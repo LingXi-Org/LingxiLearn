@@ -1,0 +1,89 @@
+# LingxiLearn — one-command deployment.
+#
+#   cp .env.example .env    # edit the password, optionally add an LLM key
+#   docker compose up --build
+#   open http://localhost:8080
+#
+# NOTE: this file was authored but could NOT be build-verified in the
+# environment where the project was developed (no Docker daemon available).
+# The local path — `make dev` — is verified end to end.
+
+name: lingxilearn
+
+x-api: &api
+  build:
+    context: ./server
+  env_file: [.env]
+  environment:
+    LINGXILEARN_DATABASE_URL: >-
+      postgresql+asyncpg://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
+    LINGXILEARN_PACKS_DIR: /app/packs
+    LINGXILEARN_VAR_DIR: /app/var
+    LINGXILEARN_WEB_DIST: /app/web
+  volumes:
+    - ./packs:/app/packs:ro
+    - web-dist:/app/web:ro
+    - api-var:/app/var
+  depends_on:
+    postgres:
+      condition: service_healthy
+  security_opt: [no-new-privileges:true]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # Builds the static frontend into a shared volume, then exits.
+  web-build:
+    build:
+      context: ./web
+      target: dist
+    volumes:
+      - web-dist:/web
+    restart: "no"
+
+  # Schema migrations run to completion before the API is allowed to start.
+  migrate:
+    <<: *api
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    volumes:
+      - ./packs:/app/packs:ro
+      - api-var:/app/var
+
+  api:
+    <<: *api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      web-build:
+        condition: service_completed_successfully
+    ports:
+      - "${LINGXILEARN_PORT:-8080}:8000"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
+
+volumes:
+  postgres-data:
+  web-dist:
+  api-var:

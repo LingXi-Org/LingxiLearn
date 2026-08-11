@@ -123,7 +123,9 @@ registry = ToolRegistry()
 
 def load_builtin_tools() -> ToolRegistry:
     """Import the bundled domain toolboxes so they self-register."""
-    from . import net  # noqa: F401  (import side effect: registration)
-    from . import knowledge  # noqa: F401
+    from . import (
+        knowledge,  # noqa: F401
+        net,  # noqa: F401  (import side effect: registration)
+    )
 
     return registry

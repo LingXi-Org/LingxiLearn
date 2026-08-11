@@ -21,7 +21,7 @@ rather than assumed:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from lingxigraph import Event, EventKind
@@ -35,7 +35,7 @@ _BULKY_STATE_KEYS = frozenset(
 )
 
 
-class Projection(str, Enum):
+class Projection(StrEnum):
     RUN_STARTED = "run.started"
     RUN_ENDED = "run.ended"
     RUN_FAILED = "run.failed"
@@ -146,7 +146,10 @@ class EventProjector:
         if event.kind is EventKind.NODE_RETRYING:
             return [
                 self._emit(
-                    Projection.NODE_RETRYING, event, node_key, {"attempt": _plain(data.get("value"))}
+                    Projection.NODE_RETRYING,
+                    event,
+                    node_key,
+                    {"attempt": _plain(data.get("value"))},
                 )
             ]
 

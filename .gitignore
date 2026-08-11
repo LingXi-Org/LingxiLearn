@@ -49,6 +49,7 @@ var/
 
 # Generated demo artifacts (rebuild with: make artifacts)
 packs/**/artifacts/*.pcap
+eval/report.json
 eval/runs/
 
 # ---------------------------------------------------------------------------

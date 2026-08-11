@@ -103,7 +103,9 @@ class ScriptedBrain:
                 claim = f"{label}，仍是薄弱点。"
                 gaps.append(claim)
             supporting = [
-                r.get("evidence_ids", []) for r in ctx.step_results if concept in r.get("concepts", [])
+                r.get("evidence_ids", [])
+                for r in ctx.step_results
+                if concept in r.get("concepts", [])
             ]
             flat = [i for group in supporting for i in group] or evidence_ids[:2]
             citations[claim] = flat

@@ -42,7 +42,9 @@ SYSTEM_PROMPT = """你是 LingxiLearn 的工科助教，正在带一名本科生
 你的工作是**挑选最合适的一条并把它说得自然**，而不是自己发明教学内容。
 
 只输出 JSON，不要 markdown 代码块，格式：
-{"intent": "ask|hint|probe_back|confirm", "say": "给学生看的话", "rationale": "你为什么这样问（学生可点开查看）"}"""
+{"intent": "ask|hint|probe_back|confirm",
+ "say": "给学生看的话",
+ "rationale": "你为什么这样问（学生可点开查看）"}"""
 
 REPORT_PROMPT = """你是 LingxiLearn 的工科助教，正在为学生写这次学习的复盘报告。
 

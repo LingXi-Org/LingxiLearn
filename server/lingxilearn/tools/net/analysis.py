@@ -236,7 +236,9 @@ def waterfall(frames: list[Frame]) -> dict[str, Any]:
     roles: dict[int, str] = {}
 
     # --- DNS ------------------------------------------------------------
-    dns_query = next((f for f in frames if f.layers.get("dns", {}).get("is_response") is False), None)
+    dns_query = next(
+        (f for f in frames if f.layers.get("dns", {}).get("is_response") is False), None
+    )
     dns_reply = None
     if dns_query is not None:
         txid = dns_query.layers["dns"]["txid"]
@@ -318,7 +320,9 @@ def waterfall(frames: list[Frame]) -> dict[str, Any]:
         span = (responses[-1].ts - responses[0].ts) * 1000
         buckets["retransmission"] = round(penalty, 3)
         buckets["transfer"] = round(max(0.0, span - penalty), 3)
-        bucket_frames["transfer"] = [f.number for f in responses if f.number not in retx_frames]
+        bucket_frames["transfer"] = [
+            f.number for f in responses if f.number not in retx_frames
+        ]
         # The duplicate ACKs are evidence for this bucket too: they are the
         # receiver telling us a hole exists, which is what the stall is about.
         dup_ack_frames = {r["frame"] for r in retrans if r["kind"] == "duplicate_ack"}

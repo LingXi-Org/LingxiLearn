@@ -173,7 +173,7 @@ async def download_artifact(
     pack = svc.packs.get(record.pack_id)
     mission = pack.missions.get(record.mission_id) if pack else None
     artifact = mission.artifacts.get(artifact_id) if mission else None
-    if artifact is None or not Path(artifact.path).exists():
+    if artifact is None or not Path(artifact.path).exists():  # noqa: ASYNC240
         raise HTTPException(status_code=404, detail="unknown_artifact")
     return FileResponse(
         artifact.path, media_type="application/vnd.tcpdump.pcap", filename=Path(artifact.path).name

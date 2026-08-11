@@ -64,7 +64,8 @@ def build_web_slow() -> tuple[list[tuple[float, bytes]], dict[str, Any]]:
     txid = 0x4E21
     q = codec.udp(CLIENT_IP, RESOLVER_IP, 51820, 53, codec.dns_query(txid, HOSTNAME))
     dns_q = b.add(0.0, _c2s(codec.ipv4(CLIENT_IP, RESOLVER_IP, q, proto=codec.PROTO_UDP, ident=1)))
-    r = codec.udp(RESOLVER_IP, CLIENT_IP, 53, 51820, codec.dns_response(txid, HOSTNAME, [SERVER_IP]))
+    answer = codec.dns_response(txid, HOSTNAME, [SERVER_IP])
+    r = codec.udp(RESOLVER_IP, CLIENT_IP, 53, 51820, answer)
     dns_r = b.add(
         121.4, _s2c(codec.ipv4(RESOLVER_IP, CLIENT_IP, r, proto=codec.PROTO_UDP, ident=2))
     )

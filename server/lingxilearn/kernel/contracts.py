@@ -146,7 +146,7 @@ class CoachContext:
     mastery: dict[str, float]
     misconceptions: list[str]
     last_answer: dict[str, Any] | None
-    last_judgement: "Judgement | None"
+    last_judgement: Judgement | None
     expects: str
     choices: list[dict[str, Any]] = field(default_factory=list)
 

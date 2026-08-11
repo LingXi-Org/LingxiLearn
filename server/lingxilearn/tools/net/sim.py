@@ -277,7 +277,8 @@ def step(state: dict[str, Any], action: dict[str, Any] | None = None) -> dict[st
         state["flags"].append("fast_retransmit_window_open")
 
     timer = state["timer"]
-    if timer["running"] and timer["expires_at"] is not None and state["tick"] >= timer["expires_at"]:
+    expires = timer["expires_at"]
+    if timer["running"] and expires is not None and state["tick"] >= expires:
         _emit(state, "timeout", seq=timer["seq"])
         state["flags"].append("timeout_fired")
         state["timeout_pending"] = True

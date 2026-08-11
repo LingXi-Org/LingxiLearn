@@ -67,43 +67,53 @@ class KnowledgeBase:
 
     def load_dir(self, root: Path) -> int:
         """Load ``*.md`` files. A ``## `` heading starts a new citable chunk."""
-        added = 0
         if not root.exists():
             return 0
+        added = 0
         for path in sorted(root.rglob("*.md")):
-            source, title, url = path.stem, path.stem, ""
-            section, buffer = "", []
-
-            def flush() -> None:
-                nonlocal added, section, buffer
-                body = "\n".join(buffer).strip()
-                if body:
-                    self.chunks.append(
-                        Chunk(
-                            id=f"{source}#{section or 'intro'}",
-                            source=source,
-                            title=title,
-                            section=section or "intro",
-                            text=body,
-                            url=url,
-                        )
-                    )
-                    added += 1
-                buffer = []
-
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("# "):
-                    title = line[2:].strip()
-                elif line.startswith("> source:"):
-                    url = line.split(":", 1)[1].strip()
-                elif line.startswith("## "):
-                    flush()
-                    section = line[3:].strip()
-                else:
-                    buffer.append(line)
-            flush()
+            added += len(self._parse_file(path))
         self._reindex()
         return added
+
+    def _parse_file(self, path: Path) -> list[Chunk]:
+        """Split one document into citable chunks, one per ``##`` section."""
+        source = title = path.stem
+        url = ""
+        section = ""
+        buffer: list[str] = []
+        chunks: list[Chunk] = []
+
+        def emit() -> None:
+            body = "\n".join(buffer).strip()
+            buffer.clear()
+            if not body:
+                return
+            anchor = section or "intro"
+            chunks.append(
+                Chunk(
+                    id=f"{source}#{anchor}",
+                    source=source,
+                    title=title,
+                    section=anchor,
+                    text=body,
+                    url=url,
+                )
+            )
+
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("# "):
+                title = line[2:].strip()
+            elif line.startswith("> source:"):
+                url = line.split(":", 1)[1].strip()
+            elif line.startswith("## "):
+                emit()
+                section = line[3:].strip()
+            else:
+                buffer.append(line)
+        emit()
+
+        self.chunks.extend(chunks)
+        return chunks
 
     def _reindex(self) -> None:
         self._df = Counter()
