@@ -1,0 +1,96 @@
+"""Application settings.
+
+Every setting is read from the environment with the ``LINGXILEARN_`` prefix.
+Secrets are :class:`SecretStr` so they never land in logs or tracebacks.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+from typing import Literal
+
+from pydantic import Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+BrainKind = Literal["scripted", "openai", "coze"]
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="LINGXILEARN_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # --- content -----------------------------------------------------------
+    packs_dir: Path = REPO_ROOT / "packs"
+    var_dir: Path = REPO_ROOT / "var"
+
+    # --- persistence -------------------------------------------------------
+    # SQLite by default so a fresh clone runs with zero setup; point this at
+    # PostgreSQL (postgresql+asyncpg://...) for the container deployment.
+    database_url: str = "sqlite+aiosqlite:///./var/lingxilearn.sqlite3"
+    # LingxiGraph's checkpointers are synchronous drivers, so they need their
+    # own DSN in the driver's native form.
+    checkpoint_url: str = ""
+
+    # --- tutor brain -------------------------------------------------------
+    brain: BrainKind = "scripted"
+
+    llm_model: str = "gpt-4o-mini"
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_api_key: SecretStr = SecretStr("")
+    llm_timeout: float = 45.0
+    llm_temperature: float = 0.3
+
+    coze_bot_id: str = ""
+    coze_base_url: str = "https://api.coze.cn"
+    coze_token: SecretStr = SecretStr("")
+    coze_timeout: float = 45.0
+
+    # --- web ---------------------------------------------------------------
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    sse_heartbeat_seconds: float = 15.0
+    max_artifact_bytes: int = 10 * 1024 * 1024
+
+    log_level: str = "INFO"
+
+    @field_validator("database_url")
+    @classmethod
+    def _known_async_driver(cls, value: str) -> str:
+        allowed = ("sqlite+aiosqlite://", "postgresql+asyncpg://")
+        if not value.startswith(allowed):
+            raise ValueError(f"LINGXILEARN_DATABASE_URL must start with one of {allowed}")
+        return value
+
+    @property
+    def resolved_checkpoint_url(self) -> str:
+        """DSN for the LingxiGraph checkpointer, derived from the app DSN by default."""
+        if self.checkpoint_url:
+            return self.checkpoint_url
+        if self.database_url.startswith("postgresql+asyncpg://"):
+            return self.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+        path = self.database_url.split("///", 1)[-1]
+        return str((REPO_ROOT / path).resolve()) if path.startswith("./") else path
+
+    @property
+    def effective_brain(self) -> BrainKind:
+        """Fall back to the deterministic brain when the chosen provider has no credential.
+
+        This keeps the whole teaching loop runnable (and reproducible in CI)
+        without an API key, instead of failing at the first coach turn.
+        """
+        if self.brain == "openai" and not self.llm_api_key.get_secret_value():
+            return "scripted"
+        if self.brain == "coze" and not (self.coze_token.get_secret_value() and self.coze_bot_id):
+            return "scripted"
+        return self.brain
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

@@ -1,0 +1,206 @@
+id: reliable-delivery
+title: 你来当发送方
+subtitle: 在一个会还手的网络里跑通可靠传输
+estimated_minutes: 18
+summary: >-
+  这一次你不是旁观者。你就是 TCP 的发送方：窗口、定时器、重复确认都摆在面前，
+  每一个决策点由你来决定下一步做什么，仿真器立刻把后果算给你看。
+  目标有两个——先让接收方拿到完整无误的字节流，再把吞吐做上去。
+why_not_chat: >-
+  这里没有可以背下来的答案。正确的动作取决于此刻的窗口状态、在途的段和刚收到的确认，
+  而仿真器会对你的每一个决定做出反应。一个会还手的系统，是对话框给不了的。
+
+concepts:
+  - tcp.reliability
+  - tcp.flow_window
+
+# ---------------------------------------------------------------- 前测
+probe:
+  - id: p1
+    concept: tcp.flow_window
+    difficulty: 1
+    prompt: 累计确认 ACK=5 的准确含义是什么？
+    expects: choice
+    choices:
+      - { value: a, label: 接收方只收到了第 5 段 }
+      - { value: b, label: 第 5 段之前的都收到了，现在期待第 5 段 }
+      - { value: c, label: 接收方收到了 5 个段，但不知道是哪几个 }
+    grader:
+      kind: choice
+      answer: b
+      misconceptions: { a: cumulative_ack_misread, c: cumulative_ack_misread }
+    explain: 累计确认给的是"下一个我要的序号"，它同时确认了此前的全部数据。
+
+  - id: p2
+    concept: tcp.reliability
+    difficulty: 2
+    prompt: 发送方连续收到三个重复 ACK，最合理的动作是什么？
+    expects: choice
+    choices:
+      - { value: a, label: 继续等定时器超时，超时了再说 }
+      - { value: b, label: 立即重传接收方正在索要的那一段 }
+      - { value: c, label: 把窗口内所有未确认的段全部重发 }
+    grader:
+      kind: choice
+      answer: b
+      misconceptions: { a: no_fast_retransmit, c: gbn_vs_sr_confusion }
+    explain: 三个重复 ACK 已经把缺口指明了，不必再等超时——这就是快重传。
+
+  - id: p3
+    concept: tcp.flow_window
+    difficulty: 1
+    prompt: 窗口大小为 4，base=2、next=5，此时还能发出几个新段？
+    expects: choice
+    choices:
+      - { value: a, label: "0 个，窗口已满" }
+      - { value: b, label: "1 个" }
+      - { value: c, label: "4 个" }
+    grader:
+      kind: choice
+      answer: b
+      misconceptions: { a: window_never_fills, c: window_limit_ignored }
+    explain: 未确认量是 next-base=3，窗口 4，还剩 1 个空位。
+
+# ---------------------------------------------------------------- 教学步骤
+steps:
+  - id: read-the-console
+    title: 先读懂仪表盘
+    objective: 认清窗口的三个边界，再开始操作。
+    concepts: [tcp.flow_window]
+    scene: sim_console
+    skip_if_mastered: 0.8
+    tools:
+      - { call: net.sim.scenarios, args: {}, as: scenarios, summary: 可用场景 }
+      - { call: net.sim.init, args: { scenario: single-loss, seed: 7 }, as: sim, summary: 初始仿真状态 }
+    knowledge: ["TCP 滑动窗口 未确认"]
+    stage_props: { scenario: single-loss, seed: 7, mode: preview }
+    ask: >-
+      右边是发送方的仪表盘：窗口大小 4，一共 8 段要发。
+      在你还没有做任何操作时，`base` 和 `next` 都等于 0——这说明了什么？
+    expects: choice
+    choices:
+      - { value: a, label: 已经发出了 0 段，也没有任何段在等待确认 }
+      - { value: b, label: 已经发出了 4 段，正在等待确认 }
+      - { value: c, label: 第 0 段已经被确认了 }
+    grader:
+      kind: choice
+      answer: a
+      misconceptions: { b: window_limit_ignored, c: cumulative_ack_misread }
+    hint_ladder:
+      - base 是最老的未确认段，next 是下一个要发的段。两者相等意味着中间没有东西。
+      - 未确认的数据量就是 next 减 base。现在这个差值是多少？
+      - 差值为 0，说明还没有任何数据在路上。
+    walkthrough: >-
+      base 指向最老的未确认段，next 指向下一个待发段，未确认量就是 next − base。
+      两者都为 0 时，既没发出过数据，也没有任何段在等确认——窗口是全空的，你有 4 个空位可用。
+    leak_guard:
+      phrases: [选 a, 答案是 a, 全空]
+    reveal_after: 2
+    max_attempts: 3
+
+  - id: drive
+    title: 把 8 段数据送到对面
+    objective: 在有丢包的链路上既保证正确性，又不浪费往返。
+    concepts: [tcp.reliability, tcp.flow_window]
+    scene: sim_console
+    tools:
+      - { call: net.sim.init,   args: { scenario: single-loss, seed: 7 }, as: sim,    summary: 初始仿真状态 }
+      - { call: net.sim.oracle, args: { scenario: single-loss, seed: 7 }, as: oracle, summary: 参考发送方的用时基准 }
+    knowledge: ["TCP 快重传 重复确认 三个", "TCP 超时重传 定时器"]
+    stage_props: { scenario: single-loss, seed: 7, mode: interactive }
+    ask: >-
+      现在开始操作。每一步你可以：发送下一段、重传某一段、重传整个窗口、或者什么都不做。
+      把 8 段完整送到对面，用的步数越少越好。做完之后提交你的操作序列。
+    expects: sim_action
+    grader:
+      kind: sim_outcome
+      score_tool:
+        call: net.sim.score
+        args: { scenario: single-loss, seed: 7 }
+        from_answer: { actions: actions }
+      score_from: score
+      min_efficiency: 0.6
+    hint_ladder:
+      - 窗口里有空位就别闲着——先把能发的都发出去，让数据在路上流动起来。
+      - 注意看接收方的确认号。如果它一直重复同一个号，它是在告诉你一件很具体的事。
+      - 接收方缓存里已经有的段，重发一次是纯浪费。只补它真正缺的那一段。
+      - 定时器响了却什么都不做，这条连接就会一直卡在那里。超时本身就是一个要求你行动的信号。
+    walkthrough: >-
+      有效的做法是：开局把窗口填满（发出第 0–3 段）。第 2 段在链路上丢了，
+      接收方每收到一个失序段就重复确认一次，于是你会连着看到三个相同的 ACK。
+      这三个重复确认已经把缺口指明——立刻只重传第 2 段（快重传），不要重传整窗，
+      因为第 3 段接收方已经缓存好了。补上缺口后累计确认会一次性跳到 4，窗口整体前移，
+      再把剩下的 4 段填进去即可。
+    leak_guard:
+      phrases:
+        - 只重传第 2 段
+        - 重传 seq 2
+        - 三个重复确认后立刻重传 base
+        - 先发满窗口再快重传
+    reveal_after: 3
+    max_attempts: 4
+
+  - id: debrief
+    title: 复盘你自己的轨迹
+    objective: 把刚才的操作和吞吐结果对应起来。
+    concepts: [tcp.reliability]
+    scene: sim_console
+    tools:
+      - { call: net.sim.oracle, args: { scenario: single-loss, seed: 7 }, as: oracle, summary: 参考发送方轨迹 }
+    stage_props: { scenario: single-loss, seed: 7, mode: replay }
+    ask: >-
+      对照你自己的序号-时间图和参考发送方的那条线：如果一段丢失后选择重传整个窗口，
+      主要的代价是什么？
+    expects: choice
+    choices:
+      - { value: a, label: 没什么代价，反正都要重发 }
+      - { value: b, label: 把接收方已经缓存好的段又发了一遍，白白占用了往返和带宽 }
+      - { value: c, label: 会导致接收方拿到重复数据，字节流出错 }
+    grader:
+      kind: choice
+      answer: b
+      misconceptions: { a: gbn_vs_sr_confusion, c: cumulative_ack_misread }
+    hint_ladder:
+      - 一段丢失时，窗口里其他几段的命运是什么？它们真的没到吗？
+      - 接收方会把失序但正确的段缓存下来。那么重发它们，收益是多少？
+      - 正确性不会因为重复而被破坏——接收方会丢弃重复段。被浪费的是别的东西。
+    walkthrough: >-
+      重传整窗不会让数据出错：接收方会识别并丢弃重复的段，字节流仍然是对的。
+      被浪费的是往返和带宽——那些段接收方本来就已经缓存好了。这正是选择性重传
+      相对回退 N 步的价值所在：只补真正缺的那一段。
+    leak_guard:
+      phrases: [浪费带宽, 选 b, 答案是 b]
+    reveal_after: 2
+    max_attempts: 3
+
+# ---------------------------------------------------------------- 后测
+verify:
+  - id: v1
+    concept: tcp.reliability
+    difficulty: 2
+    prompt: 在你刚才的这条链路上，靠三个重复 ACK 触发重传，比一直等定时器超时好在哪里？
+    expects: choice
+    choices:
+      - { value: a, label: 没有区别，最终都能补上 }
+      - { value: b, label: 能显著更早补上缺口，省掉一次超时等待 }
+      - { value: c, label: 可以不用维护定时器了 }
+    grader:
+      kind: choice
+      answer: b
+      misconceptions: { a: no_fast_retransmit, c: ignores_timeout }
+    explain: 快重传把恢复时机从"等超时"提前到"收到第三个重复 ACK"，省下的正是那段空转。
+
+  - id: v2
+    concept: tcp.flow_window
+    difficulty: 2
+    prompt: 窗口 4，base=2、next=6，此时收到 ACK=4。接下来最合理的动作是什么？
+    expects: choice
+    choices:
+      - { value: a, label: 重传第 2、3 段 }
+      - { value: b, label: 窗口前移到 4，把新的空位用来发第 6、7 段 }
+      - { value: c, label: 什么都不做，继续等 }
+    grader:
+      kind: choice
+      answer: b
+      misconceptions: { a: cumulative_ack_misread, c: window_never_fills }
+    explain: ACK=4 确认了第 2、3 段，base 前移到 4，窗口腾出两个空位，应当立刻填满。

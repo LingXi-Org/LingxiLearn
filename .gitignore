@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# Reference repositories (research only — never vendored into this project)
+# ---------------------------------------------------------------------------
+/reference/
+/vendor/
+LingxiGraph/
+LingxiNext/
+OpenMAIC/
+openmaic/
+lingxigraph/
+lingxinext/
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# ---------------------------------------------------------------------------
+# Node / Next.js
+# ---------------------------------------------------------------------------
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+.pnpm-store/
+
+# ---------------------------------------------------------------------------
+# Local state, secrets, generated artifacts
+# ---------------------------------------------------------------------------
+.env
+.env.local
+*.local
+var/
+*.sqlite3
+*.sqlite3-journal
+*.db
+
+# Generated demo artifacts (rebuild with: make artifacts)
+packs/**/artifacts/*.pcap
+eval/runs/
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp

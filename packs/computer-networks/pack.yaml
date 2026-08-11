@@ -1,0 +1,11 @@
+id: computer-networks
+title: 计算机网络
+version: "1.0.0"
+description: >-
+  本科《计算机网络》的工程实践课程包。两个任务分别训练两种真实能力：
+  从真实抓包里读出证据，以及在一个会对你做出反应的协议系统里做决策。
+concepts_file: concepts.yaml
+knowledge_dir: knowledge
+missions:
+  - web-slow
+  - reliable-delivery
