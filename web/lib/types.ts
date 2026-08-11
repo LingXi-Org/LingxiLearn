@@ -129,13 +129,23 @@ export interface SessionSnapshot {
   mastery_changes: MasteryChange[];
   misconceptions: string[];
   evidence: Evidence[];
-  transcript: any[];
+  transcript: TranscriptRecord[];
   probe_score: number;
   verify_score: number;
   step_results: StepResult[];
   report: Report | Record<string, never>;
   pending: Pending | null;
   brain: string;
+}
+
+export interface TranscriptRecord {
+  role: "system" | "coach" | "learner";
+  kind?: string;
+  say?: string;
+  text?: string;
+  request_hint?: boolean;
+  request_walkthrough?: boolean;
+  [key: string]: unknown;
 }
 
 export interface Mission {
@@ -164,6 +174,14 @@ export interface RunEvent {
   node: string;
   payload: Record<string, any>;
   ts: string;
+}
+
+export interface SessionListItem {
+  id: string;
+  mission_id: string;
+  pack_id: string;
+  status: SessionSnapshot["status"];
+  created_at: string | null;
 }
 
 // ---------------------------------------------------------------- simulator

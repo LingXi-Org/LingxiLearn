@@ -1,11 +1,17 @@
-import type { Pack, RunEvent, SessionSnapshot, SimAction, SimState } from "./types";
+import type { Pack, RunEvent, SessionListItem, SessionSnapshot, SimAction, SimState } from "./types";
 
 /**
  * When the app is served by FastAPI (the single-process deployment) the API is
  * same-origin and this is empty. Point NEXT_PUBLIC_API_BASE at the backend when
  * running `next dev` against a separately hosted server.
  */
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+// Separate local development runs Next.js on :3000 and FastAPI on :8000.
+// Keep production/static deployment same-origin, but make `npm run dev`
+// work without requiring every terminal to export an environment variable.
+const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE?.trim();
+export const API_BASE =
+  configuredApiBase ||
+  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : "");
 
 export class ApiError extends Error {
   constructor(
@@ -57,7 +63,7 @@ export const api = {
   report: (id: string) => request<Record<string, any>>(`/sessions/${id}/report`),
 
   mastery: (learnerId: string) =>
-    request<{ mastery: any[]; sessions: any[] }>(`/learners/${learnerId}/mastery`),
+    request<{ learner_id: string; mastery: unknown[]; sessions: SessionListItem[] }>(`/learners/${learnerId}/mastery`),
 
   artifactUrl: (sessionId: string, artifactId: string) =>
     `${API_BASE}/api/sessions/${sessionId}/artifact/${artifactId}`,
@@ -142,7 +148,7 @@ export function subscribeEvents(
   };
 }
 
-const KNOWN_EVENT_KINDS = [
+export const KNOWN_EVENT_KINDS = [
   "run.started",
   "run.ended",
   "run.failed",

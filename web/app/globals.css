@@ -1,170 +1,156 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-/*
- * LingxiLearn design tokens.
- *
- * Neutral greys carry the interface; one cyan accent marks the learner's own
- * actions and the current focus. Packet data gets its own semantic ramp so a
- * frame's role is legible at a glance on the ladder, in the inspector and in
- * the waterfall without a legend lookup each time.
- */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted-surface);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
 @theme {
-  --color-ink-50: #f6f8f9;
-  --color-ink-100: #eceff2;
-  --color-ink-200: #dbe1e6;
-  --color-ink-300: #b9c4cd;
-  --color-ink-400: #8c9aa6;
-  --color-ink-500: #667582;
-  --color-ink-600: #4c5a66;
-  --color-ink-700: #38434d;
-  --color-ink-800: #232c34;
-  --color-ink-900: #151b21;
-  --color-ink-950: #0d1116;
-
-  --color-accent-100: #d3f4f2;
-  --color-accent-300: #6fdcd6;
-  --color-accent-500: #12a89f;
-  --color-accent-600: #0d8b84;
-  --color-accent-700: #0a6d68;
-
-  /* Protocol phases — one hue per latency bucket, reused everywhere. */
-  --color-dns-500: #7c6cf0;
-  --color-connect-500: #3b93e8;
-  --color-ttfb-500: #e0952a;
-  --color-transfer-500: #12a89f;
-  --color-retx-500: #e05a5a;
-  --color-idle-500: #97a4ae;
-
-  --color-ok-500: #35a06a;
-  --color-warn-500: #d98324;
-  --color-bad-500: #d64f4f;
-
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-
-  --radius-card: 14px;
+  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --color-accent-500: #5b5ce2;
+  --color-accent-600: #4f46cf;
+  --color-ink-300: #c7c9d1;
+  --color-ink-400: #a4a6b0;
+  --color-ink-500: #767984;
+  --color-dns-500: #7357d8;
+  --color-connect-500: #377dcc;
+  --color-ttfb-500: #c88026;
+  --color-transfer-500: #258a78;
+  --color-retx-500: #d05050;
+  --color-idle-500: #a3a6af;
+  --color-ok-500: #269667;
+  --color-warn-500: #c4771e;
+  --color-bad-500: #ce4646;
 }
 
 :root {
-  --bg: var(--color-ink-50);
-  --panel: #ffffff;
-  --panel-2: var(--color-ink-100);
-  --text: var(--color-ink-900);
-  --muted: var(--color-ink-500);
-  --line: var(--color-ink-200);
   color-scheme: light;
+  --radius: 0.75rem;
+  --foreground: #202126;
+  --card: #ffffff;
+  --card-foreground: #202126;
+  --popover: #ffffff;
+  --popover-foreground: #202126;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted-surface: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent-foreground: #171717;
+  --destructive: #dc2626;
+  --border: #dddde2;
+  --input: #dddde2;
+  --ring: #a3a3a3;
+  --sidebar: #f5f5f5;
+  --workspace: #f4f4f5;
+  --surface-1: #fdfdfd;
+  --surface-2: #f5f5f6;
+  --surface-3: #ececef;
+  --ink: #202126;
+  --text: #202126;
+  --muted: #70727c;
+  --muted-2: #a0a2ab;
+  --line: #dddde2;
+  --line-soft: #ececef;
+  --accent: #f5f5f5;
+  --brand: #5b5ce2;
+  --brand-strong: #4b47bd;
+  --brand-soft: #efefff;
+  --panel: #ffffff;
+  --panel-2: #f3f3f5;
+  --background: #fdfdfd;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: var(--color-ink-950);
-    --panel: var(--color-ink-900);
-    --panel-2: var(--color-ink-800);
-    --text: var(--color-ink-100);
-    --muted: var(--color-ink-400);
-    --line: var(--color-ink-800);
-    color-scheme: dark;
-  }
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--workspace); color: var(--ink); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+button, textarea, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+::selection { background: color-mix(in oklab, var(--brand) 20%, white); }
+
+.home-canvas {
+  box-shadow: -1px 0 0 rgb(0 0 0 / 3%);
 }
 
-:root[data-theme="dark"] {
-  --bg: var(--color-ink-950);
-  --panel: var(--color-ink-900);
-  --panel-2: var(--color-ink-800);
-  --text: var(--color-ink-100);
-  --muted: var(--color-ink-400);
-  --line: var(--color-ink-800);
-  color-scheme: dark;
+.home-center {
+  width: min(1064px, calc(100% - 48px));
+  padding-top: clamp(64px, 20vh, 240px);
 }
 
-html,
-body {
-  height: 100%;
+.home-title {
+  font-size: clamp(28px, 2.6vw, 45px);
 }
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    "PingFang SC",
-    "Hiragino Sans GB",
-    "Microsoft YaHei",
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+.home-learning-prompt {
+  min-height: clamp(138px, 15vh, 171px);
+  max-width: 1064px;
+  padding: clamp(14px, 1.2vw, 19px) clamp(15px, 1.3vw, 20px) clamp(12px, 1vw, 16px);
+  border-color: #cfcfcf;
+  border-radius: 22px;
+  box-shadow: 0 14px 32px rgb(0 0 0 / 4.5%);
 }
 
-@utility panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
+.home-learning-prompt textarea {
+  min-height: clamp(66px, 8vh, 85px);
+  font-size: clamp(16px, 1.15vw, 19px);
+  line-height: 1.4;
 }
 
-@utility muted {
-  color: var(--muted);
+.artifact-stage {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 75%);
 }
 
-@utility mono {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
+.workspace-resize-handle[data-resize-handle-active] {
+  background: color-mix(in oklab, #5b5ce2 10%, #f1f1f1);
 }
 
-/* Scrollbars that don't shout. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--line) transparent;
-}
-*::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--line);
-  border-radius: 999px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
+.workspace-resize-handle[data-resize-handle-active] > span:first-child {
+  width: 2px;
+  background: #5b5ce2;
 }
 
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.rise {
-  animation: rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes pulse-ring {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent-500) 45%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 8px transparent;
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
-}
-
-.pulse-ring {
-  animation: pulse-ring 1.6s ease-out infinite;
-}
+.muted { color: var(--muted); }
+.mono { font-family: var(--font-mono); }
+.panel { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.rise { animation: rise .28s cubic-bezier(.22, 1, .36, 1) both; }
+.pulse-ring { animation: pulse-ring 1.35s ease-out infinite; }
+@keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse-ring { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-retx-500) 28%, transparent); } 55% { box-shadow: 0 0 0 6px transparent; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise,
-  .pulse-ring {
-    animation: none;
-  }
-  * {
-    transition-duration: 0.01ms !important;
-  }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+@media (max-width: 1023px) {
+  .home-canvas { border-radius: 0; }
+  .home-center { width: min(760px, calc(100% - 24px)); padding-top: clamp(28px, 8vh, 72px); }
+  .home-learning-prompt { min-height: 148px; padding: 14px 16px 12px; }
+  .home-learning-prompt textarea { min-height: 72px; font-size: 17px; }
 }

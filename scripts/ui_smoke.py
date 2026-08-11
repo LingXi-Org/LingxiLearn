@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Drive the real UI in a browser and capture screenshots.
+"""Drive the real AI Learning Workspace in a browser and capture screenshots.
 
     python scripts/ui_smoke.py --base http://localhost:8000 --out var/screenshots
 
-Walks the full learner journey — pick a mission, take the pre-test, work the
-packet lab and the attribution table, submit, reach the report — asserting at
-each stop that what should be on screen is on screen. Failures leave a
-screenshot behind so the state is inspectable.
+Checks the honest free-prompt draft boundary, then walks the full API-backed
+learner journey inside /workspace: pre-test, professional artifact, grading,
+post-test and the in-place learning report.
 """
 
 from __future__ import annotations
@@ -21,6 +20,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # The image ships Chromium; never let Playwright try to download its own.
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 CHROMIUM = Path("/opt/pw-browsers/chromium-1194/chrome-linux/chrome")
+if sys.platform == "win32":
+    for candidate in (
+        Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+        Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+    ):
+        if candidate.exists():
+            CHROMIUM = candidate
+            break
 
 from playwright.sync_api import Page, TimeoutError as PwTimeout, sync_playwright  # noqa: E402
 
@@ -99,32 +106,39 @@ def run(base: str, out: Path, mission_title: str, mission_id: str) -> None:
 
         # ---- home ----------------------------------------------------
         page.goto(base, wait_until="networkidle")
-        check(page.get_by_text("今天想解决什么工程问题").is_visible(), "home page rendered")
+        check(page.get_by_test_id("home-greeting").is_visible(), "AI workspace home rendered")
         check(page.get_by_text(mission_title).first.is_visible(), f"mission card: {mission_title}")
-        check(
-            page.get_by_text("为什么这件事不能靠对话框完成").first.is_visible(),
-            "mission states what a chat window cannot do",
-        )
+        check(page.get_by_role("tab", name="课程发现").is_visible(), "course discovery tab rendered")
+        check(page.get_by_role("tab", name="我的课程").is_visible(), "my courses tab rendered")
         shoot(page, out, f"01-home")
 
+        # ---- honest draft boundary -----------------------------------
+        composer = page.get_by_label("学习任务输入")
+        composer.fill("为我生成一门计算机网络课程")
+        page.get_by_label("发送任务").click()
+        page.wait_for_url("**/workspace/**draft=1**", timeout=25_000)
+        check(page.get_by_text("Mock · Coming Soon").first.is_visible(), "free prompt is visibly marked as mock")
+        check(page.get_by_text("未执行 · Coming Soon").first.is_visible(), "draft states that no agent ran")
+        shoot(page, out, "01b-draft-boundary")
+        page.goto(base, wait_until="networkidle")
+
         # ---- start ---------------------------------------------------
-        card = page.locator("article").filter(has_text=mission_title).first
-        card.get_by_role("button", name="开始").click()
-        page.wait_for_url("**/classroom/**", timeout=25_000)
+        page.get_by_test_id(f"start-mission-{mission_id}").click()
+        page.wait_for_url("**/workspace/**id=**", timeout=25_000)
         page.wait_for_selector("text=开始前，先花一分钟", timeout=30_000)
-        check(True, "classroom opened with the pre-test")
+        check(True, "workspace opened with the pre-test artifact")
         shoot(page, out, f"02-{mission_id}-pretest")
 
         # ---- pre-test ------------------------------------------------
         answer_multiple_choice(page, ITEM_IDS["probe"], PROBE_ANSWERS[mission_id])
-        page.wait_for_selector("text=AI 教练", timeout=30_000)
+        page.wait_for_selector('[data-testid="artifact-workspace"]', timeout=30_000)
         wait_idle(page)
 
         seen_sim = False
         for _round in range(1, 16):
             page.wait_for_timeout(900)
 
-            if page.locator("text=最后两题").count() or "/report" in page.url:
+            if page.locator("text=最后两题").count() or page.locator('[data-testid="report-root"]').count():
                 break
 
             # Branch on the controls actually present, not on scene text: the
@@ -174,21 +188,14 @@ def run(base: str, out: Path, mission_title: str, mission_id: str) -> None:
 
         # ---- report --------------------------------------------------
         try:
-            page.wait_for_url("**/report/**", timeout=40_000)
-            # Anchor on the loaded report, not on text that also appears in the
-            # loading state ("正在生成学习报告…" contains "学习报告").
+            # The report is an Artifact; the conversation and workspace route stay intact.
             page.wait_for_selector('[data-testid="report-root"]', timeout=25_000)
             page.wait_for_timeout(500)
-            check(True, "learning report reached")
-            check(page.locator("h1").first.inner_text() != "", "headline rendered",
-                  page.locator("h1").first.inner_text()[:44])
+            check("/workspace" in page.url, "learning report stays inside workspace")
+            check(page.locator('[data-testid="report-root"] h3').first.inner_text() != "", "headline rendered",
+                  page.locator('[data-testid="report-root"] h3').first.inner_text()[:44])
             check(page.get_by_text("掌握度变化").is_visible(), "mastery movement shown")
             check(page.get_by_text("可回溯证据").is_visible(), "evidence count shown")
-            claim = page.locator("text=条依据").first
-            if claim.count():
-                claim.click()
-                page.wait_for_timeout(400)
-                check(True, "report claims expand to their evidence")
             shoot(page, out, f"05-{mission_id}-report")
         except PwTimeout:
             check(False, "learning report reached", f"stuck at {page.url}")
@@ -236,6 +243,28 @@ def drive_simulator(page: Page) -> None:
         page.wait_for_timeout(1200)
 
 
+def run_mobile(base: str, out: Path) -> None:
+    """Verify that narrow screens switch between conversation and artifact."""
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(
+            executable_path=str(CHROMIUM) if CHROMIUM.exists() else None,
+            args=["--no-sandbox"],
+        )
+        page = browser.new_page(viewport={"width": 390, "height": 844})
+        page.set_default_timeout(20_000)
+        page.goto(base, wait_until="networkidle")
+        page.get_by_label("学习任务输入").fill("生成一份操作系统交互任务")
+        page.get_by_label("发送任务").click()
+        page.wait_for_url("**/workspace/**draft=1**")
+        check(page.get_by_label("打开工作区").is_visible(), "mobile starts in conversation view")
+        page.get_by_label("打开工作区").click()
+        check(page.get_by_test_id("draft-artifact").is_visible(), "mobile switches to artifact view")
+        page.get_by_label("返回对话").click()
+        check(page.get_by_label("打开工作区").is_visible(), "mobile returns to conversation view")
+        shoot(page, out, "06-mobile-workspace")
+        browser.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="http://localhost:8000")
@@ -246,6 +275,7 @@ def main() -> int:
     titles = {"web-slow": "慢在哪一环", "reliable-delivery": "你来当发送方"}
     print(f"=== LingxiLearn UI smoke · {args.base} · {args.mission} ===")
     run(args.base, Path(args.out), titles[args.mission], args.mission)
+    run_mobile(args.base, Path(args.out))
     print()
     print("RESULT:", "FAILED — " + ", ".join(_failures) if _failures else "all checks passed")
     return 1 if _failures else 0
