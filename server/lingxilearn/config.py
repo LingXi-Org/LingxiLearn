@@ -68,14 +68,31 @@ class Settings(BaseSettings):
         return value
 
     @property
+    def resolved_database_url(self) -> str:
+        """Anchor a relative SQLite path to the repo, not to the working directory.
+
+        Without this, ``uvicorn`` started from ``server/`` and a script started
+        from the repo root would quietly use two different databases.
+        """
+        prefix = "sqlite+aiosqlite:///"
+        if not self.database_url.startswith(prefix):
+            return self.database_url
+        path = self.database_url[len(prefix) :]
+        if path.startswith("/"):  # already absolute
+            return self.database_url
+        resolved = (REPO_ROOT / path.lstrip("./")).resolve()
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        return f"{prefix}{resolved}"
+
+    @property
     def resolved_checkpoint_url(self) -> str:
         """DSN for the LingxiGraph checkpointer, derived from the app DSN by default."""
         if self.checkpoint_url:
             return self.checkpoint_url
         if self.database_url.startswith("postgresql+asyncpg://"):
             return self.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
-        path = self.database_url.split("///", 1)[-1]
-        return str((REPO_ROOT / path).resolve()) if path.startswith("./") else path
+        path = self.resolved_database_url.split("///", 1)[-1]
+        return str(Path(path).with_name("checkpoints.sqlite3"))
 
     @property
     def effective_brain(self) -> BrainKind:

@@ -247,18 +247,30 @@ def _attribution(spec: dict[str, Any], answer: Any, ctx: dict[str, Any]) -> Judg
     score = correct_buckets / len(truth_buckets) if truth_buckets else 0.0
     threshold = float(spec.get("threshold", 0.8))
 
+    # A citation that does not support its claim is a gate, not a deduction.
+    # Otherwise, with five buckets, one bogus frame costs 0.2 and still passes —
+    # which would teach exactly the habit this mission exists to break.
+    bad_citations = [b for b, d in per_bucket.items() if d["invalid_pins"] or not d["pin_ok"]]
+    passed = score >= threshold and not bad_citations
+
     tags = _attribution_misconceptions(spec, per_bucket, total)
     feedback = ""
-    if score >= threshold:
+    if passed:
         feedback = "归因与抓包数据一致，而且每个桶都有真实帧支撑。"
+    elif bad_citations and score >= threshold:
+        feedback = "数字对得上，但有的桶钉错了帧——结论的分量来自证据本身。"
 
     return Judgement(
-        correct=score >= threshold,
+        correct=passed,
         score=round(score, 4),
         concept_scores=_concept_scores(spec, score),
         misconceptions=tags,
         feedback=feedback,
-        detail={"buckets": per_bucket, "total_ms": round(total, 2)},
+        detail={
+            "buckets": per_bucket,
+            "total_ms": round(total, 2),
+            "bad_citations": bad_citations,
+        },
     )
 
 

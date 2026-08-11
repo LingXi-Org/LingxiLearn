@@ -1,0 +1,298 @@
+"""REST + SSE surface.
+
+The SSE endpoint is the interesting one: it serves from the persisted event log
+rather than from the live run, honours ``Last-Event-ID``, sends heartbeat
+comments while idle, and closes on a terminal status.  A learner who reloads
+mid-lesson reconnects and catches up; nothing is lost because nothing was only
+ever in flight.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import json
+import uuid
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+from ..service import Service
+from ..tools.net import sim
+
+router = APIRouter(prefix="/api")
+
+TERMINAL = {"done", "failed", "cancelled"}
+
+
+def service_of(request: Request) -> Service:
+    svc: Service | None = getattr(request.app.state, "service", None)
+    if svc is None:
+        raise HTTPException(status_code=503, detail="service_unavailable")
+    return svc
+
+
+# --------------------------------------------------------------------------
+# Health & catalogue
+# --------------------------------------------------------------------------
+
+
+@router.get("/health")
+async def health(request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    try:
+        db_ok = await svc.db.ping()
+    except Exception:  # noqa: BLE001 - health must answer even when the DB is down
+        db_ok = False
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "database": db_ok,
+        "brain": svc.brain.name if svc.brain else "unconfigured",
+        "packs": sorted(svc.packs),
+        "tools": len(svc.registry.specs),
+    }
+
+
+@router.get("/packs")
+async def list_packs(request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    return {
+        "packs": [
+            {
+                "id": pack.id,
+                "title": pack.title,
+                "version": pack.version,
+                "description": pack.description,
+                "concepts": [
+                    {"id": c.id, "title": c.title, "summary": c.summary, "requires": c.requires}
+                    for c in pack.concepts.values()
+                ],
+                "missions": [
+                    {
+                        "id": m.id,
+                        "title": m.title,
+                        "subtitle": m.subtitle,
+                        "summary": m.summary,
+                        "why_not_chat": m.why_not_chat,
+                        "concepts": list(m.concepts),
+                        "estimated_minutes": m.estimated_minutes,
+                        "steps": len(m.steps),
+                    }
+                    for m in pack.missions.values()
+                ],
+            }
+            for pack in svc.packs.values()
+        ]
+    }
+
+
+# --------------------------------------------------------------------------
+# Sessions
+# --------------------------------------------------------------------------
+
+
+class CreateSession(BaseModel):
+    mission_id: str
+    pack_id: str = "computer-networks"
+    learner_id: str = Field(default="", max_length=64)
+
+
+class AnswerBody(BaseModel):
+    answer: Any
+
+
+@router.post("/sessions", status_code=201)
+async def create_session(body: CreateSession, request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    learner_id = body.learner_id or f"guest-{uuid.uuid4().hex[:12]}"
+    session_id = f"s-{uuid.uuid4().hex[:16]}"
+    try:
+        created = await svc.create_session(
+            session_id=session_id,
+            learner_id=learner_id,
+            pack_id=body.pack_id,
+            mission_id=body.mission_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {**created, "learner_id": learner_id}
+
+
+@router.get("/sessions/{session_id}")
+async def get_session(session_id: str, request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    try:
+        return await svc.snapshot(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/sessions/{session_id}/answer", status_code=202)
+async def answer(session_id: str, body: AnswerBody, request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    record = await svc.repo.get_session(session_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="unknown_session")
+    if record.status == "running":
+        raise HTTPException(status_code=409, detail="run_in_progress")
+    if record.status in TERMINAL:
+        raise HTTPException(status_code=409, detail=f"session_{record.status}")
+    await svc.answer(session_id, body.answer)
+    return {"status": "accepted"}
+
+
+@router.get("/sessions/{session_id}/report")
+async def get_report(session_id: str, request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    stored = await svc.repo.get_report(session_id)
+    if stored:
+        return stored
+    try:
+        snapshot = await svc.snapshot(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not snapshot.get("report"):
+        raise HTTPException(status_code=404, detail="report_not_ready")
+    return snapshot["report"]
+
+
+@router.get("/sessions/{session_id}/artifact/{artifact_id}")
+async def download_artifact(
+    session_id: str, artifact_id: str, request: Request
+) -> FileResponse:
+    """Hand over the raw capture so the learner can audit us in Wireshark."""
+    svc = service_of(request)
+    record = await svc.repo.get_session(session_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="unknown_session")
+    pack = svc.packs.get(record.pack_id)
+    mission = pack.missions.get(record.mission_id) if pack else None
+    artifact = mission.artifacts.get(artifact_id) if mission else None
+    if artifact is None or not Path(artifact.path).exists():
+        raise HTTPException(status_code=404, detail="unknown_artifact")
+    return FileResponse(
+        artifact.path, media_type="application/vnd.tcpdump.pcap", filename=Path(artifact.path).name
+    )
+
+
+@router.get("/learners/{learner_id}/mastery")
+async def learner_mastery(learner_id: str, request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    return {
+        "learner_id": learner_id,
+        "mastery": await svc.repo.mastery_detail(learner_id),
+        "sessions": await svc.repo.list_sessions(learner_id),
+    }
+
+
+# --------------------------------------------------------------------------
+# SSE
+# --------------------------------------------------------------------------
+
+
+@router.get("/sessions/{session_id}/events")
+async def stream_events(session_id: str, request: Request) -> StreamingResponse:
+    svc = service_of(request)
+    record = await svc.repo.get_session(session_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="unknown_session")
+
+    header = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
+    try:
+        cursor = int(header) if header else 0
+    except ValueError:
+        cursor = 0
+
+    heartbeat = svc.settings.sse_heartbeat_seconds
+
+    async def generate():  # noqa: ANN202
+        nonlocal cursor
+        waiter = svc.waiter(session_id)
+        while True:
+            if await request.is_disconnected():
+                return
+            events = await svc.repo.events_after(session_id, cursor)
+            for event in events:
+                cursor = event["sequence"]
+                payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+                yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
+
+            current = await svc.repo.get_session(session_id)
+            status = current.status if current else "failed"
+            if status in TERMINAL or status == "awaiting_learner":
+                # Drain anything appended between the query and the status read.
+                tail = await svc.repo.events_after(session_id, cursor)
+                for event in tail:
+                    cursor = event["sequence"]
+                    payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+                    yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
+                yield (
+                    "event: stream.end\n"
+                    f"data: {json.dumps({'status': status}, ensure_ascii=False)}\n\n"
+                )
+                return
+
+            if not events:
+                yield ": heartbeat\n\n"
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(waiter.wait(), timeout=heartbeat)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+# --------------------------------------------------------------------------
+# Interactive simulator
+# --------------------------------------------------------------------------
+
+
+class SimInit(BaseModel):
+    scenario: str = "single-loss"
+    seed: int = 7
+
+
+class SimStep(BaseModel):
+    state: dict[str, Any]
+    action: dict[str, Any]
+
+
+@router.get("/sim/scenarios")
+async def sim_scenarios() -> dict[str, Any]:
+    return {
+        "scenarios": [
+            {"id": key, "title": spec["title"], "brief": spec["brief"],
+             "segments": spec["segments"], "window": spec["window"],
+             "loss_percent": spec["loss_percent"]}
+            for key, spec in sim.SCENARIOS.items()
+        ]
+    }
+
+
+@router.post("/sim/init")
+async def sim_initialize(body: SimInit) -> dict[str, Any]:
+    try:
+        return sim.init(body.scenario, body.seed)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="unknown_scenario") from exc
+
+
+@router.post("/sim/step")
+async def sim_advance(body: SimStep) -> dict[str, Any]:
+    """Advance the console one tick.
+
+    Purely for interactivity — grading never trusts this. The learner's action
+    log is replayed server-side from the seed when the step is submitted.
+    """
+    if body.state.get("scenario") not in sim.SCENARIOS:
+        raise HTTPException(status_code=400, detail="bad_state")
+    return sim.step(body.state, body.action)
