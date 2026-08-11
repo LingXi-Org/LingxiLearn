@@ -2,7 +2,9 @@
 
 The SSE endpoint is the interesting one: it serves from the persisted event log
 rather than from the live run, honours ``Last-Event-ID``, sends heartbeat
-comments while idle, and closes on a terminal status.  A learner who reloads
+comments while idle, and closes only when the session actually finishes.
+Pausing for the learner keeps the connection open, because the session is still
+alive and will emit again the moment they answer.  A learner who reloads
 mid-lesson reconnects and catches up; nothing is lost because nothing was only
 ever in flight.
 """
@@ -222,7 +224,10 @@ async def stream_events(session_id: str, request: Request) -> StreamingResponse:
 
             current = await svc.repo.get_session(session_id)
             status = current.status if current else "failed"
-            if status in TERMINAL or status == "awaiting_learner":
+            # Only a terminal status closes the stream. `awaiting_learner` means
+            # the session is alive and will emit again the moment the learner
+            # answers, so the connection is held open with heartbeats instead.
+            if status in TERMINAL:
                 # Drain anything appended between the query and the status read.
                 tail = await svc.repo.events_after(session_id, cursor)
                 for event in tail:

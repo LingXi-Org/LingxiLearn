@@ -21,7 +21,12 @@ from pathlib import Path
 from typing import Any
 
 from lingxigraph import Command, GraphCancelledError, PostgresSaver, SqliteSaver
-from lingxigraph.errors import BudgetExceededError, GraphRecursionError, GraphTimeoutError
+from lingxigraph.errors import (
+    BudgetExceededError,
+    EmptyInputError,
+    GraphRecursionError,
+    GraphTimeoutError,
+)
 
 from .brains.base import TutorBrain
 from .config import Settings, get_settings
@@ -195,11 +200,17 @@ class Service:
             raise KeyError(f"unknown session: {session_id}")
         pack = self.packs[record.pack_id]
         graph = await self.graph_for(record.pack_id)
-        state = await graph.aget_state(self.config_for(session_id, pack))
-        values = dict(state.values or {})
+        try:
+            state = await graph.aget_state(self.config_for(session_id, pack))
+        except EmptyInputError:
+            # The run was created microseconds ago and has not written its first
+            # checkpoint yet. That is a normal race for a client that navigates
+            # straight into the classroom, not a server error.
+            state = None
+        values = dict(getattr(state, "values", None) or {})
         pending = [
             {"id": str(m.id), "resumable": bool(m.resumable), "value": m.value}
-            for m in (state.interrupts or ())
+            for m in (getattr(state, "interrupts", None) or ())
         ]
         mission = pack.missions.get(record.mission_id)
         return {
@@ -308,7 +319,10 @@ class Service:
         self, session_id: str, pack: Pack, learner_id: str, config: dict[str, Any]
     ) -> str:
         graph = await self.graph_for(pack.id)
-        state = await graph.aget_state(config)
+        try:
+            state = await graph.aget_state(config)
+        except EmptyInputError:
+            return "failed"
         values = dict(state.values or {})
         if state.interrupts:
             return "awaiting_learner"

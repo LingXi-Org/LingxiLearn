@@ -178,8 +178,10 @@ steps:
     concepts: [tcp.reliability]
     scene: packet_lab
     tools:
+      - { call: net.pcap.ladder,    args: { artifact: capture }, as: ladder,    summary: 时空梯形图 }
       - { call: net.pcap.anomalies, args: { artifact: capture }, as: anomalies, summary: 重传与重复确认 }
       - { call: net.pcap.frames,    args: { artifact: capture, limit: 60 }, as: frames, summary: 帧列表 }
+      - { call: net.pcap.waterfall, args: { artifact: capture }, as: waterfall, summary: 帧角色标注 }
     knowledge: ["TCP 快重传 重复确认 三个"]
     ask: 第 10 帧到第 14 帧之间，服务器方向长时间没有新数据。这段时间里到底在发生什么？
     expects: choice
