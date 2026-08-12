@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   agentTaskToCanvasGraph,
+  agentTaskToAgentRuns,
   agentTaskToSimActivity,
   agentTaskToSimMessages,
   agentTaskToSimResources,
@@ -57,6 +58,21 @@ describe("agent task adapter", () => {
     expect(messages[1].contentBlocks.map((block) => block.type)).toEqual(["text"]);
     expect(messages[1].content).toContain("课程引入设计 Agent 已接收任务");
     expect(agentTaskToSimResources(task()).map((resource) => resource.kind)).toEqual(["lesson-intro", "lecture-deck", "quiz", "visual"]);
+  });
+
+  it("renders reasoning and tool lifecycle events in task output", () => {
+    const events = [
+      { sequence: 1, kind: "agent.started", agent: "lecture_hook", payload: {}, ts: null },
+      { sequence: 2, kind: "reasoning.delta", agent: "lecture_hook", payload: { delta: "先阅读 skill" }, ts: null },
+      { sequence: 3, kind: "tool.call.delta", agent: "lecture_hook", payload: { chunks: [{ name: "read_skill" }] }, ts: null },
+      { sequence: 4, kind: "tool.result", agent: "lecture_hook", payload: { name: "read_skill", content: "已读取" }, ts: null },
+    ];
+    const messages = agentTaskToSimMessages(task(), events);
+    expect(messages[1].content).toContain("思考 · 先阅读 skill");
+    const run = agentTaskToAgentRuns(task(), events)[0];
+    expect(run.groupItems?.some((item) => item.type === "tool" && item.title === "工具调用")).toBe(true);
+    expect(run.groupItems?.some((item) => item.type === "tool" && item.title.includes("工具结果"))).toBe(true);
+    expect(agentTaskToSimActivity(task(), events).tools.map((tool) => tool.status)).toEqual(["executing", "success"]);
   });
 
   it("reports partial and failed task states", () => {

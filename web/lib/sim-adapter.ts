@@ -262,10 +262,32 @@ export function agentTaskToAssistantSegments(task: AgentTaskSnapshot, events: Ag
     }
     if (event.kind === "tool.call.delta") {
       const run = isAgentEvent ? ensureRun(event.agent, event.sequence) : undefined;
-      const detail = typeof event.payload.message === "string" ? event.payload.message : JSON.stringify(event.payload.chunks || event.payload);
+      const detail = JSON.stringify(event.payload, null, 2);
       const tool = { type: "tool" as const, id: `tool-${event.sequence}`, title: "工具调用", detail, status: "executing" as const };
       if (run) run.groupItems?.push(tool);
       else segments.push(tool);
+      continue;
+    }
+    if (event.kind === "tool.result") {
+      const run = isAgentEvent ? ensureRun(event.agent, event.sequence) : undefined;
+      const tool = {
+        type: "tool" as const,
+        id: `tool-result-${event.sequence}`,
+        title: `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}`,
+        detail: JSON.stringify(event.payload, null, 2),
+        status: "success" as const,
+      };
+      if (tool.type === "tool") {
+        if (run) run.groupItems?.push(tool);
+        else segments.push(tool);
+      }
+      continue;
+    }
+    if (event.kind === "reasoning.delta" || event.kind === "assistant.delta") {
+      const run = ensureRun(event.agent || "intent", event.sequence);
+      appendRunText(run, event, event.kind === "reasoning.delta"
+        ? `思考 · ${String(event.payload.delta || "")}`
+        : `输出 · ${String(event.payload.delta || "")}`);
       continue;
     }
     if (event.kind === "intent.started" || event.kind === "intent.completed" || event.kind === "agent.started" || event.kind === "agent.output" || event.kind === "artifact.ready" || event.kind === "agent.completed" || event.kind === "agent.failed") {
@@ -306,7 +328,14 @@ export function agentTaskToSimActivity(task: AgentTaskSnapshot | null, events: A
   return {
     summary,
     agents: agentTaskToAgentRuns(task, events),
-    tools: [],
+    tools: dedupeSimEvents(events)
+      .filter((event) => event.kind === "tool.call.delta" || event.kind === "tool.result")
+      .map((event) => ({
+        id: `activity-tool-${event.sequence}`,
+        displayTitle: event.kind === "tool.result" ? `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}` : "工具调用",
+        detail: JSON.stringify(event.payload, null, 2),
+        status: event.kind === "tool.result" ? "success" as const : "executing" as const,
+      })),
     evidence: [],
     running: task.status === "queued" || task.status === "running",
     error: task.error || undefined,
@@ -314,22 +343,45 @@ export function agentTaskToSimActivity(task: AgentTaskSnapshot | null, events: A
 }
 
 export function agentTaskToAgentRuns(task: AgentTaskSnapshot, events: AgentTaskEvent[]): SimAgentRun[] {
-  const ordered = dedupeSimEvents(events).filter((event) => event.agent && event.agent !== "coordinator");
+  const ordered = dedupeSimEvents(events).filter((event) => event.agent);
   return [...new Set(ordered.map((event) => event.agent))].map((agent) => {
     const relevant = ordered.filter((event) => event.agent === agent);
     const failed = relevant.some((event) => event.kind.endsWith("failed"));
     const complete = relevant.some((event) => event.kind.endsWith("completed"));
+    const groupItems = relevant.flatMap((event) => {
+      const item = eventToGroupItem(event, task);
+      return item ? [item] : [];
+    });
     return {
       id: `run-${agent}`,
       agent,
       label: agentLabel(agent),
       status: failed ? "error" : complete ? "complete" : "running",
-      items: relevant.map((event) => ({ id: `${event.sequence}-${event.kind}`, content: eventLine(event, task), status: event.kind.endsWith("failed") ? "error" : event.kind.endsWith("completed") || event.kind === "artifact.ready" ? "complete" : "running" })),
+      items: groupItems.filter((item): item is Extract<SimAgentGroupItem, { type: "text" }> => item.type === "text").map((item) => ({ id: item.id, content: item.content, status: item.status === "error" ? "error" : item.status === "complete" ? "complete" : "running" })),
+      groupItems,
     };
   });
 }
 
+function eventToGroupItem(event: AgentTaskEvent, task: AgentTaskSnapshot): SimAgentGroupItem | null {
+  if (event.kind === "tool.call.delta") {
+    return { type: "tool", id: `tool-${event.sequence}`, title: "工具调用", detail: JSON.stringify(event.payload, null, 2), status: "executing" };
+  }
+  if (event.kind === "tool.result") {
+    return { type: "tool", id: `tool-result-${event.sequence}`, title: `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}`, detail: JSON.stringify(event.payload, null, 2), status: "success" };
+  }
+  const content = eventLine(event, task);
+  if (!content) return null;
+  return {
+    type: "text",
+    id: `${event.sequence}-${event.kind}`,
+    content,
+    status: event.kind.endsWith("failed") ? "error" : event.kind.endsWith("completed") || event.kind === "artifact.ready" ? "complete" : "running",
+  };
+}
+
 export function agentLabel(agent: string): string {
+  if (agent === "coordinator") return "Agent 编排器";
   if (agent === "intent") return "Intent Recognizer";
   if (agent === "lecture_hook") return "课程引入设计 Agent";
   if (agent === "interactive_lecture_deck") return "交互式讲解课件 Agent";
@@ -345,13 +397,21 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
   if (event.kind === "task.started") return "任务已创建，正在启动意图识别。";
   if (event.kind === "intent.started") return "正在识别问题意图…";
   if (event.kind === "intent.completed") return `已识别主题：“${String(event.payload.topic || task.intent.topic || "未命名主题")}”。`;
-  if (event.kind === "agent.started") return `${agentLabel(event.agent)} 已接收任务，开始执行。`;
-  if (event.kind === "agent.output") return message || `${agentLabel(event.agent)} 生成了新的关键输出。`;
-  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : event.payload.artifact === "lesson-intro" ? "课程引入页面" : "课件产物"}已就绪。`;
-  if (event.kind === "agent.completed") return `${agentLabel(event.agent)} 已完成。`;
+  if (event.kind === "agent.started") return `${agentLabel(event.agent)} 已接收任务，开始执行。\n${JSON.stringify(event.payload, null, 2)}`;
+  if (event.kind === "agent.output") return `${message || `${agentLabel(event.agent)} 生成了新的关键输出。`}\n${JSON.stringify(event.payload, null, 2)}`;
+  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : event.payload.artifact === "lesson-intro" ? "课程引入页面" : "课件产物"}已就绪。\n${JSON.stringify(event.payload, null, 2)}`;
+  if (event.kind === "agent.completed") return `${agentLabel(event.agent)} 已完成。\n${JSON.stringify(event.payload, null, 2)}`;
   if (event.kind === "agent.failed") return `${agentLabel(event.agent)} 执行失败：${message || String(event.payload.error || "未知错误")}`;
   if (event.kind === "task.completed") return event.payload.status === "partial" ? "任务部分完成，可查看当前已生成产物。" : "所有 Agent 已完成。";
   if (event.kind === "task.failed") return message || task.error || "任务执行失败。";
+  if (event.kind === "reasoning.delta") return `思考 · ${String(event.payload.delta || "")}${event.payload.debug ? `\n${JSON.stringify(event.payload.debug, null, 2)}` : ""}`;
+  if (event.kind === "assistant.delta") return `输出 · ${String(event.payload.delta || "")}${event.payload.debug ? `\n${JSON.stringify(event.payload.debug, null, 2)}` : ""}`;
+  if (event.kind === "tool.call.delta") return `工具调用 · ${JSON.stringify(event.payload, null, 2)}`;
+  if (event.kind === "tool.result") return `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}\n${JSON.stringify(event.payload, null, 2)}`;
+  if (event.kind === "model.usage") return `模型用量 · ${JSON.stringify(event.payload.usage || {})}`;
+  if (event.kind === "node.started" || event.kind === "node.completed" || event.kind === "node.retrying" || event.kind === "interrupt.raised") {
+    return `${agentLabel(event.agent)} · ${event.kind}\n${JSON.stringify(event.payload, null, 2)}`;
+  }
   return "";
 }
 

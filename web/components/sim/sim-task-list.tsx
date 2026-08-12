@@ -1,37 +1,29 @@
 "use client";
 
-import { CircleCheck, CircleDot, CircleX, Clock3, ListTodo } from "lucide-react";
-import { useState } from "react";
+import { ListTodo } from "lucide-react";
 import { SimAgentGroup } from "@/components/sim/source/agent-group";
-import { SimButton } from "@/components/sim/source/button";
-import { agentLabel, dedupeSimEvents, type AgentCanvasGraph, type SimAgentRun } from "@/lib/sim-adapter";
+import { agentTaskToAgentRuns, dedupeSimEvents, type AgentCanvasGraph } from "@/lib/sim-adapter";
 import type { AgentTaskEvent, AgentTaskSnapshot } from "@/lib/types";
 
 export function SimTaskList({ task, events, graph }: { task: AgentTaskSnapshot; events: AgentTaskEvent[]; graph: AgentCanvasGraph }) {
-  const [showPayloads, setShowPayloads] = useState(true);
   const ordered = dedupeSimEvents(events);
-  const runs = agentRuns(ordered);
+  const runs = agentTaskToAgentRuns(task, ordered);
   return <div className="mx-auto flex max-w-5xl flex-col gap-4" data-testid="sim-task-list">
     <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-1)]">
-      <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3"><ListTodo className="size-4 text-[var(--brand)]" /><div className="min-w-0 flex-1"><h2 className="text-sm font-medium">任务列表</h2><p className="truncate text-[11px] text-[var(--text-muted)]">{task.id} · {task.prompt}</p></div><span className="rounded-full bg-[var(--surface-4)] px-2 py-1 text-[10px] text-[var(--text-muted)]">{statusLabel(task.status)}</span></header>
-      <div className="grid gap-3 p-4 sm:grid-cols-3"><Metric label="Graph 节点" value={String(graph.nodes.length)} /><Metric label="执行事件" value={String(ordered.length)} /><Metric label="Agent 数量" value={String(runs.length)} /></div>
-      <div className="border-t border-[var(--border)] px-4 py-3"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-medium">Graph 调试信息</h3><span className="font-mono text-[10px] text-[var(--text-muted)]">{graph.edges.length} edges</span></div><div className="grid gap-2 md:grid-cols-2">{graph.nodes.map((node) => <div key={node.id} className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-3)] p-2"><StatusIcon status={node.status} /><div className="min-w-0"><div className="text-xs font-medium">{node.label}</div><div className="truncate text-[10px] text-[var(--text-muted)]">{node.id} · {node.detail}</div></div></div>)}</div>{graph.edges.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{graph.edges.map((edge, index) => <span key={`${edge.from}-${edge.to}-${index}`} className="rounded bg-[var(--surface-4)] px-2 py-1 font-mono text-[10px] text-[var(--text-muted)]">{edge.from} → {edge.to} · {edge.label}</span>)}</div>}</div>
+      <header className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+        <ListTodo className="size-4 text-[var(--brand)]" />
+        <div className="min-w-0 flex-1"><h2 className="text-sm font-medium">任务列表</h2><p className="truncate text-[11px] text-[var(--text-muted)]">{task.id} · {task.prompt}</p></div>
+        <span className="rounded-full bg-[var(--surface-4)] px-2 py-1 text-[10px] text-[var(--text-muted)]">{statusLabel(task.status)}</span>
+      </header>
+      <div className="grid gap-3 p-4 sm:grid-cols-3 text-xs text-[var(--text-muted)]"><span>Graph 节点：{graph.nodes.length}</span><span>执行事件：{ordered.length}</span><span>Agent：{runs.length}</span></div>
     </section>
-    <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-1)]"><div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3"><div><h3 className="text-xs font-medium">Agent 思考与输出</h3><p className="mt-0.5 text-[11px] text-[var(--text-muted)]">按执行顺序展示原生事件流；payload 可展开查看详细调试信息。</p></div><SimButton type="button" variant="quiet" size="sm" onClick={() => setShowPayloads((value) => !value)}>{showPayloads ? "收起详情" : "展开详情"}</SimButton></div><div className="divide-y divide-[var(--border)]">{runs.length === 0 ? <p className="p-4 text-xs text-[var(--text-muted)]">等待 Agent 事件…</p> : runs.map((run) => <AgentLane key={run.agent} run={run} events={ordered.filter((event) => event.agent === run.agent)} showPayloads={showPayloads} running={task.status === "queued" || task.status === "running"} />)}</div></section>
+    <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-1)]">
+      <div className="border-b border-[var(--border)] px-4 py-3"><h3 className="text-xs font-medium">Agent 思考与输出</h3><p className="mt-0.5 text-[11px] text-[var(--text-muted)]">使用 Sim 原生 AgentGroup 展示 skill 读取、思考、输出、工具调用、工具结果和中间产物。</p></div>
+      <div className="divide-y divide-[var(--border)]">{runs.length === 0 ? <p className="p-4 text-xs text-[var(--text-muted)]">等待 Agent 事件…</p> : runs.map((run) => <div key={run.agent} className="p-4"><SimAgentGroup run={run} isStreaming={task.status === "queued" || task.status === "running"} defaultExpanded /></div>)}</div>
+    </section>
   </div>;
 }
 
-function AgentLane({ run, events, showPayloads, running }: { run: SimAgentRun; events: AgentTaskEvent[]; showPayloads: boolean; running: boolean }) { return <div className="p-4"><SimAgentGroup run={run} isStreaming={running} defaultExpanded /><div className="mt-3 space-y-2 border-l border-[var(--border)] pl-4">{events.map((event) => <div key={event.sequence} className="relative"><span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-[var(--brand)]" /><div className="flex items-center gap-2"><span className="font-mono text-[10px] text-[var(--text-muted)]">#{event.sequence}</span><span className="text-[11px] font-medium">{event.kind}</span><span className="ml-auto text-[10px] text-[var(--text-muted)]">{formatTime(event.ts)}</span></div><p className="mt-1 text-[12px] leading-5 text-[var(--text-secondary)]">{eventMessage(event)}</p>{showPayloads && Object.keys(event.payload).length > 0 && <pre className="mt-1 max-h-40 overflow-auto rounded-md bg-[var(--surface-4)] p-2 font-mono text-[10px] leading-4 text-[var(--text-muted)]">{JSON.stringify(event.payload, null, 2)}</pre>}</div>)}</div></div>; }
-
-function agentRuns(events: AgentTaskEvent[]): SimAgentRun[] { return [...new Set(events.filter((event) => event.agent && event.agent !== "coordinator").map((event) => event.agent))].map((agent) => { const relevant = events.filter((event) => event.agent === agent); const failed = relevant.some((event) => event.kind.endsWith("failed")); const complete = relevant.some((event) => event.kind.endsWith("completed")); return { id: `task-run-${agent}`, agent, label: agentLabel(agent), status: failed ? "error" : complete ? "complete" : "running", items: relevant.map((event) => ({ id: `${event.sequence}`, content: eventMessage(event), status: failed ? "error" : complete ? "complete" : "running" })) }; }); }
-function eventMessage(event: AgentTaskEvent) {
-  if (event.kind === "reasoning.delta") return `思考 · ${String(event.payload.delta || "")}`;
-  if (event.kind === "assistant.delta") return `输出 · ${String(event.payload.delta || "")}`;
-  if (event.kind === "tool.call.delta") return `工具调用流 · ${JSON.stringify(event.payload.chunks || [])}`;
-  if (event.kind === "model.usage") return `模型用量 · ${JSON.stringify(event.payload.usage || {})}`;
-  return typeof event.payload.message === "string" ? event.payload.message : typeof event.payload.error === "string" ? event.payload.error : event.kind === "agent.started" ? `${agentLabel(event.agent)} 开始执行${event.payload.skill ? ` · ${event.payload.skill}` : ""}` : event.kind === "agent.completed" ? `${agentLabel(event.agent)} 已完成` : `${agentLabel(event.agent)} · ${event.kind}`;
+function statusLabel(status: AgentTaskSnapshot["status"]) {
+  return status === "running" ? "执行中" : status === "completed" ? "已完成" : status === "failed" ? "失败" : status === "awaiting_user" ? "等待输入" : status === "partial" ? "部分完成" : status === "handed_off" ? "已返回主图" : "排队中";
 }
-function formatTime(value: string | null) { return value ? new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--:--:--"; }
-function statusLabel(status: AgentTaskSnapshot["status"]) { return status === "running" ? "执行中" : status === "completed" ? "已完成" : status === "failed" ? "失败" : status === "awaiting_user" ? "等待输入" : status === "partial" ? "部分完成" : status === "handed_off" ? "已返回主图" : "排队中"; }
-function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-lg bg-[var(--surface-3)] px-3 py-2"><div className="text-[10px] text-[var(--text-muted)]">{label}</div><div className="mt-1 text-lg font-medium">{value}</div></div>; }
-function StatusIcon({ status }: { status: string }) { return status === "complete" ? <CircleCheck className="mt-0.5 size-4 shrink-0 text-[var(--brand)]" /> : status === "error" ? <CircleX className="mt-0.5 size-4 shrink-0 text-red-600" /> : status === "running" ? <CircleDot className="mt-0.5 size-4 shrink-0 text-[var(--brand)]" /> : <Clock3 className="mt-0.5 size-4 shrink-0 text-[var(--text-muted)]" />; }

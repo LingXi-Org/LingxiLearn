@@ -6,17 +6,37 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from lingxigraph import AIMessage, FilesystemSkillSource
+from lingxigraph import AIMessage, AIMessageChunk, FilesystemSkillSource, ToolCallChunk, ToolMessage
 
 from lingxilearn.agents.artifact_store import ArtifactError, ArtifactStore
 from lingxilearn.agents.contracts import IntentContext, LectureHookResult, extract_json
 from lingxilearn.agents.graph import build_agent_graph
+from lingxilearn.service import Service, _message_trace_events
 from lingxilearn.agents.web_tools import _assert_public_url
 from lingxilearn.agents.skill_runtime import ArtifactDraft, progressive_skill_prompt, staged_artifact_tools
 from lingxilearn.config import Settings
-from lingxilearn.service import Service
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_agent_trace_preserves_reasoning_tool_calls_and_results() -> None:
+    chunk = AIMessageChunk(
+        "",
+        additional_kwargs={"reasoning_content": "先阅读 skill，再生成产物"},
+        tool_call_chunks=(ToolCallChunk(name="read_skill", args='{"skill_name":"lesson-intro"}', id="call-1", index=0),),
+    )
+    reasoning_and_tool = _message_trace_events((chunk, {"agent": "lecture_hook"}), "coordinator")
+    assert {event["kind"] for event in reasoning_and_tool} == {"reasoning.delta", "tool.call.delta"}
+
+    result = _message_trace_events(
+        (ToolMessage(content="SKILL.md 内容", tool_call_id="call-1", name="read_skill"), {"agent": "lecture_hook"}),
+        "coordinator",
+    )
+    assert result[0]["kind"] == "tool.result"
+    assert result[0]["agent"] == "lecture_hook"
+    assert result[0]["payload"]["tool_call_id"] == "call-1"
+    assert result[0]["payload"]["name"] == "read_skill"
+    assert result[0]["payload"]["content"] == "SKILL.md 内容"
 
 
 def test_agent_skills_are_discoverable_and_have_resources() -> None:

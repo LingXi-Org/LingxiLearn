@@ -14,14 +14,68 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Any
 from uuid import uuid4
 
-from lingxigraph import AIMessageChunk, ToolCallChunk
+from lingxigraph import AIMessage, AIMessageChunk, ToolCallChunk
 from lingxigraph.integrations import OpenAICompatChatModel
 from lingxigraph.integrations._http import should_retry_status, sleep_before_retry
+from lingxigraph.integrations.openai_compat import _tool_calls
 from lingxigraph.runtime import get_runtime
 
 
 class TracedOpenAICompatChatModel(OpenAICompatChatModel):
     """Keep reasoning deltas available to LingxiGraph's message stream."""
+
+    def _payload(
+        self,
+        messages: Sequence[Any],
+        tools: Sequence[Any] | None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Keep DeepSeek reasoning content across tool-call turns."""
+
+        payload = super()._payload(messages, tools, **kwargs)
+        encoded_messages = payload.get("messages") or []
+        for message, encoded in zip(messages, encoded_messages, strict=False):
+            if getattr(message, "type", "") != "ai":
+                continue
+            additional = getattr(message, "additional_kwargs", {}) or {}
+            reasoning = (
+                additional.get("reasoning_content")
+                or additional.get("reasoning")
+                or additional.get("thinking")
+            ) if isinstance(additional, dict) else None
+            if reasoning:
+                encoded["reasoning_content"] = str(reasoning)
+        return payload
+
+    async def _agenerate_raw(
+        self,
+        messages: Sequence[Any],
+        *,
+        tools: Sequence[Any] | None = None,
+        **kwargs: Any,
+    ) -> AIMessage:
+        """Preserve reasoning metadata on non-streaming Agent invocations too."""
+
+        response = await self._post(self._payload(messages, tools, **kwargs))
+        payload = response.json()
+        choice = payload["choices"][0]
+        message = choice["message"]
+        reasoning = (
+            message.get("reasoning_content")
+            or message.get("reasoning")
+            or message.get("thinking")
+            or ""
+        )
+        return AIMessage(
+            message.get("content") or "",
+            tool_calls=_tool_calls(message.get("tool_calls", ())),
+            usage=dict(payload.get("usage") or {}),
+            additional_kwargs={"reasoning_content": str(reasoning)} if reasoning else {},
+            response_metadata={
+                "finish_reason": choice.get("finish_reason"),
+                "model": payload.get("model"),
+            },
+        )
 
     async def _astream_raw(
         self,
@@ -35,6 +89,7 @@ class TracedOpenAICompatChatModel(OpenAICompatChatModel):
         payload.setdefault("stream_options", {"include_usage": True})
         emitted = False
         operation_key = str(uuid4())
+        reasoning_parts: list[str] = []
         for attempt in range(self.max_retries + 1):
             try:
                 async with self._client.stream(
@@ -84,7 +139,15 @@ class TracedOpenAICompatChatModel(OpenAICompatChatModel):
                             or delta.get("thinking")
                         )
                         if reasoning:
+                            reasoning_parts.append(str(reasoning))
                             additional["reasoning_content"] = reasoning
+                        if choice.get("finish_reason") and reasoning_parts:
+                            # LingxiGraph merges the final chunk into the
+                            # assistant message used for the next tool turn.
+                            # Carry the complete DeepSeek reasoning there or
+                            # its API rejects the follow-up request with 400.
+                            additional["reasoning_content"] = "".join(reasoning_parts)
+                            additional["_reasoning_replay"] = True
                         usage = dict(event.get("usage") or {})
                         value = AIMessageChunk(
                             delta.get("content") or "",

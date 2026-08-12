@@ -89,6 +89,24 @@ def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]
     metadata = value[1] if len(value) > 1 else {}
     agent = _trace_agent(metadata, default_agent)
     events: list[dict[str, Any]] = []
+    message_type = str(getattr(message, "type", "") or "")
+    content = getattr(message, "content", "")
+    if message_type == "tool":
+        events.append(
+            {
+                "kind": "tool.result",
+                "agent": agent,
+                "payload": {
+                    "tool_call_id": getattr(message, "tool_call_id", None),
+                    "name": getattr(message, "name", None),
+                    "content": str(content or ""),
+                    "status": getattr(message, "status", None),
+                    "additional_kwargs": _json_safe(getattr(message, "additional_kwargs", {}) or {}),
+                    "response_metadata": _json_safe(getattr(message, "response_metadata", {}) or {}),
+                },
+            }
+        )
+        return events
     additional = getattr(message, "additional_kwargs", {}) or {}
     reasoning = ""
     if isinstance(additional, dict):
@@ -97,9 +115,16 @@ def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]
             if candidate:
                 reasoning = str(candidate)
                 break
-    if reasoning:
-        events.append({"kind": "reasoning.delta", "agent": agent, "payload": {"delta": reasoning}})
-    content = getattr(message, "content", "")
+    if reasoning and not additional.get("_reasoning_replay"):
+        events.append({
+            "kind": "reasoning.delta",
+            "agent": agent,
+            "payload": {
+                "delta": reasoning,
+                "debug": _json_safe(additional),
+                "response_metadata": _json_safe(getattr(message, "response_metadata", {}) or {}),
+            },
+        })
     if content:
         events.append(
             {"kind": "assistant.delta", "agent": agent, "payload": {"delta": str(content)}}
@@ -119,7 +144,9 @@ def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]
                             "index": getattr(chunk, "index", 0),
                         }
                         for chunk in tool_chunks
-                    ]
+                    ],
+                    "debug": _json_safe(additional),
+                    "response_metadata": _json_safe(getattr(message, "response_metadata", {}) or {}),
                 },
             }
         )
@@ -135,6 +162,16 @@ def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]
             event["payload"],
         )
     return events
+
+
+def _safe_agent_error(exc: BaseException, settings: Settings) -> str:
+    """Expose actionable workflow errors without leaking credentials."""
+
+    detail = str(exc).strip() or type(exc).__name__
+    secret = settings.agent_api_key.get_secret_value()
+    if secret:
+        detail = detail.replace(secret, "[redacted]")
+    return detail[-4000:]
 
 
 def build_brain(settings: Settings) -> TutorBrain:
@@ -588,16 +625,31 @@ class Service:
                     self._notify_agent(task_id)
         except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
             logger.exception("agent task failed: %s", task_id)
+            detail = _safe_agent_error(exc, self.settings)
+            if current_agent != "coordinator":
+                buffer.append(
+                    {
+                        "kind": "agent.failed",
+                        "agent": current_agent,
+                        "payload": {
+                            "error_type": type(exc).__name__,
+                            "message": detail,
+                        },
+                    }
+                )
             buffer.append(
                 {
                     "kind": "task.failed",
                     "agent": "coordinator",
-                    "payload": {"message": f"运行失败：{type(exc).__name__}"},
+                    "payload": {
+                        "error_type": type(exc).__name__,
+                        "message": f"运行失败：{type(exc).__name__}: {detail}",
+                    },
                 }
             )
             await self.repo.append_agent_events(task_id, buffer)
             await self.repo.set_agent_task_status(
-                task_id, "failed", f"运行失败：{type(exc).__name__}"
+                task_id, "failed", f"运行失败：{type(exc).__name__}: {detail}"
             )
             self._notify_agent(task_id)
             return
