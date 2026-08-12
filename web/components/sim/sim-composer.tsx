@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { SimButton } from "@/components/sim/source/button";
-import { SimArrowUp, SimPlus } from "@/components/sim/source/icons";
+import { SimPlus } from "@/components/sim/source/icons";
+import { SimPromptEditor } from "@/components/sim/source/prompt-editor";
+import { SimSendButton } from "@/components/sim/source/send-button";
 
 /**
  * LingxiLearn adaptation of sim's workspace UserInput surface.
@@ -13,10 +14,6 @@ import { SimArrowUp, SimPlus } from "@/components/sim/source/icons";
  * the submit callback remains owned by LingxiLearn's REST/SSE session model.
  * Upstream source: https://github.com/simstudioai/sim/commit/ce2dff3c
  */
-
-const SEND_BUTTON_BASE = "size-[28px] rounded-full border-0 p-0 transition-colors";
-const SEND_BUTTON_ACTIVE = "bg-[#383838] hover:bg-[#575757]";
-const SEND_BUTTON_DISABLED = "bg-[#808080]";
 
 interface SimComposerProps {
   onSubmit: (text: string) => void | Promise<void>;
@@ -38,17 +35,6 @@ export function SimComposer({
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const resize = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 192)}px`;
-  }, []);
-
-  useLayoutEffect(() => {
-    resize();
-  }, [resize, value]);
-
   const submit = useCallback(() => {
     const trimmed = value.trim();
     if (!trimmed || disabled || isSending) return;
@@ -67,21 +53,14 @@ export function SimComposer({
         submit();
       }}
     >
-      <textarea
+      <SimPromptEditor
         ref={textareaRef}
         aria-label={ariaLabel}
         value={value}
         placeholder={placeholder}
-        rows={1}
         disabled={disabled || isSending}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            submit();
-          }
-        }}
-        className="block max-h-[200px] min-h-[56px] w-full resize-none overflow-y-auto bg-transparent text-[14px] leading-6 tracking-[-0.015em] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-70"
+        onValueChange={setValue}
+        onSubmit={submit}
       />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
@@ -89,25 +68,12 @@ export function SimComposer({
           <span className="text-[11px] text-[var(--text-muted)]">Agent Task</span>
         </div>
         <div className="flex items-center gap-1.5">
-        {isSending ? (
-          <span className="grid size-7 place-items-center rounded-full bg-[var(--surface-5)]" aria-label="任务提交中" title="任务提交中"><span className="size-3 animate-spin rounded-full border-2 border-white/40 border-t-white" /></span>
-        ) : (
-          <SimButton
-            type="submit"
-            variant="ghost"
-            size="icon"
-            disabled={disabled || isSending || !value.trim()}
-            className={cn(
-              SEND_BUTTON_BASE,
-              "grid place-items-center text-white",
-              disabled || isSending || !value.trim() ? SEND_BUTTON_DISABLED : SEND_BUTTON_ACTIVE,
-            )}
-            aria-label="发送任务"
-            title="发送任务"
-          >
-            <SimArrowUp className="size-4" />
-          </SimButton>
-        )}
+        <SimSendButton
+          isSending={isSending}
+          disabled={disabled || isSending || !value.trim()}
+          aria-label="发送任务"
+          title="发送任务"
+        />
         </div>
       </div>
     </form>

@@ -3,6 +3,7 @@
 import { Check, Clipboard, FileText, Sparkles, Wrench } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { SimComposer } from "@/components/sim/sim-composer";
+import { SimButton } from "@/components/sim/source/button";
 import { SimAgentGroup } from "@/components/sim/source/agent-group";
 import { Expandable, ExpandableContent } from "@/components/sim/source/expandable";
 import { useSmoothText } from "@/hooks/use-smooth-text";
@@ -69,9 +70,9 @@ function SimMessageRow({ message }: { message: SimMessage }) {
         {!isUser && message.contentBlocks.filter((block) => block.type !== "text").map((block) => <SimBlock key={block.id} block={block} />)}
       </div>
       {!isUser && message.content && (
-        <button type="button" onClick={() => void copy()} className="mt-1 grid size-8 place-items-center self-start rounded-md text-[var(--text-icon)] opacity-0 transition-opacity hover:bg-[var(--surface-hover)] group-hover/message:opacity-100" aria-label="复制消息">
+        <SimButton type="button" variant="quiet" size="icon" onClick={() => void copy()} className="mt-1 grid size-8 place-items-center self-start rounded-md opacity-0 transition-opacity group-hover/message:opacity-100" aria-label="复制消息">
           {copied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
-        </button>
+        </SimButton>
       )}
     </article>
   );
@@ -88,7 +89,7 @@ function SimActivity({ activity }: { activity: SimActivity }) {
   const [expanded, setExpanded] = useState(false);
   if (!activity.summary && !activity.agents.length && !activity.tools.length && !activity.evidence.length) return null;
   return <div className="mb-2 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-sm text-[var(--text-secondary)]" data-testid="sim-execution-trace">
-    <button type="button" onClick={() => setExpanded((value) => !value)} className="flex w-full items-center gap-2 text-left font-medium text-[var(--text-primary)]"><Sparkles className="size-4 text-[var(--brand)]" /><span>执行过程</span><span className="ml-auto text-[11px] font-normal text-[var(--text-muted)]">{expanded ? "收起" : "展开"}</span></button>
+    <SimButton type="button" variant="quiet" onClick={() => setExpanded((value) => !value)} className="flex w-full items-center justify-start gap-2 rounded-none px-0 text-left font-medium text-[var(--text-primary)]"><Sparkles className="size-4 text-[var(--brand)]" /><span>执行过程</span><span className="ml-auto text-[11px] font-normal text-[var(--text-muted)]">{expanded ? "收起" : "展开"}</span></SimButton>
     <Expandable expanded={expanded}><ExpandableContent><div className="mt-2 space-y-2 border-t border-[var(--border)] pt-2">{activity.agents.map((run) => <SimAgentGroup key={run.id} run={run} isStreaming={activity.running} />)}</div></ExpandableContent></Expandable>
   </div>;
 }

@@ -257,7 +257,7 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
 export function agentTaskToSimResources(task: AgentTaskSnapshot | null): SimResourceDescriptor[] {
   if (!task) return [];
   return [
-    { id: `${task.id}-background`, title: "课程引入设计背景产物", kind: "background", available: task.artifacts.background.available, description: "课程引入设计 Agent 生成的 Markdown 课堂背景" },
+    { id: `${task.id}-background`, title: "课程引入设计", kind: "background", available: task.artifacts.background.available, description: "课程引入设计 Agent 生成的独立 HTML 页面" },
     { id: `${task.id}-visual`, title: "交互式可视化讲解页面", kind: "visual", available: task.artifacts.visual.available, description: "交互式可视化讲解 Agent 生成的独立 HTML 页面" },
   ];
 }

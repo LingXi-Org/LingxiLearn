@@ -19,12 +19,8 @@ export function useAgentArtifact(taskId: string | undefined, kind: "background" 
     void api.fetchArtifact(api.agentArtifactUrl(taskId, kind))
       .then(async (blob) => {
         if (cancelled) return;
-        if (kind === "visual") {
-          objectUrl = URL.createObjectURL(blob);
-          setContent(objectUrl);
-        } else {
-          setContent(await blob.text());
-        }
+        objectUrl = URL.createObjectURL(blob);
+        setContent(objectUrl);
       })
       .catch((cause) => {
         if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));

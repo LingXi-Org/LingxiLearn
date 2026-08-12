@@ -1,79 +1,20 @@
 "use client";
 
-import { memo, useMemo, type ComponentType } from "react";
+import { useMemo } from "react";
 import {
   Background,
   Controls,
-  Handle,
   MiniMap,
-  Position,
   ReactFlow,
   ReactFlowProvider,
   type Edge,
   type Node,
-  type NodeProps,
   type NodeTypes,
 } from "@xyflow/react";
-import { Bot, Check, GitBranch, Merge, Play, Sparkles, Timer, X } from "lucide-react";
-import type { AgentCanvasGraph, AgentCanvasNodeKind, AgentCanvasStatus } from "@/lib/sim-adapter";
+import type { AgentCanvasGraph } from "@/lib/sim-adapter";
+import { SimWorkflowBlock, type SimWorkflowBlockData, colorByStatus } from "./workflow-block";
 
-type WorkflowNodeData = {
-  label: string;
-  kind: AgentCanvasNodeKind;
-  status: AgentCanvasStatus;
-  detail: string;
-  nodeId: string;
-  onSelect?: (id: string) => void;
-};
-
-const iconByKind: Record<AgentCanvasNodeKind, ComponentType<{ className?: string }>> = {
-  input: Play,
-  intent: Sparkles,
-  agent: Bot,
-  merge: Merge,
-};
-
-const colorByStatus: Record<AgentCanvasStatus, string> = {
-  pending: "#a3a3a3",
-  running: "#7f77dd",
-  complete: "#1d9e75",
-  error: "#d85a30",
-};
-
-const labelByStatus: Record<AgentCanvasStatus, string> = {
-  pending: "等待",
-  running: "执行中",
-  complete: "完成",
-  error: "失败",
-};
-
-const WorkflowBlock = memo(function WorkflowBlock({ data }: NodeProps<Node<WorkflowNodeData>>) {
-  const Icon = iconByKind[data.kind] ?? GitBranch;
-  const statusColor = colorByStatus[data.status];
-  return (
-    <div role="button" tabIndex={0} onClick={() => data.onSelect?.(data.nodeId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") data.onSelect?.(data.nodeId); }} className="group relative w-[250px] select-none rounded-lg border border-[var(--border-1)] bg-[var(--surface-2)] text-[var(--text-primary)] shadow-[0_1px_2px_rgb(0_0_0/5%)]">
-      <Handle type="target" position={Position.Top} id="target" className="!top-[-8px] !h-[7px] !w-5 !rounded-b-none !rounded-t-[2px] !border-0" style={{ background: statusColor }} />
-      <div className="workflow-drag-handle flex h-11 cursor-grab items-center gap-2.5 border-b border-[var(--border-1)] p-2 active:cursor-grabbing">
-        <span className="grid size-7 shrink-0 place-items-center rounded-md text-white" style={{ backgroundColor: statusColor }}>
-          <Icon className="size-4" />
-        </span>
-        <span className="min-w-0 flex-1 truncate text-[14px] font-medium">{data.label}</span>
-        <span className="flex shrink-0 items-center gap-1 text-[10px]" style={{ color: statusColor }}>
-          {data.status === "running" && <Timer className="size-3 animate-spin" />}
-          {data.status === "complete" && <Check className="size-3" />}
-          {data.status === "error" && <X className="size-3" />}
-          {labelByStatus[data.status]}
-        </span>
-      </div>
-      <div className="min-h-[52px] p-2 text-[11px] leading-5 text-[var(--text-muted)]">
-        <p className="line-clamp-2">{data.detail}</p>
-      </div>
-      <Handle type="source" position={Position.Bottom} id="source" className="!bottom-[-8px] !h-[7px] !w-5 !rounded-b-[2px] !rounded-t-none !border-0" style={{ background: statusColor }} />
-    </div>
-  );
-});
-
-const nodeTypes: NodeTypes = { workflowBlock: WorkflowBlock };
+const nodeTypes: NodeTypes = { workflowBlock: SimWorkflowBlock };
 
 function layoutGraph(graph: AgentCanvasGraph, onNodeSelect?: (id: string) => void) {
   // Layout is derived from the graph supplied by the live task. Nothing is
@@ -96,7 +37,7 @@ function layoutGraph(graph: AgentCanvasGraph, onNodeSelect?: (id: string) => voi
     const level = levels.get(node.id) ?? 0;
     byLevel.set(level, [...(byLevel.get(level) ?? []), node]);
   }
-  const nodes: Node<WorkflowNodeData>[] = graph.nodes.map((node) => {
+  const nodes: Node<SimWorkflowBlockData>[] = graph.nodes.map((node) => {
     const level = levels.get(node.id) ?? 0;
     const peers = byLevel.get(level) ?? [node];
     const index = peers.findIndex((peer) => peer.id === node.id);
@@ -142,7 +83,7 @@ export function SimWorkflowCanvas({ graph, onNodeSelect }: { graph: AgentCanvasG
       >
         <Background color="var(--border)" gap={22} size={1} />
         <Controls showInteractive={false} />
-        <MiniMap nodeColor={(node) => colorByStatus[(node.data as WorkflowNodeData).status]} maskColor="rgb(248 248 248 / 0.7)" />
+        <MiniMap nodeColor={(node) => colorByStatus[(node.data as SimWorkflowBlockData).status]} maskColor="rgb(248 248 248 / 0.7)" />
       </ReactFlow>
     </ReactFlowProvider>
   );
