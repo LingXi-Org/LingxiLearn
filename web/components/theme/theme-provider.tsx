@@ -18,10 +18,6 @@ function applyTheme(theme: Theme) {
   root.dataset.theme = theme;
   root.style.colorScheme = theme;
 
-  document.querySelector<HTMLLinkElement>("#lingxi-favicon")?.setAttribute(
-    "href",
-    theme === "dark" ? "/lingxi_logo_dark.ico" : "/lingxi_logo_light.ico",
-  );
 }
 
 function getInitialTheme(): Theme {

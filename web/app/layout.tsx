@@ -18,8 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <head>
-        <link id="lingxi-favicon" rel="icon" href="/lingxi_logo_light.ico" />
-        <link rel="icon" href="/lingxi_logo_dark.ico" media="(prefers-color-scheme: dark)" />
+        <link rel="icon" href="/logo_icon_white.svg" />
         <meta property="og:title" content="灵犀智学" />
         <meta property="og:description" content="对话驱动的智能学习工作台。" />
         <meta property="og:image" content="/og.png" />
