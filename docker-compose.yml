@@ -11,6 +11,10 @@ name: lingxilearn
 x-api: &api
   build:
     context: ./server
+    args:
+      DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
+      APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+      PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
   env_file: [.env]
   environment:
     LINGXILEARN_DATABASE_URL: >-
@@ -31,7 +35,7 @@ x-api: &api
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: ${DOCKER_REGISTRY:-docker.m.daocloud.io}/library/postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
@@ -51,6 +55,8 @@ services:
       context: ./web
       target: dist
       args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
         NEXT_PUBLIC_LOGTO_ENDPOINT: ${NEXT_PUBLIC_LOGTO_ENDPOINT:-}
         NEXT_PUBLIC_LOGTO_APP_ID: ${NEXT_PUBLIC_LOGTO_APP_ID:-}

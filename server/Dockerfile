@@ -1,19 +1,23 @@
-# syntax=docker/dockerfile:1.7
 # LingxiLearn API. Two stages so no build toolchain reaches the runtime layer.
+# Defaults are domestic mirrors; override them with Compose build args when needed.
 
-FROM ghcr.io/astral-sh/uv:0.9.7 AS uvbin
+ARG DOCKER_REGISTRY=docker.m.daocloud.io
+FROM ${DOCKER_REGISTRY}/library/python:3.13-slim AS builder
 
-FROM python:3.13-slim AS builder
-COPY --from=uvbin /uv /uvx /bin/
+ARG PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 COPY pyproject.toml README.md ./
 COPY lingxilearn ./lingxilearn
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv venv && uv pip install --no-cache .
+RUN python -m pip install --no-cache-dir --index-url ${PYPI_INDEX_URL} uv \
+ && uv venv \
+ && uv pip install --no-cache --index-url ${PYPI_INDEX_URL} .
 
-FROM python:3.13-slim AS runtime
-RUN apt-get update \
+ARG DOCKER_REGISTRY=docker.m.daocloud.io
+FROM ${DOCKER_REGISTRY}/library/python:3.13-slim AS runtime
+ARG APT_MIRROR=mirrors.aliyun.com
+RUN sed -i "s@deb.debian.org@${APT_MIRROR}@g; s@security.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
  && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 lingxi \
