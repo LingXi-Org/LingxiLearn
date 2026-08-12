@@ -9,6 +9,7 @@ only exception, and it always resolves to the configured fixed subject.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 
 import httpx
@@ -16,6 +17,8 @@ from fastapi import HTTPException, Request
 from lingxi_identity import OidcVerifier, Principal  # type: ignore[import-untyped]
 
 from .config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 def _authentication_error(detail: str = "invalid_token") -> HTTPException:
@@ -66,6 +69,16 @@ class Authenticator:
                 detail="identity_provider_unavailable",
             ) from exc
         except Exception as exc:  # noqa: BLE001 - all verifier failures are 401
+            # Keep the token itself out of logs, but expose the verifier
+            # failure class so a deployment can distinguish issuer, audience,
+            # expiry, and signature problems from a missing Authorization
+            # header.
+            logger.warning(
+                "OIDC bearer rejected: %s (issuer=%s audience=%s)",
+                type(exc).__name__,
+                self.settings.oidc_issuer,
+                self.settings.oidc_audience,
+            )
             raise _authentication_error() from exc
 
 

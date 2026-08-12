@@ -7,6 +7,7 @@ import { setAccessTokenProvider } from "@/lib/api";
 const endpoint = process.env.NEXT_PUBLIC_LOGTO_ENDPOINT;
 const appId = process.env.NEXT_PUBLIC_LOGTO_APP_ID;
 const resource = process.env.NEXT_PUBLIC_LOGTO_RESOURCE;
+const POST_LOGIN_REDIRECT_KEY = "lingxilearn.post-login-redirect";
 function getRedirectUri() {
   return process.env.NEXT_PUBLIC_LOGTO_REDIRECT_URI || `${window.location.origin}/auth/callback/`;
 }
@@ -45,14 +46,19 @@ export function useOidcAdapter() {
     isAuthenticated: logto.isAuthenticated,
     isLoading: logto.isLoading,
     error: logto.error,
-    signIn: () => logto.signIn(getRedirectUri()),
+    signIn: () => {
+      sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, `${window.location.pathname}${window.location.search}`);
+      return logto.signIn(getRedirectUri());
+    },
     signOut: () => logto.signOut(window.location.origin),
   }), [logto]);
 }
 
 export function OidcCallback() {
   const { isLoading, isAuthenticated, error } = useHandleSignInCallback(() => {
-    window.location.replace("/");
+    const redirect = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY) || "/";
+    sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+    window.location.replace(redirect);
   });
 
   if (isLoading) return <p>正在跳转回灵犀智学…</p>;

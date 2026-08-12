@@ -62,13 +62,17 @@ Compose 默认是同源访问，`NEXT_PUBLIC_API_BASE` 保持为空；登录回�
 
 ```dotenv
 LINGXILEARN_INSECURE_DEV_AUTH=false
-LINGXILEARN_OIDC_ISSUER=https://你的身份服务地址
-LINGXILEARN_OIDC_AUDIENCE=你的 API audience/resource
-NEXT_PUBLIC_LOGTO_ENDPOINT=https://你的身份服务地址
+LINGXILEARN_OIDC_ISSUER=https://auth.lingxilearn.cn/oidc
+LINGXILEARN_OIDC_AUDIENCE=https://lingxilearn.cn/api
+NEXT_PUBLIC_LOGTO_ENDPOINT=https://auth.lingxilearn.cn
 NEXT_PUBLIC_LOGTO_APP_ID=前端应用 client id
-NEXT_PUBLIC_LOGTO_RESOURCE=你的 API resource
-NEXT_PUBLIC_LOGTO_REDIRECT_URI=https://你的域名/auth/callback/
+NEXT_PUBLIC_LOGTO_RESOURCE=https://lingxilearn.cn/api
+NEXT_PUBLIC_LOGTO_REDIRECT_URI=https://lingxilearn.cn/auth/callback/
 ```
+
+`LINGXILEARN_OIDC_AUDIENCE` 必须与 `NEXT_PUBLIC_LOGTO_RESOURCE` 完全一致；不要填写身份服务
+地址或带额外尾斜杠的变体。若日志出现 `invalid_token`，先确认这两个值和 issuer 已在同一份
+`.env` 中更新，然后重新构建 `web-build` 和 `api`，避免浏览器继续使用旧的静态 token 配置。
 
 修改 `.env` 后执行：
 

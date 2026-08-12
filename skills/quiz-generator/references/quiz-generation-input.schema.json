@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quiz-generation-input.v1",
+  "title": "Quiz generation input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "intent", "lesson_intro", "interactive_lecture_deck"],
+  "properties": {
+    "schema_version": { "const": "quiz-generation-input.v1" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "intent": { "type": "object" },
+    "lesson_intro": {
+      "type": "object",
+      "required": ["schema_version"],
+      "properties": { "schema_version": { "const": "lesson-intro-result.v1" } }
+    },
+    "interactive_lecture_deck": {
+      "type": "object",
+      "required": ["schema_version"],
+      "properties": { "schema_version": { "const": "interactive-lecture-deck-result.v2" } }
+    }
+  }
+}

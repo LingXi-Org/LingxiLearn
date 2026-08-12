@@ -47,8 +47,10 @@ class Settings(BaseSettings):
     # --- identity ----------------------------------------------------------
     # LingxiIdentity verifies OIDC discovery/JWKS and returns Principal. The
     # resource service never calls the Identity management API.
-    oidc_issuer: str = ""
-    oidc_audience: str = ""
+    # Defaults match the public LingxiLearn deployment. A tenant-specific
+    # deployment should override both values together through the environment.
+    oidc_issuer: str = "https://auth.lingxilearn.cn/oidc"
+    oidc_audience: str = "https://lingxilearn.cn/api"
     oidc_timeout: float = 10.0
     insecure_dev_auth: bool = False
     dev_subject: str = "lingxilearn-dev"

@@ -11,6 +11,7 @@ license and accompanying assets.
 - `adaptive-pedagogy`: 自适应教学。
 - `interactive-lecture-deck`: 交互式讲解课件。
 - `learner-state-reflector`: 学习状态反思。
+- `quiz-generator`: 知识点出题契约骨架（仅定义输入输出规范，尚未实现出题逻辑）。
 
 The backend resolves both directories through LingxiGraph 2.1.0
 `FilesystemSkillSource`; generated task artifacts stay under `var/agent_tasks/`
