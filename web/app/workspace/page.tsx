@@ -1,30 +1,15 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Group, Panel, Separator, useGroupRef, type Layout } from "react-resizable-panels";
-import { MessagesSquare, PanelLeft, Shapes } from "lucide-react";
-import { consumeSimLayoutTransition, SimAppShell } from "@/components/sim/sim-app-shell";
-import { ArtifactWorkspace } from "@/components/workspace/artifact-workspace";
-import { AgentTaskConversation } from "@/components/workspace/agent-task-conversation";
-import { AgentTaskWorkspace } from "@/components/workspace/agent-task-workspace";
-import { LearningConversation } from "@/components/workspace/learning-conversation";
-import { useAgentTask } from "@/hooks/use-agent-task";
-import { useCatalogue } from "@/hooks/use-catalogue";
-import { useLingxiSession } from "@/hooks/use-lingxi-session";
-import { isCatalogueMissionVisible } from "@/lib/catalogue-visibility";
-import {
-  deriveArtifact,
-  draftMessages,
-  makeDraftArtifact,
-  parseWorkspaceMode,
-  reduceAgentActivity,
-  transcriptToMessages,
-  type AgentActivity,
-  type ArtifactDescriptor,
-  type WorkspaceMessage,
-} from "@/lib/workspace";
+import { MessagesSquare } from "lucide-react";
+import { consumeSimLayoutTransition, SimAppShell, markSimLayoutTransition } from "@/components/sim/sim-app-shell";
+import { SimChat } from "@/components/sim/sim-chat";
+import { SimResourcePanel } from "@/components/sim/sim-resource-panel";
+import { SimButton } from "@/components/sim/source/button";
+import { useSimMock } from "@/hooks/use-sim-mock";
+import { mockSidebarData } from "@/lib/sim-mock";
 
 const LAYOUT_KEY = "lingxilearn.workspace.layout";
 
@@ -34,21 +19,14 @@ export default function WorkspacePage() {
 
 function Workspace() {
   const params = useSearchParams();
-  const mode = useMemo(() => parseWorkspaceMode(new URLSearchParams(params.toString())), [params]);
-  const sessionId = mode?.kind === "session" ? mode.sessionId : "";
-  const taskId = mode?.kind === "task" ? mode.taskId : "";
-  const { session, events, error, submitting, submit } = useLingxiSession(sessionId);
-  const { task, events: agentEvents, error: agentError } = useAgentTask(taskId);
-  const { packs, sessions, missionById, loading } = useCatalogue();
+  const router = useRouter();
+  const sidebar = useMemo(() => mockSidebarData(), []);
+  const initialPrompt = params.get("prompt") || (params.get("task") ? "Agent task placeholder" : params.get("id") ? "Learning session placeholder" : "New Sim conversation");
+  const { run, send } = useSimMock(initialPrompt);
   const [mobileView, setMobileView] = useState<"conversation" | "artifact">("conversation");
   const [isDesktop, setIsDesktop] = useState(false);
   const [layoutReady, setLayoutReady] = useState(false);
   const groupRef = useGroupRef();
-
-  const availableMissions = useMemo(
-    () => packs.flatMap((pack) => pack.missions.filter((mission) => isCatalogueMissionVisible(mission.id)).map((mission) => ({ mission, packId: pack.id }))),
-    [packs],
-  );
 
   useEffect(() => {
     const shouldAnimate = consumeSimLayoutTransition();
@@ -73,40 +51,18 @@ function Workspace() {
   }, [groupRef, isDesktop]);
 
   const saveLayout = useCallback((layout: Layout) => window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)), []);
-  const isDraft = mode?.kind === "draft";
-  const messages = useMemo<WorkspaceMessage[]>(() => mode?.kind === "draft" ? draftMessages(mode.prompt) : session ? transcriptToMessages(session.transcript ?? []) : [], [mode, session]);
-  const draftActivity = useMemo<AgentActivity>(() => ({ plan: [], activeStep: undefined, tools: [], evidence: [], running: false, summary: "这只是任务草稿：后端尚未创建任务，也没有 Agent 或工具正在执行。" }), []);
-  const activity = useMemo(() => isDraft ? draftActivity : reduceAgentActivity(events, session), [draftActivity, events, isDraft, session]);
-  const artifact = useMemo<ArtifactDescriptor>(() => {
-    if (mode?.kind === "draft") return makeDraftArtifact(mode.prompt);
-    if (session) return deriveArtifact(session);
-    return { id: "loading", kind: "empty", title: "App Viewer", source: "api", status: error ? "error" : "running", revision: 0, description: error ? "会话加载失败，请返回首页重试。" : "正在读取任务状态与 Artifact。" };
-  }, [error, mode, session]);
-
-  if (!mode) return <div className="grid h-dvh place-items-center bg-[var(--bg)] p-6 text-center"><div><Shapes className="mx-auto size-8 text-[var(--text-icon)]" /><h1 className="mt-4 font-medium">缺少任务参数</h1><p className="mt-2 text-xs text-[var(--text-muted)]">Workspace 需要真实 session id、Agent Task id 或明确的 draft prompt。</p><Link href="/" className="mt-4 inline-flex text-xs font-medium text-[var(--text-primary)]">返回首页</Link></div></div>;
-
-  if (mode.kind === "task") return <AgentTaskLayout task={task} events={agentEvents} error={agentError} sessions={sessions} missionById={missionById} missions={availableMissions} isDesktop={isDesktop} mobileView={mobileView} setMobileView={setMobileView} />;
-
-  const title = isDraft ? "未执行的任务草稿" : session?.mission.title ?? "正在载入学习任务";
-  const pendingKind = session?.pending?.value.kind;
-  const canSend = !!session && pendingKind === "answer" && !submitting;
-  const handleSend = useCallback(async (text: string) => { if (canSend) await submit({ text }); }, [canSend, submit]);
-  const conversation = <div className="flex h-full min-h-0 flex-col bg-[var(--bg)]"><WorkspaceHeader title={title} isDraft={isDraft} status={session?.status} onArtifact={() => setMobileView("artifact")} />{error && <div role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-[11px] text-red-700">{error}</div>}<LearningConversation activity={activity} canSend={canSend} messages={messages} onSend={handleSend} running={!!session && session.status === "running"} /></div>;
-  const viewer = <ArtifactWorkspace artifact={artifact} session={session} events={events} busy={submitting} submit={isDraft ? undefined : submit} onBackToConversation={() => setMobileView("conversation")} />;
-
-  return <SimAppShell title={title} sessions={sessions} missionById={missionById} missions={availableMissions} loading={loading} currentId={sessionId}><div className={layoutReady ? "sim-three-column-layout sim-layout-ready h-full min-h-0 bg-[var(--bg)]" : "sim-three-column-layout sim-layout-entering h-full min-h-0 bg-[var(--bg)]"}>{isDesktop ? <Group groupRef={groupRef} orientation="horizontal" defaultLayout={{ conversation: 38, artifact: 62 }} onLayoutChanged={saveLayout}><Panel id="conversation" minSize="28%" maxSize="58%"><div className="sim-conversation-pane h-full min-h-0">{conversation}</div></Panel><Separator id="workspace-separator" aria-label="调整对话与工作区宽度" title="拖动调整宽度，双击恢复默认" onDoubleClick={() => groupRef.current?.setLayout({ conversation: 38, artifact: 62 })} className="workspace-resize-handle group relative z-20 w-2 shrink-0 cursor-col-resize touch-none bg-[var(--bg)] outline-none"><span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[var(--border)] transition-all group-hover:w-0.5 group-hover:bg-[var(--text-primary)] group-focus-visible:w-0.5" /></Separator><Panel id="artifact" minSize="42%"><div className="sim-artifact-pane h-full min-h-0">{viewer}</div></Panel></Group> : <div className="h-full lg:hidden"><div className={mobileView === "conversation" ? "h-full" : "hidden"}>{conversation}</div><div className={mobileView === "artifact" ? "h-full" : "hidden"}>{viewer}</div></div>}</div></SimAppShell>;
-}
-
-function AgentTaskLayout({ task, events, error, sessions, missionById, missions, isDesktop, mobileView, setMobileView }: { task: import("@/lib/types").AgentTaskSnapshot | null; events: import("@/lib/types").AgentTaskEvent[]; error?: string; sessions: import("@/lib/types").SessionListItem[]; missionById: Map<string, import("@/lib/types").Mission>; missions: { mission: import("@/lib/types").Mission; packId: string }[]; isDesktop: boolean; mobileView: "conversation" | "artifact"; setMobileView: (value: "conversation" | "artifact") => void }) {
-  const conversation = <div className="flex h-full min-h-0 flex-col bg-[var(--bg)]">{error && <div role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-[11px] text-red-700">{error}</div>}<AgentTaskConversation task={task} events={events} onArtifact={() => setMobileView("artifact")} /></div>;
-  const viewer = <AgentTaskWorkspace task={task} events={events} onBackToConversation={() => setMobileView("conversation")} />;
-  return <SimAppShell title="意图调度工作台" sessions={sessions} missionById={missionById} missions={missions}><div className="h-full min-h-0 bg-[var(--bg)]">{isDesktop ? <Group orientation="horizontal" defaultLayout={{ conversation: 38, artifact: 62 }}><Panel id="conversation" minSize="28%" maxSize="58%">{conversation}</Panel><Separator id="agent-workspace-separator" aria-label="调整对话与工作区宽度" className="workspace-resize-handle w-2 shrink-0 cursor-col-resize bg-[var(--bg)]" /><Panel id="artifact" minSize="42%">{viewer}</Panel></Group> : <div className="h-full lg:hidden"><div className={mobileView === "conversation" ? "h-full" : "hidden"}>{conversation}</div><div className={mobileView === "artifact" ? "h-full" : "hidden"}>{viewer}</div></div>}</div></SimAppShell>;
-}
-
-function WorkspaceHeader({ title, isDraft, status, onArtifact }: { title: string; isDraft: boolean; status?: string; onArtifact: () => void }) {
-  return <header className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-1)] px-3 sm:px-4 lg:hidden"><span className="size-1.5 rounded-full bg-[var(--brand)]" aria-hidden="true" /><div className="min-w-0 flex-1"><h1 className="truncate text-[12px] font-medium">{title}</h1><p className="text-[10px] text-[var(--text-muted)]">{isDraft ? "draft · 未连接后端任务" : status ?? "loading"}</p></div><button onClick={onArtifact} className="grid size-7 place-items-center rounded-md bg-[var(--surface-5)] text-[var(--text-icon)] lg:hidden" aria-label="打开工作区"><PanelLeft className="size-3.5" /></button></header>;
+  const handleSend = useCallback((text: string) => send(text), [send]);
+  const startMission = useCallback((missionId: string) => {
+    const mission = sidebar.missionById.get(missionId);
+    markSimLayoutTransition();
+    router.push(`/workspace/?mock=1&prompt=${encodeURIComponent(mission?.title ?? "Sim workflow placeholder")}`);
+  }, [router, sidebar.missionById]);
+  const conversation = <SimChat messages={run.messages} activity={run.activity} placeholder="Ask the placeholder agent anything…" onSend={handleSend} header={<header className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-1)] px-4"><span className="size-1.5 rounded-full bg-[var(--brand)]" /><span className="min-w-0 flex-1 truncate text-[12px] font-medium">{run.title}</span><span className="text-[10px] text-[var(--text-muted)]">local mock</span><SimButton type="button" variant="quiet" size="icon" className="lg:hidden" onClick={() => setMobileView("artifact")} aria-label="Open resources">Resources</SimButton></header>} notice={<div className="mb-2 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-3)] px-3 py-2 text-[11px] text-[var(--text-muted)]">占位模式：不调用真实 REST、SSE、身份认证或 LingxiGraph API。</div>} />;
+  const viewer = <SimResourcePanel run={run} onBackToConversation={() => setMobileView("conversation")} />;
+  const content = <div className={layoutReady ? "sim-three-column-layout sim-layout-ready h-full min-h-0 bg-[var(--bg)]" : "sim-three-column-layout sim-layout-entering h-full min-h-0 bg-[var(--bg)]"}>{isDesktop ? <Group groupRef={groupRef} orientation="horizontal" defaultLayout={{ conversation: 38, artifact: 62 }} onLayoutChanged={saveLayout}><Panel id="conversation" minSize="28%" maxSize="58%"><div className="sim-conversation-pane h-full min-h-0">{conversation}</div></Panel><Separator id="workspace-separator" aria-label="调整对话与工作区宽度" title="拖动调整宽度，双击恢复默认" onDoubleClick={() => groupRef.current?.setLayout({ conversation: 38, artifact: 62 })} className="workspace-resize-handle group relative z-20 w-2 shrink-0 cursor-col-resize touch-none bg-[var(--bg)] outline-none"><span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[var(--border)] transition-all group-hover:w-0.5 group-hover:bg-[var(--text-primary)] group-focus-visible:w-0.5" /></Separator><Panel id="artifact" minSize="42%"><div className="sim-artifact-pane h-full min-h-0">{viewer}</div></Panel></Group> : <div className="h-full lg:hidden"><div className={mobileView === "conversation" ? "h-full" : "hidden"}>{conversation}</div><div className={mobileView === "artifact" ? "h-full" : "hidden"}>{viewer}</div></div>}</div>;
+  return <SimAppShell title={run.title} sessions={sidebar.sessions} missionById={sidebar.missionById} missions={sidebar.missions} currentId={run.id} loading={false} onStartMission={(missionId) => startMission(missionId)}>{content}</SimAppShell>;
 }
 
 function WorkspaceLoading() {
-  return <div className="grid h-dvh place-items-center bg-[var(--bg)]"><div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><MessagesSquare className="size-4 animate-pulse" /> 正在打开学习工作台…</div></div>;
+  return <div className="grid h-dvh place-items-center bg-[var(--bg)]"><div className="flex items-center gap-2 text-xs text-[var(--text-muted)]"><MessagesSquare className="size-4 animate-pulse" /> 正在打开 Sim 工作台…</div></div>;
 }

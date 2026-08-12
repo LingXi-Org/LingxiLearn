@@ -117,7 +117,7 @@ def test_a_whole_run_projects_in_order():
             EventKind.CUSTOM,
             seq=3,
             channel=STREAM_CHANNEL,
-            value={"type": "tool.completed", "tool": "net.pcap.waterfall", "ok": True},
+            value={"type": "tool.completed", "tool": "course.tool", "ok": True},
         ),
         make(EventKind.NODE_COMPLETED, seq=4, node="investigate", update={"phase": "coach"}),
         make(EventKind.RUN_COMPLETED, seq=5),

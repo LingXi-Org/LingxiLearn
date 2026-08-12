@@ -15,7 +15,7 @@ import { SimArrowUp, SimPlus } from "@/components/sim/source/icons";
  * Upstream source: https://github.com/simstudioai/sim/commit/ce2dff3c
  */
 
-const SEND_BUTTON_BASE = "h-[28px] w-[28px] rounded-full border-0 p-0 transition-colors";
+const SEND_BUTTON_BASE = "size-[28px] rounded-full border-0 p-0 transition-colors";
 const SEND_BUTTON_ACTIVE = "bg-[#383838] hover:bg-[#575757]";
 const SEND_BUTTON_DISABLED = "bg-[#808080]";
 
@@ -62,7 +62,7 @@ export function SimComposer({
   return (
     <form
       className={cn(
-        "flex min-h-[122px] w-full flex-col rounded-[16px] border border-[#e1e1e1] bg-[var(--surface-1)] px-4 pb-3 pt-3.5",
+        "relative z-10 mx-auto flex w-full max-w-[780px] cursor-text flex-col rounded-2xl border border-[var(--border-1)] bg-[var(--surface-2)] px-2.5 py-2",
         className,
       )}
       onSubmit={(event) => {
@@ -84,17 +84,18 @@ export function SimComposer({
             submit();
           }
         }}
-        className="block max-h-48 min-h-14 w-full resize-none overflow-y-auto bg-transparent text-[14px] leading-6 tracking-[-0.015em] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-70"
+        className="block max-h-[200px] min-h-[56px] w-full resize-none overflow-y-auto bg-transparent text-[14px] leading-6 tracking-[-0.015em] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:opacity-70"
       />
-      <div className="mt-auto flex items-center gap-1.5 pt-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
         <SimButton
           type="button"
           variant="ghost"
           size="icon"
           disabled
-          title="附件功能即将开放"
+          title="添加资源"
           aria-label="添加资源"
-          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-5)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-hover)]"
         >
           <SimPlus className="size-4" />
         </SimButton>
@@ -103,9 +104,9 @@ export function SimComposer({
           variant="ghost"
           size="icon"
           disabled
-          title="附件功能即将开放"
+          title="添加附件"
           aria-label="添加附件"
-          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-5)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-hover)]"
         >
           <Paperclip className="size-[17px]" strokeWidth={1.6} />
         </SimButton>
@@ -114,21 +115,22 @@ export function SimComposer({
           variant="ghost"
           size="icon"
           disabled
-          title="技能快捷方式即将开放"
+          title="技能快捷方式"
           aria-label="打开快捷方式"
-          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-5)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-hover)]"
         >
           <span className="text-[17px] leading-none">/</span>
         </SimButton>
-        <div className="ml-auto flex items-center gap-1.5">
+        </div>
+        <div className="flex items-center gap-1.5">
           <SimButton
             type="button"
             variant="ghost"
             size="icon"
             disabled
-            title="语音输入即将开放"
+            title="语音输入"
             aria-label="语音输入"
-            className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-5)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-hover)]"
           >
             <Mic className="size-[17px]" strokeWidth={1.6} />
           </SimButton>

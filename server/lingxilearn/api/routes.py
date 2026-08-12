@@ -26,7 +26,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..auth import get_principal
 from ..learner import LearnerContext
 from ..service import Service
-from ..tools.net import sim
 
 router = APIRouter(prefix="/api")
 
@@ -124,7 +123,7 @@ class CreateSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mission_id: str
-    pack_id: str = "computer-networks"
+    pack_id: str
 
 
 class AnswerBody(BaseModel):
@@ -315,8 +314,6 @@ async def stream_agent_events(
             "Connection": "keep-alive",
         },
     )
-
-
 @router.get("/sessions/{session_id}/report")
 async def get_report(
     session_id: str,
@@ -358,8 +355,6 @@ async def download_artifact(
     return FileResponse(
         artifact.path, media_type="application/vnd.tcpdump.pcap", filename=Path(artifact.path).name
     )
-
-
 @router.get("/me/context")
 async def me_context(
     context: LearnerContext = Depends(current_learner_context),
@@ -476,48 +471,3 @@ async def stream_events(
     )
 
 
-# --------------------------------------------------------------------------
-# Interactive simulator
-# --------------------------------------------------------------------------
-
-
-class SimInit(BaseModel):
-    scenario: str = "single-loss"
-    seed: int = 7
-
-
-class SimStep(BaseModel):
-    state: dict[str, Any]
-    action: dict[str, Any]
-
-
-@router.get("/sim/scenarios")
-async def sim_scenarios() -> dict[str, Any]:
-    return {
-        "scenarios": [
-            {"id": key, "title": spec["title"], "brief": spec["brief"],
-             "segments": spec["segments"], "window": spec["window"],
-             "loss_percent": spec["loss_percent"]}
-            for key, spec in sim.SCENARIOS.items()
-        ]
-    }
-
-
-@router.post("/sim/init")
-async def sim_initialize(body: SimInit) -> dict[str, Any]:
-    try:
-        return sim.init(body.scenario, body.seed)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="unknown_scenario") from exc
-
-
-@router.post("/sim/step")
-async def sim_advance(body: SimStep) -> dict[str, Any]:
-    """Advance the console one tick.
-
-    Purely for interactivity — grading never trusts this. The learner's action
-    log is replayed server-side from the seed when the step is submitted.
-    """
-    if body.state.get("scenario") not in sim.SCENARIOS:
-        raise HTTPException(status_code=400, detail="bad_state")
-    return sim.step(body.state, body.action)

@@ -77,7 +77,7 @@ export const api = {
 
   packs: () => request<{ packs: Pack[] }>("/packs"),
 
-  createSession: (missionId: string, packId = "computer-networks") =>
+  createSession: (missionId: string, packId = "") =>
     request<{ id: string; mission_id: string; pack_id: string; status: string }>("/sessions", {
       method: "POST",
       body: JSON.stringify({ mission_id: missionId, pack_id: packId }),

@@ -19,6 +19,7 @@ x-api: &api
       postgresql+asyncpg://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
     LINGXILEARN_PACKS_DIR: /app/packs
     LINGXILEARN_VAR_DIR: /app/var
+    LINGXILEARN_AGENT_TASK_DIR: /app/var/agent_tasks
     LINGXILEARN_WEB_DIST: /app/web
   volumes:
     - ./packs:/app/packs:ro

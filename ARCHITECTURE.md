@@ -46,12 +46,12 @@ A subject enters through two seams:
 
 - a **course pack** (`packs/<id>/`) declaring concepts, misconceptions, missions,
   steps, rubrics, hint ladders and knowledge;
-- a **tool namespace** (`net.pcap.*`, `net.sim.*`, …) registered in the tool
+- a **tool namespace** registered in the tool
   registry.
 
 Adding 数据结构 or 操作系统 is a new directory plus a new namespace. It is not a
-kernel change. The two shipped missions prove this rather than assert it: they
-run through the same kernel while calling **disjoint** tool families.
+kernel change. New missions run through the same kernel while calling the tool
+families declared by their course pack.
 
 ---
 
@@ -142,10 +142,10 @@ Because step 2 makes it checkable, leakage is *measured*, not asserted — see
 
 ## 5. Evidence, and why claims are cheap without it
 
-Every tool result, knowledge citation, learner action and simulator outcome
+Every tool result, knowledge citation and learner action
 enters an append-only **ledger** with a stable id (`ev_0007`) and a content
 digest. Teaching claims and report lines reference those ids; the UI resolves an
-id back to a frame, a citation or a simulator step.
+id back to its source.
 
 Two enforcement points:
 
@@ -174,7 +174,7 @@ exists to break.
 
 Misconceptions fall out of *how* an answer is wrong: which bucket absorbed
 misplaced time (`confusions`), or which protocol event a decision ignored
-(simulator flags). No model is asked to speculate about the learner's mind.
+misconception flags. No model is asked to speculate about the learner's mind.
 
 `sim_outcome` is graded by a tool run over the learner's *answer*: the submitted
 action log is replayed from the seed server-side. The UI drives the console for
@@ -191,14 +191,6 @@ computed rather than recalled; and there is no real user traffic to anonymise.
 
 - `codec.py` — Ethernet II / IPv4 / TCP / UDP / DNS / HTTP encode + decode, with
   correct checksums.
-- `pcapfile.py` — classic libpcap container, with errors phrased for a learner.
-- `analysis.py` — flows with Wireshark-style relative sequence numbers,
-  retransmission detection, ladder data, and the latency waterfall.
-- `synth.py` — the teaching captures. Generated, so ground truth is exact and
-  frame numbers are stable across regenerations.
-- `sim.py` — the reliable-delivery simulator. Pure functions over a serialisable
-  state, with its own LCG so a seed reproduces the same loss pattern on any
-  Python version.
 
 **The waterfall partitions the wall clock**: `dns + tcp_connect + ttfb +
 transfer + retransmission + idle == total`. A budget that does not add up is a
@@ -252,7 +244,7 @@ Two rules:
 - **Never hold a database session across a graph run.** Resolve, release, then
   stream.
 - Checkpoints are namespaced by pack content version
-  (`pack/computer-networks@1.0.0`), so publishing new lesson content cannot
+  (`pack/<id>@<version>`), so publishing new lesson content cannot
   reinterpret a session already in flight.
 
 SQLite runs in WAL mode because a background run writes while the API reads.
@@ -271,25 +263,36 @@ Next.js 16 / React 19 / Tailwind v4, **statically exported** and served by
 FastAPI: one process, one port, no Node in the production image. Nothing needs
 server rendering — every byte the learner sees comes from the API at runtime.
 
-The stage is primary; the conversation is a side rail. Inverting that one
-relationship is most of what separates this from a chat wrapper.
+The frontend uses the Sim workspace interaction model: a persistent workspace
+chrome and sidebar, a streaming-shaped chat lane, and a Resource Panel for the
+learning artifact or Agent-produced document. The current application-facing mode
+is deterministic local placeholder mode: `web/lib/sim-mock.ts` produces the Sim
+conversation, tool, sub-agent, resource and orchestration states without making a
+network request. `web/lib/sim-adapter.ts` remains the boundary/reference for a
+future LingxiGraph session/agent snapshot and replayable SSE integration. It maps
+transcript turns, assistant deltas, plans, tool lifecycle, subagent progress,
+evidence and terminal states without changing the backend graph.
 
-Visualizations are hand-built SVG with no charting dependency, because the data
-is bespoke:
+The current deep links (`/workspace/?id=<session>` and `/workspace/?task=<agent>`)
+remain stable. In placeholder mode they open a local mock run rather than querying
+the identifier. The Sim backend, Better Auth, and Sim workspace database are not
+used. Modules without a LingxiGraph contract are hidden, explicitly disabled, or
+listed in `SIM_LINGXIGRAPH_PLACEHOLDERS.md`.
+
+Domain-specific learning visualizations are intentionally no longer part of the
+active frontend tree. They are represented by Sim Resource Panel placeholders until
+they can be expressed through Sim's native resource protocol:
 
 | Component | Note |
 |---|---|
-| `PacketLadder` | Linear time axis. The long stall is drawn at true scale because that gap *is* the insight; only labels are nudged apart on collision, never the geometry. |
-| `LatencyWaterfall` | The learner's answer is the component: split the clock, pin the frames. After grading, their split renders against the parser's on the same axis. |
-| `FrameInspector` | Decoded field tree plus hex dump. |
-| `SimConsole` | Window strip, sequence-time plot, event log. |
-| `RunTrace` / `EvidencePanel` | The audit trail, shown to the learner rather than hidden in a debug console. |
+| `SimResourcePanel` | Sim-style Graph, Artifacts, Sim native capability, and execution-log tabs. Unsupported domain renderers are explicit placeholders. |
 
-An inversion worth stating: rather than having a model generate interactive HTML
-into a sandboxed iframe, LingxiLearn ships hand-built parameterised components
-and lets the tutor **select one and fill its props**. This keeps the good idea —
-a tutor driving an interactive artefact while explaining it — and drops the
-sandbox, the keep-alive pool and the generation variance.
+The active frontend does not mount the former LingxiLearn conversation, UI,
+visualization, or AI-element component families. The Sim-derived shell, composer,
+chat message model, resource panel, local placeholder Agent graph, and disabled
+capability states are the only application-facing interaction surfaces. The complete
+placeholder inventory and the missing LingxiGraph contracts are documented in
+`SIM_LINGXIGRAPH_PLACEHOLDERS.md`.
 
 ---
 
@@ -299,9 +302,6 @@ sandbox, the keep-alive pool and the generation variance.
 |---|---|
 | `pytest` | leak guard, graders, pcap round-trip, simulator determinism, projector mapping, kernel loop with real interrupts, identity ownership and terminal learning idempotency |
 | `scripts/smoke.py` | full mission via the real graph, two personas × two missions |
-| `scripts/api_smoke.py` | HTTP + SSE, including a deliberate disconnect and `Last-Event-ID` resume, and asserting the answer key never crosses the wire |
-| `scripts/ui_smoke.py` | Chromium driving both missions end to end, with screenshots |
-| `python -m lingxilearn.eval` | leakage, misconception F1, evidence correctness, learning gain |
 
 The projector is a pure function specifically so the mapping that drives the
 whole UI is testable without a graph, a database or a socket.

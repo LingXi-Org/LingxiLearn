@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { LingxiIdentityProvider } from "@/components/auth/lingxi-identity-provider";
 
 export const metadata: Metadata = {
   title: "灵犀智学",
@@ -23,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:image" content="/og.png" />
       </head>
-      <body><LingxiIdentityProvider>{children}</LingxiIdentityProvider></body>
+      <body>{children}</body>
     </html>
   );
 }

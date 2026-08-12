@@ -297,58 +297,6 @@ def _attribution_misconceptions(
     return tags
 
 
-# --------------------------------------------------------------------------
-# Simulator outcome — mission "你来当发送方"
-# --------------------------------------------------------------------------
-
-
-@grader("sim_outcome")
-def _sim_outcome(spec: dict[str, Any], _answer: Any, ctx: dict[str, Any]) -> Judgement:
-    """Grade by running the learner's decisions through the simulator.
-
-    Correctness is whether the receiving application got the byte stream intact;
-    efficiency is goodput against an oracle sender.  Both are outcomes of a
-    system reacting to the learner, which is exactly what cannot be reproduced
-    by pasting a question into a chat box.
-    """
-    scored = _lookup(ctx, spec.get("score_from", "score"))
-    if not isinstance(scored, dict):
-        return Judgement(
-            correct=False,
-            score=0.0,
-            feedback="仿真结果不可用，无法判定。",
-            detail={"error": "missing_score"},
-        )
-
-    delivered_ok = bool(scored.get("delivered_intact"))
-    efficiency = float(scored.get("efficiency", 0.0))
-    min_efficiency = float(spec.get("min_efficiency", 0.6))
-
-    correct = delivered_ok and efficiency >= min_efficiency
-    score = (0.6 if delivered_ok else 0.0) + 0.4 * min(1.0, efficiency)
-
-    tags = [str(t) for t in scored.get("misconceptions", [])]
-    feedback = ""
-    if correct:
-        feedback = f"数据完整送达，吞吐达到 oracle 的 {efficiency:.0%}。"
-    elif not delivered_ok:
-        feedback = "接收端拿到的字节流不完整——先保证正确性，再谈效率。"
-
-    return Judgement(
-        correct=correct,
-        score=round(min(1.0, score), 4),
-        concept_scores=_concept_scores(spec, min(1.0, score)),
-        misconceptions=tags,
-        feedback=feedback,
-        detail={
-            "delivered_intact": delivered_ok,
-            "efficiency": round(efficiency, 4),
-            "min_efficiency": min_efficiency,
-            "stats": scored.get("stats", {}),
-        },
-    )
-
-
 def _lookup(ctx: dict[str, Any], key: str | None) -> Any:
     if not key:
         return None

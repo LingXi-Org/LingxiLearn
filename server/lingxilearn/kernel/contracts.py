@@ -14,7 +14,7 @@ from typing import Any, Literal
 # Evidence
 # --------------------------------------------------------------------------
 
-EvidenceKind = Literal["tool_result", "knowledge", "learner_action", "simulation_frame"]
+EvidenceKind = Literal["tool_result", "knowledge", "learner_action"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +28,7 @@ class Evidence:
     id: str
     kind: EvidenceKind
     source: str
-    """Where it came from, e.g. ``net.pcap.timeline`` or ``rfc9293#sec-3.8.1``."""
+    """Where it came from, such as a tool or knowledge citation."""
     summary: str
     locator: dict[str, Any] = field(default_factory=dict)
     """How to point at it in the UI: ``{"frame": 21, "field": "tcp.seq"}``."""
@@ -55,7 +55,6 @@ SceneKind = Literal[
     "probe",
     "packet_lab",
     "attribution",
-    "sim_console",
     "verify",
     "report",
 ]
@@ -66,7 +65,7 @@ class StageDirective:
     """Which scene the stage renders, and what it highlights.
 
     This is the "tutor drives the artifact" idea: the coach can point at a
-    frame or set a simulator control without generating any markup.
+    frame or update a task view without generating any markup.
     """
 
     scene: SceneKind
@@ -99,7 +98,7 @@ class TutorMove:
     hint_level: int = 0
     evidence_ids: list[str] = field(default_factory=list)
     expects: str = "text"
-    """``text`` | ``choice`` | ``attribution`` | ``sim_action`` | ``none``."""
+    """``text`` | ``choice`` | ``attribution`` | ``none``."""
     choices: list[dict[str, Any]] = field(default_factory=list)
     rationale: str = ""
     """Why this move — shown behind the "为什么问这个？" affordance."""

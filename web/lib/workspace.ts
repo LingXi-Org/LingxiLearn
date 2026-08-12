@@ -6,7 +6,6 @@ import type {
   Report,
   RunEvent,
   SessionSnapshot,
-  SimState,
   TranscriptRecord,
   Waterfall,
 } from "@/lib/types";
@@ -70,7 +69,6 @@ export type ArtifactDescriptor =
       frames: Frame[];
       roles: Record<string, string>;
     })
-  | (ArtifactBase & { kind: "sim_console"; scenario: string; seed: number })
   | (ArtifactBase & { kind: "report"; report: Report; evidence: Evidence[] });
 
 export type DraftCapability = "course" | "mistakes" | "interactive_task" | "general";
@@ -224,9 +222,6 @@ export function deriveArtifact(session: SessionSnapshot): ArtifactDescriptor {
   if (scene === "attribution") {
     return { ...common, kind: "attribution", title: "时延归因工作台", ladder: props.ladder as LadderData | undefined, waterfall, frames, roles };
   }
-  if (scene === "sim_console") {
-    return { ...common, kind: "sim_console", title: "可靠传输仿真实验", scenario: String(props.scenario ?? "single-loss"), seed: Number(props.seed ?? 7) };
-  }
   return {
     ...common,
     kind: "empty",
@@ -261,4 +256,3 @@ export type FutureArtifactPayload =
   | { kind: "chart"; data: unknown[] }
   | { kind: "terminal"; lines: string[] }
   | { kind: "file"; name: string; url: string }
-  | { kind: "sim-state"; state: SimState };

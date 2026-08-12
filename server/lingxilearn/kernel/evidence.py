@@ -1,8 +1,8 @@
 """The evidence ledger — the backbone of "可追溯学习证据".
 
-Tool output, knowledge citations, learner actions and simulator frames all
+Tool output, knowledge citations and learner actions all
 land here with a stable id.  Teaching claims reference those ids; the UI
-resolves an id back to a frame, a citation or a simulator step.
+resolves an id back to its source.
 """
 
 from __future__ import annotations

@@ -186,9 +186,6 @@ def validate_pack(pack: Pack, registry: ToolRegistry | None = None) -> Validatio
         if not misc.note:
             add(f"misconceptions.{mid}.note", "missing_note", "缺少针对性追问文案")
 
-    if not pack.missions:
-        add("missions", "no_missions", "课程包没有任何任务")
-
     for mission in pack.missions.values():
         base = f"missions.{mission.id}"
         if not mission.steps:
@@ -244,7 +241,7 @@ def validate_pack(pack: Pack, registry: ToolRegistry | None = None) -> Validatio
                 add(
                     f"{base}.artifacts.{artifact.id}",
                     "missing_artifact",
-                    f"工件文件不存在：{artifact.path}（先运行 scripts/build_artifacts.py）",
+                    f"工件文件不存在：{artifact.path}",
                 )
 
     return ValidationResult(valid=not issues, issues=issues)

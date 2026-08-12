@@ -15,9 +15,9 @@ function session(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
     id: "s-test",
     status: "awaiting_learner",
     error: "",
-    pack_id: "computer-networks",
+    pack_id: "course-pack",
     pack_version: "1.0.0",
-    mission: { id: "web-slow", title: "慢在哪一环", subtitle: "", why_not_chat: "", concepts: [] },
+    mission: { id: "mission-1", title: "正式课程任务", subtitle: "", why_not_chat: "", concepts: [] },
     phase: "await_learner",
     stage: { scene: "packet_lab", props: { frames: [] }, focus: [] },
     move: { intent: "ask", say: "看到了什么？", hint_level: 0, evidence_ids: [], expects: "text", choices: [], rationale: "" },
@@ -75,13 +75,13 @@ describe("assistant-ui message adapter", () => {
 describe("event and artifact projection", () => {
   it("reduces replayed tool events to one current tool state", () => {
     const events: RunEvent[] = [
-      { sequence: 1, kind: "tool.started", node: "investigate", payload: { tool: "net.pcap.timeline" }, ts: "" },
-      { sequence: 2, kind: "tool.completed", node: "investigate", payload: { tool: "net.pcap.timeline", ok: true, duration_ms: 12 }, ts: "" },
-      { sequence: 2, kind: "tool.completed", node: "investigate", payload: { tool: "net.pcap.timeline", ok: true, duration_ms: 12 }, ts: "" },
+      { sequence: 1, kind: "tool.started", node: "investigate", payload: { tool: "course.tool" }, ts: "" },
+      { sequence: 2, kind: "tool.completed", node: "investigate", payload: { tool: "course.tool", ok: true, duration_ms: 12 }, ts: "" },
+      { sequence: 2, kind: "tool.completed", node: "investigate", payload: { tool: "course.tool", ok: true, duration_ms: 12 }, ts: "" },
     ];
     const activity = reduceAgentActivity(events, session());
     expect(activity.tools).toHaveLength(1);
-    expect(activity.tools[0]).toMatchObject({ name: "net.pcap.timeline", state: "complete", detail: "完成 · 12 ms" });
+    expect(activity.tools[0]).toMatchObject({ name: "course.tool", state: "complete", detail: "完成 · 12 ms" });
   });
 
   it("maps stage scenes and terminal reports into typed artifacts", () => {
@@ -91,7 +91,7 @@ describe("event and artifact projection", () => {
       status: "done",
       report: {
         headline: "你已经能用证据解释时延",
-        strengths: [], gaps: [], next_steps: [], citations: {}, mission: "web-slow", mission_title: "慢在哪一环",
+        strengths: [], gaps: [], next_steps: [], citations: {}, mission: "mission-1", mission_title: "正式课程任务",
         probe_score: 0, verify_score: 1, learning_gain: 1, mastery_before: {}, mastery_after: {}, mastery_gain: {}, misconceptions: [], step_results: [], evidence_count: 0,
       },
     });

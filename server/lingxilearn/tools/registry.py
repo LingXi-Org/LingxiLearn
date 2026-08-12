@@ -1,6 +1,6 @@
 """The tool registry.
 
-Course packs name capabilities (``net.pcap.timeline``); the registry resolves
+Course packs name capabilities; the registry resolves
 them to real Python.  The kernel's ``investigate`` node never imports a domain
 module — adding 数据结构 or 操作系统 later means registering a new namespace,
 not editing the graph.

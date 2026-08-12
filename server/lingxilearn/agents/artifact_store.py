@@ -101,7 +101,7 @@ class ArtifactStore:
             "ok": bool(static["ok"] and all(item["ok"] for item in palette_results.values())),
             "static": static,
             "palette": palette_results,
-            "screenshot": "deferred_to_ui_smoke",
+            "screenshot": "deferred_to_frontend",
         }
 
 

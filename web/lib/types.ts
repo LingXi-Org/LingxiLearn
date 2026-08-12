@@ -4,7 +4,6 @@ export type SceneKind =
   | "probe"
   | "packet_lab"
   | "attribution"
-  | "sim_console"
   | "verify"
   | "report";
 
@@ -34,7 +33,7 @@ export interface TutorMove {
 
 export interface Evidence {
   id: string;
-  kind: "tool_result" | "knowledge" | "learner_action" | "simulation_frame";
+  kind: "tool_result" | "knowledge" | "learner_action";
   source: string;
   summary: string;
   locator: Record<string, unknown>;
@@ -225,7 +224,7 @@ export interface SessionListItem {
   created_at: string | null;
 }
 
-// ---------------------------------------------------------------- simulator
+// ---------------------------------------------------------------- task state
 
 export interface SimState {
   scenario: string;

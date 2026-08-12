@@ -457,10 +457,7 @@ class TutoringKernel:
         ledger = Ledger(list(state.get("evidence") or []))
         tools_ctx = dict(state.get("tool_outputs") or {})
 
-        # A grader may need a tool run over the learner's *answer* — that is how
-        # the simulator mission is graded: the client drives the console for
-        # responsiveness, but the score comes from replaying the submitted
-        # action log server-side, so a client cannot award itself goodput.
+        # A grader may need a tool run over the learner's answer.
         score_tool = step.grader.get("score_tool")
         if isinstance(score_tool, dict) and score_tool.get("call"):
             args = dict(score_tool.get("args") or {})
@@ -472,7 +469,7 @@ class TutoringKernel:
             if result.ok:
                 tools_ctx[key] = result.value
                 item = ledger.add(
-                    kind="simulation_frame",
+                    kind="tool_result",
                     source=str(score_tool["call"]),
                     summary="按你的操作序列重跑仿真得到的结果",
                     locator={"step": step.id, "as": key},

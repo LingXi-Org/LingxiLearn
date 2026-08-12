@@ -34,7 +34,7 @@ docker compose up --build  # http://localhost:8080
 
 ---
 
-## 两个任务，以及它们为什么不能靠对话框完成
+## 课程任务，以及它们为什么不能靠对话框完成
 
 判断标准很简单：**把题干贴进 ChatGPT 就能解决的任务，一律不做。**
 
@@ -68,15 +68,14 @@ docker compose up --build  # http://localhost:8080
 **这里没有可以背下来的答案。** 正确动作取决于此刻的窗口、在途段和刚收到的确认，
 而系统会对你的每一个决定做出反应。一个会还手的系统，是对话框给不了的。
 
-两个任务走**同一套教学内核**，但调用**完全不相交的工具族**（`net.pcap.*` vs `net.sim.*`）。
-课程包与工具注册表的可扩展性是被真实验证过的，不是文档里的承诺。
+正式课程任务将通过课程包提供，并复用同一套教学内核和工具注册表。
 
 ---
 
 ## 它和"AI 聊天"的区别，可以被度量
 
 ```
-make eval
+make test
 ```
 
 | 指标 | 结果 | 怎么测的 |
@@ -95,8 +94,8 @@ make eval
 ## 架构
 
 ```
-Next.js（中文 UI · 自研 SVG 可视化）
-        ↓ Bearer REST + fetch-SSE（可断线续传）
+Next.js（Sim workspace UI · local placeholder mode）
+        ↓ future adapter: REST + fetch-SSE（可断线续传）
 LingxiIdentity OIDC ── FastAPI ── Projector ── run_events（投影日志）
         ↓
 LearnerService / SQLAlchemy（学习业务权威源）
@@ -106,7 +105,7 @@ Tutoring Kernel（LingxiGraph StateGraph · 领域无关）
          → judge → advance → verify → report
         ↓                          ↓
 Course Pack（声明式）        Tool Registry（真实确定性计算）
- packs/computer-networks/     net.pcap.* | net.sim.* | net.ipv4.* | kb.*
+ packs/<course-pack>/         course-specific tools | kb.*
         ↓
 lingxigraph 2.1.0（PyPI）· SQLite / PostgreSQL
 ```
@@ -149,7 +148,7 @@ Store/Memory 接缝；graph 运行期间不直接写权威学习表。结果在 
 artifact 与 SSE 使用带 Bearer 的 fetch。
 
 常用用户数据接口：`GET /api/me/context`、`GET /api/me/mastery`、`GET/PATCH
-/api/me/preferences`。健康检查、课程包和无持久化 simulator 保持公开。
+/api/me/preferences`。健康检查和课程包接口保持公开。
 
 ### 关于 LingxiGraph 与 LingxiNext
 
@@ -184,20 +183,18 @@ LingxiGraph 已发布在 PyPI（`lingxigraph==2.1.0`，核心零运行时依赖�
 
 ```bash
 make test     # Python 单测 + ruff + mypy + frontend typecheck/test
-make eval     # 泄题 / 误区 / 证据 / 学习增益
-make smoke    # 需要先起服务：内核 → HTTP+SSE → 真实浏览器
+make test     # 后端单测 + 前端类型检查与测试
 ```
 
-`make smoke` 会用 Chromium 真的走一遍两个任务的完整流程——前测、抓包实验室、
-带证据钉选的归因表、仿真器操作、后测、可展开引用的学习报告——并在每一步截图到
-`var/screenshots/`。
+当前前端默认展示 Sim 原生占位工作区：发送消息会在浏览器内生成占位 Agent 输出、工具/子 Agent 状态、编排图和资源面板，不调用真实 API。所有尚未对齐 LingxiGraph 的能力与恢复真实接口所需的契约记录在 [`SIM_LINGXIGRAPH_PLACEHOLDERS.md`](SIM_LINGXIGRAPH_PLACEHOLDERS.md)。
+
 
 ---
 
 ## 目录
 
 ```
-packs/computer-networks/   课程包：概念图、误区分类法、两个任务、知识切片
+packs/<course-pack>/      课程包：概念图、误区分类法、知识切片
 server/lingxilearn/
   kernel/                  教学内核（领域无关）
   tools/net/               pcap 编解码、抓包分析、可靠传输仿真器
@@ -206,7 +203,7 @@ server/lingxilearn/
   store/                   SQLAlchemy + Alembic
   eval/                    评测
 skills/                    lecture-hook / visual-explainer（固定上游提交）
-web/                       Next.js 前端与自研 SVG 可视化
+web/                       Next.js Sim 前端与 LingxiGraph 适配层
 scripts/                   工件生成、内核/API/UI 冒烟
 ```
 
@@ -214,7 +211,7 @@ scripts/                   工件生成、内核/API/UI 冒烟
 
 ## 数据与边界
 
-演示用抓包由 `scripts/build_artifacts.py` 合成，**不含任何真实用户流量**；
+课程数据由课程包声明，**不含任何真实用户流量**；
 学习记录按经 OIDC 验证的 Identity User 映射到服务端内部 learner。旧的匿名 guest 记录
 保留在数据库中，但不会自动映射到 Identity 用户，也不会通过受保护 API 暴露。知识库为 RFC 摘录与原创教学笔记，
 来源见 [DATA_SOURCES.md](DATA_SOURCES.md)。
