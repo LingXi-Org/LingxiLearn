@@ -2,6 +2,7 @@ import type {
   AgentTaskEvent,
   AgentTaskListItem,
   AgentTaskSnapshot,
+  NativeSkill,
   QuizSubmissionSnapshot,
   Pack,
   RunEvent,
@@ -103,6 +104,8 @@ export const api = {
     request<{ status: string; brain: string; agent: { configured: boolean; model: string }; packs: string[]; tools: number }>("/health"),
 
   packs: () => request<{ packs: Pack[] }>("/packs"),
+
+  skills: () => request<{ skills: NativeSkill[] }>("/skills"),
 
   createSession: (missionId: string, packId = "") =>
     request<{ id: string; mission_id: string; pack_id: string; status: string }>("/sessions", {
@@ -370,6 +373,7 @@ export const KNOWN_AGENT_EVENT_KINDS = [
   "reasoning.delta",
   "assistant.delta",
   "tool.call.delta",
+  "tool.result",
   "model.usage",
   "node.started",
   "node.completed",

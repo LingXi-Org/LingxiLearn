@@ -1,6 +1,6 @@
 "use client";
 
-import { GitBranch, ListTodo } from "lucide-react";
+import { ArrowLeft, GitBranch, ListTodo, Puzzle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { SimButton } from "@/components/sim/source/button";
 import { SimResourceTab } from "@/components/sim/source/resource-tab";
@@ -9,19 +9,23 @@ import { SimTaskList } from "@/components/sim/sim-task-list";
 import { useAgentArtifact } from "@/hooks/use-agent-artifact";
 import { api } from "@/lib/api";
 import { agentTaskToAgentRuns, agentTaskToCanvasGraph } from "@/lib/sim-adapter";
-import type { AgentTaskEvent, AgentTaskSnapshot, PublicQuizQuestion } from "@/lib/types";
+import type { AgentTaskEvent, AgentTaskSnapshot, NativeSkill, PublicQuizQuestion } from "@/lib/types";
 
-export type ResourceTab = "canvas" | "task-list" | "lesson-intro" | "lecture-deck" | "quiz" | "visual";
+export type ResourceTab = "canvas" | "task-list" | "lesson-intro" | "lecture-deck" | "quiz" | "visual" | "skills";
 
-export function SimResourcePanel({ task, events, initialTab = "canvas", onBackToConversation }: { task: AgentTaskSnapshot | null; events: AgentTaskEvent[]; initialTab?: ResourceTab; onBackToConversation?: () => void }) {
+export function SimResourcePanel({ task, events, initialTab = "canvas", initialSkillId, onBackToConversation }: { task: AgentTaskSnapshot | null; events: AgentTaskEvent[]; initialTab?: ResourceTab; initialSkillId?: string | null; onBackToConversation?: () => void }) {
   const [tab, setTab] = useState<ResourceTab>(initialTab);
+  const [skills, setSkills] = useState<NativeSkill[]>([]);
+  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(initialSkillId || null);
   useEffect(() => setTab(initialTab), [initialTab]);
+  useEffect(() => setSelectedSkillId(initialSkillId || null), [initialSkillId]);
   const graph = agentTaskToCanvasGraph(task, events);
   const runs = task ? agentTaskToAgentRuns(task, events) : [];
   const hasDeck = Boolean(task?.artifacts.lecture_deck.available);
   const hasLessonIntro = Boolean(task?.artifacts.lesson_intro.available);
   const hasQuiz = Boolean(task?.artifacts.quiz.available && task.artifacts.quiz.data);
   const hasVisual = Boolean(task?.artifacts.visual.available);
+  useEffect(() => { if (tab === "skills") void api.skills().then(({ skills: next }) => setSkills(next)).catch(() => setSkills([])); }, [tab]);
 
   useEffect(() => {
     if (tab === "lecture-deck" && !hasDeck) setTab("canvas");
@@ -30,15 +34,16 @@ export function SimResourcePanel({ task, events, initialTab = "canvas", onBackTo
     if (tab === "visual" && !hasVisual) setTab("canvas");
   }, [hasDeck, hasLessonIntro, hasQuiz, hasVisual, tab]);
 
-  if (!task) return <section className="flex h-full min-h-0 items-center justify-center bg-[var(--surface-2)]" data-testid="sim-resource-panel"><div className="text-center text-xs text-[var(--text-muted)]"><GitBranch className="mx-auto mb-3 size-5 opacity-40" /><p>工作区将在提交问题后动态加载</p></div></section>;
+  if (!task && tab !== "skills") return <section className="flex h-full min-h-0 items-center justify-center bg-[var(--surface-2)]" data-testid="sim-resource-panel"><div className="text-center text-xs text-[var(--text-muted)]"><GitBranch className="mx-auto mb-3 size-5 opacity-40" /><p>工作区将在提交问题后动态加载</p></div></section>;
 
   return <section className="flex h-full min-h-0 flex-col bg-[var(--surface-2)]" data-testid="sim-resource-panel">
     <header className="flex min-h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface-1)] px-3">
-      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[var(--surface-4)] text-[var(--text-icon)]"><GitBranch className="size-3.5" /></span>
-      <span className="shrink-0 text-xs font-medium">工作区</span>
+      <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[var(--surface-4)] text-[var(--text-icon)]">{tab === "skills" ? <Puzzle className="size-3.5" /> : <GitBranch className="size-3.5" />}</span>
+      <span className="shrink-0 text-xs font-medium">{tab === "skills" ? "Skills" : "工作区"}</span>
       <nav className="ml-2 flex h-10 items-center gap-1" aria-label="知识点子图工作区页面">
         <SimResourceTab active={tab === "canvas"} onClick={() => setTab("canvas")} icon={<GitBranch className="size-3" />}>Canvas</SimResourceTab>
         <SimResourceTab active={tab === "task-list"} onClick={() => setTab("task-list")} icon={<ListTodo className="size-3" />}>任务列表</SimResourceTab>
+        <SimResourceTab active={tab === "skills"} onClick={() => { setTab("skills"); setSelectedSkillId(null); }} icon={<Puzzle className="size-3" />}>Skills</SimResourceTab>
         {hasLessonIntro && <SimResourceTab active={tab === "lesson-intro"} onClick={() => setTab("lesson-intro")}>课程引入</SimResourceTab>}
         {hasDeck && <SimResourceTab active={tab === "lecture-deck"} onClick={() => setTab("lecture-deck")}>交互式讲解课件</SimResourceTab>}
         {hasQuiz && <SimResourceTab active={tab === "quiz"} onClick={() => setTab("quiz")}>知识点检测</SimResourceTab>}
@@ -47,14 +52,21 @@ export function SimResourcePanel({ task, events, initialTab = "canvas", onBackTo
       {onBackToConversation && <SimButton type="button" variant="quiet" size="sm" className="ml-auto shrink-0 lg:hidden" onClick={onBackToConversation}>返回对话</SimButton>}
     </header>
     <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-5">
-      {tab === "canvas" && <SimAgentGraph graph={graph} runs={runs} running={task.status === "queued" || task.status === "running"} />}
-      {tab === "task-list" && <SimTaskList task={task} events={events} graph={graph} />}
-      {tab === "lesson-intro" && <LessonIntroArtifact task={task} />}
-      {tab === "lecture-deck" && <LectureDeckArtifact task={task} />}
-      {tab === "quiz" && <QuizArtifact task={task} />}
-      {tab === "visual" && <VisualArtifact task={task} />}
+      {tab === "skills" && <NativeSkills skills={skills} selectedSkillId={selectedSkillId} onSelect={setSelectedSkillId} />}
+      {task && tab === "canvas" && <SimAgentGraph graph={graph} runs={runs} running={task.status === "queued" || task.status === "running"} />}
+      {task && tab === "task-list" && <SimTaskList task={task} events={events} graph={graph} />}
+      {task && tab === "lesson-intro" && <LessonIntroArtifact task={task} />}
+      {task && tab === "lecture-deck" && <LectureDeckArtifact task={task} />}
+      {task && tab === "quiz" && <QuizArtifact task={task} />}
+      {task && tab === "visual" && <VisualArtifact task={task} />}
     </div>
   </section>;
+}
+
+function NativeSkills({ skills, selectedSkillId, onSelect }: { skills: NativeSkill[]; selectedSkillId: string | null; onSelect: (id: string | null) => void }) {
+  const selected = skills.find((skill) => skill.id === selectedSkillId);
+  if (selected) return <div className="mx-auto max-w-4xl"><SimButton type="button" variant="quiet" size="sm" onClick={() => onSelect(null)} className="mb-4 inline-flex items-center gap-1"><ArrowLeft className="size-3.5" />返回 Skills</SimButton><article className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-1)]"><header className="border-b border-[var(--border)] px-5 py-4"><p className="text-[11px] text-[var(--text-muted)]">Native Skill · {selected.id}</p><h1 className="mt-1 text-lg font-medium">{selected.display_name}</h1><p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{selected.description}</p><div className="mt-3 flex flex-wrap gap-2 text-[10px] text-[var(--text-muted)]"><span className="rounded-full bg-[var(--surface-4)] px-2 py-1">版本 {selected.version || "未标注"}</span><span className="rounded-full bg-[var(--surface-4)] px-2 py-1">{selected.license || "未标注许可证"}</span></div></header><pre className="max-h-[calc(100dvh-190px)] overflow-auto whitespace-pre-wrap p-5 font-mono text-[11px] leading-5 text-[var(--text-body)]">{selected.content}</pre></article></div>;
+  return <div className="mx-auto max-w-5xl"><div className="mb-5"><p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--brand)]">Native components</p><h1 className="mt-1 text-xl font-medium">Skills 矩阵</h1><p className="mt-1 text-sm text-[var(--text-muted)]">当前项目已安装的原生 Skills。点击任意卡片查看完整 SKILL.md。</p></div>{skills.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{skills.map((skill) => <button key={skill.id} type="button" onClick={() => onSelect(skill.id)} className="group min-h-36 rounded-xl border border-[var(--border)] bg-[var(--surface-1)] p-4 text-left transition-colors hover:border-[var(--brand)] hover:bg-[var(--surface-hover)]"><div className="flex items-start gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-strong)]"><Puzzle className="size-4" /></span><div className="min-w-0"><h2 className="truncate text-sm font-medium group-hover:text-[var(--brand-strong)]">{skill.display_name}</h2><p className="mt-0.5 font-mono text-[10px] text-[var(--text-muted)]">{skill.id}</p></div></div><p className="mt-3 line-clamp-3 text-xs leading-5 text-[var(--text-secondary)]">{skill.description}</p></button>)}</div> : <p className="rounded-xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-[var(--text-muted)]">正在加载项目 Skills，或当前没有可展示的 Skill。</p>}</div>;
 }
 
 function LessonIntroArtifact({ task }: { task: AgentTaskSnapshot }) {

@@ -194,6 +194,16 @@ export interface AgentTaskListItem {
   updated_at: string | null;
 }
 
+export interface NativeSkill {
+  id: string;
+  display_name: string;
+  description: string;
+  version: string;
+  license: string;
+  compatibility: string;
+  content: string;
+}
+
 export interface AgentAgentSnapshot {
   status: "pending" | "completed" | "failed";
   error?: string;

@@ -24,6 +24,7 @@ from lingxi_identity import Principal  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..auth import get_principal
+from ..config import REPO_ROOT
 from ..learner import LearnerContext
 from ..service import Service
 
@@ -112,6 +113,74 @@ async def list_packs(request: Request) -> dict[str, Any]:
             for pack in svc.packs.values()
         ]
     }
+
+
+@router.get("/skills")
+async def list_skills(
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """Expose the project's native Skills catalogue to the Sim workspace."""
+
+    del context
+    skills_root = REPO_ROOT / "skills"
+    skills: list[dict[str, Any]] = []
+    for directory in sorted((item for item in skills_root.iterdir() if item.is_dir()), key=lambda item: item.name):
+        skill_file = directory / "SKILL.md"
+        if not skill_file.is_file():
+            continue
+        raw = skill_file.read_text(encoding="utf-8")
+        _, _, body = raw.partition("---\n")
+        metadata: dict[str, str] = {}
+        description_lines: list[str] = []
+        in_description = False
+        for line in body.splitlines() if body else raw.splitlines():
+            if line.strip() == "---":
+                break
+            if line.startswith("name:"):
+                metadata["name"] = line.split(":", 1)[1].strip()
+                in_description = False
+                continue
+            if line.startswith("  display-name:"):
+                metadata["display_name"] = line.split(":", 1)[1].strip()
+                in_description = False
+                continue
+            if line.startswith("  display-description:"):
+                metadata["display_description"] = line.split(":", 1)[1].strip()
+                in_description = False
+                continue
+            if line.startswith("  version:"):
+                metadata["version"] = line.split(":", 1)[1].strip()
+                in_description = False
+                continue
+            if line.startswith("license:"):
+                metadata["license"] = line.split(":", 1)[1].strip()
+                in_description = False
+                continue
+            if line.startswith("compatibility:"):
+                metadata["compatibility"] = line.split(":", 1)[1].strip()
+                in_description = False
+                continue
+            if line.startswith("description:"):
+                in_description = True
+                value = line.split(":", 1)[1].strip()
+                if value and value != ">-":
+                    description_lines.append(value)
+                continue
+            if in_description and line.startswith("  "):
+                description_lines.append(line.strip())
+                continue
+            in_description = False
+        skills.append({
+            "id": metadata.get("name", directory.name),
+            "display_name": metadata.get("display_name", metadata.get("name", directory.name)),
+            "description": metadata.get("display_description", " ".join(description_lines)).strip(),
+            "version": metadata.get("version", ""),
+            "license": metadata.get("license", ""),
+            "compatibility": metadata.get("compatibility", ""),
+            "content": raw,
+        })
+    return {"skills": skills}
 
 
 # --------------------------------------------------------------------------
