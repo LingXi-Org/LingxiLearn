@@ -103,7 +103,7 @@ function Workspace() {
 }
 
 function parseResourceTab(value: string | null): ResourceTab {
-  return value === "lecture-deck" || value === "quiz" || value === "visual" ? value : "canvas";
+  return value === "task-list" || value === "lesson-intro" || value === "lecture-deck" || value === "quiz" || value === "visual" ? value : "canvas";
 }
 
 function statusLabel(status?: string) {
