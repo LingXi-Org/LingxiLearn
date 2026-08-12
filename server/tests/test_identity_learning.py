@@ -243,6 +243,17 @@ def test_oidc_verifier_accepts_valid_jwt_and_rejects_claim_and_key_failures(monk
         verifier.verify(unknown_kid)
 
 
+def test_production_authenticator_allows_lingxiidentity_es384() -> None:
+    settings = Settings(
+        oidc_issuer="https://auth.lingxilearn.cn/oidc",
+        oidc_audience="https://lingxilearn.cn/api",
+        insecure_dev_auth=False,
+    )
+    authenticator = build_authenticator(settings)
+    assert authenticator.verifier is not None
+    assert "ES384" in authenticator.verifier.algorithms
+
+
 @pytest.mark.asyncio
 async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monkeypatch) -> None:
     path = Path("var") / f"test-api-ownership-{uuid4().hex}.sqlite3"

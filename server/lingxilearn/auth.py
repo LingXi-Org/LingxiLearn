@@ -95,6 +95,11 @@ def build_authenticator(settings: Settings) -> Authenticator:
         OidcVerifier(
             issuer=settings.oidc_issuer,
             audience=settings.oidc_audience,
+            # The production LingxiIdentity/Logto tenant publishes P-384
+            # signing keys and issues ES384 tokens. Keep the older algorithms
+            # for compatible tenants while explicitly allowing the deployed
+            # algorithm.
+            algorithms=("RS256", "ES256", "ES384"),
             timeout=settings.oidc_timeout,
         )
         if has_oidc
