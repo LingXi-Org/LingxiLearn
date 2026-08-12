@@ -96,15 +96,6 @@ class ArtifactStore:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
             normalized[name] = content
-        # runtime/index.html is a skill-owned shell, not model-authored content.
-        # Inject it after staged source files have been copied so the Agent can
-        # progressively author lecture data without spending tokens on runtime code.
-        runtime_path = root / "runtime" / "index.html"
-        runtime_asset = self.deck_skill_root / "assets" / "runtime" / "index.html"
-        if not runtime_path.exists() and runtime_asset.exists():
-            runtime_path.parent.mkdir(parents=True, exist_ok=True)
-            runtime_path.write_text(runtime_asset.read_text(encoding="utf-8"), encoding="utf-8")
-            normalized["runtime/index.html"] = runtime_path.read_text(encoding="utf-8")
         missing = required - set(normalized)
         if missing:
             raise ArtifactError(f"lecture deck is missing required files: {sorted(missing)}")

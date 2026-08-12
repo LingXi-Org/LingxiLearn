@@ -114,8 +114,7 @@ DECK_PROMPT = progressive_skill_prompt(
     ),
     artifact_instructions="""这是分阶段课件生成。默认 problem 生成 5–7 页，concept 生成 6–8 页，lesson
 生成 8–12 页；必须有 opening/content/closing。每写完一份 slides/sNN.html、lecture.json 或
-manifest.json，就调用 stage_artifact_file；不要把完整文件放进最终回答。runtime/index.html 由
-runtime/index.html 必须从 skill asset 原样写入 staged artifact，dist/lecture.html 由服务端执行 standalone build。最终回执示例：
+manifest.json 和 runtime/index.html，就调用 stage_artifact_file；runtime/index.html 必须从 skill asset 原样写入 staged artifact；不要把完整文件放进最终回答。dist/lecture.html 由服务端执行 standalone build。最终回执示例：
 {"status":"staged","title":"...","files":["lecture.json","slides/s01.html"],"assumptions":[],"deviations":[]}。""",
 )
 

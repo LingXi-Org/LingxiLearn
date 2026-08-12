@@ -263,6 +263,9 @@ def test_lesson_intro_artifact_and_skill_deck_are_publishable(tmp_path: Path) ->
     assert validation["ok"] is True
     assert validation["validation"]["output"].find('"slideCount"') >= 0
 
+    with pytest.raises(ArtifactError, match="runtime/index.html"):
+        store.write_deck("missing-runtime", {"lecture.json": "{}", "manifest.json": "{}"})
+
 
 def test_web_fetch_rejects_private_addresses() -> None:
     with pytest.raises(ValueError, match="private"):

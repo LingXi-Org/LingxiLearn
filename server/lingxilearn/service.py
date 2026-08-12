@@ -204,8 +204,6 @@ class Service:
         self.brain = build_brain(self.settings)
         if self.settings.agents_configured:
             from .brains.traced_openai_compat import TracedOpenAICompatChatModel
-            from .brains.deepseek_responses import DeepSeekResponsesModel
-
             model_options = {
                 "base_url": self.settings.agent_base_url,
                 "api_key": self.settings.agent_api_key.get_secret_value(),
@@ -226,17 +224,13 @@ class Service:
             # prefix stable across tasks and avoids cross-agent drift errors.
             self.agent_model = {}
             for role in ("intent", "lecture_hook", "lecture_hook_structured", "interactive_lecture_deck", "quiz_generator", "answer_user", "interactive_visual_explainer"):
-                if role == "lecture_hook" and self.settings.agent_base_url.rstrip("/") == "https://api.deepseek.com":
-                    self.agent_model[role] = DeepSeekResponsesModel(
-                        self.settings.agent_model,
-                        base_url=self.settings.agent_base_url,
-                        api_key=self.settings.agent_api_key.get_secret_value(),
-                        timeout=self.settings.agent_lecture_timeout,
-                    )
-                else:
-                    self.agent_model[role] = TracedOpenAICompatChatModel(
-                        self.settings.agent_model, **model_options
-                    )
+                # Every skill-capable Agent must use the same tool-aware
+                # adapter. The previous native Responses special case could
+                # search the web but silently dropped stage_artifact_file,
+                # making lesson-intro stop before producing its real artifact.
+                self.agent_model[role] = TracedOpenAICompatChatModel(
+                    self.settings.agent_model, **model_options
+                )
         self.checkpointer = build_checkpointer(self.settings)
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
