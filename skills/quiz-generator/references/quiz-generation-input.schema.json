@@ -16,7 +16,7 @@
     "interactive_lecture_deck": {
       "type": "object",
       "required": ["schema_version"],
-      "properties": {"schema_version": {"const": "interactive-lecture-deck-result.v2"}},
+      "properties": {"schema_version": {"const": "interactive-lecture-deck-result.v2.1"}},
       "additionalProperties": true
     }
   }

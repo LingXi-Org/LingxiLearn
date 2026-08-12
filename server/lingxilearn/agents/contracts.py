@@ -153,7 +153,7 @@ class QuizGenerationResult(BaseModel):
 class DeckResult(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    schema_version: Literal["interactive-lecture-deck-result.v2"]
+    schema_version: Literal["interactive-lecture-deck-result.v2.1"]
     task_id: str
     title: str
     status: Literal["ready", "failed"]

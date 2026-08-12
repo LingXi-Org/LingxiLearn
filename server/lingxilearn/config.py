@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # separate guard so strict validation repair can complete without also
     # relaxing the single-page visual explainer timeout.
     agent_deck_timeout: float = 360.0
+    # A deck requires several progressive-disclosure and artifact-writing
+    # turns. Keep this independent from the parent graph limit so a verbose
+    # model cannot exhaust the child graph at the old hard-coded limit.
+    agent_deck_recursion_limit: int = 80
     agent_visual_timeout: float = 240.0
     agent_web_timeout: float = 20.0
     # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable

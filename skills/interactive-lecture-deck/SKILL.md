@@ -11,11 +11,11 @@ license: MIT
 compatibility: LingxiGraph Agent Skills runtime with Python 3
 metadata:
   author: LingXi-Org
-  version: 1.0.0
+  version: 1.1.0
   display-name: 交互式讲解课件
   display-description: 生成视觉优先、可缩放、可离线运行的中文 HTML 课程课件及讲解数据。
   output-language: zh-CN
-  output-contract: interactive-lecture-deck-result.v2
+  output-contract: interactive-lecture-deck-result.v2.1
   execution-mode: artifact-generation
 ---
 
@@ -26,25 +26,35 @@ metadata:
 Act as the interactive lecture-deck author in a multi-agent teaching system. Reconstruct supplied
 teaching content into a visual narrative. Slides show structure; the explanation panel makes the
 causal reasoning clear. Do not independently invent or fact-check lesson claims unless the caller
-asks for that work.
+asks for that work. The primary learner-facing delivery is the built, offline `dist/lecture.html`.
+The source slides, lecture data, runtime, and manifest remain available in the project workspace
+when needed for authoring, build, alignment, and validation, but do not routinely duplicate or
+return them as separate learner-facing exports.
 
 ## Output language
 
 All slide titles, labels, panel prose, onboarding text, narration, manifest descriptions, and
 delivery notes must be Simplified Chinese. Preserve formulas, code, identifiers, URLs, schema keys,
-and file names in their original form. The output contract is `interactive-lecture-deck-result.v2`.
+and file names in their original form. The output contract is `interactive-lecture-deck-result.v2.1`.
 
 ## Required output
 
-Produce these aligned artifacts:
+Produce these aligned project artifacts as needed for authoring, building, and strict validation;
+the final learner-facing delivery is `dist/lecture.html`:
 
 | Artifact | Requirement |
 | --- | --- |
-| `slides/sNN.html` | One self-contained 1280×720 HTML slide per page |
-| `lecture.json` | Overview, zoom steps, anchors, highlights, and Chinese panels |
-| `runtime/index.html` | The bundled local presentation runtime |
-| `dist/lecture.html` | One offline HTML publication with all content inlined |
-| `manifest.json` | Artifact inventory and validation result |
+| `slides/sNN.html` | One self-contained 1280×720 HTML slide per page; required source/validation artifact |
+| `lecture.json` | Overview, zoom steps, anchors, highlights, and Chinese panels; required alignment data |
+| `runtime/index.html` | The bundled local presentation runtime; required runtime/build artifact |
+| `dist/lecture.html` | One offline HTML publication with all content inlined; primary learner-facing delivery |
+| `manifest.json` | Artifact inventory and validation result; required project record, not a redundant export |
+
+Do not generate standalone PNG/JPG images, PowerPoint/PPTX exports, or duplicate HTML/JSON copies
+when the inline slide assets and `dist/lecture.html` already serve the purpose. Temporary files
+needed for an important design, validation, rendering, or compatibility check may be viewed or
+written to the host; keep them ephemeral when possible and do not include them in the delivery.
+Never remove a required project artifact before the build and strict validator have completed.
 
 ## Mandatory loading order
 
@@ -94,7 +104,7 @@ for a lesson chapter. A requested `slideCount` includes opening and closing.
 
 ## Build, validation, and delivery
 
-Use the standard project layout:
+Use the standard project layout for the required build and validation artifacts:
 
 ```text
 <project_dir>/
@@ -107,5 +117,7 @@ Use the standard project layout:
 
 Run the build and strict validator above. If anchor geometry is content-driven, also run
 `python3 scripts/measure_anchors.py <project_dir> --round 8`. Report total pages, content pages,
-zoom-step count, runtime path, standalone path, validation status, assumptions, and fallback items
-in Chinese. The final published deck and all prose in its manifest must be Chinese.
+zoom-step count, primary standalone path, validation status, assumptions, and fallback items in
+Chinese. Mention source/validation paths only when they help the caller use or inspect the project;
+do not return redundant copies or scratch artifacts. The final published deck and all prose in its
+manifest must be Chinese.

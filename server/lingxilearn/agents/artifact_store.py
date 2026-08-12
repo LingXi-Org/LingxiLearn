@@ -93,13 +93,19 @@ class ArtifactStore:
                 raise ArtifactError("lecture deck path escapes artifact root")
             if not isinstance(content, str) or not content.strip():
                 raise ArtifactError(f"empty lecture deck file: {name}")
+            if len(content.encode("utf-8")) > self.max_html_bytes:
+                raise ArtifactError(f"lecture deck file exceeds {self.max_html_bytes} bytes: {name}")
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
             normalized[name] = content
         missing = required - set(normalized)
         if missing:
             raise ArtifactError(f"lecture deck is missing required files: {sorted(missing)}")
-        return {"root": str(root), "files": sorted(normalized), "standalone": str(self.deck_path(task_id))}
+        return {
+            "root": str(root),
+            "files": sorted(normalized),
+            "standalone": str(self.deck_path(task_id)),
+        }
 
     async def build_and_validate_deck(self, task_id: str) -> dict[str, Any]:
         root = self.deck_root(task_id)
@@ -117,7 +123,11 @@ class ArtifactStore:
             [str(root), "--strict", "--json"],
             self.deck_skill_root,
         )
-        return {"build": build, "validation": validation, "ok": bool(build["ok"] and validation["ok"])}
+        return {
+            "build": build,
+            "validation": validation,
+            "ok": bool(build["ok"] and validation["ok"]),
+        }
 
     def write_html(self, task_id: str, content: str) -> dict[str, Any]:
         if not isinstance(content, str) or not content.strip():

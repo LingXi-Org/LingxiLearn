@@ -54,14 +54,15 @@ python3 scripts/build_standalone.py <outputDir>
 
 ## 5. 回执
 
-返回：
+默认返回主要学习者交付物和简短回执：
 
+- `dist/lecture.html`（单文件离线发布物）
 - 总页数 / content 页数 / step 数
-- `lecture.json`
-- `runtime/index.html`（从 `assets/runtime/index.html` 复制）
-- `dist/lecture.html`
-- `slides/`
 - 严格校验结果
 - assumptions / deviations
+
+`lecture.json`、`runtime/index.html`、`slides/` 和 `manifest.json` 仍须在项目工程中按需生成，
+用于构建、对齐和严格校验；只有在调用方明确要求源工程包或检查这些文件时才单独回传。
+不要回传截图、图片、PPT/PPTX、重复 HTML/JSON 副本或其他临时文件。
 
 不要粘贴完整 HTML 或 JSON。

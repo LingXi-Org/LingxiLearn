@@ -20,6 +20,7 @@ from lingxigraph import (
     AIMessage,
     EventKind,
     FilesystemSkillSource,
+    GraphRecursionError,
     HumanMessage,
     Runtime,
     SkillRegistry,
@@ -132,7 +133,7 @@ lesson-intro.html 并通过 stage_artifact_file 写入；HTML 必须是零依赖
 
 DECK_PROMPT = progressive_skill_prompt(
     "interactive-lecture-deck",
-    "interactive-lecture-deck-result.v2",
+    "interactive-lecture-deck-result.v2.1",
     referenced_resources=(
         "references/task-contract.md",
         "references/design-system.md",
@@ -141,12 +142,12 @@ DECK_PROMPT = progressive_skill_prompt(
         "references/lecture-data.md",
         "references/zoom-contract.md",
     ),
-    artifact_instructions="""这是分阶段课件生成。默认 problem 生成 5–7 页，concept 生成 6–8 页，lesson
-生成 8–12 页；必须有 opening/content/closing。为了避免长上下文逐页续轮，视觉大纲完成后必须按
-2–3 个文件一批调用 stage_artifact_files：先批量生成 slides，再批量生成 lecture.json 与
-manifest.json。禁止每轮只写一张 slide，除非是在修复单个校验错误。runtime/index.html 已由宿主从
-assets/runtime/index.html 原样预置，禁止调用 read_skill_resource
-读取 runtime 内容，也不要重写该文件。不要把完整文件放进最终回答。dist/lecture.html 由服务端执行 standalone build。最终回执示例：
+    artifact_instructions="""这是分阶段课件生成 Agent。默认 problem 生成 5–7 页，concept 生成 6–8 页，lesson
+生成 8–12 页；必须有 opening/content/closing。视觉大纲完成后，优先按 2–3 个文件一批调用
+stage_artifact_files：先生成 slides，再生成 lecture.json 与 manifest.json。runtime/index.html
+由宿主从 assets/runtime/index.html 原样预置；不要重复生成或覆盖它。不要生成 PNG/JPG、PowerPoint/
+PPTX 或重复的 HTML/JSON 导出。dist/lecture.html 由服务端执行 standalone build，是唯一主要学习者
+交付物。最终只返回简短 JSON receipt：
 {"status":"staged","title":"...","files":["lecture.json","slides/s01.html"],"assumptions":[],"deviations":[]}。""",
     batch_artifacts=True,
 )
@@ -498,11 +499,12 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         ).read_text(encoding="utf-8")
         draft.write("runtime/index.html", runtime_template)
         prompt = (
-            "按分阶段协议完成 interactive-lecture-deck-result.v2。\n"
+            "按最新分阶段协议完成 interactive-lecture-deck-result.v2.1。\n"
             "阶段 1：读取 skill 入口和直接相关 references。\n"
             "阶段 2：形成内部视觉大纲，决定页数、页角色、视觉关系和 zoom anchors。\n"
             "阶段 3：每次调用 stage_artifact_files 批量写入 2–3 个完整源文件；禁止逐张幻灯片单独进行一次模型续轮。\n"
-            "阶段 3.1：宿主已预置 runtime/index.html；禁止读取 runtime 模板或重写该文件。\n"
+            "阶段 3.1：宿主已预置 runtime/index.html；禁止读取 runtime 模板或重写 runtime/index.html。\n"
+            "阶段 3.2：不要生成 PNG/JPG、PowerPoint/PPTX 或重复 HTML/JSON 导出；dist/lecture.html 由服务端构建。\n"
             "阶段 4：返回 JSON receipt，不要回传完整文件。\n"
             "INTENT JSON:\n"
             + json.dumps(intent.model_dump(mode="json"), ensure_ascii=False)
@@ -524,25 +526,45 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
                 ),
                 batch_artifacts=True,
             ) + (
-                "The host already staged runtime/index.html. Do not read assets/runtime/index.html and do not overwrite runtime/index.html.",
-                "Generate 2-3 complete files per stage_artifact_files call; do not use one model round-trip per slide.",
-                "Do not narrate progress between tool calls; emit tool calls directly and reserve prose for the final JSON receipt.",
+                "The host already staged runtime/index.html; do not read assets/runtime/index.html and do not overwrite runtime/index.html.",
+                "Generate 2-3 complete source files per stage_artifact_files call; do not use one model round-trip per slide.",
+                "Do not generate PNG/JPG, PowerPoint/PPTX, or duplicate learner-facing HTML/JSON exports; the service builds dist/lecture.html as the primary delivery.",
+                "Do not narrate progress between tool calls; emit the final JSON receipt only after source artifacts are staged.",
             ),
             name="interactive-lecture-deck",
         )
         try:
-            parsed = extract_json(
-                _message_text(
-                    await _invoke_agent(
-                        agent,
-                        HumanMessage(prompt),
-                        runtime,
-                        agent_name="interactive_lecture_deck",
-                        recursion_limit=40,
-                        tool_permissions=("artifact:write",),
+            try:
+                parsed = extract_json(
+                    _message_text(
+                        await _invoke_agent(
+                            agent,
+                            HumanMessage(prompt),
+                            runtime,
+                            agent_name="interactive_lecture_deck",
+                            recursion_limit=settings.agent_deck_recursion_limit,
+                            tool_permissions=("artifact:write",),
+                        )
                     )
+                ) or {}
+            except GraphRecursionError:
+                # Artifact writes are durable within the private draft. A
+                # child Agent can hit its own budget after staging the final
+                # file but before emitting its JSON receipt; let the normal
+                # deck build/validator decide whether that draft is usable.
+                # Without this boundary the child error aborts the parent
+                # graph even when all required files are already present.
+                staged = draft.list()
+                _emit(
+                    runtime,
+                    "agent.output",
+                    agent="interactive_lecture_deck",
+                    message=(
+                        "课件生成达到子 Agent 步数上限，已写入文件将继续进入完整性校验。"
+                        f"当前已写入 {len(staged)} 个文件。"
+                    ),
                 )
-            ) or {}
+                parsed = {}
             files = draft.snapshot()
             if not files:
                 raise ValueError("interactive-lecture-deck did not stage any artifact")
@@ -552,7 +574,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         validation = await artifacts.build_and_validate_deck(task_id)
         if not validation["ok"]:
             raise ValueError(f"interactive-lecture-deck validation failed: {validation}")
-        value = DeckResult.model_validate({"schema_version": "interactive-lecture-deck-result.v2", "task_id": task_id, "title": str(parsed.get("title") or intent.topic), "status": "ready" if validation["ok"] else "failed", "files": {"lecture": "lecture.json", "slides": sorted(name for name in files if name.startswith("slides/")), "runtime": "runtime/index.html", "standalone": "dist/lecture.html", "manifest": "manifest.json"}, "manifest": parsed.get("manifest") or {}, "validation": validation, "assumptions": parsed.get("assumptions") or [], "deviations": parsed.get("deviations") or []}).model_dump(mode="json")
+        value = DeckResult.model_validate({"schema_version": "interactive-lecture-deck-result.v2.1", "task_id": task_id, "title": str(parsed.get("title") or intent.topic), "status": "ready", "files": {"lecture": "lecture.json", "slides": sorted(name for name in files if name.startswith("slides/")), "runtime": "runtime/index.html", "standalone": "dist/lecture.html", "manifest": "manifest.json"}, "manifest": parsed.get("manifest") or {}, "validation": validation, "assumptions": parsed.get("assumptions") or [], "deviations": parsed.get("deviations") or []}).model_dump(mode="json")
         await persist_result("interactive_lecture_deck", value)
         _emit(runtime, "artifact.ready", agent="interactive_lecture_deck", artifact="lecture-deck", validation=validation)
         _emit(runtime, "agent.completed", agent="interactive_lecture_deck", skill="interactive-lecture-deck")

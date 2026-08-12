@@ -44,8 +44,8 @@ def validate_input(obj: dict[str, Any]) -> None:
         raise ContractError("input.task_id must be a non-empty string")
     if not isinstance(obj["intent"], dict):
         raise ContractError("input.intent must be an object")
-    if not isinstance(obj["interactive_lecture_deck"], dict) or obj["interactive_lecture_deck"].get("schema_version") != "interactive-lecture-deck-result.v2":
-        raise ContractError("input.interactive_lecture_deck.schema_version must be interactive-lecture-deck-result.v2")
+    if not isinstance(obj["interactive_lecture_deck"], dict) or obj["interactive_lecture_deck"].get("schema_version") != "interactive-lecture-deck-result.v2.1":
+        raise ContractError("input.interactive_lecture_deck.schema_version must be interactive-lecture-deck-result.v2.1")
     if "lesson_intro" in obj and not isinstance(obj["lesson_intro"], (str, dict)):
         raise ContractError("input.lesson_intro must be HTML text or an object")
 

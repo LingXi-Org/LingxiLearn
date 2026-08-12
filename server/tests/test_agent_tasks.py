@@ -6,7 +6,17 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from lingxigraph import AIMessage, AIMessageChunk, FilesystemSkillSource, HumanMessage, ToolCallChunk, ToolMessage, create_agent, tool
+from lingxigraph import (
+    AIMessage,
+    AIMessageChunk,
+    FilesystemSkillSource,
+    GraphRecursionError,
+    HumanMessage,
+    ToolCallChunk,
+    ToolMessage,
+    create_agent,
+    tool,
+)
 
 from lingxilearn.agents.artifact_store import ArtifactError, ArtifactStore
 from lingxilearn.agents.contracts import IntentContext, LectureHookResult, extract_json
@@ -106,6 +116,10 @@ def test_agent_skills_are_discoverable_and_have_resources() -> None:
         metadata = source.discover()
         assert [item.name for item in metadata] == [name]
         assert (skill_dir / "SKILL.md").read_text(encoding="utf-8").startswith("---")
+        if name == "interactive-lecture-deck":
+            spec = source.load(name)
+            assert spec.extra_metadata.get("version") == "1.1.0"
+            assert "dist/lecture.html" in spec.content
 
 
 def test_skill_runtime_supports_progressive_disclosure_and_staged_artifacts(tmp_path: Path) -> None:
@@ -137,7 +151,7 @@ def test_skill_runtime_supports_progressive_disclosure_and_staged_artifacts(tmp_
         tools["stage_artifact_file"].func("../escape.html", "bad")
     prompt = progressive_skill_prompt(
         "interactive-lecture-deck",
-        "interactive-lecture-deck-result.v2",
+        "interactive-lecture-deck-result.v2.1",
         referenced_resources=("references/design-system.md",),
     )
     assert "read_skill" in prompt
@@ -145,7 +159,7 @@ def test_skill_runtime_supports_progressive_disclosure_and_staged_artifacts(tmp_
     assert "stage_artifact_file" in prompt
     batch_prompt = progressive_skill_prompt(
         "interactive-lecture-deck",
-        "interactive-lecture-deck-result.v2",
+        "interactive-lecture-deck-result.v2.1",
         referenced_resources=("references/slide-types.md",),
         batch_artifacts=True,
     )
@@ -295,6 +309,119 @@ async def test_specialists_start_in_parallel(
     assert {"stage_artifact_file", "stage_artifact_files", "read_staged_artifact", "list_staged_artifacts"} <= deck_tools
     assert created["interactive-lecture-deck"]["skills"].discover()[0].name == "interactive-lecture-deck"
     assert created["interactive-lecture-deck"]["config"]["tool_permissions"] == ["artifact:write"]
+    assert (
+        created["interactive-lecture-deck"]["config"]["recursion_limit"]
+        == settings.agent_deck_recursion_limit
+    )
+
+
+@pytest.mark.asyncio
+async def test_deck_recursion_exhaustion_keeps_staged_artifacts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
+
+    class FakeAgent:
+        def __init__(self, name: str, tools: list[Any]) -> None:
+            self.name = name
+            self.tools = tools
+
+        async def ainvoke(self, _input: Any, _config: Any) -> dict[str, Any]:
+            if self.name == "interactive-lecture-deck":
+                stage = next(tool for tool in self.tools if tool.name == "stage_artifact_file")
+                stage.func(
+                    "lecture.json",
+                    (source / "lecture.json").read_text(encoding="utf-8"),
+                )
+                stage.func(
+                    "manifest.json",
+                    (source / "manifest.json").read_text(encoding="utf-8"),
+                )
+                stage.func(
+                    "runtime/index.html",
+                    (
+                        REPO_ROOT
+                        / "skills"
+                        / "interactive-lecture-deck"
+                        / "assets"
+                        / "runtime"
+                        / "index.html"
+                    ).read_text(encoding="utf-8"),
+                )
+                for slide in (source / "slides").glob("s*.html"):
+                    stage.func(
+                        f"slides/{slide.name}",
+                        slide.read_text(encoding="utf-8"),
+                    )
+                raise GraphRecursionError("child deck budget exhausted")
+            if self.name == "intent-recognizer":
+                return {
+                    "messages": [
+                        AIMessage(
+                            '{"topic":"二次函数顶点","learning_objective":"理解顶点"}'
+                        )
+                    ]
+                }
+            if self.name == "lesson-intro":
+                stage = next(tool for tool in self.tools if tool.name == "stage_artifact_file")
+                stage.func(
+                    "lesson-intro.html",
+                    "<!doctype html><html><body><h1>二次函数顶点</h1></body></html>",
+                )
+                return {
+                    "messages": [
+                        AIMessage('{"topic":"二次函数顶点","status":"ok"}')
+                    ]
+                }
+            if self.name == "quiz-generator":
+                return {
+                    "messages": [
+                        AIMessage(
+                            '{"schema_version":"quiz-generation-result.v1",'
+                            '"task_id":"deck-recursion-test","title":"顶点",'
+                            '"instructions":"完成测评。","questions":['
+                            '{"id":"q01","type":"single_choice","prompt":"顶点是什么？",'
+                            '"options":[{"id":"A","label":"顶点"},{"id":"B","label":"根"}],'
+                            '"points":1,"answer":{"option_ids":["A"],"grading_mode":"exact"},'
+                            '"explanation":"顶点。","keywords":["concept:vertex"]}],'
+                            '"total_points":1}'
+                        )
+                    ]
+                }
+            return {"messages": [AIMessage("{}")]}
+
+    def fake_create_agent(_model: Any, *_tools: Any, name: str, **kwargs: Any) -> FakeAgent:
+        return FakeAgent(name, kwargs.get("tools", []))
+
+    monkeypatch.setattr("lingxilearn.agents.graph.create_agent", fake_create_agent)
+    settings = Settings(_env_file="", agent_task_dir=tmp_path)
+    store = ArtifactStore(settings)
+
+    async def validate_intro(_task_id: str) -> dict[str, Any]:
+        return {"ok": True, "contract": "lesson-intro-html.v1"}
+
+    async def validate_deck(_task_id: str) -> dict[str, Any]:
+        return {"ok": True, "build": {"ok": True}, "validation": {"ok": True}}
+
+    async def persist(_agent: str, _value: dict[str, Any]) -> None:
+        return None
+
+    monkeypatch.setattr(store, "validate_lesson_intro", validate_intro)
+    monkeypatch.setattr(store, "build_and_validate_deck", validate_deck)
+    graph = build_agent_graph(
+        model=object(),
+        settings=settings,
+        task_id="deck-recursion-test",
+        artifacts=store,
+        persist_result=persist,
+    )
+
+    result = await graph.ainvoke(
+        {"task_id": "deck-recursion-test", "prompt": "解释二次函数顶点", "errors": []}
+    )
+
+    assert result["status"] == "awaiting_user"
+    assert result["deck_result"]["status"] == "ready"
 
 
 @pytest.mark.asyncio
@@ -368,6 +495,8 @@ def test_lesson_intro_artifact_and_skill_deck_are_publishable(tmp_path: Path) ->
     validation = asyncio.run(store.build_and_validate_deck("deck-task"))
     assert validation["ok"] is True
     assert validation["validation"]["output"].find('"slideCount"') >= 0
+    assert store.deck_path("deck-task").name == "lecture.html"
+    assert store.deck_path("deck-task").parent.name == "dist"
 
     with pytest.raises(ArtifactError, match="runtime/index.html"):
         store.write_deck("missing-runtime", {"lecture.json": "{}", "manifest.json": "{}"})
