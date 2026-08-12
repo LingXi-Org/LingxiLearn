@@ -52,7 +52,10 @@ function Workspace() {
       .finally(() => setCreating(false));
   }, [authLoading, isAuthenticated, oidcConfigured, prompt, router, taskId]);
 
-  useEffect(() => setLayoutReady(true), []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLayoutReady(true), 760);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useLayoutEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");

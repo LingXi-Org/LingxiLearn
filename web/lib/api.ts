@@ -374,6 +374,8 @@ export const KNOWN_AGENT_EVENT_KINDS = [
   "assistant.delta",
   "tool.call.delta",
   "tool.result",
+  "model.started",
+  "model.completed",
   "model.usage",
   "node.started",
   "node.completed",

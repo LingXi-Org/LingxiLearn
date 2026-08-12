@@ -6,17 +6,77 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-from lingxigraph import AIMessage, AIMessageChunk, FilesystemSkillSource, ToolCallChunk, ToolMessage
+from lingxigraph import AIMessage, AIMessageChunk, FilesystemSkillSource, HumanMessage, ToolCallChunk, ToolMessage, create_agent, tool
 
 from lingxilearn.agents.artifact_store import ArtifactError, ArtifactStore
 from lingxilearn.agents.contracts import IntentContext, LectureHookResult, extract_json
-from lingxilearn.agents.graph import build_agent_graph
+from lingxilearn.agents.graph import _invoke_agent, build_agent_graph
 from lingxilearn.service import Service, _message_trace_events
 from lingxilearn.agents.web_tools import _assert_public_url
 from lingxilearn.agents.skill_runtime import ArtifactDraft, progressive_skill_prompt, staged_artifact_tools
 from lingxilearn.config import Settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.asyncio
+async def test_child_agent_stream_forwards_native_model_and_tool_events() -> None:
+    emitted: list[dict[str, Any]] = []
+
+    @tool(name="stage_probe", permissions=("artifact:write",))
+    def stage_probe(value: str) -> str:
+        return f"staged:{value}"
+
+    class FakeModel:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def astream(self, _messages: Any, *, tools: Any = None, **_kwargs: Any):
+            self.calls += 1
+            if self.calls == 1:
+                yield AIMessageChunk(
+                    "",
+                    additional_kwargs={"reasoning_content": "先调用写入工具"},
+                    tool_call_chunks=(
+                        ToolCallChunk(
+                            name="stage_probe",
+                            args='{"value":"lesson-intro.html"}',
+                            id="call-1",
+                            index=0,
+                        ),
+                    ),
+                )
+            else:
+                yield AIMessageChunk("完成")
+
+    class FakeRuntime:
+        context: dict[str, Any] = {}
+        cancellation = None
+
+        def emit(self, channel: str, value: dict[str, Any]) -> None:
+            assert channel == "agent_task"
+            emitted.append(value)
+
+    agent = create_agent(FakeModel(), tools=[stage_probe], name="trace-probe")
+    result = await _invoke_agent(
+        agent,
+        HumanMessage("生成文件"),
+        FakeRuntime(),  # type: ignore[arg-type]
+        agent_name="lecture_hook",
+        recursion_limit=8,
+        tool_permissions=("artifact:write",),
+    )
+
+    assert result["messages"][-1].content == "完成"
+    kinds = [event["type"] for event in emitted]
+    assert "model.started" in kinds
+    assert "reasoning.delta" in kinds
+    assert "tool.call.delta" in kinds
+    assert "tool.result" in kinds
+    assert "model.completed" in kinds
+    tool_result = next(event for event in emitted if event["type"] == "tool.result")
+    assert tool_result["status"] == "success"
+    assert tool_result["arguments"] == {"value": "lesson-intro.html"}
 
 
 def test_agent_trace_preserves_reasoning_tool_calls_and_results() -> None:
@@ -137,6 +197,7 @@ async def test_specialists_start_in_parallel(
             self.tools = tools
 
         async def ainvoke(self, _input: Any, _config: Any) -> dict[str, Any]:
+            created[self.name]["config"] = _config
             timeline.append(f"{self.name}:start")
             await asyncio.sleep(0.03)
             timeline.append(f"{self.name}:end")
@@ -206,9 +267,11 @@ async def test_specialists_start_in_parallel(
     assert timeline.index("interactive-lecture-deck:start") < first_end
     assert created["lesson-intro"]["skills"].discover()[0].name == "lesson-intro"
     assert {item.name for item in created["lesson-intro"]["tools"]} == {"web_search", "web_fetch", "stage_artifact_file", "read_staged_artifact", "list_staged_artifacts"}
+    assert created["lesson-intro"]["config"]["tool_permissions"] == ["artifact:write"]
     deck_tools = {item.name for item in created["interactive-lecture-deck"]["tools"]}
     assert {"stage_artifact_file", "read_staged_artifact", "list_staged_artifacts"} <= deck_tools
     assert created["interactive-lecture-deck"]["skills"].discover()[0].name == "interactive-lecture-deck"
+    assert created["interactive-lecture-deck"]["config"]["tool_permissions"] == ["artifact:write"]
 
 
 @pytest.mark.asyncio

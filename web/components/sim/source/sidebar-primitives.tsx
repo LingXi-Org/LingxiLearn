@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "./lib/cn";
 
-/** Sidebar primitives extracted from Sim's workspace sidebar at ce2dff3c. */
+/** Sidebar primitives from Sim's current workspace sidebar baseline. */
 const itemClass = "group flex h-[30px] items-center gap-2 rounded-lg px-2 text-[14px] text-[var(--text-body)] outline-none transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:bg-[var(--surface-hover)] focus-visible:text-[var(--text-primary)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:pointer-events-none disabled:opacity-60";
 
 export function SimSidebarLink({ href, icon: Icon, collapsed = false, onClick, children }: { href: string; icon: LucideIcon; collapsed?: boolean; onClick?: () => void; children: ReactNode }) {

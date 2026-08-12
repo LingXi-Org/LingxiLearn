@@ -48,8 +48,21 @@ from .tools.registry import ToolRegistry, load_builtin_tools
 logger = logging.getLogger(__name__)
 
 FLUSH_EVERY = 6
-AGENT_FLUSH_EVERY = 1
+AGENT_FLUSH_EVERY = 4
 """Batch size for persisting projections mid-run — small enough to feel live."""
+
+_AGENT_FORCE_FLUSH = frozenset(
+    {
+        "agent.started",
+        "agent.completed",
+        "agent.failed",
+        "model.started",
+        "model.completed",
+        "tool.call.delta",
+        "tool.result",
+        "artifact.ready",
+    }
+)
 
 _AGENT_NODES = frozenset(
     {
@@ -569,6 +582,7 @@ class Service:
                 context={"learner_id": learner_id, "locale": "zh-CN"},
             ):
                 mode, event = streamed
+                force_flush = False
                 if mode == "messages":
                     buffer.extend(_message_trace_events(event, current_agent))
                     if len(buffer) >= AGENT_FLUSH_EVERY:
@@ -585,9 +599,10 @@ class Service:
                     if data.get("channel") == EVENT_CHANNEL:
                         value = data.get("value") or {}
                         if isinstance(value, dict) and value.get("type"):
+                            event_type = str(value["type"])
                             buffer.append(
                                 {
-                                    "kind": str(value["type"]),
+                                    "kind": event_type,
                                     "agent": str(value.get("agent") or "coordinator"),
                                     "payload": {
                                         str(k): _json_safe(v)
@@ -596,6 +611,7 @@ class Service:
                                     },
                                 }
                             )
+                            force_flush = event_type in _AGENT_FORCE_FLUSH
                 elif event.kind in {
                     EventKind.NODE_STARTED,
                     EventKind.NODE_COMPLETED,
@@ -619,24 +635,13 @@ class Service:
                     else:
                         payload = {key: _json_safe(value) for key, value in data.items()}
                     buffer.append({"kind": kind, "agent": agent, "payload": payload})
-                if len(buffer) >= AGENT_FLUSH_EVERY:
+                if force_flush or len(buffer) >= AGENT_FLUSH_EVERY:
                     await self.repo.append_agent_events(task_id, list(buffer))
                     buffer.clear()
                     self._notify_agent(task_id)
         except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
             logger.exception("agent task failed: %s", task_id)
             detail = _safe_agent_error(exc, self.settings)
-            if current_agent != "coordinator":
-                buffer.append(
-                    {
-                        "kind": "agent.failed",
-                        "agent": current_agent,
-                        "payload": {
-                            "error_type": type(exc).__name__,
-                            "message": detail,
-                        },
-                    }
-                )
             buffer.append(
                 {
                     "kind": "task.failed",

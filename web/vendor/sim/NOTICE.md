@@ -4,7 +4,7 @@ LingxiLearn's workspace shell, chat surface, resource panel, task composer, and
 workflow canvas are adapted from the Sim open-source frontend:
 
 - Upstream: [simstudioai/sim](https://github.com/simstudioai/sim/)
-- Source snapshot: `ce2dff3cbabc65bd034aff117a2adbf03f86fde3`
+- Source snapshot: `48c59c8a70d647267200165ead35c39e067d9d59`
 - Relevant source: `apps/sim/app/workspace/[workspaceId]/home/`,
   `apps/sim/app/workspace/[workspaceId]/components/workspace-chrome/`,
   `apps/sim/app/workspace/[workspaceId]/w/components/sidebar/`,
@@ -13,6 +13,8 @@ workflow canvas are adapted from the Sim open-source frontend:
   `packages/emcn/src/components/button/button.tsx`,
   `packages/emcn/src/components/expandable/expandable.tsx`,
   `apps/sim/app/workspace/[workspaceId]/home/components/message-content/components/agent-group/agent-group.tsx`,
+  `apps/sim/components/ui/thinking-loader.tsx`,
+  `apps/sim/components/ui/thinking-loader.module.css`,
   `apps/sim/components/ui/shimmer-text.tsx`, and `apps/sim/hooks/use-smooth-text.ts`
 - License: Apache License 2.0, as provided by the upstream repository
 

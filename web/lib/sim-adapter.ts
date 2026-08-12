@@ -115,9 +115,9 @@ function eventStatus(
     .sort((a, b) => a.sequence - b.sequence);
   let status = current;
   for (const event of relevant) {
-    if (event.kind.endsWith(".started")) status = "running";
-    if (event.kind.endsWith(".completed")) status = "complete";
-    if (event.kind.endsWith(".failed")) status = "error";
+    if (["node.started", "intent.started", "agent.started", "model.started"].includes(event.kind)) status = "running";
+    if (["node.completed", "intent.completed", "agent.completed"].includes(event.kind)) status = "complete";
+    if (["agent.failed", "task.failed"].includes(event.kind)) status = "error";
   }
   return status;
 }
@@ -263,7 +263,8 @@ export function agentTaskToAssistantSegments(task: AgentTaskSnapshot, events: Ag
     if (event.kind === "tool.call.delta") {
       const run = isAgentEvent ? ensureRun(event.agent, event.sequence) : undefined;
       const detail = JSON.stringify(event.payload, null, 2);
-      const tool = { type: "tool" as const, id: `tool-${event.sequence}`, title: "工具调用", detail, status: "executing" as const };
+      const name = toolCallName(event.payload);
+      const tool = { type: "tool" as const, id: `tool-${event.sequence}`, title: `工具调用${name ? ` · ${name}` : ""}`, detail, status: "executing" as const };
       if (run) run.groupItems?.push(tool);
       else segments.push(tool);
       continue;
@@ -297,7 +298,12 @@ export function agentTaskToAssistantSegments(task: AgentTaskSnapshot, events: Ag
       appendRunText(run, event, eventLine(event, task));
       continue;
     }
-    appendText(eventLine(event, task));
+    const line = eventLine(event, task);
+    if (event.agent && event.agent !== "coordinator" && line) {
+      appendRunText(ensureRun(event.agent, event.sequence), event, line);
+    } else {
+      appendText(line);
+    }
   }
   if (segments.length === 0) appendText("正在连接 Agent 事件流…");
   return segments;
@@ -332,7 +338,7 @@ export function agentTaskToSimActivity(task: AgentTaskSnapshot | null, events: A
       .filter((event) => event.kind === "tool.call.delta" || event.kind === "tool.result")
       .map((event) => ({
         id: `activity-tool-${event.sequence}`,
-        displayTitle: event.kind === "tool.result" ? `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}` : "工具调用",
+        displayTitle: event.kind === "tool.result" ? `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}` : `工具调用${toolCallName(event.payload) ? ` · ${toolCallName(event.payload)}` : ""}`,
         detail: JSON.stringify(event.payload, null, 2),
         status: event.kind === "tool.result" ? "success" as const : "executing" as const,
       })),
@@ -347,7 +353,7 @@ export function agentTaskToAgentRuns(task: AgentTaskSnapshot, events: AgentTaskE
   return [...new Set(ordered.map((event) => event.agent))].map((agent) => {
     const relevant = ordered.filter((event) => event.agent === agent);
     const failed = relevant.some((event) => event.kind.endsWith("failed"));
-    const complete = relevant.some((event) => event.kind.endsWith("completed"));
+    const complete = relevant.some((event) => ["node.completed", "intent.completed", "agent.completed"].includes(event.kind));
     const groupItems = relevant.flatMap((event) => {
       const item = eventToGroupItem(event, task);
       return item ? [item] : [];
@@ -365,7 +371,8 @@ export function agentTaskToAgentRuns(task: AgentTaskSnapshot, events: AgentTaskE
 
 function eventToGroupItem(event: AgentTaskEvent, task: AgentTaskSnapshot): SimAgentGroupItem | null {
   if (event.kind === "tool.call.delta") {
-    return { type: "tool", id: `tool-${event.sequence}`, title: "工具调用", detail: JSON.stringify(event.payload, null, 2), status: "executing" };
+    const name = toolCallName(event.payload);
+    return { type: "tool", id: `tool-${event.sequence}`, title: `工具调用${name ? ` · ${name}` : ""}`, detail: JSON.stringify(event.payload, null, 2), status: "executing" };
   }
   if (event.kind === "tool.result") {
     return { type: "tool", id: `tool-result-${event.sequence}`, title: `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}`, detail: JSON.stringify(event.payload, null, 2), status: "success" };
@@ -409,10 +416,18 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
   if (event.kind === "tool.call.delta") return `工具调用 · ${JSON.stringify(event.payload, null, 2)}`;
   if (event.kind === "tool.result") return `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}\n${JSON.stringify(event.payload, null, 2)}`;
   if (event.kind === "model.usage") return `模型用量 · ${JSON.stringify(event.payload.usage || {})}`;
+  if (event.kind === "model.started") return "模型开始思考与生成…";
+  if (event.kind === "model.completed") return `模型本轮完成\n${JSON.stringify(event.payload, null, 2)}`;
   if (event.kind === "node.started" || event.kind === "node.completed" || event.kind === "node.retrying" || event.kind === "interrupt.raised") {
     return `${agentLabel(event.agent)} · ${event.kind}\n${JSON.stringify(event.payload, null, 2)}`;
   }
   return "";
+}
+
+function toolCallName(payload: Record<string, unknown>): string {
+  const calls = Array.isArray(payload.calls) ? payload.calls : Array.isArray(payload.chunks) ? payload.chunks : [];
+  const first = calls[0];
+  return first && typeof first === "object" && "name" in first ? String(first.name || "") : "";
 }
 
 export function agentTaskToSimResources(task: AgentTaskSnapshot | null): SimResourceDescriptor[] {

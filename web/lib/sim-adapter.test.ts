@@ -70,9 +70,20 @@ describe("agent task adapter", () => {
     const messages = agentTaskToSimMessages(task(), events);
     expect(messages[1].content).toContain("思考 · 先阅读 skill");
     const run = agentTaskToAgentRuns(task(), events)[0];
-    expect(run.groupItems?.some((item) => item.type === "tool" && item.title === "工具调用")).toBe(true);
+    expect(run.groupItems?.some((item) => item.type === "tool" && item.title.startsWith("工具调用"))).toBe(true);
     expect(run.groupItems?.some((item) => item.type === "tool" && item.title.includes("工具结果"))).toBe(true);
     expect(agentTaskToSimActivity(task(), events).tools.map((tool) => tool.status)).toEqual(["executing", "success"]);
+  });
+
+  it("keeps an agent running after an intermediate model turn", () => {
+    const events = [
+      { sequence: 1, kind: "agent.started", agent: "lecture_hook", payload: { skill: "lesson-intro" }, ts: null },
+      { sequence: 2, kind: "model.started", agent: "lecture_hook", payload: {}, ts: null },
+      { sequence: 3, kind: "model.completed", agent: "lecture_hook", payload: { duration_ms: 1200 }, ts: null },
+      { sequence: 4, kind: "tool.call.delta", agent: "lecture_hook", payload: { calls: [{ name: "read_skill" }] }, ts: null },
+    ];
+    expect(agentTaskToAgentRuns(task(), events)[0].status).toBe("running");
+    expect(agentTaskToCanvasGraph(task(), events).nodes.find((node) => node.id === "lecture_hook")?.status).toBe("running");
   });
 
   it("reports partial and failed task states", () => {

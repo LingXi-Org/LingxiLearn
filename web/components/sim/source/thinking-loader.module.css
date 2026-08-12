@@ -1,0 +1,607 @@
+/**
+ * ThinkingLoader gooey animation
+ *
+ * Metaball technique on the SVG alpha channel: ink shapes are blurred with
+ * feGaussianBlur, then feColorMatrix crushes the soft alpha back to hard
+ * edges. Unlike the CSS blur+contrast trick this needs no solid backdrop and
+ * no blend mode, so the loader composites cleanly on any background.
+ *
+ * Every variant is authored in the shared 100x100 viewBox. All stages stack
+ * inside one filtered group; because the alpha crush happens after the
+ * stages composite, crossfading two stages reads as one pattern melting
+ * into the next, which is what drives the cycling morph.
+ *
+ * Ink color rides on currentColor: near-black on light surfaces, off-white
+ * in dark mode.
+ */
+
+.frame {
+  /* currentColor paints the squeeze ring's stroked arcs (the only non-filled
+     geometry). It tracks the loader polarity — dark on light, light on dark —
+     matching the gradient stops below. */
+  color: var(--thinking-ink-current);
+  flex: none;
+  /* Loader fill is a radial gradient (center → edge) plus a soft white inner
+     glow, per the Figma loader spec. Stops and glow opacity are theme vars,
+     inherited by the gradient stops and feFlood inside the SVG, so one set of
+     defs serves both themes. Light mode = the DARK-grey loader (reads on white):
+     #2C2C2C → #5F5F5F, glow white 0.6. */
+  --tl-grad-inner: var(--thinking-ink-inner);
+  --tl-grad-outer: var(--thinking-ink-outer);
+  --tl-glow: var(--thinking-ink-glow);
+}
+
+/* Gradient stops + glow flood read the theme vars via CSS (a raw `var()` in an
+   SVG presentation attribute would not resolve — it must come through CSS).
+   `stop-color`/`flood-color` are transitionable even when fed by a var, so a
+   caller that re-points the ink vars (e.g. settling the loader's material into
+   a surface it hands off to) gets a smooth color tween, not a hard flip. */
+.gradInner {
+  stop-color: var(--tl-grad-inner);
+  transition: stop-color 450ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.gradOuter {
+  stop-color: var(--tl-grad-outer);
+  transition: stop-color 450ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.glow {
+  flood-color: var(--tl-glow);
+  transition: flood-color 450ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Wall-clock phase lock: the component sets --tl-sync to a shared negative
+   delay (now mod the common animation period), so every instance's keyframes
+   line up no matter when it mounted. The doubled class out-specifies the
+   shape classes' animation shorthand (implicit 0s delay) regardless of
+   source order. */
+.frame.frame * {
+  animation-delay: var(--tl-sync, 0s);
+}
+
+.frame.inheritInk {
+  color: inherit;
+  --tl-grad-inner: currentColor;
+  --tl-grad-outer: currentColor;
+  --tl-glow: color-mix(in srgb, var(--white) 60%, transparent);
+}
+
+.labelRow {
+  display: inline-flex;
+  align-items: center;
+  /* gap + label size scale with the loader (vars set per-instance); defaults
+     match the chat's size-20 loader (8px gap, 14px text). */
+  gap: var(--tl-label-gap, 8px);
+  /* The status phrase must never break onto a second line — the glyph + phrase
+     stay on one row regardless of phrase length or how narrow the available
+     width is (e.g. the hero loader docked near the card's right edge).
+     white-space inherits, so this one declaration reaches both the shimmer
+     (.label) and static (.labelStatic) text spans. */
+  white-space: nowrap;
+}
+
+/* The sweeping-band treatment itself (gradient, timing, dark mode, reduced
+   motion) is owned by the shared shimmer-text module; this class only adds the
+   loader-scaled font sizing. Canonical normal weight per emcn rules: body text
+   is 400, never medium. */
+.label {
+  composes: shimmer from "./shimmer-text.module.css";
+  font-size: var(--tl-label-size, 14px);
+  font-weight: 400;
+}
+
+/* Static label (shimmer off): the phrase in solid body ink, no gradient sweep. */
+.labelStatic {
+  font-size: var(--tl-label-size, 14px);
+  font-weight: 400;
+  color: var(--text-body);
+}
+
+/* Phrase crossfade — the incoming phrase rises and fades in while the outgoing
+   one rises and fades out (stacked over it), so phrases rotate smoothly. */
+.labelStack {
+  position: relative;
+  display: inline-flex;
+}
+.labelLayer {
+  display: inline-flex;
+}
+/* Incoming phrase wipes in left → right through an animated gradient mask
+   (soft trailing edge), so it's revealed horizontally rather than fading up. */
+.labelIn {
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 70%, transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 70%, transparent 100%);
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: label-reveal 460ms ease both;
+}
+.labelOut {
+  position: absolute;
+  inset: 0;
+  animation: label-out 300ms ease both;
+}
+@keyframes label-reveal {
+  from {
+    opacity: 0;
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  to {
+    opacity: 1;
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+  }
+}
+@keyframes label-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.stage {
+  opacity: 0;
+  transition: opacity var(--tl-morph-duration, 500ms) ease-in-out;
+}
+
+.stageActive {
+  opacity: 1;
+}
+
+/* metaballs — two circles drift apart and melt back together */
+.metaballsA {
+  animation: metaballs-a 1s infinite alternate;
+}
+.metaballsB {
+  animation: metaballs-b 1s infinite alternate;
+}
+@keyframes metaballs-a {
+  90%,
+  100% {
+    transform: translateX(28px);
+  }
+}
+@keyframes metaballs-b {
+  90%,
+  100% {
+    transform: translateX(-28px);
+  }
+}
+
+.relayBall {
+  animation: relay 1.3s linear infinite;
+}
+@keyframes relay {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(var(--tl-relay-distance, 58px));
+    opacity: 0;
+  }
+}
+
+/* The wide workflow relay keeps its angled cap paths static. Only a narrow
+   inner-edge extension moves with the four flexing center cells, so the outer
+   corners and slopes never distort. */
+@property --tl-relay-left-cap-progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --tl-relay-right-cap-progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --tl-relay-b1 {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 25%;
+}
+
+@property --tl-relay-b2 {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 50%;
+}
+
+@property --tl-relay-b3 {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 75%;
+}
+
+.relayWideLayout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  contain: layout paint;
+  animation: relay-wide-wave 1.6s linear infinite both;
+}
+
+.relayCapFrame {
+  position: absolute;
+  top: 0;
+  width: 40px;
+  height: 24px;
+  overflow: visible;
+}
+
+.relayLeftCapFrame {
+  left: 0;
+}
+
+.relayRightCapFrame {
+  right: 0;
+}
+
+.relayCapExtension {
+  position: absolute;
+  top: 0;
+  height: 24px;
+  background: currentColor;
+  will-change: width;
+}
+
+.relayLeftCap {
+  left: 35px;
+  width: calc(5px + var(--tl-relay-left-cap-progress) * 1px);
+  border-radius: 0 4px 4px 0;
+}
+
+.relayRightCap {
+  right: 35px;
+  width: calc(5px + var(--tl-relay-right-cap-progress) * 1px);
+  border-radius: 4px 0 0 4px;
+}
+
+.relayActivityTrack {
+  position: absolute;
+  top: 0;
+  right: calc(42px + var(--tl-relay-right-cap-progress) * 1px);
+  bottom: 0;
+  left: calc(42px + var(--tl-relay-left-cap-progress) * 1px);
+  contain: layout paint;
+}
+
+.relayActivityBlock {
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  clip-path: inset(0 calc(100% - var(--tl-relay-b1) + 1px) 0 0 round 4px);
+  will-change: clip-path;
+}
+
+.relayActivityBlockSecond {
+  clip-path: inset(
+    0 calc(100% - var(--tl-relay-b2) + 1px) 0 calc(var(--tl-relay-b1) + 1px) round 4px
+  );
+}
+
+.relayActivityBlockThird {
+  clip-path: inset(
+    0 calc(100% - var(--tl-relay-b3) + 1px) 0 calc(var(--tl-relay-b2) + 1px) round 4px
+  );
+}
+
+.relayActivityBlockFourth {
+  clip-path: inset(0 0 0 calc(var(--tl-relay-b3) + 1px) round 4px);
+}
+
+@keyframes relay-wide-wave {
+  0%,
+  100% {
+    --tl-relay-b1: 10.655%;
+    --tl-relay-b2: 24.978%;
+    --tl-relay-b3: 58.16%;
+    --tl-relay-left-cap-progress: 0;
+    --tl-relay-right-cap-progress: 0.976;
+  }
+  5% {
+    --tl-relay-b1: 14.423%;
+    --tl-relay-b2: 27.648%;
+    --tl-relay-b3: 55.273%;
+    --tl-relay-left-cap-progress: 0.095;
+    --tl-relay-right-cap-progress: 0.994;
+  }
+  10% {
+    --tl-relay-b1: 21.161%;
+    --tl-relay-b2: 33.204%;
+    --tl-relay-b3: 55.113%;
+    --tl-relay-left-cap-progress: 0.295;
+    --tl-relay-right-cap-progress: 1;
+  }
+  15% {
+    --tl-relay-b1: 28.65%;
+    --tl-relay-b2: 40.122%;
+    --tl-relay-b3: 58.089%;
+    --tl-relay-left-cap-progress: 0.513;
+    --tl-relay-right-cap-progress: 0.905;
+  }
+  20% {
+    --tl-relay-b1: 35.828%;
+    --tl-relay-b2: 47.584%;
+    --tl-relay-b3: 63.388%;
+    --tl-relay-left-cap-progress: 0.683;
+    --tl-relay-right-cap-progress: 0.705;
+  }
+  25% {
+    --tl-relay-b1: 40.906%;
+    --tl-relay-b2: 56.326%;
+    --tl-relay-b3: 70.465%;
+    --tl-relay-left-cap-progress: 0.802;
+    --tl-relay-right-cap-progress: 0.487;
+  }
+  30% {
+    --tl-relay-b1: 42.672%;
+    --tl-relay-b2: 64.684%;
+    --tl-relay-b3: 77.21%;
+    --tl-relay-left-cap-progress: 0.885;
+    --tl-relay-right-cap-progress: 0.317;
+  }
+  35% {
+    --tl-relay-b1: 42.602%;
+    --tl-relay-b2: 70.912%;
+    --tl-relay-b3: 82.247%;
+    --tl-relay-left-cap-progress: 0.941;
+    --tl-relay-right-cap-progress: 0.198;
+  }
+  40% {
+    --tl-relay-b1: 42.139%;
+    --tl-relay-b2: 74.843%;
+    --tl-relay-b3: 85.574%;
+    --tl-relay-left-cap-progress: 0.976;
+    --tl-relay-right-cap-progress: 0.115;
+  }
+  45% {
+    --tl-relay-b1: 40.427%;
+    --tl-relay-b2: 75.01%;
+    --tl-relay-b3: 88.046%;
+    --tl-relay-left-cap-progress: 0.994;
+    --tl-relay-right-cap-progress: 0.059;
+  }
+  50% {
+    --tl-relay-b1: 37.684%;
+    --tl-relay-b2: 72.125%;
+    --tl-relay-b3: 89.89%;
+    --tl-relay-left-cap-progress: 1;
+    --tl-relay-right-cap-progress: 0.024;
+  }
+  55% {
+    --tl-relay-b1: 33.489%;
+    --tl-relay-b2: 67.94%;
+    --tl-relay-b3: 90.833%;
+    --tl-relay-left-cap-progress: 0.905;
+    --tl-relay-right-cap-progress: 0.006;
+  }
+  60% {
+    --tl-relay-b1: 28.085%;
+    --tl-relay-b2: 63.498%;
+    --tl-relay-b3: 90.982%;
+    --tl-relay-left-cap-progress: 0.705;
+    --tl-relay-right-cap-progress: 0;
+  }
+  65% {
+    --tl-relay-b1: 22.094%;
+    --tl-relay-b2: 57.865%;
+    --tl-relay-b3: 88.465%;
+    --tl-relay-left-cap-progress: 0.487;
+    --tl-relay-right-cap-progress: 0.095;
+  }
+  70% {
+    --tl-relay-b1: 16.986%;
+    --tl-relay-b2: 51.788%;
+    --tl-relay-b3: 83.593%;
+    --tl-relay-left-cap-progress: 0.317;
+    --tl-relay-right-cap-progress: 0.295;
+  }
+  75% {
+    --tl-relay-b1: 13.648%;
+    --tl-relay-b2: 45.485%;
+    --tl-relay-b3: 78.236%;
+    --tl-relay-left-cap-progress: 0.198;
+    --tl-relay-right-cap-progress: 0.513;
+  }
+  80% {
+    --tl-relay-b1: 11.758%;
+    --tl-relay-b2: 38.997%;
+    --tl-relay-b3: 73.344%;
+    --tl-relay-left-cap-progress: 0.115;
+    --tl-relay-right-cap-progress: 0.683;
+  }
+  85% {
+    --tl-relay-b1: 10.679%;
+    --tl-relay-b2: 32.987%;
+    --tl-relay-b3: 69.104%;
+    --tl-relay-left-cap-progress: 0.059;
+    --tl-relay-right-cap-progress: 0.802;
+  }
+  90% {
+    --tl-relay-b1: 10.047%;
+    --tl-relay-b2: 28.326%;
+    --tl-relay-b3: 65.775%;
+    --tl-relay-left-cap-progress: 0.024;
+    --tl-relay-right-cap-progress: 0.885;
+  }
+  95% {
+    --tl-relay-b1: 10.022%;
+    --tl-relay-b2: 25.718%;
+    --tl-relay-b3: 62.334%;
+    --tl-relay-left-cap-progress: 0.006;
+    --tl-relay-right-cap-progress: 0.941;
+  }
+}
+
+/* corners — four dots rotate around a center square */
+.cornersA {
+  animation: corners-a 0.8s infinite;
+}
+.cornersB {
+  animation: corners-b 0.8s infinite;
+}
+.cornersC {
+  animation: corners-c 0.8s infinite;
+}
+.cornersD {
+  animation: corners-d 0.8s infinite;
+}
+@keyframes corners-a {
+  100% {
+    transform: translate(46px, 0);
+  }
+}
+@keyframes corners-b {
+  100% {
+    transform: translate(0, 46px);
+  }
+}
+@keyframes corners-c {
+  100% {
+    transform: translate(-46px, 0);
+  }
+}
+@keyframes corners-d {
+  100% {
+    transform: translate(0, -46px);
+  }
+}
+
+/* burst — four dots repeatedly fling out of a center cross */
+.burstUp {
+  animation: burst-up 0.8s infinite;
+}
+.burstDown {
+  animation: burst-down 0.8s infinite;
+}
+.burstLeft {
+  animation: burst-left 0.8s infinite;
+}
+.burstRight {
+  animation: burst-right 0.8s infinite;
+}
+@keyframes burst-up {
+  100% {
+    transform: translateY(-50px);
+  }
+}
+@keyframes burst-down {
+  100% {
+    transform: translateY(50px);
+  }
+}
+@keyframes burst-left {
+  100% {
+    transform: translateX(-50px);
+  }
+}
+@keyframes burst-right {
+  100% {
+    transform: translateX(50px);
+  }
+}
+
+/* compass — one dot tours the four cardinal points */
+.compassMover {
+  animation: compass 2s infinite;
+}
+@keyframes compass {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(27px, 27px);
+  }
+  50% {
+    transform: translate(0, 54px);
+  }
+  75% {
+    transform: translate(-27px, 27px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+/* squeeze — two bars pinch together inside the ring arcs */
+.squeezeBarL {
+  animation: squeeze-l 0.6s infinite alternate;
+}
+.squeezeBarR {
+  animation: squeeze-r 0.6s infinite alternate;
+}
+@keyframes squeeze-l {
+  0%,
+  30% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(10px);
+  }
+}
+@keyframes squeeze-r {
+  0%,
+  30% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-10px);
+  }
+}
+
+/* thinking — three small blobs drift out from the core and back on offset
+   periods (1.3/1.6/1.9s), so the merged cloud churns and never repeats:
+   the Core weighing options. */
+.thinkA {
+  animation: think-a 1.6s infinite alternate;
+}
+.thinkB {
+  animation: think-b 1.9s infinite alternate;
+}
+.thinkC {
+  animation: think-c 1.3s infinite alternate;
+}
+@keyframes think-a {
+  100% {
+    transform: translate(-20px, -14px);
+  }
+}
+@keyframes think-b {
+  100% {
+    transform: translate(22px, -10px);
+  }
+}
+@keyframes think-c {
+  100% {
+    transform: translate(2px, 22px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame *,
+  .labelIn {
+    animation: none;
+  }
+  .stage {
+    transition: none;
+  }
+  .gradInner,
+  .gradOuter,
+  .glow {
+    transition: none;
+  }
+  /* No crossfade — the incoming phrase just replaces the outgoing one. */
+  .labelOut {
+    display: none;
+  }
+}

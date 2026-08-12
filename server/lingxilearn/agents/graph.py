@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import operator
+import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any, TypedDict
@@ -17,11 +18,13 @@ from lingxigraph import (
     END,
     START,
     AIMessage,
+    EventKind,
     FilesystemSkillSource,
     HumanMessage,
     Runtime,
     SkillRegistry,
     StateGraph,
+    ToolMessage,
     create_agent,
     interrupt,
 )
@@ -64,6 +67,7 @@ class AgentState(TypedDict, total=False):
 
 
 PersistResult = Callable[[str, dict[str, Any]], Awaitable[None]]
+AgentNode = Callable[[AgentState, Runtime[Any]], Awaitable[dict[str, Any]]]
 
 
 def _agent_model(model: Any, role: str) -> Any:
@@ -73,6 +77,31 @@ def _agent_model(model: Any, role: str) -> Any:
     if callable(resolver):
         return resolver(role)
     return model
+
+
+def _emit_agent_failure(
+    runtime: Runtime[Any], agent_name: str, exc: BaseException
+) -> None:
+    """Emit one correctly attributed failure even when siblings run in parallel."""
+
+    _emit(
+        runtime,
+        "agent.failed",
+        agent=agent_name,
+        error_type=type(exc).__name__,
+        message=str(exc) or type(exc).__name__,
+    )
+
+
+def _trace_agent_node(agent_name: str, node: AgentNode) -> AgentNode:
+    async def traced(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
+        try:
+            return await node(state, runtime)
+        except Exception as exc:
+            _emit_agent_failure(runtime, agent_name, exc)
+            raise
+
+    return traced
 
 
 INTENT_PROMPT = """你是 LingxiLearn 的意图识别与调度 Agent。
@@ -170,6 +199,173 @@ def _message_text(result: Any) -> str:
     return ""
 
 
+def _message_payload(message: Any) -> tuple[str, str]:
+    """Return provider reasoning and visible content from a native message."""
+
+    additional = getattr(message, "additional_kwargs", {}) or {}
+    reasoning = ""
+    if isinstance(additional, dict):
+        for key in ("reasoning_content", "reasoning", "thinking"):
+            if additional.get(key):
+                reasoning = str(additional[key])
+                break
+    return reasoning, str(getattr(message, "content", "") or "")
+
+
+async def _invoke_agent(
+    agent: Any,
+    message: HumanMessage,
+    runtime: Runtime[Any],
+    *,
+    agent_name: str,
+    recursion_limit: int,
+    tool_permissions: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Run a child Agent while forwarding its native runtime events.
+
+    Calling a compiled Agent with ``ainvoke`` inside an ordinary graph node does
+    not make it a native subgraph, so its model/tool events never reach the
+    parent's stream.  Streaming the child explicitly keeps progressive skill
+    disclosure observable without a second UI event implementation.
+    """
+
+    stream = getattr(agent, "astream", None)
+    if not callable(stream):
+        return await agent.ainvoke(
+            {"messages": [message]},
+            {
+                "recursion_limit": recursion_limit,
+                "tool_permissions": list(tool_permissions),
+            },
+        )
+
+    config = {
+        "recursion_limit": recursion_limit,
+        "tool_permissions": list(tool_permissions),
+    }
+    latest: dict[str, Any] = {}
+    reasoning_parts: list[str] = []
+    content_parts: list[str] = []
+    tool_calls: dict[str, dict[str, Any]] = {}
+    model_started = 0.0
+    tool_batch_started = 0.0
+
+    def flush_text() -> None:
+        if reasoning_parts:
+            _emit(
+                runtime,
+                "reasoning.delta",
+                agent=agent_name,
+                delta="".join(reasoning_parts),
+            )
+            reasoning_parts.clear()
+        if content_parts:
+            _emit(
+                runtime,
+                "assistant.delta",
+                agent=agent_name,
+                delta="".join(content_parts),
+            )
+            content_parts.clear()
+
+    try:
+        async for mode, value in stream(
+            {"messages": [message]},
+            config,
+            stream_mode=("events", "values"),
+            context=runtime.context,
+            cancellation=runtime.cancellation,
+            subgraphs=True,
+        ):
+            if mode == "values":
+                if isinstance(value, dict):
+                    latest = value
+                continue
+            event = value
+            if event.kind is EventKind.MESSAGE:
+                envelope = event.data.get("value")
+                native_message = envelope[0] if isinstance(envelope, (tuple, list)) and envelope else None
+                if native_message is not None:
+                    reasoning, content = _message_payload(native_message)
+                    if reasoning and not (getattr(native_message, "additional_kwargs", {}) or {}).get("_reasoning_replay"):
+                        reasoning_parts.append(reasoning)
+                    if content:
+                        content_parts.append(content)
+                    if sum(map(len, reasoning_parts)) + sum(map(len, content_parts)) >= 256:
+                        flush_text()
+                continue
+            if event.kind is EventKind.NODE_STARTED and event.node == "agent":
+                model_started = time.monotonic()
+                _emit(runtime, "model.started", agent=agent_name)
+                continue
+            if event.kind is EventKind.NODE_STARTED and event.node == "tools":
+                tool_batch_started = time.monotonic()
+                continue
+            if event.kind is not EventKind.NODE_COMPLETED:
+                continue
+            update = event.data.get("update") or {}
+            messages = update.get("messages", ()) if isinstance(update, dict) else ()
+            if event.node == "agent":
+                flush_text()
+                response = messages[-1] if messages else None
+                if isinstance(response, AIMessage):
+                    for call in response.tool_calls:
+                        call_payload = {
+                            "id": call.id,
+                            "name": call.name,
+                            "args": dict(call.args),
+                        }
+                        tool_calls[call.id] = call_payload
+                        _emit(
+                            runtime,
+                            "tool.call.delta",
+                            agent=agent_name,
+                            calls=[call_payload],
+                        )
+                    usage = dict(response.usage or {})
+                    if usage:
+                        _emit(runtime, "model.usage", agent=agent_name, usage=usage)
+                    _emit(
+                        runtime,
+                        "model.completed",
+                        agent=agent_name,
+                        duration_ms=round((time.monotonic() - model_started) * 1000, 2)
+                        if model_started
+                        else None,
+                        response_metadata=getattr(response, "response_metadata", {}) or {},
+                        additional_kwargs=getattr(response, "additional_kwargs", {}) or {},
+                    )
+                continue
+            if event.node == "tools":
+                duration_ms = (
+                    round((time.monotonic() - tool_batch_started) * 1000, 2)
+                    if tool_batch_started
+                    else None
+                )
+                for result in messages:
+                    if not isinstance(result, ToolMessage):
+                        continue
+                    call = tool_calls.get(result.tool_call_id, {})
+                    _emit(
+                        runtime,
+                        "tool.result",
+                        agent=agent_name,
+                        tool_call_id=result.tool_call_id,
+                        name=result.name,
+                        arguments=call.get("args", {}),
+                        content=result.content,
+                        status=result.status,
+                        duration_ms=duration_ms,
+                        additional_kwargs=result.additional_kwargs,
+                        response_metadata=result.response_metadata,
+                    )
+        flush_text()
+        return latest
+    except Exception:
+        flush_text()
+        raise
+
+
 def _route_from_state(state: AgentState) -> str:
     route = state.get("route")
     if route not in {"initialize", "await_user", "answer_user", "interactive_visual_explainer", "quiz_submit", "handoff"}:
@@ -193,7 +389,13 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         raw = state.get("prompt", "") if initial else str((state.get("user_message") or {}).get("message") or "")
         _emit(runtime, "intent.started", agent="intent")
         agent = create_agent(_agent_model(model, "intent"), system_prompt=INTENT_PROMPT, name="intent-recognizer")
-        result = await agent.ainvoke({"messages": [HumanMessage(raw)]}, {"recursion_limit": 8})
+        result = await _invoke_agent(
+            agent,
+            HumanMessage(raw),
+            runtime,
+            agent_name="intent",
+            recursion_limit=8,
+        )
         parsed = extract_json(_message_text(result)) or {}
         if initial:
             try:
@@ -242,7 +444,14 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         )
         try:
             response_text = _message_text(
-                await agent.ainvoke({"messages": [HumanMessage(prompt)]}, {"recursion_limit": 30})
+                await _invoke_agent(
+                    agent,
+                    HumanMessage(prompt),
+                    runtime,
+                    agent_name="lecture_hook",
+                    recursion_limit=30,
+                    tool_permissions=("artifact:write",),
+                )
             )
             parsed = extract_json(response_text) or {}
             html = draft.snapshot().get("lesson-intro.html")
@@ -283,8 +492,6 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             "阶段 4：返回 JSON receipt，不要回传完整文件。\n"
             "INTENT JSON:\n"
             + json.dumps(intent.model_dump(mode="json"), ensure_ascii=False)
-            + "\nLESSON INTRO HTML（课程引入 skill 的原始产物，直接承接，不要重新渲染）：\n"
-            + str((state.get("lecture_result") or {}).get("html") or "")
         )
         agent = create_agent(
             _agent_model(model, "interactive_lecture_deck"),
@@ -305,7 +512,18 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             name="interactive-lecture-deck",
         )
         try:
-            parsed = extract_json(_message_text(await agent.ainvoke({"messages": [HumanMessage(prompt)]}, {"recursion_limit": 40}))) or {}
+            parsed = extract_json(
+                _message_text(
+                    await _invoke_agent(
+                        agent,
+                        HumanMessage(prompt),
+                        runtime,
+                        agent_name="interactive_lecture_deck",
+                        recursion_limit=40,
+                        tool_permissions=("artifact:write",),
+                    )
+                )
+            ) or {}
             files = draft.snapshot()
             if not files:
                 raise ValueError("interactive-lecture-deck did not stage any artifact")
@@ -354,8 +572,12 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         )
         parsed = extract_json(
             _message_text(
-                await agent.ainvoke(
-                    {"messages": [HumanMessage(prompt)]}, {"recursion_limit": 20}
+                await _invoke_agent(
+                    agent,
+                    HumanMessage(prompt),
+                    runtime,
+                    agent_name="quiz_generator",
+                    recursion_limit=20,
                 )
             )
         )
@@ -381,7 +603,17 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         message = str((state.get("user_message") or {}).get("message") or "")
         agent = create_agent(_agent_model(model, "answer_user"), system_prompt=ANSWER_PROMPT, name="answer-user")
         context = {"intent": state.get("intent"), "lesson_intro": state.get("lecture_result"), "deck": state.get("deck_result"), "question": message}
-        parsed = extract_json(_message_text(await agent.ainvoke({"messages": [HumanMessage(json.dumps(context, ensure_ascii=False))]}, {"recursion_limit": 8})))
+        parsed = extract_json(
+            _message_text(
+                await _invoke_agent(
+                    agent,
+                    HumanMessage(json.dumps(context, ensure_ascii=False)),
+                    runtime,
+                    agent_name="answer_user",
+                    recursion_limit=8,
+                )
+            )
+        )
         text = str((parsed or {}).get("text") or "").strip()
         if not text:
             raise ValueError("answer-user returned no answer text")
@@ -423,8 +655,13 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             name="interactive-visual-explainer",
         )
         try:
-            await agent.ainvoke(
-                {"messages": [HumanMessage(prompt)]}, {"recursion_limit": 24}
+            await _invoke_agent(
+                agent,
+                HumanMessage(prompt),
+                runtime,
+                agent_name="interactive_visual_explainer",
+                recursion_limit=24,
+                tool_permissions=("artifact:write",),
             )
             staged = draft.snapshot()
             html = staged.get("visual-explainer.html")
@@ -454,13 +691,13 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         return {"handoff_result": value}
 
     builder = StateGraph(AgentState, name="lingxilearn-difficult-knowledge-subgraph", version="2.0.0")
-    builder.add_node("recognize_intent", recognize_intent, timeout=settings.agent_timeout)
-    builder.add_node("lecture_hook", lecture_hook, timeout=settings.agent_lecture_timeout)
-    builder.add_node("interactive_lecture_deck", interactive_lecture_deck, timeout=settings.agent_visual_timeout)
-    builder.add_node("quiz_generator", quiz_generator, timeout=settings.agent_timeout)
+    builder.add_node("recognize_intent", _trace_agent_node("intent", recognize_intent), timeout=settings.agent_timeout)
+    builder.add_node("lecture_hook", _trace_agent_node("lecture_hook", lecture_hook), timeout=settings.agent_lecture_timeout)
+    builder.add_node("interactive_lecture_deck", _trace_agent_node("interactive_lecture_deck", interactive_lecture_deck), timeout=settings.agent_visual_timeout)
+    builder.add_node("quiz_generator", _trace_agent_node("quiz_generator", quiz_generator), timeout=settings.agent_timeout)
     builder.add_node("await_user", await_user)
-    builder.add_node("answer_user", answer_user, timeout=settings.agent_timeout)
-    builder.add_node("interactive_visual_explainer", visual_explainer, timeout=settings.agent_visual_timeout)
+    builder.add_node("answer_user", _trace_agent_node("answer_user", answer_user), timeout=settings.agent_timeout)
+    builder.add_node("interactive_visual_explainer", _trace_agent_node("interactive_visual_explainer", visual_explainer), timeout=settings.agent_visual_timeout)
     builder.add_node("quiz_submit", quiz_submit)
     builder.add_node("handoff", handoff)
     builder.add_edge(START, "recognize_intent")

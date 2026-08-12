@@ -7,12 +7,12 @@ import { SimPromptEditor } from "@/components/sim/source/prompt-editor";
 import { SimSendButton } from "@/components/sim/source/send-button";
 
 /**
- * LingxiLearn adaptation of sim's workspace UserInput surface.
+ * LingxiLearn host for Sim's workspace UserInput surface.
  *
  * The structure and interaction states follow the upstream Sim source at
- * `apps/sim/app/workspace/[workspaceId]/home/components/user-input`, while
- * the submit callback remains owned by LingxiLearn's REST/SSE session model.
- * Upstream source: https://github.com/simstudioai/sim/commit/ce2dff3c
+ * `apps/sim/app/workspace/[workspaceId]/home/components/user-input`; only the
+ * submit callback remains owned by LingxiLearn's REST/SSE session model.
+ * Upstream source: https://github.com/simstudioai/sim/commit/48c59c8a70d647267200165ead35c39e067d9d59
  */
 
 interface SimComposerProps {

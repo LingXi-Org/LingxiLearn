@@ -18,7 +18,7 @@ const iconByKind: Record<AgentCanvasNodeKind, ComponentType<{ className?: string
 const colorByStatus: Record<AgentCanvasStatus, string> = { pending: "#a3a3a3", running: "#7f77dd", complete: "#1d9e75", error: "#d85a30" };
 const labelByStatus: Record<AgentCanvasStatus, string> = { pending: "等待", running: "执行中", complete: "完成", error: "失败" };
 
-/** Read-only Sim WorkflowBlockView subset used by the live LingxiGraph canvas. */
+/** Read-only host binding for Sim's current WorkflowBlockView renderer. */
 export const SimWorkflowBlock = memo(function SimWorkflowBlock({ data }: NodeProps<Node<SimWorkflowBlockData>>) {
   const Icon = iconByKind[data.kind] ?? GitBranch;
   const statusColor = colorByStatus[data.status];

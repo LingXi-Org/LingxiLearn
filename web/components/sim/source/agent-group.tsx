@@ -6,10 +6,11 @@ import type { SimAgentGroupItem, SimAgentRun } from "@/lib/sim-adapter";
 import { cn } from "./lib/cn";
 import { Expandable, ExpandableContent } from "./expandable";
 import { ShimmerText } from "./shimmer-text";
+import { ThinkingLoader } from "./thinking-loader";
 
-// Adapted from Sim's recursive AgentGroup @ ce2dff3c. It preserves the source
-// contract: live lanes auto-open, completed lanes collapse, manual choice wins,
-// and each lane owns a bounded viewport that follows streamed output.
+// Sim current recursive AgentGroup behavior with a LingxiLearn model adapter:
+// live lanes auto-open, completed lanes collapse, manual choice wins, and each
+// lane owns the bounded viewport used by the upstream message renderer.
 export function SimAgentGroup({ run, isStreaming, onSelect, defaultExpanded = false, isCurrentSection = false }: { run: SimAgentRun; isStreaming: boolean; onSelect?: (agent: string) => void; defaultExpanded?: boolean; isCurrentSection?: boolean }) {
   const isLaneOpen = run.status === "running";
   const groupItems = run.groupItems ?? [
@@ -24,11 +25,11 @@ export function SimAgentGroup({ run, isStreaming, onSelect, defaultExpanded = fa
 
   return <div className="flex flex-col gap-1.5" data-agent={run.agent}>
     {hasWork ? <button type="button" onClick={toggle} className="group/agent flex cursor-pointer items-center gap-2 text-left">
-      <div className="flex size-4 shrink-0 items-center justify-center"><Sparkles className="size-4 text-[var(--text-icon)]" /></div>
+      <div className="flex size-4 shrink-0 items-center justify-center">{isLaneOpen || run.isDelegating ? <ThinkingLoader size={16} /> : <Sparkles className="size-4 text-[var(--text-icon)]" />}</div>
       {isLaneOpen || run.isDelegating ? <ShimmerText className="text-sm">{run.label}</ShimmerText> : <span className="text-sm text-[var(--text-body)]">{run.label}</span>}
       <ChevronDown className={cn("size-3.5 text-[var(--text-icon)] opacity-0 transition-[transform,opacity] duration-150 group-hover/agent:opacity-100 group-focus-visible/agent:opacity-100", !expanded && "-rotate-90")} />
       <span className={cn("ml-auto text-[11px]", run.status === "error" ? "text-red-600" : "text-[var(--text-muted)]")}>{run.status === "running" ? "执行中" : run.status === "error" ? "失败" : "完成"}</span>
-    </button> : <div className="flex items-center gap-2"><div className="flex size-4 shrink-0 items-center justify-center"><Sparkles className="size-4 text-[var(--text-icon)]" /></div><span className="text-sm text-[var(--text-body)]">{run.label}</span></div>}
+    </button> : <div className="flex items-center gap-2"><div className="flex size-4 shrink-0 items-center justify-center">{isLaneOpen || run.isDelegating ? <ThinkingLoader size={16} /> : <Sparkles className="size-4 text-[var(--text-icon)]" />}</div><span className="text-sm text-[var(--text-body)]">{run.label}</span></div>}
     {hasWork && <Expandable expanded={expanded}>
       <ExpandableContent>
         <BoundedViewport isStreaming={isStreaming}>

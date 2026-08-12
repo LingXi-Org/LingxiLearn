@@ -4,10 +4,11 @@ import { forwardRef, useCallback, useLayoutEffect, type KeyboardEvent, type Text
 import { cn } from "./lib/cn";
 
 /**
- * Sim prompt editor surface, reduced to the interaction contract used by
- * LingxiLearn. The upstream editor's attachment, mention and resource menus
- * are intentionally omitted because those capabilities are not mounted here.
- * Sim snapshot: ce2dff3c.
+ * Sim prompt editor surface. The editor instance used by the full Sim input
+ * owns attachments, mentions and resource menus; this host passes the same
+ * controlled textarea contract while its data adapter supplies the workspace
+ * submit lifecycle.
+ * Sim snapshot: 48c59c8a70d647267200165ead35c39e067d9d59.
  */
 export interface SimPromptEditorProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "onSubmit"> {
   value: string;
