@@ -17,7 +17,13 @@ export interface SimMessage {
   content: string;
   contentBlocks: SimContentBlock[];
   status: "complete" | "streaming" | "error";
+  assistantSegments?: SimAssistantSegment[];
 }
+
+export type SimAssistantSegment =
+  | { type: "text"; id: string; content: string }
+  | { type: "agent"; id: string; run: SimAgentRun }
+  | { type: "tool"; id: string; title: string; detail?: string; status: "executing" | "success" | "error" };
 
 export interface SimActivityTool {
   id: string;
@@ -94,8 +100,8 @@ const TERMINAL_STATUSES = new Set(["handed_off", "completed", "partial", "failed
 function statusForSnapshot(
   snapshot: AgentTaskSnapshot["agents"][keyof AgentTaskSnapshot["agents"]],
 ): AgentCanvasStatus {
-  if (snapshot.status === "completed") return "complete";
-  if (snapshot.status === "failed") return "error";
+  if (snapshot?.status === "completed") return "complete";
+  if (snapshot?.status === "failed") return "error";
   return "pending";
 }
 
@@ -131,7 +137,7 @@ export function agentTaskToCanvasGraph(
   const agentIds = [...new Set(orderedEvents.map((event) => event.agent).filter((agent) => agent && agent !== "coordinator"))];
   const nodes: AgentCanvasNode[] = [{ id: "input", label: "User input", kind: "input", status: "complete", detail: task.prompt }];
   for (const agent of agentIds) {
-    const snapshot = agent === "intent" ? task.agents.intent : agent === "lecture_hook" ? task.agents.lecture_hook : agent === "interactive_lecture_deck" ? task.agents.interactive_lecture_deck : agent === "quiz_generator" ? task.agents.quiz_generator : agent === "interactive_visual_explainer" ? task.agents.interactive_visual_explainer : agent === "main_graph_placeholder" ? task.agents.main_graph_placeholder : { status: "pending" as const };
+    const snapshot = agent === "intent" ? task.agents.intent : agent === "lecture_hook" ? task.agents.lecture_hook : agent === "interactive_lecture_deck" ? task.agents.interactive_lecture_deck : agent === "quiz_generator" ? task.agents.quiz_generator : agent === "interactive_visual_explainer" ? task.agents.interactive_visual_explainer : { status: "pending" as const };
     const relevant = orderedEvents.filter((event) => event.agent === agent);
     const latest = relevant.at(-1);
     nodes.push({
@@ -143,8 +149,7 @@ export function agentTaskToCanvasGraph(
     });
   }
   const terminal = TERMINAL_STATUSES.has(task.status) || orderedEvents.some((event) => event.kind === "task.completed" || event.kind === "task.failed");
-  const hasMainGraphPlaceholder = agentIds.includes("main_graph_placeholder");
-  if (terminal && !hasMainGraphPlaceholder) nodes.push({ id: "merge", label: "Merge results", kind: "merge", status: task.status === "failed" ? "error" : "complete", detail: task.error || "汇总当前 Agent 产物" });
+  if (terminal) nodes.push({ id: "merge", label: "Merge results", kind: "merge", status: task.status === "failed" ? "error" : "complete", detail: task.error || "汇总当前 Agent 产物" });
 
   const edges: AgentCanvasEdge[] = [];
   const intent = agentIds.includes("intent") ? "intent" : agentIds[0];
@@ -165,12 +170,7 @@ export function agentTaskToCanvasGraph(
   for (const agent of postQuizAgents) {
     edges.push({ from: agentIds.includes("quiz_generator") ? "quiz_generator" : intent || "input", to: agent, label: "按需路由" });
   }
-  if (agentIds.includes("main_graph_placeholder")) {
-    for (const agent of ["quiz_submit", "handoff"].filter((agent) => agentIds.includes(agent))) {
-      edges.push({ from: agent, to: "main_graph_placeholder", label: "handoff" });
-    }
-  }
-  if (terminal && !hasMainGraphPlaceholder) {
+  if (terminal) {
     const outputAgents = specialists.length ? specialists : intent ? [intent] : [];
     for (const agent of outputAgents) edges.push({ from: agent, to: "merge", label: "产物" });
   }
@@ -204,8 +204,12 @@ export function draftToSimMessages(prompt: string): SimMessage[] {
 
 export function agentTaskToSimMessages(task: AgentTaskSnapshot, events: AgentTaskEvent[] = []): SimMessage[] {
   const status = taskStatus(task);
-  const lines = dedupeSimEvents(events).map((event) => eventLine(event, task)).filter(Boolean);
-  const content = lines.join("\n") || "正在连接 Agent 事件流…";
+  const assistantSegments = agentTaskToAssistantSegments(task, events);
+  const content = assistantSegments.flatMap((segment) => segment.type === "text"
+    ? [segment.content]
+    : segment.type === "agent"
+      ? segment.run.items.map((item) => item.content)
+      : [segment.detail || segment.title]).join("\n") || "正在连接 Agent 事件流…";
 
   return [
     {
@@ -221,8 +225,60 @@ export function agentTaskToSimMessages(task: AgentTaskSnapshot, events: AgentTas
       content,
       contentBlocks: [{ type: "text", id: `task-stream-${task.id}`, content }],
       status,
+      assistantSegments,
     },
   ];
+}
+
+export function agentTaskToAssistantSegments(task: AgentTaskSnapshot, events: AgentTaskEvent[] = []): SimAssistantSegment[] {
+  const segments: SimAssistantSegment[] = [];
+  const runs = new Map<string, SimAgentRun>();
+  const ordered = dedupeSimEvents(events);
+  const appendText = (content: string) => {
+    if (!content) return;
+    const previous = segments.at(-1);
+    if (previous?.type === "text") previous.content += content;
+    else segments.push({ type: "text", id: `text-${segments.length}`, content });
+  };
+  const ensureRun = (agent: string, sequence: number) => {
+    const existing = runs.get(agent);
+    if (existing) return existing;
+    const run: SimAgentRun = { id: `run-${agent}-${sequence}`, agent, label: agentLabel(agent), status: "running", items: [], groupItems: [] };
+    runs.set(agent, run);
+    segments.push({ type: "agent", id: run.id, run });
+    return run;
+  };
+  const appendRunText = (run: SimAgentRun, event: AgentTaskEvent, content: string) => {
+    if (!content) return;
+    const item = { type: "text" as const, id: `${event.sequence}-${event.kind}`, content, status: event.kind.endsWith("failed") ? "error" as const : event.kind.endsWith("completed") || event.kind === "artifact.ready" ? "complete" as const : "running" as const };
+    run.items.push({ id: item.id, content: item.content, status: item.status });
+    run.groupItems?.push(item);
+  };
+  for (const event of ordered) {
+    const isAgentEvent = event.agent && event.agent !== "coordinator";
+    if (event.kind === "task.started" || event.kind === "task.completed" || event.kind === "task.failed") {
+      appendText(eventLine(event, task));
+      continue;
+    }
+    if (event.kind === "tool.call.delta") {
+      const run = isAgentEvent ? ensureRun(event.agent, event.sequence) : undefined;
+      const detail = typeof event.payload.message === "string" ? event.payload.message : JSON.stringify(event.payload.chunks || event.payload);
+      const tool = { type: "tool" as const, id: `tool-${event.sequence}`, title: "工具调用", detail, status: "executing" as const };
+      if (run) run.groupItems?.push(tool);
+      else segments.push(tool);
+      continue;
+    }
+    if (event.kind === "intent.started" || event.kind === "intent.completed" || event.kind === "agent.started" || event.kind === "agent.output" || event.kind === "artifact.ready" || event.kind === "agent.completed" || event.kind === "agent.failed") {
+      const run = ensureRun(event.agent || "intent", event.sequence);
+      if (event.kind.endsWith("completed")) run.status = "complete";
+      if (event.kind.endsWith("failed")) run.status = "error";
+      appendRunText(run, event, eventLine(event, task));
+      continue;
+    }
+    appendText(eventLine(event, task));
+  }
+  if (segments.length === 0) appendText("正在连接 Agent 事件流…");
+  return segments;
 }
 
 export function agentTaskToSimActivity(task: AgentTaskSnapshot | null, events: AgentTaskEvent[] = []): SimActivity {
@@ -281,7 +337,6 @@ export function agentLabel(agent: string): string {
   if (agent === "interactive_visual_explainer") return "交互式可视化讲解";
   if (agent === "answer_user") return "知识点答疑 Agent";
   if (agent === "quiz_submit") return "答题提交";
-  if (agent === "main_graph_placeholder") return "主图占位 Agent";
   return agent.split(/[_-]/).map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : "").join(" ");
 }
 
