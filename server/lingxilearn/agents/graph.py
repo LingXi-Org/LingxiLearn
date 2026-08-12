@@ -505,6 +505,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             "阶段 3：每次调用 stage_artifact_files 批量写入 2–3 个完整源文件；禁止逐张幻灯片单独进行一次模型续轮。\n"
             "阶段 3.1：宿主已预置 runtime/index.html；禁止读取 runtime 模板或重写 runtime/index.html。\n"
             "阶段 3.2：不要生成 PNG/JPG、PowerPoint/PPTX 或重复 HTML/JSON 导出；dist/lecture.html 由服务端构建。\n"
+            "lecture.json 中每个 anchor.rect 必须写成对象 {\"x\":整数,\"y\":整数,\"w\":整数,\"h\":整数}，禁止写成 [x,y,w,h] 数组。\n"
             "阶段 4：返回 JSON receipt，不要回传完整文件。\n"
             "INTENT JSON:\n"
             + json.dumps(intent.model_dump(mode="json"), ensure_ascii=False)
