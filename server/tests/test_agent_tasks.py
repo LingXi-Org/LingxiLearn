@@ -111,14 +111,30 @@ def test_agent_skills_are_discoverable_and_have_resources() -> None:
 def test_skill_runtime_supports_progressive_disclosure_and_staged_artifacts(tmp_path: Path) -> None:
     settings = Settings(_env_file="", agent_task_dir=tmp_path)
     draft = ArtifactDraft(ArtifactStore(settings), "staged-task", "deck")
-    tools = staged_artifact_tools(draft)
-    result = tools[0].func("slides/s01.html", "<!doctype html><html></html>")
+    tools = {item.name: item for item in staged_artifact_tools(draft, batch=True)}
+    result = tools["stage_artifact_file"].func("slides/s01.html", "<!doctype html><html></html>")
     assert "staged" in result
     assert draft.list() == [{"path": "slides/s01.html", "bytes": 28}]
-    assert tools[1].func("slides/s01.html") == "<!doctype html><html></html>"
-    assert "slides/s01.html" in tools[2].func()
+    assert tools["read_staged_artifact"].func("slides/s01.html") == "<!doctype html><html></html>"
+    assert "slides/s01.html" in tools["list_staged_artifacts"].func()
+    batch = tools["stage_artifact_files"].func(
+        [
+            {"path": "slides/s02.html", "content": "<!doctype html><html><body>2</body></html>"},
+            {"path": "slides/s03.html", "content": "<!doctype html><html><body>3</body></html>"},
+        ]
+    )
+    assert '"status": "staged"' in batch
+    assert {item["path"] for item in draft.list()} == {
+        "slides/s01.html",
+        "slides/s02.html",
+        "slides/s03.html",
+    }
     with pytest.raises(ArtifactError):
-        tools[0].func("../escape.html", "bad")
+        tools["stage_artifact_files"].func(
+            [{"path": "slides/s04.html", "content": "<!doctype html><html></html>"}]
+        )
+    with pytest.raises(ArtifactError):
+        tools["stage_artifact_file"].func("../escape.html", "bad")
     prompt = progressive_skill_prompt(
         "interactive-lecture-deck",
         "interactive-lecture-deck-result.v2",
@@ -127,6 +143,13 @@ def test_skill_runtime_supports_progressive_disclosure_and_staged_artifacts(tmp_
     assert "read_skill" in prompt
     assert "read_skill_resource" in prompt
     assert "stage_artifact_file" in prompt
+    batch_prompt = progressive_skill_prompt(
+        "interactive-lecture-deck",
+        "interactive-lecture-deck-result.v2",
+        referenced_resources=("references/slide-types.md",),
+        batch_artifacts=True,
+    )
+    assert "stage_artifact_files" in batch_prompt
     draft.cleanup()
     assert not draft.root.exists()
 
@@ -269,7 +292,7 @@ async def test_specialists_start_in_parallel(
     assert {item.name for item in created["lesson-intro"]["tools"]} == {"web_search", "web_fetch", "stage_artifact_file", "read_staged_artifact", "list_staged_artifacts"}
     assert created["lesson-intro"]["config"]["tool_permissions"] == ["artifact:write"]
     deck_tools = {item.name for item in created["interactive-lecture-deck"]["tools"]}
-    assert {"stage_artifact_file", "read_staged_artifact", "list_staged_artifacts"} <= deck_tools
+    assert {"stage_artifact_file", "stage_artifact_files", "read_staged_artifact", "list_staged_artifacts"} <= deck_tools
     assert created["interactive-lecture-deck"]["skills"].discover()[0].name == "interactive-lecture-deck"
     assert created["interactive-lecture-deck"]["config"]["tool_permissions"] == ["artifact:write"]
 

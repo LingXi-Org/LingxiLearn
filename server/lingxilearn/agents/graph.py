@@ -142,9 +142,13 @@ DECK_PROMPT = progressive_skill_prompt(
         "references/zoom-contract.md",
     ),
     artifact_instructions="""这是分阶段课件生成。默认 problem 生成 5–7 页，concept 生成 6–8 页，lesson
-生成 8–12 页；必须有 opening/content/closing。每写完一份 slides/sNN.html、lecture.json 或
-manifest.json 和 runtime/index.html，就调用 stage_artifact_file；runtime/index.html 必须从 skill asset 原样写入 staged artifact；不要把完整文件放进最终回答。dist/lecture.html 由服务端执行 standalone build。最终回执示例：
+生成 8–12 页；必须有 opening/content/closing。为了避免长上下文逐页续轮，视觉大纲完成后必须按
+2–3 个文件一批调用 stage_artifact_files：先批量生成 slides，再批量生成 lecture.json 与
+manifest.json。禁止每轮只写一张 slide，除非是在修复单个校验错误。runtime/index.html 已由宿主从
+assets/runtime/index.html 原样预置，禁止调用 read_skill_resource
+读取 runtime 内容，也不要重写该文件。不要把完整文件放进最终回答。dist/lecture.html 由服务端执行 standalone build。最终回执示例：
 {"status":"staged","title":"...","files":["lecture.json","slides/s01.html"],"assumptions":[],"deviations":[]}。""",
+    batch_artifacts=True,
 )
 
 QUIZ_PROMPT = progressive_skill_prompt(
@@ -484,18 +488,28 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         _emit(runtime, "agent.started", agent="interactive_lecture_deck", skill="interactive-lecture-deck")
         intent = IntentContext.model_validate(state["intent"])
         draft = ArtifactDraft(artifacts, task_id, "deck")
+        runtime_template = (
+            REPO_ROOT
+            / "skills"
+            / "interactive-lecture-deck"
+            / "assets"
+            / "runtime"
+            / "index.html"
+        ).read_text(encoding="utf-8")
+        draft.write("runtime/index.html", runtime_template)
         prompt = (
             "按分阶段协议完成 interactive-lecture-deck-result.v2。\n"
             "阶段 1：读取 skill 入口和直接相关 references。\n"
             "阶段 2：形成内部视觉大纲，决定页数、页角色、视觉关系和 zoom anchors。\n"
-            "阶段 3：逐文件调用 stage_artifact_file 生成课件源文件，并回读检查。\n"
+            "阶段 3：每次调用 stage_artifact_files 批量写入 2–3 个完整源文件；禁止逐张幻灯片单独进行一次模型续轮。\n"
+            "阶段 3.1：宿主已预置 runtime/index.html；禁止读取 runtime 模板或重写该文件。\n"
             "阶段 4：返回 JSON receipt，不要回传完整文件。\n"
             "INTENT JSON:\n"
             + json.dumps(intent.model_dump(mode="json"), ensure_ascii=False)
         )
         agent = create_agent(
             _agent_model(model, "interactive_lecture_deck"),
-            tools=staged_artifact_tools(draft),
+            tools=staged_artifact_tools(draft, batch=True),
             skills=deck_registry,
             system_prompt=DECK_PROMPT,
             pinned_constraints=skill_constraints(
@@ -508,6 +522,11 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
                     "references/lecture-data.md",
                     "references/zoom-contract.md",
                 ),
+                batch_artifacts=True,
+            ) + (
+                "The host already staged runtime/index.html. Do not read assets/runtime/index.html and do not overwrite runtime/index.html.",
+                "Generate 2-3 complete files per stage_artifact_files call; do not use one model round-trip per slide.",
+                "Do not narrate progress between tool calls; emit tool calls directly and reserve prose for the final JSON receipt.",
             ),
             name="interactive-lecture-deck",
         )
@@ -693,7 +712,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
     builder = StateGraph(AgentState, name="lingxilearn-difficult-knowledge-subgraph", version="2.0.0")
     builder.add_node("recognize_intent", _trace_agent_node("intent", recognize_intent), timeout=settings.agent_timeout)
     builder.add_node("lecture_hook", _trace_agent_node("lecture_hook", lecture_hook), timeout=settings.agent_lecture_timeout)
-    builder.add_node("interactive_lecture_deck", _trace_agent_node("interactive_lecture_deck", interactive_lecture_deck), timeout=settings.agent_visual_timeout)
+    builder.add_node("interactive_lecture_deck", _trace_agent_node("interactive_lecture_deck", interactive_lecture_deck), timeout=settings.agent_deck_timeout)
     builder.add_node("quiz_generator", _trace_agent_node("quiz_generator", quiz_generator), timeout=settings.agent_timeout)
     builder.add_node("await_user", await_user)
     builder.add_node("answer_user", _trace_agent_node("answer_user", answer_user), timeout=settings.agent_timeout)

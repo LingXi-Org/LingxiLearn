@@ -79,7 +79,7 @@ class ArtifactDraft:
             shutil.rmtree(self.root)
 
 
-def staged_artifact_tools(draft: ArtifactDraft) -> list[Any]:
+def staged_artifact_tools(draft: ArtifactDraft, *, batch: bool = False) -> list[Any]:
     """Expose safe write/read/list tools without exposing the filesystem."""
 
     @tool(name="stage_artifact_file", timeout=30.0, permissions=("artifact:write",))
@@ -87,6 +87,21 @@ def staged_artifact_tools(draft: ArtifactDraft) -> list[Any]:
         """Write one complete artifact file into the private task draft."""
 
         return json.dumps(draft.write(path, content), ensure_ascii=False)
+
+    @tool(name="stage_artifact_files", timeout=45.0, permissions=("artifact:write",))
+    def stage_artifact_files(files: list[dict[str, str]]) -> str:
+        """Write two or three complete artifact files in one model turn."""
+
+        if not 2 <= len(files) <= 3:
+            raise ArtifactError("stage_artifact_files accepts between 2 and 3 files")
+        written: list[dict[str, Any]] = []
+        for item in files:
+            path = str(item.get("path") or "")
+            content = item.get("content")
+            if not isinstance(content, str):
+                raise ArtifactError(f"draft artifact content must be a string: {path}")
+            written.append(draft.write(path, content))
+        return json.dumps({"files": written, "status": "staged"}, ensure_ascii=False)
 
     @tool(name="read_staged_artifact", timeout=30.0, read_only=True)
     def read_staged_artifact(path: str) -> str:
@@ -100,7 +115,12 @@ def staged_artifact_tools(draft: ArtifactDraft) -> list[Any]:
 
         return json.dumps(draft.list(), ensure_ascii=False)
 
-    return [stage_artifact_file, read_staged_artifact, list_staged_artifacts]
+    return [
+        stage_artifact_file,
+        *([stage_artifact_files] if batch else []),
+        read_staged_artifact,
+        list_staged_artifacts,
+    ]
 
 
 def progressive_skill_prompt(
@@ -110,12 +130,15 @@ def progressive_skill_prompt(
     referenced_resources: tuple[str, ...] = (),
     artifact_instructions: str = "",
     stage_artifacts: bool = True,
+    batch_artifacts: bool = False,
 ) -> str:
     """Build a consistent prompt for the skill runtime's staged disclosure model."""
 
     resources = "、".join(referenced_resources) or "技能中直接引用的资源"
     artifact_step = (
-        "4. 生成过程中调用 stage_artifact_file 使用受控的 staged artifact 工具逐文件提交，并可用 list_staged_artifacts、read_staged_artifact 回读检查。"
+        "4. 生成过程中优先调用 stage_artifact_files 每轮提交 2–3 个完整文件；仅在单文件修复时使用 stage_artifact_file，并可用 list_staged_artifacts、read_staged_artifact 回读检查。"
+        if stage_artifacts and batch_artifacts
+        else "4. 生成过程中调用 stage_artifact_file 提交完整文件，并可用 list_staged_artifacts、read_staged_artifact 回读检查。"
         if stage_artifacts
         else "4. 按输入/输出契约生成结构化结果；不要回传未要求的内容。"
     )
@@ -142,6 +165,7 @@ def skill_constraints(
     referenced_resources: tuple[str, ...],
     *,
     stage_artifacts: bool = True,
+    batch_artifacts: bool = False,
 ) -> tuple[str, ...]:
     """Pinned constraints make the first disclosure step stable under prompt caching."""
 
@@ -150,8 +174,10 @@ def skill_constraints(
         f"Before generating output, call read_skill with the exact skill name {skill_name!r}.",
         f"After reading SKILL.md, read only relevant referenced resources; start with {resource_text}.",
     ]
-    if stage_artifacts:
-        constraints.append("For artifact-generation skills, write files through stage_artifact_file and return only a JSON receipt.")
+    if stage_artifacts and batch_artifacts:
+        constraints.append("For artifact-generation skills, batch 2-3 complete files per stage_artifact_files call when possible; use stage_artifact_file only for a single-file repair, then return only a JSON receipt.")
+    elif stage_artifacts:
+        constraints.append("For artifact-generation skills, write the complete file through stage_artifact_file and return only a JSON receipt.")
     return tuple(constraints)
 
 

@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # Intent and visual generation normally finish within the shared timeout,
     # while lecture-hook may perform several bounded research calls first.
     agent_lecture_timeout: float = 180.0
+    # Deck generation is optimized to finish well below this ceiling. Keep a
+    # separate guard so strict validation repair can complete without also
+    # relaxing the single-page visual explainer timeout.
+    agent_deck_timeout: float = 360.0
     agent_visual_timeout: float = 240.0
     agent_web_timeout: float = 20.0
     # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable
