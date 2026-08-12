@@ -258,11 +258,14 @@ class Service:
                 "base_url": self.settings.agent_base_url,
                 "api_key": self.settings.agent_api_key.get_secret_value(),
                 "timeout": self.settings.agent_timeout,
-                # Keep the shared Agent default explicit so every current and
-                # future specialist uses DeepSeek V4 high-effort thinking.
+                # Keep one shared low-latency default so every current and
+                # future specialist avoids expensive hidden reasoning.
                 "default_options": {
-                    "thinking": {"type": "enabled"},
-                    "reasoning_effort": "high",
+                    # Keep Agent tool loops responsive.  The UI still renders
+                    # provider reasoning when a provider sends it, but normal
+                    # orchestration requests do not spend tokens on CoT.
+                    "thinking": {"type": "disabled"},
+                    "reasoning_effort": "low",
                 },
                 "cache_first": {
                     "enabled": self.settings.agent_cache_enabled,

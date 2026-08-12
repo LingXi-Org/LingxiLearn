@@ -36,13 +36,30 @@ export function SimAgentGroup({ run, isStreaming, onSelect, defaultExpanded = fa
           <div className="flex flex-col gap-1.5 py-0.5">
             {groupItems.map((item, index) => item.type === "text"
               ? <span key={item.id} className={cn("pl-6 text-[13px] leading-[18px] text-[var(--text-muted)]", item.status === "error" && "text-red-700")}>{item.content}</span>
+              : item.type === "reasoning"
+                ? <SimReasoningChain key={item.id} item={item} />
               : item.type === "tool"
-                ? <div key={item.id} className="flex items-start gap-2 pl-6 text-[12px] leading-[18px] text-[var(--text-muted)]"><span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", item.status === "executing" ? "bg-[var(--brand)]" : item.status === "awaiting_approval" ? "bg-amber-500" : item.status === "error" ? "bg-red-600" : "bg-emerald-600")} /><span className="shrink-0">{item.title}</span>{item.detail && <span className="whitespace-pre-wrap break-all text-[11px] opacity-70">{item.detail}</span>}</div>
+                ? <SimToolCall key={item.id} item={item} />
                 : <div key={item.id} className="pl-6"><SimAgentGroup run={item.run} isStreaming={isStreaming} isCurrentSection={index === groupItems.length - 1} /></div>)}
           </div>
         </BoundedViewport>
       </ExpandableContent>
     </Expandable>}
+  </div>;
+}
+
+function SimReasoningChain({ item }: { item: Extract<SimAgentGroupItem, { type: "reasoning" }> }) {
+  return <div className="flex min-h-6 items-start gap-2 pl-6 text-[12px] leading-[18px] text-[var(--text-muted)]" aria-label="最新思考">
+    {item.status === "running" ? <ThinkingLoader size={13} /> : <Sparkles className="mt-0.5 size-3 text-[var(--text-icon)]" />}
+    <span className="line-clamp-2 whitespace-pre-wrap text-[var(--text-secondary)]">{item.content}</span>
+  </div>;
+}
+
+function SimToolCall({ item }: { item: Extract<SimAgentGroupItem, { type: "tool" }> }) {
+  return <div className="flex items-start gap-2 pl-6 text-[12px] leading-[18px] text-[var(--text-muted)]" aria-label={item.title}>
+    <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", item.status === "executing" ? "bg-[var(--brand)]" : item.status === "awaiting_approval" ? "bg-amber-500" : item.status === "error" ? "bg-red-600" : "bg-emerald-600")} />
+    <span className="shrink-0">{item.title}</span>
+    {item.detail && <span className="whitespace-pre-wrap break-all text-[11px] opacity-70">{item.detail}</span>}
   </div>;
 }
 

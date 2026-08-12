@@ -75,6 +75,21 @@ describe("agent task adapter", () => {
     expect(agentTaskToSimActivity(task(), events).tools.map((tool) => tool.status)).toEqual(["executing", "success"]);
   });
 
+  it("keeps only the latest reasoning item and redacts tool payloads", () => {
+    const events = [
+      { sequence: 1, kind: "reasoning.delta", agent: "lecture_hook", payload: { delta: "旧思考" }, ts: null },
+      { sequence: 2, kind: "tool.result", agent: "lecture_hook", payload: { name: "read_skill", content: "完整 SKILL.md 私密内容" }, ts: null },
+      { sequence: 3, kind: "reasoning.delta", agent: "lecture_hook", payload: { delta: "最新思考" }, ts: null },
+    ];
+    const run = agentTaskToAgentRuns(task(), events)[0];
+    const reasoning = run.groupItems?.filter((item) => item.type === "reasoning");
+    expect(reasoning).toHaveLength(1);
+    expect(reasoning?.[0]).toMatchObject({ content: "最新思考" });
+    const tool = run.groupItems?.find((item) => item.type === "tool");
+    expect(tool?.type === "tool" ? tool.detail : "").not.toContain("完整 SKILL.md 私密内容");
+    expect(tool?.type === "tool" ? tool.detail : "").toContain("内容已隐藏");
+  });
+
   it("keeps an agent running after an intermediate model turn", () => {
     const events = [
       { sequence: 1, kind: "agent.started", agent: "lecture_hook", payload: { skill: "lesson-intro" }, ts: null },

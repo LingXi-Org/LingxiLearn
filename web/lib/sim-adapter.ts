@@ -79,6 +79,7 @@ export interface SimAgentRunItem {
 
 export type SimAgentGroupItem =
   | { type: "text"; id: string; content: string; status?: "running" | "complete" | "error" }
+  | { type: "reasoning"; id: string; content: string; status: "running" | "complete" }
   | { type: "tool"; id: string; title: string; detail?: string; status: "executing" | "success" | "error" | "awaiting_approval" }
   | { type: "agent"; id: string; run: SimAgentRun };
 
@@ -250,6 +251,19 @@ export function agentTaskToAssistantSegments(task: AgentTaskSnapshot, events: Ag
   };
   const appendRunText = (run: SimAgentRun, event: AgentTaskEvent, content: string) => {
     if (!content) return;
+    if (event.kind === "agent.completed" || event.kind === "agent.failed") {
+      const reasoning = run.groupItems?.find((candidate) => candidate.type === "reasoning");
+      if (reasoning?.type === "reasoning") reasoning.status = event.kind === "agent.completed" ? "complete" : "complete";
+    }
+    if (event.kind === "reasoning.delta") {
+      const item = { type: "reasoning" as const, id: `reasoning-${run.agent}`, content, status: "running" as const };
+      const previousIndex = run.groupItems?.findIndex((candidate) => candidate.type === "reasoning") ?? -1;
+      if (previousIndex !== -1) run.groupItems?.splice(previousIndex, 1, item);
+      else run.groupItems?.push(item);
+      run.items = run.items.filter((candidate) => !candidate.id.startsWith(`reasoning-${run.agent}`));
+      run.items.push({ id: item.id, content: item.content, status: "running" });
+      return;
+    }
     const item = { type: "text" as const, id: `${event.sequence}-${event.kind}`, content, status: event.kind.endsWith("failed") ? "error" as const : event.kind.endsWith("completed") || event.kind === "artifact.ready" ? "complete" as const : "running" as const };
     run.items.push({ id: item.id, content: item.content, status: item.status });
     run.groupItems?.push(item);
@@ -262,7 +276,7 @@ export function agentTaskToAssistantSegments(task: AgentTaskSnapshot, events: Ag
     }
     if (event.kind === "tool.call.delta") {
       const run = isAgentEvent ? ensureRun(event.agent, event.sequence) : undefined;
-      const detail = JSON.stringify(event.payload, null, 2);
+      const detail = sanitizedToolDetail(event);
       const name = toolCallName(event.payload);
       const tool = { type: "tool" as const, id: `tool-${event.sequence}`, title: `工具调用${name ? ` · ${name}` : ""}`, detail, status: "executing" as const };
       if (run) run.groupItems?.push(tool);
@@ -275,8 +289,8 @@ export function agentTaskToAssistantSegments(task: AgentTaskSnapshot, events: Ag
         type: "tool" as const,
         id: `tool-result-${event.sequence}`,
         title: `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}`,
-        detail: JSON.stringify(event.payload, null, 2),
-        status: "success" as const,
+        detail: sanitizedToolDetail(event),
+        status: event.payload.status === "error" ? "error" as const : "success" as const,
       };
       if (tool.type === "tool") {
         if (run) run.groupItems?.push(tool);
@@ -339,7 +353,7 @@ export function agentTaskToSimActivity(task: AgentTaskSnapshot | null, events: A
       .map((event) => ({
         id: `activity-tool-${event.sequence}`,
         displayTitle: event.kind === "tool.result" ? `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}` : `工具调用${toolCallName(event.payload) ? ` · ${toolCallName(event.payload)}` : ""}`,
-        detail: JSON.stringify(event.payload, null, 2),
+        detail: sanitizedToolDetail(event),
         status: event.kind === "tool.result" ? "success" as const : "executing" as const,
       })),
     evidence: [],
@@ -354,10 +368,7 @@ export function agentTaskToAgentRuns(task: AgentTaskSnapshot, events: AgentTaskE
     const relevant = ordered.filter((event) => event.agent === agent);
     const failed = relevant.some((event) => event.kind.endsWith("failed"));
     const complete = relevant.some((event) => ["node.completed", "intent.completed", "agent.completed"].includes(event.kind));
-    const groupItems = relevant.flatMap((event) => {
-      const item = eventToGroupItem(event, task);
-      return item ? [item] : [];
-    });
+    const groupItems = groupItemsForEvents(relevant, task);
     return {
       id: `run-${agent}`,
       agent,
@@ -369,13 +380,41 @@ export function agentTaskToAgentRuns(task: AgentTaskSnapshot, events: AgentTaskE
   });
 }
 
+function groupItemsForEvents(events: AgentTaskEvent[], task: AgentTaskSnapshot): SimAgentGroupItem[] {
+  const items: SimAgentGroupItem[] = [];
+  let reasoningIndex = -1;
+  for (const event of events) {
+    const item = eventToGroupItem(event, task);
+    if (!item) continue;
+    if (item.type === "reasoning") {
+      if (reasoningIndex === -1) {
+        reasoningIndex = items.length;
+        items.push(item);
+      } else {
+        items[reasoningIndex] = item;
+      }
+    } else {
+      items.push(item);
+    }
+  }
+  const finished = events.some((event) => event.kind === "agent.completed" || event.kind === "agent.failed");
+  if (finished && reasoningIndex !== -1) {
+    const reasoning = items[reasoningIndex];
+    if (reasoning.type === "reasoning") items[reasoningIndex] = { ...reasoning, status: "complete" };
+  }
+  return items;
+}
+
 function eventToGroupItem(event: AgentTaskEvent, task: AgentTaskSnapshot): SimAgentGroupItem | null {
+  if (event.kind === "reasoning.delta") {
+    return { type: "reasoning", id: `reasoning-${event.agent}`, content: String(event.payload.delta || ""), status: "running" };
+  }
   if (event.kind === "tool.call.delta") {
     const name = toolCallName(event.payload);
-    return { type: "tool", id: `tool-${event.sequence}`, title: `工具调用${name ? ` · ${name}` : ""}`, detail: JSON.stringify(event.payload, null, 2), status: "executing" };
+    return { type: "tool", id: `tool-${event.sequence}`, title: `工具调用${name ? ` · ${name}` : ""}`, detail: sanitizedToolDetail(event), status: "executing" };
   }
   if (event.kind === "tool.result") {
-    return { type: "tool", id: `tool-result-${event.sequence}`, title: `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}`, detail: JSON.stringify(event.payload, null, 2), status: "success" };
+    return { type: "tool", id: `tool-result-${event.sequence}`, title: `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}`, detail: sanitizedToolDetail(event), status: event.payload.status === "error" ? "error" : "success" };
   }
   const content = eventLine(event, task);
   if (!content) return null;
@@ -404,20 +443,20 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
   if (event.kind === "task.started") return "任务已创建，正在启动意图识别。";
   if (event.kind === "intent.started") return "正在识别问题意图…";
   if (event.kind === "intent.completed") return `已识别主题：“${String(event.payload.topic || task.intent.topic || "未命名主题")}”。`;
-  if (event.kind === "agent.started") return `${agentLabel(event.agent)} 已接收任务，开始执行。\n${JSON.stringify(event.payload, null, 2)}`;
-  if (event.kind === "agent.output") return `${message || `${agentLabel(event.agent)} 生成了新的关键输出。`}\n${JSON.stringify(event.payload, null, 2)}`;
-  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : event.payload.artifact === "lesson-intro" ? "课程引入页面" : "课件产物"}已就绪。\n${JSON.stringify(event.payload, null, 2)}`;
-  if (event.kind === "agent.completed") return `${agentLabel(event.agent)} 已完成。\n${JSON.stringify(event.payload, null, 2)}`;
+  if (event.kind === "agent.started") return `${agentLabel(event.agent)} 已接收任务${event.payload.skill ? ` · ${String(event.payload.skill)}` : ""}，开始执行。`;
+  if (event.kind === "agent.output") return message || `${agentLabel(event.agent)} 生成了新的关键输出。`;
+  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : event.payload.artifact === "lesson-intro" ? "课程引入页面" : "课件产物"}已就绪。`;
+  if (event.kind === "agent.completed") return `${agentLabel(event.agent)} 已完成。`;
   if (event.kind === "agent.failed") return `${agentLabel(event.agent)} 执行失败：${message || String(event.payload.error || "未知错误")}`;
   if (event.kind === "task.completed") return event.payload.status === "partial" ? "任务部分完成，可查看当前已生成产物。" : "所有 Agent 已完成。";
   if (event.kind === "task.failed") return message || task.error || "任务执行失败。";
-  if (event.kind === "reasoning.delta") return `思考 · ${String(event.payload.delta || "")}${event.payload.debug ? `\n${JSON.stringify(event.payload.debug, null, 2)}` : ""}`;
+  if (event.kind === "reasoning.delta") return `思考 · ${String(event.payload.delta || "")}`;
   if (event.kind === "assistant.delta") return `输出 · ${String(event.payload.delta || "")}${event.payload.debug ? `\n${JSON.stringify(event.payload.debug, null, 2)}` : ""}`;
-  if (event.kind === "tool.call.delta") return `工具调用 · ${JSON.stringify(event.payload, null, 2)}`;
-  if (event.kind === "tool.result") return `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}\n${JSON.stringify(event.payload, null, 2)}`;
+  if (event.kind === "tool.call.delta") return `工具调用${toolCallName(event.payload) ? ` · ${toolCallName(event.payload)}` : ""}`;
+  if (event.kind === "tool.result") return `工具结果${event.payload.name ? ` · ${String(event.payload.name)}` : ""}`;
   if (event.kind === "model.usage") return `模型用量 · ${JSON.stringify(event.payload.usage || {})}`;
   if (event.kind === "model.started") return "模型开始思考与生成…";
-  if (event.kind === "model.completed") return `模型本轮完成\n${JSON.stringify(event.payload, null, 2)}`;
+  if (event.kind === "model.completed") return `模型本轮完成${event.payload.duration_ms ? ` · ${String(event.payload.duration_ms)}ms` : ""}`;
   if (event.kind === "node.started" || event.kind === "node.completed" || event.kind === "node.retrying" || event.kind === "interrupt.raised") {
     return `${agentLabel(event.agent)} · ${event.kind}\n${JSON.stringify(event.payload, null, 2)}`;
   }
@@ -428,6 +467,47 @@ function toolCallName(payload: Record<string, unknown>): string {
   const calls = Array.isArray(payload.calls) ? payload.calls : Array.isArray(payload.chunks) ? payload.chunks : [];
   const first = calls[0];
   return first && typeof first === "object" && "name" in first ? String(first.name || "") : "";
+}
+
+function sanitizedToolDetail(event: AgentTaskEvent): string {
+  if (event.kind === "tool.call.delta") {
+    const calls = Array.isArray(event.payload.calls) ? event.payload.calls : Array.isArray(event.payload.chunks) ? event.payload.chunks : [];
+    return JSON.stringify({
+      calls: calls.map((call) => {
+        if (!call || typeof call !== "object") return { name: "unknown" };
+        const value = call as Record<string, unknown>;
+        return { id: value.id, name: value.name, args: sanitizeToolValue(value.args) };
+      }),
+    }, null, 2);
+  }
+  return JSON.stringify({
+    tool_call_id: event.payload.tool_call_id,
+    name: event.payload.name,
+    status: event.payload.status || "success",
+    duration_ms: event.payload.duration_ms,
+    arguments: sanitizeToolValue(event.payload.arguments),
+    result: summarizeToolResult(event.payload.content),
+  }, null, 2);
+}
+
+function sanitizeToolValue(value: unknown, key = ""): unknown {
+  const sensitive = /token|secret|password|authorization|api[_-]?key|content|html|body|data|prompt/i.test(key);
+  if (sensitive && value !== undefined && value !== null) {
+    const size = typeof value === "string" ? value.length : JSON.stringify(value).length;
+    return `[已脱敏内容 · ${size} 字符]`;
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeToolValue(item, key));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [entryKey, sanitizeToolValue(entryValue, entryKey)]));
+  }
+  if (typeof value === "string" && value.length > 240) return `${value.slice(0, 240)}…[已截断]`;
+  return value;
+}
+
+function summarizeToolResult(value: unknown): string {
+  if (value === undefined || value === null) return "无返回内容";
+  if (typeof value !== "string") return "已返回结构化结果";
+  return `已返回结果 · ${value.length} 字符（内容已隐藏）`;
 }
 
 export function agentTaskToSimResources(task: AgentTaskSnapshot | null): SimResourceDescriptor[] {
