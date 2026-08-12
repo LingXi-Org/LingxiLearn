@@ -83,7 +83,6 @@ class Settings(BaseSettings):
     # prompt/tool prefix intact so DeepSeek can use its native prompt cache.
     agent_cache_enabled: bool = True
     agent_cache_verify_mode: Literal["strict", "warn", "off"] = "strict"
-    agent_search_url: str = "https://html.duckduckgo.com/html/"
     agent_max_html_bytes: int = 512 * 1024
     agent_task_dir: Path = REPO_ROOT / "var" / "agent_tasks"
 

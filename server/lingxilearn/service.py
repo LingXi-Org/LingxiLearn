@@ -118,16 +118,17 @@ class Service:
         self.brain = build_brain(self.settings)
         if self.settings.agents_configured:
             from lingxigraph.integrations import OpenAICompatChatModel
+            from .brains.deepseek_responses import DeepSeekResponsesModel
 
             model_options = {
                 "base_url": self.settings.agent_base_url,
                 "api_key": self.settings.agent_api_key.get_secret_value(),
                 "timeout": self.settings.agent_timeout,
-                # DeepSeek V4 defaults to thinking/high effort.  Agent tasks
-                # prioritize latency, so explicitly select the lowest-cost
-                # mode instead of relying on the provider default.
+                # Keep the shared Agent default explicit so every current and
+                # future specialist uses DeepSeek V4 high-effort thinking.
                 "default_options": {
-                    "thinking": {"type": "disabled"},
+                    "thinking": {"type": "enabled"},
+                    "reasoning_effort": "high",
                 },
                 "cache_first": {
                     "enabled": self.settings.agent_cache_enabled,
@@ -138,19 +139,18 @@ class Service:
             # catalog. Keeping one model instance per role makes the cache
             # prefix stable across tasks and avoids cross-agent drift errors.
             self.agent_model = {}
-            for role in ("intent", "lecture_hook", "visual_explainer"):
-                role_options = model_options
-                if role == "visual_explainer":
-                    role_options = {
-                        **model_options,
-                        "default_options": {
-                            "thinking": {"type": "enabled"},
-                            "reasoning_effort": "high",
-                        },
-                    }
-                self.agent_model[role] = OpenAICompatChatModel(
-                    self.settings.agent_model, **role_options
-                )
+            for role in ("intent", "lecture_hook", "lecture_hook_structured", "visual_explainer"):
+                if role == "lecture_hook" and self.settings.agent_base_url.rstrip("/") == "https://api.deepseek.com":
+                    self.agent_model[role] = DeepSeekResponsesModel(
+                        self.settings.agent_model,
+                        base_url=self.settings.agent_base_url,
+                        api_key=self.settings.agent_api_key.get_secret_value(),
+                        timeout=self.settings.agent_lecture_timeout,
+                    )
+                else:
+                    self.agent_model[role] = OpenAICompatChatModel(
+                        self.settings.agent_model, **model_options
+                    )
         self.checkpointer = build_checkpointer(self.settings)
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",

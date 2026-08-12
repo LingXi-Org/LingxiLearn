@@ -136,7 +136,12 @@ def extract_json(text: str) -> dict[str, Any] | None:
         except (TypeError, json.JSONDecodeError):
             continue
         if isinstance(value, dict):
-            return value
+            # Native Responses summaries can echo the task envelope before
+            # the actual contract. Prefer the candidate with contract keys.
+            if {"schema_version", "topic", "selected_hook"}.issubset(value):
+                return value
+            if not any({"schema_version", "topic", "selected_hook"}.issubset(item) for item in candidates if isinstance(item, dict)):
+                return value
     return None
 
 

@@ -131,6 +131,9 @@ LINGXILEARN_AGENT_BASE_URL=https://api.deepseek.com
 LINGXILEARN_AGENT_TIMEOUT=90
 ```
 
+当 Agent Base URL 为官方 DeepSeek API 时，`lecture-hook` 使用 DeepSeek
+Responses API 的原生 `web_search` 工具；不再依赖本地 DuckDuckGo HTML 搜索器。
+
 ### 身份、学习数据与 LingxiGraph 边界
 
 持久化用户数据接口要求 `Authorization: Bearer <OIDC JWT>`。服务端使用

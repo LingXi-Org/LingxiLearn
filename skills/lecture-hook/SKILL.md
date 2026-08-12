@@ -22,7 +22,8 @@ A successful hook must satisfy all four conditions:
 
 If an entertaining detail can be removed without changing why the target concept matters, treat it as a likely seductive detail and reject it.
 
-Research every factual hook on the web; never rely on memory or invent facts. Do not issue one
+Research every factual hook on the web; prefer the provider's native web-search capability when
+available; never rely on memory or invent facts. Do not issue one
 generic query. Explore at least four applicable angles, such as origin/history, people/conflict,
 failure/limitation, counterintuitive fact, everyday phenomenon, modern application, misconception,
 or extreme case.
@@ -33,6 +34,11 @@ Default research target:
 - six inspected search results;
 - three full pages fetched;
 - two independent sources supporting the selected hook's core fact.
+
+For DeepSeek Responses API, use the native `web_search` capability (`tools: [{"type":
+"web_search"}]`, `tool_choice: "auto"`) rather than adding a second custom search path. Inspect
+native source records, including title, URL, snippet/content, date, and provenance. Treat native
+results as evidence inputs, not automatically verified facts.
 
 Prefer primary documents, official records, standards, original papers, and archives; then
 universities, museums, governments, professional associations; then peer-reviewed research and

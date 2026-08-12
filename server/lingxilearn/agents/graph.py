@@ -23,7 +23,6 @@ from lingxigraph import (
 from ..config import REPO_ROOT, Settings
 from .artifact_store import ArtifactStore
 from .contracts import IntentContext, LectureHookResult, extract_json, jsonable
-from .web_tools import build_web_tools
 
 logger = logging.getLogger(__name__)
 EVENT_CHANNEL = "agent_task"
@@ -77,7 +76,8 @@ LECTURE_PROMPT = """你是 lecture-hook 专用 subagent。你要严格执行可�
 
 必须：
 1. 先使用 read_skill 读取 lecture-hook 的完整指令。
-2. 按 Skill 的“研究标准”和“运行时限制”进行网页研究；使用 web_search 和 web_fetch，不得凭记忆编造事实。
+2. 按 Skill 的“研究标准”和“运行时限制”进行网页研究；DeepSeek 专用模型使用官方 Responses API 原生
+   web_search，不要寻找或调用第二套搜索实现；不得凭记忆编造事实。
 3. 对中心事实建立 claim-to-source 证据账本，保留不确定性。
 4. 最终只输出可被 lecture-hook-result.v1 解析的 JSON。
 5. student-facing prose 使用中文，URL 和证据放进 research。
@@ -115,6 +115,14 @@ LECTURE_RECOVERY_PROMPT = """你是 lecture-hook 专用 subagent。此前受控�
 不得编造来源；research.sources 和 research.claims 使用空数组，warnings 说明需要补充外部证据。
 仍需给出一个不依赖具体事实、仅用于引出概念的课堂问题型 Hook。只输出 JSON。"""
 
+LECTURE_NORMALIZER_PROMPT = """你是 lecture-hook 结构化归一化 Agent。
+把给定的原生 DeepSeek Web Search 搜索总结转换为严格的 lecture-hook-result.v1 JSON。
+只输出 JSON，不要 Markdown，不要解释。不得补造搜索结果；没有可靠来源时使用
+status=insufficient_evidence、空 research.sources/claims，并在 warnings 说明证据不足。
+JSON 必须包含 schema_version、status、topic、selected_hook、candidates、research；
+selected_hook 必须包含 title、hook_type、opening、story、question、transition、
+estimated_duration_sec、why_this_hook_works、visual_cue。"""
+
 
 def _emit(runtime: Runtime[Any] | None, event_type: str, **payload: Any) -> None:
     if runtime is None:
@@ -143,6 +151,43 @@ def _fallback_intent(prompt: str) -> IntentContext:
         topic=topic,
         learning_objective=f"理解{topic}的核心概念、作用和关键机制。",
         course_context="由用户问题自动推断",
+    )
+
+
+def _evidence_safe_lecture(intent: IntentContext, task_id: str, warning: str) -> LectureHookResult:
+    """Return a valid contract without inventing sources when model JSON is unusable."""
+    topic = intent.topic
+    return LectureHookResult.model_validate(
+        {
+            "schema_version": "lecture-hook-result.v1",
+            "status": "insufficient_evidence",
+            "topic": topic,
+            "selected_hook": {
+                "title": f"从一个问题认识{topic}",
+                "hook_type": "question",
+                "opening": f"如果只用一句话解释{topic}，你会先说明它解决什么问题？",
+                "story": "",
+                "question": f"你认为{topic}最关键的学习问题是什么？",
+                "transition": "接下来用可靠资料逐步拆解这个问题。",
+                "estimated_duration_sec": 30,
+                "why_this_hook_works": "不依赖未经核验的外部事实，适合作为证据不足时的安全引入。",
+                "visual_cue": "",
+            },
+            "candidates": [
+                {
+                    "title": f"从一个问题认识{topic}",
+                    "hook_type": "question",
+                    "score": 50,
+                    "lesson_alignment": 70,
+                    "curiosity": 40,
+                    "evidence_strength": 0,
+                    "rejection_reason": "",
+                }
+            ],
+            "research": {"search_angles": [], "claims": [], "sources": []},
+            "warnings": [warning],
+            "task_id": task_id,
+        }
     )
 
 
@@ -210,7 +255,6 @@ def build_agent_graph(
         )
         agent = create_agent(
             _agent_model(model, "lecture_hook"),
-            build_web_tools(settings),
             skills=lecture_registry,
             system_prompt=LECTURE_PROMPT,
             name="lecture-hook",
@@ -234,8 +278,26 @@ def build_agent_graph(
             )
         parsed = extract_json(_message_text(result))
         if parsed is None:
-            raise ValueError("lecture-hook agent did not return JSON")
-        hook = LectureHookResult.model_validate(parsed)
+            raw_search = _message_text(result)
+            _emit(runtime, "agent.output", agent="lecture_hook", message="DeepSeek 原生 Web Search 已返回资料，正在整理为课堂产物。")
+            normalizer = create_agent(
+                _agent_model(model, "lecture_hook_structured"),
+                system_prompt=LECTURE_NORMALIZER_PROMPT,
+                name="lecture-hook-normalizer",
+            )
+            normalized = await normalizer.ainvoke(
+                {"messages": [HumanMessage(prompt + "\n\n原生 DeepSeek Web Search 返回的搜索总结如下：\n" + raw_search)]},
+                {"recursion_limit": 8},
+            )
+            parsed = extract_json(_message_text(normalized))
+        if parsed is None:
+            hook = _evidence_safe_lecture(intent, state["task_id"], "原生 Web Search 结果未能转换为完整产物，等待补充可靠来源。")
+        else:
+            try:
+                hook = LectureHookResult.model_validate(parsed)
+            except Exception as exc:  # noqa: BLE001 - preserve task completion with safe evidence state
+                logger.warning("lecture-hook JSON contract invalid after native search: %s", exc)
+                hook = _evidence_safe_lecture(intent, state["task_id"], "原生 Web Search 结果未能转换为完整产物，等待补充可靠来源。")
         value = hook.model_copy(update={"task_id": state["task_id"]}).model_dump(mode="json")
         await persist_result("lecture_hook", value)
         _emit(runtime, "agent.output", agent="lecture_hook", message=f"课堂 Hook：{hook.selected_hook.title}。{hook.selected_hook.opening}")

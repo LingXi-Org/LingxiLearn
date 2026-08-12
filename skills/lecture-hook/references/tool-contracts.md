@@ -10,6 +10,23 @@ most three `web_search` calls and four `web_fetch` calls per task. A failed or t
 skipped without retry, duplicate queries are not allowed, and generation begins when a limit is
 reached. Record the actual evidence and unmet targets in the result.
 
+## DeepSeek native search (preferred)
+
+DeepSeek Responses API supports the native search capability:
+
+```python
+response = client.responses.create(
+    model="deepseek-v4-flash",
+    input="搜索国内关于傅里叶变换教学的优质中文资料，并总结核心内容。",
+    tools=[{"type": "web_search"}],
+    tool_choice="auto",
+)
+```
+
+Use this path for the DeepSeek specialist. Do not attach the legacy custom search/fetch tools to
+the same specialist unless native search is unavailable. Inspect returned source records and record
+their URLs, titles, dates, provenance, and uncertainty in `research`.
+
 ## `web.search`
 
 Input conceptually:
