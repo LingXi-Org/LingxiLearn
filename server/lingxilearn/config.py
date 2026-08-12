@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
+from pydantic.fields import AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -46,6 +47,22 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("")
     llm_timeout: float = 45.0
     llm_temperature: float = 0.3
+
+    # --- Agent Task runtime -----------------------------------------------
+    # Agent tasks use one shared DeepSeek model. DS_API_KEY is intentionally
+    # unprefixed because it is the repository-level credential requested by
+    # the product contract; the alias keeps it out of public settings dumps.
+    agent_api_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("DS_API_KEY", "LINGXILEARN_AGENT_API_KEY"),
+        repr=False,
+    )
+    agent_model: str = "deepseek-v4-flash"
+    agent_base_url: str = "https://api.deepseek.com"
+    agent_timeout: float = 90.0
+    agent_search_url: str = "https://html.duckduckgo.com/html/"
+    agent_max_html_bytes: int = 512 * 1024
+    agent_task_dir: Path = REPO_ROOT / "var" / "agent_tasks"
 
     coze_bot_id: str = ""
     coze_base_url: str = "https://api.coze.cn"
@@ -106,6 +123,10 @@ class Settings(BaseSettings):
         if self.brain == "coze" and not (self.coze_token.get_secret_value() and self.coze_bot_id):
             return "scripted"
         return self.brain
+
+    @property
+    def agents_configured(self) -> bool:
+        return bool(self.agent_api_key.get_secret_value())
 
 
 @lru_cache

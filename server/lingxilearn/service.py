@@ -20,7 +20,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from lingxigraph import Command, GraphCancelledError, PostgresSaver, SqliteSaver
+from lingxigraph import Command, EventKind, GraphCancelledError, PostgresSaver, SqliteSaver
 from lingxigraph.errors import (
     BudgetExceededError,
     EmptyInputError,
@@ -28,6 +28,8 @@ from lingxigraph.errors import (
     GraphTimeoutError,
 )
 
+from .agents.artifact_store import ArtifactError, ArtifactStore
+from .agents.graph import EVENT_CHANNEL, build_agent_graph
 from .brains.base import TutorBrain
 from .config import Settings, get_settings
 from .kernel.graph import build_graph
@@ -79,11 +81,14 @@ class Service:
         self.db = Database(self.settings)
         self.repo = Repository(self.db)
         self.brain: TutorBrain | None = None
+        self.agent_model: Any | None = None
+        self.agent_artifacts = ArtifactStore(self.settings)
         self.checkpointer: Any = None
         self._graphs: dict[str, Any] = {}
         self._graph_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._run_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
+        self._agent_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._tasks: set[asyncio.Task[Any]] = set()
 
     # -- lifecycle -------------------------------------------------------
@@ -100,6 +105,16 @@ class Service:
             [p.root / "knowledge" for p in self.packs.values() if (p.root / "knowledge").exists()]
         )
         self.brain = build_brain(self.settings)
+        if self.settings.agents_configured:
+            from lingxigraph.integrations import OpenAICompatChatModel
+
+            self.agent_model = OpenAICompatChatModel(
+                self.settings.agent_model,
+                base_url=self.settings.agent_base_url,
+                api_key=self.settings.agent_api_key.get_secret_value(),
+                timeout=self.settings.agent_timeout,
+                default_options={"temperature": 0.2},
+            )
         self.checkpointer = build_checkpointer(self.settings)
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
@@ -113,6 +128,10 @@ class Service:
             task.cancel()
         if self.brain is not None:
             await self.brain.aclose()
+        if self.agent_model is not None:
+            closer = getattr(self.agent_model, "aclose", None)
+            if callable(closer):
+                await closer()
         await self.db.dispose()
 
     # -- graphs ----------------------------------------------------------
@@ -181,6 +200,188 @@ class Service:
         )
         self._spawn(self._drive(session_id, pack, learner_id, state))
         return {"id": session_id, "mission_id": mission_id, "pack_id": pack.id, "status": "running"}
+
+    # -- Agent Tasks ------------------------------------------------------
+
+    async def create_agent_task(
+        self, *, task_id: str, learner_id: str, prompt: str
+    ) -> dict[str, Any]:
+        normalized = " ".join(prompt.strip().split())
+        if not normalized:
+            raise ValueError("prompt must not be empty")
+        if len(normalized) > 4000:
+            raise ValueError("prompt is too long")
+        await self.repo.ensure_learner(learner_id)
+        await self.repo.create_agent_task(
+            id=task_id,
+            learner_id=learner_id,
+            prompt=normalized,
+            status="queued",
+            intent={},
+            lecture_result={},
+            visual_result={},
+        )
+        await self.repo.append_agent_events(
+            task_id,
+            [{"kind": "task.started", "agent": "coordinator", "payload": {"status": "queued"}}],
+        )
+        if self.agent_model is None:
+            message = "DS_API_KEY is not configured"
+            await self.repo.set_agent_task_status(task_id, "failed", message)
+            await self.repo.append_agent_events(
+                task_id,
+                [{"kind": "task.failed", "agent": "coordinator", "payload": {"message": message}}],
+            )
+            return {"id": task_id, "learner_id": learner_id, "status": "failed", "error": message}
+        self._spawn(self._drive_agent_task(task_id, learner_id, normalized))
+        return {"id": task_id, "learner_id": learner_id, "status": "queued"}
+
+    async def agent_task_snapshot(self, task_id: str) -> dict[str, Any]:
+        record = await self.repo.get_agent_task(task_id)
+        if record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        return {
+            "id": record.id,
+            "status": record.status,
+            "prompt": record.prompt,
+            "intent": record.intent or {},
+            "agents": {
+                "intent": _agent_snapshot(record.intent),
+                "lecture_hook": _agent_snapshot(record.lecture_result),
+                "visual_explainer": _agent_snapshot(record.visual_result),
+            },
+            "artifacts": {
+                "background": {
+                    "available": bool(
+                        record.lecture_result and record.lecture_result.get("selected_hook")
+                    ),
+                    "url": f"/api/agent-tasks/{record.id}/artifacts/background",
+                },
+                "visual": {
+                    "available": self.agent_artifacts.html_path(record.id).exists(),
+                    "url": f"/api/agent-tasks/{record.id}/artifacts/visual",
+                    **({"metadata": record.visual_result} if record.visual_result else {}),
+                },
+            },
+            "error": record.error,
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+        }
+
+    def agent_waiter(self, task_id: str) -> asyncio.Event:
+        return self._agent_waiters[task_id]
+
+    def _notify_agent(self, task_id: str) -> None:
+        event = self._agent_waiters[task_id]
+        event.set()
+        event.clear()
+
+    async def agent_artifact(self, task_id: str, kind: str) -> tuple[bytes, str, str]:
+        record = await self.repo.get_agent_task(task_id)
+        if record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        if kind == "visual":
+            try:
+                return (
+                    self.agent_artifacts.read_html(task_id),
+                    "text/html; charset=utf-8",
+                    "visual-explainer.html",
+                )
+            except ArtifactError as exc:
+                raise KeyError(str(exc)) from exc
+        if kind == "background":
+            result = record.lecture_result or {}
+            if not result.get("selected_hook"):
+                raise KeyError("background artifact is not ready")
+            return (
+                render_background_markdown(result).encode("utf-8"),
+                "text/markdown; charset=utf-8",
+                "background.md",
+            )
+        raise KeyError(f"unknown artifact kind: {kind}")
+
+    async def _drive_agent_task(self, task_id: str, learner_id: str, prompt: str) -> None:
+        if self.agent_model is None:
+            await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
+            self._notify_agent(task_id)
+            return
+        await self.repo.set_agent_task_status(task_id, "running")
+        async def persist_result(agent: str, value: dict[str, Any]) -> None:
+            await self.repo.update_agent_task_output(task_id, agent, value)
+            self._notify_agent(task_id)
+
+        graph = build_agent_graph(
+            model=self.agent_model,
+            settings=self.settings,
+            task_id=task_id,
+            artifacts=self.agent_artifacts,
+            persist_result=persist_result,
+            checkpointer=self.checkpointer,
+        )
+        config = {
+            "configurable": {
+                "thread_id": task_id,
+                "checkpoint_ns": "agent-task@1.0.0",
+            },
+            "recursion_limit": 80,
+        }
+        buffer: list[dict[str, Any]] = []
+        try:
+            async for event in graph.astream(
+                {
+                    "task_id": task_id,
+                    "prompt": prompt,
+                    "errors": [],
+                    "status": "running",
+                },
+                config,
+                stream_mode="events",
+                context={"learner_id": learner_id, "locale": "zh-CN"},
+            ):
+                if event.kind is EventKind.CUSTOM:
+                    data = dict(event.data or {})
+                    if data.get("channel") == EVENT_CHANNEL:
+                        value = data.get("value") or {}
+                        if isinstance(value, dict) and value.get("type"):
+                            buffer.append(
+                                {
+                                    "kind": str(value["type"]),
+                                    "agent": str(value.get("agent") or "coordinator"),
+                                    "payload": {
+                                        str(k): _json_safe(v)
+                                        for k, v in value.items()
+                                        if k not in {"type", "agent"}
+                                    },
+                                }
+                            )
+                if len(buffer) >= FLUSH_EVERY:
+                    await self.repo.append_agent_events(task_id, list(buffer))
+                    buffer.clear()
+                    self._notify_agent(task_id)
+        except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
+            logger.exception("agent task failed: %s", task_id)
+            buffer.append(
+                {
+                    "kind": "task.failed",
+                    "agent": "coordinator",
+                    "payload": {"message": f"运行失败：{type(exc).__name__}"},
+                }
+            )
+            await self.repo.append_agent_events(task_id, buffer)
+            await self.repo.set_agent_task_status(
+                task_id, "failed", f"运行失败：{type(exc).__name__}"
+            )
+            self._notify_agent(task_id)
+            return
+
+        if buffer:
+            await self.repo.append_agent_events(task_id, buffer)
+        state = await graph.aget_state(config)
+        values = dict(getattr(state, "values", None) or {})
+        status = str(values.get("status") or "partial")
+        errors = [str(item) for item in values.get("errors") or []]
+        await self.repo.set_agent_task_status(task_id, status, "; ".join(errors))
+        self._notify_agent(task_id)
 
     async def answer(self, session_id: str, payload: Any) -> None:
         record = await self.repo.get_session(session_id)
@@ -347,3 +548,98 @@ def _public_step(step: dict[str, Any]) -> dict[str, Any]:
         for k, v in step.items()
         if k not in {"grader", "walkthrough", "leak_guard", "hint_ladder"}
     }
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if hasattr(value, "model_dump"):
+        return _json_safe(value.model_dump(mode="json"))
+    return str(value)
+
+
+def _agent_snapshot(result: dict[str, Any] | None) -> dict[str, Any]:
+    result = result or {}
+    if result.get("status") == "failed":
+        return {"status": "failed", "error": result.get("error", "")}
+    return {"status": "completed" if result else "pending"}
+
+
+def render_background_markdown(result: dict[str, Any]) -> str:
+    selected = result.get("selected_hook") or {}
+    research = result.get("research") or {}
+    lines = [
+        f"# {selected.get('title') or '课堂背景 Hook'}",
+        "",
+        f"**知识点：** {result.get('topic', '')}",
+        f"**状态：** {result.get('status', 'ok')}",
+        "",
+        "## 开场",
+        selected.get("opening", ""),
+        "",
+        "## 背景故事",
+        selected.get("story", ""),
+        "",
+        "## 抛给学习者的问题",
+        selected.get("question", ""),
+        "",
+        "## 过渡到知识点",
+        selected.get("transition", ""),
+        "",
+        "## 为什么这个 Hook 有效",
+        selected.get("why_this_hook_works", ""),
+        "",
+    ]
+    if selected.get("visual_cue"):
+        lines.extend(["## 可视化提示", selected["visual_cue"], ""])
+    candidates = result.get("candidates") or []
+    if candidates:
+        lines.extend(
+            [
+                "## 候选方案",
+                "",
+                "| 方案 | 类型 | 总分 | 课程对齐 | 好奇心 | 证据强度 |",
+                "| --- | --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for item in candidates:
+            lines.append(
+                f"| {item.get('title', '')} | {item.get('hook_type', '')} | "
+                f"{item.get('score', 0):.0f} | {item.get('lesson_alignment', 0):.0f} | "
+                f"{item.get('curiosity', 0):.0f} | {item.get('evidence_strength', 0):.0f} |"
+            )
+        lines.append("")
+    claims = research.get("claims") or []
+    if claims:
+        lines.extend(["## 研究证据账本", ""])
+        for claim in claims:
+            qualification = (
+                f"（{claim.get('qualification')}）" if claim.get("qualification") else ""
+            )
+            lines.append(
+                f"- `{claim.get('claim_id', '')}` **{claim.get('status', '')}** "
+                f"置信度 {float(claim.get('confidence', 0)):.0%}："
+                f"{claim.get('claim', '')}{qualification}"
+            )
+        lines.append("")
+    sources = research.get("sources") or []
+    if sources:
+        lines.extend(["## 来源", ""])
+        for source in sources:
+            publisher = f" · {source.get('publisher')}" if source.get("publisher") else ""
+            lines.append(
+                f"- `{source.get('source_id', '')}` "
+                f"[{source.get('title', source.get('url', ''))}]({source.get('url', '')}) "
+                f"· Tier {source.get('tier', '')}{publisher}"
+            )
+        lines.append("")
+    warnings = result.get("warnings") or []
+    if warnings:
+        lines.extend(["## 警告与不确定性", ""])
+        lines.extend(f"- {warning}" for warning in warnings)
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"

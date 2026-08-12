@@ -60,6 +60,43 @@ class Session(Base):
     )
 
 
+class AgentTask(Base):
+    """A one-shot intent-routing task and its specialist outputs."""
+
+    __tablename__ = "agent_tasks"
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    prompt: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    intent: Mapped[dict] = mapped_column(JSON, default=dict)
+    lecture_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    visual_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class AgentTaskEvent(Base):
+    """Durable SSE projection log for Agent Tasks."""
+
+    __tablename__ = "agent_task_events"
+    __table_args__ = (
+        UniqueConstraint("task_id", "sequence", name="uq_agent_task_events_sequence"),
+        Index("ix_agent_task_events_task_sequence", "task_id", "sequence"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(64))
+    agent: Mapped[str] = mapped_column(String(64), default="")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class RunEvent(Base):
     """The durable projection log. SSE serves from here, never from the live run."""
 

@@ -21,8 +21,22 @@ Tutoring Kernel  ── LingxiGraph StateGraph, domain-agnostic
         ├── Course Pack     declarative YAML: concepts, missions, rubrics
         └── Tool Registry   real deterministic computation
         │
-lingxigraph (PyPI) · SQLite | PostgreSQL
+lingxigraph 2.1.0 (PyPI) · SQLite | PostgreSQL
 ```
+
+### Intent-driven Agent Tasks
+
+Free-form questions use a separate one-shot graph. `recognize_intent` normalizes
+the learner's topic, objective, level and duration, then fans out to
+`lecture_hook` and `visual_explainer` in the same graph tick. Both branches are
+joined by `merge_results`, so one failed specialist can still leave a `partial`
+task with the other artifact available.
+
+The specialists receive LingxiGraph 2.1.0 `FilesystemSkillSource` instances for
+the vendored skills under `skills/`. The lecture branch gets only the public,
+SSRF-checked web tools. The visual branch gets task-scoped HTML write/validate
+tools; only `visual-explainer.html` under `var/agent_tasks/<task_id>/` is
+allowed. The visual artifact is served with a sandboxed iframe and a strict CSP.
 
 **The kernel knows nothing about any subject.** Its ten nodes are pedagogical
 acts — `intake`, `diagnose`, `plan`, `investigate`, `coach`, `await_learner`,
@@ -218,7 +232,8 @@ SQLAlchemy 2.0 async with **Alembic from the first commit** — `alembic check`
 reports no drift and downgrade/upgrade round-trips. `create_all` exists only for
 the SQLite quick start and tests.
 
-Five tables: `learners`, `sessions`, `run_events`, `mastery`, `reports`. The
+Seven tables: `learners`, `sessions`, `run_events`, `mastery`, `reports`,
+`agent_tasks`, and `agent_task_events`. The
 graph's own checkpointer owns authoritative run state; these tables own what must
 outlive a single run.
 

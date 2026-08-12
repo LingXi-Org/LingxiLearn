@@ -1,4 +1,13 @@
-import type { Pack, RunEvent, SessionListItem, SessionSnapshot, SimAction, SimState } from "./types";
+import type {
+  AgentTaskEvent,
+  AgentTaskSnapshot,
+  Pack,
+  RunEvent,
+  SessionListItem,
+  SessionSnapshot,
+  SimAction,
+  SimState,
+} from "./types";
 
 /**
  * When the app is served by FastAPI (the single-process deployment) the API is
@@ -42,7 +51,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () =>
-    request<{ status: string; brain: string; packs: string[]; tools: number }>("/health"),
+    request<{ status: string; brain: string; agent: { configured: boolean; model: string }; packs: string[]; tools: number }>("/health"),
 
   packs: () => request<{ packs: Pack[] }>("/packs"),
 
@@ -61,6 +70,17 @@ export const api = {
     }),
 
   report: (id: string) => request<Record<string, any>>(`/sessions/${id}/report`),
+
+  createAgentTask: (prompt: string, learnerId = "") =>
+    request<{ id: string; learner_id: string; status: string }>("/agent-tasks", {
+      method: "POST",
+      body: JSON.stringify({ prompt, learner_id: learnerId }),
+    }),
+
+  agentTask: (id: string) => request<AgentTaskSnapshot>(`/agent-tasks/${id}`),
+
+  agentArtifactUrl: (taskId: string, kind: "background" | "visual") =>
+    `${API_BASE}/api/agent-tasks/${taskId}/artifacts/${kind}`,
 
   mastery: (learnerId: string) =>
     request<{ learner_id: string; mastery: unknown[]; sessions: SessionListItem[] }>(`/learners/${learnerId}/mastery`),
@@ -148,6 +168,49 @@ export function subscribeEvents(
   };
 }
 
+export function subscribeAgentEvents(
+  taskId: string,
+  onEvent: (event: AgentTaskEvent) => void,
+  options: { from?: number; onEnd?: (status: string) => void } = {},
+): () => void {
+  let closed = false;
+  let source: EventSource | null = null;
+  let lastSequence = options.from ?? 0;
+  let retry: ReturnType<typeof setTimeout> | null = null;
+
+  const connect = () => {
+    if (closed) return;
+    source = new EventSource(`${API_BASE}/api/agent-tasks/${taskId}/events?last_event_id=${lastSequence}`);
+    const handler = (message: MessageEvent) => {
+      try {
+        const event = JSON.parse(message.data) as AgentTaskEvent;
+        if (typeof event.sequence === "number") lastSequence = event.sequence;
+        onEvent(event);
+      } catch {
+        /* ignore malformed frames */
+      }
+    };
+    for (const kind of KNOWN_AGENT_EVENT_KINDS) source.addEventListener(kind, handler as EventListener);
+    source.addEventListener("stream.end", (message) => {
+      const data = JSON.parse((message as MessageEvent).data ?? "{}");
+      options.onEnd?.(data.status ?? "unknown");
+      source?.close();
+      source = null;
+    });
+    source.onerror = () => {
+      source?.close();
+      source = null;
+      if (!closed) retry = setTimeout(connect, 1200);
+    };
+  };
+  connect();
+  return () => {
+    closed = true;
+    if (retry) clearTimeout(retry);
+    source?.close();
+  };
+}
+
 export const KNOWN_EVENT_KINDS = [
   "run.started",
   "run.ended",
@@ -171,4 +234,16 @@ export const KNOWN_EVENT_KINDS = [
   "step.completed",
   "plan.ready",
   "report.ready",
+];
+
+export const KNOWN_AGENT_EVENT_KINDS = [
+  "task.started",
+  "intent.started",
+  "intent.completed",
+  "agent.started",
+  "agent.completed",
+  "agent.failed",
+  "artifact.ready",
+  "task.completed",
+  "task.failed",
 ];

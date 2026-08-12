@@ -12,6 +12,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "export",
   trailingSlash: true,
+  // Keep production checks isolated from a concurrently running dev server.
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   images: { unoptimized: true },
   env: {
     NEXT_PUBLIC_API_BASE: process.env.NEXT_PUBLIC_API_BASE ?? "",

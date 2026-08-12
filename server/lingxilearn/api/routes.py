@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..service import Service
@@ -28,6 +28,7 @@ from ..tools.net import sim
 router = APIRouter(prefix="/api")
 
 TERMINAL = {"done", "failed", "cancelled"}
+AGENT_TERMINAL = {"completed", "partial", "failed"}
 
 
 def service_of(request: Request) -> Service:
@@ -53,6 +54,10 @@ async def health(request: Request) -> dict[str, Any]:
         "status": "ok" if db_ok else "degraded",
         "database": db_ok,
         "brain": svc.brain.name if svc.brain else "unconfigured",
+        "agent": {
+            "configured": svc.settings.agents_configured,
+            "model": svc.settings.agent_model,
+        },
         "packs": sorted(svc.packs),
         "tools": len(svc.registry.specs),
     }
@@ -106,6 +111,11 @@ class AnswerBody(BaseModel):
     answer: Any
 
 
+class CreateAgentTask(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4000)
+    learner_id: str = Field(default="", max_length=64)
+
+
 @router.post("/sessions", status_code=201)
 async def create_session(body: CreateSession, request: Request) -> dict[str, Any]:
     svc = service_of(request)
@@ -144,6 +154,108 @@ async def answer(session_id: str, body: AnswerBody, request: Request) -> dict[st
         raise HTTPException(status_code=409, detail=f"session_{record.status}")
     await svc.answer(session_id, body.answer)
     return {"status": "accepted"}
+
+
+# --------------------------------------------------------------------------
+# Intent-driven Agent Tasks
+# --------------------------------------------------------------------------
+
+
+@router.post("/agent-tasks", status_code=202)
+async def create_agent_task(body: CreateAgentTask, request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    learner_id = body.learner_id or f"guest-{uuid.uuid4().hex[:12]}"
+    task_id = f"t-{uuid.uuid4().hex[:20]}"
+    try:
+        created = await svc.create_agent_task(
+            task_id=task_id,
+            learner_id=learner_id,
+            prompt=body.prompt,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return created
+
+
+@router.get("/agent-tasks/{task_id}")
+async def get_agent_task(task_id: str, request: Request) -> dict[str, Any]:
+    svc = service_of(request)
+    try:
+        return await svc.agent_task_snapshot(task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/agent-tasks/{task_id}/artifacts/{kind}")
+async def get_agent_artifact(task_id: str, kind: str, request: Request) -> Response:
+    svc = service_of(request)
+    try:
+        content, media_type, filename = await svc.agent_artifact(task_id, kind)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    headers = {"Content-Disposition": f'inline; filename="{filename}"'}
+    if kind == "visual":
+        headers["Content-Security-Policy"] = (
+            "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
+            "img-src data:; font-src data:; connect-src 'none'; frame-src 'none'; "
+            "base-uri 'none'; form-action 'none'"
+        )
+        headers["X-Content-Type-Options"] = "nosniff"
+    return Response(content=content, media_type=media_type, headers=headers)
+
+
+@router.get("/agent-tasks/{task_id}/events")
+async def stream_agent_events(task_id: str, request: Request) -> StreamingResponse:
+    svc = service_of(request)
+    try:
+        await svc.agent_task_snapshot(task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    header = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
+    try:
+        cursor = int(header) if header else 0
+    except ValueError:
+        cursor = 0
+    heartbeat = svc.settings.sse_heartbeat_seconds
+
+    async def generate():  # noqa: ANN202
+        nonlocal cursor
+        waiter = svc.agent_waiter(task_id)
+        while True:
+            if await request.is_disconnected():
+                return
+            events = await svc.repo.agent_events_after(task_id, cursor)
+            for event in events:
+                cursor = event["sequence"]
+                payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+                yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
+
+            current = await svc.agent_task_snapshot(task_id)
+            if current["status"] in AGENT_TERMINAL:
+                tail = await svc.repo.agent_events_after(task_id, cursor)
+                for event in tail:
+                    cursor = event["sequence"]
+                    payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+                    yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
+                yield "event: stream.end\ndata: " + json.dumps(
+                    {"status": current["status"]}, ensure_ascii=False
+                ) + "\n\n"
+                return
+            if not events:
+                yield ": heartbeat\n\n"
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(waiter.wait(), timeout=heartbeat)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/sessions/{session_id}/report")

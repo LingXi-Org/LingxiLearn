@@ -13,6 +13,7 @@ import type {
 
 export type WorkspaceMode =
   | { kind: "session"; sessionId: string }
+  | { kind: "task"; taskId: string }
   | { kind: "draft"; prompt: string };
 
 export interface WorkspaceMessage {
@@ -77,6 +78,8 @@ export type DraftCapability = "course" | "mistakes" | "interactive_task" | "gene
 export function parseWorkspaceMode(params: URLSearchParams): WorkspaceMode | null {
   const sessionId = params.get("id")?.trim();
   if (sessionId) return { kind: "session", sessionId };
+  const taskId = params.get("task")?.trim();
+  if (taskId) return { kind: "task", taskId };
   if (params.get("draft") === "1") {
     return { kind: "draft", prompt: params.get("prompt")?.trim() || "新的学习任务" };
   }

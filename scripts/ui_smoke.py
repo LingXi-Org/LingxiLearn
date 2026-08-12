@@ -3,7 +3,7 @@
 
     python scripts/ui_smoke.py --base http://localhost:8000 --out var/screenshots
 
-Checks the honest free-prompt draft boundary, then walks the full API-backed
+Checks the free-prompt Agent Task route and its two artifact tabs, then walks the full API-backed
 learner journey inside /workspace: pre-test, professional artifact, grading,
 post-test and the in-place learning report.
 """
@@ -112,14 +112,17 @@ def run(base: str, out: Path, mission_title: str, mission_id: str) -> None:
         check(page.get_by_role("tab", name="我的课程").is_visible(), "my courses tab rendered")
         shoot(page, out, f"01-home")
 
-        # ---- honest draft boundary -----------------------------------
+        # ---- intent-driven Agent Task --------------------------------
         composer = page.get_by_label("学习任务输入")
-        composer.fill("为我生成一门计算机网络课程")
+        composer.fill("解释 TCP 拥塞控制，并生成背景文档和可视化讲解")
         page.get_by_label("发送任务").click()
-        page.wait_for_url("**/workspace/**draft=1**", timeout=25_000)
-        check(page.get_by_text("Mock · Coming Soon").first.is_visible(), "free prompt is visibly marked as mock")
-        check(page.get_by_text("未执行 · Coming Soon").first.is_visible(), "draft states that no agent ran")
-        shoot(page, out, "01b-draft-boundary")
+        page.wait_for_url("**/workspace/**task=**", timeout=25_000)
+        check(page.get_by_text("意图调度工作台").is_visible(), "free prompt created an Agent Task")
+        check(page.get_by_role("button", name="背景文档").is_visible(), "background tab rendered")
+        check(page.get_by_role("button", name="可视化讲解").is_visible(), "visual tab rendered")
+        page.get_by_role("button", name="可视化讲解").click()
+        check(page.get_by_test_id("agent-task-workspace").is_visible(), "Agent Task workspace rendered")
+        shoot(page, out, "01b-agent-task")
         page.goto(base, wait_until="networkidle")
 
         # ---- start ---------------------------------------------------
@@ -255,10 +258,11 @@ def run_mobile(base: str, out: Path) -> None:
         page.goto(base, wait_until="networkidle")
         page.get_by_label("学习任务输入").fill("生成一份操作系统交互任务")
         page.get_by_label("发送任务").click()
-        page.wait_for_url("**/workspace/**draft=1**")
+        page.wait_for_url("**/workspace/**task=**")
+        check(page.get_by_text("意图调度工作台").is_visible(), "mobile Agent Task conversation rendered")
         check(page.get_by_label("打开工作区").is_visible(), "mobile starts in conversation view")
         page.get_by_label("打开工作区").click()
-        check(page.get_by_test_id("draft-artifact").is_visible(), "mobile switches to artifact view")
+        check(page.get_by_test_id("agent-task-workspace").is_visible(), "mobile switches to artifact view")
         page.get_by_label("返回对话").click()
         check(page.get_by_label("打开工作区").is_visible(), "mobile returns to conversation view")
         shoot(page, out, "06-mobile-workspace")

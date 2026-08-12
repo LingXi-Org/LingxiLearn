@@ -106,7 +106,7 @@ Tutoring Kernel（LingxiGraph StateGraph · 领域无关）
 Course Pack（声明式）        Tool Registry（真实确定性计算）
  packs/computer-networks/     net.pcap.* | net.sim.* | net.ipv4.* | kb.*
         ↓
-lingxigraph（PyPI）· SQLite / PostgreSQL
+lingxigraph 2.1.0（PyPI）· SQLite / PostgreSQL
 ```
 
 内核的十个节点没有一个提到 DNS 或 TCP。学科通过**课程包**和**工具注册表**进入，
@@ -114,9 +114,25 @@ lingxigraph（PyPI）· SQLite / PostgreSQL
 
 细节见 [ARCHITECTURE.md](ARCHITECTURE.md)（英文）。
 
+### 意图调度 Agent 与双 Skill 产物
+
+首页自由 Prompt 会创建一个 Agent Task。意图识别 Agent 先统一教学上下文，随后
+`lecture-hook` 与 `visual-explainer` 两个专用 subagent 从同一节点并行扇出，结果在
+右侧工作区的“背景文档 / 可视化讲解”标签页汇合。前者输出带来源和不确定性的 Markdown，
+后者输出一个零外部依赖的 HTML，并在任务目录内进行静态检查。
+
+新增 Agent 运行时读取以下配置；`DS_API_KEY` 不会进入日志、事件 payload 或 API 响应：
+
+```dotenv
+DS_API_KEY=...
+LINGXILEARN_AGENT_MODEL=deepseek-v4-flash
+LINGXILEARN_AGENT_BASE_URL=https://api.deepseek.com
+LINGXILEARN_AGENT_TIMEOUT=90
+```
+
 ### 关于 LingxiGraph 与 LingxiNext
 
-LingxiGraph 已发布在 PyPI（`lingxigraph`，核心零运行时依赖），因此这里**直接作为普通
+LingxiGraph 已发布在 PyPI（`lingxigraph==2.1.0`，核心零运行时依赖），因此这里**直接作为普通
 依赖使用**——没有 fork，没有 vendor，没有 submodule。LingxiNext 的工程手法有借鉴
 （用内容版本做 checkpoint 命名空间、compose 的迁移闸门、两阶段 uv 镜像），
 但代码是独立的。三个参考项目都在 `.gitignore` 中，不进入本仓库。
@@ -168,6 +184,7 @@ server/lingxilearn/
   stream/                  Event → UI 投影（纯函数）
   store/                   SQLAlchemy + Alembic
   eval/                    评测
+skills/                    lecture-hook / visual-explainer（固定上游提交）
 web/                       Next.js 前端与自研 SVG 可视化
 scripts/                   工件生成、内核/API/UI 冒烟
 ```
