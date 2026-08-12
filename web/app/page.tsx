@@ -17,7 +17,7 @@ const GREETINGS = [
 
 export default function Home() {
   const router = useRouter();
-  const { packs, sessions, missionById, error, loading, createSession } = useCatalogue();
+  const { packs, sessions, missionById, error, loading, createSession, createAgentTask } = useCatalogue();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [starting, setStarting] = useState<string>();
   const [activeTab, setActiveTab] = useState<"discover" | "mine">("discover");
@@ -27,9 +27,21 @@ export default function Home() {
     setGreeting(GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
   }, []);
 
-  const openDraft = useCallback((prompt: string) => {
-    router.push(`/workspace/?draft=1&prompt=${encodeURIComponent(prompt)}`);
-  }, [router]);
+  const [startingPrompt, setStartingPrompt] = useState(false);
+  const [promptError, setPromptError] = useState<string>();
+
+  const openDraft = useCallback(async (prompt: string) => {
+    setStartingPrompt(true);
+    setPromptError(undefined);
+    try {
+      const created = await createAgentTask(prompt);
+      router.push(`/workspace/?task=${encodeURIComponent(created.id)}`);
+    } catch (cause) {
+      setPromptError(cause instanceof Error ? cause.message : "Agent Task 创建失败，请稍后重试。");
+    } finally {
+      setStartingPrompt(false);
+    }
+  }, [createAgentTask, router]);
 
   const startMission = useCallback(async (missionId: string, packId: string) => {
     setStarting(missionId);
@@ -77,7 +89,8 @@ export default function Home() {
               </h1>
             </div>
 
-            <LearningPrompt className="home-learning-prompt mt-7 sm:mt-10 lg:mt-12" onSend={openDraft} placeholder="描述你想学习的内容或遇到的问题" />
+          <LearningPrompt className="home-learning-prompt mt-7 sm:mt-10 lg:mt-12" onSend={openDraft} disabled={startingPrompt} placeholder={startingPrompt ? "正在调度 Agent…" : "描述你想学习的内容或遇到的问题"} />
+          {promptError && <p role="alert" className="mx-auto mt-3 max-w-xl text-center text-xs text-red-600">{promptError}</p>}
           </section>
 
           <section id="courses" className="mt-8 sm:mt-10" aria-label="课程">

@@ -16,7 +16,17 @@ from sqlalchemy import delete, event, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ..config import Settings
-from .models import Base, Learner, Mastery, ReportRecord, RunEvent, Session, utcnow
+from .models import (
+    AgentTask,
+    AgentTaskEvent,
+    Base,
+    Learner,
+    Mastery,
+    ReportRecord,
+    RunEvent,
+    Session,
+    utcnow,
+)
 
 
 class Database:
@@ -169,6 +179,103 @@ class Repository:
                     "pack_id": r.pack_id,
                     "status": r.status,
                     "created_at": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ]
+
+    # -- Agent Tasks ------------------------------------------------------
+
+    async def create_agent_task(self, **fields: Any) -> None:
+        async with self.db.session() as s:
+            s.add(AgentTask(**fields))
+            await s.commit()
+
+    async def get_agent_task(self, task_id: str) -> AgentTask | None:
+        async with self.db.session() as s:
+            return await s.get(AgentTask, task_id)
+
+    async def set_agent_task_status(self, task_id: str, status: str, error: str = "") -> None:
+        async with self.db.session() as s:
+            row = await s.get(AgentTask, task_id)
+            if row is None:
+                return
+            row.status = status
+            row.error = error
+            row.updated_at = utcnow()
+            await s.commit()
+
+    async def update_agent_task_output(
+        self, task_id: str, agent: str, value: dict[str, Any]
+    ) -> None:
+        async with self.db.session() as s:
+            row = await s.get(AgentTask, task_id)
+            if row is None:
+                return
+            if agent == "intent":
+                row.intent = value
+            elif agent == "lecture_hook":
+                row.lecture_result = value
+            elif agent == "visual_explainer":
+                row.visual_result = value
+            else:
+                raise ValueError(f"unknown agent output: {agent}")
+            row.updated_at = utcnow()
+            await s.commit()
+
+    async def append_agent_events(self, task_id: str, events: list[dict[str, Any]]) -> int:
+        if not events:
+            async with self.db.session() as s:
+                highest = (
+                    await s.execute(
+                        select(func.max(AgentTaskEvent.sequence)).where(
+                            AgentTaskEvent.task_id == task_id
+                        )
+                    )
+                ).scalar()
+                return int(highest or 0)
+        async with self.db.session() as s:
+            highest = (
+                await s.execute(
+                    select(func.max(AgentTaskEvent.sequence)).where(
+                        AgentTaskEvent.task_id == task_id
+                    )
+                )
+            ).scalar() or 0
+            for offset, event in enumerate(events, start=1):
+                s.add(
+                    AgentTaskEvent(
+                        task_id=task_id,
+                        sequence=highest + offset,
+                        kind=str(event.get("kind", "")),
+                        agent=str(event.get("agent", "")),
+                        payload=event.get("payload") or {},
+                    )
+                )
+            await s.commit()
+            return highest + len(events)
+
+    async def agent_events_after(
+        self, task_id: str, after: int = 0, limit: int = 500
+    ) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(AgentTaskEvent)
+                    .where(
+                        AgentTaskEvent.task_id == task_id,
+                        AgentTaskEvent.sequence > after,
+                    )
+                    .order_by(AgentTaskEvent.sequence)
+                    .limit(limit)
+                )
+            ).scalars()
+            return [
+                {
+                    "sequence": r.sequence,
+                    "kind": r.kind,
+                    "agent": r.agent,
+                    "payload": r.payload,
+                    "ts": r.created_at.isoformat() if r.created_at else None,
                 }
                 for r in rows
             ]

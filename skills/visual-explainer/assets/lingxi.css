@@ -1,0 +1,225 @@
+/* LingXi 可视化讲解 · 学术论文风基础样式
+   直接内联进单文件页面的 <style> 中。零依赖，自带亮/暗双模。
+   9 组色阶来自 Anthropic Imagine 设计系统；--c1..--c7 的分类色序已通过
+   scripts/validate_palette.js 在 light 与 dark 两种模式下全部 PASS。 */
+
+:root {
+  color-scheme: light dark;
+
+  --paper: #fbfaf7;
+  --surface: #ffffff;
+  --sunken: #f4f2ec;
+  --ink-1: #23231f;
+  --ink-2: #5f5e5a;
+  --ink-3: #8a8880;
+  --rule: rgba(35, 35, 31, 0.14);
+  --rule-strong: rgba(35, 35, 31, 0.3);
+  --accent: #534ab7;
+
+  --font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif SC", "SimSun", Georgia, "Times New Roman", serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", "Noto Sans SC", "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --measure: 68ch;
+  --hairline: 0.5px;
+
+  --c1: #7f77dd; --c1-fill: #eeedfe; --c1-ink: #3c3489; --c1-ink2: #534ab7;
+  --c2: #1d9e75; --c2-fill: #e1f5ee; --c2-ink: #085041; --c2-ink2: #0f6e56;
+  --c3: #d85a30; --c3-fill: #faece7; --c3-ink: #712b13; --c3-ink2: #993c1d;
+  --c4: #378add; --c4-fill: #e6f1fb; --c4-ink: #0c447c; --c4-ink2: #185fa5;
+  --c5: #ba7517; --c5-fill: #faeeda; --c5-ink: #633806; --c5-ink2: #854f0b;
+  --c6: #d4537e; --c6-fill: #fbeaf0; --c6-ink: #72243e; --c6-ink2: #993556;
+  --c7: #639922; --c7-fill: #eaf3de; --c7-ink: #27500a; --c7-ink2: #3b6d11;
+  --c0: #888780; --c0-fill: #f1efe8; --c0-ink: #444441; --c0-ink2: #5f5e5a;
+  --c-warn: #e24b4a; --c-warn-fill: #fcebeb; --c-warn-ink: #791f1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1a1a19;
+    --surface: #232322;
+    --sunken: #2c2c2a;
+    --ink-1: #edebe4;
+    --ink-2: #b4b2a9;
+    --ink-3: #888780;
+    --rule: rgba(237, 235, 228, 0.16);
+    --rule-strong: rgba(237, 235, 228, 0.32);
+    --accent: #afa9ec;
+
+    --c1-fill: #3c3489; --c1-ink: #cecbf6; --c1-ink2: #afa9ec;
+    --c2-fill: #085041; --c2-ink: #9fe1cb; --c2-ink2: #5dcaa5;
+    --c3-fill: #712b13; --c3-ink: #f5c4b3; --c3-ink2: #f0997b;
+    --c4-fill: #0c447c; --c4-ink: #b5d4f4; --c4-ink2: #85b7eb;
+    --c5-fill: #633806; --c5-ink: #fac775; --c5-ink2: #ef9f27;
+    --c6-fill: #72243e; --c6-ink: #f4c0d1; --c6-ink2: #ed93b1;
+    --c7-fill: #27500a; --c7-ink: #c0dd97; --c7-ink2: #97c459;
+    --c0-fill: #444441; --c0-ink: #d3d1c7; --c0-ink2: #b4b2a9;
+    --c-warn-fill: #791f1f; --c-warn-ink: #f7c1c1;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 40px 24px 72px;
+  background: var(--paper);
+  color: var(--ink-1);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  counter-reset: figure;
+}
+
+main { max-width: 880px; margin-inline: auto; }
+.prose { max-width: var(--measure); }
+
+h1, h2, h3 { font-family: var(--font-serif); font-weight: 500; line-height: 1.35; margin: 0; }
+h1 { font-size: 30px; letter-spacing: 0.01em; }
+h2 { font-size: 21px; margin-top: 2.5rem; padding-bottom: 0.4rem; border-bottom: var(--hairline) solid var(--rule); }
+h3 { font-size: 17px; margin-top: 1.75rem; }
+p { margin: 0 0 1rem; }
+a { color: var(--accent); text-underline-offset: 3px; }
+code, .num { font-family: var(--font-mono); font-size: 0.92em; font-variant-numeric: tabular-nums; }
+
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: none; color: var(--ink-3); font-family: var(--font-mono); margin: 0 0 0.6rem; }
+.lead { font-size: 18px; color: var(--ink-2); margin: 0.75rem 0 0; }
+.muted { color: var(--ink-2); }
+.hint { font-size: 13px; color: var(--ink-3); }
+
+.takeaway {
+  margin: 1.5rem 0;
+  padding: 0.9rem 1.1rem;
+  background: var(--sunken);
+  border-left: 2px solid var(--accent);
+  border-radius: 0;
+  font-size: 15px;
+}
+
+figure { margin: 2rem 0; }
+figure > svg, figure > .canvas-wrap { display: block; width: 100%; height: auto; }
+figcaption {
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: var(--hairline) solid var(--rule);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+figcaption::before {
+  counter-increment: figure;
+  content: "图 " counter(figure) " · ";
+  color: var(--ink-1);
+  font-family: var(--font-mono);
+}
+
+.panel {
+  background: var(--surface);
+  border: var(--hairline) solid var(--rule);
+  border-radius: var(--r-lg);
+  padding: 1rem 1.25rem;
+}
+
+figure + .controls { margin-top: -0.75rem; }
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin: 1.25rem 0;
+  padding: 0.9rem 1.1rem;
+  background: var(--sunken);
+  border-radius: var(--r-md);
+}
+.ctl { display: flex; align-items: center; gap: 10px; flex: 1 1 240px; min-width: 0; }
+.ctl > label { font-size: 14px; color: var(--ink-2); white-space: nowrap; }
+.ctl > output { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: right; }
+
+input[type="range"] { flex: 1 1 90px; min-width: 80px; accent-color: var(--accent); height: 22px; }
+select, button {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink-1);
+  background: var(--surface);
+  border: var(--hairline) solid var(--rule-strong);
+  border-radius: var(--r-md);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button:hover, select:hover { background: var(--sunken); }
+button:active { transform: scale(0.98); }
+button[aria-pressed="true"] { background: var(--c1-fill); color: var(--c1-ink); border-color: transparent; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 1.25rem 0; }
+.kpi { background: var(--sunken); border-radius: var(--r-md); padding: 0.85rem 1rem; }
+.kpi-label { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+.kpi-value { font-family: var(--font-mono); font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 0.75rem; font-size: 13px; color: var(--ink-2); }
+.legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--c0); flex: none; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; margin: 1.25rem 0; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: var(--hairline) solid var(--rule); overflow-wrap: anywhere; }
+th { font-weight: 500; color: var(--ink-2); font-size: 13px; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.alt { font-size: 13px; color: var(--ink-2); margin-top: 0.75rem; }
+
+/* ---- SVG 基元：每个 <text> 必须带 t / ts / th 之一 ---- */
+svg { overflow: visible; }
+.t  { font-family: var(--font-sans); font-size: 14px; font-weight: 400; fill: var(--ink-1); }
+.ts { font-family: var(--font-sans); font-size: 12px; font-weight: 400; fill: var(--ink-2); }
+.th { font-family: var(--font-sans); font-size: 14px; font-weight: 500; fill: var(--ink-1); }
+.tn { font-family: var(--font-mono); font-size: 12px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+.box { fill: var(--surface); stroke: var(--rule-strong); stroke-width: 0.5; }
+.arr { stroke: var(--ink-3); stroke-width: 1.5; fill: none; stroke-linecap: round; }
+.axis { stroke: var(--rule-strong); stroke-width: 0.5; fill: none; }
+.grid { stroke: var(--rule); stroke-width: 0.5; fill: none; }
+.leader { stroke: var(--ink-3); stroke-width: 0.5; stroke-dasharray: 3 3; fill: none; }
+.node { cursor: pointer; }
+.node:hover { opacity: 0.82; }
+
+.c-1 > rect, .c-1 > circle, .c-1 > ellipse, .c-1 > polygon, rect.c-1, circle.c-1, ellipse.c-1 { fill: var(--c1-fill); stroke: var(--c1); stroke-width: 0.5; }
+.c-2 > rect, .c-2 > circle, .c-2 > ellipse, .c-2 > polygon, rect.c-2, circle.c-2, ellipse.c-2 { fill: var(--c2-fill); stroke: var(--c2); stroke-width: 0.5; }
+.c-3 > rect, .c-3 > circle, .c-3 > ellipse, .c-3 > polygon, rect.c-3, circle.c-3, ellipse.c-3 { fill: var(--c3-fill); stroke: var(--c3); stroke-width: 0.5; }
+.c-4 > rect, .c-4 > circle, .c-4 > ellipse, .c-4 > polygon, rect.c-4, circle.c-4, ellipse.c-4 { fill: var(--c4-fill); stroke: var(--c4); stroke-width: 0.5; }
+.c-5 > rect, .c-5 > circle, .c-5 > ellipse, .c-5 > polygon, rect.c-5, circle.c-5, ellipse.c-5 { fill: var(--c5-fill); stroke: var(--c5); stroke-width: 0.5; }
+.c-6 > rect, .c-6 > circle, .c-6 > ellipse, .c-6 > polygon, rect.c-6, circle.c-6, ellipse.c-6 { fill: var(--c6-fill); stroke: var(--c6); stroke-width: 0.5; }
+.c-7 > rect, .c-7 > circle, .c-7 > ellipse, .c-7 > polygon, rect.c-7, circle.c-7, ellipse.c-7 { fill: var(--c7-fill); stroke: var(--c7); stroke-width: 0.5; }
+.c-0 > rect, .c-0 > circle, .c-0 > ellipse, .c-0 > polygon, rect.c-0, circle.c-0, ellipse.c-0 { fill: var(--c0-fill); stroke: var(--c0); stroke-width: 0.5; }
+
+.c-1 > .t, .c-1 > .th { fill: var(--c1-ink); } .c-1 > .ts { fill: var(--c1-ink2); }
+.c-2 > .t, .c-2 > .th { fill: var(--c2-ink); } .c-2 > .ts { fill: var(--c2-ink2); }
+.c-3 > .t, .c-3 > .th { fill: var(--c3-ink); } .c-3 > .ts { fill: var(--c3-ink2); }
+.c-4 > .t, .c-4 > .th { fill: var(--c4-ink); } .c-4 > .ts { fill: var(--c4-ink2); }
+.c-5 > .t, .c-5 > .th { fill: var(--c5-ink); } .c-5 > .ts { fill: var(--c5-ink2); }
+.c-6 > .t, .c-6 > .th { fill: var(--c6-ink); } .c-6 > .ts { fill: var(--c6-ink2); }
+.c-7 > .t, .c-7 > .th { fill: var(--c7-ink); } .c-7 > .ts { fill: var(--c7-ink2); }
+.c-0 > .t, .c-0 > .th { fill: var(--c0-ink); } .c-0 > .ts { fill: var(--c0-ink2); }
+
+.dim { opacity: 0.28; }
+.on { stroke-width: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+@media (max-width: 560px) {
+  body { padding: 24px 14px 48px; font-size: 15px; }
+  h1 { font-size: 24px; }
+  .ctl { flex: 1 1 100%; }
+  .kpi-value { font-size: 21px; }
+}
+
+@media print {
+  body { background: #fff; padding: 0; }
+  .controls { display: none; }
+  figure { break-inside: avoid; }
+}

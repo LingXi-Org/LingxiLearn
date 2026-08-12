@@ -6,7 +6,7 @@ fabricated :class:`~lingxigraph.Event` values.  The projections are then
 persisted and replayed to SSE clients, which is what makes ``Last-Event-ID``
 resumption fall out for free.
 
-Notes on the runtime's actual behaviour, verified against LingxiGraph 2.0.1
+Notes on the runtime's actual behaviour, verified against LingxiGraph 2.1.0
 rather than assumed:
 
 * ``NODE_FAILED`` is declared in the enum but never emitted — a node failure

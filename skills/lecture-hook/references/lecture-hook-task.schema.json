@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lingxi.example/schemas/lecture-hook-task.schema.json",
+  "title": "Lecture Hook Task",
+  "type": "object",
+  "required": ["topic"],
+  "properties": {
+    "task_id": {"type": "string"},
+    "topic": {"type": "string", "minLength": 1},
+    "learning_objective": {"type": "string"},
+    "course_context": {"type": "string"},
+    "learner_level": {"type": "string", "default": "undergraduate"},
+    "language": {"type": "string", "default": "zh-CN"},
+    "target_duration_sec": {"type": "integer", "minimum": 20, "maximum": 180, "default": 75},
+    "candidate_count": {"type": "integer", "minimum": 2, "maximum": 5, "default": 3},
+    "avoid": {"type": "array", "items": {"type": "string"}},
+    "preferred_hook_types": {
+      "type": "array",
+      "items": {
+        "enum": ["puzzle", "failure", "human_dispute", "everyday", "intuition_trap", "extreme_scale", "definition_origin", "modern_stakes"]
+      }
+    }
+  },
+  "additionalProperties": true
+}

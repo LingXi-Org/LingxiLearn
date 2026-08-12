@@ -7,9 +7,12 @@ import { Group, Panel, Separator, useGroupRef, type Layout } from "react-resizab
 import { Menu, MessagesSquare, PanelLeft, Shapes } from "lucide-react";
 import { TaskSidebar } from "@/components/navigation/task-sidebar";
 import { ArtifactWorkspace } from "@/components/workspace/artifact-workspace";
+import { AgentTaskConversation } from "@/components/workspace/agent-task-conversation";
+import { AgentTaskWorkspace } from "@/components/workspace/agent-task-workspace";
 import { LearningConversation } from "@/components/workspace/learning-conversation";
 import { useCatalogue } from "@/hooks/use-catalogue";
 import { useLingxiSession } from "@/hooks/use-lingxi-session";
+import { useAgentTask } from "@/hooks/use-agent-task";
 import {
   deriveArtifact,
   draftMessages,
@@ -32,7 +35,9 @@ function Workspace() {
   const params = useSearchParams();
   const mode = useMemo(() => parseWorkspaceMode(new URLSearchParams(params.toString())), [params]);
   const sessionId = mode?.kind === "session" ? mode.sessionId : "";
+  const taskId = mode?.kind === "task" ? mode.taskId : "";
   const { session, events, error, submitting, submit } = useLingxiSession(sessionId);
+  const { task, events: agentEvents, error: agentError } = useAgentTask(taskId);
   const { sessions, missionById } = useCatalogue();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mobileView, setMobileView] = useState<"conversation" | "artifact">("conversation");
@@ -90,6 +95,23 @@ function Workspace() {
     );
   }
 
+  if (mode.kind === "task") {
+    return (
+      <AgentTaskLayout
+        task={task}
+        events={agentEvents}
+        error={agentError}
+        sessions={sessions}
+        missionById={missionById}
+        isDesktop={isDesktop}
+        drawerOpen={drawerOpen}
+        setDrawerOpen={setDrawerOpen}
+        mobileView={mobileView}
+        setMobileView={setMobileView}
+      />
+    );
+  }
+
   const title = isDraft ? "未执行的任务草稿" : session?.mission.title ?? "正在载入学习任务";
 
   const conversation = (
@@ -140,6 +162,66 @@ function Workspace() {
         <div className={mobileView === "conversation" ? "h-full" : "hidden"}>{conversation}</div>
         <div className={mobileView === "artifact" ? "h-full" : "hidden"}>{viewer}</div>
       </div>
+      )}
+    </div>
+  );
+}
+
+function AgentTaskLayout({
+  task,
+  events,
+  error,
+  sessions,
+  missionById,
+  isDesktop,
+  drawerOpen,
+  setDrawerOpen,
+  mobileView,
+  setMobileView,
+}: {
+  task: import("@/lib/types").AgentTaskSnapshot | null;
+  events: import("@/lib/types").AgentTaskEvent[];
+  error?: string;
+  sessions: import("@/lib/types").SessionListItem[];
+  missionById: Map<string, import("@/lib/types").Mission>;
+  isDesktop: boolean;
+  drawerOpen: boolean;
+  setDrawerOpen: (value: boolean) => void;
+  mobileView: "conversation" | "artifact";
+  setMobileView: (value: "conversation" | "artifact") => void;
+}) {
+  const conversation = (
+    <div className="flex h-full min-h-0 flex-col bg-[#fafafa]">
+      {error && <div role="alert" className="border-b border-red-100 bg-red-50 px-4 py-2 text-[11px] text-red-700">{error}</div>}
+      <AgentTaskConversation task={task} events={events} onMenu={() => setDrawerOpen(true)} onArtifact={() => setMobileView("artifact")} />
+    </div>
+  );
+  const viewer = <AgentTaskWorkspace task={task} events={events} onBackToConversation={() => setMobileView("conversation")} />;
+  return (
+    <div className="h-dvh min-h-[620px] overflow-hidden bg-[#f1f1f1]">
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 flex bg-black/25" onClick={() => setDrawerOpen(false)}>
+          <div onClick={(event) => event.stopPropagation()}><TaskSidebar mobile sessions={sessions} missionById={missionById} onClose={() => setDrawerOpen(false)} /></div>
+        </div>
+      )}
+      {isDesktop ? (
+        <div className="h-full">
+          <Group orientation="horizontal" defaultLayout={{ conversation: 36, artifact: 64 }}>
+            <Panel id="conversation" minSize="24%" maxSize="55%">
+              <div className="relative h-full">
+                <button onClick={() => setDrawerOpen(true)} className="absolute right-3 top-3 z-10 rounded-lg p-2 hover:bg-black/[.05]" aria-label="打开任务列表"><Menu className="size-4" /></button>
+                {conversation}
+              </div>
+            </Panel>
+            <Separator id="agent-workspace-separator" className="workspace-resize-handle w-2 shrink-0 cursor-col-resize bg-[#f1f1f1]" />
+            <Panel id="artifact" minSize="45%">{viewer}</Panel>
+          </Group>
+        </div>
+      ) : (
+        <div className="h-full lg:hidden">
+          <div className={mobileView === "conversation" ? "h-full" : "hidden"}>{conversation}</div>
+          <div className={mobileView === "artifact" ? "h-full" : "hidden"}>{viewer}</div>
+        </div>
       )}
     </div>
   );

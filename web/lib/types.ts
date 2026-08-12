@@ -176,6 +176,47 @@ export interface RunEvent {
   ts: string;
 }
 
+export interface AgentTaskEvent {
+  sequence: number;
+  kind: string;
+  agent: string;
+  payload: Record<string, any>;
+  ts: string | null;
+}
+
+export type AgentTaskStatus = "queued" | "running" | "completed" | "partial" | "failed";
+
+export interface AgentAgentSnapshot {
+  status: "pending" | "completed" | "failed";
+  error?: string;
+}
+
+export interface AgentTaskSnapshot {
+  id: string;
+  status: AgentTaskStatus;
+  prompt: string;
+  intent: {
+    topic?: string;
+    learning_objective?: string;
+    learner_level?: string;
+    course_context?: string;
+    language?: string;
+    target_duration_sec?: number;
+  };
+  agents: {
+    intent: AgentAgentSnapshot;
+    lecture_hook: AgentAgentSnapshot;
+    visual_explainer: AgentAgentSnapshot;
+  };
+  artifacts: {
+    background: { available: boolean; url: string };
+    visual: { available: boolean; url: string; metadata?: Record<string, any> };
+  };
+  error: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface SessionListItem {
   id: string;
   mission_id: string;

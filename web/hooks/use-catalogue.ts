@@ -49,5 +49,12 @@ export function useCatalogue() {
     return created;
   }, []);
 
-  return { packs, sessions, missionById, brain, error, loading, refresh, createSession };
+  const createAgentTask = useCallback(async (prompt: string) => {
+    const learnerId = window.localStorage.getItem(LEARNER_KEY) ?? "";
+    const created = await api.createAgentTask(prompt, learnerId);
+    window.localStorage.setItem(LEARNER_KEY, created.learner_id);
+    return created;
+  }, []);
+
+  return { packs, sessions, missionById, brain, error, loading, refresh, createSession, createAgentTask };
 }
