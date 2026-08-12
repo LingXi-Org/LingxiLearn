@@ -67,9 +67,25 @@ services:
     restart: "no"
 
   # Schema migrations run to completion before the API is allowed to start.
+  api-var-init:
+    <<: *api
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /app/var/agent_tasks && chown -R 10001:10001 /app/var"]
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    volumes:
+      - api-var:/app/var
+
   migrate:
     <<: *api
     command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api-var-init:
+        condition: service_completed_successfully
     restart: "no"
     read_only: true
     tmpfs:
@@ -84,6 +100,8 @@ services:
       postgres:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      api-var-init:
         condition: service_completed_successfully
       web-build:
         condition: service_completed_successfully
