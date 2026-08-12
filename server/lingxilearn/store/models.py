@@ -11,6 +11,7 @@ run state; these tables own the things that must outlive a single run:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -40,6 +41,40 @@ class Learner(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     display_name: Mapped[str] = mapped_column(String(128), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class IdentityUser(Base):
+    """The verified LingxiIdentity subject mapped to one internal learner."""
+
+    __tablename__ = "identity_users"
+    __table_args__ = (
+        UniqueConstraint("issuer", "subject", name="uq_identity_users_issuer_subject"),
+        UniqueConstraint("learner_id", name="uq_identity_users_learner"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    issuer: Mapped[str] = mapped_column(String(256))
+    subject: Mapped[str] = mapped_column(String(256))
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LearnerProfile(Base):
+    """Small, extensible profile owned by LingxiLearn."""
+
+    __tablename__ = "learner_profiles"
+
+    learner_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("learners.id"), primary_key=True
+    )
+    locale: Mapped[str] = mapped_column(String(32), default="zh-CN")
+    level: Mapped[str] = mapped_column(String(64), default="undergraduate")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class Session(Base):
@@ -129,6 +164,83 @@ class Mastery(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class Misconception(Base):
+    """Aggregated misconception observations for one learner."""
+
+    __tablename__ = "misconceptions"
+    __table_args__ = (
+        UniqueConstraint("learner_id", "tag", name="uq_misconceptions_learner_tag"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    tag: Mapped[str] = mapped_column(String(128))
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=0)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LearningEvidence(Base):
+    """Canonical learner evidence; graph-local evidence ids are session-scoped."""
+
+    __tablename__ = "learning_evidence"
+    __table_args__ = (
+        UniqueConstraint("session_id", "evidence_id", name="uq_learning_evidence_session_id"),
+        Index("ix_learning_evidence_learner_created", "learner_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(192), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("sessions.id"), nullable=True, index=True
+    )
+    evidence_id: Mapped[str] = mapped_column(String(64))
+    kind: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(256))
+    summary: Mapped[str] = mapped_column(Text, default="")
+    locator: Mapped[dict] = mapped_column(JSON, default=dict)
+    value: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    digest: Mapped[str] = mapped_column(String(128), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LearningPreference(Base):
+    """Per-learner preference document, shallow-merged by the service."""
+
+    __tablename__ = "learning_preferences"
+
+    learner_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("learners.id"), primary_key=True
+    )
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class LearningEvent(Base):
+    """Append-only, idempotent learning event separate from the SSE projection."""
+
+    __tablename__ = "learning_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "learner_id", "idempotency_key", name="uq_learning_events_learner_idempotency"
+        ),
+        Index("ix_learning_events_learner_created", "learner_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("sessions.id"), nullable=True, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(96))
+    idempotency_key: Mapped[str] = mapped_column(String(192))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class ReportRecord(Base):

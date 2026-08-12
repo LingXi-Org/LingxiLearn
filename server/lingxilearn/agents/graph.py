@@ -6,7 +6,7 @@ import json
 import logging
 import operator
 from collections.abc import Awaitable, Callable
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, TypedDict, cast
 
 from lingxigraph import (
     END,
@@ -138,6 +138,7 @@ def build_agent_graph(
     artifacts: ArtifactStore,
     persist_result: PersistResult,
     checkpointer: Any | None = None,
+    store: Any | None = None,
 ):
     """Compile one task graph with task-scoped specialist tools."""
 
@@ -215,8 +216,8 @@ def build_agent_graph(
             )
 
         artifact_tools = [
-            tool(name="artifact_write_html", timeout=30)(artifact_write_html),
-            tool(name="artifact_validate_html", timeout=60)(artifact_validate_html),
+            cast(Any, tool(name="artifact_write_html", timeout=30))(artifact_write_html),
+            cast(Any, tool(name="artifact_validate_html", timeout=60))(artifact_validate_html),
         ]
         prompt = (
             "请为下面的知识点制作 visual-explainer 页面。完成后必须调用写入和校验工具。\n"
@@ -311,4 +312,7 @@ def build_agent_graph(
     builder.add_edge("recognize_intent", "visual_explainer")
     builder.add_edge(("lecture_hook", "visual_explainer"), "merge_results", trigger="all")
     builder.add_edge("merge_results", END)
-    return builder.compile(checkpointer=checkpointer)
+    compile_options: dict[str, Any] = {"checkpointer": checkpointer}
+    if store is not None:
+        compile_options["store"] = store
+    return builder.compile(**compile_options)

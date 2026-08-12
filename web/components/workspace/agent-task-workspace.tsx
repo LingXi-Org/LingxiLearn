@@ -45,14 +45,19 @@ function BackgroundDocument({ task }: { task: AgentTaskSnapshot | null }) {
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!task?.artifacts.background.available) return;
+    if (!task?.artifacts.background.available) {
+      setContent("");
+      setError("");
+      return;
+    }
     let cancelled = false;
-    fetch(api.agentArtifactUrl(task.id, "background"))
-      .then((response) => response.ok ? response.text() : Promise.reject(new Error("背景文档尚未生成")))
+    setError("");
+    api.fetchArtifact(api.agentArtifactUrl(task.id, "background"))
+      .then((blob) => blob.text())
       .then((value) => { if (!cancelled) setContent(value); })
       .catch((cause: unknown) => { if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => { cancelled = true; };
-  }, [task]);
+  }, [task?.id, task?.artifacts.background.available]);
 
   if (!task || !task.artifacts.background.available) return <ArtifactPending label="背景文档" detail="lecture-hook Agent 正在研究并核验来源。" failed={task?.agents.lecture_hook.status === "failed"} />;
   if (error) return <ArtifactError message={error} />;
@@ -61,18 +66,45 @@ function BackgroundDocument({ task }: { task: AgentTaskSnapshot | null }) {
 }
 
 function VisualArtifact({ task, events }: { task: AgentTaskSnapshot | null; events: AgentTaskEvent[] }) {
+  const [blobUrl, setBlobUrl] = useState<string>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    if (!task || !task.artifacts.visual.available) {
+      setBlobUrl(undefined);
+      setError(undefined);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | undefined;
+    setBlobUrl(undefined);
+    setError(undefined);
+    api.fetchArtifact(api.agentArtifactUrl(task.id, "visual"))
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [task?.id, task?.artifacts.visual.available]);
+
   if (!task || !task.artifacts.visual.available) return <ArtifactPending label="可视化讲解" detail="visual-explainer Agent 正在生成并校验单文件 HTML。" failed={task?.agents.visual_explainer.status === "failed"} />;
-  const url = api.agentArtifactUrl(task.id, "visual");
   const metadata = task.artifacts.visual.metadata;
   const validation = metadata?.validation;
+  if (error) return <ArtifactError message={error} />;
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f5f5f5]">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#dedede] bg-white px-3 py-2 text-xs">
         <span className="font-medium">{metadata?.title || "可视化讲解"}</span>
         {validation?.ok ? <Badge variant="secondary"><Check className="size-3" />校验通过</Badge> : <Badge variant="outline"><CircleAlert className="size-3" />有校验提示</Badge>}
-        <span className="ml-auto flex items-center gap-2"><a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#5047a8] hover:underline">独立打开 <ExternalLink className="size-3" /></a><a href={url} download="visual-explainer.html" className="text-[#777] hover:text-[#222]">下载 HTML</a></span>
+        <span className="ml-auto flex items-center gap-2"><a href={blobUrl || "#"} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#5047a8] hover:underline">独立打开 <ExternalLink className="size-3" /></a><a href={blobUrl || "#"} download="visual-explainer.html" className="text-[#777] hover:text-[#222]">下载 HTML</a></span>
       </div>
-      <iframe title={metadata?.title || "可视化讲解"} src={url} sandbox="allow-scripts" className="min-h-0 flex-1 border-0 bg-white" />
+      <iframe title={metadata?.title || "可视化讲解"} src={blobUrl} sandbox="allow-scripts" className="min-h-0 flex-1 border-0 bg-white" />
       {events.some((event) => event.kind === "agent.completed" && event.agent === "visual_explainer") && !validation?.ok && <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">页面已生成，但静态检查仍有提示；不影响预览。</div>}
     </div>
   );

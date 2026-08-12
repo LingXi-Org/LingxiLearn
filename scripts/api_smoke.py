@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -69,10 +70,19 @@ async def wait_for_pause(client: httpx.AsyncClient, base: str, sid: str) -> dict
     raise TimeoutError("session never left running")
 
 
-async def collect_sse(base: str, sid: str, *, last_id: int = 0, stop_after: int = 6) -> list[dict]:
+async def collect_sse(
+    base: str,
+    sid: str,
+    *,
+    token: str = "",
+    last_id: int = 0,
+    stop_after: int = 6,
+) -> list[dict]:
     """Read a few events then hang up — mimicking a flaky client."""
     got: list[dict[str, Any]] = []
     headers = {"Last-Event-ID": str(last_id)} if last_id else {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     async with httpx.AsyncClient(timeout=30.0) as client:
         async with client.stream(
             "GET", f"{base}/api/sessions/{sid}/events", headers=headers
@@ -87,8 +97,9 @@ async def collect_sse(base: str, sid: str, *, last_id: int = 0, stop_after: int 
     return got
 
 
-async def run(base: str, mission: str) -> None:
-    async with httpx.AsyncClient(timeout=30.0) as client:
+async def run(base: str, mission: str, token: str = "") -> None:
+    auth = {"Authorization": f"Bearer {token}"} if token else {}
+    async with httpx.AsyncClient(timeout=30.0, headers=auth) as client:
         health = (await client.get(f"{base}/api/health")).json()
         check(health["status"] == "ok", "API healthy", f"brain={health['brain']}")
 
@@ -97,9 +108,14 @@ async def run(base: str, mission: str) -> None:
         )
         check(created.status_code == 201, "session created", created.text[:80])
         sid = created.json()["id"]
-        learner = created.json()["learner_id"]
 
-        first = await collect_sse(base, sid, stop_after=4)
+        rejected = await client.post(
+            f"{base}/api/sessions",
+            json={"mission_id": mission, "pack_id": "computer-networks", "learner_id": "client-owned"},
+        )
+        check(rejected.status_code == 422, "client learner_id rejected", rejected.text[:80])
+
+        first = await collect_sse(base, sid, token=token, stop_after=4)
         check(bool(first), "SSE delivered events", f"{len(first)} before hangup")
 
         snap = await wait_for_pause(client, base, sid)
@@ -107,7 +123,9 @@ async def run(base: str, mission: str) -> None:
         check(snap["pending"] is not None, "pending question readable from durable state")
 
         # Reconnect from where the first reader stopped.
-        resumed = await collect_sse(base, sid, last_id=first[-1]["sequence"], stop_after=3)
+        resumed = await collect_sse(
+            base, sid, token=token, last_id=first[-1]["sequence"], stop_after=3
+        )
         check(
             all(e["sequence"] > first[-1]["sequence"] for e in resumed),
             "SSE resumed after Last-Event-ID",
@@ -139,11 +157,11 @@ async def run(base: str, mission: str) -> None:
             f"probe {report.get('probe_score')} → verify {report.get('verify_score')}",
         )
 
-        mastery = (await client.get(f"{base}/api/learners/{learner}/mastery")).json()
+        mastery = (await client.get(f"{base}/api/me/mastery")).json()
         check(bool(mastery["mastery"]), "mastery persisted across the session",
               f"{len(mastery['mastery'])} concepts")
 
-        events = await collect_sse(base, sid, stop_after=10_000)
+        events = await collect_sse(base, sid, token=token, stop_after=10_000)
         kinds = {e["kind"] for e in events}
         check("tool.completed" in kinds, "tool events recorded", f"{len(events)} total events")
         check("report.ready" in kinds, "report event recorded")
@@ -161,9 +179,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="http://localhost:8000")
     parser.add_argument("--mission", default="web-slow")
+    parser.add_argument("--token", default=os.environ.get("LINGXILEARN_ACCESS_TOKEN", ""))
     args = parser.parse_args()
     print(f"=== LingxiLearn API smoke · {args.base} · mission={args.mission} ===")
-    asyncio.run(run(args.base, args.mission))
+    asyncio.run(run(args.base, args.mission, args.token))
     print()
     print("RESULT:", "FAILED — " + ", ".join(_failures) if _failures else "all checks passed")
     return 1 if _failures else 0

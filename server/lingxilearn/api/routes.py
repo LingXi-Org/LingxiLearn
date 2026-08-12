@@ -18,10 +18,13 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
+from lingxi_identity import Principal  # type: ignore[import-untyped]
+from pydantic import BaseModel, ConfigDict, Field
 
+from ..auth import get_principal
+from ..learner import LearnerContext
 from ..service import Service
 from ..tools.net import sim
 
@@ -36,6 +39,22 @@ def service_of(request: Request) -> Service:
     if svc is None:
         raise HTTPException(status_code=503, detail="service_unavailable")
     return svc
+
+
+async def current_learner_context(
+    request: Request, principal: Principal = Depends(get_principal)
+) -> LearnerContext:
+    svc = service_of(request)
+    try:
+        return await svc.learners.get_learner_context(principal)
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="invalid_identity") from exc
+
+
+def not_found() -> HTTPException:
+    """Use one response for missing and not-owned persistent resources."""
+
+    return HTTPException(status_code=404, detail="resource_not_found")
 
 
 # --------------------------------------------------------------------------
@@ -102,57 +121,75 @@ async def list_packs(request: Request) -> dict[str, Any]:
 
 
 class CreateSession(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     mission_id: str
     pack_id: str = "computer-networks"
-    learner_id: str = Field(default="", max_length=64)
 
 
 class AnswerBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     answer: Any
 
 
 class CreateAgentTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str = Field(min_length=1, max_length=4000)
-    learner_id: str = Field(default="", max_length=64)
 
 
 @router.post("/sessions", status_code=201)
-async def create_session(body: CreateSession, request: Request) -> dict[str, Any]:
+async def create_session(
+    body: CreateSession,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
     svc = service_of(request)
-    learner_id = body.learner_id or f"guest-{uuid.uuid4().hex[:12]}"
     session_id = f"s-{uuid.uuid4().hex[:16]}"
     try:
         created = await svc.create_session(
             session_id=session_id,
-            learner_id=learner_id,
+            learner_id=context.learner_id,
             pack_id=body.pack_id,
             mission_id=body.mission_id,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {**created, "learner_id": learner_id}
+    return created
 
 
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str, request: Request) -> dict[str, Any]:
+async def get_session(
+    session_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
     svc = service_of(request)
+    if await svc.repo.get_session_for_learner(session_id, context.learner_id) is None:
+        raise not_found()
     try:
-        return await svc.snapshot(session_id)
+        return await svc.snapshot(session_id, learner_id=context.learner_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise not_found() from exc
 
 
 @router.post("/sessions/{session_id}/answer", status_code=202)
-async def answer(session_id: str, body: AnswerBody, request: Request) -> dict[str, Any]:
+async def answer(
+    session_id: str,
+    body: AnswerBody,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
     svc = service_of(request)
-    record = await svc.repo.get_session(session_id)
+    record = await svc.repo.get_session_for_learner(session_id, context.learner_id)
     if record is None:
-        raise HTTPException(status_code=404, detail="unknown_session")
+        raise not_found()
     if record.status == "running":
         raise HTTPException(status_code=409, detail="run_in_progress")
     if record.status in TERMINAL:
         raise HTTPException(status_code=409, detail=f"session_{record.status}")
-    await svc.answer(session_id, body.answer)
+    await svc.answer(session_id, body.answer, learner_id=context.learner_id)
     return {"status": "accepted"}
 
 
@@ -162,14 +199,17 @@ async def answer(session_id: str, body: AnswerBody, request: Request) -> dict[st
 
 
 @router.post("/agent-tasks", status_code=202)
-async def create_agent_task(body: CreateAgentTask, request: Request) -> dict[str, Any]:
+async def create_agent_task(
+    body: CreateAgentTask,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
     svc = service_of(request)
-    learner_id = body.learner_id or f"guest-{uuid.uuid4().hex[:12]}"
     task_id = f"t-{uuid.uuid4().hex[:20]}"
     try:
         created = await svc.create_agent_task(
             task_id=task_id,
-            learner_id=learner_id,
+            learner_id=context.learner_id,
             prompt=body.prompt,
         )
     except ValueError as exc:
@@ -178,21 +218,32 @@ async def create_agent_task(body: CreateAgentTask, request: Request) -> dict[str
 
 
 @router.get("/agent-tasks/{task_id}")
-async def get_agent_task(task_id: str, request: Request) -> dict[str, Any]:
+async def get_agent_task(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
     svc = service_of(request)
     try:
-        return await svc.agent_task_snapshot(task_id)
+        return await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise not_found() from exc
 
 
 @router.get("/agent-tasks/{task_id}/artifacts/{kind}")
-async def get_agent_artifact(task_id: str, kind: str, request: Request) -> Response:
+async def get_agent_artifact(
+    task_id: str,
+    kind: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> Response:
     svc = service_of(request)
     try:
-        content, media_type, filename = await svc.agent_artifact(task_id, kind)
+        content, media_type, filename = await svc.agent_artifact(
+            task_id, kind, learner_id=context.learner_id
+        )
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise not_found() from exc
     headers = {"Content-Disposition": f'inline; filename="{filename}"'}
     if kind == "visual":
         headers["Content-Security-Policy"] = (
@@ -205,12 +256,16 @@ async def get_agent_artifact(task_id: str, kind: str, request: Request) -> Respo
 
 
 @router.get("/agent-tasks/{task_id}/events")
-async def stream_agent_events(task_id: str, request: Request) -> StreamingResponse:
+async def stream_agent_events(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> StreamingResponse:
     svc = service_of(request)
     try:
-        await svc.agent_task_snapshot(task_id)
+        await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise not_found() from exc
 
     header = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
     try:
@@ -225,15 +280,19 @@ async def stream_agent_events(task_id: str, request: Request) -> StreamingRespon
         while True:
             if await request.is_disconnected():
                 return
-            events = await svc.repo.agent_events_after(task_id, cursor)
+            events = await svc.repo.agent_events_after_for_learner(
+                task_id, context.learner_id, cursor
+            )
             for event in events:
                 cursor = event["sequence"]
                 payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
                 yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
 
-            current = await svc.agent_task_snapshot(task_id)
+            current = await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
             if current["status"] in AGENT_TERMINAL:
-                tail = await svc.repo.agent_events_after(task_id, cursor)
+                tail = await svc.repo.agent_events_after_for_learner(
+                    task_id, context.learner_id, cursor
+                )
                 for event in tail:
                     cursor = event["sequence"]
                     payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
@@ -259,15 +318,21 @@ async def stream_agent_events(task_id: str, request: Request) -> StreamingRespon
 
 
 @router.get("/sessions/{session_id}/report")
-async def get_report(session_id: str, request: Request) -> dict[str, Any]:
+async def get_report(
+    session_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
     svc = service_of(request)
-    stored = await svc.repo.get_report(session_id)
-    if stored:
+    if await svc.repo.get_session_for_learner(session_id, context.learner_id) is None:
+        raise not_found()
+    stored = await svc.repo.get_report_for_learner(session_id, context.learner_id)
+    if stored is not None:
         return stored
     try:
-        snapshot = await svc.snapshot(session_id)
+        snapshot = await svc.snapshot(session_id, learner_id=context.learner_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise not_found() from exc
     if not snapshot.get("report"):
         raise HTTPException(status_code=404, detail="report_not_ready")
     return snapshot["report"]
@@ -275,13 +340,16 @@ async def get_report(session_id: str, request: Request) -> dict[str, Any]:
 
 @router.get("/sessions/{session_id}/artifact/{artifact_id}")
 async def download_artifact(
-    session_id: str, artifact_id: str, request: Request
+    session_id: str,
+    artifact_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
 ) -> FileResponse:
     """Hand over the raw capture so the learner can audit us in Wireshark."""
     svc = service_of(request)
-    record = await svc.repo.get_session(session_id)
+    record = await svc.repo.get_session_for_learner(session_id, context.learner_id)
     if record is None:
-        raise HTTPException(status_code=404, detail="unknown_session")
+        raise not_found()
     pack = svc.packs.get(record.pack_id)
     mission = pack.missions.get(record.mission_id) if pack else None
     artifact = mission.artifacts.get(artifact_id) if mission else None
@@ -292,14 +360,44 @@ async def download_artifact(
     )
 
 
-@router.get("/learners/{learner_id}/mastery")
-async def learner_mastery(learner_id: str, request: Request) -> dict[str, Any]:
+@router.get("/me/context")
+async def me_context(
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    return context.public_dict()
+
+
+@router.get("/me/mastery")
+async def me_mastery(
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
     svc = service_of(request)
     return {
-        "learner_id": learner_id,
-        "mastery": await svc.repo.mastery_detail(learner_id),
-        "sessions": await svc.repo.list_sessions(learner_id),
+        "mastery": await svc.learners.get_mastery(context),
+        "sessions": await svc.repo.list_sessions(context.learner_id),
     }
+
+
+@router.get("/me/preferences")
+async def get_preferences(
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    return {"preferences": context.preferences}
+
+
+@router.patch("/me/preferences")
+async def patch_preferences(
+    body: dict[str, Any],
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    svc = service_of(request)
+    try:
+        preference = await svc.learners.update_preference(context, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"preferences": dict(preference.payload or {})}
 
 
 # --------------------------------------------------------------------------
@@ -308,11 +406,15 @@ async def learner_mastery(learner_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.get("/sessions/{session_id}/events")
-async def stream_events(session_id: str, request: Request) -> StreamingResponse:
+async def stream_events(
+    session_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> StreamingResponse:
     svc = service_of(request)
-    record = await svc.repo.get_session(session_id)
+    record = await svc.repo.get_session_for_learner(session_id, context.learner_id)
     if record is None:
-        raise HTTPException(status_code=404, detail="unknown_session")
+        raise not_found()
 
     header = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
     try:
@@ -328,20 +430,26 @@ async def stream_events(session_id: str, request: Request) -> StreamingResponse:
         while True:
             if await request.is_disconnected():
                 return
-            events = await svc.repo.events_after(session_id, cursor)
+            events = await svc.repo.events_after_for_learner(
+                session_id, context.learner_id, cursor
+            )
             for event in events:
                 cursor = event["sequence"]
                 payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
                 yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
 
-            current = await svc.repo.get_session(session_id)
+            current = await svc.repo.get_session_for_learner(
+                session_id, context.learner_id
+            )
             status = current.status if current else "failed"
             # Only a terminal status closes the stream. `awaiting_learner` means
             # the session is alive and will emit again the moment the learner
             # answers, so the connection is held open with heartbeats instead.
             if status in TERMINAL:
                 # Drain anything appended between the query and the status read.
-                tail = await svc.repo.events_after(session_id, cursor)
+                tail = await svc.repo.events_after_for_learner(
+                    session_id, context.learner_id, cursor
+                )
                 for event in tail:
                     cursor = event["sequence"]
                     payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))

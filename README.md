@@ -96,8 +96,10 @@ make eval
 
 ```
 Next.js（中文 UI · 自研 SVG 可视化）
-        ↓ REST + SSE（可断线续传）
-FastAPI ── Projector（纯函数）── run_events（持久事件日志）
+        ↓ Bearer REST + fetch-SSE（可断线续传）
+LingxiIdentity OIDC ── FastAPI ── Projector ── run_events（投影日志）
+        ↓
+LearnerService / SQLAlchemy（学习业务权威源）
         ↓
 Tutoring Kernel（LingxiGraph StateGraph · 领域无关）
   intake → diagnose → plan → investigate → coach → await_learner
@@ -129,6 +131,25 @@ LINGXILEARN_AGENT_MODEL=deepseek-v4-flash
 LINGXILEARN_AGENT_BASE_URL=https://api.deepseek.com
 LINGXILEARN_AGENT_TIMEOUT=90
 ```
+
+### 身份、学习数据与 LingxiGraph 边界
+
+持久化用户数据接口要求 `Authorization: Bearer <OIDC JWT>`。服务端使用
+`LingxiIdentity` 的 `OidcVerifier.verify()` 校验 issuer、audience、签名、过期时间和必需
+claims，并只以 `Principal.subject` 查找 `(issuer, subject) → learner` 的内部映射；客户端
+不能传入 `learner_id`。生产环境必须配置 OIDC issuer/audience。仅在本地显式设置
+`LINGXILEARN_INSECURE_DEV_AUTH=true` 时，缺少 token 的请求才会使用固定的
+`LINGXILEARN_DEV_SUBJECT`，不会接受客户端自报身份。
+
+`LearnerProfile`、`Mastery`、`Misconception`、`LearningEvidence`、`LearningPreference`、
+`LearningEvent` 以及现有会话/报告表由 LingxiLearn 的 SQLAlchemy/Alembic 数据层负责，
+是教育业务的权威源。LingxiGraph 只负责 StateGraph、checkpoint、Runtime，以及可选的
+Store/Memory 接缝；graph 运行期间不直接写权威学习表。结果在 session 终态通过一次幂等
+事务批量落库。前端只注入内存态 token provider，不把 token 或 learner 缓存在 localStorage；
+artifact 与 SSE 使用带 Bearer 的 fetch。
+
+常用用户数据接口：`GET /api/me/context`、`GET /api/me/mastery`、`GET/PATCH
+/api/me/preferences`。健康检查、课程包和无持久化 simulator 保持公开。
 
 ### 关于 LingxiGraph 与 LingxiNext
 
@@ -162,7 +183,7 @@ LingxiGraph 已发布在 PyPI（`lingxigraph==2.1.0`，核心零运行时依赖�
 ## 验证方式
 
 ```bash
-make test     # 60 个单测 + ruff + tsc
+make test     # Python 单测 + ruff + mypy + frontend typecheck/test
 make eval     # 泄题 / 误区 / 证据 / 学习增益
 make smoke    # 需要先起服务：内核 → HTTP+SSE → 真实浏览器
 ```
@@ -194,7 +215,8 @@ scripts/                   工件生成、内核/API/UI 冒烟
 ## 数据与边界
 
 演示用抓包由 `scripts/build_artifacts.py` 合成，**不含任何真实用户流量**；
-学习记录使用匿名 guest ID。知识库为 RFC 摘录与原创教学笔记，
+学习记录按经 OIDC 验证的 Identity User 映射到服务端内部 learner。旧的匿名 guest 记录
+保留在数据库中，但不会自动映射到 Identity 用户，也不会通过受保护 API 暴露。知识库为 RFC 摘录与原创教学笔记，
 来源见 [DATA_SOURCES.md](DATA_SOURCES.md)。
 
 > LingxiLearn 用于学习辅导与形成性反馈，**不替代教师、学校或考试的最终评价**。

@@ -208,7 +208,7 @@ def _attribution_cases(pack: Pack, registry: ToolRegistry) -> list[dict[str, Any
         moved[frm] = 0.0
         return moved
 
-    cases = []
+    cases: list[dict[str, Any]] = []
     for frm, to, tag in [
         ("retransmission", "ttfb", "transfer_time_as_server_think"),
         ("retransmission", "transfer", "retransmission_invisible"),
@@ -252,7 +252,7 @@ def _simulator_cases(pack: Pack) -> list[dict[str, Any]]:
     # headline one. A sender that stalls for sixty ticks with window room really
     # is failing to keep the window full, and scoring that detection as a false
     # positive would be mislabelling, not rigour.
-    policies = {
+    policies: dict[str, tuple[list[dict[str, Any]], list[str]]] = {
         "no-recovery": ([{"op": "send"}] * 4 + [{"op": "wait"}] * 80, ["ignores_timeout"]),
         "go-back-n": (
             [{"op": "send"}] * 4
@@ -271,7 +271,7 @@ def _simulator_cases(pack: Pack) -> list[dict[str, Any]]:
             ["cumulative_ack_misread", "window_never_fills"],
         ),
     }
-    cases = []
+    cases: list[dict[str, Any]] = []
     for name, (actions, expected) in policies.items():
         scored = sim.score("single-loss", 7, actions)
         cases.append(

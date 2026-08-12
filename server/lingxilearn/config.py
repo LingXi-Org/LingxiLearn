@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     # own DSN in the driver's native form.
     checkpoint_url: str = ""
 
+    # --- identity ----------------------------------------------------------
+    # LingxiIdentity verifies OIDC discovery/JWKS and returns Principal. The
+    # resource service never calls the Identity management API.
+    oidc_issuer: str = ""
+    oidc_audience: str = ""
+    oidc_timeout: float = 10.0
+    insecure_dev_auth: bool = False
+    dev_subject: str = "lingxilearn-dev"
+
     # --- tutor brain -------------------------------------------------------
     brain: BrainKind = "scripted"
 

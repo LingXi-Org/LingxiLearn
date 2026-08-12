@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from ..tools.registry import ToolRegistry
 from .models import (
@@ -198,9 +198,9 @@ def validate_pack(pack: Pack, registry: ToolRegistry | None = None) -> Validatio
         if not mission.verify:
             add(f"{base}.verify", "no_verify", "任务缺少后测，无法验证是否真的学会")
 
-        for concept in mission.concepts:
-            if concept not in pack.concepts:
-                add(f"{base}.concepts", "unknown_concept", f"未知概念 {concept}")
+        for concept_id in mission.concepts:
+            if concept_id not in pack.concepts:
+                add(f"{base}.concepts", "unknown_concept", f"未知概念 {concept_id}")
 
         seen_steps: set[str] = set()
         for step in mission.steps:
@@ -220,9 +220,9 @@ def validate_pack(pack: Pack, registry: ToolRegistry | None = None) -> Validatio
             if not step.leak_guard.get("phrases") and not step.leak_guard.get("numbers"):
                 add(spath, "missing_leak_guard", "步骤没有声明答案标记，无法度量泄题")
 
-            for concept in step.concepts:
-                if concept not in pack.concepts:
-                    add(spath, "unknown_concept", f"未知概念 {concept}")
+            for concept_id in step.concepts:
+                if concept_id not in pack.concepts:
+                    add(spath, "unknown_concept", f"未知概念 {concept_id}")
 
             for call in step.tools:
                 if registry is not None and call.call not in registry.specs:

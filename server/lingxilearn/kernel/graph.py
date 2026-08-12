@@ -176,7 +176,10 @@ class TutoringKernel:
             concept_scores,
             hint_level=0,
             evidence_ids=[e["id"] for e in evidence_delta],
-            counts=dict(state.get("mastery_counts") or {}),
+            counts={
+                concept: int(count)
+                for concept, count in dict(state.get("mastery_counts") or {}).items()
+            },
             reason="前测结果",
         )
 
@@ -712,6 +715,7 @@ def build_graph(
     brain: TutorBrain,
     registry: ToolRegistry,
     checkpointer: Any | None = None,
+    store: Any | None = None,
 ) -> Any:
     kernel = TutoringKernel(pack=pack, brain=brain, registry=registry)
 
@@ -750,4 +754,7 @@ def build_graph(
     builder.add_edge("verify", "report")
     builder.add_edge("report", END)
 
-    return builder.compile(checkpointer=checkpointer)
+    compile_options: dict[str, Any] = {"checkpointer": checkpointer}
+    if store is not None:
+        compile_options["store"] = store
+    return builder.compile(**compile_options)

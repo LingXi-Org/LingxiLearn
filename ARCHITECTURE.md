@@ -226,16 +226,26 @@ what learners misfile as "the server is slow".
 
 ---
 
-## 9. Persistence
+## 9. Persistence and identity ownership
 
 SQLAlchemy 2.0 async with **Alembic from the first commit** — `alembic check`
 reports no drift and downgrade/upgrade round-trips. `create_all` exists only for
 the SQLite quick start and tests.
 
-Seven tables: `learners`, `sessions`, `run_events`, `mastery`, `reports`,
-`agent_tasks`, and `agent_task_events`. The
-graph's own checkpointer owns authoritative run state; these tables own what must
-outlive a single run.
+The database contains the existing runtime projections plus identity-owned
+learning data: `learners`, `identity_users`, `learner_profiles`, `sessions`,
+`run_events`, `mastery`, `misconceptions`, `learning_evidence`,
+`learning_preferences`, `learning_events`, `reports`, `agent_tasks`, and
+`agent_task_events`. The graph's own checkpointer owns authoritative run state;
+LingxiLearn's SQLAlchemy layer owns educational data that must outlive a run.
+
+Protected requests are resolved from a verified `LingxiIdentity.Principal`.
+The `(issuer, subject)` mapping is server-owned, and resource queries always
+include the mapped internal learner id. Missing and not-owned resources both
+return 404. Session completion/failure writes evidence and a learning event in
+one idempotent transaction; only normal completion updates mastery,
+misconceptions and reports. Existing anonymous guest rows are retained but are
+not backfilled into the new identity mapping.
 
 Two rules:
 
@@ -246,6 +256,12 @@ Two rules:
   reinterpret a session already in flight.
 
 SQLite runs in WAL mode because a background run writes while the API reads.
+
+The web client uses an in-memory bearer-token provider. Since native
+`EventSource` cannot attach Authorization headers, SSE is consumed through a
+fetch stream while preserving heartbeats and `Last-Event-ID` replay. Agent
+artifacts are fetched as authenticated blobs before being opened in an iframe
+or downloaded.
 
 ---
 
@@ -281,7 +297,7 @@ sandbox, the keep-alive pool and the generation variance.
 
 | Layer | What |
 |---|---|
-| `pytest` (60) | leak guard, graders, pcap round-trip, simulator determinism, projector mapping, kernel loop with real interrupts |
+| `pytest` | leak guard, graders, pcap round-trip, simulator determinism, projector mapping, kernel loop with real interrupts, identity ownership and terminal learning idempotency |
 | `scripts/smoke.py` | full mission via the real graph, two personas × two missions |
 | `scripts/api_smoke.py` | HTTP + SSE, including a deliberate disconnect and `Last-Event-ID` resume, and asserting the answer key never crosses the wire |
 | `scripts/ui_smoke.py` | Chromium driving both missions end to end, with screenshots |

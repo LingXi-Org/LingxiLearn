@@ -8,6 +8,7 @@ import {
   Database,
   FileText,
   Home,
+  LogOut,
   MoreHorizontal,
   Network,
   PanelLeft,
@@ -24,6 +25,7 @@ import type { Mission, SessionListItem } from "@/lib/types";
 import { Brand } from "@/components/brand";
 import { isCatalogueMissionVisible } from "@/lib/catalogue-visibility";
 import { cn } from "@/lib/utils";
+import { useLingxiIdentity } from "@/components/auth/lingxi-identity-provider";
 
 type SidebarIcon = LucideIcon;
 
@@ -59,6 +61,7 @@ export function SimSidebar({
   onClose,
   className,
 }: SimSidebarProps) {
+  const { configured, authenticated, login, logout } = useLingxiIdentity();
   const visibleSessions = sessions.filter((session) => isCatalogueMissionVisible(session.mission_id));
 
   return (
@@ -188,6 +191,7 @@ export function SimSidebar({
       </div>
 
       <div className="shrink-0 border-t border-[var(--border)] px-3 py-2">
+        {configured && <button type="button" onClick={() => void (authenticated ? logout() : login())} className="mb-1 flex min-h-[36px] w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-5)] hover:text-[var(--text-primary)]">{authenticated ? <LogOut className="size-[18px] text-[var(--text-icon)]" strokeWidth={1.55} /> : <span className="grid size-[18px] place-items-center rounded-full bg-[var(--brand)] text-[10px] text-white">身</span>}{authenticated ? "退出 LingxiIdentity" : "登录 LingxiIdentity"}</button>}
         <SidebarNavButton icon={CircleHelp} onClick={onClose}>
           帮助
         </SidebarNavButton>

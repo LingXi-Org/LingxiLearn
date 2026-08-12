@@ -3,10 +3,11 @@ name = "lingxilearn"
 version = "0.1.0"
 description = "AI learning and engineering-practice assistant for undergraduate engineering students."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = { text = "MIT" }
 
 dependencies = [
+    "LingxiIdentity>=0.1,<0.2",
     "lingxigraph[openai,coze,postgres]==2.1.0",
     "fastapi>=0.115,<1",
     "uvicorn[standard]>=0.30,<1",
@@ -47,13 +48,13 @@ filterwarnings = ["error::DeprecationWarning:lingxilearn.*"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "ASYNC", "UP"]
 ignore = ["B008"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 check_untyped_defs = true
 ignore_missing_imports = true

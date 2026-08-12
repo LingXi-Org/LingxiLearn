@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from lingxigraph import ToolSpec
 from lingxigraph import tool as lingxi_tool
@@ -55,7 +55,7 @@ class ToolRegistry:
     def register(self, name: str, func: Callable[..., Any]) -> ToolSpec:
         # `lingxi_tool` turns the function into a frozen ToolSpec; the callable
         # stays reachable at `.func`, which is how we invoke it directly.
-        spec = lingxi_tool(name=_schema_safe(name))(func)
+        spec = cast(Any, lingxi_tool(name=_schema_safe(name)))(func)
         self.specs[name] = spec
         return spec
 

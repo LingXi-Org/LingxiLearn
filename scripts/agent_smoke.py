@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from typing import Any
 
@@ -41,8 +42,9 @@ def parse_sse(body: str) -> tuple[list[dict[str, Any]], str]:
     return events, current_kind
 
 
-def run(base: str, prompt: str, timeout: float) -> int:
-    with httpx.Client(base_url=base.rstrip("/"), timeout=30.0) as client:
+def run(base: str, prompt: str, timeout: float, token: str = "") -> int:
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    with httpx.Client(base_url=base.rstrip("/"), timeout=30.0, headers=headers) as client:
         health = client.get("/api/health")
         health.raise_for_status()
         if not health.json().get("agent", {}).get("configured"):
@@ -96,12 +98,13 @@ def main() -> int:
     parser.add_argument("--base", default="http://localhost:8000")
     parser.add_argument("--prompt", default="解释 TCP 拥塞控制并生成两份学习产物")
     parser.add_argument("--timeout", type=float, default=180.0)
+    parser.add_argument("--token", default=os.environ.get("LINGXILEARN_ACCESS_TOKEN", ""))
     args = parser.parse_args()
     if not args.live:
         print("Refusing to call DeepSeek. Re-run with --live to enable integration smoke.")
         return 2
     try:
-        return run(args.base, args.prompt, args.timeout)
+        return run(args.base, args.prompt, args.timeout, args.token)
     except (httpx.HTTPError, RuntimeError) as exc:
         print(f"FAIL: {exc}")
         return 1

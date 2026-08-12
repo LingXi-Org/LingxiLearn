@@ -3,7 +3,7 @@
 
 FROM ghcr.io/astral-sh/uv:0.9.7 AS uvbin
 
-FROM python:3.12-slim AS builder
+FROM python:3.13-slim AS builder
 COPY --from=uvbin /uv /uvx /bin/
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
@@ -12,7 +12,7 @@ COPY lingxilearn ./lingxilearn
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv && uv pip install --no-cache .
 
-FROM python:3.12-slim AS runtime
+FROM python:3.13-slim AS runtime
 RUN groupadd --gid 10001 lingxi \
  && useradd --uid 10001 --gid 10001 --create-home lingxi
 WORKDIR /app

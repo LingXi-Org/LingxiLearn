@@ -9,7 +9,7 @@ help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 setup: ## Install backend and frontend dependencies
-	cd server && uv venv --python 3.11 && uv pip install -e ".[dev]"
+	cd server && uv venv --python 3.13 && uv pip install -e ".[dev]"
 	cd web && npm install --no-audit --no-fund
 	$(MAKE) artifacts
 
@@ -29,7 +29,9 @@ web: ## Run the Next.js dev server against a local API
 test: ## Unit tests and type checks
 	cd server && .venv/bin/python -m pytest -q
 	cd server && .venv/bin/ruff check lingxilearn
+	cd server && .venv/bin/mypy --config-file pyproject.toml lingxilearn
 	cd web && npx tsc --noEmit
+	cd web && npm test -- --run
 
 smoke: ## End-to-end checks: kernel, HTTP+SSE, and the real browser
 	@for m in web-slow reliable-delivery; do \

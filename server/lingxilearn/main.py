@@ -7,17 +7,19 @@ parts a judge or a teaching assistant has to get right to see it work.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.routes import router
+from .auth import build_authenticator
 from .config import REPO_ROOT, get_settings
 from .service import Service
 
@@ -36,11 +38,15 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     settings.var_dir.mkdir(parents=True, exist_ok=True)
 
     service = Service(settings)
+    # Build the verifier before opening graph/database resources so a strict
+    # production configuration fails fast and cleanly.
+    identity = await asyncio.to_thread(build_authenticator, settings)
     # Convenience for the zero-setup SQLite path; Postgres deployments run
     # `alembic upgrade head` in a one-shot migrate step before the app starts.
     if settings.database_url.startswith("sqlite"):
         await service.db.create_all()
     await service.startup()
+    app.state.identity = identity
     app.state.service = service
     try:
         yield
@@ -70,6 +76,8 @@ def create_app() -> FastAPI:
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa(full_path: str):  # noqa: ANN202
+            if full_path == "api" or full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="not_found")
             candidate = WEB_DIST / full_path
             if full_path and candidate.is_file():
                 return FileResponse(candidate)

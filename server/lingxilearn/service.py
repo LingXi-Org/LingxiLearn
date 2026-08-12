@@ -15,6 +15,7 @@ from ``Last-Event-ID``.  A reconnect resumes exactly where it left off.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from collections import defaultdict
 from pathlib import Path
@@ -34,9 +35,11 @@ from .brains.base import TutorBrain
 from .config import Settings, get_settings
 from .kernel.graph import build_graph
 from .kernel.state import initial_state
+from .learner import LearnerService
 from .packs.loader import discover_packs, validate_pack
 from .packs.models import Pack
 from .store.db import Database, Repository
+from .store.learner import LearnerRepository
 from .stream.projector import EventProjector
 from .tools import knowledge
 from .tools.registry import ToolRegistry, load_builtin_tools
@@ -74,16 +77,23 @@ def build_checkpointer(settings: Settings) -> Any:
 
 
 class Service:
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, graph_store: Any | None = None) -> None:
         self.settings = settings or get_settings()
         self.registry: ToolRegistry = load_builtin_tools()
         self.packs: dict[str, Pack] = {}
         self.db = Database(self.settings)
         self.repo = Repository(self.db)
+        self.learner_repository = LearnerRepository(self.db)
+        self.learner_service = LearnerService(self.learner_repository, self.settings)
+        self.learners = self.learner_service
         self.brain: TutorBrain | None = None
         self.agent_model: Any | None = None
         self.agent_artifacts = ArtifactStore(self.settings)
         self.checkpointer: Any = None
+        # Optional LingxiGraph runtime Store/Memory seam.  Canonical learner
+        # data remains in LearnerRepository regardless of whether a host wires
+        # this runtime capability in.
+        self.graph_store = graph_store
         self._graphs: dict[str, Any] = {}
         self._graph_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._run_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -132,6 +142,12 @@ class Service:
             closer = getattr(self.agent_model, "aclose", None)
             if callable(closer):
                 await closer()
+        if self.checkpointer is not None:
+            closer = getattr(self.checkpointer, "close", None)
+            if callable(closer):
+                result = closer()
+                if inspect.isawaitable(result):
+                    await result
         await self.db.dispose()
 
     # -- graphs ----------------------------------------------------------
@@ -153,6 +169,7 @@ class Service:
                 brain=self.brain,
                 registry=self.registry,
                 checkpointer=self.checkpointer,
+                store=self.graph_store,
             )
             self._graphs[pack_id] = graph
             return graph
@@ -180,7 +197,7 @@ class Service:
             raise KeyError(f"unknown mission: {mission_id}")
 
         await self.repo.ensure_learner(learner_id)
-        known = await self.repo.mastery_for(learner_id)
+        known = await self.learner_repository.mastery_for(learner_id)
         await self.repo.create_session(
             id=session_id,
             learner_id=learner_id,
@@ -232,12 +249,18 @@ class Service:
                 task_id,
                 [{"kind": "task.failed", "agent": "coordinator", "payload": {"message": message}}],
             )
-            return {"id": task_id, "learner_id": learner_id, "status": "failed", "error": message}
+            return {"id": task_id, "status": "failed", "error": message}
         self._spawn(self._drive_agent_task(task_id, learner_id, normalized))
-        return {"id": task_id, "learner_id": learner_id, "status": "queued"}
+        return {"id": task_id, "status": "queued"}
 
-    async def agent_task_snapshot(self, task_id: str) -> dict[str, Any]:
-        record = await self.repo.get_agent_task(task_id)
+    async def agent_task_snapshot(
+        self, task_id: str, learner_id: str | None = None
+    ) -> dict[str, Any]:
+        record = (
+            await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            if learner_id is not None
+            else await self.repo.get_agent_task(task_id)
+        )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
         return {
@@ -276,8 +299,14 @@ class Service:
         event.set()
         event.clear()
 
-    async def agent_artifact(self, task_id: str, kind: str) -> tuple[bytes, str, str]:
-        record = await self.repo.get_agent_task(task_id)
+    async def agent_artifact(
+        self, task_id: str, kind: str, learner_id: str | None = None
+    ) -> tuple[bytes, str, str]:
+        record = (
+            await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            if learner_id is not None
+            else await self.repo.get_agent_task(task_id)
+        )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
         if kind == "visual":
@@ -317,6 +346,7 @@ class Service:
             artifacts=self.agent_artifacts,
             persist_result=persist_result,
             checkpointer=self.checkpointer,
+            store=self.graph_store,
         )
         config = {
             "configurable": {
@@ -383,8 +413,14 @@ class Service:
         await self.repo.set_agent_task_status(task_id, status, "; ".join(errors))
         self._notify_agent(task_id)
 
-    async def answer(self, session_id: str, payload: Any) -> None:
-        record = await self.repo.get_session(session_id)
+    async def answer(
+        self, session_id: str, payload: Any, learner_id: str | None = None
+    ) -> None:
+        record = (
+            await self.repo.get_session_for_learner(session_id, learner_id)
+            if learner_id is not None
+            else await self.repo.get_session(session_id)
+        )
         if record is None:
             raise KeyError(f"unknown session: {session_id}")
         pack = self.packs.get(record.pack_id)
@@ -395,8 +431,14 @@ class Service:
             self._drive(session_id, pack, record.learner_id, Command(resume=payload))
         )
 
-    async def snapshot(self, session_id: str) -> dict[str, Any]:
-        record = await self.repo.get_session(session_id)
+    async def snapshot(
+        self, session_id: str, learner_id: str | None = None
+    ) -> dict[str, Any]:
+        record = (
+            await self.repo.get_session_for_learner(session_id, learner_id)
+            if learner_id is not None
+            else await self.repo.get_session(session_id)
+        )
         if record is None:
             raise KeyError(f"unknown session: {session_id}")
         pack = self.packs[record.pack_id]
@@ -509,6 +551,14 @@ class Service:
 
             if status == "awaiting_learner":
                 status = await self._finalize(session_id, pack, learner_id, config)
+            elif status in {"failed", "cancelled"}:
+                await self._finalize(
+                    session_id,
+                    pack,
+                    learner_id,
+                    config,
+                    outcome_override="failed",
+                )
             await self.repo.set_status(session_id, status, error)
             if error:
                 await self.repo.append_events(
@@ -517,28 +567,65 @@ class Service:
             self._notify(session_id)
 
     async def _finalize(
-        self, session_id: str, pack: Pack, learner_id: str, config: dict[str, Any]
+        self,
+        session_id: str,
+        pack: Pack,
+        learner_id: str,
+        config: dict[str, Any],
+        outcome_override: str | None = None,
     ) -> str:
         graph = await self.graph_for(pack.id)
+        values: dict[str, Any] = {}
         try:
             state = await graph.aget_state(config)
         except EmptyInputError:
-            return "failed"
-        values = dict(state.values or {})
-        if state.interrupts:
+            state = None
+        if state is not None:
+            values = dict(state.values or {})
+        if state is not None and state.interrupts and outcome_override is None:
             return "awaiting_learner"
-        if values.get("phase") == "done":
-            await self.repo.save_mastery(learner_id, dict(values.get("mastery") or {}))
-            report = dict(values.get("report") or {})
-            if report:
-                await self.repo.save_report(
-                    session_id=session_id,
-                    learner_id=learner_id,
-                    mission_id=str(values.get("mission_id", "")),
-                    report=report,
-                )
-            return "done"
-        return "awaiting_learner"
+        completed = outcome_override is None and values.get("phase") == "done"
+        if not completed and outcome_override is None:
+            return "awaiting_learner"
+
+        try:
+            context = await self.learners.context_for_learner_id(learner_id)
+        except LookupError:
+            # Anonymous records created before the identity boundary remain
+            # readable only to legacy internal tooling and are never mapped
+            # automatically to a new Identity user.
+            if completed:
+                await self.repo.save_mastery(learner_id, dict(values.get("mastery") or {}))
+                report = dict(values.get("report") or {})
+                if report:
+                    await self.repo.save_report(
+                        session_id=session_id,
+                        learner_id=learner_id,
+                        mission_id=str(values.get("mission_id", "")),
+                        report=report,
+                    )
+                return "done"
+            return "failed"
+
+        outcome = "completed" if completed else "failed"
+        session_record = await self.repo.get_session(session_id)
+        await self.learners.record_session_outcome(
+            context,
+            session_id=session_id,
+            outcome=outcome,
+            evidence=list(values.get("evidence") or []),
+            misconceptions=[str(tag) for tag in values.get("misconceptions") or []],
+            mastery={
+                str(concept): float(score)
+                for concept, score in dict(values.get("mastery") or {}).items()
+            },
+            report=dict(values.get("report") or {}),
+            mission_id=str(
+                values.get("mission_id")
+                or (session_record.mission_id if session_record is not None else "")
+            ),
+        )
+        return "done" if completed else "failed"
 
 
 def _public_step(step: dict[str, Any]) -> dict[str, Any]:

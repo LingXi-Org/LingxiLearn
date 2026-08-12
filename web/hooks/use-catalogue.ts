@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { Mission, Pack, SessionListItem } from "@/lib/types";
 
-const LEARNER_KEY = "lingxilearn.learner";
-
 export function useCatalogue() {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
@@ -19,13 +17,8 @@ export function useCatalogue() {
       const [catalogue, health] = await Promise.all([api.packs(), api.health()]);
       setPacks(catalogue.packs);
       setBrain(health.brain);
-      const learnerId = window.localStorage.getItem(LEARNER_KEY);
-      if (learnerId) {
-        const history = await api.mastery(learnerId);
-        setSessions(history.sessions);
-      } else {
-        setSessions([]);
-      }
+      const history = await api.mastery();
+      setSessions(history.sessions);
       setError(undefined);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -43,17 +36,11 @@ export function useCatalogue() {
   }, [packs]);
 
   const createSession = useCallback(async (missionId: string, packId: string) => {
-    const learnerId = window.localStorage.getItem(LEARNER_KEY) ?? "";
-    const created = await api.createSession(missionId, packId, learnerId);
-    window.localStorage.setItem(LEARNER_KEY, created.learner_id);
-    return created;
+    return api.createSession(missionId, packId);
   }, []);
 
   const createAgentTask = useCallback(async (prompt: string) => {
-    const learnerId = window.localStorage.getItem(LEARNER_KEY) ?? "";
-    const created = await api.createAgentTask(prompt, learnerId);
-    window.localStorage.setItem(LEARNER_KEY, created.learner_id);
-    return created;
+    return api.createAgentTask(prompt);
   }, []);
 
   return { packs, sessions, missionById, brain, error, loading, refresh, createSession, createAgentTask };

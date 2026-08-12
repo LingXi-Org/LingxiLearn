@@ -48,9 +48,13 @@ RFC 文档版权归 IETF Trust 所有，此处为教学用途的**摘录与转�
 
 ## 学习记录
 
-- 未登录用户使用匿名 guest ID（`guest-<random>`），**不采集姓名、学号或任何可识别信息**。
-- 存储内容：会话状态、作答记录、掌握度、证据账本、运行事件日志。
+- 持久化用户数据必须通过 LingxiIdentity OIDC Bearer JWT；服务端以验证后的
+  `Principal.subject` 和 issuer 建立唯一 Identity User 映射，客户端不能传入 learner ID。
+- 本地只有显式 `LINGXILEARN_INSECURE_DEV_AUTH=true` 时才使用固定开发 subject；不接受
+  客户端自报 subject、header 或 learner ID。
+- 存储内容：学习者画像、会话状态、作答证据、掌握度、误区聚合、偏好、追加式学习事件、报告和 SSE 投影日志。
 - 本地开发默认写入 `var/lingxilearn.sqlite3`；容器部署写入 PostgreSQL 卷。
+- 旧的匿名 guest 记录不会自动映射到新 Identity 用户，仍保留但不通过受保护 API 暴露。
 - 演示与评测使用的学习者档案全部是**合成的**（`scripts/smoke.py`、`lingxilearn.eval`），
   评测报告中的"学习增益"一栏已明确标注为流程验证，**不代表真实学生的学习效果**。
 

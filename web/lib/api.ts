@@ -31,11 +31,33 @@ export class ApiError extends Error {
   }
 }
 
+export type AccessTokenProvider = () => string | null | Promise<string | null>;
+
+// The host application owns login/refresh.  LingxiLearn keeps only this
+// in-memory callback and never persists an access token in browser storage.
+let accessTokenProvider: AccessTokenProvider = () => null;
+
+export function setAccessTokenProvider(provider: AccessTokenProvider): () => void {
+  const previous = accessTokenProvider;
+  accessTokenProvider = provider;
+  return () => { accessTokenProvider = previous; };
+}
+
+function apiUrl(path: string): string {
+  return `${API_BASE}/api${path}`;
+}
+
+async function authorizedFetch(url: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  const token = await accessTokenProvider();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(url, { ...init, headers });
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}/api${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  const response = await authorizedFetch(apiUrl(path), { ...init, headers });
   if (!response.ok) {
     let detail = response.statusText;
     try {
@@ -55,10 +77,10 @@ export const api = {
 
   packs: () => request<{ packs: Pack[] }>("/packs"),
 
-  createSession: (missionId: string, packId = "computer-networks", learnerId = "") =>
-    request<{ id: string; learner_id: string; status: string }>("/sessions", {
+  createSession: (missionId: string, packId = "computer-networks") =>
+    request<{ id: string; mission_id: string; pack_id: string; status: string }>("/sessions", {
       method: "POST",
-      body: JSON.stringify({ mission_id: missionId, pack_id: packId, learner_id: learnerId }),
+      body: JSON.stringify({ mission_id: missionId, pack_id: packId }),
     }),
 
   session: (id: string) => request<SessionSnapshot>(`/sessions/${id}`),
@@ -71,10 +93,10 @@ export const api = {
 
   report: (id: string) => request<Record<string, any>>(`/sessions/${id}/report`),
 
-  createAgentTask: (prompt: string, learnerId = "") =>
-    request<{ id: string; learner_id: string; status: string }>("/agent-tasks", {
+  createAgentTask: (prompt: string) =>
+    request<{ id: string; status: string }>("/agent-tasks", {
       method: "POST",
-      body: JSON.stringify({ prompt, learner_id: learnerId }),
+      body: JSON.stringify({ prompt }),
     }),
 
   agentTask: (id: string) => request<AgentTaskSnapshot>(`/agent-tasks/${id}`),
@@ -82,8 +104,24 @@ export const api = {
   agentArtifactUrl: (taskId: string, kind: "background" | "visual") =>
     `${API_BASE}/api/agent-tasks/${taskId}/artifacts/${kind}`,
 
-  mastery: (learnerId: string) =>
-    request<{ learner_id: string; mastery: unknown[]; sessions: SessionListItem[] }>(`/learners/${learnerId}/mastery`),
+  context: () => request<{
+    profile: Record<string, unknown>;
+    mastery: Record<string, number>;
+    misconceptions: Record<string, unknown>[];
+    preferences: Record<string, unknown>;
+  }>("/me/context"),
+
+  mastery: () =>
+    request<{ mastery: Record<string, number>; sessions: SessionListItem[] }>("/me/mastery"),
+
+  preferences: () =>
+    request<{ preferences: Record<string, unknown> }>("/me/preferences"),
+
+  updatePreferences: (patch: Record<string, unknown>) =>
+    request<{ preferences: Record<string, unknown> }>("/me/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
 
   artifactUrl: (sessionId: string, artifactId: string) =>
     `${API_BASE}/api/sessions/${sessionId}/artifact/${artifactId}`,
@@ -98,7 +136,15 @@ export const api = {
     request<SimState>("/sim/step", {
       method: "POST",
       body: JSON.stringify({ state, action }),
-    }),
+  }),
+
+  fetchArtifact: async (url: string): Promise<Blob> => {
+    const response = await authorizedFetch(url.startsWith("/") ? apiUrl(url) : url);
+    if (!response.ok) {
+      throw new ApiError(response.status, response.statusText);
+    }
+    return response.blob();
+  },
 };
 
 /**
@@ -108,107 +154,141 @@ export const api = {
  * we saw resumes exactly where we left off — no gap, no duplicates. That is why
  * this tracks `lastSequence` rather than trusting the socket to stay up.
  */
-export function subscribeEvents(
-  sessionId: string,
-  onEvent: (event: RunEvent) => void,
-  options: { from?: number; onEnd?: (status: string) => void } = {},
+type SseOptions = { from?: number; onEnd?: (status: string) => void };
+
+/**
+ * Fetch-based SSE keeps the existing durable-log replay contract while making
+ * it possible to attach the same Authorization header as normal API calls.
+ */
+function subscribeSse<T extends { sequence?: number }>(
+  path: string,
+  onEvent: (event: T) => void,
+  options: SseOptions = {},
 ): () => void {
   let closed = false;
-  let source: EventSource | null = null;
-  let lastSequence = options.from ?? 0;
+  let finished = false;
+  let controller: AbortController | null = null;
   let retry: ReturnType<typeof setTimeout> | null = null;
+  let lastSequence = options.from ?? 0;
 
-  const connect = () => {
-    if (closed) return;
-    const url = `${API_BASE}/api/sessions/${sessionId}/events?last_event_id=${lastSequence}`;
-    source = new EventSource(url);
-
-    source.onmessage = (message) => {
-      try {
-        const event = JSON.parse(message.data) as RunEvent;
-        if (typeof event.sequence === "number") lastSequence = event.sequence;
-        onEvent(event);
-      } catch {
-        /* ignore malformed frames rather than tearing down the stream */
-      }
-    };
-
-    // Named events arrive with `event: <kind>`; onmessage only sees unnamed
-    // ones, so the server's kind-named frames need an explicit listener.
-    const handler = (message: MessageEvent) => {
-      try {
-        const event = JSON.parse(message.data) as RunEvent;
-        if (typeof event.sequence === "number") lastSequence = event.sequence;
-        onEvent(event);
-      } catch {
-        /* ignore */
-      }
-    };
-    for (const kind of KNOWN_EVENT_KINDS) source.addEventListener(kind, handler as EventListener);
-
-    source.addEventListener("stream.end", (message) => {
-      const data = JSON.parse((message as MessageEvent).data ?? "{}");
-      options.onEnd?.(data.status ?? "unknown");
-      source?.close();
-      source = null;
-    });
-
-    source.onerror = () => {
-      source?.close();
-      source = null;
-      if (!closed) retry = setTimeout(connect, 1200);
-    };
+  const scheduleReconnect = () => {
+    if (!closed && !finished && !retry) {
+      retry = setTimeout(() => {
+        retry = null;
+        void connect();
+      }, 1200);
+    }
   };
 
-  connect();
+  const dispatch = (eventName: string, data: string) => {
+    if (!data) return;
+    if (eventName === "stream.end") {
+      try {
+        const payload = JSON.parse(data) as { status?: string };
+        options.onEnd?.(payload.status ?? "unknown");
+      } catch {
+        options.onEnd?.("unknown");
+      }
+      finished = true;
+      return;
+    }
+    try {
+      const event = JSON.parse(data) as T;
+      if (typeof event.sequence === "number") lastSequence = event.sequence;
+      onEvent(event);
+    } catch {
+      /* Ignore malformed frames rather than losing the stream. */
+    }
+  };
+
+  const connect = async () => {
+    if (closed || finished) return;
+    controller = new AbortController();
+    try {
+      const separator = path.includes("?") ? "&" : "?";
+      const response = await authorizedFetch(
+        apiUrl(`${path}${separator}last_event_id=${lastSequence}`),
+        {
+          signal: controller.signal,
+          headers: {
+            Accept: "text/event-stream",
+            "Last-Event-ID": String(lastSequence),
+          },
+        },
+      );
+      if (!response.ok || !response.body) {
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          finished = true;
+          return;
+        }
+        scheduleReconnect();
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let eventName = "message";
+      let dataLines: string[] = [];
+
+      const consumeLine = (line: string) => {
+        if (line === "") {
+          dispatch(eventName, dataLines.join("\n"));
+          eventName = "message";
+          dataLines = [];
+          return;
+        }
+        if (line.startsWith(":")) return;
+        if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""));
+      };
+
+      while (!closed && !finished) {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          buffer += decoder.decode();
+          if (buffer) consumeLine(buffer);
+          break;
+        }
+        buffer += decoder.decode(chunk.value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) consumeLine(line.replace(/\r$/, ""));
+      }
+      reader.releaseLock();
+      if (!closed && !finished) scheduleReconnect();
+    } catch (cause) {
+      if (!closed && !(cause instanceof DOMException && cause.name === "AbortError")) {
+        scheduleReconnect();
+      }
+    } finally {
+      controller = null;
+    }
+  };
+
+  void connect();
   return () => {
     closed = true;
     if (retry) clearTimeout(retry);
-    source?.close();
+    retry = null;
+    controller?.abort();
   };
+}
+
+export function subscribeEvents(
+  sessionId: string,
+  onEvent: (event: RunEvent) => void,
+  options: SseOptions = {},
+): () => void {
+  return subscribeSse(`/sessions/${sessionId}/events`, onEvent, options);
 }
 
 export function subscribeAgentEvents(
   taskId: string,
   onEvent: (event: AgentTaskEvent) => void,
-  options: { from?: number; onEnd?: (status: string) => void } = {},
+  options: SseOptions = {},
 ): () => void {
-  let closed = false;
-  let source: EventSource | null = null;
-  let lastSequence = options.from ?? 0;
-  let retry: ReturnType<typeof setTimeout> | null = null;
-
-  const connect = () => {
-    if (closed) return;
-    source = new EventSource(`${API_BASE}/api/agent-tasks/${taskId}/events?last_event_id=${lastSequence}`);
-    const handler = (message: MessageEvent) => {
-      try {
-        const event = JSON.parse(message.data) as AgentTaskEvent;
-        if (typeof event.sequence === "number") lastSequence = event.sequence;
-        onEvent(event);
-      } catch {
-        /* ignore malformed frames */
-      }
-    };
-    for (const kind of KNOWN_AGENT_EVENT_KINDS) source.addEventListener(kind, handler as EventListener);
-    source.addEventListener("stream.end", (message) => {
-      const data = JSON.parse((message as MessageEvent).data ?? "{}");
-      options.onEnd?.(data.status ?? "unknown");
-      source?.close();
-      source = null;
-    });
-    source.onerror = () => {
-      source?.close();
-      source = null;
-      if (!closed) retry = setTimeout(connect, 1200);
-    };
-  };
-  connect();
-  return () => {
-    closed = true;
-    if (retry) clearTimeout(retry);
-    source?.close();
-  };
+  return subscribeSse(`/agent-tasks/${taskId}/events`, onEvent, options);
 }
 
 export const KNOWN_EVENT_KINDS = [

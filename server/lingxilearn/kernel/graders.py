@@ -291,9 +291,9 @@ def _attribution_misconceptions(
 
     for bucket, detail in per_bucket.items():
         if detail["invalid_pins"]:
-            tag = (spec.get("pin_misconceptions") or {}).get(bucket)
-            if tag and str(tag) not in tags:
-                tags.append(str(tag))
+            pin_tag = (spec.get("pin_misconceptions") or {}).get(bucket)
+            if pin_tag and str(pin_tag) not in tags:
+                tags.append(str(pin_tag))
     return tags
 
 

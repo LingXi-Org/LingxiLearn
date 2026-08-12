@@ -152,6 +152,17 @@ class Repository:
         async with self.db.session() as s:
             return await s.get(Session, session_id)
 
+    async def get_session_for_learner(
+        self, session_id: str, learner_id: str
+    ) -> Session | None:
+        async with self.db.session() as s:
+            return await s.scalar(
+                select(Session).where(
+                    Session.id == session_id,
+                    Session.learner_id == learner_id,
+                )
+            )
+
     async def set_status(self, session_id: str, status: str, error: str = "") -> None:
         async with self.db.session() as s:
             row = await s.get(Session, session_id)
@@ -193,6 +204,17 @@ class Repository:
     async def get_agent_task(self, task_id: str) -> AgentTask | None:
         async with self.db.session() as s:
             return await s.get(AgentTask, task_id)
+
+    async def get_agent_task_for_learner(
+        self, task_id: str, learner_id: str
+    ) -> AgentTask | None:
+        async with self.db.session() as s:
+            return await s.scalar(
+                select(AgentTask).where(
+                    AgentTask.id == task_id,
+                    AgentTask.learner_id == learner_id,
+                )
+            )
 
     async def set_agent_task_status(self, task_id: str, status: str, error: str = "") -> None:
         async with self.db.session() as s:
@@ -280,6 +302,34 @@ class Repository:
                 for r in rows
             ]
 
+    async def agent_events_after_for_learner(
+        self, task_id: str, learner_id: str, after: int = 0, limit: int = 500
+    ) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(AgentTaskEvent)
+                    .join(AgentTask, AgentTask.id == AgentTaskEvent.task_id)
+                    .where(
+                        AgentTaskEvent.task_id == task_id,
+                        AgentTask.learner_id == learner_id,
+                        AgentTaskEvent.sequence > after,
+                    )
+                    .order_by(AgentTaskEvent.sequence)
+                    .limit(limit)
+                )
+            ).scalars()
+            return [
+                {
+                    "sequence": r.sequence,
+                    "kind": r.kind,
+                    "agent": r.agent,
+                    "payload": r.payload,
+                    "ts": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ]
+
     # -- events ----------------------------------------------------------
 
     async def next_sequence(self, session_id: str) -> int:
@@ -337,6 +387,34 @@ class Repository:
                 for r in rows
             ]
 
+    async def events_after_for_learner(
+        self, session_id: str, learner_id: str, after: int = 0, limit: int = 500
+    ) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(RunEvent)
+                    .join(Session, Session.id == RunEvent.session_id)
+                    .where(
+                        RunEvent.session_id == session_id,
+                        Session.learner_id == learner_id,
+                        RunEvent.sequence > after,
+                    )
+                    .order_by(RunEvent.sequence)
+                    .limit(limit)
+                )
+            ).scalars()
+            return [
+                {
+                    "sequence": r.sequence,
+                    "kind": r.kind,
+                    "node": r.node,
+                    "payload": r.payload,
+                    "ts": r.created_at.isoformat() if r.created_at else None,
+                }
+                for r in rows
+            ]
+
     # -- reports ---------------------------------------------------------
 
     async def save_report(
@@ -359,4 +437,16 @@ class Repository:
     async def get_report(self, session_id: str) -> dict[str, Any] | None:
         async with self.db.session() as s:
             row = await s.get(ReportRecord, session_id)
+            return dict(row.payload) if row else None
+
+    async def get_report_for_learner(
+        self, session_id: str, learner_id: str
+    ) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.scalar(
+                select(ReportRecord).where(
+                    ReportRecord.session_id == session_id,
+                    ReportRecord.learner_id == learner_id,
+                )
+            )
             return dict(row.payload) if row else None

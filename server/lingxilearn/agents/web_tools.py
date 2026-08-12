@@ -9,7 +9,7 @@ import json
 import re
 import socket
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 import httpx
@@ -169,6 +169,6 @@ def build_web_tools(settings: Settings) -> list[Any]:
         )
 
     return [
-        tool(name="web_search", timeout=settings.agent_timeout)(web_search),
-        tool(name="web_fetch", timeout=settings.agent_timeout)(web_fetch),
+        cast(Any, tool(name="web_search", timeout=settings.agent_timeout))(web_search),
+        cast(Any, tool(name="web_fetch", timeout=settings.agent_timeout))(web_fetch),
     ]
