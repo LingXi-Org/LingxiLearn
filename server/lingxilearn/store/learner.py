@@ -74,6 +74,12 @@ class LearnerRepository:
 
             learner_id = f"l-{uuid4().hex[:24]}"
             s.add(Learner(id=learner_id, display_name=subject[:128]))
+            # Make the parent row durable in the current transaction before
+            # inserting the identity mapping.  The models intentionally do
+            # not define an ORM relationship, so relying on unit-of-work
+            # dependency sorting is not safe across SQLAlchemy/Postgres
+            # combinations.
+            await s.flush()
             s.add(
                 IdentityUser(
                     issuer=issuer,

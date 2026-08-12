@@ -47,6 +47,7 @@ from .tools.registry import ToolRegistry, load_builtin_tools
 logger = logging.getLogger(__name__)
 
 FLUSH_EVERY = 6
+AGENT_FLUSH_EVERY = 1
 """Batch size for persisting projections mid-run — small enough to feel live."""
 
 
@@ -87,7 +88,7 @@ class Service:
         self.learner_service = LearnerService(self.learner_repository, self.settings)
         self.learners = self.learner_service
         self.brain: TutorBrain | None = None
-        self.agent_model: Any | None = None
+        self.agent_model: dict[str, Any] | None = None
         self.agent_artifacts = ArtifactStore(self.settings)
         self.checkpointer: Any = None
         # Optional LingxiGraph runtime Store/Memory seam.  Canonical learner
@@ -118,13 +119,38 @@ class Service:
         if self.settings.agents_configured:
             from lingxigraph.integrations import OpenAICompatChatModel
 
-            self.agent_model = OpenAICompatChatModel(
-                self.settings.agent_model,
-                base_url=self.settings.agent_base_url,
-                api_key=self.settings.agent_api_key.get_secret_value(),
-                timeout=self.settings.agent_timeout,
-                default_options={"temperature": 0.2},
-            )
+            model_options = {
+                "base_url": self.settings.agent_base_url,
+                "api_key": self.settings.agent_api_key.get_secret_value(),
+                "timeout": self.settings.agent_timeout,
+                # DeepSeek V4 defaults to thinking/high effort.  Agent tasks
+                # prioritize latency, so explicitly select the lowest-cost
+                # mode instead of relying on the provider default.
+                "default_options": {
+                    "thinking": {"type": "disabled"},
+                },
+                "cache_first": {
+                    "enabled": self.settings.agent_cache_enabled,
+                    "verify_mode": self.settings.agent_cache_verify_mode,
+                },
+            }
+            # Each specialist has a different immutable system prompt and tool
+            # catalog. Keeping one model instance per role makes the cache
+            # prefix stable across tasks and avoids cross-agent drift errors.
+            self.agent_model = {}
+            for role in ("intent", "lecture_hook", "visual_explainer"):
+                role_options = model_options
+                if role == "visual_explainer":
+                    role_options = {
+                        **model_options,
+                        "default_options": {
+                            "thinking": {"type": "enabled"},
+                            "reasoning_effort": "high",
+                        },
+                    }
+                self.agent_model[role] = OpenAICompatChatModel(
+                    self.settings.agent_model, **role_options
+                )
         self.checkpointer = build_checkpointer(self.settings)
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
@@ -138,8 +164,8 @@ class Service:
             task.cancel()
         if self.brain is not None:
             await self.brain.aclose()
-        if self.agent_model is not None:
-            closer = getattr(self.agent_model, "aclose", None)
+        for model in (self.agent_model or {}).values():
+            closer = getattr(model, "aclose", None)
             if callable(closer):
                 await closer()
         if self.checkpointer is not None:
@@ -384,7 +410,7 @@ class Service:
                                     },
                                 }
                             )
-                if len(buffer) >= FLUSH_EVERY:
+                if len(buffer) >= AGENT_FLUSH_EVERY:
                     await self.repo.append_agent_events(task_id, list(buffer))
                     buffer.clear()
                     self._notify_agent(task_id)

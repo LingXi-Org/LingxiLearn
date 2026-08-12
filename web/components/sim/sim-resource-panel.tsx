@@ -1,53 +1,107 @@
 "use client";
 
-import { Activity, Boxes, CircleAlert, FileText, GitBranch, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, Bot, FileText, GitBranch, LoaderCircle, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import { SimButton } from "@/components/sim/source/button";
 import { SimAgentGraph } from "@/components/sim/sim-agent-graph";
-import type { SimMockRun } from "@/lib/sim-mock";
+import { useAgentArtifact } from "@/hooks/use-agent-artifact";
+import { agentTaskToAgentRuns, agentTaskToCanvasGraph } from "@/lib/sim-adapter";
+import type { AgentTaskEvent, AgentTaskSnapshot } from "@/lib/types";
 
-type ResourceTab = "graph" | "resources" | "capabilities" | "log";
+export type ResourceTab = "canvas" | "background" | "visual";
 
-export function SimResourcePanel({ run, onBackToConversation }: { run: SimMockRun; onBackToConversation?: () => void }) {
-  const [tab, setTab] = useState<ResourceTab>("graph");
+export function SimResourcePanel({
+  task,
+  events,
+  initialTab = "canvas",
+  onBackToConversation,
+}: {
+  task: AgentTaskSnapshot | null;
+  events: AgentTaskEvent[];
+  initialTab?: ResourceTab;
+  onBackToConversation?: () => void;
+}) {
+  const [tab, setTab] = useState<ResourceTab>(initialTab);
+  useEffect(() => setTab(initialTab), [initialTab]);
+  const graph = agentTaskToCanvasGraph(task, events);
+  const runs = task ? agentTaskToAgentRuns(task, events) : [];
+  const hasLecture = events.some((event) => event.agent === "lecture_hook") || Boolean(task?.artifacts.background.available);
+  const hasVisual = events.some((event) => event.agent === "visual_explainer") || Boolean(task?.artifacts.visual.available);
+
+  useEffect(() => {
+    if (tab === "background" && !hasLecture) setTab("canvas");
+    if (tab === "visual" && !hasVisual) setTab("canvas");
+  }, [hasLecture, hasVisual, tab]);
+
+  if (!task) {
+    return <section className="flex h-full min-h-0 items-center justify-center bg-[var(--surface-2)]" data-testid="sim-resource-panel"><div className="text-center text-xs text-[var(--text-muted)]"><GitBranch className="mx-auto mb-3 size-5 opacity-40" /><p>工作区将在提交问题后动态加载</p></div></section>;
+  }
+
   return (
     <section className="flex h-full min-h-0 flex-col bg-[var(--surface-2)]" data-testid="sim-resource-panel">
       <header className="flex min-h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-[var(--border)] bg-[var(--surface-1)] px-3">
         <span className="grid size-6 shrink-0 place-items-center rounded-md bg-[var(--surface-4)] text-[var(--text-icon)]"><GitBranch className="size-3.5" /></span>
-        <span className="shrink-0 text-xs font-medium">Resources</span>
-        <nav className="ml-2 flex h-10 items-center gap-1" aria-label="Sim resources">
-          <ResourceTab active={tab === "graph"} onClick={() => setTab("graph")} icon={<GitBranch className="size-3" />}>Graph</ResourceTab>
-          <ResourceTab active={tab === "resources"} onClick={() => setTab("resources")} icon={<Boxes className="size-3" />}>Artifacts</ResourceTab>
-          <ResourceTab active={tab === "capabilities"} onClick={() => setTab("capabilities")} icon={<Sparkles className="size-3" />}>Sim native</ResourceTab>
-          <ResourceTab active={tab === "log"} onClick={() => setTab("log")} icon={<Activity className="size-3" />}>Run log</ResourceTab>
+        <span className="shrink-0 text-xs font-medium">工作区</span>
+        <nav className="ml-2 flex h-10 items-center gap-1" aria-label="Agent 工作区页面">
+          <ResourceTab active={tab === "canvas"} onClick={() => setTab("canvas")} icon={<GitBranch className="size-3" />}>Canvas</ResourceTab>
+          {hasLecture && <ResourceTab active={tab === "background"} onClick={() => setTab("background")} icon={<FileText className="size-3" />}>Lecture hook</ResourceTab>}
+          {hasVisual && <ResourceTab active={tab === "visual"} onClick={() => setTab("visual")} icon={<Sparkles className="size-3" />}>Visual explainer</ResourceTab>}
         </nav>
-        {onBackToConversation && <SimButton type="button" variant="quiet" size="sm" className="ml-auto shrink-0 lg:hidden" onClick={onBackToConversation}>Back to chat</SimButton>}
+        {onBackToConversation && <SimButton type="button" variant="quiet" size="sm" className="ml-auto shrink-0 lg:hidden" onClick={onBackToConversation}>返回对话</SimButton>}
       </header>
       <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-5">
-        {tab === "graph" && <SimAgentGraph graph={run.graph} />}
-        {tab === "resources" && <ResourceList run={run} />}
-        {tab === "capabilities" && <CapabilityList run={run} />}
-        {tab === "log" && <RunLog run={run} />}
+        {tab === "canvas" && <SimAgentGraph graph={graph} runs={runs} running={task.status === "queued" || task.status === "running"} />}
+        {tab === "background" && <BackgroundArtifact task={task} />}
+        {tab === "visual" && <VisualArtifact task={task} />}
       </div>
     </section>
   );
 }
 
-function ResourceList({ run }: { run: SimMockRun }) {
-  return <div className="mx-auto max-w-2xl"><PanelHeading icon={<Boxes className="size-4" />} title="Sim resource placeholders" detail="LingxiGraph learning artifacts are intentionally not called in this demo." /><div className="mt-4 space-y-2">{run.resources.map((resource) => <div key={resource.id} className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-1)] px-3 py-3"><span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--surface-4)] text-[var(--text-icon)]">{resource.kind === "background" ? <FileText className="size-4" /> : resource.kind === "visual" ? <Sparkles className="size-4" /> : <Boxes className="size-4" />}</span><span className="min-w-0 flex-1"><span className="block text-xs font-medium">{resource.title}</span><span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{resource.description}</span></span><SimButton type="button" variant="quiet" size="sm" disabled>{resource.available ? "Open" : "Placeholder"}</SimButton></div>)}</div></div>;
+function BackgroundArtifact({ task }: { task: AgentTaskSnapshot | null }) {
+  const available = Boolean(task?.artifacts.background.available);
+  const artifact = useAgentArtifact(task?.id, "background", available);
+  return (
+    <ArtifactFrame icon={<FileText className="size-4" />} title="Lecture hook 背景产物" agent="lecture_hook" available={available} loading={artifact.loading} error={artifact.error}>
+      {artifact.content && <article className="prose prose-sm max-w-none whitespace-pre-wrap text-[13px] leading-7 text-[var(--text-primary)]">{artifact.content}</article>}
+    </ArtifactFrame>
+  );
 }
 
-function CapabilityList({ run }: { run: SimMockRun }) {
-  const categories = ["conversation", "agent", "workspace", "platform"] as const;
-  return <div className="mx-auto max-w-3xl"><PanelHeading icon={<Sparkles className="size-4" />} title="Sim native capabilities" detail="所有未对接 LingxiGraph 的 Sim 能力在这里以明确占位展示。" /><div className="mt-4 grid gap-2 sm:grid-cols-2">{categories.flatMap((category) => run.capabilities.filter((capability) => capability.category === category)).map((capability) => <div key={capability.id} className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-1)] p-3"><div className="flex items-center gap-2"><span className="size-1.5 rounded-full bg-[var(--text-muted)]" /><span className="text-xs font-medium">{capability.title}</span><span className="ml-auto rounded bg-[var(--surface-3)] px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[var(--text-muted)]">placeholder</span></div><p className="mt-2 text-[11px] leading-5 text-[var(--text-muted)]">{capability.description}</p></div>)}</div></div>;
+function VisualArtifact({ task }: { task: AgentTaskSnapshot | null }) {
+  const available = Boolean(task?.artifacts.visual.available);
+  const artifact = useAgentArtifact(task?.id, "visual", available);
+  return (
+    <ArtifactFrame icon={<Sparkles className="size-4" />} title="Visual explainer 交互页面" agent="visual_explainer" available={available} loading={artifact.loading} error={artifact.error}>
+      {artifact.content && <iframe title="Visual explainer artifact" src={artifact.content} sandbox="allow-scripts" className="h-[min(72vh,760px)] w-full rounded-lg border border-[var(--border)] bg-white" />}
+    </ArtifactFrame>
+  );
 }
 
-function RunLog({ run }: { run: SimMockRun }) {
-  return <div className="mx-auto max-w-2xl"><PanelHeading icon={<Activity className="size-4" />} title="Run log" detail="Deterministic local event stream · no SSE connection" /><div className="mt-4 space-y-2">{run.log.map((entry, index) => <div key={`${entry}-${index}`} className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-xs"><span className="font-mono text-[var(--text-muted)]">{String(index + 1).padStart(3, "0")}</span><span className="min-w-0 flex-1">{entry}</span><span className="text-[10px] text-[var(--brand)]">mock</span></div>)}</div><div className="mt-4 flex items-start gap-2 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface-3)] p-3 text-[11px] leading-5 text-[var(--text-muted)]"><CircleAlert className="mt-0.5 size-3.5 shrink-0" />所有日志均为前端占位事件，不代表 LingxiGraph 已执行。</div></div>;
+function ArtifactFrame({ icon, title, agent, available, loading, error, children }: { icon: React.ReactNode; title: string; agent: string; available: boolean; loading: boolean; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="mx-auto max-w-4xl">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="grid size-8 place-items-center rounded-lg bg-[var(--surface-4)] text-[var(--text-icon)]">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-medium">{title}</h2>
+          <p className="mt-1 text-[11px] text-[var(--text-muted)]">由 {agent} Agent 生成，内容来自当前任务 Artifact。</p>
+        </div>
+        <span className="flex shrink-0 items-center gap-1 text-[11px] text-[var(--text-muted)]">
+          {loading && <LoaderCircle className="size-3 animate-spin" />}
+          {available ? "已就绪" : "等待产物"}
+        </span>
+      </div>
+      {!available && <EmptyArtifact agent={agent} />}
+      {available && loading && <div className="grid min-h-40 place-items-center rounded-xl border border-[var(--border)] bg-[var(--surface-1)] text-xs text-[var(--text-muted)]"><LoaderCircle className="mr-2 inline size-4 animate-spin" />正在读取 Artifact…</div>}
+      {available && error && <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-xs leading-5 text-red-800"><AlertCircle className="mt-0.5 size-4 shrink-0" />Artifact 加载失败：{error}</div>}
+      {available && !loading && !error && children}
+    </div>
+  );
 }
 
-function PanelHeading({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
-  return <div className="flex items-start gap-2"><span className="grid size-7 place-items-center rounded-lg bg-[var(--surface-4)] text-[var(--text-icon)]">{icon}</span><div><h2 className="text-sm font-medium">{title}</h2><p className="mt-1 text-[11px] leading-5 text-[var(--text-muted)]">{detail}</p></div></div>;
+function EmptyArtifact({ agent }: { agent: string }) {
+  return <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-1)] px-6 text-center text-xs text-[var(--text-muted)]"><div><Bot className="mx-auto size-5 text-[var(--text-icon)]" /><p className="mt-3">{agent} 尚未生成产物。</p><p className="mt-1">任务运行完成后，这里会自动显示真实内容。</p></div></div>;
 }
 
 function ResourceTab({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) {

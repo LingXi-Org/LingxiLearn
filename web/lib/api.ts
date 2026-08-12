@@ -139,7 +139,10 @@ export const api = {
   }),
 
   fetchArtifact: async (url: string): Promise<Blob> => {
-    const response = await authorizedFetch(url.startsWith("/") ? apiUrl(url) : url);
+    // Artifact URL builders already include the `/api` prefix. Passing an
+    // origin-relative URL through apiUrl() again produced `/api/api/...` in
+    // the same-origin Compose deployment.
+    const response = await authorizedFetch(url);
     if (!response.ok) {
       throw new ApiError(response.status, response.statusText);
     }

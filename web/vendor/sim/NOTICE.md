@@ -1,28 +1,24 @@
 # Sim source attribution
 
-LingxiLearn's workspace shell, chat surface, resource panel, and task composer are
-adapted from the Sim open-source frontend:
+LingxiLearn's workspace shell, chat surface, resource panel, task composer, and
+workflow canvas are adapted from the Sim open-source frontend:
 
 - Upstream: [simstudioai/sim](https://github.com/simstudioai/sim/)
 - Source snapshot: `ce2dff3cbabc65bd034aff117a2adbf03f86fde3`
-- Relevant source: `apps/sim/app/workspace/[workspaceId]/home/home.tsx`,
-  `apps/sim/app/workspace/[workspaceId]/home/components/user-input/`, and
-  `apps/sim/app/workspace/[workspaceId]/home/components/message-content/`,
-  `apps/sim/app/workspace/[workspaceId]/home/components/mothership-chat/`,
+- Relevant source: `apps/sim/app/workspace/[workspaceId]/home/`,
   `apps/sim/app/workspace/[workspaceId]/components/workspace-chrome/`,
-  `apps/sim/app/workspace/[workspaceId]/w/components/sidebar/`, and
-  `packages/emcn/src/components/button/button.tsx`
+  `apps/sim/app/workspace/[workspaceId]/w/components/sidebar/`,
+  `apps/sim/app/workspace/[workspaceId]/w/[workflowId]/workflow.tsx`,
+  `packages/workflow-renderer/src/workflow-block/workflow-block-view.tsx`, and
+  `packages/emcn/src/components/button/button.tsx`,
+  `packages/emcn/src/components/expandable/expandable.tsx`,
+  `apps/sim/app/workspace/[workspaceId]/home/components/message-content/components/agent-group/agent-group.tsx`,
+  `apps/sim/components/ui/shimmer-text.tsx`, and `apps/sim/hooks/use-smooth-text.ts`
 - License: Apache License 2.0, as provided by the upstream repository
 
-Only the local LingxiLearn adaptation is present in this repository. The upstream Sim
-checkout is not modified; its backend, authentication, and workspace data model are
-not imported. `web/lib/sim-adapter.ts` translates the existing LingxiGraph REST/SSE
-snapshots and events into the Sim-derived client model for future integration. The
-application currently runs `web/lib/sim-mock.ts` instead: it renders a deterministic
-local placeholder Agent, orchestration graph, tools, sub-agents, and resources
-without calling a real API.
-
-Unsupported Sim resources (tables, files, knowledge bases, integrations, schedules,
-attachments, voice input, and skills) are listed in the native capability placeholder
-panel or rendered as disabled controls. The client does not claim that this local
-mock state came from LingxiGraph.
+The Sim interaction primitives needed by this surface are vendored under
+`web/components/sim/source/` and `web/hooks/use-smooth-text.ts`. The upstream
+checkout is not modified and its backend or workspace data model is not used.
+`web/lib/sim-adapter.ts` translates the existing LingxiGraph Agent Task snapshots
+and SSE events into the Sim-derived UI model. Real task data is fetched from the
+LingxiLearn API and real artifacts are rendered in the right-hand workspace.

@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class IntentContext(BaseModel):
@@ -35,6 +35,11 @@ class HookSelection(BaseModel):
     why_this_hook_works: str
     visual_cue: str = ""
 
+    @field_validator("visual_cue", mode="before")
+    @classmethod
+    def _none_visual_cue_is_empty(cls, value: Any) -> Any:
+        return "" if value is None else value
+
 
 class HookCandidate(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -47,6 +52,13 @@ class HookCandidate(BaseModel):
     evidence_strength: float = Field(ge=0, le=100)
     rejection_reason: str = ""
 
+    @field_validator("rejection_reason", mode="before")
+    @classmethod
+    def _none_rejection_reason_is_empty(cls, value: Any) -> Any:
+        """Accept model JSON null while keeping the public contract a string."""
+
+        return "" if value is None else value
+
 
 class ResearchClaim(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -57,6 +69,11 @@ class ResearchClaim(BaseModel):
     confidence: float = Field(ge=0, le=1)
     source_ids: list[str] = Field(default_factory=list)
     qualification: str = ""
+
+    @field_validator("qualification", mode="before")
+    @classmethod
+    def _none_qualification_is_empty(cls, value: Any) -> Any:
+        return "" if value is None else value
 
 
 class ResearchSource(BaseModel):
@@ -69,6 +86,11 @@ class ResearchSource(BaseModel):
     publisher: str = ""
     published_at: str = ""
     notes: str = ""
+
+    @field_validator("publisher", "published_at", "notes", mode="before")
+    @classmethod
+    def _none_source_text_is_empty(cls, value: Any) -> Any:
+        return "" if value is None else value
 
 
 class ResearchLedger(BaseModel):

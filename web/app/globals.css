@@ -1,6 +1,20 @@
 @import "tailwindcss";
+
+@keyframes collapsible-down {
+  from { height: 0; }
+  to { height: var(--radix-collapsible-content-height); }
+}
+
+@keyframes collapsible-up {
+  from { height: var(--radix-collapsible-content-height); }
+  to { height: 0; }
+}
+
+@utility animate-collapsible-down { animation: collapsible-down 150ms ease-out; }
+@utility animate-collapsible-up { animation: collapsible-up 150ms ease-out; }
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@xyflow/react/dist/style.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -101,6 +115,7 @@
   --text-inverse: #ffffff;
   --shadow-overlay: 0 12px 32px rgb(0 0 0 / 12%);
   --border-1: #d8d8d8;
+  --workflow-edge: #dedede;
   --sidebar-width: 238px;
   --sidebar-collapsed-width: 51px;
   --sidebar-expanded-width: 238px;

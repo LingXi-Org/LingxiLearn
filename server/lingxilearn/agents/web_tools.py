@@ -84,7 +84,7 @@ async def _assert_public_url(url: str) -> None:
 async def _get_public(url: str, settings: Settings) -> tuple[str, httpx.Response]:
     current = url
     async with httpx.AsyncClient(
-        timeout=settings.agent_timeout,
+        timeout=settings.agent_web_timeout,
         follow_redirects=False,
         headers={"User-Agent": "LingxiLearn/agent-research"},
     ) as client:
@@ -169,6 +169,6 @@ def build_web_tools(settings: Settings) -> list[Any]:
         )
 
     return [
-        cast(Any, tool(name="web_search", timeout=settings.agent_timeout))(web_search),
-        cast(Any, tool(name="web_fetch", timeout=settings.agent_timeout))(web_fetch),
+        cast(Any, tool(name="web_search", timeout=settings.agent_web_timeout))(web_search),
+        cast(Any, tool(name="web_fetch", timeout=settings.agent_web_timeout))(web_fetch),
     ]

@@ -107,7 +107,7 @@ Tutoring Kernel（LingxiGraph StateGraph · 领域无关）
 Course Pack（声明式）        Tool Registry（真实确定性计算）
  packs/<course-pack>/         course-specific tools | kb.*
         ↓
-lingxigraph 2.1.0（PyPI）· SQLite / PostgreSQL
+lingxigraph 2.2.0（PyPI）· SQLite / PostgreSQL
 ```
 
 内核的十个节点没有一个提到 DNS 或 TCP。学科通过**课程包**和**工具注册表**进入，
@@ -152,8 +152,10 @@ artifact 与 SSE 使用带 Bearer 的 fetch。
 
 ### 关于 LingxiGraph 与 LingxiNext
 
-LingxiGraph 已发布在 PyPI（`lingxigraph==2.1.0`，核心零运行时依赖），因此这里**直接作为普通
-依赖使用**——没有 fork，没有 vendor，没有 submodule。LingxiNext 的工程手法有借鉴
+LingxiGraph 已发布在 PyPI（`lingxigraph==2.2.0`，核心零运行时依赖），因此这里**直接作为普通
+依赖使用**——没有 fork，没有 vendor，没有 submodule。LingxiLearn 的 Agent Task 现在按
+Agent 角色复用稳定前缀的模型实例，并启用 LingxiGraph 2.2.0 的 cache-first 投影，让
+DeepSeek 原生 prompt cache 不会被不同 system prompt/tool schema 互相污染。LingxiNext 的工程手法有借鉴
 （用内容版本做 checkpoint 命名空间、compose 的迁移闸门、两阶段 uv 镜像），
 但代码是独立的。三个参考项目都在 `.gitignore` 中，不进入本仓库。
 

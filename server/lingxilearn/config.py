@@ -14,7 +14,12 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic.fields import AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+_source_root = Path(__file__).resolve().parents[2]
+_installed_root = Path(__file__).resolve().parents[1]
+# In the source checkout the package lives below ``server/``; in the Docker
+# image it is copied directly below ``/app``.  Resolve the root from the
+# mounted/runtime assets instead of assuming one directory layout.
+REPO_ROOT = _source_root if (_source_root / "skills").is_dir() else _installed_root
 
 BrainKind = Literal["scripted", "openai", "coze"]
 
@@ -69,6 +74,15 @@ class Settings(BaseSettings):
     agent_model: str = "deepseek-v4-flash"
     agent_base_url: str = "https://api.deepseek.com"
     agent_timeout: float = 90.0
+    # Intent and visual generation normally finish within the shared timeout,
+    # while lecture-hook may perform several bounded research calls first.
+    agent_lecture_timeout: float = 180.0
+    agent_visual_timeout: float = 240.0
+    agent_web_timeout: float = 20.0
+    # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable
+    # prompt/tool prefix intact so DeepSeek can use its native prompt cache.
+    agent_cache_enabled: bool = True
+    agent_cache_verify_mode: Literal["strict", "warn", "off"] = "strict"
     agent_search_url: str = "https://html.duckduckgo.com/html/"
     agent_max_html_bytes: int = 512 * 1024
     agent_task_dir: Path = REPO_ROOT / "var" / "agent_tasks"

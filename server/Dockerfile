@@ -13,7 +13,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv && uv pip install --no-cache .
 
 FROM python:3.13-slim AS runtime
-RUN groupadd --gid 10001 lingxi \
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends nodejs \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --gid 10001 lingxi \
  && useradd --uid 10001 --gid 10001 --create-home lingxi
 WORKDIR /app
 ENV PATH=/app/.venv/bin:$PATH \

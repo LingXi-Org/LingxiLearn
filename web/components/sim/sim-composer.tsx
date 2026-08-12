@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { Mic, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SimButton } from "@/components/sim/source/button";
 import { SimArrowUp, SimPlus } from "@/components/sim/source/icons";
@@ -24,7 +23,6 @@ interface SimComposerProps {
   placeholder: string;
   disabled?: boolean;
   isSending?: boolean;
-  onStopGeneration?: () => void;
   className?: string;
   "aria-label"?: string;
 }
@@ -34,7 +32,6 @@ export function SimComposer({
   placeholder,
   disabled = false,
   isSending = false,
-  onStopGeneration,
   className,
   "aria-label": ariaLabel = "学习任务输入",
 }: SimComposerProps) {
@@ -88,65 +85,12 @@ export function SimComposer({
       />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
-        <SimButton
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled
-          title="添加资源"
-          aria-label="添加资源"
-          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-hover)]"
-        >
-          <SimPlus className="size-4" />
-        </SimButton>
-        <SimButton
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled
-          title="添加附件"
-          aria-label="添加附件"
-          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-hover)]"
-        >
-          <Paperclip className="size-[17px]" strokeWidth={1.6} />
-        </SimButton>
-        <SimButton
-          type="button"
-          variant="ghost"
-          size="icon"
-          disabled
-          title="技能快捷方式"
-          aria-label="打开快捷方式"
-          className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-hover)]"
-        >
-          <span className="text-[17px] leading-none">/</span>
-        </SimButton>
+          <span className="grid size-7 place-items-center rounded-full text-[var(--text-icon)]" title="问题将进入 Agent 编排"><SimPlus className="size-4" /></span>
+          <span className="text-[11px] text-[var(--text-muted)]">Agent Task</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <SimButton
-            type="button"
-            variant="ghost"
-            size="icon"
-            disabled
-            title="语音输入"
-            aria-label="语音输入"
-            className="grid size-7 place-items-center rounded-full text-[var(--text-icon)] transition-colors hover:bg-[var(--surface-hover)]"
-          >
-            <Mic className="size-[17px]" strokeWidth={1.6} />
-          </SimButton>
         {isSending ? (
-          <SimButton
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onStopGeneration}
-            disabled={!onStopGeneration}
-            className={cn(SEND_BUTTON_BASE, SEND_BUTTON_ACTIVE, "grid place-items-center text-white disabled:opacity-50")}
-            aria-label="停止生成"
-            title="停止生成"
-          >
-            <span className="size-3 rounded-[3px] bg-current" />
-          </SimButton>
+          <span className="grid size-7 place-items-center rounded-full bg-[var(--surface-5)]" aria-label="任务提交中" title="任务提交中"><span className="size-3 animate-spin rounded-full border-2 border-white/40 border-t-white" /></span>
         ) : (
           <SimButton
             type="submit"

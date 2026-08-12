@@ -1,66 +1,82 @@
-# Sim 原生能力与 LingxiGraph 对齐占位清单
+# Sim × LingxiGraph 真实 Agent 工作区
 
-## 当前状态
+本文件记录当前实现边界。原先用于验证 Sim 交互的本地占位工作区已经移除，前端现在直接消费 LingxiLearn 的 Agent Task REST/SSE 和 Artifact API。
 
-当前前端运行在 **Sim native placeholder mode**。首页、工作区、侧栏、输入框、消息流、资源面板和响应式布局均使用 Sim 派生的交互模型；发送消息只在浏览器内生成确定性的占位 Agent 输出，不调用 REST、SSE、LingxiIdentity、数据库、文件系统或外部网络。
-
-入口代码：
-
-- `web/app/page.tsx`：Sim 首页，发送消息后进入占位工作区。
-- `web/app/workspace/page.tsx`：Sim 工作区和移动端抽屉/双栏布局。
-- `web/lib/sim-mock.ts`：占位消息、工具、子 Agent、资源、编排图和能力目录。
-- `web/hooks/use-sim-mock.ts`：本地会话状态，不连接真实 API。
-- `web/components/sim/sim-agent-graph.tsx`：占位 Agent 编排图。
-- `web/components/sim/sim-resource-panel.tsx`：Graph、Artifacts、Sim native、Run log 四个原生能力面板。
-
-`web/lib/sim-adapter.ts` 仍保留为 LingxiGraph 对接边界和纯函数测试参考，但当前页面不主动使用它，也不产生真实后端请求。
-
-## 已提供的占位能力
-
-资源面板的 **Sim native** 标签会列出全部前端占位能力：
-
-| Sim 能力 | 当前占位表现 | 对齐 LingxiGraph 所需内容 |
-|---|---|---|
-| Chat conversation / Prompt composer | 本地消息和占位回复 | session transcript、assistant delta、提交/停止协议 |
-| Attachments | 禁用入口 | 上传、鉴权、文件生命周期和消息附件事件 |
-| Sub-agents | 子 Agent 消息块和状态 | AgentTask snapshot、agent started/completed/failed 事件 |
-| Tool calls | 工具卡片和结果状态 | `tool.started`、`tool.completed`、错误与耗时字段 |
-| Agent orchestration | 节点、边、执行顺序图 | graph/node 运行状态、依赖关系和可重放事件 |
-| Workflows / Skills | 侧栏工作流和能力卡片占位 | workflow/skill 注册、版本和运行 API |
-| Browser / Terminal | 明确的 no-op 占位 | 安全沙箱、权限、工具输入输出和审计日志 |
-| Resource panel | Sim 原生标签页 | 统一 resource descriptor、预览、下载和生命周期 |
-| Files / Tables / Knowledge | Artifact 卡片上的 disabled placeholder | 文件、表格、知识库的后端资源协议与引用 |
-| Canvas / visual | Visual explanation 占位卡片 | 可视化 Artifact schema、版本和渲染器 |
-| Command search | 未接入入口 | 命令注册、快捷键和 workspace 状态操作 |
-| Integrations / Schedules | 未接入入口 | 外部连接配置、定时执行、权限和后台任务 |
-| Voice | 未接入入口 | 浏览器媒体权限、转写/合成服务和流式事件 |
-| Authentication | `Sign in (placeholder)` | 当前 LingxiIdentity 与 Sim 用户/工作区身份映射 |
-| Persistence | 刷新后重新生成本地演示 run | session/task 持久化、历史列表、游标续传 |
-
-## 编排图的占位拓扑
+## 用户流程
 
 ```text
-User input
-    → Intent router
-        → Research agent
-            ├─ Knowledge search (no API call)
-            ├─ Artifact inspect (no file access)
-            └─ Resource panel (placeholder)
+用户输入问题
+      |
+      v
+POST /api/agent-tasks
+      |
+      v
+recognize_intent
+      |
+      +--------------------+
+      v                    v
+lecture_hook       visual_explainer
+      |                    |
+      +---------+----------+
+                v
+          merge_results
+                |
+                v
+        SSE + AgentTaskSnapshot
 ```
 
-图中所有节点都标记为 `placeholder` 或 `no API call`。它们用于验证 Sim 原生消息、工具、子 Agent 和资源布局，不代表 LingxiGraph 实际执行过对应节点。
+后端图定义位于 `server/lingxilearn/agents/graph.py`。意图识别完成后，`lecture_hook` 和 `visual_explainer` 并行执行；每个 Agent 的结果写入任务快照，运行事件写入持久化事件表并通过 SSE 回放。
 
-## 与现有 LingxiGraph 的差异
+## 前端数据流
 
-真实实现仍位于后端 FastAPI/LingxiGraph 和对应的 REST/SSE 代码中，主要差异如下：
+- 首页仅负责把问题带到 `/workspace/?prompt=...`。
+- 工作区首次加载时创建 Agent Task，并将 URL 替换为 `/workspace/?task=<task-id>`。
+- `web/hooks/use-agent-task.ts` 读取任务快照并订阅 `/api/agent-tasks/<task-id>/events`。
+- `web/lib/sim-adapter.ts` 将快照和事件转换为聊天消息、活动摘要和 Canvas 图。
+- 右侧工作区由三个页面组成：Canvas、Lecture hook、Visual explainer。
+- Artifact 必须通过 `api.fetchArtifact` 读取，以便携带现有内存鉴权令牌；可视化 HTML 使用受限 iframe 展示。
 
-1. 当前前端没有读取课程包、创建 Session、创建 Agent Task 或提交 learner answer，因此课程流程、测验、报告、mastery 和确定性 Artifact 不会被执行。
-2. 当前前端没有打开 SSE 游标、断线重连或事件去重链路；这些能力由 `web/lib/sim-adapter.ts` 和现有 hooks 保留为后续对接参考。
-3. 占位 Agent、工具、子 Agent 和资源使用前端固定模型，不具备真实输入校验、权限隔离、失败重试、超时、取消和幂等语义。
-4. 深链接 `?id=...` 与 `?task=...` 仍可打开工作区，但只显示 placeholder run，不查询对应的 LingxiGraph 实体。
-5. Sim 原生资源类型没有与 LingxiGraph 的 packet ladder、waterfall、simulator、quiz、report 等领域 Artifact 做真实 schema 转换；这些内容统一保留在 Sim Resource Panel 的占位卡片中。
-6. Sim 的 Better Auth、workspace database 和真实外部集成没有引入；侧栏身份入口为 disabled/placeholder，避免伪造已登录状态。
+## Canvas
 
-## 后续对接顺序
+`web/components/sim/source/workflow-canvas.tsx` 使用 `@xyflow/react` 原生 Canvas，包含：
 
-建议先实现统一 resource descriptor 和事件投影，再逐项恢复真实能力：先接 session transcript/SSE，再接 AgentTask/sub-agent，再接工具和 Artifact 资源，最后接文件、知识库、集成、调度、语音和持久化。恢复真实 API 时，应保留当前占位卡片作为无后端能力的降级状态。
+- User input
+- Intent recognizer
+- Lecture hook
+- Visual explainer
+- Merge results
+
+节点状态由任务快照和 SSE 事件实时推导，连接使用 React Flow Edge，支持原生 Handle、平移、缩放、Controls、MiniMap、网格和自动布局。
+
+## Artifact 页面
+
+| 页面 | Agent | API | 展示方式 |
+| --- | --- | --- | --- |
+| Lecture hook | `lecture_hook` | `/api/agent-tasks/{task_id}/artifacts/background` | Markdown 文本 |
+| Visual explainer | `visual_explainer` | `/api/agent-tasks/{task_id}/artifacts/visual` | Blob URL + sandboxed iframe |
+
+产物尚未生成时显示等待状态；任务部分失败时保留已成功产物；读取失败时显示错误状态。Blob URL 在页面卸载或任务切换时释放。
+
+## 已移除设计
+
+以下内容不属于当前 Agent 学习链路，已从前端移除：
+
+- Sim Files、Tables、Knowledge、Integrations、Scheduled Tasks、Skills、Tools、Logs、Settings 页面
+- 本地 `SimMockRun`、mock graph、mock session 和 `localStorage` 资源仓库
+- 浏览器本地文件元数据、假 OAuth、假终端、假语音和假工具反馈
+
+Sim 的布局、Composer、聊天消息外壳和 Canvas 视觉结构仍作为 UI 适配使用，但业务数据只来自 LingxiGraph。
+
+## 验证
+
+```text
+cd web
+npm run typecheck
+npm test
+npm run build
+
+cd ../server
+pytest -q tests/test_agent_tasks.py
+```
+
+本地运行时需要配置 `DS_API_KEY`，并在开发环境启用 `LINGXILEARN_INSECURE_DEV_AUTH=true`；生产环境使用现有 LingxiIdentity OIDC 配置。

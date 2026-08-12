@@ -8,15 +8,19 @@ export function useAgentTask(taskId: string) {
   const [task, setTask] = useState<AgentTaskSnapshot | null>(null);
   const [events, setEvents] = useState<AgentTaskEvent[]>([]);
   const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(Boolean(taskId));
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
     if (!taskId) return;
     try {
+      setLoading(true);
       setTask(await api.agentTask(taskId));
       setError(undefined);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setLoading(false);
     }
   }, [taskId]);
 
@@ -24,6 +28,7 @@ export function useAgentTask(taskId: string) {
     setTask(null);
     setEvents([]);
     setError(undefined);
+    setLoading(Boolean(taskId));
     void refresh();
   }, [refresh]);
 
@@ -48,5 +53,5 @@ export function useAgentTask(taskId: string) {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
   }, []);
 
-  return { task, events, error, refresh };
+  return { task, events, error, loading, refresh };
 }

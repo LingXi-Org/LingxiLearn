@@ -1,43 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  agentTaskToCanvasGraph,
+  agentTaskToSimActivity,
   agentTaskToSimMessages,
   agentTaskToSimResources,
   dedupeSimEvents,
-  runEventsToSimActivity,
-  sessionToSimMessages,
+  draftToSimMessages,
 } from "@/lib/sim-adapter";
-import type { AgentTaskSnapshot, SessionSnapshot } from "@/lib/types";
-
-const session = (overrides: Partial<SessionSnapshot> = {}): SessionSnapshot => ({
-  id: "s-1",
-  status: "running",
-  error: "",
-  pack_id: "pack",
-  pack_version: "1",
-  mission: { id: "m", title: "任务", subtitle: "", why_not_chat: "", concepts: [] },
-  phase: "investigate",
-  stage: { scene: "packet_lab", props: {}, focus: [] },
-  move: { intent: "ask", say: "下一步？", hint_level: 0, evidence_ids: [], expects: "text", choices: [], rationale: "" },
-  plan: ["读取抓包"],
-  step_index: 0,
-  current_step: {},
-  hint_level: 0,
-  attempts: 0,
-  answer_unlocked: false,
-  mastery: {},
-  mastery_before: {},
-  mastery_changes: [],
-  misconceptions: [],
-  evidence: [],
-  transcript: [{ role: "learner", text: "我先看 DNS" }, { role: "coach", say: "很好，先定位查询和响应。" }],
-  probe_score: 0,
-  verify_score: 0,
-  step_results: [],
-  report: {},
-  pending: null,
-  brain: "scripted",
-  ...overrides,
-});
+import type { AgentTaskSnapshot } from "@/lib/types";
 
 const task = (overrides: Partial<AgentTaskSnapshot> = {}): AgentTaskSnapshot => ({
   id: "t-1",
@@ -59,34 +29,39 @@ const task = (overrides: Partial<AgentTaskSnapshot> = {}): AgentTaskSnapshot => 
   ...overrides,
 });
 
-describe("sim adapter", () => {
-  it("converts transcript and live assistant deltas into Sim messages", () => {
-    const messages = sessionToSimMessages(session(), [
-      { sequence: 4, kind: "assistant.delta", node: "coach", payload: { delta: "继续观察 ACK。" }, ts: "" },
+describe("agent task adapter", () => {
+  it("grows the fan-out graph from live events", () => {
+    const graph = agentTaskToCanvasGraph(task({ status: "completed" }), [
+      { sequence: 1, kind: "intent.started", agent: "intent", payload: {}, ts: null },
+      { sequence: 2, kind: "intent.completed", agent: "intent", payload: { topic: "TCP" }, ts: null },
+      { sequence: 3, kind: "agent.started", agent: "lecture_hook", payload: {}, ts: null },
+      { sequence: 4, kind: "agent.completed", agent: "visual_explainer", payload: {}, ts: null },
+      { sequence: 5, kind: "task.completed", agent: "coordinator", payload: { status: "completed" }, ts: null },
     ]);
-    expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "assistant"]);
-    expect(messages.at(-1)?.status).toBe("streaming");
+    expect(graph.nodes.map((node) => node.id)).toEqual(["input", "intent", "lecture_hook", "visual_explainer", "merge"]);
+    expect(graph.nodes.find((node) => node.id === "lecture_hook")?.status).toBe("running");
+    expect(graph.nodes.find((node) => node.id === "visual_explainer")?.status).toBe("complete");
+    expect(graph.edges.filter((edge) => edge.from === "intent")).toHaveLength(2);
   });
 
-  it("maps plan, tool lifecycle, evidence and failures", () => {
-    const activity = runEventsToSimActivity([
-      { sequence: 1, kind: "plan.ready", node: "plan", payload: { steps: ["检查 DNS", "检查 TCP"] }, ts: "" },
-      { sequence: 2, kind: "tool.started", node: "investigate", payload: { tool: "pcap.analyze" }, ts: "" },
-      { sequence: 3, kind: "tool.completed", node: "investigate", payload: { tool: "pcap.analyze", ok: true, duration_ms: 8 }, ts: "" },
-      { sequence: 4, kind: "run.failed", node: "", payload: { detail: "失败" }, ts: "" },
-    ], session());
-    expect(activity.plan).toEqual(["检查 DNS", "检查 TCP"]);
-    expect(activity.tools[0]).toMatchObject({ name: "pcap.analyze", status: "success" });
-    expect(activity.error).toBe("失败");
-  });
-
-  it("turns Agent Task events into subagent/resource blocks", () => {
+  it("streams key event output instead of static task cards", () => {
     const messages = agentTaskToSimMessages(task(), [
       { sequence: 1, kind: "agent.started", agent: "lecture_hook", payload: {}, ts: null },
-      { sequence: 2, kind: "artifact.ready", agent: "lecture_hook", payload: { kind: "background" }, ts: null },
     ]);
-    expect(messages[1].contentBlocks.map((block) => block.type)).toEqual(["subagent", "resource"]);
-    expect(agentTaskToSimResources(task()).map((resource) => resource.id)).toEqual(["t-1-background", "t-1-visual"]);
+    expect(messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(messages[1].contentBlocks.map((block) => block.type)).toEqual(["text"]);
+    expect(messages[1].content).toContain("Lecture Hook Agent 已接收任务");
+    expect(agentTaskToSimResources(task()).map((resource) => resource.kind)).toEqual(["background", "visual"]);
+  });
+
+  it("reports partial and failed task states", () => {
+    expect(agentTaskToSimActivity(task({ status: "partial" })).summary).toBe("任务正在执行");
+    expect(agentTaskToSimActivity(task({ status: "failed", error: "模型不可用" })).summary).toBe("模型不可用");
+    expect(agentTaskToSimMessages(task({ status: "failed", error: "模型不可用" }))[1].status).toBe("error");
+  });
+
+  it("creates a real-task draft while the POST is in flight", () => {
+    expect(draftToSimMessages("解释 TCP")[1].content).toContain("创建 Agent 任务");
   });
 
   it("deduplicates replayed SSE sequences while preserving order", () => {

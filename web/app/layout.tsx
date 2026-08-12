@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { OidcAdapterProvider } from "@/components/auth/oidc-adapter";
 
 export const metadata: Metadata = {
   title: "灵犀智学",
@@ -22,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:image" content="/og.png" />
       </head>
-      <body>{children}</body>
+      <body><OidcAdapterProvider>{children}</OidcAdapterProvider></body>
     </html>
   );
 }

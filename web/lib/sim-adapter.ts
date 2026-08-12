@@ -1,29 +1,11 @@
-import type {
-  AgentTaskEvent,
-  AgentTaskSnapshot,
-  Evidence,
-  RunEvent,
-  SessionSnapshot,
-  TranscriptRecord,
-} from "@/lib/types";
+import type { AgentTaskEvent, AgentTaskSnapshot } from "@/lib/types";
 
-/** The small client-side contract consumed by the Sim-derived chat surface. */
-export type SimBlockType = "text" | "tool_call" | "subagent" | "status" | "resource";
-
-export interface SimToolCall {
-  id: string;
-  name: string;
-  status: "executing" | "success" | "error";
-  displayTitle: string;
-  detail?: string;
-  agent?: string;
-}
+export type SimBlockType = "text" | "subagent" | "status" | "resource";
 
 export interface SimContentBlock {
   type: SimBlockType;
   id: string;
   content?: string;
-  toolCall?: SimToolCall;
   agent?: string;
   title?: string;
   status?: "running" | "complete" | "error";
@@ -37,11 +19,18 @@ export interface SimMessage {
   status: "complete" | "streaming" | "error";
 }
 
+export interface SimActivityTool {
+  id: string;
+  displayTitle: string;
+  detail?: string;
+  status: "executing" | "success" | "error";
+}
+
 export interface SimActivity {
   summary: string;
-  plan: string[];
-  tools: SimToolCall[];
-  evidence: Pick<Evidence, "id" | "summary" | "source">[];
+  agents: SimAgentRun[];
+  tools: SimActivityTool[];
+  evidence: Array<{ id: string; summary: string; source: string }>;
   running: boolean;
   error?: string;
 }
@@ -49,170 +38,227 @@ export interface SimActivity {
 export interface SimResourceDescriptor {
   id: string;
   title: string;
-  kind: "learning-artifact" | "background" | "visual";
+  kind: "background" | "visual";
   available: boolean;
   description: string;
 }
 
-function textForTranscript(record: TranscriptRecord): string {
-  return record.role === "coach" ? String(record.say ?? "") : String(record.text ?? "");
+export type AgentCanvasNodeKind = "input" | "intent" | "agent" | "merge";
+export type AgentCanvasStatus = "pending" | "running" | "complete" | "error";
+
+export interface AgentCanvasNode {
+  id: string;
+  label: string;
+  kind: AgentCanvasNodeKind;
+  status: AgentCanvasStatus;
+  detail: string;
 }
 
-export function transcriptToSimMessages(transcript: TranscriptRecord[]): SimMessage[] {
-  return transcript.flatMap((record, index) => {
-    if (record.role === "system") return [];
-    const content = textForTranscript(record).trim();
-    if (!content) return [];
-    return [{
-      id: `sim-message-${index}-${record.role}`,
-      role: record.role === "learner" ? "user" as const : "assistant" as const,
-      content,
-      contentBlocks: [{ type: "text", id: `text-${index}`, content }],
-      status: "complete" as const,
-    }];
-  });
+export interface AgentCanvasEdge {
+  from: string;
+  to: string;
+  label: string;
+}
+
+export interface AgentCanvasGraph {
+  nodes: AgentCanvasNode[];
+  edges: AgentCanvasEdge[];
+}
+
+export interface SimAgentRunItem {
+  id: string;
+  content: string;
+  status: "running" | "complete" | "error";
+}
+
+export interface SimAgentRun {
+  id: string;
+  agent: string;
+  label: string;
+  status: "running" | "complete" | "error";
+  items: SimAgentRunItem[];
+}
+
+const TERMINAL_STATUSES = new Set(["completed", "partial", "failed"]);
+
+function statusForSnapshot(
+  snapshot: AgentTaskSnapshot["agents"][keyof AgentTaskSnapshot["agents"]],
+): AgentCanvasStatus {
+  if (snapshot.status === "completed") return "complete";
+  if (snapshot.status === "failed") return "error";
+  return "pending";
+}
+
+function eventStatus(
+  events: AgentTaskEvent[],
+  agent: string,
+  current: AgentCanvasStatus,
+): AgentCanvasStatus {
+  const relevant = events
+    .filter((event) => event.agent === agent || (agent === "intent" && event.kind.startsWith("intent.")))
+    .sort((a, b) => a.sequence - b.sequence);
+  let status = current;
+  for (const event of relevant) {
+    if (event.kind.endsWith(".started")) status = "running";
+    if (event.kind.endsWith(".completed")) status = "complete";
+    if (event.kind.endsWith(".failed")) status = "error";
+  }
+  return status;
+}
+
+export function agentTaskToCanvasGraph(
+  task: AgentTaskSnapshot | null,
+  events: AgentTaskEvent[] = [],
+): AgentCanvasGraph {
+  if (!task) {
+    return {
+      nodes: [],
+      edges: [],
+    };
+  }
+
+  const orderedEvents = dedupeSimEvents(events);
+  const agentIds = [...new Set(orderedEvents.map((event) => event.agent).filter((agent) => agent && agent !== "coordinator"))];
+  const nodes: AgentCanvasNode[] = [{ id: "input", label: "User input", kind: "input", status: "complete", detail: task.prompt }];
+  for (const agent of agentIds) {
+    const snapshot = agent === "intent" ? task.agents.intent : agent === "lecture_hook" ? task.agents.lecture_hook : agent === "visual_explainer" ? task.agents.visual_explainer : { status: "pending" as const };
+    const relevant = orderedEvents.filter((event) => event.agent === agent);
+    const latest = relevant.at(-1);
+    nodes.push({
+      id: agent,
+      label: agentLabel(agent),
+      kind: agent === "intent" ? "intent" : "agent",
+      status: eventStatus(orderedEvents, agent, statusForSnapshot(snapshot)),
+      detail: latest ? eventLine(latest, task) : "等待执行",
+    });
+  }
+  const terminal = TERMINAL_STATUSES.has(task.status) || orderedEvents.some((event) => event.kind === "task.completed" || event.kind === "task.failed");
+  if (terminal) nodes.push({ id: "merge", label: "Merge results", kind: "merge", status: task.status === "failed" ? "error" : "complete", detail: task.error || "汇总当前 Agent 产物" });
+
+  const edges: AgentCanvasEdge[] = [];
+  const intent = agentIds.includes("intent") ? "intent" : agentIds[0];
+  if (intent) edges.push({ from: "input", to: intent, label: "识别" });
+  const specialists = agentIds.filter((agent) => agent !== intent);
+  for (const agent of specialists) edges.push({ from: intent || "input", to: agent, label: "分发" });
+  if (terminal) for (const agent of specialists.length ? specialists : intent ? [intent] : []) edges.push({ from: agent, to: "merge", label: "产物" });
+  return { nodes, edges };
+}
+
+function taskStatus(task: AgentTaskSnapshot): SimMessage["status"] {
+  if (task.status === "failed") return "error";
+  if (TERMINAL_STATUSES.has(task.status)) return "complete";
+  return "streaming";
 }
 
 export function draftToSimMessages(prompt: string): SimMessage[] {
   return [
     {
-      id: "sim-draft-user",
+      id: "draft-user",
       role: "user",
       content: prompt,
       contentBlocks: [{ type: "text", id: "draft-user-text", content: prompt }],
       status: "complete",
     },
     {
-      id: "sim-draft-status",
+      id: "draft-status",
       role: "assistant",
-      content: "当前自由 Prompt 规划能力尚未接入 LingxiGraph；此页面保留为 Sim 风格的占位会话。",
-      contentBlocks: [{ type: "status", id: "draft-status", content: "未连接后端任务", status: "complete" }],
-      status: "complete",
+      content: "正在创建 Agent 任务…",
+      contentBlocks: [{ type: "status", id: "draft-status-block", content: "正在创建 Agent 任务…", status: "running" }],
+      status: "streaming",
     },
   ];
 }
 
-function lastAssistantContent(messages: SimMessage[]): string {
-  return [...messages].reverse().find((message) => message.role === "assistant")?.content ?? "";
-}
-
-function liveDelta(events: RunEvent[], messages: SimMessage[]): string {
-  const delta = events
-    .filter((event) => event.kind === "assistant.delta")
-    .sort((a, b) => a.sequence - b.sequence)
-    .map((event) => String(event.payload.delta ?? ""))
-    .join("");
-  if (!delta.trim()) return "";
-  const previous = lastAssistantContent(messages);
-  return previous.endsWith(delta) || delta.endsWith(previous) ? "" : delta;
-}
-
-export function sessionToSimMessages(session: SessionSnapshot, events: RunEvent[] = []): SimMessage[] {
-  const messages = transcriptToSimMessages(session.transcript ?? []);
-  const delta = liveDelta(events, messages);
-  if (!delta) return messages;
-  return [...messages, {
-    id: `sim-live-${session.id}-${Math.max(...events.map((event) => event.sequence), 0)}`,
-    role: "assistant",
-    content: delta,
-    contentBlocks: [{ type: "text", id: "live-text", content: delta }],
-    status: "streaming",
-  }];
-}
-
-function toolCallFromRunEvent(event: RunEvent): SimToolCall | null {
-  if (event.kind !== "tool.started" && event.kind !== "tool.completed") return null;
-  const name = String(event.payload.tool ?? "tool");
-  const ok = event.payload.ok !== false;
-  return {
-    id: `tool-${name}`,
-    name,
-    displayTitle: name,
-    status: event.kind === "tool.started" ? "executing" : ok ? "success" : "error",
-    detail: event.kind === "tool.completed"
-      ? ok
-        ? event.payload.duration_ms === undefined ? "完成" : `完成 · ${String(event.payload.duration_ms)} ms`
-        : String(event.payload.error ?? "工具执行失败")
-      : undefined,
-  };
-}
-
-export function runEventsToSimActivity(events: RunEvent[], session?: SessionSnapshot | null): SimActivity {
-  const ordered = [...events].sort((a, b) => a.sequence - b.sequence);
-  const tools = new Map<string, SimToolCall>();
-  let plan = session?.plan ?? [];
-  let summary = "等待任务状态";
-  let error: string | undefined;
-
-  for (const event of ordered) {
-    if (event.kind === "plan.ready" && Array.isArray(event.payload.steps)) plan = event.payload.steps.map(String);
-    const tool = toolCallFromRunEvent(event);
-    if (tool) tools.set(tool.name, tool);
-    if (event.kind === "run.failed") error = String(event.payload.detail ?? event.payload.message ?? "任务运行失败");
-    if (event.kind === "node.started") summary = `正在执行 ${event.node || "下一步"}`;
-    if (event.kind === "assistant.delta") summary = "正在生成响应";
-  }
-
-  const phaseText: Record<string, string> = {
-    intake: "正在读取任务上下文",
-    diagnose: "正在诊断当前掌握情况",
-    plan: "正在生成学习路径",
-    investigate: "正在调用专业工具分析真实工件",
-    coach: "正在整理下一步引导",
-    await_learner: "等待你的输入",
-    judge: "正在判定作答并更新证据",
-    advance: "正在推进任务阶段",
-    verify: "正在验证学习结果",
-    report: "正在生成学习报告",
-    done: "任务已完成",
-  };
-
-  return {
-    summary: error ?? phaseText[session?.phase ?? ""] ?? summary,
-    plan,
-    tools: [...tools.values()],
-    evidence: (session?.evidence ?? []).map(({ id, summary: evidenceSummary, source }) => ({ id, summary: evidenceSummary, source })),
-    running: session?.status === "running",
-    error,
-  };
-}
-
 export function agentTaskToSimMessages(task: AgentTaskSnapshot, events: AgentTaskEvent[] = []): SimMessage[] {
-  const blocks: SimContentBlock[] = [];
-  for (const event of [...events].sort((a, b) => a.sequence - b.sequence)) {
-    if (event.kind === "agent.started" || event.kind === "agent.completed" || event.kind === "agent.failed") {
-      const status = event.kind === "agent.failed" ? "error" : event.kind === "agent.completed" ? "complete" : "running";
-      blocks.push({ type: "subagent", id: `agent-${event.sequence}`, agent: event.agent, title: event.agent, status });
-    }
-    if (event.kind === "artifact.ready") {
-      blocks.push({ type: "resource", id: `artifact-${event.sequence}`, title: String(event.payload.kind ?? "学习产物"), status: "complete" });
-    }
-  }
-  const status = task.status === "failed" ? "error" : task.status === "completed" || task.status === "partial" ? "complete" : "streaming";
-  const blockStatus = status === "streaming" ? "running" : status;
+  const status = taskStatus(task);
+  const lines = dedupeSimEvents(events).map((event) => eventLine(event, task)).filter(Boolean);
+  const content = lines.join("\n") || "正在连接 Agent 事件流…";
+
   return [
     {
-      id: `sim-task-prompt-${task.id}`,
+      id: `task-prompt-${task.id}`,
       role: "user",
       content: task.prompt,
       contentBlocks: [{ type: "text", id: `prompt-${task.id}`, content: task.prompt }],
       status: "complete",
     },
     {
-      id: `sim-task-result-${task.id}`,
+      id: `task-result-${task.id}`,
       role: "assistant",
-      content: task.intent.topic ? `正在围绕“${task.intent.topic}”准备学习产物。` : "正在准备学习产物。",
-      contentBlocks: blocks.length ? blocks : [{ type: "status", id: `status-${task.id}`, content: task.error || "Agent 正在处理任务", status: blockStatus }],
+      content,
+      contentBlocks: [{ type: "text", id: `task-stream-${task.id}`, content }],
       status,
     },
   ];
 }
 
+export function agentTaskToSimActivity(task: AgentTaskSnapshot | null, events: AgentTaskEvent[] = []): SimActivity {
+  if (!task) return { summary: "", agents: [], tools: [], evidence: [], running: false };
+  const latest = [...events].sort((a, b) => b.sequence - a.sequence)[0];
+  const summary = task.status === "failed"
+    ? task.error || "任务执行失败"
+    : latest?.kind === "intent.started"
+      ? "正在识别问题意图"
+      : latest?.agent === "lecture_hook"
+        ? "正在生成课堂 Hook 背景产物"
+        : latest?.agent === "visual_explainer"
+          ? "正在生成交互式可视化页面"
+          : task.status === "completed"
+            ? "两个 Agent 已完成"
+            : "任务正在执行";
+  return {
+    summary,
+    agents: agentTaskToAgentRuns(task, events),
+    tools: [],
+    evidence: [],
+    running: task.status === "queued" || task.status === "running",
+    error: task.error || undefined,
+  };
+}
+
+export function agentTaskToAgentRuns(task: AgentTaskSnapshot, events: AgentTaskEvent[]): SimAgentRun[] {
+  const ordered = dedupeSimEvents(events).filter((event) => event.agent && event.agent !== "coordinator");
+  return [...new Set(ordered.map((event) => event.agent))].map((agent) => {
+    const relevant = ordered.filter((event) => event.agent === agent);
+    const failed = relevant.some((event) => event.kind.endsWith("failed"));
+    const complete = relevant.some((event) => event.kind.endsWith("completed"));
+    return {
+      id: `run-${agent}`,
+      agent,
+      label: agentLabel(agent),
+      status: failed ? "error" : complete ? "complete" : "running",
+      items: relevant.map((event) => ({ id: `${event.sequence}-${event.kind}`, content: eventLine(event, task), status: event.kind.endsWith("failed") ? "error" : event.kind.endsWith("completed") || event.kind === "artifact.ready" ? "complete" : "running" })),
+    };
+  });
+}
+
+export function agentLabel(agent: string): string {
+  if (agent === "intent") return "Intent Recognizer";
+  if (agent === "lecture_hook") return "Lecture Hook Agent";
+  if (agent === "visual_explainer") return "Visual Explainer Agent";
+  return agent.split(/[_-]/).map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : "").join(" ");
+}
+
+function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
+  const message = typeof event.payload.message === "string" ? event.payload.message : "";
+  if (event.kind === "task.started") return "任务已创建，正在启动意图识别。";
+  if (event.kind === "intent.started") return "正在识别问题意图…";
+  if (event.kind === "intent.completed") return `已识别主题：“${String(event.payload.topic || task.intent.topic || "未命名主题")}”。`;
+  if (event.kind === "agent.started") return `${agentLabel(event.agent)} 已接收任务，开始执行。`;
+  if (event.kind === "agent.output") return message || `${agentLabel(event.agent)} 生成了新的关键输出。`;
+  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : "背景产物"}已就绪。`;
+  if (event.kind === "agent.completed") return `${agentLabel(event.agent)} 已完成。`;
+  if (event.kind === "agent.failed") return `${agentLabel(event.agent)} 执行失败：${message || String(event.payload.error || "未知错误")}`;
+  if (event.kind === "task.completed") return event.payload.status === "partial" ? "任务部分完成，可查看当前已生成产物。" : "所有 Agent 已完成。";
+  if (event.kind === "task.failed") return message || task.error || "任务执行失败。";
+  return "";
+}
+
 export function agentTaskToSimResources(task: AgentTaskSnapshot | null): SimResourceDescriptor[] {
   if (!task) return [];
   return [
-    { id: `${task.id}-background`, title: "背景文档", kind: "background", available: task.artifacts.background.available, description: "lecture-hook Agent 生成的来源与背景文档" },
-    { id: `${task.id}-visual`, title: "可视化讲解", kind: "visual", available: task.artifacts.visual.available, description: "visual-explainer Agent 生成的交互式讲解" },
+    { id: `${task.id}-background`, title: "Lecture hook 背景产物", kind: "background", available: task.artifacts.background.available, description: "lecture_hook Agent 生成的 Markdown 课堂背景" },
+    { id: `${task.id}-visual`, title: "Visual explainer 交互页面", kind: "visual", available: task.artifacts.visual.available, description: "visual_explainer Agent 生成的独立 HTML 页面" },
   ];
 }
 

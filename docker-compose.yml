@@ -4,9 +4,7 @@
 #   docker compose up --build
 #   open http://localhost:8080
 #
-# NOTE: this file was authored but could NOT be build-verified in the
-# environment where the project was developed (no Docker daemon available).
-# The local path — `make dev` — is verified end to end.
+# The Compose path is exercised by the Agent-task end-to-end verification.
 
 name: lingxilearn
 
@@ -23,6 +21,7 @@ x-api: &api
     LINGXILEARN_WEB_DIST: /app/web
   volumes:
     - ./packs:/app/packs:ro
+    - ./skills:/app/skills:ro
     - web-dist:/app/web:ro
     - api-var:/app/var
   depends_on:
@@ -51,6 +50,12 @@ services:
     build:
       context: ./web
       target: dist
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
+        NEXT_PUBLIC_LOGTO_ENDPOINT: ${NEXT_PUBLIC_LOGTO_ENDPOINT:-}
+        NEXT_PUBLIC_LOGTO_APP_ID: ${NEXT_PUBLIC_LOGTO_APP_ID:-}
+        NEXT_PUBLIC_LOGTO_RESOURCE: ${NEXT_PUBLIC_LOGTO_RESOURCE:-}
+        NEXT_PUBLIC_LOGTO_REDIRECT_URI: ${NEXT_PUBLIC_LOGTO_REDIRECT_URI:-}
     volumes:
       - web-dist:/web
     restart: "no"
