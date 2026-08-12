@@ -59,7 +59,7 @@ export function ArtifactWorkspace({
 }) {
   return (
     <section className="flex h-full min-h-0 flex-col bg-white" data-testid="artifact-workspace">
-      <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-[#dedede] bg-white px-3 sm:px-4">
+      <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-[#dedede] bg-white px-3 sm:px-4 lg:hidden">
         {onBackToConversation && (
           <button onClick={onBackToConversation} className="grid size-8 place-items-center rounded-lg hover:bg-white lg:hidden" aria-label="返回对话">
             <ArrowLeft className="size-4" />
@@ -83,7 +83,7 @@ export function ArtifactWorkspace({
         </div>
       </header>
 
-      <div className="artifact-stage min-h-0 flex-1 overflow-hidden border border-[#dedede] bg-[#fafafa] lg:m-0 lg:rounded-tl-[16px]">
+      <div className="artifact-stage min-h-0 flex-1 overflow-hidden border-t border-[#dedede] bg-[#fafafa]">
         {artifact.kind === "draft" && <DraftArtifact artifact={artifact} />}
         {artifact.kind === "empty" && <EmptyArtifact artifact={artifact} />}
         {artifact.kind === "assessment" && submit && <AssessmentArtifact key={artifact.id} title={artifact.title} items={artifact.items ?? []} kind={artifact.assessmentKind} busy={busy} submit={submit} />}
