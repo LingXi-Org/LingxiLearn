@@ -95,6 +95,8 @@ class ArtifactStore:
                 raise ArtifactError(f"empty lecture deck file: {name}")
             if len(content.encode("utf-8")) > self.max_html_bytes:
                 raise ArtifactError(f"lecture deck file exceeds {self.max_html_bytes} bytes: {name}")
+            if name == "lecture.json":
+                content = _normalize_lecture_json(content)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
             normalized[name] = content
@@ -239,6 +241,43 @@ def _run_node(node: str, script: Path, args: list[str], cwd: Path) -> dict[str, 
         "exit_code": completed.returncode,
         "output": ((completed.stdout or "") + (completed.stderr or ""))[-12000:],
     }
+
+
+def _normalize_lecture_json(content: str) -> str:
+    """Repair the common shorthand ``rect: [x, y, w, h]`` before validation.
+
+    The lecture schema intentionally uses an object so the fields remain self-
+    describing. Models occasionally emit the equivalent four-number array,
+    though, and the old validator indexed it with string keys, crashing the
+    whole graph instead of returning a useful validation result. This narrow
+    normalization keeps the generated geometry unchanged while preserving
+    strict validation for every other malformed shape.
+    """
+
+    try:
+        data = json.loads(content)
+    except (TypeError, json.JSONDecodeError):
+        return content
+
+    changed = False
+    for slide in data.get("slides", []) if isinstance(data, dict) else []:
+        if not isinstance(slide, dict):
+            continue
+        for anchor in slide.get("anchors", []) or []:
+            if not isinstance(anchor, dict):
+                continue
+            rect = anchor.get("rect")
+            if (
+                isinstance(rect, list)
+                and len(rect) == 4
+                and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in rect)
+            ):
+                anchor["rect"] = dict(zip(("x", "y", "w", "h"), rect))
+                changed = True
+
+    if not changed:
+        return content
+    return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 
 
 def _run_python(python: str, script: Path, args: list[str], cwd: Path) -> dict[str, Any]:
