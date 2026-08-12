@@ -30,7 +30,7 @@ from ..service import Service
 router = APIRouter(prefix="/api")
 
 TERMINAL = {"done", "failed", "cancelled"}
-AGENT_TERMINAL = {"completed", "partial", "failed"}
+AGENT_TERMINAL = {"handed_off", "completed", "partial", "failed"}
 
 
 def service_of(request: Request) -> Service:
@@ -138,6 +138,19 @@ class CreateAgentTask(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
 
 
+class AgentMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(min_length=1, max_length=4000)
+
+
+class QuizSubmissionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    submission_id: str = Field(min_length=1, max_length=128)
+    answers: dict[str, Any]
+
+
 @router.post("/sessions", status_code=201)
 async def create_session(
     body: CreateSession,
@@ -227,6 +240,40 @@ async def get_agent_task(
         return await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
+
+
+@router.post("/agent-tasks/{task_id}/messages", status_code=202)
+async def post_agent_message(
+    task_id: str,
+    body: AgentMessage,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    svc = service_of(request)
+    try:
+        await svc.agent_message(task_id, body.message, learner_id=context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"status": "accepted"}
+
+
+@router.post("/agent-tasks/{task_id}/quiz-submissions", status_code=202)
+async def submit_agent_quiz(
+    task_id: str,
+    body: QuizSubmissionBody,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    svc = service_of(request)
+    try:
+        return await svc.submit_agent_quiz(task_id, submission_id=body.submission_id, answers=body.answers, learner_id=context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+    except ValueError as exc:
+        detail = str(exc)
+        raise HTTPException(status_code=409 if detail in {"already_submitted", "task_not_waiting:awaiting_user"} or detail.startswith("task_not_waiting") else 400, detail=detail) from exc
 
 
 @router.get("/agent-tasks/{task_id}/artifacts/{kind}")

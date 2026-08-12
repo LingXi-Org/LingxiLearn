@@ -29,8 +29,55 @@ cp .env.example .env       # 改一下数据库密码
 docker compose up --build  # http://localhost:8080
 ```
 
-> ⚠️ compose 与 Dockerfile 已完整编写，但**在开发环境中没有 Docker daemon，未经构建验证**。
-> 本地 `make dev` 路径是端到端验证过的。
+### Docker 国内源与 `.env` 配置
+
+Compose 默认使用以下国内源：阿里云容器镜像、清华 PyPI、npmmirror npm、阿里云 Debian。需要更换镜像站时，只改 `.env` 中这四项即可：
+
+```dotenv
+DOCKER_REGISTRY=docker.m.daocloud.io
+PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+NPM_REGISTRY=https://registry.npmmirror.com
+APT_MIRROR=mirrors.aliyun.com
+```
+
+首次部署建议至少填写：
+
+```dotenv
+POSTGRES_PASSWORD=请改成随机强密码
+LINGXILEARN_PORT=8080
+LINGXILEARN_BRAIN=scripted
+DS_API_KEY=你的 DeepSeek API Key        # 使用 Agent Task 时填写；不使用可留空
+```
+
+`scripted` 模式不需要任何大模型 Key，可以直接启动。若使用 OpenAI 兼容模型，将以下三项改成对应服务商配置：
+
+```dotenv
+LINGXILEARN_BRAIN=openai
+LINGXILEARN_LLM_MODEL=模型名
+LINGXILEARN_LLM_BASE_URL=https://兼容接口地址/v1
+LINGXILEARN_LLM_API_KEY=API Key
+```
+
+Compose 默认是同源访问，`NEXT_PUBLIC_API_BASE` 保持为空；登录回调地址必须与身份服务中登记的地址完全一致，例如本地部署填写 `http://localhost:8080/auth/callback/`。生产环境还必须关闭开发免认证，并填写后端 OIDC 参数：
+
+```dotenv
+LINGXILEARN_INSECURE_DEV_AUTH=false
+LINGXILEARN_OIDC_ISSUER=https://你的身份服务地址
+LINGXILEARN_OIDC_AUDIENCE=你的 API audience/resource
+NEXT_PUBLIC_LOGTO_ENDPOINT=https://你的身份服务地址
+NEXT_PUBLIC_LOGTO_APP_ID=前端应用 client id
+NEXT_PUBLIC_LOGTO_RESOURCE=你的 API resource
+NEXT_PUBLIC_LOGTO_REDIRECT_URI=https://你的域名/auth/callback/
+```
+
+修改 `.env` 后执行：
+
+```bash
+docker compose config
+docker compose up -d --build
+```
+
+> ⚠️ 本地 `make dev` 路径是端到端验证过的；Docker 构建是否成功还取决于服务器能否访问所选镜像站和包源。
 
 ---
 
@@ -118,9 +165,9 @@ lingxigraph 2.2.0（PyPI）· SQLite / PostgreSQL
 ### 意图调度 Agent 与双 Skill 产物
 
 首页自由 Prompt 会创建一个 Agent Task。意图识别 Agent 先统一教学上下文，随后
-`lesson-intro` 与 `interactive-visual-explainer` 两个专用 subagent 从同一节点并行扇出，结果在
-右侧工作区的“背景文档 / 可视化讲解”标签页汇合。前者输出带来源和不确定性的 Markdown，
-后者输出一个零外部依赖的 HTML，并在任务目录内进行静态检查。
+`lesson-intro` 与 `interactive-lecture-deck` 从同一节点并行扇出，结果交给稳定契约的
+`quiz_generator` 生成结构化题目。任务暂停等待学习者对话或一次性答题；按需的
+`interactive-visual-explainer` 会在右侧打开独立讲解页面，完成或放弃答题后 handoff 回主图。
 
 新增 Agent 运行时读取以下配置；`DS_API_KEY` 不会进入日志、事件 payload 或 API 响应：
 

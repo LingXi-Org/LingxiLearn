@@ -26,11 +26,13 @@ lingxigraph 2.2.0 (PyPI) · SQLite | PostgreSQL
 
 ### Intent-driven Agent Tasks
 
-Free-form questions use a separate one-shot graph. `recognize_intent` normalizes
-the learner's topic, objective, level and duration, then fans out to
-`lecture_hook` and `visual_explainer` in the same graph tick. Both branches are
-joined by `merge_results`, so one failed specialist can still leave a `partial`
-task with the other artifact available.
+Free-form questions use a durable difficult-knowledge subgraph.
+`recognize_intent` normalizes the learner's topic, objective, level and duration,
+then fans out to `lecture_hook` (`lesson-intro`) and
+`interactive_lecture_deck` in the same graph tick. Both branches feed the
+contract-only `quiz_generator`, after which the task waits for the learner.
+Subsequent messages are routed through the same recognizer to answer, invoke the
+general `interactive-visual-explainer`, submit once, or handoff to the main graph.
 
 The specialists receive LingxiGraph 2.2.0 `FilesystemSkillSource` instances for
 the vendored skills under `skills/`. The lecture branch gets only the public,

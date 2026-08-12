@@ -68,31 +68,35 @@ function Workspace() {
     setCreating(true);
     setCreateError(undefined);
     try {
-      const created = await api.createAgentTask(text);
-      router.push(`/workspace/?task=${encodeURIComponent(created.id)}`);
+      if (taskId) {
+        await api.agentMessage(taskId, text);
+      } else {
+        const created = await api.createAgentTask(text);
+        router.push(`/workspace/?task=${encodeURIComponent(created.id)}`);
+      }
     } catch (cause) {
       setCreateError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setCreating(false);
     }
-  }, [router]);
+  }, [router, taskId]);
 
   const messages = task ? agentTaskToSimMessages(task, events) : prompt ? draftToSimMessages(prompt) : [];
   const activity = agentTaskToSimActivity(task, events);
   const error = createError || taskError;
   const title = task?.intent.topic || task?.prompt || prompt || "新问题";
-  const conversation = <SimChat messages={messages} activity={activity} placeholder="输入你想学习的问题…" disabled={loading && !task} running={creating || Boolean(task && (task.status === "queued" || task.status === "running"))} onSend={handleSend} header={<header className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-1)] px-4"><span className="size-1.5 rounded-full bg-[var(--brand)]" /><span className="min-w-0 flex-1 truncate text-[12px] font-medium">{title}</span><span className="text-[10px] text-[var(--text-muted)]">{task ? statusLabel(task.status) : creating ? "正在创建" : "待开始"}</span><SimButton type="button" variant="quiet" size="sm" className="lg:hidden" onClick={() => setMobileView("artifact")}>工作区</SimButton></header>} notice={error ? <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800">{error}</div> : undefined} />;
+  const conversation = <SimChat messages={messages} activity={activity} placeholder={task?.status === "awaiting_user" ? "继续追问，或说明是否要答题…" : "输入你想学习的问题…"} disabled={loading && !task} running={creating || Boolean(task && (task.status === "queued" || task.status === "running"))} onSend={handleSend} header={<header className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface-1)] px-4"><span className="size-1.5 rounded-full bg-[var(--brand)]" /><span className="min-w-0 flex-1 truncate text-[12px] font-medium">{title}</span><span className="text-[10px] text-[var(--text-muted)]">{task ? statusLabel(task.status) : creating ? "正在创建" : "待开始"}</span><SimButton type="button" variant="quiet" size="sm" className="lg:hidden" onClick={() => setMobileView("artifact")}>工作区</SimButton></header>} notice={error ? <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800">{error}</div> : undefined} />;
   const viewer = <SimResourcePanel task={task} events={events} initialTab={requestedTab} onBackToConversation={() => setMobileView("conversation")} />;
   const content = <div className={layoutReady ? "sim-three-column-layout sim-layout-ready h-full min-h-0 bg-[var(--bg)]" : "sim-three-column-layout sim-layout-entering h-full min-h-0 bg-[var(--bg)]"}>{isDesktop ? <Group groupRef={groupRef} orientation="horizontal" defaultLayout={{ conversation: 38, artifact: 62 }} onLayoutChanged={saveLayout}><Panel id="conversation" minSize="28%" maxSize="58%"><div className="sim-conversation-pane h-full min-h-0">{conversation}</div></Panel><Separator id="workspace-separator" aria-label="调整对话与工作区宽度" title="拖动调整宽度，双击恢复默认" onDoubleClick={() => groupRef.current?.setLayout({ conversation: 38, artifact: 62 })} className="workspace-resize-handle group relative z-20 w-2 shrink-0 cursor-col-resize touch-none bg-[var(--bg)] outline-none"><span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[var(--border)] transition-all group-hover:w-0.5 group-hover:bg-[var(--text-primary)] group-focus-visible:w-0.5" /></Separator><Panel id="artifact" minSize="42%"><div className="sim-artifact-pane h-full min-h-0">{viewer}</div></Panel></Group> : <div className="h-full lg:hidden"><div className={mobileView === "conversation" ? "h-full" : "hidden"}>{conversation}</div><div className={mobileView === "artifact" ? "h-full" : "hidden"}>{viewer}</div></div>}</div>;
   return <SimAppShell title={title} currentTaskId={task?.id || taskId || undefined} taskStatus={task?.status}><>{content}</></SimAppShell>;
 }
 
 function parseResourceTab(value: string | null): ResourceTab {
-  return value === "background" || value === "visual" ? value : "canvas";
+  return value === "lecture-deck" || value === "quiz" || value === "visual" ? value : "canvas";
 }
 
 function statusLabel(status?: string) {
-  return status === "completed" ? "已完成" : status === "partial" ? "部分完成" : status === "failed" ? "失败" : status === "running" ? "执行中" : "排队中";
+  return status === "handed_off" ? "已返回主图" : status === "awaiting_user" ? "等待你的输入" : status === "completed" ? "已完成" : status === "partial" ? "部分完成" : status === "failed" ? "失败" : status === "running" ? "执行中" : "排队中";
 }
 
 function WorkspaceLoading() {

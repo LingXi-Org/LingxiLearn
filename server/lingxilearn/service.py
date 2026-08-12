@@ -15,6 +15,7 @@ from ``Last-Event-ID``.  A reconnect resumes exactly where it left off.
 from __future__ import annotations
 
 import asyncio
+from html import escape
 import inspect
 import logging
 from collections import defaultdict
@@ -31,6 +32,7 @@ from lingxigraph.errors import (
 
 from .agents.artifact_store import ArtifactError, ArtifactStore
 from .agents.graph import EVENT_CHANNEL, build_agent_graph
+from .agents.contracts import QuizGenerationResult, quiz_public
 from .brains.base import TutorBrain
 from .config import Settings, get_settings
 from .kernel.graph import build_graph
@@ -139,7 +141,7 @@ class Service:
             # catalog. Keeping one model instance per role makes the cache
             # prefix stable across tasks and avoids cross-agent drift errors.
             self.agent_model = {}
-            for role in ("intent", "lecture_hook", "lecture_hook_structured", "visual_explainer"):
+            for role in ("intent", "lecture_hook", "lecture_hook_structured", "interactive_lecture_deck", "quiz_generator", "answer_user", "interactive_visual_explainer"):
                 if role == "lecture_hook" and self.settings.agent_base_url.rstrip("/") == "https://api.deepseek.com":
                     self.agent_model[role] = DeepSeekResponsesModel(
                         self.settings.agent_model,
@@ -262,6 +264,10 @@ class Service:
             status="queued",
             intent={},
             lecture_result={},
+            deck_result={},
+            quiz_result={},
+            handoff_result={},
+            user_messages=[],
             visual_result={},
         )
         await self.repo.append_agent_events(
@@ -297,14 +303,20 @@ class Service:
             "agents": {
                 "intent": _agent_snapshot(record.intent),
                 "lecture_hook": _agent_snapshot(record.lecture_result),
-                "visual_explainer": _agent_snapshot(record.visual_result),
+                "interactive_lecture_deck": _agent_snapshot(record.deck_result),
+                "quiz_generator": _agent_snapshot(record.quiz_result),
+                "interactive_visual_explainer": _agent_snapshot(record.visual_result),
+                "main_graph_placeholder": _agent_snapshot(record.handoff_result),
             },
             "artifacts": {
-                "background": {
-                    "available": bool(
-                        record.lecture_result and record.lecture_result.get("selected_hook")
-                    ),
-                    "url": f"/api/agent-tasks/{record.id}/artifacts/background",
+                "lecture_deck": {
+                    "available": self.agent_artifacts.deck_path(record.id).exists(),
+                    "url": f"/api/agent-tasks/{record.id}/artifacts/lecture-deck",
+                    **({"metadata": record.deck_result} if record.deck_result else {}),
+                },
+                "quiz": {
+                    "available": bool(record.quiz_result),
+                    "data": quiz_public(record.quiz_result) if record.quiz_result else None,
                 },
                 "visual": {
                     "available": self.agent_artifacts.html_path(record.id).exists(),
@@ -312,6 +324,7 @@ class Service:
                     **({"metadata": record.visual_result} if record.visual_result else {}),
                 },
             },
+            "quiz_submission": await _submission_snapshot(self.repo, record.id),
             "error": record.error,
             "created_at": record.created_at.isoformat() if record.created_at else None,
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
@@ -335,6 +348,15 @@ class Service:
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
+        if kind == "lecture-deck":
+            try:
+                return (
+                    self.agent_artifacts.deck_path(task_id).read_bytes(),
+                    "text/html; charset=utf-8",
+                    "lecture.html",
+                )
+            except OSError as exc:
+                raise KeyError("lecture deck is not ready") from exc
         if kind == "visual":
             try:
                 return (
@@ -344,18 +366,42 @@ class Service:
                 )
             except ArtifactError as exc:
                 raise KeyError(str(exc)) from exc
-        if kind == "background":
-            result = record.lecture_result or {}
-            if not result.get("selected_hook"):
-                raise KeyError("background artifact is not ready")
-            return (
-                render_background_markdown(result).encode("utf-8"),
-                "text/markdown; charset=utf-8",
-                "background.md",
-            )
         raise KeyError(f"unknown artifact kind: {kind}")
 
-    async def _drive_agent_task(self, task_id: str, learner_id: str, prompt: str) -> None:
+    async def agent_message(self, task_id: str, message: str, learner_id: str | None = None) -> None:
+        record = await (self.repo.get_agent_task_for_learner(task_id, learner_id) if learner_id else self.repo.get_agent_task(task_id))
+        if record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        if record.status != "awaiting_user":
+            raise ValueError(f"task_not_waiting:{record.status}")
+        if not message.strip():
+            raise ValueError("message must not be empty")
+        self._spawn(self._drive_agent_task(task_id, record.learner_id, "", resume={"message": message, "kind": "chat"}))
+
+    async def submit_agent_quiz(
+        self,
+        task_id: str,
+        *,
+        submission_id: str,
+        answers: dict[str, Any],
+        learner_id: str | None = None,
+    ) -> dict[str, Any]:
+        record = await (self.repo.get_agent_task_for_learner(task_id, learner_id) if learner_id else self.repo.get_agent_task(task_id))
+        if record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        existing = await self.repo.get_quiz_submission(task_id)
+        if existing is not None:
+            if existing.submission_id == submission_id:
+                return {"status": "duplicate", "submission": await _submission_snapshot(self.repo, task_id)}
+            raise ValueError("already_submitted")
+        if record.status != "awaiting_user":
+            raise ValueError(f"task_not_waiting:{record.status}")
+        result = _grade_agent_quiz(record.quiz_result or {}, answers)
+        await self.repo.create_quiz_submission(task_id=task_id, submission_id=submission_id, answers=answers, per_question=result["per_question"], total_score=result["total_score"], total_points=result["total_points"])
+        self._spawn(self._drive_agent_task(task_id, record.learner_id, "", resume={"message": "已提交答题", "kind": "quiz_submit", "answers": answers}))
+        return {"status": "accepted", "submission": await _submission_snapshot(self.repo, task_id)}
+
+    async def _drive_agent_task(self, task_id: str, learner_id: str, prompt: str, *, resume: dict[str, Any] | None = None) -> None:
         if self.agent_model is None:
             await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
             self._notify_agent(task_id)
@@ -383,17 +429,8 @@ class Service:
         }
         buffer: list[dict[str, Any]] = []
         try:
-            async for event in graph.astream(
-                {
-                    "task_id": task_id,
-                    "prompt": prompt,
-                    "errors": [],
-                    "status": "running",
-                },
-                config,
-                stream_mode="events",
-                context={"learner_id": learner_id, "locale": "zh-CN"},
-            ):
+            graph_input: Any = Command(resume=resume) if resume is not None else {"task_id": task_id, "prompt": prompt, "errors": [], "status": "running"}
+            async for event in graph.astream(graph_input, config, stream_mode="events", context={"learner_id": learner_id, "locale": "zh-CN"}):
                 if event.kind is EventKind.CUSTOM:
                     data = dict(event.data or {})
                     if data.get("channel") == EVENT_CHANNEL:
@@ -434,7 +471,7 @@ class Service:
             await self.repo.append_agent_events(task_id, buffer)
         state = await graph.aget_state(config)
         values = dict(getattr(state, "values", None) or {})
-        status = str(values.get("status") or "partial")
+        status = str(values.get("status") or ("awaiting_user" if getattr(state, "interrupts", None) else "partial"))
         errors = [str(item) for item in values.get("errors") or []]
         await self.repo.set_agent_task_status(task_id, status, "; ".join(errors))
         self._notify_agent(task_id)
@@ -682,6 +719,45 @@ def _agent_snapshot(result: dict[str, Any] | None) -> dict[str, Any]:
     return {"status": "completed" if result else "pending"}
 
 
+async def _submission_snapshot(repo: Repository, task_id: str) -> dict[str, Any] | None:
+    row = await repo.get_quiz_submission(task_id)
+    if row is None:
+        return None
+    return {
+        "submission_id": row.submission_id,
+        "submitted_at": row.created_at.isoformat() if row.created_at else None,
+        "total_score": row.total_score,
+        "total_points": row.total_points,
+        "per_question": row.per_question or [],
+        "handoff_reason": row.handoff_reason,
+    }
+
+
+def _grade_agent_quiz(quiz: dict[str, Any], answers: dict[str, Any]) -> dict[str, Any]:
+    per_question: list[dict[str, Any]] = []
+    total_score = 0.0
+    total_points = 0
+    for question in quiz.get("questions", []):
+        qid = str(question.get("id", ""))
+        points = int(question.get("points", 1))
+        total_points += points
+        actual = answers.get(qid)
+        expected = question.get("answer")
+        qtype = question.get("type")
+        if qtype == "multi_choice":
+            correct = set(actual or []) == set(expected or [])
+        elif qtype == "short_text":
+            text = str(actual or "").strip().casefold()
+            keywords = [str(item).strip().casefold() for item in question.get("keywords", []) if str(item).strip()]
+            correct = bool(keywords) and all(keyword in text for keyword in keywords)
+        else:
+            correct = str(actual or "") == str(expected or "")
+        score = points if correct else 0
+        total_score += score
+        per_question.append({"id": qid, "correct": correct, "score": score, "points": points})
+    return {"per_question": per_question, "total_score": total_score, "total_points": total_points}
+
+
 def render_background_markdown(result: dict[str, Any]) -> str:
     selected = result.get("selected_hook") or {}
     research = result.get("research") or {}
@@ -756,3 +832,20 @@ def render_background_markdown(result: dict[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings)
         lines.append("")
     return "\n".join(lines).strip() + "\n"
+
+
+def render_background_html(result: dict[str, Any]) -> str:
+    """Render the lesson-intro result as a self-contained browser artifact."""
+    selected = result.get("selected_hook") or {}
+    esc = lambda value: escape(str(value or ""))
+    sections = (("开场", "opening"), ("背景故事", "story"), ("抛给学习者的问题", "question"), ("过渡到知识点", "transition"), ("为什么这个 Hook 有效", "why_this_hook_works"))
+    body = "".join(
+        f'<section><h2>{esc(title)}</h2><p>{esc(selected.get(key)).replace(chr(10), "<br>")}</p></section>'
+        for title, key in sections
+        if selected.get(key)
+    )
+    if selected.get("visual_cue"):
+        body += f'<section><h2>可视化提示</h2><p>{esc(selected["visual_cue"])}</p></section>'
+    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected.get("title") or "课堂背景 Hook")}</title><style>
+:root {{ color-scheme: light dark; font-family: Inter,ui-sans-serif,system-ui,sans-serif; background:#fff; color:#202126; }} @media (prefers-color-scheme:dark) {{ :root {{ background:#171717; color:#f5f5f5; }} section {{ border-color:#3a3a3a; }} .meta {{ color:#aaa; }} }} body {{ margin:0; padding:clamp(24px,5vw,64px); line-height:1.75; }} main {{ max-width:860px; margin:auto; }} h1 {{ margin:0 0 8px; font-size:clamp(28px,5vw,48px); line-height:1.2; }} .meta {{ color:#666; margin:0 0 40px; }} section {{ border-top:1px solid #e5e5e5; padding:24px 0; }} h2 {{ font-size:18px; margin:0 0 8px; }} p {{ margin:0; }}
+</style></head><body><main><h1>{esc(selected.get("title") or "课堂背景 Hook")}</h1><p class="meta">知识点：{esc(result.get("topic"))}</p>{body}</main></body></html>'''

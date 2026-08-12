@@ -106,12 +106,38 @@ class AgentTask(Base):
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
     intent: Mapped[dict] = mapped_column(JSON, default=dict)
     lecture_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    deck_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    quiz_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    handoff_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    user_messages: Mapped[list] = mapped_column(JSON, default=list)
+    # Kept for backwards-compatible reads of tasks created before the subgraph
+    # refactor. New code never creates or renders this artifact.
     visual_result: Mapped[dict] = mapped_column(JSON, default=dict)
     error: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class QuizSubmission(Base):
+    """The single durable submission allowed for one AgentTask."""
+
+    __tablename__ = "quiz_submissions"
+    __table_args__ = (
+        UniqueConstraint("task_id", name="uq_quiz_submissions_task"),
+        UniqueConstraint("submission_id", name="uq_quiz_submissions_submission"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    submission_id: Mapped[str] = mapped_column(String(128))
+    answers: Mapped[dict] = mapped_column(JSON, default=dict)
+    per_question: Mapped[list] = mapped_column(JSON, default=list)
+    total_score: Mapped[float] = mapped_column(Float, default=0)
+    total_points: Mapped[int] = mapped_column(Integer, default=0)
+    handoff_reason: Mapped[str] = mapped_column(String(64), default="quiz_completed")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class AgentTaskEvent(Base):

@@ -346,7 +346,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         hidden_artifact = await client.get(
             "/api/agent-tasks/t-owned/artifacts/background", headers=second_headers
         )
-        assert artifact.status_code == 200
+        assert artifact.status_code == 404
         assert hidden_artifact.status_code == 404
 
         missing_auth = await client.get("/api/me/mastery")

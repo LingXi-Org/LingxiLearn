@@ -17,12 +17,17 @@ const task = (overrides: Partial<AgentTaskSnapshot> = {}): AgentTaskSnapshot => 
   agents: {
     intent: { status: "completed" },
     lecture_hook: { status: "pending" },
-    visual_explainer: { status: "pending" },
+    interactive_lecture_deck: { status: "pending" },
+    quiz_generator: { status: "pending" },
+    interactive_visual_explainer: { status: "pending" },
+    main_graph_placeholder: { status: "pending" },
   },
   artifacts: {
-    background: { available: false, url: "" },
+    lecture_deck: { available: false, url: "" },
+    quiz: { available: false },
     visual: { available: true, url: "", metadata: { title: "TCP 可视化" } },
   },
+  quiz_submission: null,
   error: "",
   created_at: null,
   updated_at: null,
@@ -35,12 +40,12 @@ describe("agent task adapter", () => {
       { sequence: 1, kind: "intent.started", agent: "intent", payload: {}, ts: null },
       { sequence: 2, kind: "intent.completed", agent: "intent", payload: { topic: "TCP" }, ts: null },
       { sequence: 3, kind: "agent.started", agent: "lecture_hook", payload: {}, ts: null },
-      { sequence: 4, kind: "agent.completed", agent: "visual_explainer", payload: {}, ts: null },
+      { sequence: 4, kind: "agent.completed", agent: "interactive_lecture_deck", payload: {}, ts: null },
       { sequence: 5, kind: "task.completed", agent: "coordinator", payload: { status: "completed" }, ts: null },
     ]);
-    expect(graph.nodes.map((node) => node.id)).toEqual(["input", "intent", "lecture_hook", "visual_explainer", "merge"]);
+    expect(graph.nodes.map((node) => node.id)).toEqual(["input", "intent", "lecture_hook", "interactive_lecture_deck", "merge"]);
     expect(graph.nodes.find((node) => node.id === "lecture_hook")?.status).toBe("running");
-    expect(graph.nodes.find((node) => node.id === "visual_explainer")?.status).toBe("complete");
+    expect(graph.nodes.find((node) => node.id === "interactive_lecture_deck")?.status).toBe("complete");
     expect(graph.edges.filter((edge) => edge.from === "intent")).toHaveLength(2);
   });
 
@@ -51,7 +56,7 @@ describe("agent task adapter", () => {
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant"]);
     expect(messages[1].contentBlocks.map((block) => block.type)).toEqual(["text"]);
     expect(messages[1].content).toContain("课程引入设计 Agent 已接收任务");
-    expect(agentTaskToSimResources(task()).map((resource) => resource.kind)).toEqual(["background", "visual"]);
+    expect(agentTaskToSimResources(task()).map((resource) => resource.kind)).toEqual(["lecture-deck", "quiz", "visual"]);
   });
 
   it("reports partial and failed task states", () => {

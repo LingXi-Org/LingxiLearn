@@ -183,7 +183,7 @@ export interface AgentTaskEvent {
   ts: string | null;
 }
 
-export type AgentTaskStatus = "queued" | "running" | "completed" | "partial" | "failed";
+export type AgentTaskStatus = "queued" | "running" | "awaiting_user" | "handed_off" | "completed" | "partial" | "failed";
 
 export interface AgentAgentSnapshot {
   status: "pending" | "completed" | "failed";
@@ -205,15 +205,46 @@ export interface AgentTaskSnapshot {
   agents: {
     intent: AgentAgentSnapshot;
     lecture_hook: AgentAgentSnapshot;
-    visual_explainer: AgentAgentSnapshot;
+    interactive_lecture_deck: AgentAgentSnapshot;
+    quiz_generator: AgentAgentSnapshot;
+    interactive_visual_explainer: AgentAgentSnapshot;
+    main_graph_placeholder: AgentAgentSnapshot;
   };
   artifacts: {
-    background: { available: boolean; url: string };
+    lecture_deck: { available: boolean; url: string; metadata?: Record<string, any> };
+    quiz: { available: boolean; data?: PublicQuiz | null };
     visual: { available: boolean; url: string; metadata?: Record<string, any> };
   };
+  quiz_submission: QuizSubmissionSnapshot | null;
   error: string;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface PublicQuizQuestion {
+  id: string;
+  type: "single_choice" | "multi_choice" | "short_text";
+  prompt: string;
+  options: Array<{ id: string; label: string }>;
+  points: number;
+}
+
+export interface PublicQuiz {
+  schema_version: "quiz-generation-result.v1";
+  task_id: string;
+  title: string;
+  instructions: string;
+  questions: PublicQuizQuestion[];
+  total_points: number;
+}
+
+export interface QuizSubmissionSnapshot {
+  submission_id: string;
+  submitted_at: string | null;
+  total_score: number;
+  total_points: number;
+  per_question: Array<{ id: string; correct: boolean; score: number; points: number }>;
+  handoff_reason: string;
 }
 
 export interface SessionListItem {

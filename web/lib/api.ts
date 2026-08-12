@@ -1,6 +1,7 @@
 import type {
   AgentTaskEvent,
   AgentTaskSnapshot,
+  QuizSubmissionSnapshot,
   Pack,
   RunEvent,
   SessionListItem,
@@ -101,7 +102,19 @@ export const api = {
 
   agentTask: (id: string) => request<AgentTaskSnapshot>(`/agent-tasks/${id}`),
 
-  agentArtifactUrl: (taskId: string, kind: "background" | "visual") =>
+  agentMessage: (taskId: string, message: string) =>
+    request<{ status: string }>(`/agent-tasks/${taskId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
+
+  submitAgentQuiz: (taskId: string, submissionId: string, answers: Record<string, unknown>) =>
+    request<{ status: string; submission: QuizSubmissionSnapshot }>(`/agent-tasks/${taskId}/quiz-submissions`, {
+      method: "POST",
+      body: JSON.stringify({ submission_id: submissionId, answers }),
+    }),
+
+  agentArtifactUrl: (taskId: string, kind: "lecture-deck" | "visual") =>
     `${API_BASE}/api/agent-tasks/${taskId}/artifacts/${kind}`,
 
   context: () => request<{

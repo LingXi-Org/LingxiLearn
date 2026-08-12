@@ -25,6 +25,7 @@ from .models import (
     ReportRecord,
     RunEvent,
     Session,
+    QuizSubmission,
     utcnow,
 )
 
@@ -237,12 +238,66 @@ class Repository:
                 row.intent = value
             elif agent == "lecture_hook":
                 row.lecture_result = value
+            elif agent == "interactive_lecture_deck":
+                row.deck_result = value
+            elif agent == "quiz_generator":
+                row.quiz_result = value
+            elif agent == "handoff":
+                row.handoff_result = value
+            elif agent == "user_message":
+                row.user_messages = [*(row.user_messages or []), value][-100:]
             elif agent == "visual_explainer":
                 row.visual_result = value
             else:
                 raise ValueError(f"unknown agent output: {agent}")
             row.updated_at = utcnow()
             await s.commit()
+
+    async def get_quiz_submission(self, task_id: str) -> QuizSubmission | None:
+        async with self.db.session() as s:
+            return await s.scalar(select(QuizSubmission).where(QuizSubmission.task_id == task_id))
+
+    async def create_quiz_submission(
+        self,
+        *,
+        task_id: str,
+        submission_id: str,
+        answers: dict[str, Any],
+        per_question: list[dict[str, Any]],
+        total_score: float,
+        total_points: int,
+        handoff_reason: str = "quiz_completed",
+    ) -> dict[str, Any]:
+        """Create the only submission for a task, with retry-safe semantics."""
+
+        async with self.db.session() as s:
+            existing = await s.scalar(select(QuizSubmission).where(QuizSubmission.task_id == task_id))
+            if existing is not None:
+                if existing.submission_id == submission_id:
+                    return _quiz_submission_dict(existing)
+                raise ValueError("already_submitted")
+            row = QuizSubmission(
+                task_id=task_id,
+                submission_id=submission_id,
+                answers=answers,
+                per_question=per_question,
+                total_score=float(total_score),
+                total_points=int(total_points),
+                handoff_reason=handoff_reason,
+            )
+            s.add(row)
+            try:
+                await s.commit()
+            except Exception:
+                await s.rollback()
+                existing = await s.scalar(select(QuizSubmission).where(QuizSubmission.task_id == task_id))
+                if existing is not None:
+                    if existing.submission_id == submission_id:
+                        return _quiz_submission_dict(existing)
+                    raise ValueError("already_submitted")
+                raise
+            await s.refresh(row)
+            return _quiz_submission_dict(row)
 
     async def append_agent_events(self, task_id: str, events: list[dict[str, Any]]) -> int:
         if not events:
@@ -329,7 +384,6 @@ class Repository:
                 }
                 for r in rows
             ]
-
     # -- events ----------------------------------------------------------
 
     async def next_sequence(self, session_id: str) -> int:
@@ -450,3 +504,17 @@ class Repository:
                 )
             )
             return dict(row.payload) if row else None
+
+
+def _quiz_submission_dict(row: QuizSubmission) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "task_id": row.task_id,
+        "submission_id": row.submission_id,
+        "answers": row.answers or {},
+        "per_question": row.per_question or [],
+        "total_score": row.total_score,
+        "total_points": row.total_points,
+        "handoff_reason": row.handoff_reason,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }

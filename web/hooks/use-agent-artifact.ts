@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
-export function useAgentArtifact(taskId: string | undefined, kind: "background" | "visual", enabled: boolean) {
+export function useAgentArtifact(taskId: string | undefined, kind: "lecture-deck" | "visual", enabled: boolean) {
   const [content, setContent] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();

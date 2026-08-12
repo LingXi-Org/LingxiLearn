@@ -38,7 +38,7 @@ export interface SimActivity {
 export interface SimResourceDescriptor {
   id: string;
   title: string;
-  kind: "background" | "visual";
+  kind: "lecture-deck" | "quiz" | "visual";
   available: boolean;
   description: string;
 }
@@ -79,7 +79,7 @@ export interface SimAgentRun {
   items: SimAgentRunItem[];
 }
 
-const TERMINAL_STATUSES = new Set(["completed", "partial", "failed"]);
+const TERMINAL_STATUSES = new Set(["handed_off", "completed", "partial", "failed"]);
 
 function statusForSnapshot(
   snapshot: AgentTaskSnapshot["agents"][keyof AgentTaskSnapshot["agents"]],
@@ -121,7 +121,7 @@ export function agentTaskToCanvasGraph(
   const agentIds = [...new Set(orderedEvents.map((event) => event.agent).filter((agent) => agent && agent !== "coordinator"))];
   const nodes: AgentCanvasNode[] = [{ id: "input", label: "User input", kind: "input", status: "complete", detail: task.prompt }];
   for (const agent of agentIds) {
-    const snapshot = agent === "intent" ? task.agents.intent : agent === "lecture_hook" ? task.agents.lecture_hook : agent === "visual_explainer" ? task.agents.visual_explainer : { status: "pending" as const };
+    const snapshot = agent === "intent" ? task.agents.intent : agent === "lecture_hook" ? task.agents.lecture_hook : agent === "interactive_lecture_deck" ? task.agents.interactive_lecture_deck : agent === "quiz_generator" ? task.agents.quiz_generator : agent === "interactive_visual_explainer" ? task.agents.interactive_visual_explainer : agent === "main_graph_placeholder" ? task.agents.main_graph_placeholder : { status: "pending" as const };
     const relevant = orderedEvents.filter((event) => event.agent === agent);
     const latest = relevant.at(-1);
     nodes.push({
@@ -133,14 +133,37 @@ export function agentTaskToCanvasGraph(
     });
   }
   const terminal = TERMINAL_STATUSES.has(task.status) || orderedEvents.some((event) => event.kind === "task.completed" || event.kind === "task.failed");
-  if (terminal) nodes.push({ id: "merge", label: "Merge results", kind: "merge", status: task.status === "failed" ? "error" : "complete", detail: task.error || "汇总当前 Agent 产物" });
+  const hasMainGraphPlaceholder = agentIds.includes("main_graph_placeholder");
+  if (terminal && !hasMainGraphPlaceholder) nodes.push({ id: "merge", label: "Merge results", kind: "merge", status: task.status === "failed" ? "error" : "complete", detail: task.error || "汇总当前 Agent 产物" });
 
   const edges: AgentCanvasEdge[] = [];
   const intent = agentIds.includes("intent") ? "intent" : agentIds[0];
   if (intent) edges.push({ from: "input", to: intent, label: "识别" });
   const specialists = agentIds.filter((agent) => agent !== intent);
-  for (const agent of specialists) edges.push({ from: intent || "input", to: agent, label: "分发" });
-  if (terminal) for (const agent of specialists.length ? specialists : intent ? [intent] : []) edges.push({ from: agent, to: "merge", label: "产物" });
+  const initialAgents = specialists.filter((agent) => agent === "lecture_hook" || agent === "interactive_lecture_deck");
+  for (const agent of initialAgents) edges.push({ from: intent || "input", to: agent, label: "并行讲解" });
+
+  if (agentIds.includes("quiz_generator")) {
+    for (const agent of initialAgents) edges.push({ from: agent, to: "quiz_generator", label: "拼接产物" });
+  } else {
+    for (const agent of specialists.filter((agent) => !initialAgents.some((initial) => initial === agent))) {
+      edges.push({ from: intent || "input", to: agent, label: "分发" });
+    }
+  }
+
+  const postQuizAgents = specialists.filter((agent) => ["answer_user", "interactive_visual_explainer", "quiz_submit", "handoff"].includes(agent));
+  for (const agent of postQuizAgents) {
+    edges.push({ from: agentIds.includes("quiz_generator") ? "quiz_generator" : intent || "input", to: agent, label: "按需路由" });
+  }
+  if (agentIds.includes("main_graph_placeholder")) {
+    for (const agent of ["quiz_submit", "handoff"].filter((agent) => agentIds.includes(agent))) {
+      edges.push({ from: agent, to: "main_graph_placeholder", label: "handoff" });
+    }
+  }
+  if (terminal && !hasMainGraphPlaceholder) {
+    const outputAgents = specialists.length ? specialists : intent ? [intent] : [];
+    for (const agent of outputAgents) edges.push({ from: agent, to: "merge", label: "产物" });
+  }
   return { nodes, edges };
 }
 
@@ -199,12 +222,20 @@ export function agentTaskToSimActivity(task: AgentTaskSnapshot | null, events: A
     ? task.error || "任务执行失败"
     : latest?.kind === "intent.started"
       ? "正在识别问题意图"
-      : latest?.agent === "lecture_hook"
-        ? "正在生成课堂 Hook 背景产物"
-        : latest?.agent === "visual_explainer"
-          ? "正在生成交互式可视化页面"
-          : task.status === "completed"
-            ? "两个 Agent 已完成"
+        : latest?.agent === "lecture_hook"
+        ? "正在生成课程引入"
+        : latest?.agent === "interactive_lecture_deck"
+          ? "正在生成交互式讲解课件"
+          : latest?.agent === "quiz_generator"
+            ? "正在生成一次性检测题"
+            : latest?.agent === "interactive_visual_explainer"
+              ? "正在生成按需可视化讲解"
+              : task.status === "awaiting_user"
+                ? "等待你的对话或答题"
+                : task.status === "handed_off"
+                  ? "已返回主图"
+                  : task.status === "completed"
+                    ? "子图已完成"
             : "任务正在执行";
   return {
     summary,
@@ -235,7 +266,12 @@ export function agentTaskToAgentRuns(task: AgentTaskSnapshot, events: AgentTaskE
 export function agentLabel(agent: string): string {
   if (agent === "intent") return "Intent Recognizer";
   if (agent === "lecture_hook") return "课程引入设计 Agent";
-  if (agent === "visual_explainer") return "交互式可视化讲解 Agent";
+  if (agent === "interactive_lecture_deck") return "交互式讲解课件 Agent";
+  if (agent === "quiz_generator") return "出题 Agent";
+  if (agent === "interactive_visual_explainer") return "交互式可视化讲解";
+  if (agent === "answer_user") return "知识点答疑 Agent";
+  if (agent === "quiz_submit") return "答题提交";
+  if (agent === "main_graph_placeholder") return "主图占位 Agent";
   return agent.split(/[_-]/).map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : "").join(" ");
 }
 
@@ -246,7 +282,7 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
   if (event.kind === "intent.completed") return `已识别主题：“${String(event.payload.topic || task.intent.topic || "未命名主题")}”。`;
   if (event.kind === "agent.started") return `${agentLabel(event.agent)} 已接收任务，开始执行。`;
   if (event.kind === "agent.output") return message || `${agentLabel(event.agent)} 生成了新的关键输出。`;
-  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : "背景产物"}已就绪。`;
+  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : "课件产物"}已就绪。`;
   if (event.kind === "agent.completed") return `${agentLabel(event.agent)} 已完成。`;
   if (event.kind === "agent.failed") return `${agentLabel(event.agent)} 执行失败：${message || String(event.payload.error || "未知错误")}`;
   if (event.kind === "task.completed") return event.payload.status === "partial" ? "任务部分完成，可查看当前已生成产物。" : "所有 Agent 已完成。";
@@ -257,8 +293,9 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
 export function agentTaskToSimResources(task: AgentTaskSnapshot | null): SimResourceDescriptor[] {
   if (!task) return [];
   return [
-    { id: `${task.id}-background`, title: "课程引入设计", kind: "background", available: task.artifacts.background.available, description: "课程引入设计 Agent 生成的独立 HTML 页面" },
-    { id: `${task.id}-visual`, title: "交互式可视化讲解页面", kind: "visual", available: task.artifacts.visual.available, description: "交互式可视化讲解 Agent 生成的独立 HTML 页面" },
+    { id: `${task.id}-deck`, title: "交互式讲解课件", kind: "lecture-deck", available: Boolean(task.artifacts.lecture_deck?.available), description: "interactive-lecture-deck 生成的离线课件" },
+    { id: `${task.id}-quiz`, title: "知识点检测", kind: "quiz", available: Boolean(task.artifacts.quiz?.available), description: "由结构化题目渲染的一次性答题页面" },
+    { id: `${task.id}-visual`, title: "交互式可视化讲解", kind: "visual", available: Boolean(task.artifacts.visual?.available), description: "按需调用通用 interactive-visual-explainer 生成的页面" },
   ];
 }
 

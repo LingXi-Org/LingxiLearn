@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_agent_skills_are_discoverable_and_have_resources() -> None:
-    for name in ("lesson-intro", "interactive-visual-explainer"):
+    for name in ("lesson-intro", "interactive-lecture-deck", "interactive-visual-explainer"):
         skill_dir = REPO_ROOT / "skills" / name
         source = FilesystemSkillSource(skill_dir)
         metadata = source.discover()
@@ -49,9 +49,9 @@ def test_agent_graph_fans_out_specialists_before_merge(tmp_path: Path) -> None:
     )
     edges = {(edge.source, edge.target, edge.label) for edge in graph.get_graph().edges}
     assert ("recognize_intent", "lecture_hook", None) in edges
-    assert ("recognize_intent", "visual_explainer", None) in edges
-    assert ("lecture_hook", "merge_results", "all") in edges
-    assert ("visual_explainer", "merge_results", "all") in edges
+    assert ("recognize_intent", "interactive_lecture_deck", None) in edges
+    assert ("lecture_hook", "quiz_generator", "all") in edges
+    assert ("interactive_lecture_deck", "quiz_generator", "all") in edges
 
 
 @pytest.mark.asyncio
@@ -130,14 +130,14 @@ async def test_specialists_start_in_parallel(
     result = await graph.ainvoke(
         {"task_id": "parallel-test", "prompt": "解释 TCP 拥塞控制", "errors": []}
     )
-    assert result["status"] == "completed"
+    assert result["status"] == "awaiting_user"
     first_end = min(
         index
         for index, item in enumerate(timeline)
-        if item in {"lecture-hook:end", "visual-explainer:end"}
+        if item in {"lesson-intro:end", "interactive-lecture-deck:end"}
     )
-    assert timeline.index("lecture-hook:start") < first_end
-    assert timeline.index("visual-explainer:start") < first_end
+    assert timeline.index("lesson-intro:start") < first_end
+    assert timeline.index("interactive-lecture-deck:start") < first_end
 
 
 @pytest.mark.asyncio
