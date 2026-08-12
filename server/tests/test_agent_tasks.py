@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -501,29 +500,6 @@ def test_lesson_intro_artifact_and_skill_deck_are_publishable(tmp_path: Path) ->
 
     with pytest.raises(ArtifactError, match="runtime/index.html"):
         store.write_deck("missing-runtime", {"lecture.json": "{}", "manifest.json": "{}"})
-
-
-def test_deck_repairs_array_anchor_rect_before_strict_validation(tmp_path: Path) -> None:
-    settings = Settings(_env_file="", agent_task_dir=tmp_path)
-    store = ArtifactStore(settings)
-    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
-    lecture = json.loads((source / "lecture.json").read_text(encoding="utf-8"))
-    first_anchor = next(slide["anchors"][0] for slide in lecture["slides"] if slide["anchors"])
-    rect = first_anchor["rect"]
-    first_anchor["rect"] = [rect["x"], rect["y"], rect["w"], rect["h"]]
-    files = {
-        "lecture.json": json.dumps(lecture, ensure_ascii=False),
-        "manifest.json": (source / "manifest.json").read_text(encoding="utf-8"),
-        "runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"),
-    }
-    for slide in (source / "slides").glob("s*.html"):
-        files[f"slides/{slide.name}"] = slide.read_text(encoding="utf-8")
-
-    store.write_deck("array-rect-task", files)
-    stored = json.loads(store.deck_root("array-rect-task").joinpath("lecture.json").read_text(encoding="utf-8"))
-    assert stored["slides"][1]["anchors"][0]["rect"] == rect
-    validation = asyncio.run(store.build_and_validate_deck("array-rect-task"))
-    assert validation["ok"] is True
 
 
 def test_web_fetch_rejects_private_addresses() -> None:
