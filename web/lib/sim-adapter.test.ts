@@ -23,6 +23,7 @@ const task = (overrides: Partial<AgentTaskSnapshot> = {}): AgentTaskSnapshot => 
     main_graph_placeholder: { status: "pending" },
   },
   artifacts: {
+    lesson_intro: { available: true, url: "", metadata: { title: "课程引入" } },
     lecture_deck: { available: false, url: "" },
     quiz: { available: false },
     visual: { available: true, url: "", metadata: { title: "TCP 可视化" } },
@@ -56,7 +57,7 @@ describe("agent task adapter", () => {
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant"]);
     expect(messages[1].contentBlocks.map((block) => block.type)).toEqual(["text"]);
     expect(messages[1].content).toContain("课程引入设计 Agent 已接收任务");
-    expect(agentTaskToSimResources(task()).map((resource) => resource.kind)).toEqual(["lecture-deck", "quiz", "visual"]);
+    expect(agentTaskToSimResources(task()).map((resource) => resource.kind)).toEqual(["lesson-intro", "lecture-deck", "quiz", "visual"]);
   });
 
   it("reports partial and failed task states", () => {

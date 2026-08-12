@@ -285,6 +285,7 @@ class Repository:
                 total_points=int(total_points),
                 handoff_reason=handoff_reason,
             )
+
             s.add(row)
             try:
                 await s.commit()
@@ -298,6 +299,27 @@ class Repository:
                 raise
             await s.refresh(row)
             return _quiz_submission_dict(row)
+
+    async def list_agent_tasks(self, learner_id: str) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(AgentTask)
+                    .where(AgentTask.learner_id == learner_id)
+                    .order_by(AgentTask.updated_at.desc(), AgentTask.created_at.desc())
+                )
+            ).scalars()
+            return [
+                {
+                    "id": row.id,
+                    "prompt": row.prompt,
+                    "status": row.status,
+                    "intent": row.intent or {},
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                }
+                for row in rows
+            ]
 
     async def append_agent_events(self, task_id: str, events: list[dict[str, Any]]) -> int:
         if not events:

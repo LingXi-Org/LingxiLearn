@@ -1,7 +1,10 @@
 "use client";
 
 import { CircleHelp, Home, LogIn, LogOut, PanelLeft, Workflow } from "lucide-react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
+import type { AgentTaskListItem } from "@/lib/types";
 import { useOidcAdapter } from "@/components/auth/oidc-adapter";
 import { SimSidebarButton, SimSidebarIconButton, SimSidebarLink } from "@/components/sim/source/sidebar-primitives";
 
@@ -15,6 +18,22 @@ interface SimSidebarProps {
 
 export function SimSidebar({ currentTaskId, taskStatus, collapsed = false, onToggleCollapsed, onClose }: SimSidebarProps) {
   const { configured, isAuthenticated, isLoading, signIn, signOut } = useOidcAdapter();
+  const [tasks, setTasks] = useState<AgentTaskListItem[]>([]);
+  useEffect(() => {
+    if (configured && !isAuthenticated) {
+      setTasks([]);
+      return;
+    }
+    let active = true;
+    const refresh = () => void api.agentTasks().then(({ tasks: next }) => {
+      if (active) setTasks(next);
+    }).catch(() => {
+      // The workspace remains usable when history is temporarily unavailable.
+    });
+    refresh();
+    const timer = window.setInterval(refresh, 15_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [configured, currentTaskId, isAuthenticated]);
   const handleAuth = () => void (isAuthenticated ? signOut() : signIn());
   return (
     <aside className="sim-sidebar-container flex h-full w-full min-h-0 flex-col overflow-hidden bg-[var(--surface-1)] text-[var(--text-primary)]" data-collapsed={collapsed || undefined} aria-label="灵犀 Agent 工作区导航">
@@ -35,6 +54,18 @@ export function SimSidebar({ currentTaskId, taskStatus, collapsed = false, onTog
               <Workflow className="size-4 shrink-0 text-[var(--brand)]" />
               {!collapsed && <span className="min-w-0 flex-1 truncate">{currentTaskId}</span>}
               {!collapsed && <span className="shrink-0 text-[10px] text-[var(--text-muted)]">{statusLabel(taskStatus)}</span>}
+            </div>
+          </section>
+        )}
+        {tasks.length > 0 && (
+          <section className="border-t border-[var(--border)] pt-3">
+            {!collapsed && <p className="px-2 text-[11px] text-[var(--text-muted)]">历史对话</p>}
+            <div className="mt-1 space-y-0.5">
+              {tasks.map((item) => {
+                const title = item.intent?.topic || item.prompt || "未命名对话";
+                const href = `/workspace/?task=${encodeURIComponent(item.id)}`;
+                return <SimSidebarLink key={item.id} href={href} icon={Workflow} collapsed={collapsed} onClick={onClose}>{title}</SimSidebarLink>;
+              })}
             </div>
           </section>
         )}

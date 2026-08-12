@@ -1,5 +1,6 @@
 import type {
   AgentTaskEvent,
+  AgentTaskListItem,
   AgentTaskSnapshot,
   QuizSubmissionSnapshot,
   Pack,
@@ -37,6 +38,8 @@ export type AccessTokenProvider = () => string | null | Promise<string | null>;
 // The host application owns login/refresh.  LingxiLearn keeps only this
 // in-memory callback and never persists an access token in browser storage.
 let accessTokenProvider: AccessTokenProvider = () => null;
+let authenticationFailureHandler: (() => void) | null = null;
+let accessTokenRefreshHandler: (() => void | Promise<void>) | null = null;
 
 export function setAccessTokenProvider(provider: AccessTokenProvider): () => void {
   const previous = accessTokenProvider;
@@ -44,15 +47,37 @@ export function setAccessTokenProvider(provider: AccessTokenProvider): () => voi
   return () => { accessTokenProvider = previous; };
 }
 
+export function setAuthenticationFailureHandler(handler: (() => void) | null): () => void {
+  const previous = authenticationFailureHandler;
+  authenticationFailureHandler = handler;
+  return () => { authenticationFailureHandler = previous; };
+}
+
+export function setAccessTokenRefreshHandler(handler: (() => void | Promise<void>) | null): () => void {
+  const previous = accessTokenRefreshHandler;
+  accessTokenRefreshHandler = handler;
+  return () => { accessTokenRefreshHandler = previous; };
+}
+
 function apiUrl(path: string): string {
   return `${API_BASE}/api${path}`;
 }
 
 async function authorizedFetch(url: string, init?: RequestInit): Promise<Response> {
-  const headers = new Headers(init?.headers);
-  const token = await accessTokenProvider();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(url, { ...init, headers });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const headers = new Headers(init?.headers);
+    const token = await accessTokenProvider();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const response = await fetch(url, { ...init, headers });
+    if (response.status !== 401 || attempt > 0 || !accessTokenRefreshHandler) return response;
+    try {
+      await accessTokenRefreshHandler();
+    } catch {
+      authenticationFailureHandler?.();
+      return response;
+    }
+  }
+  throw new Error("unreachable");
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -60,6 +85,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   headers.set("Content-Type", "application/json");
   const response = await authorizedFetch(apiUrl(path), { ...init, headers });
   if (!response.ok) {
+    if (response.status === 401) authenticationFailureHandler?.();
     let detail = response.statusText;
     try {
       const body = await response.json();
@@ -108,13 +134,15 @@ export const api = {
       body: JSON.stringify({ message }),
     }),
 
+  agentTasks: () => request<{ tasks: AgentTaskListItem[] }>("/agent-tasks"),
+
   submitAgentQuiz: (taskId: string, submissionId: string, answers: Record<string, unknown>) =>
     request<{ status: string; submission: QuizSubmissionSnapshot }>(`/agent-tasks/${taskId}/quiz-submissions`, {
       method: "POST",
       body: JSON.stringify({ submission_id: submissionId, answers }),
     }),
 
-  agentArtifactUrl: (taskId: string, kind: "lecture-deck" | "visual") =>
+  agentArtifactUrl: (taskId: string, kind: "lesson-intro" | "lecture-deck" | "visual") =>
     `${API_BASE}/api/agent-tasks/${taskId}/artifacts/${kind}`,
 
   context: () => request<{

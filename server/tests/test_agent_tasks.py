@@ -10,7 +10,7 @@ from lingxigraph import AIMessage, FilesystemSkillSource
 
 from lingxilearn.agents.artifact_store import ArtifactError, ArtifactStore
 from lingxilearn.agents.contracts import IntentContext, LectureHookResult, extract_json
-from lingxilearn.agents.graph import build_agent_graph
+from lingxilearn.agents.graph import _fallback_deck, build_agent_graph
 from lingxilearn.agents.web_tools import _assert_public_url
 from lingxilearn.config import Settings
 from lingxilearn.service import Service
@@ -189,6 +189,36 @@ def test_visual_artifact_is_task_scoped_and_single_file_only(tmp_path: Path) -> 
         store.write_html("../escape", html)
     with pytest.raises(ArtifactError):
         store.write_html("task-1", "")
+
+
+def test_lesson_intro_artifact_and_fallback_deck_are_publishable(tmp_path: Path) -> None:
+    settings = Settings(_env_file="", agent_task_dir=tmp_path)
+    store = ArtifactStore(settings)
+    intro = store.write_lesson_intro_html(
+        "intro-task",
+        {
+            "status": "ok",
+            "topic": "TCP 拥塞控制",
+            "selected_hook": {
+                "title": "为什么网络会堵",
+                "opening": "开场",
+                "story": "故事",
+                "question": "问题",
+                "transition": "过渡",
+                "why_this_hook_works": "有效",
+                "estimated_duration_sec": 30,
+            },
+            "research": {"claims": [], "sources": []},
+            "warnings": [],
+        },
+    )
+    assert intro["artifact_id"] == "lesson-intro"
+    assert "为什么网络会堵" in store.lesson_intro_path("intro-task").read_text(encoding="utf-8")
+
+    store.write_deck("deck-task", _fallback_deck("deck-task", IntentContext(topic="TCP 拥塞控制")))
+    validation = asyncio.run(store.build_and_validate_deck("deck-task"))
+    assert validation["ok"] is True
+    assert validation["validation"]["output"].find('"slideCount": 5') >= 0
 
 
 def test_web_fetch_rejects_private_addresses() -> None:

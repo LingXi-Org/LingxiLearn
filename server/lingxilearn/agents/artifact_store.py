@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from html import escape
 import re
 import shutil
 import subprocess
@@ -45,16 +46,70 @@ class ArtifactStore:
     def html_path(self, task_id: str) -> Path:
         return self.task_root(task_id) / "visual-explainer.html"
 
+    def lesson_intro_path(self, task_id: str) -> Path:
+        return self.task_root(task_id) / "lesson-intro.html"
+
     def deck_root(self, task_id: str) -> Path:
         return self.task_root(task_id) / "lecture-deck"
 
     def deck_path(self, task_id: str) -> Path:
         return self.deck_root(task_id) / "dist" / "lecture.html"
 
+    def write_lesson_intro_html(self, task_id: str, result: dict[str, Any]) -> dict[str, Any]:
+        """Render lesson-intro JSON into a durable, task-scoped HTML artifact.
+
+        lesson-intro itself intentionally returns structured JSON. This renderer
+        is the presentation adapter, so the agent does not get to emit arbitrary
+        workspace HTML while the complete lesson-intro result remains persisted.
+        """
+        selected = result.get("selected_hook") or {}
+        research = result.get("research") or {}
+        esc = lambda value: escape(str(value or ""))
+
+        def section(title: str, value: Any) -> str:
+            text = str(value or "").strip()
+            if not text:
+                return ""
+            return f'<section><h2>{esc(title)}</h2><p>{esc(text).replace(chr(10), "<br>")}</p></section>'
+
+        claims = "".join(
+            f'<li><strong>{esc(item.get("status"))}</strong> {esc(item.get("claim"))}'
+            f'{("（" + esc(item.get("qualification")) + "）") if item.get("qualification") else ""}</li>'
+            for item in research.get("claims", [])
+        )
+        sources = "".join(
+            f'<li><a href="{esc(item.get("url"))}" rel="noreferrer">{esc(item.get("title") or item.get("url"))}</a>'
+            f' · Tier {esc(item.get("tier"))}</li>'
+            for item in research.get("sources", [])
+        )
+        evidence = ""
+        if claims:
+            evidence += f'<section><h2>研究证据账本</h2><ul>{claims}</ul></section>'
+        if sources:
+            evidence += f'<section><h2>来源</h2><ul>{sources}</ul></section>'
+        warnings = "".join(f"<li>{esc(item)}</li>" for item in result.get("warnings", []))
+        warning_section = f'<section class="warning"><h2>不确定性</h2><ul>{warnings}</ul></section>' if warnings else ""
+        html = f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected.get("title") or "课程引入")}</title><style>
+:root{{--paper:#fbfaf7;--ink:#23231f;--muted:#686762;--rule:rgba(35,35,31,.16);--accent:#534ab7;--accent-fill:#eeedfe;--font-serif:"Songti SC","Source Han Serif SC","SimSun",Georgia,serif;--font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif}}*{{box-sizing:border-box}}html,body{{margin:0;min-height:100%;background:#141412;color:var(--ink);font-family:var(--font-sans)}}main{{max-width:960px;margin:0 auto;min-height:100vh;padding:56px clamp(24px,6vw,80px);background:var(--paper)}}.kicker{{margin:0 0 12px;color:var(--accent);font:500 13px var(--font-sans);letter-spacing:.08em}}h1{{margin:0;max-width:780px;font:500 clamp(32px,5vw,52px)/1.18 var(--font-serif)}}.meta{{margin:18px 0 42px;color:var(--muted);font-size:14px}}section{{border-top:.5px solid var(--rule);padding:24px 0}}h2{{margin:0 0 9px;font:500 20px/1.3 var(--font-serif)}}p,li{{color:var(--muted);font-size:16px;line-height:1.8}}p{{margin:0}}ul{{margin:0;padding-left:22px}}a{{color:var(--accent);text-decoration:none}}.warning{{background:var(--accent-fill);padding:20px 22px;border:0}}@media(prefers-color-scheme:dark){{--paper:#1e1e1b;--ink:#f2f0e8;--muted:#b8b6ad;--rule:rgba(242,240,232,.2);--accent:#aaa2ff;--accent-fill:#302e47}}
+</style></head><body><main><p class="kicker">LESSON INTRO · {esc(result.get("status", "ok"))}</p><h1>{esc(selected.get("title") or "课程引入")}</h1><p class="meta">知识点：{esc(result.get("topic"))} · 预计 {esc(selected.get("estimated_duration_sec"))} 秒</p>{section("开场", selected.get("opening"))}{section("背景故事", selected.get("story"))}{section("抛给学习者的问题", selected.get("question"))}{section("过渡到知识点", selected.get("transition"))}{section("为什么这个 Hook 有效", selected.get("why_this_hook_works"))}{section("可视化提示", selected.get("visual_cue"))}{evidence}{warning_section}</main></body></html>'''
+        encoded = html.encode("utf-8")
+        if len(encoded) > self.max_html_bytes:
+            raise ArtifactError(f"lesson-intro HTML exceeds {self.max_html_bytes} bytes")
+        path = self.lesson_intro_path(task_id)
+        path.write_bytes(encoded)
+        return {
+            "artifact_id": "lesson-intro",
+            "filename": path.name,
+            "bytes": len(encoded),
+            "relative_path": f"{task_id}/{path.name}",
+        }
+
     def write_deck(self, task_id: str, files: dict[str, str]) -> dict[str, Any]:
         required = {"lecture.json", "runtime/index.html", "manifest.json"}
         normalized: dict[str, str] = {}
         root = self.deck_root(task_id).resolve()
+        if root.exists():
+            shutil.rmtree(root)
         root.mkdir(parents=True, exist_ok=True)
         for raw_name, content in files.items():
             name = str(raw_name).replace("\\", "/").lstrip("./")

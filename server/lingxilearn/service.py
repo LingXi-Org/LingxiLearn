@@ -309,6 +309,11 @@ class Service:
                 "main_graph_placeholder": _agent_snapshot(record.handoff_result),
             },
             "artifacts": {
+                "lesson_intro": {
+                    "available": self.agent_artifacts.lesson_intro_path(record.id).exists(),
+                    "url": f"/api/agent-tasks/{record.id}/artifacts/lesson-intro",
+                    **({"metadata": record.lecture_result} if record.lecture_result else {}),
+                },
                 "lecture_deck": {
                     "available": self.agent_artifacts.deck_path(record.id).exists(),
                     "url": f"/api/agent-tasks/{record.id}/artifacts/lecture-deck",
@@ -329,6 +334,9 @@ class Service:
             "created_at": record.created_at.isoformat() if record.created_at else None,
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
         }
+
+    async def list_agent_tasks(self, learner_id: str) -> list[dict[str, Any]]:
+        return await self.repo.list_agent_tasks(learner_id)
 
     def agent_waiter(self, task_id: str) -> asyncio.Event:
         return self._agent_waiters[task_id]
@@ -357,6 +365,15 @@ class Service:
                 )
             except OSError as exc:
                 raise KeyError("lecture deck is not ready") from exc
+        if kind == "lesson-intro":
+            try:
+                return (
+                    self.agent_artifacts.lesson_intro_path(task_id).read_bytes(),
+                    "text/html; charset=utf-8",
+                    "lesson-intro.html",
+                )
+            except OSError as exc:
+                raise KeyError("lesson intro is not ready") from exc
         if kind == "visual":
             try:
                 return (

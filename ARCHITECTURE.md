@@ -254,7 +254,7 @@ SQLite runs in WAL mode because a background run writes while the API reads.
 The web client uses an in-memory bearer-token provider. Since native
 `EventSource` cannot attach Authorization headers, SSE is consumed through a
 fetch stream while preserving heartbeats and `Last-Event-ID` replay. Agent
-artifacts are fetched as authenticated blobs before being opened in an iframe
+lesson-intro, lecture-deck, and visual artifacts are fetched as authenticated blobs before being opened in dedicated iframe tabs
 or downloaded.
 
 ---

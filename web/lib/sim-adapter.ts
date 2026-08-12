@@ -38,7 +38,7 @@ export interface SimActivity {
 export interface SimResourceDescriptor {
   id: string;
   title: string;
-  kind: "lecture-deck" | "quiz" | "visual";
+  kind: "lesson-intro" | "lecture-deck" | "quiz" | "visual";
   available: boolean;
   description: string;
 }
@@ -71,12 +71,22 @@ export interface SimAgentRunItem {
   status: "running" | "complete" | "error";
 }
 
+export type SimAgentGroupItem =
+  | { type: "text"; id: string; content: string; status?: "running" | "complete" | "error" }
+  | { type: "tool"; id: string; title: string; detail?: string; status: "executing" | "success" | "error" | "awaiting_approval" }
+  | { type: "agent"; id: string; run: SimAgentRun };
+
 export interface SimAgentRun {
   id: string;
   agent: string;
   label: string;
   status: "running" | "complete" | "error";
   items: SimAgentRunItem[];
+  /** Full Sim-style sequence when tool calls or nested lanes are available. */
+  groupItems?: SimAgentGroupItem[];
+  /** Optional recursive children, matching Sim's nested AgentGroup shape. */
+  children?: SimAgentRun[];
+  isDelegating?: boolean;
 }
 
 const TERMINAL_STATUSES = new Set(["handed_off", "completed", "partial", "failed"]);
@@ -282,7 +292,7 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
   if (event.kind === "intent.completed") return `已识别主题：“${String(event.payload.topic || task.intent.topic || "未命名主题")}”。`;
   if (event.kind === "agent.started") return `${agentLabel(event.agent)} 已接收任务，开始执行。`;
   if (event.kind === "agent.output") return message || `${agentLabel(event.agent)} 生成了新的关键输出。`;
-  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : "课件产物"}已就绪。`;
+  if (event.kind === "artifact.ready") return `${agentLabel(event.agent)} 的${event.payload.artifact === "visual" ? "交互页面" : event.payload.artifact === "lesson-intro" ? "课程引入页面" : "课件产物"}已就绪。`;
   if (event.kind === "agent.completed") return `${agentLabel(event.agent)} 已完成。`;
   if (event.kind === "agent.failed") return `${agentLabel(event.agent)} 执行失败：${message || String(event.payload.error || "未知错误")}`;
   if (event.kind === "task.completed") return event.payload.status === "partial" ? "任务部分完成，可查看当前已生成产物。" : "所有 Agent 已完成。";
@@ -293,6 +303,7 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
 export function agentTaskToSimResources(task: AgentTaskSnapshot | null): SimResourceDescriptor[] {
   if (!task) return [];
   return [
+    { id: `${task.id}-intro`, title: "课程引入", kind: "lesson-intro", available: Boolean(task.artifacts.lesson_intro?.available), description: "lesson-intro 结果渲染的课程引入页面" },
     { id: `${task.id}-deck`, title: "交互式讲解课件", kind: "lecture-deck", available: Boolean(task.artifacts.lecture_deck?.available), description: "interactive-lecture-deck 生成的离线课件" },
     { id: `${task.id}-quiz`, title: "知识点检测", kind: "quiz", available: Boolean(task.artifacts.quiz?.available), description: "由结构化题目渲染的一次性答题页面" },
     { id: `${task.id}-visual`, title: "交互式可视化讲解", kind: "visual", available: Boolean(task.artifacts.visual?.available), description: "按需调用通用 interactive-visual-explainer 生成的页面" },

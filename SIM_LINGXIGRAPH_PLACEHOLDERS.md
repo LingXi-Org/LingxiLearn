@@ -33,7 +33,7 @@ lecture_hook       interactive_lecture_deck
 - 工作区首次加载时创建 Agent Task，并将 URL 替换为 `/workspace/?task=<task-id>`。
 - `web/hooks/use-agent-task.ts` 读取任务快照并订阅 `/api/agent-tasks/<task-id>/events`。
 - `web/lib/sim-adapter.ts` 将快照和事件转换为聊天消息、活动摘要和 Canvas 图。
-- 右侧工作区由 Canvas、Lecture deck、结构化 Quiz 和按需 Visual explainer 页面组成。
+- 右侧工作区由 Canvas、课程引入、Lecture deck、结构化 Quiz 和按需 Visual explainer 页面组成。
 - Artifact 必须通过 `api.fetchArtifact` 读取，以便携带现有内存鉴权令牌；可视化 HTML 使用受限 iframe 展示。
 
 ## Canvas
@@ -54,6 +54,7 @@ lecture_hook       interactive_lecture_deck
 | 页面 | Agent | API | 展示方式 |
 | --- | --- | --- | --- |
 | Lecture deck | `interactive_lecture_deck` | `/api/agent-tasks/{task_id}/artifacts/lecture-deck` | Offline deck + sandboxed iframe |
+| Lesson intro | `lecture_hook` | `/api/agent-tasks/{task_id}/artifacts/lesson-intro` | Structured lesson-intro result rendered as a dedicated HTML tab |
 | Quiz | `quiz_generator` | `/api/agent-tasks/{task_id}` | Structured JSON rendered by React |
 | Visual explainer | on-demand `interactive_visual_explainer` | `/api/agent-tasks/{task_id}/artifacts/visual` | Blob URL + sandboxed iframe |
 

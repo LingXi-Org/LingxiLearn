@@ -229,6 +229,14 @@ async def create_agent_task(
     return created
 
 
+@router.get("/agent-tasks")
+async def list_agent_tasks(
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    return {"tasks": await service_of(request).list_agent_tasks(context.learner_id)}
+
+
 @router.get("/agent-tasks/{task_id}")
 async def get_agent_task(
     task_id: str,

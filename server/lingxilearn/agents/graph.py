@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import operator
+import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any, TypedDict
@@ -99,8 +100,9 @@ skill，并根据给定知识点生成离线课件。不要返回 Markdown 代�
   "files":{"lecture.json":"...","slides/s01.html":"...","slides/s02.html":"...","slides/s03.html":"...","runtime/index.html":"...","manifest.json":"..."},
   "assumptions":[],"deviations":[]
 }
-文件内容必须是完整文本；每个 slide 1280x720，至少三页，opening/content/closing 齐全。
-课件不请求网络，讲解数据使用中文。"""
+文件内容必须是完整文本；每个 slide 1280x720，至少五页，opening/content/closing 齐全。
+课件不请求网络，讲解数据使用中文。默认生成 5–7 页（opening + 3–5 个 content + closing）；不要为了减少输出压缩成三页。
+如果无法生成完整、严格自包含的课件文件，返回空 files，让编排器使用内置 academic fallback。"""
 
 QUIZ_PROMPT = """你是 quiz-generator 的标准契约实现。根据 intent、lesson-intro 和 interactive-lecture-deck
 产物生成用于检验一个疑难知识点的题目。只输出 JSON，不要 Markdown：
@@ -179,24 +181,53 @@ def _fallback_hook(intent: IntentContext, task_id: str) -> LectureHookResult:
 
 
 def _fallback_deck(task_id: str, intent: IntentContext) -> dict[str, str]:
+    """Build a complete five-page fallback using the bundled academic CSS system."""
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-    def slide(slide_id: str, title: str, role: str, body: str, visual: str) -> str:
-        anchors = '<div data-anchor="core-relation" data-rect="120 300 360 180" style="position:absolute;left:120px;top:300px;width:360px;height:180px">核心概念</div><div data-anchor="core-effect" data-rect="560 300 360 180" style="position:absolute;left:560px;top:300px;width:360px;height:180px">现象与结果的联系</div>' if role == "content" else visual
-        return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><style>html,body{{margin:0;width:1280px;height:720px;background:#f7f7f5;color:#242424;font-family:system-ui,sans-serif}}.slide{{position:relative;width:1280px;height:720px;padding:72px 96px;box-sizing:border-box}}h1{{font-size:42px;font-weight:500;margin:0 0 32px}}p{{font-size:24px;line-height:1.7;max-width:920px}}.visual{{position:relative;margin-top:48px;padding:28px;border:1px solid #aaa;font-size:30px;display:flex;gap:48px}}</style></head><body><main class="slide" data-slide-id="{slide_id}" data-canvas="1280x720" data-slide-role="{role}" data-style="anthropic-academic"><h1>{title}</h1><p>{body}</p><div class="visual" data-visual="concept-map">{anchors}</div></main></body></html>'''
-    lecture = {
-        "schemaVersion": "zoom-lecture/v2",
-        "deck": {"id": f"task-{task_id[-12:]}", "title": intent.topic, "language": "zh-CN", "style": "anthropic-academic", "canvas": {"width": 1280, "height": 720, "format": "ppt169"}, "slideDir": "slides", "createdAt": now, "objectives": [intent.learning_objective]},
-        "slides": [
-            {"id": "s01", "index": 1, "role": "opening", "file": "slides/s01.html", "title": intent.topic, "anchors": [], "steps": [{"id": "s01-01", "order": 1, "kind": "overview", "camera": {"mode": "fit"}, "advance": "manual"}]},
-            {"id": "s02", "index": 2, "role": "content", "file": "slides/s02.html", "title": f"{intent.topic}的关键关系", "anchors": [{"id": "core-relation", "label": "核心关系", "rect": {"x": 120, "y": 300, "w": 360, "h": 180}}, {"id": "core-effect", "label": "现象与结果", "rect": {"x": 560, "y": 300, "w": 360, "h": 180}}], "steps": [{"id": "s02-01", "order": 1, "kind": "overview", "camera": {"mode": "fit"}, "advance": "manual"}, {"id": "s02-02", "order": 2, "kind": "zoom", "camera": {"mode": "anchor", "anchorId": "core-relation"}, "panel": {"title": "先看核心关系", "body": f"观察这个关系：它把{intent.topic}的现象、原因和结果连在了一起，帮助我们从结构而不是记忆理解它。"}, "advance": "manual"}, {"id": "s02-03", "order": 3, "kind": "zoom", "camera": {"mode": "anchor", "anchorId": "core-effect"}, "panel": {"title": "再看解释结果", "body": "当现象发生时，沿着这条关系检查原因和结果，就能把结论迁移到新的例子。"}, "advance": "manual"}]},
-            {"id": "s03", "index": 3, "role": "closing", "file": "slides/s03.html", "title": "把关系带回问题", "anchors": [], "steps": [{"id": "s03-01", "order": 1, "kind": "overview", "camera": {"mode": "fit"}, "advance": "manual"}]},
-        ],
-    }
-    lecture["slides"][1]["steps"][1]["panel"]["body"] = "观察这个关系：它把知识点的现象、原因和结果连在一起。这样我们不靠零散记忆，而是用结构理解它。它还为后面的例题建立检查顺序。"
-    lecture["slides"][1]["steps"][2]["panel"]["body"] = "当现象发生时，沿着这条关系依次检查原因和结果。再用一个新例子复述过程，就能把结论迁移到新的问题。"
-    manifest = {"schemaVersion": "zoom-lecture-manifest/v2", "taskId": task_id, "generatedAt": now, "deck": {"title": intent.topic, "canvas": {"width": 1280, "height": 720}, "style": "anthropic-academic", "slideCount": 3, "contentSlideCount": 1, "stepCount": 5}, "artifacts": {"lecture": "lecture.json", "slides": ["slides/s01.html", "slides/s02.html", "slides/s03.html"], "runtime": "runtime/index.html"}, "validation": {"tool": "scripts/validate_deck.py --strict", "status": "pass", "errors": [], "warnings": []}, "assumptions": ["模型课件生成不可用时使用安全占位课件"], "deviations": []}
-    runtime = (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8")
-    return {"lecture.json": json.dumps(lecture, ensure_ascii=False), "slides/s01.html": slide("s01", intent.topic, "opening", f"今天只解决一个问题：如何真正理解{intent.topic}？", "现象 → 关系 → 结论"), "slides/s02.html": slide("s02", f"{intent.topic}的关键关系", "content", intent.learning_objective, "核心概念"), "slides/s03.html": slide("s03", "把关系带回问题", "closing", "用这条关系解释新的例子，并检查自己是否能说清原因。", "迁移与检查"), "runtime/index.html": runtime, "manifest.json": json.dumps(manifest, ensure_ascii=False)}
+    example = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex" / "slides" / "s02.html"
+    source = example.read_text(encoding="utf-8")
+    css_match = re.search(r"<style>\s*(.*?)\s*</style>", source, re.S)
+    css = css_match.group(1) if css_match else "html,body{margin:0;background:#141412}.slide{position:relative;width:1280px;height:720px;background:#fbfaf7;color:#23231f}"
+
+    def page(slide_id: str, title: str, role: str, lead: str, visual: str, footer: str, anchors: str = "") -> str:
+        title_class = "t-display" if role == "opening" else "t-title"
+        return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>{title}</title><style>{css}</style></head><body><div class="slide" id="{slide_id}" data-slide-id="{slide_id}" data-slide-role="{role}" data-canvas="1280x720" data-style="anthropic-academic"><div class="block" style="left:64px;top:{126 if role == "opening" else 56}px;width:760px;height:100px"><h1 class="{title_class}">{title}</h1></div><div class="block" style="left:64px;top:{320 if role == "opening" else 128}px;width:900px;height:72px"><p class="t-lead">{lead}</p></div>{visual}{anchors}<div class="block" style="left:64px;top:648px;width:1120px;height:24px;font:400 15px/1.5 var(--font-sans);color:var(--ink-3)">{footer}</div></div></body></html>'''
+
+    def diagram(kind: str, labels: list[str], colors: list[str]) -> str:
+        nodes = "".join(
+            f'<g transform="translate({index * 370} 0)"><rect x="0" y="20" width="320" height="210" rx="12" fill="var(--{color}-fill)" stroke="var(--{color})" stroke-width=".5"/><text class="tn" x="24" y="54">0{index + 1}</text><text class="th" x="24" y="100">{label}</text><text class="ts" x="24" y="146">从现象到机制</text><circle cx="160" cy="190" r="18" fill="var(--{color})"/></g>' for index, (label, color) in enumerate(zip(labels, colors))
+        )
+        arrows = "".join(f'<path d="M{320 + index * 370} 125 H{350 + index * 370}" stroke="var(--ink-3)" stroke-width="1.4"/>' for index in range(len(labels) - 1))
+        return f'<svg class="block visual" data-visual="{kind}" style="left:64px;top:208px;width:1152px;height:300px" viewBox="0 0 1152 300">{nodes}{arrows}</svg>'
+
+    def anchors(prefix: str, count: int = 3) -> str:
+        return "".join(f'<div data-anchor="{prefix}-{index}" data-rect="{64 + index * 370} 208 320 210" style="position:absolute;left:{64 + index * 370}px;top:208px;width:320px;height:210px;pointer-events:none"></div>' for index in range(count))
+
+    slides: list[dict[str, Any]] = [
+        {"id": "s01", "index": 1, "role": "opening", "title": intent.topic, "file": "slides/s01.html", "anchors": [], "steps": [{"id": "s01-01", "order": 1, "kind": "overview", "camera": {"mode": "fit"}, "advance": "manual"}]},
+    ]
+    content_specs = [
+        ("s02", f"先把{intent.topic}拆成三个观察点", "不要先背结论，先找出它改变了什么。", "core-a", "第 1 页 · 现象 → 关系 → 结果"),
+        ("s03", "真正的转折发生在中间", "中间状态决定了表面现象会不会持续。", "core-b", "第 2 页 · 找到机制转折"),
+        ("s04", "把机制带回一个新例子", "能迁移到新情境，才说明理解已经超过记忆。", "core-c", "第 3 页 · 用关系检查新例子"),
+    ]
+    for index, (sid, title, lead, prefix, footer) in enumerate(content_specs, start=2):
+        slide_anchors = [{"id": f"{prefix}-{anchor}", "label": f"观察点 {anchor + 1}", "rect": {"x": 64 + anchor * 370, "y": 208, "w": 320, "h": 210}} for anchor in range(3)]
+        slides.append({"id": sid, "index": index, "role": "content", "title": title, "file": f"slides/{sid}.html", "anchors": slide_anchors, "steps": [{"id": f"{sid}-01", "order": 1, "kind": "overview", "camera": {"mode": "fit"}, "advance": "manual"}, {"id": f"{sid}-02", "order": 2, "kind": "zoom", "camera": {"mode": "anchor", "anchorId": f"{prefix}-0"}, "panel": {"title": "先看这一处", "body": f"先把注意力放在第一个观察点。{intent.topic}的关键，不是孤立地记住一个词，而是看清它与前一个状态的联系。这个顺序会为后面的判断打下基础。"}, "advance": "manual"}, {"id": f"{sid}-03", "order": 3, "kind": "zoom", "camera": {"mode": "anchor", "anchorId": f"{prefix}-1"}, "panel": {"title": "再看转折关系", "body": "这里真正要抓住的是关系：当条件变化时，中间机制会先改变，随后才表现为我们看到的结果。以后遇到新例子，也可以沿着这条顺序检查。"}, "advance": "manual"}]})
+    slides.append({"id": "s05", "index": 5, "role": "closing", "title": "把这条关系带回问题", "file": "slides/s05.html", "anchors": [], "steps": [{"id": "s05-01", "order": 1, "kind": "overview", "camera": {"mode": "fit"}, "advance": "manual"}]})
+
+    files: dict[str, str] = {"runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8")}
+    files["slides/s01.html"] = page("s01", intent.topic, "opening", f"今天只解决一个问题：如何真正理解{intent.topic}？", '<svg class="block visual" data-visual="concept-map" style="left:820px;top:104px;width:360px;height:442px" viewBox="0 0 360 442"><circle cx="180" cy="160" r="74" fill="var(--c1-fill)" stroke="var(--c1)"/><text class="th" x="125" y="166">问题</text><path d="M180 238 V340" stroke="var(--ink-3)" stroke-width="1.4"/><text class="ts" x="72" y="382">现象 → 关系 → 结论</text></svg>', "课程引入之后，先建立一张关系图。")
+    for slide in slides[1:-1]:
+        prefix = next(item[3] for item in content_specs if item[0] == slide["id"])
+        spec = next(item for item in content_specs if item[0] == slide["id"])
+        files[slide["file"]] = page(slide["id"], slide["title"], "content", spec[2], diagram("comparison", ["现象", "机制", "结果"], ["c1", "c2", "c3"]), spec[4], anchors(prefix))
+    files["slides/s05.html"] = page("s05", "把这条关系带回问题", "closing", "遇到新的例子时，按观察点、转折关系、结果表现重新检查。", '<svg class="block visual" data-visual="process" style="left:64px;top:208px;width:1152px;height:300px" viewBox="0 0 1152 300"><circle cx="120" cy="130" r="58" fill="var(--c1-fill)" stroke="var(--c1)"/><circle cx="576" cy="130" r="58" fill="var(--c2-fill)" stroke="var(--c2)"/><circle cx="1032" cy="130" r="58" fill="var(--c3-fill)" stroke="var(--c3)"/><path d="M180 130 H516 M636 130 H972" stroke="var(--ink-3)" stroke-width="1.4"/><text class="th" x="78" y="138">观察</text><text class="th" x="534" y="138">解释</text><text class="th" x="984" y="138">迁移</text></svg>', "五页课件 · 用结构解释，而不是只背定义。")
+
+    lecture = {"schemaVersion": "zoom-lecture/v2", "deck": {"id": f"task-{task_id[-12:]}", "title": intent.topic, "language": "zh-CN", "style": "anthropic-academic", "canvas": {"width": 1280, "height": 720, "format": "ppt169"}, "slideDir": "slides", "createdAt": now, "objectives": [intent.learning_objective]}, "slides": slides}
+    manifest = {"schemaVersion": "zoom-lecture-manifest/v2", "taskId": task_id, "generatedAt": now, "deck": {"title": intent.topic, "canvas": {"width": 1280, "height": 720}, "style": "anthropic-academic", "slideCount": 5, "contentSlideCount": 3, "stepCount": 11}, "artifacts": {"lecture": "lecture.json", "slides": [slide["file"] for slide in slides], "runtime": "runtime/index.html"}, "validation": {"tool": "scripts/validate_deck.py --strict", "status": "pending", "errors": [], "warnings": []}, "assumptions": ["模型课件严格校验失败时使用五页 academic fallback"], "deviations": []}
+    files["lecture.json"] = json.dumps(lecture, ensure_ascii=False)
+    files["manifest.json"] = json.dumps(manifest, ensure_ascii=False)
+    return files
 
 
 def _fallback_quiz(task_id: str, intent: IntentContext) -> QuizGenerationResult:
@@ -214,6 +245,14 @@ def _route_from_state(state: AgentState) -> str:
 
 def _public_quiz(state: AgentState) -> dict[str, Any]:
     return quiz_public(state.get("quiz_result") or {})
+
+
+def _deck_slide_count(files: dict[str, str]) -> int:
+    try:
+        lecture = json.loads(files.get("lecture.json", "{}"))
+        return len(lecture.get("slides", []))
+    except (TypeError, json.JSONDecodeError):
+        return 0
 
 
 def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts: ArtifactStore, persist_result: PersistResult, checkpointer: Any | None = None, store: Any | None = None):
@@ -269,7 +308,9 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             hook = _fallback_hook(intent, state["task_id"])
         value = hook.model_copy(update={"task_id": state["task_id"]}).model_dump(mode="json")
         await persist_result("lecture_hook", value)
+        intro_artifact = artifacts.write_lesson_intro_html(state["task_id"], value)
         _emit(runtime, "agent.output", agent="lecture_hook", message=f"课程引入：{hook.selected_hook.title}")
+        _emit(runtime, "artifact.ready", agent="lecture_hook", artifact="lesson-intro", path=intro_artifact["relative_path"])
         _emit(runtime, "agent.completed", agent="lecture_hook", skill="lesson-intro")
         return {"lecture_result": value}
 
@@ -291,6 +332,16 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             parsed = {}
         artifacts.write_deck(task_id, files)
         validation = await artifacts.build_and_validate_deck(task_id)
+        if not validation["ok"] or _deck_slide_count(files) < 5:
+            logger.warning(
+                "interactive-lecture-deck output rejected; using academic fallback (valid=%s slides=%s)",
+                validation["ok"],
+                _deck_slide_count(files),
+            )
+            files = _fallback_deck(task_id, intent)
+            parsed = {}
+            artifacts.write_deck(task_id, files)
+            validation = await artifacts.build_and_validate_deck(task_id)
         value = DeckResult.model_validate({"schema_version": "interactive-lecture-deck-result.v2", "task_id": task_id, "title": str(parsed.get("title") or intent.topic), "status": "ready" if validation["ok"] else "failed", "files": {"lecture": "lecture.json", "slides": sorted(name for name in files if name.startswith("slides/")), "runtime": "runtime/index.html", "standalone": "dist/lecture.html", "manifest": "manifest.json"}, "manifest": parsed.get("manifest") or {}, "validation": validation, "assumptions": parsed.get("assumptions") or [], "deviations": parsed.get("deviations") or []}).model_dump(mode="json")
         await persist_result("interactive_lecture_deck", value)
         _emit(runtime, "artifact.ready", agent="interactive_lecture_deck", artifact="lecture-deck", validation=validation)

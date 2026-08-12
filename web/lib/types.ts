@@ -185,6 +185,15 @@ export interface AgentTaskEvent {
 
 export type AgentTaskStatus = "queued" | "running" | "awaiting_user" | "handed_off" | "completed" | "partial" | "failed";
 
+export interface AgentTaskListItem {
+  id: string;
+  prompt: string;
+  status: AgentTaskStatus;
+  intent: { topic?: string };
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface AgentAgentSnapshot {
   status: "pending" | "completed" | "failed";
   error?: string;
@@ -211,6 +220,7 @@ export interface AgentTaskSnapshot {
     main_graph_placeholder: AgentAgentSnapshot;
   };
   artifacts: {
+    lesson_intro: { available: boolean; url: string; metadata?: Record<string, any> };
     lecture_deck: { available: boolean; url: string; metadata?: Record<string, any> };
     quiz: { available: boolean; data?: PublicQuiz | null };
     visual: { available: boolean; url: string; metadata?: Record<string, any> };
