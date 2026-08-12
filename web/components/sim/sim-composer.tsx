@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
+import type { NativeSkill } from "@/lib/types";
 import { SimPlus } from "@/components/sim/source/icons";
 import { SimPromptEditor } from "@/components/sim/source/prompt-editor";
 import { SimSendButton } from "@/components/sim/source/send-button";
@@ -33,7 +35,18 @@ export function SimComposer({
   "aria-label": ariaLabel = "学习任务输入",
 }: SimComposerProps) {
   const [value, setValue] = useState("");
+  const [skills, setSkills] = useState<NativeSkill[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    void api.skills().then(({ skills: next }) => {
+      if (active) setSkills(next);
+    }).catch(() => {
+      if (active) setSkills([]);
+    });
+    return () => { active = false; };
+  }, []);
 
   const submit = useCallback(() => {
     const trimmed = value.trim();
@@ -61,6 +74,8 @@ export function SimComposer({
         disabled={disabled || isSending}
         onValueChange={setValue}
         onSubmit={submit}
+        skills={skills}
+        onSkillSelect={() => undefined}
       />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">

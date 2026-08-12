@@ -15,7 +15,9 @@ workflow canvas are adapted from the Sim open-source frontend:
   `apps/sim/app/workspace/[workspaceId]/home/components/message-content/components/agent-group/agent-group.tsx`,
   `apps/sim/components/ui/thinking-loader.tsx`,
   `apps/sim/components/ui/thinking-loader.module.css`,
-  `apps/sim/components/ui/shimmer-text.tsx`, and `apps/sim/hooks/use-smooth-text.ts`
+  `apps/sim/components/ui/shimmer-text.tsx`,
+  `apps/sim/hooks/use-smooth-text.ts`, and
+  `apps/sim/app/workspace/[workspaceId]/home/components/user-input/components/skills-menu-dropdown/skills-menu-dropdown.tsx`
 - License: Apache License 2.0, as provided by the upstream repository
 
 The Sim interaction primitives needed by this surface are vendored under
