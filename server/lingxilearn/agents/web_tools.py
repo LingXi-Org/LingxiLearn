@@ -19,6 +19,8 @@ from ..config import Settings
 
 MAX_RESULTS = 8
 MAX_REDIRECTS = 3
+MAX_SEARCH_CALLS = 3
+MAX_FETCH_CALLS = 4
 
 
 class _TextParser(HTMLParser):
@@ -104,11 +106,27 @@ async def _get_public(url: str, settings: Settings) -> tuple[str, httpx.Response
 
 
 def build_web_tools(settings: Settings) -> list[Any]:
+    # These counters are task-scoped because build_web_tools is called once for
+    # each specialist agent. A failed call still consumes budget; callers must
+    # skip the failed source rather than retry it.
+    search_calls = 0
+    fetch_calls = 0
+    searched_queries: set[str] = set()
+    fetched_urls: set[str] = set()
+
     async def web_search(query: str, domains: str = "", freshness: str = "") -> str:
         """Search the public web and return title, URL, snippet and domain."""
 
+        nonlocal search_calls
         if not query.strip():
             raise ValueError("query must not be empty")
+        normalized_query = " ".join(query.casefold().split())
+        if normalized_query in searched_queries:
+            raise ValueError("duplicate web_search query is not allowed")
+        if search_calls >= MAX_SEARCH_CALLS:
+            raise ValueError("web_search budget exhausted: maximum is 3 calls per task")
+        searched_queries.add(normalized_query)
+        search_calls += 1
         params = {"q": query.strip(), "kl": "wt-wt"}
         if domains.strip():
             sites = " ".join(
@@ -154,6 +172,14 @@ def build_web_tools(settings: Settings) -> list[Any]:
     async def web_fetch(url: str) -> str:
         """Fetch a public page and return title, final URL and cleaned text."""
 
+        nonlocal fetch_calls
+        normalized_url = url.strip()
+        if normalized_url in fetched_urls:
+            raise ValueError("duplicate web_fetch URL is not allowed")
+        if fetch_calls >= MAX_FETCH_CALLS:
+            raise ValueError("web_fetch budget exhausted: maximum is 4 calls per task")
+        fetched_urls.add(normalized_url)
+        fetch_calls += 1
         final_url, response = await _get_public(url, settings)
         parser = _TextParser()
         parser.feed(response.text)
