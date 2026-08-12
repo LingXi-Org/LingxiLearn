@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "adaptive-pedagogy-result.v2",
+  "type": "object",
+  "required": [
+    "version",
+    "mode",
+    "decision",
+    "student_response",
+    "evidence_used",
+    "state_update_proposals"
+  ],
+  "properties": {
+    "version": {
+      "const": "adaptive-pedagogy-result.v2"
+    },
+    "mode": {
+      "enum": [
+        "preflight",
+        "teach"
+      ]
+    },
+    "evidence_used": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": [
+        "strategy",
+        "reason",
+        "question_value_gate"
+      ],
+      "properties": {
+        "strategy": {
+          "enum": [
+            "retrieve_or_predict",
+            "minimal_cue",
+            "progressive_hint",
+            "conceptual_conflict",
+            "worked_example_fade",
+            "targeted_explanation",
+            "teach_back",
+            "transfer_check",
+            "learner_model_challenge",
+            "advance"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "question_value_gate": {
+          "enum": [
+            "ask",
+            "do_not_ask"
+          ]
+        },
+        "verification_debt": {
+          "enum": [
+            "none",
+            "create",
+            "keep",
+            "discharge"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "student_response": {
+      "type": "object",
+      "required": [
+        "text",
+        "required_reply"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "required_reply": {
+          "type": "boolean"
+        },
+        "choices": {
+          "type": "array"
+        },
+        "confidence_chips": {
+          "type": "array"
+        },
+        "local_scaffolds": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "visual_request": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "background_reflection": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "prefetch_cache": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "state_update_proposals": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": true
+}

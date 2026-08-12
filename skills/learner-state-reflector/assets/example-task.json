@@ -1,0 +1,21 @@
+{
+  "topic": "gradient descent",
+  "events": [
+    {
+      "id": "e17",
+      "concept": "learning_rate",
+      "correct": false,
+      "stable_incorrect_rule": true,
+      "confidence": 0.9,
+      "assisted": false
+    },
+    {
+      "id": "e18",
+      "concept": "learning_rate",
+      "correct": true,
+      "assisted": true,
+      "hint_level": 3
+    }
+  ],
+  "prior_state": {}
+}

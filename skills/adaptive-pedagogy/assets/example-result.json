@@ -1,0 +1,65 @@
+{
+  "version": "adaptive-pedagogy-result.v2",
+  "mode": "teach",
+  "evidence_used": [
+    "e17"
+  ],
+  "decision": {
+    "strategy": "conceptual_conflict",
+    "reason": "学习者表达了一个稳定且高置信度的规则，可以用一个反例进行检验。",
+    "question_value_gate": "ask",
+    "verification_debt": "none"
+  },
+  "student_response": {
+    "text": "先不判断对错。把学习率设成 2.0：你预测它会更快到最低点，还是会出现别的现象？",
+    "required_reply": true,
+    "confidence_chips": [],
+    "choices": [
+      {
+        "id": "hint",
+        "label": "给我一点提示"
+      },
+      {
+        "id": "explain",
+        "label": "直接讲解"
+      }
+    ],
+    "local_scaffolds": [
+      {
+        "level": 1,
+        "label": "提示",
+        "content": "想想一步跨过最低点以后，下一次梯度方向会怎样变化。"
+      }
+    ]
+  },
+  "visual_request": {
+    "skill": "interactive-visual-explainer",
+    "blocking": false,
+    "brief": {
+      "topic": "梯度下降的学习率",
+      "predict_before_reveal": true,
+      "interaction": "学习率滑块与迭代轨迹动画"
+    },
+    "fallback_text": "如果暂时不看图，也可以想一个极端情况：一步直接跨过最低点很多，会发生什么？"
+  },
+  "background_reflection": {
+    "skill": "learner-state-reflector",
+    "blocking": false,
+    "event_ids": [
+      "e17"
+    ]
+  },
+  "prefetch_cache": null,
+  "state_update_proposals": [
+    {
+      "path": "knowledge.gradient_descent.learning_rate",
+      "operation": "append_evidence",
+      "value": {
+        "pattern": "larger_is_always_faster"
+      },
+      "evidence_ids": [
+        "e17"
+      ]
+    }
+  ]
+}

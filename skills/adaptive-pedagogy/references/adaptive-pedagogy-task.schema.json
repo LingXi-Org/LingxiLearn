@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "adaptive-pedagogy-task.v2",
+  "type": "object",
+  "required": [
+    "mode",
+    "topic"
+  ],
+  "properties": {
+    "mode": {
+      "enum": [
+        "preflight",
+        "teach"
+      ]
+    },
+    "topic": {
+      "type": "string"
+    },
+    "learning_objective": {
+      "type": "string"
+    },
+    "taught_content": {
+      "type": [
+        "string",
+        "object",
+        "array"
+      ]
+    },
+    "current_event": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "learner_state": {
+      "type": "object"
+    },
+    "session_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "available_skills": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

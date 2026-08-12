@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lingxigraph:skill:interactive-lecture-deck:task-request.schema.json",
+  "title": "主智能体下发的 PPT 开发任务",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "taskType",
+    "title",
+    "sourceMaterial"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "zoom-lecture-task/v1"
+    },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "taskType": {
+      "type": "string",
+      "enum": [
+        "problem",
+        "concept",
+        "lesson"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audience": {
+      "type": "string"
+    },
+    "objectives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sourceMaterial": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "problemStatement": {
+          "type": "string"
+        },
+        "referenceNotes": {
+          "type": "string"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "markdown",
+                  "image",
+                  "data"
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "outline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "heading"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "heading": {
+            "type": "string",
+            "minLength": 1
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mustCover": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "slideCount": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 40
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 40
+            }
+          }
+        },
+        "canvas": {
+          "const": "ppt169"
+        },
+        "language": {
+          "type": "string"
+        },
+        "style": {
+          "const": "anthropic-academic"
+        },
+        "density": {
+          "type": "string",
+          "enum": [
+            "sparse",
+            "balanced",
+            "dense"
+          ]
+        },
+        "zoomPointsPerSlide": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 8
+            },
+            "max": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            }
+          }
+        }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "outputDir": {
+          "type": "string"
+        },
+        "returnManifest": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  }
+}

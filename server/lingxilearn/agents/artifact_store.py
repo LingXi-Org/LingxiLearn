@@ -28,7 +28,7 @@ class ArtifactStore:
         self.root = settings.agent_task_dir.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.max_html_bytes = min(settings.agent_max_html_bytes, MAX_HTML_BYTES)
-        self.skill_root = (REPO_ROOT / "skills" / "visual-explainer").resolve()
+        self.skill_root = (REPO_ROOT / "skills" / "interactive-visual-explainer").resolve()
 
     def task_root(self, task_id: str) -> Path:
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,96}", task_id):

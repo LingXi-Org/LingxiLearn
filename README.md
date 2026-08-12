@@ -118,7 +118,7 @@ lingxigraph 2.2.0（PyPI）· SQLite / PostgreSQL
 ### 意图调度 Agent 与双 Skill 产物
 
 首页自由 Prompt 会创建一个 Agent Task。意图识别 Agent 先统一教学上下文，随后
-`lecture-hook` 与 `visual-explainer` 两个专用 subagent 从同一节点并行扇出，结果在
+`lesson-intro` 与 `interactive-visual-explainer` 两个专用 subagent 从同一节点并行扇出，结果在
 右侧工作区的“背景文档 / 可视化讲解”标签页汇合。前者输出带来源和不确定性的 Markdown，
 后者输出一个零外部依赖的 HTML，并在任务目录内进行静态检查。
 
@@ -131,7 +131,7 @@ LINGXILEARN_AGENT_BASE_URL=https://api.deepseek.com
 LINGXILEARN_AGENT_TIMEOUT=90
 ```
 
-当 Agent Base URL 为官方 DeepSeek API 时，`lecture-hook` 使用 DeepSeek
+当 Agent Base URL 为官方 DeepSeek API 时，`lesson-intro` 使用 DeepSeek
 Responses API 的原生 `web_search` 工具；不再依赖本地 DuckDuckGo HTML 搜索器。
 
 ### 身份、学习数据与 LingxiGraph 边界
@@ -207,7 +207,7 @@ server/lingxilearn/
   stream/                  Event → UI 投影（纯函数）
   store/                   SQLAlchemy + Alembic
   eval/                    评测
-skills/                    lecture-hook / visual-explainer（固定上游提交）
+skills/                    LingxiSkills 最新技能（含中文展示名称与描述）
 web/                       Next.js Sim 前端与 LingxiGraph 适配层
 scripts/                   工件生成、内核/API/UI 冒烟
 ```

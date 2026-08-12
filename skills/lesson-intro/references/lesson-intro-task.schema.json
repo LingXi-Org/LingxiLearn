@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lingxi.example/schemas/lecture-hook-task.schema.json",
-  "title": "Lecture Hook Task",
+  "$id": "https://lingxi.example/schemas/lesson-intro-task.schema.json",
+  "title": "Lesson Introduction Task",
   "type": "object",
   "required": ["topic"],
   "properties": {

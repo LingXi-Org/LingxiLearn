@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>P02 · 结论型标题</title>
+<style>
+:root{
+  --paper:#fbfaf7; --surface:#ffffff; --sunken:#f4f2ec;
+  --ink-1:#23231f; --ink-2:#5f5e5a; --ink-3:#8a8880;
+  --rule:rgba(35,35,31,.14); --rule-strong:rgba(35,35,31,.30);
+  --accent:#534ab7;
+  --c1:#7f77dd; --c1-fill:#eeedfe; --c1-ink:#3c3489;
+  --c2:#1d9e75; --c2-fill:#e1f5ee; --c2-ink:#085041;
+  --c3:#d85a30; --c3-fill:#faece7; --c3-ink:#712b13;
+  --c4:#378add; --c4-fill:#e6f1fb; --c4-ink:#0c447c;
+  --c5:#ba7517; --c5-fill:#faeeda; --c5-ink:#633806;
+  --c6:#d4537e; --c6-fill:#fbeaf0; --c6-ink:#72243e;
+  --c7:#639922; --c7-fill:#eaf3de; --c7-ink:#27500a;
+  --c0:#888780; --c0-fill:#f1efe8; --c0-ink:#444441;
+  --c-warn:#e24b4a; --c-warn-fill:#fcebeb; --c-warn-ink:#791f1f;
+  --font-serif:"Songti SC","Source Han Serif SC","Noto Serif SC","SimSun",Georgia,"Times New Roman",serif;
+  --font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Source Han Sans SC","Noto Sans SC","Segoe UI",Roboto,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#141412}
+.slide{
+  position:relative;width:1280px;height:720px;overflow:hidden;
+  background:var(--paper);color:var(--ink-1);font-family:var(--font-sans);
+  -webkit-font-smoothing:antialiased;
+}
+.block{position:absolute;box-sizing:border-box}
+.t-display{margin:0;font:500 58px/1.18 var(--font-serif);color:var(--ink-1)}
+.t-title{margin:0;font:500 38px/1.24 var(--font-serif);color:var(--ink-1)}
+.t-subtitle{margin:0;font:500 24px/1.35 var(--font-sans);color:var(--ink-1)}
+.t-lead{margin:0;font:400 22px/1.55 var(--font-sans);color:var(--ink-2)}
+.t-body{margin:0;font:400 20px/1.55 var(--font-sans);color:var(--ink-1)}
+.t-note{margin:0;font:400 15px/1.5 var(--font-sans);color:var(--ink-3)}
+.t-data{font:500 30px/1.25 var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink-1)}
+.eyebrow{font:400 14px/1.4 var(--font-mono);letter-spacing:.08em;color:var(--ink-3)}
+.rule{height:.5px;background:var(--rule)}
+.visual{position:absolute}
+.panel-shape{fill:var(--surface);stroke:var(--rule-strong);stroke-width:.5}
+.t{font:400 18px var(--font-sans);fill:var(--ink-1)}
+.ts{font:400 15px var(--font-sans);fill:var(--ink-2)}
+.th{font:500 18px var(--font-sans);fill:var(--ink-1)}
+.tn{font:400 15px var(--font-mono);fill:var(--ink-2);font-variant-numeric:tabular-nums}
+.axis{stroke:var(--rule-strong);stroke-width:.5;fill:none}
+.grid{stroke:var(--rule);stroke-width:.5;fill:none}
+.arr{stroke:var(--ink-3);stroke-width:1.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.data-1{stroke:var(--c1);fill:none;stroke-width:3}
+.data-2{stroke:var(--c2);fill:none;stroke-width:3}
+</style>
+</head>
+<body>
+<div class="slide" id="s02" data-slide-id="s02" data-slide-role="content" data-canvas="1280x720" data-style="anthropic-academic">
+
+  <div class="block eyebrow" style="left:64px;top:48px;width:400px;height:20px;">核心判断</div>
+  <div class="block" style="left:64px;top:72px;width:1152px;height:56px;">
+    <h1 class="t-title">把页面标题写成一个可判断的结论</h1>
+  </div>
+  <div class="block" style="left:64px;top:136px;width:760px;height:48px;">
+    <p class="t-lead">一句引导足够。解释不要堆在页面上，把注意力交给图。</p>
+  </div>
+
+  <svg class="block visual" data-visual="diagram"
+       data-anchor="a-main-relationship" data-rect="64 208 1152 376"
+       style="left:64px;top:208px;width:1152px;height:376px;"
+       viewBox="0 0 1152 376" aria-label="示例关系图">
+    <line class="axis" x1="88" y1="304" x2="1064" y2="304"/>
+    <line class="axis" x1="88" y1="64" x2="88" y2="304"/>
+    <path class="data-1" d="M88,286 C260,276 368,252 480,220 C620,180 738,120 1064,88"/>
+    <path class="data-2" d="M88,286 C330,274 540,266 720,254 C850,244 950,224 1064,196"/>
+    <circle cx="720" cy="155" r="6" fill="var(--c1)"/>
+    <path class="arr" d="M730,146 C770,116 820,104 868,104"/>
+    <text class="th" x="878" y="110">关键转折在这里</text>
+    <text class="ts" x="88" y="338">横轴：条件 / 时间 / 输入</text>
+    <text class="ts" x="16" y="54">结果</text>
+  </svg>
+
+  <div class="block rule" style="left:64px;top:616px;width:1152px;height:.5px;"></div>
+  <div class="block" style="left:64px;top:632px;width:1040px;height:28px;">
+    <p class="t-note">图 1 · 图注说“这张图说明什么”，不要重复标题。</p>
+  </div>
+  <div class="block t-note" style="left:1160px;top:640px;width:56px;height:20px;text-align:right;">02</div>
+</div>
+</body>
+</html>

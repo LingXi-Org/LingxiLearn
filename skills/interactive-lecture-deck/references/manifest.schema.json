@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lingxigraph:skill:interactive-lecture-deck:manifest.schema.json",
+  "title": "Zoom Lecture Deck v2 回传清单",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "generatedAt",
+    "deck",
+    "artifacts",
+    "validation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "zoom-lecture-manifest/v2"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "deck": {
+      "type": "object",
+      "required": [
+        "title",
+        "canvas",
+        "style",
+        "slideCount",
+        "contentSlideCount",
+        "stepCount"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "canvas": {
+          "type": "object",
+          "required": [
+            "width",
+            "height"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "type": "integer"
+            },
+            "height": {
+              "type": "integer"
+            }
+          }
+        },
+        "style": {
+          "type": "string"
+        },
+        "slideCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "stepCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contentSlideCount": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "lecture",
+        "slides",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "lecture": {
+          "type": "string"
+        },
+        "slides": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "runtime": {
+          "type": "string"
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "tool",
+        "status",
+        "errors",
+        "warnings"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "pass-with-warnings",
+            "fail"
+          ]
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "objective",
+          "slides"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "objective": {
+            "type": "string"
+          },
+          "slides": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "deviations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

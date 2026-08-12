@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dependency-free structural validator for lecture-hook-result.v1 outputs."""
+"""Dependency-free structural validator for lesson-intro-result.v1 outputs."""
 from __future__ import annotations
 import json
 import sys
@@ -20,8 +20,8 @@ def require(obj, key, typ=None):
 
 
 def validate(data: dict) -> None:
-    if data.get("schema_version") != "lecture-hook-result.v1":
-        fail("schema_version must be lecture-hook-result.v1")
+    if data.get("schema_version") != "lesson-intro-result.v1":
+        fail("schema_version must be lesson-intro-result.v1")
     if data.get("status") not in {"ok", "insufficient_evidence"}:
         fail("invalid status")
     require(data, "topic", str)
@@ -89,7 +89,7 @@ def main() -> int:
     except Exception as exc:
         print(f"INVALID: {exc}", file=sys.stderr)
         return 1
-    print("VALID lecture-hook-result.v1")
+    print("校验通过：lesson-intro-result.v1")
     return 0
 
 

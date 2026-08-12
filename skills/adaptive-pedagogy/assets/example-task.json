@@ -1,0 +1,28 @@
+{
+  "mode": "teach",
+  "topic": "梯度下降",
+  "learning_objective": "解释为什么学习率不能任意增大。",
+  "taught_content": [
+    "梯度方向",
+    "学习率",
+    "迭代"
+  ],
+  "current_event": {
+    "id": "e17",
+    "text": "学习率越大一步走得越远，所以应该越快。",
+    "correct": false,
+    "stable_incorrect_rule": true,
+    "confidence": 0.9,
+    "attempts": 1
+  },
+  "learner_state": {
+    "verification_debt": [],
+    "interaction": {
+      "mandatory_prompts_since_value": 0
+    }
+  },
+  "available_skills": [
+    "interactive-visual-explainer",
+    "interactive-lecture-deck"
+  ]
+}

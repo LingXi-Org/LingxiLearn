@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_agent_skills_are_discoverable_and_have_resources() -> None:
-    for name in ("lecture-hook", "visual-explainer"):
+    for name in ("lesson-intro", "interactive-visual-explainer"):
         skill_dir = REPO_ROOT / "skills" / name
         source = FilesystemSkillSource(skill_dir)
         metadata = source.discover()
@@ -60,7 +60,7 @@ async def test_specialists_start_in_parallel(
 ) -> None:
     timeline: list[str] = []
     lecture = {
-        "schema_version": "lecture-hook-result.v1",
+        "schema_version": "lesson-intro-result.v1",
         "status": "ok",
         "topic": "TCP 拥塞控制",
         "selected_hook": {
@@ -96,7 +96,7 @@ async def test_specialists_start_in_parallel(
             timeline.append(f"{self.name}:end")
             if self.name == "intent-recognizer":
                 content = '{"topic":"TCP 拥塞控制"}'
-            elif self.name == "lecture-hook":
+            elif self.name in {"lecture-hook", "lesson-intro"}:
                 content = LectureHookResult.model_validate(lecture).model_dump_json()
             else:
                 content = (
@@ -176,7 +176,7 @@ def test_visual_artifact_is_task_scoped_and_single_file_only(tmp_path: Path) -> 
     assert result["relative_path"] == "task-1/visual-explainer.html"
     assert store.read_html("task-1").decode() == html
 
-    template = (REPO_ROOT / "skills" / "visual-explainer" / "assets" / "template.html").read_text(
+    template = (REPO_ROOT / "skills" / "interactive-visual-explainer" / "assets" / "template.html").read_text(
         encoding="utf-8"
     )
     store.write_html("template-check", template)

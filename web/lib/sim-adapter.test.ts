@@ -50,7 +50,7 @@ describe("agent task adapter", () => {
     ]);
     expect(messages.map((message) => message.role)).toEqual(["user", "assistant"]);
     expect(messages[1].contentBlocks.map((block) => block.type)).toEqual(["text"]);
-    expect(messages[1].content).toContain("Lecture Hook Agent 已接收任务");
+    expect(messages[1].content).toContain("课程引入设计 Agent 已接收任务");
     expect(agentTaskToSimResources(task()).map((resource) => resource.kind)).toEqual(["background", "visual"]);
   });
 

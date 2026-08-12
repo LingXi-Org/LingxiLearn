@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "zoom-lecture/v2",
+  "deck": {
+    "id": "quadratic-vertex",
+    "title": "二次函数在闭区间上的最值",
+    "language": "zh-CN",
+    "style": "anthropic-academic",
+    "canvas": {"width":1280,"height":720,"format":"ppt169"},
+    "slideDir": "slides",
+    "createdAt": "2026-08-12T00:00:00Z",
+    "objectives": ["能把参数最值转化为关键位置与闭区间的位置比较"]
+  },
+  "defaults": {
+    "camera": {"padding":24},
+    "transition": {"inMs":920,"outMs":640,"easing":"zoomOut"},
+    "highlight": {"style":"outline"},
+    "panel": {"placement":"auto","width":420}
+  },
+  "slides": [
+    {
+      "id":"s01","index":1,"role":"opening","file":"slides/s01.html","title":"闭区间最值：先找顶点落在哪里","anchors":[],
+      "steps":[{"id":"s01-01","order":1,"kind":"overview","camera":{"mode":"fit"},"advance":"manual"}]
+    },
+    {
+      "id":"s02","index":2,"role":"content","file":"slides/s02.html","title":"顶点落点一变，最小值的来源就跟着变",
+      "anchors":[
+        {"id":"a-left","label":"顶点在区间左侧","rect":{"x":64,"y":208,"w":368,"h":336}},
+        {"id":"a-inside","label":"顶点在区间内部","rect":{"x":456,"y":208,"w":368,"h":336}},
+        {"id":"a-right","label":"顶点在区间右侧","rect":{"x":848,"y":208,"w":368,"h":336}}
+      ],
+      "steps":[
+        {"id":"s02-01","order":1,"kind":"overview","camera":{"mode":"fit"},"advance":"manual"},
+        {"id":"s02-02","order":2,"kind":"zoom","camera":{"mode":"anchor","anchorId":"a-left"},"panel":{"placement":"right","title":"左侧时先看单调性","body":"顶点已经落到区间左边，所以 `[0,2]` 只截到抛物线的递增段。此时最小值不可能来自区间内部，只要把左端点 `x=0` 代入就够了。"},"advance":"manual"},
+        {"id":"s02-03","order":3,"kind":"zoom","camera":{"mode":"anchor","anchorId":"a-inside"},"panel":{"placement":"right","title":"落在内部就直接取顶点","body":"中间这一种最省力：顶点本身就在闭区间内，函数又开口向上，因此最小值就是顶点值。边界 `a=0` 与 `a=2` 也可以一并放进这一段。"},"advance":"manual"},
+        {"id":"s02-04","order":4,"kind":"zoom","camera":{"mode":"anchor","anchorId":"a-right"},"panel":{"placement":"left","title":"右侧时换到另一端点","body":"顶点越过右端点以后，整个区间落在抛物线的递减段。最小值便移动到 `x=2`；把三个来源放在一起，分段函数的边界也就自然出现了。"},"advance":"manual"}
+      ]
+    },
+    {
+      "id":"s03","index":3,"role":"closing","file":"slides/s03.html","title":"以后遇到参数最值，只按这三步检查","anchors":[],
+      "steps":[{"id":"s03-01","order":1,"kind":"overview","camera":{"mode":"fit"},"advance":"manual"}]
+    }
+  ]
+}

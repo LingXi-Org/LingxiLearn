@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lingxi.example/schemas/lecture-hook-result.schema.json",
-  "title": "Lecture Hook Result v1",
+  "$id": "https://lingxi.example/schemas/lesson-intro-result.schema.json",
+  "title": "Lesson Introduction Result v1",
   "type": "object",
   "required": ["schema_version", "status", "topic", "selected_hook", "candidates", "research", "warnings"],
   "properties": {
-    "schema_version": {"const": "lecture-hook-result.v1"},
+    "schema_version": {"const": "lesson-intro-result.v1"},
     "status": {"enum": ["ok", "insufficient_evidence"]},
     "task_id": {"type": "string"},
     "topic": {"type": "string"},
@@ -48,6 +48,11 @@
       "required": ["claims", "sources", "search_angles"],
       "properties": {
         "search_angles": {"type": "array", "items": {"type": "string"}},
+        "search_provider": {"type": "string"},
+        "search_calls": {"type": "integer", "minimum": 0},
+        "inspected_results": {"type": "integer", "minimum": 0},
+        "fetched_sources": {"type": "integer", "minimum": 0},
+        "unmet_targets": {"type": "array", "items": {"type": "string"}},
         "claims": {
           "type": "array",
           "items": {

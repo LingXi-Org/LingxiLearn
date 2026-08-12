@@ -102,11 +102,11 @@ class ResearchLedger(BaseModel):
 
 
 class LectureHookResult(BaseModel):
-    """Subset-plus-compatible representation of lecture-hook-result.v1."""
+    """Subset-plus-compatible representation of lesson-intro-result.v1."""
 
     model_config = ConfigDict(extra="allow")
 
-    schema_version: Literal["lecture-hook-result.v1"]
+    schema_version: Literal["lesson-intro-result.v1"]
     status: Literal["ok", "insufficient_evidence"]
     topic: str
     selected_hook: HookSelection

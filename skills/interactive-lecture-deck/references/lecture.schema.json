@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lingxigraph:skill:interactive-lecture-deck:lecture.schema.json",
+  "title": "Zoom Lecture Deck v2 — lecture.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "deck",
+    "slides"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "zoom-lecture/v2"
+    },
+    "deck": {
+      "$ref": "#/$defs/deck"
+    },
+    "defaults": {
+      "$ref": "#/$defs/defaults"
+    },
+    "slides": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "$ref": "#/$defs/slide"
+      }
+    },
+    "extensions": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "deck": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "language",
+        "style",
+        "canvas",
+        "slideDir",
+        "createdAt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "language": {
+          "type": "string",
+          "minLength": 2
+        },
+        "style": {
+          "const": "anthropic-academic"
+        },
+        "canvas": {
+          "type": "object",
+          "required": [
+            "width",
+            "height",
+            "format"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "const": 1280
+            },
+            "height": {
+              "const": 720
+            },
+            "format": {
+              "const": "ppt169"
+            }
+          }
+        },
+        "slideDir": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "objectives": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "depth": {
+              "$ref": "#/$defs/depth"
+            },
+            "padding": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 240
+            }
+          }
+        },
+        "transition": {
+          "$ref": "#/$defs/transition"
+        },
+        "highlight": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "style": {
+              "$ref": "#/$defs/highlightStyle"
+            }
+          }
+        },
+        "panel": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "placement": {
+              "$ref": "#/$defs/placement"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 280,
+              "maximum": 640
+            }
+          }
+        }
+      }
+    },
+    "slide": {
+      "type": "object",
+      "required": [
+        "id",
+        "index",
+        "role",
+        "file",
+        "title",
+        "anchors",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^s\\d{2}$"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^[^\\\\]+\\.html$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": "string"
+        },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/anchor"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "opening",
+            "content",
+            "closing"
+          ]
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "rect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,39}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rect": {
+          "$ref": "#/$defs/rect"
+        }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1280
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 720
+        },
+        "w": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1280
+        },
+        "h": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 720
+        }
+      }
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 6
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inMs": {
+          "type": "integer",
+          "minimum": 120,
+          "maximum": 3000
+        },
+        "outMs": {
+          "type": "integer",
+          "minimum": 120,
+          "maximum": 3000
+        },
+        "easing": {
+          "type": "string",
+          "enum": [
+            "zoomOut",
+            "smooth",
+            "linear"
+          ]
+        }
+      }
+    },
+    "highlightStyle": {
+      "type": "string",
+      "enum": [
+        "outline",
+        "spotlight",
+        "none"
+      ]
+    },
+    "placement": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "left",
+        "right",
+        "top",
+        "bottom"
+      ]
+    },
+    "step": {
+      "type": "object",
+      "required": [
+        "id",
+        "order",
+        "kind",
+        "camera",
+        "advance"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^s\\d{2}-\\d{2}$"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "overview",
+            "zoom"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "camera": {
+          "$ref": "#/$defs/camera"
+        },
+        "transition": {
+          "$ref": "#/$defs/transition"
+        },
+        "highlight": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "anchorIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": {
+              "$ref": "#/$defs/highlightStyle"
+            }
+          }
+        },
+        "panel": {
+          "$ref": "#/$defs/panel"
+        },
+        "narration": {
+          "type": "string"
+        },
+        "advance": {
+          "const": "manual"
+        },
+        "extensions": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "zoom"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "panel"
+            ],
+            "properties": {
+              "camera": {
+                "properties": {
+                  "mode": {
+                    "const": "anchor"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "overview"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "camera": {
+                "properties": {
+                  "mode": {
+                    "const": "fit"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "camera": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "fit",
+            "anchor"
+          ]
+        },
+        "anchorId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,39}$"
+        },
+        "depth": {
+          "$ref": "#/$defs/depth"
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 1.05,
+          "maximum": 6.0
+        },
+        "padding": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 240
+        },
+        "focus": {
+          "type": "object",
+          "required": [
+            "cx",
+            "cy"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cx": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "cy": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "anchor"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "required": [
+              "anchorId"
+            ]
+          }
+        }
+      ]
+    },
+    "panel": {
+      "type": "object",
+      "required": [
+        "body"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1
+        },
+        "placement": {
+          "$ref": "#/$defs/placement"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 280,
+          "maximum": 640
+        },
+        "avoidAnchorIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

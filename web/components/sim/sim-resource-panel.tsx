@@ -44,8 +44,8 @@ export function SimResourcePanel({
         <span className="shrink-0 text-xs font-medium">工作区</span>
         <nav className="ml-2 flex h-10 items-center gap-1" aria-label="Agent 工作区页面">
           <ResourceTab active={tab === "canvas"} onClick={() => setTab("canvas")} icon={<GitBranch className="size-3" />}>Canvas</ResourceTab>
-          {hasLecture && <ResourceTab active={tab === "background"} onClick={() => setTab("background")} icon={<FileText className="size-3" />}>Lecture hook</ResourceTab>}
-          {hasVisual && <ResourceTab active={tab === "visual"} onClick={() => setTab("visual")} icon={<Sparkles className="size-3" />}>Visual explainer</ResourceTab>}
+          {hasLecture && <ResourceTab active={tab === "background"} onClick={() => setTab("background")} icon={<FileText className="size-3" />}>课程引入设计</ResourceTab>}
+          {hasVisual && <ResourceTab active={tab === "visual"} onClick={() => setTab("visual")} icon={<Sparkles className="size-3" />}>交互式可视化讲解</ResourceTab>}
         </nav>
         {onBackToConversation && <SimButton type="button" variant="quiet" size="sm" className="ml-auto shrink-0 lg:hidden" onClick={onBackToConversation}>返回对话</SimButton>}
       </header>
@@ -62,7 +62,7 @@ function BackgroundArtifact({ task }: { task: AgentTaskSnapshot | null }) {
   const available = Boolean(task?.artifacts.background.available);
   const artifact = useAgentArtifact(task?.id, "background", available);
   return (
-    <ArtifactFrame icon={<FileText className="size-4" />} title="Lecture hook 背景产物" agent="lecture_hook" available={available} loading={artifact.loading} error={artifact.error}>
+    <ArtifactFrame icon={<FileText className="size-4" />} title="课程引入设计背景产物" agent="课程引入设计" available={available} loading={artifact.loading} error={artifact.error}>
       {artifact.content && <article className="prose prose-sm max-w-none whitespace-pre-wrap text-[13px] leading-7 text-[var(--text-primary)]">{artifact.content}</article>}
     </ArtifactFrame>
   );
@@ -72,7 +72,7 @@ function VisualArtifact({ task }: { task: AgentTaskSnapshot | null }) {
   const available = Boolean(task?.artifacts.visual.available);
   const artifact = useAgentArtifact(task?.id, "visual", available);
   return (
-    <ArtifactFrame icon={<Sparkles className="size-4" />} title="Visual explainer 交互页面" agent="visual_explainer" available={available} loading={artifact.loading} error={artifact.error}>
+    <ArtifactFrame icon={<Sparkles className="size-4" />} title="交互式可视化讲解页面" agent="交互式可视化讲解" available={available} loading={artifact.loading} error={artifact.error}>
       {artifact.content && <iframe title="Visual explainer artifact" src={artifact.content} sandbox="allow-scripts" className="h-[min(72vh,760px)] w-full rounded-lg border border-[var(--border)] bg-white" />}
     </ArtifactFrame>
   );

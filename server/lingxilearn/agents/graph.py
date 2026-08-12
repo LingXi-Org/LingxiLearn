@@ -70,16 +70,16 @@ INTENT_PROMPT = """你是 LingxiLearn 的意图识别与调度 Agent。
 格式：
 {"topic":"...","learning_objective":"...","learner_level":"undergraduate","course_context":"...","language":"zh-CN","target_duration_sec":75}"""
 
-LECTURE_PROMPT = """你是 lecture-hook 专用 subagent。你要严格执行可用的 lecture-hook Agent Skill。
+LECTURE_PROMPT = """你是 lesson-intro 专用 subagent。你要严格执行可用的 lesson-intro Agent Skill。
 
 任务：根据用户问题和意图上下文，为目标知识点生成有证据支撑的课堂背景 Hook。
 
 必须：
-1. 先使用 read_skill 读取 lecture-hook 的完整指令。
+1. 先使用 read_skill 读取 lesson-intro 的完整指令。
 2. 按 Skill 的“研究标准”和“运行时限制”进行网页研究；DeepSeek 专用模型使用官方 Responses API 原生
    web_search，不要寻找或调用第二套搜索实现；不得凭记忆编造事实。
 3. 对中心事实建立 claim-to-source 证据账本，保留不确定性。
-4. 最终只输出可被 lecture-hook-result.v1 解析的 JSON。
+4. 最终只输出可被 lesson-intro-result.v1 解析的 JSON。
 5. student-facing prose 使用中文，URL 和证据放进 research。
 
 执行边界：最多进行 3 次 web_search、最多抓取 4 个最相关来源；某个来源失败或超时
@@ -110,13 +110,13 @@ HTML 作为 content 传入；然后必须调用 artifact_validate_html。禁止�
 JSON 格式：
 {"title":"...","learning_goal":"...","main_interaction":"...","figures":["..."],"assumptions":["..."],"tradeoffs":["..."]}"""
 
-LECTURE_RECOVERY_PROMPT = """你是 lecture-hook 专用 subagent。此前受控网页研究没有在预算内完成。
-请基于给定教学意图生成 lecture-hook-result.v1 JSON，并将 status 设置为 insufficient_evidence。
+LECTURE_RECOVERY_PROMPT = """你是 lesson-intro 专用 subagent。此前受控网页研究没有在预算内完成。
+请基于给定教学意图生成 lesson-intro-result.v1 JSON，并将 status 设置为 insufficient_evidence。
 不得编造来源；research.sources 和 research.claims 使用空数组，warnings 说明需要补充外部证据。
 仍需给出一个不依赖具体事实、仅用于引出概念的课堂问题型 Hook。只输出 JSON。"""
 
-LECTURE_NORMALIZER_PROMPT = """你是 lecture-hook 结构化归一化 Agent。
-把给定的原生 DeepSeek Web Search 搜索总结转换为严格的 lecture-hook-result.v1 JSON。
+LECTURE_NORMALIZER_PROMPT = """你是 lesson-intro 结构化归一化 Agent。
+把给定的原生 DeepSeek Web Search 搜索总结转换为严格的 lesson-intro-result.v1 JSON。
 只输出 JSON，不要 Markdown，不要解释。不得补造搜索结果；没有可靠来源时使用
 status=insufficient_evidence、空 research.sources/claims，并在 warnings 说明证据不足。
 JSON 必须包含 schema_version、status、topic、selected_hook、candidates、research；
@@ -159,7 +159,7 @@ def _evidence_safe_lecture(intent: IntentContext, task_id: str, warning: str) ->
     topic = intent.topic
     return LectureHookResult.model_validate(
         {
-            "schema_version": "lecture-hook-result.v1",
+            "schema_version": "lesson-intro-result.v1",
             "status": "insufficient_evidence",
             "topic": topic,
             "selected_hook": {
@@ -216,7 +216,7 @@ def build_agent_graph(
 ):
     """Compile one task graph with task-scoped specialist tools."""
 
-    lecture_skill = FilesystemSkillSource(REPO_ROOT / "skills" / "lecture-hook")
+    lecture_skill = FilesystemSkillSource(REPO_ROOT / "skills" / "lesson-intro")
     lecture_registry = SkillRegistry((lecture_skill,))
 
     async def recognize_intent(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
@@ -242,14 +242,14 @@ def build_agent_graph(
         return {"intent": value}
 
     async def lecture_hook(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
-        _emit(runtime, "agent.started", agent="lecture_hook", skill="lecture-hook")
+        _emit(runtime, "agent.started", agent="lecture_hook", skill="lesson-intro")
         intent = IntentContext.model_validate(state["intent"])
         task = {
             "task_id": state["task_id"],
             **intent.model_dump(mode="json"),
         }
         prompt = (
-            "请为下面的 lecture-hook task 生成结果。\n"
+            "请为下面的 lesson-intro task 生成结果。\n"
             "TASK JSON:\n"
             + json.dumps(jsonable(task), ensure_ascii=False)
         )
@@ -302,14 +302,14 @@ def build_agent_graph(
         await persist_result("lecture_hook", value)
         _emit(runtime, "agent.output", agent="lecture_hook", message=f"课堂 Hook：{hook.selected_hook.title}。{hook.selected_hook.opening}")
         _emit(runtime, "artifact.ready", agent="lecture_hook", artifact="background")
-        _emit(runtime, "agent.completed", agent="lecture_hook", skill="lecture-hook")
+        _emit(runtime, "agent.completed", agent="lecture_hook", skill="lesson-intro")
         return {"lecture_result": value}
 
     async def visual_explainer(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
-        _emit(runtime, "agent.started", agent="visual_explainer", skill="visual-explainer")
+        _emit(runtime, "agent.started", agent="visual_explainer", skill="interactive-visual-explainer")
         intent = IntentContext.model_validate(state["intent"])
 
-        skill_root = REPO_ROOT / "skills" / "visual-explainer"
+        skill_root = REPO_ROOT / "skills" / "interactive-visual-explainer"
         skill_text = (skill_root / "SKILL.md").read_text(encoding="utf-8")
         template_text = (skill_root / "assets" / "template.html").read_text(encoding="utf-8")
         prompt = (
@@ -396,7 +396,7 @@ def build_agent_graph(
             artifact="visual",
             validation=validation,
         )
-        _emit(runtime, "agent.completed", agent="visual_explainer", skill="visual-explainer")
+        _emit(runtime, "agent.completed", agent="visual_explainer", skill="interactive-visual-explainer")
         return {"visual_result": value}
 
     async def merge_results(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:

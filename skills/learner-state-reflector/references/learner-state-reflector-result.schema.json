@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "learner-state-reflector-result.v1",
+  "type": "object",
+  "required": [
+    "version",
+    "evidence_summary",
+    "state_update_proposals",
+    "verification_debt_proposals"
+  ],
+  "properties": {
+    "version": {
+      "const": "learner-state-reflector-result.v1"
+    },
+    "evidence_summary": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "state_update_proposals": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "verification_debt_proposals": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "learner_model_card": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "prefetch_suggestions": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

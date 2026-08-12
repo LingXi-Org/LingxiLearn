@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "learner-state-reflector-task.v1",
+  "type": "object",
+  "required": [
+    "events"
+  ],
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "prior_state": {
+      "type": "object"
+    },
+    "topic": {
+      "type": "string"
+    },
+    "learning_objective": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

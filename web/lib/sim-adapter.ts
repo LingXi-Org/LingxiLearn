@@ -234,8 +234,8 @@ export function agentTaskToAgentRuns(task: AgentTaskSnapshot, events: AgentTaskE
 
 export function agentLabel(agent: string): string {
   if (agent === "intent") return "Intent Recognizer";
-  if (agent === "lecture_hook") return "Lecture Hook Agent";
-  if (agent === "visual_explainer") return "Visual Explainer Agent";
+  if (agent === "lecture_hook") return "课程引入设计 Agent";
+  if (agent === "visual_explainer") return "交互式可视化讲解 Agent";
   return agent.split(/[_-]/).map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : "").join(" ");
 }
 
@@ -257,8 +257,8 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
 export function agentTaskToSimResources(task: AgentTaskSnapshot | null): SimResourceDescriptor[] {
   if (!task) return [];
   return [
-    { id: `${task.id}-background`, title: "Lecture hook 背景产物", kind: "background", available: task.artifacts.background.available, description: "lecture_hook Agent 生成的 Markdown 课堂背景" },
-    { id: `${task.id}-visual`, title: "Visual explainer 交互页面", kind: "visual", available: task.artifacts.visual.available, description: "visual_explainer Agent 生成的独立 HTML 页面" },
+    { id: `${task.id}-background`, title: "课程引入设计背景产物", kind: "background", available: task.artifacts.background.available, description: "课程引入设计 Agent 生成的 Markdown 课堂背景" },
+    { id: `${task.id}-visual`, title: "交互式可视化讲解页面", kind: "visual", available: task.artifacts.visual.available, description: "交互式可视化讲解 Agent 生成的独立 HTML 页面" },
   ];
 }
 

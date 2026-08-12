@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "learner-state.v2",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "topic": {
+      "type": "string"
+    },
+    "knowledge": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "recent_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "verification_debt": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "interaction": {
+      "type": "object",
+      "properties": {
+        "mandatory_prompts_since_value": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_support_choice": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_hint_level": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 5
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
