@@ -217,7 +217,6 @@ export interface AgentTaskSnapshot {
     interactive_lecture_deck: AgentAgentSnapshot;
     quiz_generator: AgentAgentSnapshot;
     interactive_visual_explainer: AgentAgentSnapshot;
-    main_graph_placeholder: AgentAgentSnapshot;
   };
   artifacts: {
     lesson_intro: { available: boolean; url: string; metadata?: Record<string, any> };

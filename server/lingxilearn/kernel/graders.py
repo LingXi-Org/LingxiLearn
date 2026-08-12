@@ -158,6 +158,33 @@ def _keywords(spec: dict[str, Any], answer: Any, _ctx: dict[str, Any]) -> Judgem
     hits = sum(
         1 for group in required if any(re.sub(r"\s+", "", a).casefold() in folded for a in group)
     )
+
+
+@grader("sim_outcome")
+def _sim_outcome(spec: dict[str, Any], _answer: Any, ctx: dict[str, Any]) -> Judgement:
+    """Grade a simulator delivery only after the artifact is intact."""
+
+    outcome = _lookup(ctx, str(spec.get("score_from", "score")))
+    if not isinstance(outcome, dict):
+        return Judgement(
+            correct=False,
+            score=0.0,
+            feedback="缺少模拟器结果，无法判定。",
+            detail={"error": "missing_outcome"},
+        )
+    intact = bool(outcome.get("delivered_intact"))
+    efficiency = float(outcome.get("efficiency", 0.0) or 0.0)
+    minimum = float(spec.get("min_efficiency", 0.0) or 0.0)
+    correct = intact and efficiency >= minimum
+    score = efficiency if intact else 0.0
+    return Judgement(
+        correct=correct,
+        score=score,
+        concept_scores=_concept_scores(spec, score),
+        misconceptions=[str(item) for item in outcome.get("misconceptions", [])],
+        feedback="交付完整且效率达标。" if correct else "先保证交付结果完整，再优化效率。",
+        detail={"delivered_intact": intact, "efficiency": efficiency, "min_efficiency": minimum},
+    )
     score = hits / len(required) if required else 0.0
     threshold = float(spec.get("threshold", 0.75))
     tags = [

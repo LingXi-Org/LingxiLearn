@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>为什么雨后的石板路格外滑？</title>
+  <style>
+    :root { color-scheme: light; --ink: #1d2a24; --muted: #5f7067; --paper: #f4f1e8; --accent: #c96c43; --line: #d8d3c5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px 18px; background: var(--paper); color: var(--ink); font: 16px/1.75 system-ui, -apple-system, "Noto Sans SC", sans-serif; }
+    main { width: min(720px, 100%); }
+    .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 750; letter-spacing: .14em; }
+    h1 { max-width: 12em; margin: 12px 0 24px; font-size: clamp(2.2rem, 7vw, 4.5rem); line-height: 1.04; letter-spacing: -.055em; }
+    .scene, .question { border: 1px solid var(--line); border-radius: 22px; padding: clamp(22px, 5vw, 38px); background: rgba(255,255,255,.42); }
+    .scene { position: relative; overflow: hidden; }
+    .scene::after { content: ""; position: absolute; width: 140px; height: 140px; right: -42px; top: -42px; border: 20px solid rgba(201,108,67,.18); border-radius: 50%; }
+    p { margin: 0 0 1em; }
+    p:last-child { margin-bottom: 0; }
+    .question { margin-top: 16px; background: var(--ink); color: #f9f6ed; }
+    .question strong { display: block; margin-bottom: 8px; color: #f6b18d; }
+    .continue { margin: 22px 4px 0; color: var(--muted); }
+    @media (prefers-reduced-motion: no-preference) { .scene::after { animation: drift 8s ease-in-out infinite alternate; } @keyframes drift { to { transform: translate(-18px, 20px); } } }
+    @media (max-width: 520px) { body { padding-top: 22px; } h1 { font-size: clamp(2.35rem, 14vw, 3.4rem); } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">从脚底开始的一堂力学课</div>
+    <h1>为什么雨后的石板路格外滑？</h1>
+    <section class="scene" aria-label="雨后石板路的场景">
+      <p>刚下过雨，石板路只是多了一层亮晶晶的水。可脚底一落下去，熟悉的路面忽然像换了性格：鞋底轻轻一偏，身体就开始往前溜。</p>
+      <p>石板没有突然变陡，鞋底也没有凭空消失。真正改变的，可能是鞋底和地面之间那场我们看不见的“较量”。</p>
+    </section>
+    <section class="question" aria-label="带着问题出发">
+      <strong>先猜一猜</strong>
+      <p>水到底让摩擦变小了吗？如果只是让两样东西更容易滑开，为什么有些湿地面反而更“黏”？</p>
+    </section>
+    <p class="continue">接下来，我们就从这个小小的脚底打滑开始，看看摩擦力究竟在什么时候帮我们站稳，又在什么时候悄悄放手。</p>
+  </main>
+</body>
+</html>

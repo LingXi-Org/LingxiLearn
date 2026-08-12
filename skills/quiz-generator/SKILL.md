@@ -1,45 +1,72 @@
 ---
 name: quiz-generator
 description: >-
-  Define and eventually generate structured knowledge-point assessment items from an intent,
-  lesson-intro result, and interactive lecture deck result. Use for the difficult-knowledge
-  subgraph quiz-generation stage, contract validation, public-snapshot sanitization, and future
-  quiz authoring. This is an interface skeleton only; do not implement the generation model here.
+  Generate a compact, evidence-grounded Chinese formative quiz from supplied lesson context and
+  taught lecture material. Use after teaching to check retrieval, conceptual distinctions,
+  misconceptions, application, prediction, explanation, or transfer. Produce grading-safe internal
+  JSON and a clean public snapshot when requested. Do not browse by default and never import facts
+  that were not taught. Chinese display name: 知识点测评生成。Chinese display description: 基于已讲授的中文课程内容生成紧凑、无泄题、可诊断理解误区的知识点测评。
+license: MIT
+compatibility: LingxiGraph Agent Skills runtime with Python 3
+metadata:
+  author: LingXi-Org
+  version: 1.0.0
+  display-name: 知识点测评生成
+  display-description: 基于已讲授的中文课程内容生成紧凑、无泄题、可诊断理解误区的知识点测评。
+  output-language: zh-CN
+  output-contract: quiz-generation-result.v1
+  execution-mode: synchronous-structured-generation
 ---
 
-# Knowledge Quiz Generator
+# 知识点测评生成
 
-## Scope
+## 目标
 
-Provide the stable skill boundary for the future `quiz_generator` node. This initial skill defines
-the input and output contracts only. Keep question generation, rubric design, and model/tool
-selection out of this skeleton until the quiz skill is deliberately implemented.
+把已经讲授的知识点转化为一组短小、有诊断价值的形成性测评。测评不是第二篇讲义，也不是
+题库堆砌；它要帮助学习者暴露理解断点，帮助教师知道下一步该补哪里。
 
-## Input
+默认一次生成 3–4 道题：先检查核心概念，再辨析一个有依据的误区，然后视材料质量加入应用、
+预测、解释或迁移题。材料只支持一个可靠问题时，生成更少的题；不要为了凑齐题型而编造难题。
 
-Read [quiz-generation-input.schema.json](references/quiz-generation-input.schema.json). The
-runtime must provide one JSON object with:
+## 输入与输出
 
-- `schema_version`: `quiz-generation-input.v1`
-- `task_id`: the durable Agent Task ID
-- `intent`: the extracted knowledge-point context
-- `lesson_intro`: the complete `lesson-intro-result.v1` value
-- `interactive_lecture_deck`: the complete `interactive-lecture-deck-result.v2` value
+读取 `references/quiz-generation-input.schema.json`。输入应包含知识点意图和已讲授的交互课件；
+课程引入可以是单文件 HTML、最小 JSON envelope，或缺省。把上游材料视为证据边界，不修改它，
+也不要默认联网补课。
 
-Treat the two upstream results as evidence for alignment. Do not invent facts that are absent from
-the supplied context, and do not mutate either upstream result.
+返回 `quiz-generation-result.v1`。题干、选项、说明、关键词和假设都使用简体中文；协议字段、
+题目 ID 和枚举值保持技术形式。完整结果供内部判分使用；公开给学习者前，使用
+`scripts/quiz_contract.py sanitize` 删除 `answer`、`explanation`、`keywords` 和 `assumptions`。
 
-## Output
+## 设计原则
 
-Read [quiz-generation-result.schema.json](references/quiz-generation-result.schema.json). The
-internal result must validate as `quiz-generation-result.v1` and include stable question IDs,
-question types, prompts, options where applicable, points, and internal grading fields.
+- 测理解，不测未讲授的冷知识；每个正确答案都必须能在输入材料中找到依据。
+- 一题只做一个主要判断。题干自包含，不依赖“上一页”“第 3 张幻灯片”或隐藏图形。
+- 干扰项来自真实近错：反转因果、混淆邻近概念、漏掉必要条件、越过适用边界或把局部规律过度泛化。
+- 单选题应有且只有一个可辩护答案；多选题只有在确实存在多个正确条件时使用。
+- 选项保持相近的语法、长度和具体程度，打散正确选项位置，不用“以上都对/以上都不对”。
+- 简答题通常要求 1–4 句，用概念与关系评分，不依赖逐字复述。
+- 难度来自推理距离，不来自晦涩措辞或额外知识。材料不足时宁可少出一道题。
+- 不把课程引入中的历史日期、人物轶事或装饰性事实自动变成考点，除非课件真正讲授并要求掌握。
 
-The service, not the skill, owns one-shot submission enforcement and persistence. Before returning
-the public snapshot, remove `answer`, `explanation`, `keywords`, rubric details, and any other
-grading hints. The public snapshot contains only renderable question data.
+## 工作流程
 
-## Not implemented yet
+1. 校验输入版本，读取意图、课程引入和课件；提取中心概念、机制、定义、对比、例题、边界
+   条件与明确学习目标。
+2. 建立私有证据图：`概念 → 已讲授的事实/关系/例子/误区`。任何无法落到证据图的内容不出题。
+3. 选择最少但信息量足够的题目。优先顺序通常是核心辨识 → 误区辨析 → 应用/预测 → 解释/迁移，
+   但可以根据材料自由删减或调整。
+4. 为每道题写答案、解释、评分信息和关键词；`total_points` 必须等于所有题目分值之和。
+5. 按 `references/quality-gate.md` 做一次重写式审查，而不是只做形式检查。
+6. 用 `scripts/quiz_contract.py validate-result` 校验，程序化调用时只返回 JSON，不包 Markdown 代码围栏。
 
-Do not add model prompts, web research, question-selection heuristics, grading algorithms, or HTML
-rendering in this initialization. Those are future implementation work behind this contract.
+## 证据不足与冲突
+
+不要用外部搜索修补上游材料的空白。若材料稀疏，生成更少、更安全的问题，并在内部
+`assumptions` 中记录限制；如果一个选择题无法构造唯一可信答案，改成有评分标准的简答题，
+或直接省略。材料互相冲突时保留不确定性，不把猜测写成答案。
+
+## 公开快照
+
+内部结果和学习者看到的题目必须分离。公开快照只保留可渲染内容：题目 ID、题型、题干、选项和
+分值。不得泄露答案、解析、关键词、假设或任何能反推出正确选项的内部信息。

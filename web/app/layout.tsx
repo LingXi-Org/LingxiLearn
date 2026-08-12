@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { OidcAdapterProvider } from "@/components/auth/oidc-adapter";
+import { ThemeProvider } from "@/components/theme/theme-provider";
 
 export const metadata: Metadata = {
   title: "灵犀智学",
@@ -17,13 +18,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <head>
+        <link id="lingxi-favicon" rel="icon" href="/lingxi_logo_light.ico" />
+        <link rel="icon" href="/lingxi_logo_dark.ico" media="(prefers-color-scheme: dark)" />
         <meta property="og:title" content="灵犀智学" />
         <meta property="og:description" content="对话驱动的智能学习工作台。" />
         <meta property="og:image" content="/og.png" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:image" content="/og.png" />
       </head>
-      <body><OidcAdapterProvider>{children}</OidcAdapterProvider></body>
+      <body><ThemeProvider><OidcAdapterProvider>{children}</OidcAdapterProvider></ThemeProvider></body>
     </html>
   );
 }

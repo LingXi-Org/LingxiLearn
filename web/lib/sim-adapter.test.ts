@@ -20,7 +20,6 @@ const task = (overrides: Partial<AgentTaskSnapshot> = {}): AgentTaskSnapshot => 
     interactive_lecture_deck: { status: "pending" },
     quiz_generator: { status: "pending" },
     interactive_visual_explainer: { status: "pending" },
-    main_graph_placeholder: { status: "pending" },
   },
   artifacts: {
     lesson_intro: { available: true, url: "", metadata: { title: "课程引入" } },

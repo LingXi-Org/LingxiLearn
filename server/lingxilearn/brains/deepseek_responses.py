@@ -36,7 +36,9 @@ class DeepSeekResponsesModel:
             if message.type == "system":
                 instructions.append(text)
             else:
-                inputs.append({"role": "assistant" if message.type == "ai" else "user", "content": text})
+                inputs.append(
+                    {"role": "assistant" if message.type == "ai" else "user", "content": text}
+                )
         payload: dict[str, Any] = {
             "model": self.model,
             "input": inputs,
@@ -59,19 +61,72 @@ class DeepSeekResponsesModel:
                         parts.append(str(content["text"]))
         return "".join(parts)
 
+    @staticmethod
+    def _output_reasoning(payload: Mapping[str, Any]) -> str:
+        parts: list[str] = []
+        for item in payload.get("output", ()) or ():
+            if not isinstance(item, Mapping):
+                continue
+            for key in ("reasoning_content", "reasoning", "thinking"):
+                value = item.get(key)
+                if isinstance(value, str):
+                    parts.append(value)
+            for content in item.get("content", ()) or ():
+                if isinstance(content, Mapping) and str(content.get("type", "")).startswith(
+                    "reasoning"
+                ):
+                    if isinstance(content.get("text"), str):
+                        parts.append(str(content["text"]))
+        return "".join(parts)
+
     async def agenerate(self, messages: Sequence[AnyMessage], **_: Any) -> AIMessage:
         response = await self._client.post("/responses", json=self._payload(messages))
         response.raise_for_status()
         payload = response.json()
+        reasoning = self._output_reasoning(payload)
         return AIMessage(
             self._output_text(payload),
             usage=dict(payload.get("usage") or {}),
+            additional_kwargs={"reasoning_content": reasoning} if reasoning else {},
             response_metadata={"model": payload.get("model"), "provider": self.provider_id},
         )
 
-    async def astream(self, messages: Sequence[AnyMessage], **kwargs: Any) -> AsyncIterator[AIMessageChunk]:
-        response = await self.agenerate(messages, **kwargs)
-        yield AIMessageChunk(response.content, usage=response.usage, response_metadata=response.response_metadata)
+    async def astream(
+        self, messages: Sequence[AnyMessage], **kwargs: Any
+    ) -> AsyncIterator[AIMessageChunk]:
+        payload = self._payload(messages)
+        payload["stream"] = True
+        async with self._client.stream("POST", "/responses", json=payload) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if raw == "[DONE]":
+                    return
+                event = json.loads(raw)
+                event_type = str(event.get("type") or "")
+                value = event.get("delta") or event.get("text") or ""
+                additional: dict[str, Any] = {}
+                if "reasoning" in event_type or "thinking" in event_type:
+                    if value:
+                        additional["reasoning_content"] = str(value)
+                    value = ""
+                usage = dict(
+                    event.get("usage")
+                    or (event.get("response") or {}).get("usage")
+                    or {}
+                )
+                if value or additional or usage:
+                    yield AIMessageChunk(
+                        str(value),
+                        usage=usage,
+                        additional_kwargs=additional,
+                        response_metadata={
+                            "model": event.get("model"),
+                            "provider": self.provider_id,
+                        },
+                    )
 
     async def aclose(self) -> None:
         await self._client.aclose()

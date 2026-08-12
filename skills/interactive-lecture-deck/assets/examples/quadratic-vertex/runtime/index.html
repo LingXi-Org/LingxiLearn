@@ -169,23 +169,6 @@ let spatialState={x:0,y:0,z:0,yaw:0,pitch:0,roll:0};
 let userView={scale:1,panX:0,panY:0,yaw:0,pitch:0};
 let drag=null;
 
-const DEMO_SLIDE=`<!doctype html><html><head><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;width:1280px;height:720px;overflow:hidden;background:#fbfaf7;color:#23231f;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}.slide{position:relative;width:1280px;height:720px;padding:62px 72px}.k{font:500 15px ui-monospace,monospace;letter-spacing:.08em;color:#6d6a65}.t{position:absolute;left:72px;top:100px;width:850px;font:500 44px/1.2 Georgia,"Songti SC",serif}.rule{position:absolute;left:72px;right:72px;top:180px;border-top:1px solid #d7d4cc}.node{position:absolute;top:250px;width:300px;height:250px;border:1px solid #c7c3b9;border-radius:8px;padding:28px;background:#fff}.n1{left:82px}.n2{left:490px}.n3{left:898px}.num{font:500 13px ui-monospace,monospace;color:#534ab7}.node h3{font:500 27px/1.25 Georgia,"Songti SC",serif;margin:19px 0 13px}.node p{font:400 16px/1.7 sans-serif;color:#65625e;margin:0}.arrow{position:absolute;top:370px;font:400 34px Georgia,serif;color:#8d8982}.a1{left:424px}.a2{left:832px}</style></head><body><main class="slide"><div class="k">SPATIAL EXPLANATION</div><div class="t">放大不是为了看大，而是为了把因果关系逐层说清。</div><div class="rule"></div><section class="node n1"><div class="num">01</div><h3>输入压力</h3><p>观察请求到达速度如何逼近系统处理能力。</p></section><div class="arrow a1">→</div><section class="node n2"><div class="num">02</div><h3>队列累积</h3><p>真正的转折发生在积压开始持续增长时。</p></section><div class="arrow a2">→</div><section class="node n3"><div class="num">03</div><h3>等待时延</h3><p>最后被看到的延迟，其实是前面累积的结果。</p></section></main></body></html>`;
-const FALLBACK={
- schemaVersion:'zoom-lecture/v2',
- deck:{id:'runtime-demo',title:'Spatial UI Runtime 演示',language:'zh-CN',style:'anthropic-academic',canvas:{width:1280,height:720,format:'ppt169'},slideDir:'slides',createdAt:new Date().toISOString()},
- defaults:{camera:{padding:28},transition:{inMs:980,outMs:700,easing:'zoomOut'},highlight:{style:'outline'},panel:{placement:'auto',width:420}},
- slides:[{id:'s01',index:1,role:'content',file:'runtime/demo-slide.html',title:'放大不是为了看大，而是为了把因果关系逐层说清',anchors:[
-   {id:'a-demand',label:'输入压力',rect:{x:82,y:250,w:300,h:250}},
-   {id:'a-queue',label:'队列累积',rect:{x:490,y:250,w:300,h:250}},
-   {id:'a-delay',label:'等待时延',rect:{x:898,y:250,w:300,h:250}}
- ],steps:[
-   {id:'s01-01',order:1,kind:'overview',camera:{mode:'fit'},advance:'manual'},
-   {id:'s01-02',order:2,kind:'zoom',camera:{mode:'anchor',anchorId:'a-demand'},panel:{placement:'right',title:'先找输入端的变化',body:'先看左边。真正重要的不是“请求很多”，而是到达速率开始稳定逼近服务能力。只要系统还有空隙，短暂的高峰并不会立刻变成问题。'},advance:'manual'},
-   {id:'s01-03',order:3,kind:'zoom',camera:{mode:'anchor',anchorId:'a-queue'},panel:{placement:'left',title:'转折发生在队列这里',body:'现在看中间：当输入长期高于处理速度，队列就不再有机会被清空。它像一个不断加水、却来不及排出的容器，后面的时延放大其实从这里已经决定了。'},advance:'manual'},
-   {id:'s01-04',order:4,kind:'zoom',camera:{mode:'anchor',anchorId:'a-delay'},panel:{placement:'left',title:'时延只是最后被看见的结果',body:'右边的时延抬升是结果，不是起点。以后排查性能问题，先回到队列是否持续累积，再去问链路或处理器是不是“变慢”了，判断会更稳。'},advance:'manual'}
- ]}]
-};
-
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function inlineMd(s){let x=escapeHtml(s);x=x.replace(/`([^`]+)`/g,'<code>$1</code>');x=x.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');x=x.replace(/\*([^*]+)\*/g,'<em>$1</em>');x=x.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');return x;}
@@ -354,8 +337,7 @@ function parseBundle(){
 }
 function slideSource(slide){
  if(bundle){const key=String(slide.file||'').replace(/^\.\//,'');return bundle.slides[key]??bundle.slides[slide.id]??null}
- if(lecture===FALLBACK)return DEMO_SLIDE;
- return null;
+  return null;
 }
 function loadSlide(slide){
  if(currentSlideId===slide.id)return Promise.resolve(false);currentSlideId=slide.id;
@@ -397,11 +379,12 @@ onboardingBtn.addEventListener('click',dismissOnboarding);
 async function boot(){
  bundle=parseBundle();
  if(bundle){lecture=bundle.lecture;}
- else{
-  const q=new URLSearchParams(location.search),src=q.get('lecture')||'../lecture.json';
-  try{const res=await fetch(src,{cache:'no-store'});if(!res.ok)throw new Error(res.status+' '+res.statusText);lecture=await res.json();}
-  catch(err){lecture=FALLBACK;console.info('lecture.json unavailable; using built-in demo. Build a standalone artifact to run a real deck directly from file://',err)}
- }
+  else{
+   const q=new URLSearchParams(location.search),src=q.get('lecture')||'../lecture.json';
+   const res=await fetch(src,{cache:'no-store'});
+   if(!res.ok)throw new Error(res.status+' '+res.statusText);
+   lecture=await res.json();
+  }
  flatten();updateFit();await renderStep(false);requestAnimationFrame(()=>onboarding.classList.add('show'));
 }
 addEventListener('keydown',e=>{

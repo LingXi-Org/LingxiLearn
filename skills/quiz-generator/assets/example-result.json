@@ -1,0 +1,50 @@
+{
+  "schema_version": "quiz-generation-result.v1",
+  "task_id": "demo-friction-01",
+  "title": "摩擦力：从打滑到站稳",
+  "instructions": "请选择最合适的答案；最后一题请用一两句话说明理由。",
+  "questions": [
+    {
+      "id": "q01_core",
+      "type": "single_choice",
+      "prompt": "关于摩擦力，哪种说法最符合本节课的核心概念？",
+      "options": [
+        {"id": "A", "label": "它总是阻止物体向前运动"},
+        {"id": "B", "label": "它总是让物体停下来"},
+        {"id": "C", "label": "它阻碍接触面间的相对运动趋势"},
+        {"id": "D", "label": "它只存在于粗糙的静止表面"}
+      ],
+      "points": 2,
+      "answer": {"option_ids": ["C"], "grading_mode": "exact"},
+      "explanation": "摩擦力针对的是接触面间的相对运动趋势，不等同于单纯阻止物体向前或让物体停下。",
+      "keywords": ["concept:摩擦力", "bloom:understand", "difficulty:easy", "purpose:retrieval"]
+    },
+    {
+      "id": "q02_misconception",
+      "type": "single_choice",
+      "prompt": "人走路时，脚向后蹬地。地面对脚的摩擦力主要指向哪里？",
+      "options": [
+        {"id": "A", "label": "向前"},
+        {"id": "B", "label": "向后"},
+        {"id": "C", "label": "竖直向上"},
+        {"id": "D", "label": "没有摩擦力"}
+      ],
+      "points": 3,
+      "answer": {"option_ids": ["A"], "grading_mode": "exact"},
+      "explanation": "脚向后蹬地时，脚相对地面有向后滑动的趋势，地面对脚的摩擦力指向前方，帮助人向前走。",
+      "keywords": ["concept:摩擦力方向", "bloom:apply", "difficulty:medium", "purpose:misconception"]
+    },
+    {
+      "id": "q03_transfer",
+      "type": "short_text",
+      "prompt": "为什么雨后的石板路可能更容易打滑？请用接触条件和相对运动趋势解释。",
+      "options": [],
+      "points": 4,
+      "answer": {"grading_mode": "rubric", "criteria": [{"id": "c1", "description": "指出水膜改变了接触条件", "points": 2}, {"id": "c2", "description": "把变化与更容易发生相对滑动联系起来", "points": 2}]},
+      "explanation": "水膜会改变鞋底与石板的接触条件；在具体材料和水膜条件下，接触面可能更容易发生相对滑动。",
+      "keywords": ["concept:接触条件", "bloom:explain", "difficulty:medium", "purpose:transfer"]
+    }
+  ],
+  "total_points": 9,
+  "assumptions": ["题目只使用课件中已讲授的摩擦力方向和接触条件。"]
+}

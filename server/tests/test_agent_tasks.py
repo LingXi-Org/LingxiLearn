@@ -10,8 +10,9 @@ from lingxigraph import AIMessage, FilesystemSkillSource
 
 from lingxilearn.agents.artifact_store import ArtifactError, ArtifactStore
 from lingxilearn.agents.contracts import IntentContext, LectureHookResult, extract_json
-from lingxilearn.agents.graph import _fallback_deck, build_agent_graph
+from lingxilearn.agents.graph import build_agent_graph
 from lingxilearn.agents.web_tools import _assert_public_url
+from lingxilearn.agents.skill_runtime import ArtifactDraft, progressive_skill_prompt, staged_artifact_tools
 from lingxilearn.config import Settings
 from lingxilearn.service import Service
 
@@ -25,6 +26,29 @@ def test_agent_skills_are_discoverable_and_have_resources() -> None:
         metadata = source.discover()
         assert [item.name for item in metadata] == [name]
         assert (skill_dir / "SKILL.md").read_text(encoding="utf-8").startswith("---")
+
+
+def test_skill_runtime_supports_progressive_disclosure_and_staged_artifacts(tmp_path: Path) -> None:
+    settings = Settings(_env_file="", agent_task_dir=tmp_path)
+    draft = ArtifactDraft(ArtifactStore(settings), "staged-task", "deck")
+    tools = staged_artifact_tools(draft)
+    result = tools[0].func("slides/s01.html", "<!doctype html><html></html>")
+    assert "staged" in result
+    assert draft.list() == [{"path": "slides/s01.html", "bytes": 28}]
+    assert tools[1].func("slides/s01.html") == "<!doctype html><html></html>"
+    assert "slides/s01.html" in tools[2].func()
+    with pytest.raises(ArtifactError):
+        tools[0].func("../escape.html", "bad")
+    prompt = progressive_skill_prompt(
+        "interactive-lecture-deck",
+        "interactive-lecture-deck-result.v2",
+        referenced_resources=("references/design-system.md",),
+    )
+    assert "read_skill" in prompt
+    assert "read_skill_resource" in prompt
+    assert "stage_artifact_file" in prompt
+    draft.cleanup()
+    assert not draft.root.exists()
 
 
 def test_intent_and_lecture_contracts_reject_malformed_output() -> None:
@@ -59,6 +83,7 @@ async def test_specialists_start_in_parallel(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     timeline: list[str] = []
+    created: dict[str, dict[str, Any]] = {}
     lecture = {
         "schema_version": "lesson-intro-result.v1",
         "status": "ok",
@@ -87,8 +112,9 @@ async def test_specialists_start_in_parallel(
     }
 
     class FakeAgent:
-        def __init__(self, name: str) -> None:
+        def __init__(self, name: str, tools: list[Any]) -> None:
             self.name = name
+            self.tools = tools
 
         async def ainvoke(self, _input: Any, _config: Any) -> dict[str, Any]:
             timeline.append(f"{self.name}:start")
@@ -97,7 +123,23 @@ async def test_specialists_start_in_parallel(
             if self.name == "intent-recognizer":
                 content = '{"topic":"TCP 拥塞控制"}'
             elif self.name in {"lecture-hook", "lesson-intro"}:
-                content = LectureHookResult.model_validate(lecture).model_dump_json()
+                content = '{"topic":"TCP 拥塞控制","status":"ok"}'
+                stage = next(tool for tool in self.tools if tool.name == "stage_artifact_file")
+                stage.func(
+                    "lesson-intro.html",
+                    "<!doctype html><html lang='zh-CN'><head><title>TCP</title></head><body><h1>TCP 拥塞控制</h1><p>理解一个可观察的问题。</p></body></html>",
+                )
+            elif self.name == "quiz-generator":
+                content = '{"schema_version":"quiz-generation-result.v1","task_id":"parallel-test","title":"TCP","instructions":"完成测评。","questions":[{"id":"q01","type":"single_choice","prompt":"核心关系是什么？","options":[{"id":"A","label":"关系"},{"id":"B","label":"结论"}],"points":1,"answer":{"option_ids":["A"],"grading_mode":"exact"},"explanation":"关系。","keywords":["concept:TCP"]}],"total_points":1}'
+            elif self.name == "interactive-lecture-deck":
+                source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
+                stage = next(tool for tool in self.tools if tool.name == "stage_artifact_file")
+                stage.func("lecture.json", (source / "lecture.json").read_text(encoding="utf-8"))
+                stage.func("manifest.json", (source / "manifest.json").read_text(encoding="utf-8"))
+                stage.func("runtime/index.html", (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"))
+                for slide in (source / "slides").glob("s*.html"):
+                    stage.func(f"slides/{slide.name}", slide.read_text(encoding="utf-8"))
+                content = '{"title":"TCP 拥塞控制"}'
             else:
                 content = (
                     "<!doctype html><html lang='zh-CN'><head><title>TCP</title></head>"
@@ -105,8 +147,9 @@ async def test_specialists_start_in_parallel(
                 )
             return {"messages": [AIMessage(content=content)]}
 
-    def fake_create_agent(_model: Any, *_tools: Any, name: str, **_kwargs: Any) -> FakeAgent:
-        return FakeAgent(name)
+    def fake_create_agent(_model: Any, *_tools: Any, name: str, **kwargs: Any) -> FakeAgent:
+        created[name] = kwargs
+        return FakeAgent(name, kwargs.get("tools", []))
 
     monkeypatch.setattr("lingxilearn.agents.graph.create_agent", fake_create_agent)
     settings = Settings(_env_file="", agent_task_dir=tmp_path)
@@ -116,6 +159,9 @@ async def test_specialists_start_in_parallel(
         return {"ok": True, "static": {"ok": True}, "palette": {}, "screenshot": "fixture"}
 
     monkeypatch.setattr(store, "validate_html", fake_validate)
+    async def fake_validate_intro(_task_id: str) -> dict[str, Any]:
+        return {"ok": True, "contract": "lesson-intro-html.v1"}
+    monkeypatch.setattr(store, "validate_lesson_intro", fake_validate_intro)
 
     async def persist(_agent: str, _value: dict[str, Any]) -> None:
         return None
@@ -138,6 +184,11 @@ async def test_specialists_start_in_parallel(
     )
     assert timeline.index("lesson-intro:start") < first_end
     assert timeline.index("interactive-lecture-deck:start") < first_end
+    assert created["lesson-intro"]["skills"].discover()[0].name == "lesson-intro"
+    assert {item.name for item in created["lesson-intro"]["tools"]} == {"web_search", "web_fetch", "stage_artifact_file", "read_staged_artifact", "list_staged_artifacts"}
+    deck_tools = {item.name for item in created["interactive-lecture-deck"]["tools"]}
+    assert {"stage_artifact_file", "read_staged_artifact", "list_staged_artifacts"} <= deck_tools
+    assert created["interactive-lecture-deck"]["skills"].discover()[0].name == "interactive-lecture-deck"
 
 
 @pytest.mark.asyncio
@@ -191,34 +242,26 @@ def test_visual_artifact_is_task_scoped_and_single_file_only(tmp_path: Path) -> 
         store.write_html("task-1", "")
 
 
-def test_lesson_intro_artifact_and_fallback_deck_are_publishable(tmp_path: Path) -> None:
+def test_lesson_intro_artifact_and_skill_deck_are_publishable(tmp_path: Path) -> None:
     settings = Settings(_env_file="", agent_task_dir=tmp_path)
     store = ArtifactStore(settings)
-    intro = store.write_lesson_intro_html(
-        "intro-task",
-        {
-            "status": "ok",
-            "topic": "TCP 拥塞控制",
-            "selected_hook": {
-                "title": "为什么网络会堵",
-                "opening": "开场",
-                "story": "故事",
-                "question": "问题",
-                "transition": "过渡",
-                "why_this_hook_works": "有效",
-                "estimated_duration_sec": 30,
-            },
-            "research": {"claims": [], "sources": []},
-            "warnings": [],
-        },
-    )
+    html = (REPO_ROOT / "skills" / "lesson-intro" / "assets" / "example-page.html").read_text(encoding="utf-8")
+    intro = store.write_lesson_intro_file("intro-task", html)
     assert intro["artifact_id"] == "lesson-intro"
-    assert "为什么网络会堵" in store.lesson_intro_path("intro-task").read_text(encoding="utf-8")
+    assert "为什么雨后的石板路格外滑" in store.lesson_intro_path("intro-task").read_text(encoding="utf-8")
 
-    store.write_deck("deck-task", _fallback_deck("deck-task", IntentContext(topic="TCP 拥塞控制")))
+    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
+    files = {
+        "lecture.json": (source / "lecture.json").read_text(encoding="utf-8"),
+        "manifest.json": (source / "manifest.json").read_text(encoding="utf-8"),
+        "runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"),
+    }
+    for slide in (source / "slides").glob("s*.html"):
+        files[f"slides/{slide.name}"] = slide.read_text(encoding="utf-8")
+    store.write_deck("deck-task", files)
     validation = asyncio.run(store.build_and_validate_deck("deck-task"))
     assert validation["ok"] is True
-    assert validation["validation"]["output"].find('"slideCount": 5') >= 0
+    assert validation["validation"]["output"].find('"slideCount"') >= 0
 
 
 def test_web_fetch_rejects_private_addresses() -> None:

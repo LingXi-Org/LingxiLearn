@@ -33,6 +33,14 @@ the same DeepSeek specialist unless native search is unavailable. The native too
 retrieval internally; in that case count inspected source records rather than pretending separate
 `web_fetch` calls occurred.
 
+## Output separation
+
+The primary artifact is a self-contained HTML page. If the host needs an envelope, it may carry
+optional research bookkeeping, input parameters, claim-to-source records, quality flags, and
+rendering measurements in `structured_data`. Do not make that envelope a content requirement, and do
+not expose URLs, tool names, search counts, or diagnostic notes in the learner-facing page unless a
+caller explicitly requests visible citations.
+
 ## Fallback `web.search`
 
 Input conceptually:

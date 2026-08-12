@@ -1,0 +1,16 @@
+{
+  "schema_version": "quiz-generation-input.v2",
+  "task_id": "demo-friction-01",
+  "intent": {
+    "topic": "摩擦力",
+    "learning_objective": "区分静摩擦与滑动摩擦，并能解释接触条件变化。"
+  },
+  "lesson_intro": "<!doctype html><html lang=\"zh-CN\"><body><h1>为什么雨后的石板路格外滑？</h1></body></html>",
+  "interactive_lecture_deck": {
+    "schema_version": "interactive-lecture-deck-result.v2",
+    "lesson": {
+      "central_concept": "摩擦力阻碍相对运动趋势，表现取决于接触条件。",
+      "misconceptions": ["摩擦力总是阻碍物体运动", "有接触就一定有摩擦力"]
+    }
+  }
+}

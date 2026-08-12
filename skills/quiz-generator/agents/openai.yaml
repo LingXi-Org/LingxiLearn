@@ -1,4 +1,4 @@
 interface:
-  display_name: "知识点出题"
-  short_description: "定义知识点检测题的结构化输入输出契约"
-  default_prompt: "Use $quiz-generator to validate a structured quiz-generation input and output contract."
+  display_name: "知识点测评生成"
+  short_description: "基于已讲授内容生成无泄题、可诊断理解误区的中文知识点测评"
+  default_prompt: "使用 $quiz-generator 基于提供的中文课程材料生成一组紧凑、可判分且不泄露答案的知识点测评。"

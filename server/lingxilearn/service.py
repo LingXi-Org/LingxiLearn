@@ -15,7 +15,6 @@ from ``Last-Event-ID``.  A reconnect resumes exactly where it left off.
 from __future__ import annotations
 
 import asyncio
-from html import escape
 import inspect
 import logging
 from collections import defaultdict
@@ -51,6 +50,91 @@ logger = logging.getLogger(__name__)
 FLUSH_EVERY = 6
 AGENT_FLUSH_EVERY = 1
 """Batch size for persisting projections mid-run — small enough to feel live."""
+
+_AGENT_NODES = frozenset(
+    {
+        "intent",
+        "lecture_hook",
+        "interactive_lecture_deck",
+        "quiz_generator",
+        "answer_user",
+        "interactive_visual_explainer",
+    }
+)
+
+_GRAPH_NODE_TO_AGENT = {"recognize_intent": "intent"}
+
+
+def _trace_agent(metadata: Any, default_agent: str = "coordinator") -> str:
+    """Resolve the outer Agent Task node from a LingxiGraph message envelope."""
+    if not isinstance(metadata, dict):
+        return default_agent
+    for key in ("agent", "node"):
+        value = metadata.get(key)
+        if value in _AGENT_NODES:
+            return str(value)
+    namespace = metadata.get("namespace") or ()
+    if isinstance(namespace, (list, tuple)):
+        for value in namespace:
+            if value in _AGENT_NODES:
+                return str(value)
+    return default_agent
+
+
+def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]]:
+    """Convert one native LingxiGraph message envelope into Agent Task events."""
+    if not isinstance(value, (tuple, list)) or not value:
+        return []
+    message = value[0]
+    metadata = value[1] if len(value) > 1 else {}
+    agent = _trace_agent(metadata, default_agent)
+    events: list[dict[str, Any]] = []
+    additional = getattr(message, "additional_kwargs", {}) or {}
+    reasoning = ""
+    if isinstance(additional, dict):
+        for key in ("reasoning_content", "reasoning", "thinking"):
+            candidate = additional.get(key)
+            if candidate:
+                reasoning = str(candidate)
+                break
+    if reasoning:
+        events.append({"kind": "reasoning.delta", "agent": agent, "payload": {"delta": reasoning}})
+    content = getattr(message, "content", "")
+    if content:
+        events.append(
+            {"kind": "assistant.delta", "agent": agent, "payload": {"delta": str(content)}}
+        )
+    tool_chunks = getattr(message, "tool_call_chunks", ()) or ()
+    if tool_chunks:
+        events.append(
+            {
+                "kind": "tool.call.delta",
+                "agent": agent,
+                "payload": {
+                    "chunks": [
+                        {
+                            "name": getattr(chunk, "name", None),
+                            "args": getattr(chunk, "args", ""),
+                            "id": getattr(chunk, "id", None),
+                            "index": getattr(chunk, "index", 0),
+                        }
+                        for chunk in tool_chunks
+                    ]
+                },
+            }
+        )
+    usage = getattr(message, "usage", {}) or {}
+    if usage:
+        events.append({"kind": "model.usage", "agent": agent, "payload": {"usage": dict(usage)}})
+    for event in events:
+        logger.debug(
+            "agent trace task=%s agent=%s kind=%s payload=%s",
+            metadata.get("task_id", ""),
+            agent,
+            event["kind"],
+            event["payload"],
+        )
+    return events
 
 
 def build_brain(settings: Settings) -> TutorBrain:
@@ -119,7 +203,7 @@ class Service:
         )
         self.brain = build_brain(self.settings)
         if self.settings.agents_configured:
-            from lingxigraph.integrations import OpenAICompatChatModel
+            from .brains.traced_openai_compat import TracedOpenAICompatChatModel
             from .brains.deepseek_responses import DeepSeekResponsesModel
 
             model_options = {
@@ -150,7 +234,7 @@ class Service:
                         timeout=self.settings.agent_lecture_timeout,
                     )
                 else:
-                    self.agent_model[role] = OpenAICompatChatModel(
+                    self.agent_model[role] = TracedOpenAICompatChatModel(
                         self.settings.agent_model, **model_options
                     )
         self.checkpointer = build_checkpointer(self.settings)
@@ -306,13 +390,12 @@ class Service:
                 "interactive_lecture_deck": _agent_snapshot(record.deck_result),
                 "quiz_generator": _agent_snapshot(record.quiz_result),
                 "interactive_visual_explainer": _agent_snapshot(record.visual_result),
-                "main_graph_placeholder": _agent_snapshot(record.handoff_result),
             },
             "artifacts": {
                 "lesson_intro": {
                     "available": self.agent_artifacts.lesson_intro_path(record.id).exists(),
                     "url": f"/api/agent-tasks/{record.id}/artifacts/lesson-intro",
-                    **({"metadata": record.lecture_result} if record.lecture_result else {}),
+                    **({"metadata": _lesson_intro_metadata(record.lecture_result)} if record.lecture_result else {}),
                 },
                 "lecture_deck": {
                     "available": self.agent_artifacts.deck_path(record.id).exists(),
@@ -445,9 +528,27 @@ class Service:
             "recursion_limit": 80,
         }
         buffer: list[dict[str, Any]] = []
+        current_agent = "coordinator"
         try:
             graph_input: Any = Command(resume=resume) if resume is not None else {"task_id": task_id, "prompt": prompt, "errors": [], "status": "running"}
-            async for event in graph.astream(graph_input, config, stream_mode="events", context={"learner_id": learner_id, "locale": "zh-CN"}):
+            async for streamed in graph.astream(
+                graph_input,
+                config,
+                stream_mode=("events", "messages"),
+                context={"learner_id": learner_id, "locale": "zh-CN"},
+            ):
+                mode, event = streamed
+                if mode == "messages":
+                    buffer.extend(_message_trace_events(event, current_agent))
+                    if len(buffer) >= AGENT_FLUSH_EVERY:
+                        await self.repo.append_agent_events(task_id, list(buffer))
+                        buffer.clear()
+                        self._notify_agent(task_id)
+                    continue
+                if event.kind is EventKind.NODE_STARTED and event.node in _AGENT_NODES:
+                    current_agent = str(event.node)
+                elif event.kind is EventKind.NODE_COMPLETED and event.node in _AGENT_NODES:
+                    current_agent = "coordinator"
                 if event.kind is EventKind.CUSTOM:
                     data = dict(event.data or {})
                     if data.get("channel") == EVENT_CHANNEL:
@@ -464,6 +565,29 @@ class Service:
                                     },
                                 }
                             )
+                elif event.kind in {
+                    EventKind.NODE_STARTED,
+                    EventKind.NODE_COMPLETED,
+                    EventKind.NODE_RETRYING,
+                    EventKind.INTERRUPT_RAISED,
+                }:
+                    kind = {
+                        EventKind.NODE_STARTED: "node.started",
+                        EventKind.NODE_COMPLETED: "node.completed",
+                        EventKind.NODE_RETRYING: "node.retrying",
+                        EventKind.INTERRUPT_RAISED: "interrupt.raised",
+                    }[event.kind]
+                    agent = _GRAPH_NODE_TO_AGENT.get(
+                        str(event.node or ""), str(event.node or current_agent)
+                    )
+                    data = dict(event.data or {})
+                    if event.kind is EventKind.NODE_COMPLETED:
+                        payload = {"state": _json_safe(data.get("update") or {})}
+                    elif event.kind is EventKind.NODE_RETRYING:
+                        payload = {"attempt": _json_safe(data.get("value"))}
+                    else:
+                        payload = {key: _json_safe(value) for key, value in data.items()}
+                    buffer.append({"kind": kind, "agent": agent, "payload": payload})
                 if len(buffer) >= AGENT_FLUSH_EVERY:
                     await self.repo.append_agent_events(task_id, list(buffer))
                     buffer.clear()
@@ -736,6 +860,15 @@ def _agent_snapshot(result: dict[str, Any] | None) -> dict[str, Any]:
     return {"status": "completed" if result else "pending"}
 
 
+def _lesson_intro_metadata(result: dict[str, Any]) -> dict[str, Any]:
+    """Expose lesson metadata without duplicating the learner-facing HTML in snapshots."""
+    return {
+        key: result[key]
+        for key in ("topic", "status", "warnings", "validation")
+        if key in result
+    }
+
+
 async def _submission_snapshot(repo: Repository, task_id: str) -> dict[str, Any] | None:
     row = await repo.get_quiz_submission(task_id)
     if row is None:
@@ -761,108 +894,25 @@ def _grade_agent_quiz(quiz: dict[str, Any], answers: dict[str, Any]) -> dict[str
         actual = answers.get(qid)
         expected = question.get("answer")
         qtype = question.get("type")
+        expected_options = (
+            expected.get("option_ids", [])
+            if isinstance(expected, dict)
+            else expected
+        )
         if qtype == "multi_choice":
-            correct = set(actual or []) == set(expected or [])
+            correct = set(actual or []) == set(expected_options or [])
         elif qtype == "short_text":
             text = str(actual or "").strip().casefold()
-            keywords = [str(item).strip().casefold() for item in question.get("keywords", []) if str(item).strip()]
+            rubric_keywords = expected.get("keywords", []) if isinstance(expected, dict) else []
+            keywords = [
+                str(item).strip().casefold()
+                for item in (rubric_keywords or question.get("keywords", []))
+                if str(item).strip() and not str(item).startswith(("concept:", "bloom:", "difficulty:", "purpose:"))
+            ]
             correct = bool(keywords) and all(keyword in text for keyword in keywords)
         else:
-            correct = str(actual or "") == str(expected or "")
+            correct = str(actual or "") in {str(item) for item in (expected_options or [])}
         score = points if correct else 0
         total_score += score
         per_question.append({"id": qid, "correct": correct, "score": score, "points": points})
     return {"per_question": per_question, "total_score": total_score, "total_points": total_points}
-
-
-def render_background_markdown(result: dict[str, Any]) -> str:
-    selected = result.get("selected_hook") or {}
-    research = result.get("research") or {}
-    lines = [
-        f"# {selected.get('title') or '课堂背景 Hook'}",
-        "",
-        f"**知识点：** {result.get('topic', '')}",
-        f"**状态：** {result.get('status', 'ok')}",
-        "",
-        "## 开场",
-        selected.get("opening", ""),
-        "",
-        "## 背景故事",
-        selected.get("story", ""),
-        "",
-        "## 抛给学习者的问题",
-        selected.get("question", ""),
-        "",
-        "## 过渡到知识点",
-        selected.get("transition", ""),
-        "",
-        "## 为什么这个 Hook 有效",
-        selected.get("why_this_hook_works", ""),
-        "",
-    ]
-    if selected.get("visual_cue"):
-        lines.extend(["## 可视化提示", selected["visual_cue"], ""])
-    candidates = result.get("candidates") or []
-    if candidates:
-        lines.extend(
-            [
-                "## 候选方案",
-                "",
-                "| 方案 | 类型 | 总分 | 课程对齐 | 好奇心 | 证据强度 |",
-                "| --- | --- | ---: | ---: | ---: | ---: |",
-            ]
-        )
-        for item in candidates:
-            lines.append(
-                f"| {item.get('title', '')} | {item.get('hook_type', '')} | "
-                f"{item.get('score', 0):.0f} | {item.get('lesson_alignment', 0):.0f} | "
-                f"{item.get('curiosity', 0):.0f} | {item.get('evidence_strength', 0):.0f} |"
-            )
-        lines.append("")
-    claims = research.get("claims") or []
-    if claims:
-        lines.extend(["## 研究证据账本", ""])
-        for claim in claims:
-            qualification = (
-                f"（{claim.get('qualification')}）" if claim.get("qualification") else ""
-            )
-            lines.append(
-                f"- `{claim.get('claim_id', '')}` **{claim.get('status', '')}** "
-                f"置信度 {float(claim.get('confidence', 0)):.0%}："
-                f"{claim.get('claim', '')}{qualification}"
-            )
-        lines.append("")
-    sources = research.get("sources") or []
-    if sources:
-        lines.extend(["## 来源", ""])
-        for source in sources:
-            publisher = f" · {source.get('publisher')}" if source.get("publisher") else ""
-            lines.append(
-                f"- `{source.get('source_id', '')}` "
-                f"[{source.get('title', source.get('url', ''))}]({source.get('url', '')}) "
-                f"· Tier {source.get('tier', '')}{publisher}"
-            )
-        lines.append("")
-    warnings = result.get("warnings") or []
-    if warnings:
-        lines.extend(["## 警告与不确定性", ""])
-        lines.extend(f"- {warning}" for warning in warnings)
-        lines.append("")
-    return "\n".join(lines).strip() + "\n"
-
-
-def render_background_html(result: dict[str, Any]) -> str:
-    """Render the lesson-intro result as a self-contained browser artifact."""
-    selected = result.get("selected_hook") or {}
-    esc = lambda value: escape(str(value or ""))
-    sections = (("开场", "opening"), ("背景故事", "story"), ("抛给学习者的问题", "question"), ("过渡到知识点", "transition"), ("为什么这个 Hook 有效", "why_this_hook_works"))
-    body = "".join(
-        f'<section><h2>{esc(title)}</h2><p>{esc(selected.get(key)).replace(chr(10), "<br>")}</p></section>'
-        for title, key in sections
-        if selected.get(key)
-    )
-    if selected.get("visual_cue"):
-        body += f'<section><h2>可视化提示</h2><p>{esc(selected["visual_cue"])}</p></section>'
-    return f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected.get("title") or "课堂背景 Hook")}</title><style>
-:root {{ color-scheme: light dark; font-family: Inter,ui-sans-serif,system-ui,sans-serif; background:#fff; color:#202126; }} @media (prefers-color-scheme:dark) {{ :root {{ background:#171717; color:#f5f5f5; }} section {{ border-color:#3a3a3a; }} .meta {{ color:#aaa; }} }} body {{ margin:0; padding:clamp(24px,5vw,64px); line-height:1.75; }} main {{ max-width:860px; margin:auto; }} h1 {{ margin:0 0 8px; font-size:clamp(28px,5vw,48px); line-height:1.2; }} .meta {{ color:#666; margin:0 0 40px; }} section {{ border-top:1px solid #e5e5e5; padding:24px 0; }} h2 {{ font-size:18px; margin:0 0 8px; }} p {{ margin:0; }}
-</style></head><body><main><h1>{esc(selected.get("title") or "课堂背景 Hook")}</h1><p class="meta">知识点：{esc(result.get("topic"))}</p>{body}</main></body></html>'''

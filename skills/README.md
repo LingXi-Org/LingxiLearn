@@ -1,18 +1,18 @@
 # Bundled Agent Skills
 
-This directory contains the current skills loaded from LingXi-Org/LingxiSkills.
-The old `lecture-hook` and `visual-explainer` skill names are retired. They are
-vendored from LingXi-Org/LingxiSkills at the current upstream commit.
-`50bc42dacd8b69361aeffb82f630a6ddf9670a4b` and retain the upstream MIT
-license and accompanying assets.
+This directory vendors the six skills from `LingXi-Org/LingxiSkills` at upstream
+commit `01711cb5ada3df4a4d7dfdc6a8602ba7d335a5c8`.
 
-- `lesson-intro`: 课程引入设计。
-- `interactive-visual-explainer`: 交互式可视化讲解。
-- `adaptive-pedagogy`: 自适应教学。
-- `interactive-lecture-deck`: 交互式讲解课件。
-- `learner-state-reflector`: 学习状态反思。
-- `quiz-generator`: 知识点出题契约骨架（仅定义输入输出规范，尚未实现出题逻辑）。
+- `lesson-intro`: 生成可直接打开的单文件中文课程引入 HTML。
+- `interactive-visual-explainer`: 生成离线交互式可视化讲解。
+- `adaptive-pedagogy`: 根据学习证据选择自适应教学策略。
+- `interactive-lecture-deck`: 生成可缩放的离线 HTML 讲解课件。
+- `learner-state-reflector`: 反思并压缩学习状态。
+- `quiz-generator`: 基于已讲授材料生成 3–4 道有诊断价值的形成性测评，并提供契约校验与公开快照清洗。
 
-The backend resolves both directories through LingxiGraph 2.1.0
-`FilesystemSkillSource`; generated task artifacts stay under `var/agent_tasks/`
-and are intentionally ignored by Git.
+`lesson-intro` 的主产物是原始 `lesson-intro.html`，后端直接保存和提供该文件，
+不再把结构化结果重新渲染成替代页面。`quiz-generator` 通过 `scripts/quiz_contract.py`
+执行输入/结果校验和脱敏；题目由已注册的 skill Agent 实际生成。
+
+后端通过 LingxiGraph `FilesystemSkillSource` 加载这些目录，生成任务产物保存在
+`var/agent_tasks/`，并由 Git 忽略。
