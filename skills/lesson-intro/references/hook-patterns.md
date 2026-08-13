@@ -8,12 +8,14 @@ Start with an observation whose explanation requires the target concept.
 Best for: math, physics, algorithms, statistics.
 
 ## 2. The costly failure
-Begin with a real failure, outage, design mistake, experiment, or wrong prediction. Reveal the missing principle.
+Begin with a supplied failure pattern, design constraint, experiment, or wrong prediction. If no real
+case is supplied, use a clearly framed hypothetical rather than inventing an event.
 
 Best for: engineering, networking, security, systems, medicine (with care).
 
 ## 3. The human dispute
-Use a verified disagreement, priority dispute, rejected idea, or competing model. End on the conceptual question beneath the conflict.
+Use a disagreement, competing model, or rejected idea only when it appears in the supplied context;
+otherwise turn the conceptual tension into a neutral question.
 
 Best for: history of mathematics/science, economics, philosophy.
 
@@ -38,7 +40,9 @@ Show what goes wrong with an obvious alternative, then introduce the target defi
 Best for: loss functions, metrics, mathematical definitions, protocol rules.
 
 ## 8. The modern stakes bridge
-Start from a current technology or real decision, then walk backward to the foundational concept.
+Start from a technology or decision already present in the supplied context, then walk backward to
+the foundational concept. Without such context, use an everyday observation instead of a current
+claim.
 
 Best for: AI, cryptography, networks, control, economics.
 
@@ -47,6 +51,6 @@ Best for: AI, cryptography, networks, control, economics.
 - biography with no conceptual bridge;
 - trivia that could introduce any topic;
 - fabricated dialogue or reconstructed thoughts presented as fact;
-- fake certainty around disputed history;
+- fake certainty around disputed history or context not supplied by the caller;
 - five-minute story before the learner knows why it matters;
 - "Imagine a world..." filler with no concrete tension.

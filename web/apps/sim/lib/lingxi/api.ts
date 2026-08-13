@@ -36,6 +36,14 @@ export class ApiError extends Error {
 
 export type AccessTokenProvider = () => string | null | Promise<string | null>
 
+export interface LingxiAttachmentRef {
+  key: string
+  path?: string
+  filename: string
+  media_type: string
+  size: number
+}
+
 // The host application owns login/refresh.  LingxiLearn keeps only this
 // in-memory callback and never persists an access token in browser storage.
 let accessTokenProvider: AccessTokenProvider = () => null
@@ -137,10 +145,10 @@ export const api = {
 
   report: (id: string) => request<Record<string, any>>(`/sessions/${id}/report`),
 
-  createAgentTask: (prompt: string) =>
+  createAgentTask: (prompt: string, attachments: LingxiAttachmentRef[] = []) =>
     request<{ id: string; status: string }>('/agent-tasks', {
       method: 'POST',
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, attachments }),
     }),
 
   agentTask: (id: string) => request<AgentTaskSnapshot>(`/agent-tasks/${id}`),
@@ -148,10 +156,10 @@ export const api = {
   agentKnowledgeGraph: (id: string) =>
     request<KnowledgeGraphData>(`/agent-tasks/${id}/knowledge-graph`),
 
-  agentMessage: (taskId: string, message: string) =>
+  agentMessage: (taskId: string, message: string, attachments: LingxiAttachmentRef[] = []) =>
     request<{ status: string }>(`/agent-tasks/${taskId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, attachments }),
     }),
 
   agentTasks: (scope: 'active' | 'archived' = 'active') =>
@@ -214,9 +222,6 @@ export const api = {
 
   agentArtifactUrl: (taskId: string, kind: 'lesson-intro' | 'lecture-deck' | 'visual') =>
     `${API_BASE}/api/agent-tasks/${taskId}/artifacts/${kind}`,
-
-  agentQuizArtifact: (taskId: string) =>
-    `${API_BASE}/api/agent-tasks/${taskId}/artifacts/quiz`,
 
   context: () =>
     request<{

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import operator
+import re
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -49,6 +50,20 @@ from .web_tools import build_web_tools
 
 logger = logging.getLogger(__name__)
 EVENT_CHANNEL = "agent_task"
+
+
+def _learner_message(state: "AgentState") -> str:
+    message = str((state.get("user_message") or {}).get("message") or "")
+    attachments = (state.get("user_message") or {}).get("attachments") or []
+    if not attachments:
+        return message
+    lines = [message, "", "[已上传附件]"]
+    lines.extend(
+        f"- {item.get('filename', '未命名文件')} ({item.get('media_type', 'application/octet-stream')}, {item.get('path') or item.get('key', '')})"
+        for item in attachments
+        if isinstance(item, dict)
+    )
+    return "\n".join(lines)
 
 
 class AgentState(TypedDict, total=False):
@@ -205,6 +220,27 @@ def _message_text(result: Any) -> str:
         content = message.content if isinstance(message, AIMessage) else getattr(message, "content", None)
         if content:
             return str(content)
+    return ""
+
+
+def _recover_lesson_intro_html(response_text: str, parsed: dict[str, Any]) -> str:
+    """Recover a complete HTML response when a model skipped the staging tool.
+
+    The normal path is always ``stage_artifact_file``. Some providers nevertheless return the
+    generated document in their final message after the tool call is omitted. Recovering only a
+    complete doctype-to-closing-html document keeps this fallback narrow and lets the existing
+    artifact validator remain the final authority.
+    """
+
+    envelope_html = parsed.get("html") if isinstance(parsed, dict) else None
+    candidates = [envelope_html] if isinstance(envelope_html, str) else []
+    candidates.extend(re.findall(r"(?is)<!doctype\s+html\b.*?</html\s*>", response_text or ""))
+    for candidate in candidates:
+        document = candidate.strip().strip("`")
+        if re.match(r"(?is)^<!doctype\s+html\b", document) and re.search(
+            r"(?is)</html\s*>$", document
+        ):
+            return document
     return ""
 
 
@@ -400,7 +436,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
 
     async def recognize_intent(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
         initial = not bool(state.get("intent"))
-        raw = state.get("prompt", "") if initial else str((state.get("user_message") or {}).get("message") or "")
+        raw = state.get("prompt", "") if initial else _learner_message(state)
         if knowledge_deep_dive and not initial and (state.get("user_message") or {}).get("kind") == "quiz_submit":
             route = "adaptive_pedagogy"
             _emit(runtime, "intent.routed", agent="intent", route=route)
@@ -468,18 +504,44 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             name="lesson-intro",
         )
         try:
-            response_text = _message_text(
-                await _invoke_agent(
-                    agent,
-                    HumanMessage(prompt),
-                    runtime,
-                    agent_name="lecture_hook",
-                    recursion_limit=30,
-                    tool_permissions=("artifact:write",),
-                )
+            agent_result = await _invoke_agent(
+                agent,
+                HumanMessage(prompt),
+                runtime,
+                agent_name="lecture_hook",
+                recursion_limit=30,
+                tool_permissions=("artifact:write",),
             )
+            response_text = _message_text(agent_result)
             parsed = extract_json(response_text) or {}
             html = draft.snapshot().get("lesson-intro.html")
+            if not html:
+                response_candidates = [response_text]
+                if isinstance(agent_result, dict):
+                    response_candidates.extend(
+                        str(content)
+                        for message in agent_result.get("messages", [])
+                        for content in [getattr(message, "content", None)]
+                        if content
+                    )
+                html = next(
+                    (
+                        recovered
+                        for candidate in response_candidates
+                        if (recovered := _recover_lesson_intro_html(candidate, parsed))
+                    ),
+                    "",
+                )
+                if html:
+                    draft.write("lesson-intro.html", html)
+                    _emit(
+                        runtime,
+                        "artifact.recovered",
+                        agent="lecture_hook",
+                        artifact="lesson-intro",
+                        path="lesson-intro.html",
+                        reason="model response contained a complete HTML document but skipped staging",
+                    )
             if not html:
                 raise ValueError("lesson-intro did not stage lesson-intro.html")
             artifacts.write_lesson_intro_file(state["task_id"], html)
@@ -662,7 +724,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         return {"user_message": value}
 
     async def answer_user(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
-        message = str((state.get("user_message") or {}).get("message") or "")
+        message = _learner_message(state)
         agent = create_agent(_agent_model(model, "answer_user"), system_prompt=ANSWER_PROMPT, name="answer-user")
         context = {"intent": state.get("intent"), "lesson_intro": state.get("lecture_result"), "deck": state.get("deck_result"), "question": message}
         parsed = extract_json(
@@ -688,7 +750,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
 
         if state.get("route") == "handoff":
             return {}
-        message = str((state.get("user_message") or {}).get("message") or "")
+        message = _learner_message(state)
         first_turn = not bool(state.get("adaptive_result")) and not message
         context = {
             "mode": "teach",
@@ -799,7 +861,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         return {"status": "handoff_pending"}
 
     async def handoff(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
-        message = str((state.get("user_message") or {}).get("message") or "")
+        message = _learner_message(state)
         reason = "quiz_completed" if state.get("route") == "quiz_submit" else "quiz_declined"
         value = {"target": "main_graph.next_node", "reason": reason, "task_id": task_id, "message": message}
         await persist_result("handoff", value)

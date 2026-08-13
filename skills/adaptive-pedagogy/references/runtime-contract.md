@@ -5,8 +5,13 @@
 Normal path:
 `student event -> deterministic judge/tools -> adaptive-pedagogy -> guard -> render response`
 
+Ambiguous-evidence path:
+`student event -> deterministic judge/tools -> formative-assessor -> adaptive-pedagogy -> guard -> render response`
+
 Budget:
-- one blocking pedagogical Skill call;
+- normal path: one blocking pedagogical Skill call;
+- ambiguous path: at most one conditional blocking `formative-assessor` call, then one
+  `adaptive-pedagogy` call;
 - zero blocking visual, quiz, learner-state, or remedial-deck Skill calls;
 - zero dependence on `learner-state-reflector`.
 
@@ -17,7 +22,8 @@ The only learner-facing writer on this path is `adaptive-pedagogy`:
 
 After the response is rendered:
 - enqueue `learner-state-reflector`;
-- optionally prefetch `interactive-visual-explainer`, a remedial deck, or a quiz;
+- optionally prefetch `retrieval-practice-builder`, `interactive-visual-explainer`, a remedial deck,
+  or a quiz;
 - store hint/choice/UI events.
 
 The next synchronous call may use the most recent committed learner state, but it must also include
@@ -42,6 +48,9 @@ Cache:
 - first post-lecture probe;
 - likely misconception branch notes;
 - visual briefs.
+
+After a concept response, `retrieval-practice-builder` may add a next-task cache. The host must
+discard it when the topic, learner evidence, or current support policy changes.
 
 Discard the cache if the learner asks a different question or skips to another topic.
 

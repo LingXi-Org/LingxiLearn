@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://lingxi.example/schemas/lesson-intro-result.schema.json",
-  "title": "Lesson Introduction HTML Result",
+  "title": "Direct Lesson Introduction HTML Result",
   "description": "Optional envelope for the primary single-file HTML lesson introduction.",
   "type": "object",
   "required": ["html"],
@@ -12,27 +12,19 @@
       "description": "A complete self-contained HTML document."
     },
     "topic": {"type": "string"},
-    "status": {"enum": ["ok", "insufficient_evidence"]},
-    "visible_citations": {"type": "boolean"},
+    "status": {"const": "ok"},
     "warnings": {"type": "array", "items": {"type": "string"}},
     "structured_data": {
       "type": "object",
       "description": "Optional machine-facing parameters and evidence; never learner-facing content.",
       "properties": {
         "input": {"type": "object"},
-        "research": {
-          "type": "object",
-          "properties": {
-            "claims": {"type": "array"},
-            "sources": {"type": "array"}
-          },
-          "additionalProperties": true
-        },
+        "editorial": {"type": "object"},
         "quality": {"type": "object"},
         "rendering": {"type": "object"}
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

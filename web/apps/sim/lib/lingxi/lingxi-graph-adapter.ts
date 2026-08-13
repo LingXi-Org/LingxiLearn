@@ -1,4 +1,4 @@
-import { api, subscribeAgentEvents } from '@/lib/lingxi/api'
+import { api, subscribeAgentEvents, type LingxiAttachmentRef } from '@/lib/lingxi/api'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import type {
   ContentBlock,
@@ -24,9 +24,16 @@ export interface LingxiGraphSubscriptionOptions {
 
 export interface LingxiGraphChatAdapter {
   readonly kind: typeof LINGXI_GRAPH_ADAPTER_KIND
-  createTask(prompt: string): Promise<{ id: string; status: string }>
+  createTask(
+    prompt: string,
+    attachments?: LingxiAttachmentRef[]
+  ): Promise<{ id: string; status: string }>
   loadTask(taskId: string): Promise<AgentTaskSnapshot>
-  sendMessage(taskId: string, message: string): Promise<{ status: string }>
+  sendMessage(
+    taskId: string,
+    message: string,
+    attachments?: LingxiAttachmentRef[]
+  ): Promise<{ status: string }>
   cancelTask(taskId: string): Promise<{ id: string; status: string }>
   updateTaskMetadata(
     taskId: string,

@@ -143,6 +143,14 @@
             "dense"
           ]
         },
+        "qualityMode": {
+          "type": "string",
+          "enum": [
+            "fast",
+            "full"
+          ],
+          "default": "fast"
+        },
         "zoomPointsPerSlide": {
           "type": "object",
           "additionalProperties": false,

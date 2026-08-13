@@ -8,7 +8,6 @@ import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urlparse
 
 
 FORBIDDEN_VISIBLE_PATTERNS = (
@@ -23,7 +22,8 @@ FORBIDDEN_VISIBLE_PATTERNS = (
 )
 
 INTERNAL_SCRIPT_PATTERN = re.compile(
-    r"(?:task[_ -]?id|schema_version|structured_data|search_calls|source_ids|claim-to-source|"
+    r"(?:task[_ -]?id|schema_version|structured_data|search_calls|fetch_calls|query_results|"
+    r"aggregated_results|source_records|source_ids|claim-to-source|research|claims|sources|"
     r"web_search|web_fetch|runtime|debug|candidate[_ -]?score)",
     re.IGNORECASE,
 )
@@ -108,7 +108,7 @@ class VisibleTextParser(HTMLParser):
         return re.sub(r"\s+", " ", " ".join(self.title_parts)).strip()
 
 
-def validate_html(html: str, *, visible_citations: bool = False) -> None:
+def validate_html(html: str) -> None:
     if not re.search(r"(?is)<!doctype\s+html", html):
         fail("HTML must start with a doctype declaration")
     parser = VisibleTextParser()
@@ -127,6 +127,30 @@ def validate_html(html: str, *, visible_citations: bool = False) -> None:
         fail("HTML must contain exactly one h1")
     if parser.h2_count > 2:
         fail("HTML may contain at most two h2 headings")
+    if len(re.findall(r"(?is)<figure\b", html)) < 1 or len(re.findall(r"(?is)<figcaption\b", html)) < 1:
+        fail("HTML must contain a dominant figure with a figcaption")
+    svg_tags = re.findall(r"(?is)<svg\b([^>]*)>", html)
+    if not svg_tags:
+        fail("HTML must contain an inline SVG concept visual")
+    if not all(re.search(r"(?i)\bviewbox\s*=\s*['\"]0\s+0\s+680\s+\d+", attrs) for attrs in svg_tags):
+        fail("SVG viewBox must use width 680")
+    for attrs in re.findall(r"(?is)<text\b([^>]*)>", html):
+        class_match = re.search(r"(?i)\bclass\s*=\s*['\"]([^'\"]+)['\"]", attrs)
+        if not class_match or not re.search(r"(?:^|\s)(?:t|ts|th|tn)(?:\s|$)", class_match.group(1)):
+            fail("every SVG text element must use class t, ts, th, or tn")
+    required_tokens = ("--paper", "--surface", "--ink-1", "--ink-2", "--rule", "--accent", "--font-serif", "--font-sans", "--font-mono")
+    if not all(token in html for token in required_tokens):
+        fail("HTML must use the shared visual tokens")
+    if not re.search(r"(?is)prefers-color-scheme\s*:\s*dark", html):
+        fail("HTML must define an explicit dark mode")
+    if not re.search(r"(?is)@media\s+print", html):
+        fail("HTML must define a print fallback")
+    if re.search(r"(?is)(?:linear|radial)-gradient|box-shadow|drop-shadow|backdrop-filter|\bfilter\s*:", html):
+        fail("HTML must not use gradients, shadows, blur, or filters")
+    if re.search(r"(?is)font-weight\s*:\s*(?:600|700|800|900)\b", html):
+        fail("HTML may use only 400/500 font weights")
+    if re.search(r"(?is)border-radius\s*:\s*(?:1[3-9]|[2-9]\d|\d{3,})px", html):
+        fail("HTML must use radii no larger than 12px")
     if len(parser.visible_text) < 60:
         fail("HTML visible text is too short to form a useful lesson introduction")
     if parser.external_resource:
@@ -138,7 +162,7 @@ def validate_html(html: str, *, visible_citations: bool = False) -> None:
     if parser.data_attribute:
         fail("HTML must not hide internal parameters in data-* attributes")
     for pattern in FORBIDDEN_VISIBLE_PATTERNS:
-        if not visible_citations and re.search(pattern, parser.visible_text, re.IGNORECASE):
+        if re.search(pattern, parser.visible_text, re.IGNORECASE):
             fail(f"HTML visible text contains internal or development-facing text: {pattern}")
 
 
@@ -152,33 +176,15 @@ def require(obj: dict, key: str, expected=None):
     return value
 
 
-def validate_claims(research: dict) -> None:
-    claims = research.get("claims")
-    sources = research.get("sources")
-    if claims is None and sources is None:
-        return
-    claims = require(research, "claims", list)
-    sources = require(research, "sources", list)
-    source_ids: set[str] = set()
-    for index, source in enumerate(sources):
-        sid = require(source, "source_id", str)
-        source_ids.add(sid)
-        url = require(source, "url", str)
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            fail(f"source {index} has invalid URL")
-    for index, claim in enumerate(claims):
-        require(claim, "claim_id", str)
-        require(claim, "claim", str)
-        if claim.get("status") not in {"verified", "qualified", "rejected"}:
-            fail(f"claim {index} has invalid status")
-        unknown = [sid for sid in require(claim, "source_ids", list) if sid not in source_ids]
-        if unknown:
-            fail(f"claim {index} references unknown sources: {unknown}")
-
-
 def validate_envelope(data: dict) -> None:
     html = require(data, "html", str)
+    forbidden_machine_keys = {
+        "research", "claims", "sources", "source_records", "query_results", "aggregated_results",
+        "search_calls", "fetch_calls", "visible_citations",
+    }
+    forbidden = forbidden_machine_keys & data.keys()
+    if forbidden:
+        fail(f"lesson-intro no longer accepts search or source aggregation fields: {sorted(forbidden)}")
     structured = data.get("structured_data")
     if structured is not None:
         structured = require(data, "structured_data", dict)
@@ -186,13 +192,13 @@ def validate_envelope(data: dict) -> None:
         if input_data is not None and isinstance(input_data, dict):
             if input_data.get("language", "zh-CN") != "zh-CN":
                 fail("lesson-intro-html.v1 requires zh-CN output")
-        research = structured.get("research")
-        if research is not None:
-            validate_claims(require(structured, "research", dict))
+        forbidden = forbidden_machine_keys & structured.keys()
+        if forbidden:
+            fail(f"structured_data contains removed search or source fields: {sorted(forbidden)}")
     status = data.get("status")
-    if status is not None and status not in {"ok", "insufficient_evidence"}:
+    if status is not None and status != "ok":
         fail("invalid status")
-    validate_html(html, visible_citations=bool(data.get("visible_citations", False)))
+    validate_html(html)
 
 
 def validate_input(text: str) -> None:

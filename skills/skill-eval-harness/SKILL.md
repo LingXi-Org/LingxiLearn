@@ -44,9 +44,14 @@ responses, replace a deterministic grader, or write learner state.
    ```text
    python scripts/evaluate.py validate-run <run.json>
    python scripts/evaluate.py evaluate <run.json> --output <report.json>
+   python scripts/run_suite.py <repository-root> --output <suite-report.json>
    ```
 
-5. Review every failing finding and the observed coverage. A Skill passes only when the component
+   Individual reports follow `references/skill-eval-report.schema.json`; repository-wide suite
+   reports follow `references/skill-eval-suite-report.schema.json`.
+
+5. Review every failing finding and the observed coverage. Set `expectations.required_layers` for
+   layers that a case must observe; a missing required layer fails the case. A Skill passes only when the component
    layer has no errors and every layer required by the case expectations passes. Do not hide missing
    learner outcomes behind a high component score.
 
@@ -62,8 +67,9 @@ responses, replace a deterministic grader, or write learner state.
   debt discharge, and evidence traceability.
 
 Use `validator` values for the bundled contracts (`adaptive-pedagogy-result.v2`,
-`learner-state-reflector-result.v1`, `quiz-generation-result.v1`, `html`) or provide
-`curriculum-graph-builder-result.v1` or
+`learner-state-reflector-result.v1`, `quiz-generation-result.v1`,
+`curriculum-graph-builder-result.v1`, `formative-assessor-result.v1`,
+`retrieval-practice-builder-result.v1`, `lesson-intro-html.v1`, `html`) or provide
 `required_output_keys` for another Skill. The harness performs deterministic checks only; judgments
 such as whether a misconception interpretation is pedagogically sound still require human review or
 a separately specified judge.
@@ -76,6 +82,11 @@ a separately specified judge.
   sidecars unless the case explicitly tests their standalone artifact contract.
 - Enforce `learner_facing_writer_count <= 1` for a learner turn.
 - Report latency and token measurements supplied by the host; never invent measurements.
+- Keep expected answers outside the learner-facing paths used by leakage checks. For retrieval tasks,
+  inspect `public_task`, never the internal `grading_key`.
+- For `lesson-intro-html.v1`, check the shared visual contract as well as basic HTML shape: tokenized
+  palette, 680-wide SVG, figure caption, dark/print modes, no gradients/shadows, and restrained
+  typography.
 - Never mutate the tested Skill or learner data. Write only the requested report file.
 
 ## Result contract
@@ -83,3 +94,7 @@ a separately specified judge.
 Return `skill-eval-report.v1` JSON with per-case findings, four layer scores, observed coverage,
 thresholds, and a concise overall status. Preserve case IDs, evidence IDs, and raw metric values so a
 failing report can be traced back to the source artifact.
+
+`run_suite.py` discovers checked-in `skills/*/assets/eval-run.json` files, evaluates each suite, and
+returns `skill-eval-suite-report.v1`. It is intended for development and CI, never for student
+runtime.

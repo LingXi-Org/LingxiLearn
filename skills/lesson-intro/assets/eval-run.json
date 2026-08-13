@@ -1,0 +1,44 @@
+{
+  "schema_version": "skill-eval-run.v1",
+  "suite_id": "lesson-intro-v1-smoke",
+  "skill": "lesson-intro",
+  "skill_path": "skills/lesson-intro",
+  "cases": [
+    {
+      "case_id": "direct-context-opening",
+      "task": {
+        "schema_version": "lesson-intro-task.v1",
+        "topic": "摩擦力",
+        "learning_objective": "理解摩擦力如何帮助物体保持相对稳定。",
+        "course_context": "从雨后石板路和鞋底打滑的日常观察引入摩擦力。",
+        "language": "zh-CN",
+        "target_duration_sec": 60,
+        "preferred_hook_type": "everyday"
+      },
+      "validator": "lesson-intro-html.v1",
+      "expectations": {
+        "required_output_keys": ["html"],
+        "learner_facing_paths": ["html"],
+        "forbidden_strings": ["web_search", "搜索次数", "答案是"],
+        "max_blocking_hops": 0,
+        "max_latency_ms": 1800,
+        "max_tokens": 1200,
+        "required_layers": ["component", "trajectory", "pedagogy"]
+      },
+      "output": {
+        "html": "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>雨后的石板路</title><style>:root{--paper:#fbfaf7;--surface:#fff;--ink-1:#23231f;--ink-2:#5f5e5a;--rule:rgba(35,35,31,.14);--accent:#534ab7;--c1:#7f77dd;--c2:#1d9e75;--c3:#d85a30;--font-serif:serif;--font-sans:sans-serif;--font-mono:monospace}@media(prefers-color-scheme:dark){:root{--paper:#1a1a19;--surface:#232322;--ink-1:#edebe4}}@media print{body{background:#fff}}body{background:var(--paper);color:var(--ink-1);font:18px/1.7 var(--font-sans)}figure{max-width:680px}svg{width:100%}.t,.ts,.th,.tn{fill:var(--ink-1)}figcaption{color:var(--ink-2)}</style></head><body><main><h1>为什么雨后的石板路更容易打滑？</h1><p>雨水刚落下，熟悉的路面像换了一种性格。鞋底轻轻一偏，身体就开始向前溜。</p><figure><svg viewBox=\"0 0 680 240\" role=\"img\"><title>接触界面的变化</title><text class=\"th\" x=\"60\" y=\"60\">接触界面</text><line x1=\"60\" y1=\"110\" x2=\"620\" y2=\"110\" stroke=\"var(--c1)\"/></svg><figcaption>图 1 · 水改变的也许不是路面，而是鞋底与地面相遇的方式。</figcaption></figure><p>先猜一猜：摩擦力究竟在什么时候帮我们站稳？接下来，我们把脚底的感觉变成可以判断的规律。</p></main></body></html>"
+      },
+      "trajectory": {
+        "learner_facing_writer_count": 1,
+        "blocking_hops": 0,
+        "latency_ms": 600,
+        "prompt_tokens": 420,
+        "completion_tokens": 220,
+        "response_blocked_by_sidecar": false,
+        "turns": [
+          {"event": "lesson-intro", "writer": "lesson-intro", "audience": "learner", "blocking": true}
+        ]
+      }
+    }
+  ]
+}

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { FilePreviewSession } from '@/lib/copilot/request/session/file-preview-session-contract'
 import type { MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
+import { api, type LingxiAttachmentRef } from '@/lib/lingxi/api'
 import {
-  api,
   type LingxiGraphChatAdapter,
   projectLingxiGraphEvents,
 } from '@/lib/lingxi/lingxi-graph-adapter'
@@ -49,6 +49,46 @@ function contextSuffix(contexts?: ChatContext[]): string {
 function attachmentSuffix(attachments?: FileAttachmentForApi[]): string {
   const names = attachments?.map((file) => file.filename.trim()).filter(Boolean) ?? []
   return names.length > 0 ? `\n\n[附件: ${names.join(', ')}]` : ''
+}
+
+function attachmentRefs(attachments?: FileAttachmentForApi[]): LingxiAttachmentRef[] {
+  return (attachments ?? [])
+    .filter((file) => Boolean(file.key && file.filename))
+    .map(({ key, path, filename, media_type, size }) => ({
+      key,
+      path,
+      filename,
+      media_type,
+      size,
+    }))
+}
+
+function parseNativeQuizAnswer(
+  task: AgentTaskSnapshot,
+  message: string
+): Record<string, unknown> | null {
+  const quiz = task.artifacts.quiz?.data
+  if (!quiz || task.quiz_submission || task.status !== 'awaiting_user') return null
+  const lines = message.split('\n')
+  if (lines.length !== quiz.questions.length) return null
+
+  const answers: Record<string, unknown> = {}
+  for (const [index, question] of quiz.questions.entries()) {
+    const prefix = `${question.prompt} — `
+    if (!lines[index].startsWith(prefix)) return null
+    const answer = lines[index].slice(prefix.length).trim()
+    if (!answer) return null
+    if (question.type === 'short_text') {
+      answers[question.id] = answer
+      continue
+    }
+    const labels = question.type === 'multi_choice' ? answer.split(', ').filter(Boolean) : [answer]
+    const optionIds = labels.map(
+      (label) => question.options.find((option) => option.label === label)?.id ?? label
+    )
+    answers[question.id] = question.type === 'multi_choice' ? optionIds : optionIds[0]
+  }
+  return answers
 }
 
 function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[] {
@@ -281,6 +321,7 @@ export function useLingxiGraphChat(
       if (!currentAdapter || currentAdapter.kind !== 'lingxigraph') return
       const content = message.trim()
       if (!content) return
+      const refs = attachmentRefs(_fileAttachments)
       const requestMessage = `${content}${contextSuffix(contexts)}${attachmentSuffix(_fileAttachments)}`
       const userId = `lingxi-user:${Date.now()}`
       setIsSending(true)
@@ -292,7 +333,7 @@ export function useLingxiGraphChat(
       try {
         let taskId = resolvedChatId
         if (!taskId) {
-          const created = await currentAdapter.createTask(requestMessage)
+          const created = await currentAdapter.createTask(requestMessage, refs)
           taskId = created.id
           requestIdRef.current = taskId
           setResolvedChatId(taskId)
@@ -300,7 +341,15 @@ export function useLingxiGraphChat(
           onRequestStartedRef.current?.({ requestId: taskId, userMessageId: userId })
         } else {
           requestIdRef.current = taskId
-          await currentAdapter.sendMessage(taskId, requestMessage)
+          const currentTask = task
+          const quizAnswers = currentTask ? parseNativeQuizAnswer(currentTask, content) : null
+          if (quizAnswers) {
+            await api.submitAgentQuiz(taskId, crypto.randomUUID(), quizAnswers)
+          } else {
+            await currentAdapter.sendMessage(taskId, requestMessage, refs)
+          }
+          const refreshed = await currentAdapter.loadTask(taskId)
+          setTask(refreshed)
           onRequestStartedRef.current?.({ requestId: taskId, userMessageId: userId })
         }
       } catch (cause) {
@@ -309,7 +358,7 @@ export function useLingxiGraphChat(
         setIsSending(false)
       }
     },
-    [resolvedChatId, router, workspaceId]
+    [resolvedChatId, router, task, workspaceId]
   )
 
   const stopGeneration = useCallback(async () => {
