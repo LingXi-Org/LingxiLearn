@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ImageResponse } from 'next/og'
-import { SimLogoFull } from '@/app/(landing)/components/og-sim-logo'
 
 const size = {
   width: 1200,
@@ -60,6 +59,26 @@ interface LandingOgImageProps {
   domainLabel?: string
 }
 
+function escapeXml(value: string): string {
+  return value.replace(
+    /[&<>\"']/g,
+    (character) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character] ?? character
+  )
+}
+
+function createStaticOgImage({ eyebrow, title, subtitle, domainLabel }: LandingOgImageProps) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#121212"/>
+  <text x="64" y="110" fill="#71717a" font-family="Arial, sans-serif" font-size="22">${escapeXml(eyebrow)}</text>
+  <text x="64" y="205" fill="#fafafa" font-family="Arial, sans-serif" font-size="64" font-weight="600">${escapeXml(title)}</text>
+  <text x="64" y="275" fill="#a1a1aa" font-family="Arial, sans-serif" font-size="28">${escapeXml(subtitle)}</text>
+  <text x="64" y="570" fill="#fafafa" font-family="Arial, sans-serif" font-size="28" font-weight="600">LingxiGraph</text>
+  <text x="1136" y="570" text-anchor="end" fill="#71717a" font-family="Arial, sans-serif" font-size="20">${escapeXml(domainLabel)}</text>
+</svg>`
+  return new Response(svg, { headers: { 'Content-Type': 'image/svg+xml' } })
+}
+
 /** Shared dynamic OG image for landing catalog pages (models, integrations). */
 export async function createLandingOgImage({
   eyebrow,
@@ -68,6 +87,10 @@ export async function createLandingOgImage({
   pills = [],
   domainLabel = 'sim.ai',
 }: LandingOgImageProps) {
+  if (process.env.NEXT_STATIC_EXPORT === '1') {
+    return createStaticOgImage({ eyebrow, title, subtitle, domainLabel })
+  }
+
   return new ImageResponse(
     <div
       style={{
@@ -150,7 +173,15 @@ export async function createLandingOgImage({
           width: '100%',
         }}
       >
-        <SimLogoFull />
+        <span
+          style={{
+            color: '#fafafa',
+            fontSize: 28,
+            fontWeight: 500,
+          }}
+        >
+          LingxiGraph
+        </span>
         <span
           style={{
             fontSize: 20,

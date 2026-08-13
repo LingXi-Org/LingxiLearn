@@ -17,6 +17,8 @@ docs/
 
 # Environment and config
 .env*
+**/.env.local
+**/.env.*.local
 !.env.example
 .prettierrc
 .prettierignore

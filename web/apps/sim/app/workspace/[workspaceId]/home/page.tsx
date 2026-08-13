@@ -23,6 +23,18 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
     redirect(`/workspace/${workspaceId}`)
   }
 
+  // The LingxiGraph entrypoint is exported as a static browser shell. Its
+  // authenticated task/session data is loaded by the client adapter after the
+  // page mounts, so do not invoke Sim's request-header-backed session and
+  // server prefetch layers while Next generates the static artifact.
+  if (workspaceId === 'lingxi') {
+    return (
+      <Suspense fallback={<HomeFallback />}>
+        <Home tableViewsEnabled={false} />
+      </Suspense>
+    )
+  }
+
   const queryClient = getQueryClient()
   const listsPrefetch = prefetchHomeLists(queryClient, workspaceId)
 

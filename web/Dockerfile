@@ -13,7 +13,8 @@ ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE \
     NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID=$NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID \
     NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE=$NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE \
     NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI=$NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI \
-    NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE=$NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE
+    NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE=$NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE \
+    NEXT_STATIC_EXPORT=1
 COPY package.json bun.lock bunfig.toml ./
 COPY apps/sim/package.json apps/sim/package.json
 COPY packages packages
@@ -23,7 +24,12 @@ COPY packages packages
 # the generated lock metadata even when the dependency set is valid.
 RUN bun install --ignore-scripts
 COPY . .
-RUN bun --cwd apps/sim run build
+# Use Bun's `run --cwd` form. The previous argument order only printed Bun's
+# help text and exited successfully, allowing a stale static export to be
+# published by the dist stage.
+RUN rm -rf apps/sim/out apps/sim/.next \
+  && bun run --cwd apps/sim build \
+  && test -f apps/sim/out/index.html
 
 ARG DOCKER_REGISTRY=docker.m.daocloud.io
 FROM ${DOCKER_REGISTRY}/library/busybox:1.37 AS dist
