@@ -21,7 +21,7 @@ from lingxigraph import (
 
 from lingxilearn.agents.artifact_store import ArtifactError, ArtifactStore
 from lingxilearn.agents.contracts import IntentContext, LectureHookResult, extract_json
-from lingxilearn.agents.graph import _invoke_agent, _recover_lesson_intro_html, build_agent_graph
+from lingxilearn.agents.graph import _invoke_agent, build_agent_graph
 from lingxilearn.service import Service, _message_trace_events
 from lingxilearn.agents.web_tools import _assert_public_url
 from lingxilearn.agents.skill_runtime import ArtifactDraft, progressive_skill_prompt, staged_artifact_tools
@@ -119,7 +119,7 @@ def test_agent_skills_are_discoverable_and_have_resources() -> None:
         assert (skill_dir / "SKILL.md").read_text(encoding="utf-8").startswith("---")
         if name == "interactive-lecture-deck":
             spec = source.load(name)
-            assert spec.extra_metadata.get("version") == "1.3.0"
+            assert spec.extra_metadata.get("version") == "1.2.0"
             assert "dist/lecture.html" in spec.content
 
 
@@ -178,13 +178,6 @@ def test_intent_and_lecture_contracts_reject_malformed_output() -> None:
 
     with pytest.raises(ValueError):
         LectureHookResult.model_validate({"schema_version": "wrong"})
-
-
-def test_lesson_intro_recovers_complete_html_from_unstaged_model_response() -> None:
-    html = "<!doctype html><html lang='zh-CN'><head><title>TCP</title></head><body><h1>TCP</h1></body></html>"
-    assert _recover_lesson_intro_html(f"```html\n{html}\n```", {}) == html
-    assert _recover_lesson_intro_html("ignored", {"html": html}) == html
-    assert _recover_lesson_intro_html("<html><body>incomplete</body></html>", {}) == ""
 
 
 def test_agent_graph_fans_out_specialists_before_merge(tmp_path: Path) -> None:
@@ -489,7 +482,7 @@ def test_lesson_intro_artifact_and_skill_deck_are_publishable(tmp_path: Path) ->
     html = (REPO_ROOT / "skills" / "lesson-intro" / "assets" / "example-page.html").read_text(encoding="utf-8")
     intro = store.write_lesson_intro_file("intro-task", html)
     assert intro["artifact_id"] == "lesson-intro"
-    assert "路面没变，为什么脚下变滑了" in store.lesson_intro_path("intro-task").read_text(encoding="utf-8")
+    assert "为什么雨后的石板路格外滑" in store.lesson_intro_path("intro-task").read_text(encoding="utf-8")
 
     source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
     files = {
