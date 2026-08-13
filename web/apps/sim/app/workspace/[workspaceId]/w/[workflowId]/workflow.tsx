@@ -135,7 +135,8 @@ import { useWorkflowSearchReplaceStore } from '@/stores/workflow-search-replace/
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import { getUniqueBlockName, prepareBlockState } from '@/stores/workflows/utils'
 import { useWorkflowStore } from '@/stores/workflows/workflow/store'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState, WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowMetadata } from '@/stores/workflows/registry/types'
 
 /** Lazy-loaded components for non-critical UI that can load after initial render */
 const LazyChat = lazy(() =>
@@ -277,6 +278,8 @@ interface WorkflowContentProps {
   workspaceId?: string
   workflowId?: string
   embedded?: boolean
+  initialWorkflowState?: WorkflowState
+  initialWorkflowMetadata?: WorkflowMetadata
 }
 
 const WorkflowContent = React.memo(
@@ -284,6 +287,8 @@ const WorkflowContent = React.memo(
     workspaceId: propWorkspaceId,
     workflowId: propWorkflowId,
     embedded,
+    initialWorkflowState,
+    initialWorkflowMetadata,
   }: WorkflowContentProps = {}) => {
     const [isCanvasReady, setIsCanvasReady] = useState(false)
     const [potentialParentId, setPotentialParentId] = useState<string | null>(null)
@@ -352,6 +357,7 @@ const WorkflowContent = React.memo(
       pendingSelection,
       setPendingSelection,
       clearPendingSelection,
+      hydrateWorkflowState,
     } = useWorkflowRegistry(
       useShallow((state) => ({
         activeWorkflowId: state.activeWorkflowId,
@@ -364,8 +370,22 @@ const WorkflowContent = React.memo(
         pendingSelection: state.pendingSelection,
         setPendingSelection: state.setPendingSelection,
         clearPendingSelection: state.clearPendingSelection,
+        hydrateWorkflowState: state.hydrateWorkflowState,
       }))
     )
+
+    const isExternalReadOnlyWorkflow = Boolean(initialWorkflowState && initialWorkflowMetadata)
+
+    useEffect(() => {
+      if (!isExternalReadOnlyWorkflow || !initialWorkflowState) return
+      hydrateWorkflowState(workspaceId, workflowIdParam, initialWorkflowState)
+    }, [
+      hydrateWorkflowState,
+      initialWorkflowState,
+      isExternalReadOnlyWorkflow,
+      workflowIdParam,
+      workspaceId,
+    ])
 
     useEffect(() => {
       userFocusedWorkflowIdRef.current = null
@@ -410,7 +430,10 @@ const WorkflowContent = React.memo(
     )
 
     const { blocks, edges, lastSaved } = currentWorkflow
-    const workflowMetadata = workflows[workflowIdParam]
+    const effectiveWorkflows = isExternalReadOnlyWorkflow
+      ? { [workflowIdParam]: initialWorkflowMetadata! }
+      : workflows
+    const workflowMetadata = effectiveWorkflows[workflowIdParam]
     const workflowRowLocked = !!workflowMetadata?.locked
     const workflowFolderLocked = isFolderOrAncestorLocked(workflowMetadata?.folderId, folders)
 
@@ -432,19 +455,20 @@ const WorkflowContent = React.memo(
 
     const isWorkflowReady = useMemo(
       () =>
-        !isWorkflowMapPlaceholderData &&
+        (isExternalReadOnlyWorkflow || !isWorkflowMapPlaceholderData) &&
         hydration.phase === 'ready' &&
         hydration.workflowId === workflowIdParam &&
         activeWorkflowId === workflowIdParam &&
-        Boolean(workflows[workflowIdParam]) &&
+        Boolean(effectiveWorkflows[workflowIdParam]) &&
         lastSaved !== undefined,
       [
+        isExternalReadOnlyWorkflow,
         isWorkflowMapPlaceholderData,
         hydration.phase,
         hydration.workflowId,
         workflowIdParam,
         activeWorkflowId,
-        workflows,
+        effectiveWorkflows,
         lastSaved,
       ]
     )
@@ -2443,15 +2467,17 @@ const WorkflowContent = React.memo(
     )
 
     const loadingWorkflowRef = useRef<string | null>(null)
-    const currentWorkflowExists =
-      !isWorkflowMapPlaceholderData && Boolean(workflows[workflowIdParam])
+    const currentWorkflowExists = isExternalReadOnlyWorkflow
+      ? true
+      : !isWorkflowMapPlaceholderData && Boolean(workflows[workflowIdParam])
 
     useEffect(() => {
+      if (isExternalReadOnlyWorkflow) return
       const currentId = workflowIdParam
       // Wait for workflow data to be available before attempting to load
       if (
-        isWorkflowMapLoading ||
-        isWorkflowMapPlaceholderData ||
+        (!isExternalReadOnlyWorkflow &&
+          (isWorkflowMapLoading || isWorkflowMapPlaceholderData)) ||
         !currentId ||
         !currentWorkflowExists ||
         !hydration.workspaceId ||
@@ -2508,6 +2534,7 @@ const WorkflowContent = React.memo(
       }
     }, [
       workflowIdParam,
+      isExternalReadOnlyWorkflow,
       isWorkflowMapLoading,
       isWorkflowMapPlaceholderData,
       currentWorkflowExists,
@@ -4891,18 +4918,34 @@ interface WorkflowProps {
   workspaceId?: string
   workflowId?: string
   embedded?: boolean
+  initialWorkflowState?: WorkflowState
+  initialWorkflowMetadata?: WorkflowMetadata
 }
 
 /** Workflow page with ReactFlowProvider and error boundary wrapper. */
-const Workflow = React.memo(({ workspaceId, workflowId, embedded }: WorkflowProps = {}) => {
+const Workflow = React.memo(
+  ({
+    workspaceId,
+    workflowId,
+    embedded,
+    initialWorkflowState,
+    initialWorkflowMetadata,
+  }: WorkflowProps = {}) => {
   return (
     <ReactFlowProvider>
       <ErrorBoundary>
-        <WorkflowContent workspaceId={workspaceId} workflowId={workflowId} embedded={embedded} />
+        <WorkflowContent
+          workspaceId={workspaceId}
+          workflowId={workflowId}
+          embedded={embedded}
+          initialWorkflowState={initialWorkflowState}
+          initialWorkflowMetadata={initialWorkflowMetadata}
+        />
       </ErrorBoundary>
     </ReactFlowProvider>
   )
-})
+  }
+)
 
 Workflow.displayName = 'Workflow'
 

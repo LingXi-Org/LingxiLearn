@@ -10,6 +10,7 @@ import {
   projectLingxiGraphEvents,
 } from '@/lib/lingxi/lingxi-graph-adapter'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import { lingxiWorkflowId } from '@/lib/lingxi/components/lingxi-workflow'
 import type { ChatContext } from '@/stores/panel'
 import type {
   ChatMessage,
@@ -83,13 +84,20 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
     },
   ]
   return entries
-    .filter(({ key }) => Boolean(task.artifacts[key]?.available))
-    .map(({ key, title, path }) => ({
-      type: 'file' as const,
-      id: `lingxi-artifact:${task.id}:${key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key === 'knowledge_graph' ? 'knowledge-graph' : key}`,
-      title,
-      path,
-    }))
+    .filter(({ key }) => key === 'knowledge_graph' || Boolean(task.artifacts[key]?.available))
+    .map(({ key, title, path }) => {
+      const kind =
+        key === 'lesson_intro'
+          ? 'lesson-intro'
+          : key === 'lecture_deck'
+            ? 'lecture-deck'
+            : key === 'knowledge_graph'
+              ? 'knowledge-graph'
+              : key
+      return kind === 'knowledge-graph'
+        ? { type: 'workflow' as const, id: lingxiWorkflowId(task.id), title }
+        : { type: 'file' as const, id: `lingxi-artifact:${task.id}:${kind}`, title, path }
+    })
 }
 
 export function useLingxiGraphChat(
@@ -172,7 +180,13 @@ export function useLingxiGraphChat(
       })
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
-        if (artifact) onResourceEventRef.current?.(`lingxi-artifact:${taskId}:${artifact}`)
+        if (artifact) {
+          const resourceId =
+            artifact === 'knowledge_graph'
+              ? lingxiWorkflowId(taskId)
+              : `lingxi-artifact:${taskId}:${artifact}`
+          onResourceEventRef.current?.(resourceId)
+        }
         void currentAdapter
           .loadTask(taskId)
           .then((refreshed) => {

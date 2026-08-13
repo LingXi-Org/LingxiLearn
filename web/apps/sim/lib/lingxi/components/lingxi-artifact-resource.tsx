@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@sim/emcn'
 import { api } from '@/lib/lingxi/api'
-import { KnowledgeGraphCanvas } from '@/lib/lingxi/components/knowledge-graph-canvas'
+import { LingxiWorkflow } from '@/lib/lingxi/components/lingxi-workflow'
 import { useAgentTask } from '@/lib/lingxi/hooks/use-agent-task'
 import type { PublicQuizQuestion } from '@/lib/lingxi/types'
 import { QuestionDisplay } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
@@ -47,30 +47,6 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
   const [submittedAnswers, setSubmittedAnswers] = useState<string[]>()
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [graph, setGraph] = useState<import('@/lib/lingxi/types').KnowledgeGraphData | null>(null)
-  const [graphLoading, setGraphLoading] = useState(false)
-
-  useEffect(() => {
-    if (parsed?.kind !== 'knowledge-graph') return
-    setGraphLoading(true)
-    void api
-      .agentKnowledgeGraph(parsed.taskId)
-      .then(setGraph)
-      .catch(() => setGraph(null))
-      .finally(() => setGraphLoading(false))
-  }, [parsed, task?.artifacts.knowledge_graph?.revision])
-
-  useEffect(() => {
-    if (parsed?.kind !== 'knowledge-graph' || task?.artifacts.knowledge_graph?.available) return
-    if (task?.artifacts.knowledge_graph?.status === 'failed') return
-    const timer = setInterval(() => {
-      void api
-        .agentKnowledgeGraph(parsed.taskId)
-        .then(setGraph)
-        .catch(() => {})
-    }, 1800)
-    return () => clearInterval(timer)
-  }, [parsed, task?.artifacts.knowledge_graph?.available, task?.artifacts.knowledge_graph?.status])
 
   const submitQuiz = useCallback(
     async (answers: string[]) => {
@@ -101,31 +77,7 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
   if (!parsed) return <div className='p-6 text-[var(--text-secondary)] text-sm'>产物地址无效。</div>
 
   if (parsed.kind === 'knowledge-graph') {
-    if (graphLoading)
-      return (
-        <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载 Lingxi 知识图谱…</div>
-      )
-    if (!graph && task?.artifacts.knowledge_graph?.status === 'failed')
-      return (
-        <div className='flex h-full flex-col items-center justify-center gap-3 p-6 text-center'>
-          <p className='text-[var(--text-secondary)] text-sm'>
-            知识图谱后台生成失败，本次聊天和已有图谱不受影响。
-          </p>
-          <Button variant='outline' onClick={() => void refresh()}>
-            重新加载任务
-          </Button>
-        </div>
-      )
-    if (!graph)
-      return (
-        <div className='flex h-full flex-col items-center justify-center gap-2 p-6 text-center'>
-          <p className='text-[var(--text-secondary)] text-sm'>
-            图谱正在后台生成，完成后会自动出现。
-          </p>
-          <p className='text-[var(--text-muted)] text-xs'>当前聊天可继续接收输入。</p>
-        </div>
-      )
-    return <KnowledgeGraphCanvas graph={graph} />
+    return <LingxiWorkflow taskId={parsed.taskId} />
   }
 
   if (parsed.kind !== 'quiz') {

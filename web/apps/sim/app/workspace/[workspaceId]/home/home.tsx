@@ -47,6 +47,7 @@ import { getWorkspaceFilesQueryOptions, useWorkspaceFiles } from '@/hooks/querie
 import { useOAuthReturnRouter } from '@/hooks/use-oauth-return'
 import type { ChatContext } from '@/stores/panel'
 import { SkillDetail } from '@/app/workspace/[workspaceId]/skills/[skillId]/skill-detail'
+import { LingxiWorkflow } from '@/lib/lingxi/components/lingxi-workflow'
 import {
   ChatSurfaceProvider,
   CreditsChip,
@@ -103,9 +104,14 @@ export function Home(props: HomeProps) {
   const workspaceId = workspaceMatch?.[1] ?? 'lingxi'
   const chatMatch = pathname.match(/^\/workspace\/[^/]+\/chat\/([^/]+)/)
   const skillMatch = pathname.match(/^\/workspace\/[^/]+\/skills\/([^/]+)/)
+  const workflowMatch = pathname.match(/^\/workspace\/[^/]+\/w\/(lingxi-task-[^/]+)/)
 
   if (skillMatch && workspaceId === 'lingxi') {
     return <SkillDetail workspaceId={workspaceId} skillId={skillMatch[1]} />
+  }
+
+  if (workflowMatch && workspaceId === 'lingxi') {
+    return <LingxiWorkflow taskId={workflowMatch[1].slice('lingxi-task-'.length)} />
   }
 
   return <HomeChatSurface {...props} chatId={props.chatId ?? chatMatch?.[1]} />

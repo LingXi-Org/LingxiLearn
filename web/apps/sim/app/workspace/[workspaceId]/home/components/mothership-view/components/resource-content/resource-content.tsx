@@ -37,6 +37,7 @@ import { BrowserSession } from '@/app/workspace/[workspaceId]/home/components/mo
 import { GenericResourceContent } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/generic-resource-content'
 import { TerminalSession } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/terminal-session/terminal-session'
 import { LingxiArtifactResource } from '@/lib/lingxi/components/lingxi-artifact-resource'
+import { LingxiWorkflow, lingxiTaskId } from '@/lib/lingxi/components/lingxi-workflow'
 import {
   RESOURCE_TAB_ICON_BUTTON_CLASS,
   RESOURCE_TAB_ICON_CLASS,
@@ -284,6 +285,9 @@ export const ResourceContent = memo(function ResourceContent({
       )
 
     case 'workflow':
+      if (workspaceId === 'lingxi' && resource.id.startsWith('lingxi-task-')) {
+        return <LingxiWorkflow key={resource.id} taskId={lingxiTaskId(resource.id)} />
+      }
       return (
         <EmbeddedWorkflow key={resource.id} workspaceId={workspaceId} workflowId={resource.id} />
       )
@@ -644,6 +648,9 @@ interface EmbeddedWorkflowProps {
 }
 
 function EmbeddedWorkflow({ workspaceId, workflowId }: EmbeddedWorkflowProps) {
+  if (workspaceId === 'lingxi' && workflowId.startsWith('lingxi-task-')) {
+    return <LingxiWorkflow taskId={lingxiTaskId(workflowId)} />
+  }
   const { data: workflowList, isPending: isWorkflowsPending } = useWorkflows(workspaceId)
   const workflowExists = (workflowList ?? []).some((w) => w.id === workflowId)
   const hasLoadError = useWorkflowRegistry(

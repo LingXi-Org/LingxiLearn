@@ -152,9 +152,10 @@ export function agentTaskToCanvasGraph(
 
   const orderedEvents = dedupeSimEvents(events)
   const agentIds = [
-    ...new Set(
-      orderedEvents.map((event) => event.agent).filter((agent) => agent && agent !== 'coordinator')
-    ),
+    ...new Set([
+      ...Object.keys(task.agents),
+      ...orderedEvents.map((event) => event.agent),
+    ].filter((agent): agent is string => Boolean(agent) && agent !== 'coordinator')),
   ]
   const nodes: AgentCanvasNode[] = [
     { id: 'input', label: 'User input', kind: 'input', status: 'complete', detail: task.prompt },

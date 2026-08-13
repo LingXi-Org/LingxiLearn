@@ -235,6 +235,27 @@ export const useWorkflowRegistry = create<WorkflowRegistry>()(
         }
       },
 
+      hydrateWorkflowState: (workspaceId: string, workflowId: string, workflowState: WorkflowState) => {
+        resetWorkflowStores()
+        useWorkflowStore.getState().replaceWorkflowState({
+          ...workflowState,
+          currentWorkflowId: workflowId,
+          lastSaved: workflowState.lastSaved ?? Date.now(),
+        })
+        useSubBlockStore.getState().initializeFromWorkflow(workflowId, workflowState.blocks || {})
+        set({
+          activeWorkflowId: workflowId,
+          error: null,
+          hydration: {
+            phase: 'ready',
+            workspaceId,
+            workflowId,
+            requestId: null,
+            error: null,
+          },
+        })
+      },
+
       setActiveWorkflow: async (id: string) => {
         const { activeWorkflowId, hydration } = get()
 

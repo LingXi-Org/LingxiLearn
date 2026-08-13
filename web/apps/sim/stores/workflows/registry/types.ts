@@ -1,5 +1,6 @@
 import type { Edge } from 'reactflow'
 import type { BlockState, Loop, Parallel } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/stores/workflows/workflow/types'
 
 interface ClipboardData {
   blocks: Record<string, BlockState>
@@ -46,6 +47,7 @@ interface WorkflowRegistryState {
 interface WorkflowRegistryActions {
   setActiveWorkflow: (id: string) => Promise<void>
   loadWorkflowState: (workflowId: string) => Promise<void>
+  hydrateWorkflowState: (workspaceId: string, workflowId: string, workflowState: WorkflowState) => void
   switchToWorkspace: (id: string) => void
   markWorkflowCreating: (workflowId: string) => void
   markWorkflowCreated: (workflowId: string | null) => void
