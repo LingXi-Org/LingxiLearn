@@ -1,11 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@sim/emcn'
 import { api } from '@/lib/lingxi/api'
 import { LingxiWorkflow } from '@/lib/lingxi/components/lingxi-workflow'
 import { useAgentTask } from '@/lib/lingxi/hooks/use-agent-task'
 import type { PublicQuizQuestion } from '@/lib/lingxi/types'
+import type { FileContentSource } from '@/hooks/use-file-content-source'
+import { FileViewer } from '@/app/workspace/[workspaceId]/files/components/file-viewer'
 import { QuestionDisplay } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
 import type { QuestionItem } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
 
@@ -40,6 +42,20 @@ function normalizeQuizAnswer(question: PublicQuizQuestion, answer: string): stri
   )
   return question.type === 'multi_choice' ? ids : (ids[0] ?? '')
 }
+
+function artifactFileSource(taskId: string, kind: 'lesson-intro' | 'lecture-deck' | 'visual'):
+  FileContentSource {
+  return {
+    buildUrl: () => api.agentArtifactUrl(taskId, kind),
+    resolveImageSrc: (src) => src,
+  }
+}
+
+const ARTIFACT_FILE_TYPES = {
+  'lesson-intro': 'text/html',
+  'lecture-deck': 'text/html',
+  visual: 'text/html',
+} as const
 
 export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourceProps) {
   const parsed = useMemo(() => parseResourceId(resourceId), [resourceId])
@@ -82,11 +98,27 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
 
   if (parsed.kind !== 'quiz') {
     return (
-      <iframe
-        className='h-full w-full border-0 bg-white'
-        src={api.agentArtifactUrl(parsed.taskId, parsed.kind)}
-        title='LingxiGraph 学习产物'
-        sandbox='allow-scripts allow-same-origin allow-forms allow-popups'
+      <FileViewer
+        contentSource={artifactFileSource(
+          parsed.taskId,
+          parsed.kind as 'lesson-intro' | 'lecture-deck' | 'visual'
+        )}
+        file={{
+          id: resourceId,
+          workspaceId: 'lingxi',
+          name: `${parsed.kind}.html`,
+          key: resourceId,
+          path: resourceId,
+          size: 0,
+          type: ARTIFACT_FILE_TYPES[parsed.kind as keyof typeof ARTIFACT_FILE_TYPES],
+          uploadedBy: 'lingxilearn',
+          uploadedAt: new Date(0),
+          updatedAt: new Date(0),
+        }}
+        workspaceId='lingxi'
+        canEdit={false}
+        readOnly
+        previewMode='preview'
       />
     )
   }

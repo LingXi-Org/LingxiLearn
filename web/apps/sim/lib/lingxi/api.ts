@@ -215,6 +215,9 @@ export const api = {
   agentArtifactUrl: (taskId: string, kind: 'lesson-intro' | 'lecture-deck' | 'visual') =>
     `${API_BASE}/api/agent-tasks/${taskId}/artifacts/${kind}`,
 
+  agentQuizArtifact: (taskId: string) =>
+    `${API_BASE}/api/agent-tasks/${taskId}/artifacts/quiz`,
+
   context: () =>
     request<{
       profile: Record<string, unknown>
