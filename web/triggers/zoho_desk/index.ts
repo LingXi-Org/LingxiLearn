@@ -1,1 +1,0 @@
-export { zohoDeskWebhookTrigger } from './webhook'

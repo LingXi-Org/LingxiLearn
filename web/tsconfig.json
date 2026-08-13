@@ -22,17 +22,35 @@
       "@/*": ["./*"],
       "@sim/emcn": ["./components/ui-kit/index.ts"],
       "@sim/emcn/*": ["./components/ui-kit/*"],
-      "@sim/workflow-renderer/note-colors": [
-        "./lib/sim-packages/workflow-renderer/note/note-colors.ts"
-      ],
-      "@sim/*": ["./lib/sim-packages/*"]
+      "@sim/db": ["./lib/sim-packages/db/index.ts"],
+      "@sim/db/*": ["./lib/sim-packages/db/*"],
+      "@sim/logger": ["./lib/sim-packages/logger/index.ts"],
+      "@sim/realtime-protocol/*": ["./lib/sim-packages/realtime-protocol/*"],
+      "@sim/security/*": ["./lib/sim-packages/security/*"],
+      "@sim/utils": ["./lib/sim-packages/utils/index.ts"],
+      "@sim/utils/*": ["./lib/sim-packages/utils/*"]
     }
   },
   "include": [
     "next-env.d.ts",
     ".next/types/**/*.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "content/**/*.ts",
+    "content/**/*.tsx",
+    "lib/ashby/**/*.ts",
+    "lib/blog/**/*.ts",
+    "lib/colors/**/*.ts",
+    "lib/content/**/*.ts",
+    "lib/landing/**/*.ts",
+    "lib/landing/**/*.tsx",
+    "lib/lingxi/**/*.ts",
+    "lib/lingxi/**/*.tsx",
+    "lib/logger/**/*.ts",
+    "lib/ui/**/*.ts",
+    "lib/utils/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules", ".next", "out", "dist", "**/*.test.ts", "**/*.test.tsx"]

@@ -1,1 +1,0 @@
-export { tableNewRowTrigger } from './poller'

@@ -1,1 +1,0 @@
-export { typeformWebhookTrigger } from './webhook'
