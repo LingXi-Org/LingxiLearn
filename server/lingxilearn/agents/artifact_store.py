@@ -122,7 +122,11 @@ class ArtifactStore:
             _run_python,
             sys.executable,
             self.deck_skill_root / "scripts" / "validate_deck.py",
-            [str(root), "--strict", "--json"],
+            # Warnings describe polish opportunities (layout overlap, wording
+            # length, or teaching tone). They must not make an otherwise
+            # buildable lecture abort the learner workflow. The validator
+            # still returns non-zero for structural/runtime errors.
+            [str(root), "--json"],
             self.deck_skill_root,
         )
         return {
