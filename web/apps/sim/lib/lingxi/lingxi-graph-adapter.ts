@@ -495,6 +495,20 @@ function isTerminal(task: AgentTaskSnapshot): boolean {
   return TERMINAL_TASK_STATUSES.has(task.status)
 }
 
+function quizQuestionTag(task: AgentTaskSnapshot): string | null {
+  const quiz = task.artifacts.quiz?.data
+  if (!quiz || task.quiz_submission) return null
+  const questions = quiz.questions.map((question) => ({
+    type: question.type === 'multi_choice' ? 'multi_select' : 'single_select',
+    prompt: question.prompt,
+    options:
+      question.options.length > 0
+        ? question.options
+        : [{ id: `${question.id}-free-text`, label: '直接输入答案' }],
+  }))
+  return questions.length > 0 ? `<question>${JSON.stringify(questions)}</question>` : null
+}
+
 /**
  * Converts the durable LingxiGraph event log to Sim's transcript contract.
  * `reasoning.delta` is deliberately absent: only the safe phase summaries
@@ -629,6 +643,12 @@ export function projectLingxiGraphEvents(
       assistantText = task.error || '学习任务未能完成。'
       blocks.push({ type: 'text', content: assistantText, timestamp: event.sequence })
     }
+  }
+
+  const question = quizQuestionTag(task)
+  if (question && !assistantText.includes('<question>')) {
+    assistantText = `${assistantText ? `${assistantText}\n\n` : ''}${question}`
+    blocks.push({ type: 'text', content: question })
   }
 
   return {
