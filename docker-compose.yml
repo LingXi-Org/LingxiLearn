@@ -68,6 +68,8 @@ services:
         NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE: ${NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE:-}
         NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI: ${NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI:-}
         NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE: ${NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE:-}
+        DATABASE_URL: postgresql://build:build@localhost:5432/build
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:8080}
     volumes:
       - web-dist:/web
     restart: "no"
