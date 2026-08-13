@@ -29,7 +29,6 @@ const ALLOWLISTED_FILES = new Set([
   'packages/utils/src/id.test.ts',
   'packages/utils/src/object.test.ts',
   'packages/utils/src/retry.test.ts',
-  'packages/cli/src/index.ts',
   'packages/ts-sdk/src/index.ts',
   // CJS bundle — cannot use ES module imports
   'apps/sim/lib/execution/isolated-vm-worker.cjs',

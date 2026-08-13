@@ -117,7 +117,7 @@ export function SolutionsHero({ hero, align = 'left', variant = 'solutions' }: S
         </p>
 
         <div className={cn('max-sm:w-full', LANDING_HERO_CTA_GAP)}>
-          <HeroCta />
+          <HeroCta primary={hero.cta} secondary={hero.secondaryCta} />
         </div>
       </div>
 

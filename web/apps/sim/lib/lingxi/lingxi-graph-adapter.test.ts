@@ -6,6 +6,7 @@ const task: AgentTaskSnapshot = {
   id: 'task-1',
   status: 'completed',
   prompt: 'Explain packet retransmission',
+  graph_version: 'knowledge_deep_dive.v1',
   intent: { topic: 'packet retransmission' },
   agents: {
     intent: { status: 'completed' },
@@ -13,12 +14,15 @@ const task: AgentTaskSnapshot = {
     interactive_lecture_deck: { status: 'pending' },
     quiz_generator: { status: 'pending' },
     interactive_visual_explainer: { status: 'pending' },
+    adaptive_pedagogy: { status: 'pending' },
+    curriculum_graph_builder: { status: 'pending' },
   },
   artifacts: {
     lesson_intro: { available: true, url: '/api/artifacts/intro' },
     lecture_deck: { available: false, url: '' },
     quiz: { available: false, data: null },
     visual: { available: false, url: '' },
+    knowledge_graph: { available: false, url: '', status: 'pending' },
   },
   quiz_submission: null,
   error: '',

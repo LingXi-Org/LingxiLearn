@@ -1,0 +1,126 @@
+# LingxiLearn local development.
+#
+# This is the only development Compose file. The browser and API read the
+# current checkout through bind mounts; generated frontend assets are not
+# copied into a production image in this mode.
+
+name: lingxilearn-dev
+
+x-api-dev: &api-dev
+  build:
+    context: ./server
+    dockerfile: Dockerfile
+    args:
+      DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
+      APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
+      PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+  env_file: [.env]
+  environment:
+    LINGXILEARN_DATABASE_URL: >-
+      postgresql+asyncpg://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
+    LINGXILEARN_PACKS_DIR: /app/packs
+    LINGXILEARN_SKILLS_DIR: /app/skills
+    LINGXILEARN_VAR_DIR: /app/var
+    LINGXILEARN_AGENT_TASK_DIR: /app/var/agent_tasks
+    LINGXILEARN_WEB_DIST: /app/web-dist-disabled
+    LINGXILEARN_CORS_ORIGINS: '["http://localhost:3000"]'
+    LINGXILEARN_OIDC_ISSUER: ${LINGXILEARN_OIDC_ISSUER:-https://auth.lingxilearn.cn/oidc}
+    LINGXILEARN_OIDC_AUDIENCE: ${LINGXILEARN_OIDC_AUDIENCE:-https://lingxilearn.cn/api}
+    LINGXILEARN_INSECURE_DEV_AUTH: ${LINGXILEARN_INSECURE_DEV_AUTH:-false}
+  volumes:
+    - ./server/lingxilearn:/app/lingxilearn
+    - ./server/migrations:/app/migrations:ro
+    - ./server/alembic.ini:/app/alembic.ini:ro
+    - ./packs:/app/packs:ro
+    - ./skills:/app/skills:ro
+    - ./var:/app/var
+  depends_on:
+    postgres:
+      condition: service_healthy
+  security_opt: [no-new-privileges:true]
+
+services:
+  postgres:
+    image: ${DOCKER_REGISTRY:-docker.m.daocloud.io}/library/postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - lingxilearn-dev-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  migrate:
+    <<: *api-dev
+    user: "0:0"
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *api-dev
+    user: "0:0"
+    command:
+      [
+        "uvicorn",
+        "lingxilearn.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+        "--reload-dir",
+        "/app/lingxilearn"
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${LINGXILEARN_PORT:-8080}:8000"
+    restart: unless-stopped
+
+  simstudio:
+    build:
+      context: ./web
+      dockerfile: docker/dev.Dockerfile
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    working_dir: /app
+    command:
+      [
+        "sh",
+        "-c",
+        "bun install --ignore-scripts --registry $${NPM_REGISTRY:-https://registry.npmmirror.com} && exec bun run --cwd apps/sim dev"
+      ]
+    volumes:
+      - ./web:/app
+      - lingxilearn-dev-web-node-modules:/app/node_modules
+      - lingxilearn-dev-web-next:/app/apps/sim/.next
+    environment:
+      NODE_ENV: development
+      NEXT_STATIC_EXPORT: "0"
+      NEXT_PUBLIC_API_BASE: http://localhost:${LINGXILEARN_PORT:-8080}
+      NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER: ${NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER:-https://auth.lingxilearn.cn/oidc}
+      NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID: ${NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID:-}
+      NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE: ${NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE:-https://lingxilearn.cn/api}
+      NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI: ${NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI:-http://localhost:3000/auth/callback/}
+      NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE: ${NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE:-openid profile email offline_access roles urn:logto:scope:organizations urn:logto:scope:organization_roles learn.read learn.write}
+      NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  lingxilearn-dev-postgres-data:
+  lingxilearn-dev-web-node-modules:
+  lingxilearn-dev-web-next:

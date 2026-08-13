@@ -3,18 +3,21 @@
 ## Synchronous path
 
 Normal path:
-`student event -> adaptive-pedagogy -> render response`
+`student event -> deterministic judge/tools -> adaptive-pedagogy -> guard -> render response`
 
 Budget:
 - one blocking pedagogical Skill call;
-- at most one blocking external rendering Skill call, and only when necessary;
+- zero blocking visual, quiz, learner-state, or remedial-deck Skill calls;
 - zero dependence on `learner-state-reflector`.
+
+The only learner-facing writer on this path is `adaptive-pedagogy`:
+`learner_facing_writer_count <= 1`.
 
 ## Background path
 
-After rendering:
+After the response is rendered:
 - enqueue `learner-state-reflector`;
-- optionally build `interactive-visual-explainer`;
+- optionally prefetch `interactive-visual-explainer`, a remedial deck, or a quiz;
 - store hint/choice/UI events.
 
 The next synchronous call may use the most recent committed learner state, but it must also include
@@ -22,7 +25,8 @@ the current session's raw evidence so a delayed background update cannot block p
 
 ## Preflight
 
-While `interactive-lecture-deck` is being viewed, the host should *optionally* run:
+Once curriculum context is available, the host may run this preflight in parallel with
+`lesson-intro` and `interactive-lecture-deck`:
 
 ```json
 {

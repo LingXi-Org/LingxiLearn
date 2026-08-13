@@ -27,9 +27,9 @@ export type SessionHookResult = {
 export const SessionContext = createContext<SessionHookResult | null>(null)
 
 /**
- * LingxiGraph owns authentication and authorization. Sim's Better Auth session
- * provider is retained under sim-backend-unwired; the browser shell receives a
- * stable local viewer so it never calls a non-existent Better Auth endpoint.
+ * LingxiGraph owns authentication and authorization. Better Auth is not part
+ * of this browser shell; it receives identity from LingxiIdentity and never
+ * calls a Sim auth endpoint.
  */
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const identity = useLingxiIdentity()

@@ -36,22 +36,15 @@ apps/
 │   ├── stores/          # Zustand stores
 │   ├── tools/           # Tool definitions
 │   └── triggers/        # Trigger definitions
-└── realtime/            # Bun Socket.IO server (collaborative canvas)
-
 packages/                # @sim/* — audit, auth, db, logger, realtime-protocol,
                          # security, tsconfig, utils, platform-authz,
                          # workflow-persistence, workflow-types
 ```
 
-The Socket.IO collaborative-canvas server lives in a separate workspace at
-`apps/realtime/`. It shares DB + auth with `apps/sim` via the `@sim/*`
-packages. `apps/* → packages/*` only — packages never import from `apps/*`.
-Do not add imports from `@/lib/webhooks/providers/*`, `@/executor/*`,
-`@/blocks/*`, or `@/tools/*` to any package consumed by `apps/realtime` —
-those heavyweight registries stay in this app. `apps/realtime` calls back
-into this app only over internal HTTP with `INTERNAL_API_SECRET`. CI enforces
-these boundaries via `scripts/check-monorepo-boundaries.ts` and
-`scripts/check-realtime-prune-graph.ts`.
+The deployed browser shell does not start a separate Socket.IO collaborative
+canvas server. LingxiLearn task updates use the FastAPI REST/SSE surface. The
+client-side collaboration protocol package remains only where existing editor
+types still require it.
 
 ### Feature Organization
 

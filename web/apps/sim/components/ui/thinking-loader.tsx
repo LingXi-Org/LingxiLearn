@@ -5,7 +5,6 @@ import { cn } from '@sim/emcn'
 import styles from '@/components/ui/thinking-loader.module.css'
 
 const VARIANTS = [
-  'lingxi',
   'play',
   'metaballs',
   'relay',
@@ -20,11 +19,10 @@ const VARIANTS = [
 export type ThinkingLoaderVariant = (typeof VARIANTS)[number]
 
 /**
- * Shapes used in the random morph cycle. The `lingxi` and `play` entry shapes
- * plus the `orb` terminal shape are excluded so a logo handoff never lands on
- * an entry or terminal silhouette mid-stream.
+ * Shapes used in the random morph cycle. The `play` entry shape and `orb`
+ * terminal shape are excluded so the cycle never lands on either mid-stream.
  */
-const CYCLE_VARIANTS = VARIANTS.filter((v) => v !== 'lingxi' && v !== 'play' && v !== 'orb')
+const CYCLE_VARIANTS = VARIANTS.filter((v) => v !== 'play' && v !== 'orb')
 
 /**
  * Deterministic integer hash — turns a step index into a spread-out pseudo-
@@ -92,19 +90,6 @@ function variantAtNow(): { variant: ThinkingLoaderVariant; msUntilNext: number }
  * contain-fit to the canvas. Animations live in the CSS module.
  */
 const VARIANT_SHAPES: Record<ThinkingLoaderVariant, ReactNode> = {
-  /**
-   * The production Lingxi mark from `public/logo_icon_black.svg`, normalized
-   * into the loader's 100x100 canvas. Keeping the real paths in this stage is
-   * what makes the logo dissolve into the blobs instead of swapping to an
-   * unrelated starter glyph.
-   */
-  lingxi: (
-    <g transform='translate(-30 -34) scale(1.020408 1.162791)'>
-      <path d='M44.73 40.05H41.59L35.32 88.28a.07.07 0 0 0 0 0c-.17 1.19-3.61 22 10.5 25.56a15.78 15.78 0 0 0 3.29.35c5.52-.06 20-1.49 38.4-13.14L80.54 90S59.15 102.17 54 87.74a14.5 14.5 0 0 1-.59-7.1l4.93-32.12s1.73-7.46-3.87-8.41Z' />
-      <path d='m65.61 55.09 34.7 54.57s2.46 4.66 9.42 4.58l12.73-.43-35-52.58S81.6 52.33 65.61 55.09Z' />
-      <path d='M88.6 54s9.14-17.25 25.54-14c0 0 9.51 1.61 7.08 15.51 0 0-4.52 18.86-11.54 25.08a1.72 1.72 0 0 1-2.58-.33l-5.85-8.76a1.42 1.42 0 0 1-.07-1.45c.29-.54.76-1.48 1.48-3.13C102.66 66.91 108.37 46 88.6 54Z' />
-    </g>
-  ),
   play: (
     <path d='M 31 20 C 27 17 22 20 22 25 V 75 C 22 80 27 83 31 80 L 76 55 C 81 52 81 48 76 45 Z' />
   ),
@@ -224,7 +209,6 @@ const WIDE_RELAY_LAYOUT = (
  * match the loader. Keys are the shape names; the comment is the world concept.
  */
 const VARIANT_PHRASE: Record<ThinkingLoaderVariant, string> = {
-  lingxi: 'Ready',
   play: 'Ready',
   corners: 'Orchestrating…', // Mothership — the Core directing the work
   squeeze: 'Working…', // Pod — one agent on a task
@@ -237,7 +221,6 @@ const VARIANT_PHRASE: Record<ThinkingLoaderVariant, string> = {
 }
 
 const VARIANT_PHRASE_ZH: Record<ThinkingLoaderVariant, string> = {
-  lingxi: '就绪',
   play: '就绪',
   corners: '编排中…',
   squeeze: '执行中…',

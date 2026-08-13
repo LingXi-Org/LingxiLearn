@@ -1,0 +1,79 @@
+{
+  "schema_version": "curriculum-graph-builder-task.v1",
+  "task_id": "turn_math_002",
+  "learning_context": {
+    "topic": "导数应用",
+    "learning_objective": "理解导数如何用于研究函数单调性",
+    "source_materials": [
+      {
+        "source_id": "msg_002",
+        "kind": "user_message",
+        "content": "我正在学用导数判断函数单调性，这一部分建立在函数图像理解上。"
+      }
+    ]
+  },
+  "graph_policy": {
+    "mode": "auto",
+    "preferred_graph_id": "kg_math_analysis",
+    "max_new_nodes": 12,
+    "allow_position_hints": false
+  },
+  "existing_graphs": [
+    {
+      "graph_id": "kg_math_analysis",
+      "revision": 7,
+      "title": "高等数学：函数基础",
+      "domain": "高等数学",
+      "nodes": [
+        {
+          "id": "concept.function.definition",
+          "label": "函数概念",
+          "type": "concept",
+          "importance": 0.9,
+          "is_current": false,
+          "learning_state": "demonstrated",
+          "level": 0
+        },
+        {
+          "id": "concept.function.graph",
+          "label": "函数图像",
+          "type": "concept",
+          "importance": 0.8,
+          "is_current": false,
+          "learning_state": "emerging",
+          "level": 1
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge.function-definition.foundation-for-graph",
+          "source": "concept.function.definition",
+          "target": "concept.function.graph",
+          "relation": "foundation_for",
+          "relation_label": "基础",
+          "directed": true,
+          "importance": 0.9
+        }
+      ],
+      "root_node_ids": [
+        "concept.function.definition"
+      ]
+    }
+  ],
+  "learner_signals": {
+    "current_concepts": [
+      {
+        "label": "导数应用"
+      }
+    ],
+    "concept_states": [
+      {
+        "node_id": "concept.function.graph",
+        "state": "needs_recheck",
+        "evidence_ids": [
+          "ev_21"
+        ]
+      }
+    ]
+  }
+}

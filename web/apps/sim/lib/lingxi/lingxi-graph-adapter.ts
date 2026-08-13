@@ -589,6 +589,12 @@ export function projectLingxiGraphEvents(
     if (event.kind === 'assistant.delta' || event.kind === 'agent.output') {
       const text = eventText(event)
       if (!text) continue
+      if (event.kind === 'agent.output' && event.agent === 'adaptive_pedagogy') {
+        // The deep-dive graph has exactly one learner-facing writer. Keep its
+        // latest Chinese response in the chat body while retaining the run
+        // block for the debug trace.
+        assistantText = text
+      }
       if (event.kind === 'assistant.delta' && !agent) {
         assistantText += text
         blocks.push({ type: 'text', content: text, timestamp: event.sequence })

@@ -336,6 +336,21 @@ async def post_agent_message(
     return {"status": "accepted"}
 
 
+@router.get("/agent-tasks/{task_id}/knowledge-graph")
+async def get_agent_knowledge_graph(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        graph = await service_of(request).agent_knowledge_graph(task_id, context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+    if graph is None:
+        raise not_found()
+    return graph
+
+
 @router.post("/agent-tasks/{task_id}/quiz-submissions", status_code=202)
 async def submit_agent_quiz(
     task_id: str,

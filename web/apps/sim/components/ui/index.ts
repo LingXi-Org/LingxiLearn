@@ -15,3 +15,4 @@ export {
 } from './select'
 export { ShimmerText } from './shimmer-text'
 export { ThinkingLoader, type ThinkingLoaderVariant } from './thinking-loader'
+export { LingxiLogoMorph } from './lingxi-logo-morph'

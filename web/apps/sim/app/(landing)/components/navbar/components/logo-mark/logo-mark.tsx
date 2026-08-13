@@ -2,33 +2,23 @@
 
 import { type CSSProperties, type ReactNode, useState } from 'react'
 import { cn } from '@sim/emcn'
-import { ThinkingLoader } from '@/components/ui'
+import { LingxiLogoMorph } from '@/components/ui'
 
 interface LogoMarkProps {
   /** Server-rendered Sim wordmark, shown by default. */
   children: ReactNode
 }
 
-/**
- * Loader ink that matches the wordmark - keeps the loader's default radial gloss
- * (center darker, edge lifted ~24% toward white, the same relative step as the
- * stock `#2c2c2c → #5f5f5f`) but recentres it on `var(--text-body)`, the
- * navbar's text color, so each blob's center matches the static "sim" mark it
- * dissolves from. Glow off so nothing over-lightens the silhouette.
- */
-const LOADER_INK = {
-  '--tl-grad-inner': 'var(--text-body)',
-  '--tl-grad-outer': 'color-mix(in srgb, var(--text-body) 76%, #fff)',
-  '--tl-glow': 'transparent',
+/** Keep the animated arc ink aligned with the resting wordmark. */
+const MORPH_INK = {
+  '--llm-ink': 'var(--text-body)',
 } as CSSProperties
 
 /**
- * Navbar logo with a hover easter egg: the static "sim" wordmark dissolves into
- * the cycling thinking loader, inked to match the wordmark's solid
- * `--text-body` fill - so the mark appears to come alive in the same
- * material. The wordmark stays server-rendered (passed as children) and
- * crawlable; only this hover shell is client. The loader mounts on hover (no
- * idle timers) and sits behind the wordmark, revealed as the wordmark fades.
+ * Navbar logo with a hover easter egg: the static mark hands off to three
+ * phase-shifted arc trails that accelerate around the center, then decelerate
+ * and restore the production logo. The server-rendered wordmark remains the
+ * resting state; the animated SVG is mounted only while the shell is active.
  */
 export function LogoMark({ children }: LogoMarkProps) {
   const [hovered, setHovered] = useState(false)
@@ -59,7 +49,7 @@ export function LogoMark({ children }: LogoMarkProps) {
       </span>
       {hovered ? (
         <span aria-hidden className='absolute inset-0 z-0 flex items-center justify-center'>
-          <ThinkingLoader size={28} startVariant='lingxi' startHoldMs={360} style={LOADER_INK} />
+          <LingxiLogoMorph size={28} style={MORPH_INK} />
         </span>
       ) : null}
     </span>

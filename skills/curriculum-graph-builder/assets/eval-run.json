@@ -1,0 +1,108 @@
+{
+  "schema_version": "skill-eval-run.v1",
+  "suite_id": "curriculum-graph-builder-v1-smoke",
+  "skill": "curriculum-graph-builder",
+  "skill_path": "skills/curriculum-graph-builder",
+  "cases": [
+    {
+      "case_id": "create-from-course-pack",
+      "task": {
+        "schema_version": "curriculum-graph-builder-task.v1",
+        "task_id": "turn_math_001",
+        "learning_context": {
+          "topic": "函数与导数",
+          "source_materials": [
+            {
+              "source_id": "lesson_001",
+              "kind": "course_pack",
+              "content": "函数定义是理解函数图像的基础；理解函数图像后再讨论导数应用。"
+            }
+          ]
+        },
+        "existing_graphs": []
+      },
+      "validator": "curriculum-graph-builder-result.v1",
+      "expectations": {
+        "required_output_keys": [
+          "decision.action",
+          "graph_patch.add_nodes",
+          "graph_patch.add_edges"
+        ],
+        "max_blocking_hops": 0,
+        "traceability_required": true
+      },
+      "output": {
+        "schema_version": "curriculum-graph-builder-result.v1",
+        "task_id": "turn_math_001",
+        "status": "ok",
+        "decision": {
+          "action": "create_graph",
+          "target_graph_id": null,
+          "base_revision": null,
+          "confidence": "high",
+          "reason": "课程包提供了明确的概念和先修关系。"
+        },
+        "graph_patch": {
+          "add_nodes": [
+            {
+              "id": "concept.function.definition",
+              "label": "函数概念",
+              "type": "concept",
+              "importance": 0.9,
+              "is_current": false,
+              "learning_state": "unknown",
+              "source_refs": ["lesson_001"]
+            },
+            {
+              "id": "concept.function.graph",
+              "label": "函数图像",
+              "type": "concept",
+              "importance": 0.8,
+              "is_current": false,
+              "learning_state": "unknown",
+              "source_refs": ["lesson_001"]
+            }
+          ],
+          "update_nodes": [],
+          "add_edges": [
+            {
+              "id": "edge.function-definition.foundation-for-graph",
+              "source": "concept.function.definition",
+              "target": "concept.function.graph",
+              "relation": "foundation_for",
+              "relation_label": "基础",
+              "directed": true,
+              "source_refs": ["lesson_001"]
+            }
+          ],
+          "update_edges": [],
+          "learner_overlay_updates": []
+        },
+        "warnings": [],
+        "evidence_summary": [
+          {
+            "claim": "函数概念为理解函数图像提供基础。",
+            "source_refs": ["lesson_001"]
+          }
+        ]
+      },
+      "trajectory": {
+        "learner_facing_writer_count": 0,
+        "blocking_hops": 0,
+        "latency_ms": 700,
+        "response_blocked_by_sidecar": false,
+        "turns": [
+          {
+            "event": "course-pack-authoring",
+            "writer": "curriculum-graph-builder",
+            "audience": "host",
+            "blocking": false
+          }
+        ]
+      },
+      "outcome": {
+        "evidence_refs": ["lesson_001"]
+      }
+    }
+  ]
+}

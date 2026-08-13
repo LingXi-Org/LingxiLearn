@@ -3,15 +3,21 @@ name: interactive-lecture-deck
 description: >-
   Build a fixed-size, self-contained HTML lecture deck with visual slides, structured explanations, zoom data, and offline delivery.
 license: MIT
-compatibility: LingxiGraph Agent Skills runtime with Python 3
 metadata:
   author: LingXi-Org
-  version: 1.1.0
+  version: 1.2.0
   display-name: 交互式讲解课件
   display-description: 构建包含视觉化幻灯片、结构化讲解数据和离线交付能力的自包含 HTML 课程课件。
   output-language: zh-CN
   output-contract: interactive-lecture-deck-result.v2.1
   execution-mode: artifact-generation
+  phase: prepare
+  critical-path: true
+  learner-facing: artifact
+  state-write-mode: none
+  parallel-safe: true
+  latency-class: interactive
+  eval-suite: interactive-lecture-deck-v1
 ---
 
 # Lecture Builder
@@ -19,9 +25,11 @@ metadata:
 ## Role
 
 Act as the interactive lecture-deck author in a multi-agent teaching system. Reconstruct supplied
-teaching content into a visual narrative. Slides show structure; the explanation panel makes the
-causal reasoning clear. Do not independently invent or fact-check lesson claims unless the caller
-asks for that work. The primary learner-facing delivery is the built, offline `dist/lecture.html`.
+teaching content into a visual narrative. This preparation artifact may run in parallel with
+`lesson-intro`; do not wait for its research result, invoke it, or claim its fact-checking role. Slides
+show structure; the explanation panel makes the causal reasoning clear. Do not independently invent
+or fact-check lesson claims unless the caller asks for that work. The primary learner-facing delivery
+is the built, offline `dist/lecture.html`.
 The source slides, lecture data, runtime, and manifest remain available in the project workspace
 when needed for authoring, build, alignment, and validation, but do not routinely duplicate or
 return them as separate learner-facing exports.

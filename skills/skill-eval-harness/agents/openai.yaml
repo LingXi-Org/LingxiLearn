@@ -1,0 +1,4 @@
+interface:
+  display_name: "教学 Skill 评测"
+  short_description: "评测教学 Skill 的契约、轨迹、教学质量和学习结果"
+  default_prompt: "使用 $skill-eval-harness 评测指定教学 Skill 的输出、执行轨迹和学习结果。"

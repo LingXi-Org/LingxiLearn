@@ -1,0 +1,98 @@
+{
+  "schema_version": "curriculum-graph-builder-result.v1",
+  "task_id": "turn_math_001",
+  "status": "ok",
+  "decision": {
+    "action": "create_graph",
+    "target_graph_id": null,
+    "base_revision": null,
+    "confidence": "high",
+    "reason": "当前用户没有已有知识图谱，且材料提供了函数概念、函数图像与导数应用之间的明确课程关系。",
+    "proposed_title": "高等数学：函数与导数",
+    "proposed_domain": "高等数学"
+  },
+  "graph_patch": {
+    "add_nodes": [
+      {
+        "id": "concept.function.definition",
+        "label": "函数概念",
+        "type": "concept",
+        "importance": 0.9,
+        "is_current": false,
+        "learning_state": "unknown",
+        "level": 0,
+        "source_refs": [
+          "lesson_001"
+        ]
+      },
+      {
+        "id": "concept.function.graph",
+        "label": "函数图像",
+        "type": "concept",
+        "importance": 0.8,
+        "is_current": true,
+        "learning_state": "emerging",
+        "level": 1,
+        "source_refs": [
+          "lesson_001"
+        ]
+      },
+      {
+        "id": "topic.derivative.application",
+        "label": "导数应用",
+        "type": "topic",
+        "importance": 0.7,
+        "is_current": false,
+        "learning_state": "unknown",
+        "level": 2,
+        "source_refs": [
+          "lesson_001"
+        ]
+      }
+    ],
+    "update_nodes": [],
+    "add_edges": [
+      {
+        "id": "edge.function-definition.foundation-for-graph",
+        "source": "concept.function.definition",
+        "target": "concept.function.graph",
+        "relation": "foundation_for",
+        "relation_label": "基础",
+        "directed": true,
+        "importance": 0.9,
+        "source_refs": [
+          "lesson_001"
+        ]
+      },
+      {
+        "id": "edge.function-graph.prerequisite-of-derivative-application",
+        "source": "concept.function.graph",
+        "target": "topic.derivative.application",
+        "relation": "prerequisite_of",
+        "relation_label": "先修",
+        "directed": true,
+        "importance": 0.8,
+        "source_refs": [
+          "lesson_001"
+        ]
+      }
+    ],
+    "update_edges": [],
+    "learner_overlay_updates": []
+  },
+  "warnings": [],
+  "evidence_summary": [
+    {
+      "claim": "函数概念为理解函数图像提供基础。",
+      "source_refs": [
+        "lesson_001"
+      ]
+    },
+    {
+      "claim": "函数图像是进入导数应用学习的重要先修内容。",
+      "source_refs": [
+        "lesson_001"
+      ]
+    }
+  ]
+}

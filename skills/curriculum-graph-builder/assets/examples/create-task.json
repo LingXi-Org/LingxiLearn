@@ -1,0 +1,39 @@
+{
+  "schema_version": "curriculum-graph-builder-task.v1",
+  "task_id": "turn_math_001",
+  "learning_context": {
+    "topic": "函数与导数",
+    "learning_objective": "理解函数概念、函数图像与导数应用之间的学习关系",
+    "source_materials": [
+      {
+        "source_id": "lesson_001",
+        "kind": "lecture_deck",
+        "content": {
+          "summary": "函数定义是理解函数图像的基础；理解函数图像后再讨论导数在单调性与极值判断中的应用。"
+        }
+      }
+    ]
+  },
+  "graph_policy": {
+    "mode": "auto",
+    "max_new_nodes": 12,
+    "allow_position_hints": false
+  },
+  "existing_graphs": [],
+  "learner_signals": {
+    "current_concepts": [
+      {
+        "label": "函数图像"
+      }
+    ],
+    "concept_states": [
+      {
+        "label": "函数图像",
+        "state": "emerging",
+        "evidence_ids": [
+          "ev_11"
+        ]
+      }
+    ]
+  }
+}

@@ -7,7 +7,6 @@
 
 <p align="center">
   <a href="https://deepwiki.com/simstudioai/sim" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/Ask-DeepWiki-E6E6E6?labelColor=C3C3C3&color=E6E6E6" alt="Ask DeepWiki"></a>
-  <a href="https://cursor.com/link/prompt?text=Help%20me%20set%20up%20Sim%20locally.%20Follow%20these%20steps%3A%0A%0A1.%20First%2C%20verify%20Docker%20is%20installed%20and%20running%3A%0A%20%20%20docker%20--version%0A%20%20%20docker%20info%0A%0A2.%20Clone%20the%20repository%3A%0A%20%20%20git%20clone%20https%3A%2F%2Fgithub.com%2Fsimstudioai%2Fsim.git%0A%20%20%20cd%20sim%0A%0A3.%20Generate%20required%20secrets%20%28the%20stack%20will%20not%20start%20without%20them%29%3A%0A%20%20%20cat%20%3E%20.env%20%3C%3C%20EOF%0A%20%20%20BETTER_AUTH_SECRET%3D%24%28openssl%20rand%20-hex%2032%29%0A%20%20%20ENCRYPTION_KEY%3D%24%28openssl%20rand%20-hex%2032%29%0A%20%20%20INTERNAL_API_SECRET%3D%24%28openssl%20rand%20-hex%2032%29%0A%20%20%20CRON_SECRET%3D%24%28openssl%20rand%20-hex%2032%29%0A%20%20%20EOF%0A%0A4.%20Start%20the%20services%20with%20Docker%20Compose%3A%0A%20%20%20docker%20compose%20-f%20docker-compose.prod.yml%20up%20-d%0A%0A4.%20Wait%20for%20all%20containers%20to%20be%20healthy%20(this%20may%20take%201-2%20minutes)%3A%0A%20%20%20docker%20compose%20-f%20docker-compose.prod.yml%20ps%0A%0A5.%20Verify%20the%20app%20is%20accessible%20at%20http%3A%2F%2Flocalhost%3A3000%0A%0AIf%20there%20are%20any%20errors%2C%20help%20me%20troubleshoot%20them.%20Common%20issues%3A%0A-%20Port%203000%2C%203002%2C%20or%205432%20already%20in%20use%0A-%20Docker%20not%20running%0A-%20Insufficient%20memory%20(needs%2012GB%2B%20RAM)%0A%0AFor%20local%20AI%20models%20with%20Ollama%2C%20use%20this%20instead%20of%20step%203%3A%0A%20%20%20docker%20compose%20-f%20docker-compose.ollama.yml%20--profile%20setup%20up%20-d"><img src="https://img.shields.io/badge/Set%20Up%20with-Cursor-E6E6E6?logo=cursor&logoColor=1A1A1A&labelColor=C3C3C3&color=E6E6E6" alt="Set Up with Cursor"></a>
 </p>
 
 <p align="center">
@@ -16,7 +15,7 @@
   </a>
 </p>
 
-<p align="center">A workspace to build, deploy and manage AI agents and workflows.</p>
+<p align="center">LingxiLearn 的 Sim 前端工作区：为课程任务提供对话、工具调用、思考摘要与产物展示。</p>
 
 ## Quickstart
 
@@ -24,15 +23,19 @@
 
 <a href="https://sim.ai" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/Open-sim.ai-3B3B3B?labelColor=1A1A1A" alt="Open sim.ai"></a>
 
-### Self-hosted
+### Local development
 
 ```bash
-git clone https://github.com/simstudioai/sim.git && cd sim
-bun install
-bun run setup
+docker compose -f ../docker-compose.dev.yml up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+从仓库根目录执行：
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+前端源码通过 bind mount 加载，访问 [http://localhost:3000](http://localhost:3000)；API 在 [http://localhost:8080](http://localhost:8080)。
 
 <p align="center">
   <img src="apps/sim/public/static/readme-platform.png" alt="The Sim platform — chat on the left, the visual workflow builder on the right" width="100%"/>
@@ -70,58 +73,23 @@ Open [http://localhost:3000](http://localhost:3000)
   </tr>
 </table>
 
-## Self-hosting
+## Deployment
 
-**Requirements:** [Bun](https://bun.sh/) and [Docker](https://www.docker.com/).
-
-`bun run setup` is an interactive wizard: it provisions the database, generates secrets, writes your `.env` files, connects a Chat API key, and starts Sim the way you choose:
-
-- **Local dev** — run from source to contribute or hack on Sim
-- **Docker Compose** — a self-contained instance for testing self-hosting
-- **Kubernetes (Helm)** — deploy to a local cluster
-
-When it finishes, open [http://localhost:3000](http://localhost:3000).
-
-Reconfigure an optional capability without rerunning the full wizard:
+根目录只保留两套 Compose。
 
 ```bash
-bun run setup status
-bun run setup email
-bun run setup storage
-bun run setup sandbox
-bun run setup jobs
-bun run setup cache
-bun run setup knowledge
-bun run setup llm
-bun run setup integration slack
+# 本地开发：源码 bind mount，前端 3000，API 8080
+docker compose -f docker-compose.dev.yml up --build
+
+# 生产：静态前端构建产物由 API 单进程提供
+docker compose up --build
 ```
 
-`bun run setup status` detects the effective local-dev, Docker Compose, or current-context
-Helm configuration and reports configured, missing, or invalid capabilities and OAuth
-integrations without printing credential values. This is separate from `bun run sim status`,
-which reports whether installed services are running and healthy.
-
-Manage your install with `bun run sim`:
-
-```bash
-bun run sim start | stop | restart   # bring your install up / down / cycle
-bun run sim update                   # pull/rebuild and apply Compose images
-bun run sim status                    # what's installed and healthy
-bun run sim logs                      # follow logs
-bun run sim doctor                    # diagnose configuration problems
-bun run sim down                      # remove containers (data kept)
-bun run sim reset                     # archive .env and wipe managed data
-```
-
-`sim` detects how you're running (Docker Compose, local dev, or Kubernetes) and acts accordingly.
-
-Prefer a bare `sim`? Run `bun link` once — but note `sim` lands in `~/.bun/bin`, which Homebrew's bun doesn't add to your PATH, so you may need `export PATH="$HOME/.bun/bin:$PATH"` in your shell profile.
-
-Sim also supports local models via [Ollama](https://ollama.ai) and [vLLM](https://docs.vllm.ai/). See the [self-hosting docs](https://docs.sim.ai/self-hosting/docker) for details.
+生产路径只启动 Postgres、一次性迁移、静态前端构建和一个 FastAPI API 实例；LingxiGraph 的任务更新使用 REST/SSE，不需要 Realtime、Redis 或 Cron 容器。
 
 ## Chat API Keys
 
-Chat is a Sim-managed service. `bun run setup` connects a Chat API key for you — sign in when it opens your browser and the key is stored automatically. To view, create, or revoke keys later, go to [sim.ai/selfhost/settings/chat-keys](https://sim.ai/selfhost/settings/chat-keys).
+LingxiLearn 使用 LingxiIdentity 与 LingxiGraph API，不再依赖 Sim 自带的 Chat API Key 管理器。
 
 ## Environment Variables
 
@@ -143,8 +111,7 @@ See the [environment variables reference](https://docs.sim.ai/self-hosting/envir
 - **Flow Editor**: [ReactFlow](https://reactflow.dev/)
 - **Docs**: [Fumadocs](https://fumadocs.vercel.app/)
 - **Monorepo**: [Turborepo](https://turborepo.org/)
-- **Realtime**: [Socket.io](https://socket.io/)
-- **Background Jobs**: [Trigger.dev](https://trigger.dev/)
+- **Task streaming**: REST + Server-Sent Events (SSE)
 - **Remote Code Execution**: [E2B](https://www.e2b.dev/)
 - **Isolated Code Execution**: [isolated-vm](https://github.com/laverdet/isolated-vm)
 

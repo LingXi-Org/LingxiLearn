@@ -39,8 +39,7 @@ function routePath(contract: AnyApiRouteContract, input: object): string {
 /**
  * The imported browser components keep their strongly typed Sim contracts.
  * LingxiGraph has a deliberately smaller API, so every Sim-owned contract is
- * rejected locally before fetch. The complete upstream transport remains in
- * sim-backend-unwired/api-client/request.sim.ts for source parity.
+ * rejected locally before fetch.
  */
 export async function requestJson<C extends AnyApiRouteContract>(
   contract: C,

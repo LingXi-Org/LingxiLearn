@@ -16,16 +16,25 @@ from sqlalchemy import delete, event, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ..config import Settings
+from .knowledge_graph import GraphRevisionConflict, graph_snapshot_dict, validate_result
+
+__all__ = ["Database", "Repository", "GraphRevisionConflict"]
 from .models import (
     AgentTask,
     AgentTaskEvent,
+    AgentTaskSidecar,
     Base,
+    KnowledgeGraph,
+    KnowledgeGraphEdge,
+    KnowledgeGraphEvent,
+    KnowledgeGraphLearnerOverlay,
+    KnowledgeGraphNode,
     Learner,
     Mastery,
+    QuizSubmission,
     ReportRecord,
     RunEvent,
     Session,
-    QuizSubmission,
     utcnow,
 )
 
@@ -242,6 +251,8 @@ class Repository:
                 row.deck_result = value
             elif agent == "quiz_generator":
                 row.quiz_result = value
+            elif agent == "adaptive_pedagogy":
+                row.adaptive_result = value
             elif agent == "handoff":
                 row.handoff_result = value
             elif agent == "user_message":
@@ -295,7 +306,7 @@ class Repository:
                 if existing is not None:
                     if existing.submission_id == submission_id:
                         return _quiz_submission_dict(existing)
-                    raise ValueError("already_submitted")
+                    raise ValueError("already_submitted") from None
                 raise
             await s.refresh(row)
             return _quiz_submission_dict(row)
@@ -406,6 +417,335 @@ class Repository:
                 }
                 for r in rows
             ]
+
+    # -- sidecars --------------------------------------------------------
+
+    async def upsert_agent_sidecar(
+        self,
+        *,
+        sidecar_id: str,
+        task_id: str,
+        learner_id: str,
+        kind: str,
+        input: dict[str, Any],
+    ) -> dict[str, Any]:
+        async with self.db.session() as s:
+            row = await s.scalar(
+                select(AgentTaskSidecar).where(
+                    AgentTaskSidecar.task_id == task_id,
+                    AgentTaskSidecar.kind == kind,
+                )
+            )
+            if row is None:
+                row = AgentTaskSidecar(
+                    id=sidecar_id,
+                    task_id=task_id,
+                    learner_id=learner_id,
+                    kind=kind,
+                    status="queued",
+                    input=input,
+                    output={},
+                    error="",
+                    attempts=0,
+                )
+                s.add(row)
+            elif row.input == input and row.status in {"queued", "running", "succeeded"}:
+                await s.commit()
+                return _sidecar_dict(row)
+            elif row.status in {"failed", "queued", "succeeded"}:
+                row.input = input
+                row.status = "queued"
+                row.error = ""
+                row.output = {}
+            await s.commit()
+            return _sidecar_dict(row)
+
+    async def claim_agent_sidecar(self, sidecar_id: str) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.get(AgentTaskSidecar, sidecar_id)
+            if row is None or row.status in {"running", "succeeded"}:
+                return None
+            row.status = "running"
+            row.attempts = int(row.attempts or 0) + 1
+            row.updated_at = utcnow()
+            await s.commit()
+            return _sidecar_dict(row)
+
+    async def finish_agent_sidecar(
+        self, sidecar_id: str, *, status: str, output: dict[str, Any] | None = None, error: str = ""
+    ) -> None:
+        async with self.db.session() as s:
+            row = await s.get(AgentTaskSidecar, sidecar_id)
+            if row is None:
+                return
+            row.status = status
+            row.output = output or {}
+            row.error = error
+            row.updated_at = utcnow()
+            await s.commit()
+
+    async def list_agent_sidecars(self, task_id: str, learner_id: str) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(AgentTaskSidecar)
+                    .where(
+                        AgentTaskSidecar.task_id == task_id,
+                        AgentTaskSidecar.learner_id == learner_id,
+                    )
+                    .order_by(AgentTaskSidecar.created_at)
+                )
+            ).scalars()
+            return [_sidecar_dict(row) for row in rows]
+
+    async def queued_agent_sidecars(self) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(AgentTaskSidecar).where(
+                        AgentTaskSidecar.status.in_(("queued", "running"))
+                    )
+                )
+            ).scalars()
+            return [_sidecar_dict(row) for row in rows]
+
+    # -- knowledge graphs -----------------------------------------------
+
+    async def get_knowledge_graph(
+        self, graph_id: str, learner_id: str
+    ) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            graph = await s.scalar(
+                select(KnowledgeGraph).where(
+                    KnowledgeGraph.graph_id == graph_id,
+                    KnowledgeGraph.learner_id == learner_id,
+                )
+            )
+            if graph is None:
+                return None
+            nodes = (
+                await s.execute(
+                    select(KnowledgeGraphNode)
+                    .where(KnowledgeGraphNode.graph_id == graph_id)
+                    .order_by(KnowledgeGraphNode.level, KnowledgeGraphNode.node_id)
+                )
+            ).scalars().all()
+            edges = (
+                await s.execute(
+                    select(KnowledgeGraphEdge)
+                    .where(KnowledgeGraphEdge.graph_id == graph_id)
+                    .order_by(KnowledgeGraphEdge.edge_id)
+                )
+            ).scalars().all()
+            overlays = (
+                await s.execute(
+                    select(KnowledgeGraphLearnerOverlay).where(
+                        KnowledgeGraphLearnerOverlay.graph_id == graph_id,
+                        KnowledgeGraphLearnerOverlay.learner_id == learner_id,
+                    )
+                )
+            ).scalars().all()
+            return graph_snapshot_dict(graph, nodes, edges, overlays)
+
+    async def list_knowledge_graph_candidates(
+        self, learner_id: str, query: str, limit: int = 3
+    ) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            graphs = (
+                await s.execute(
+                    select(KnowledgeGraph)
+                    .where(KnowledgeGraph.learner_id == learner_id)
+                    .order_by(KnowledgeGraph.updated_at.desc())
+                )
+            ).scalars().all()
+            normalized_query = "".join(query.split()).casefold()
+            terms = {term.casefold() for term in query.split() if term.strip()}
+            if normalized_query:
+                terms.add(normalized_query)
+                terms.update(normalized_query[index : index + 2] for index in range(max(0, len(normalized_query) - 1)))
+            scored: list[tuple[int, KnowledgeGraph]] = []
+            for graph in graphs:
+                nodes = (
+                    await s.execute(
+                        select(KnowledgeGraphNode).where(KnowledgeGraphNode.graph_id == graph.graph_id)
+                    )
+                ).scalars().all()
+                haystack = " ".join(
+                    [graph.title, graph.domain, *[node.label for node in nodes], *sum((node.aliases or [] for node in nodes), [])]
+                ).casefold()
+                score = sum(1 for term in terms if term in haystack)
+                if score:
+                    scored.append((score, graph))
+            scored.sort(
+                key=lambda item: (-item[0], -(item[1].updated_at.timestamp() if item[1].updated_at else 0))
+            )
+            snapshots: list[dict[str, Any]] = []
+            for _, graph in scored[:limit]:
+                snapshot = await self.get_knowledge_graph(graph.graph_id, learner_id)
+                if snapshot is not None:
+                    snapshots.append(snapshot)
+            return snapshots
+
+    async def apply_knowledge_graph_result(
+        self,
+        *,
+        learner_id: str,
+        task_id: str,
+        result: dict[str, Any],
+        graph_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if result.get("status") != "ok":
+            target = result["decision"].get("target_graph_id")
+            return await self.get_knowledge_graph(target, learner_id) if target else None
+        action = result["decision"]["action"]
+        target = result["decision"].get("target_graph_id")
+        existing_for_validation = (
+            await self.get_knowledge_graph(target, learner_id) if target else None
+        )
+        if action in {"extend_graph", "update_graph"} and existing_for_validation is not None:
+            expected_revision = result["decision"].get("base_revision")
+            if int(existing_for_validation["revision"]) != int(expected_revision):
+                raise GraphRevisionConflict("knowledge graph revision conflict")
+        validate_result(result, existing_for_validation)
+        if action == "no_change":
+            return await self.get_knowledge_graph(target, learner_id) if target else None
+        patch = result["graph_patch"]
+        async with self.db.session() as s:
+            selected_id = graph_id or target
+            graph = await s.scalar(
+                select(KnowledgeGraph).where(
+                    KnowledgeGraph.graph_id == selected_id,
+                    KnowledgeGraph.learner_id == learner_id,
+                )
+            ) if selected_id else None
+            if action == "create_graph":
+                if graph is not None:
+                    prior_event = await s.scalar(
+                        select(KnowledgeGraphEvent).where(
+                            KnowledgeGraphEvent.graph_id == selected_id,
+                            KnowledgeGraphEvent.learner_id == learner_id,
+                            KnowledgeGraphEvent.task_id == task_id,
+                        )
+                    )
+                    if prior_event is not None:
+                        await s.rollback()
+                        return await self.get_knowledge_graph(selected_id, learner_id)
+                    raise GraphRevisionConflict("graph id already exists")
+                if not selected_id:
+                    raise ValueError("host must allocate graph_id for create_graph")
+                graph = KnowledgeGraph(
+                    graph_id=selected_id,
+                    learner_id=learner_id,
+                    title=result["decision"].get("proposed_title") or "我的知识图谱",
+                    domain=result["decision"].get("proposed_domain") or "",
+                    revision=0,
+                )
+                s.add(graph)
+                await s.flush()
+            else:
+                if graph is None:
+                    raise KeyError("knowledge graph not found")
+                expected = result["decision"].get("base_revision")
+                if int(graph.revision) != int(expected):
+                    raise GraphRevisionConflict("knowledge graph revision conflict")
+
+            existing_nodes = {
+                row.node_id: row
+                for row in (
+                    await s.execute(select(KnowledgeGraphNode).where(KnowledgeGraphNode.graph_id == graph.graph_id))
+                ).scalars()
+            }
+            existing_edges = {
+                row.edge_id: row
+                for row in (
+                    await s.execute(select(KnowledgeGraphEdge).where(KnowledgeGraphEdge.graph_id == graph.graph_id))
+                ).scalars()
+            }
+            existing_overlay = {
+                row.node_id: row
+                for row in (
+                    await s.execute(
+                        select(KnowledgeGraphLearnerOverlay).where(
+                            KnowledgeGraphLearnerOverlay.graph_id == graph.graph_id,
+                            KnowledgeGraphLearnerOverlay.learner_id == learner_id,
+                        )
+                    )
+                ).scalars()
+            }
+            for node in patch["add_nodes"]:
+                values = dict(node)
+                is_current = bool(values.pop("is_current", False))
+                learning_state = values.pop("learning_state", "unknown")
+                values["graph_id"] = graph.graph_id
+                values["node_id"] = values.pop("id")
+                s.add(KnowledgeGraphNode(**values))
+                overlay = KnowledgeGraphLearnerOverlay(
+                    graph_id=graph.graph_id,
+                    learner_id=learner_id,
+                    node_id=values["node_id"],
+                    is_current=is_current,
+                    learning_state=learning_state,
+                    evidence_ids=[],
+                )
+                s.add(overlay)
+                existing_overlay[values["node_id"]] = overlay
+            for update in patch["update_nodes"]:
+                row = existing_nodes[update["id"]]
+                for key, value in update["set"].items():
+                    setattr(row, key, value)
+            for edge in patch["add_edges"]:
+                values = dict(edge)
+                if values["relation"] in {"contrasts_with", "commonly_confused_with", "related_to"}:
+                    values["source"], values["target"] = sorted(
+                        (values["source"], values["target"])
+                    )
+                values["graph_id"] = graph.graph_id
+                values["edge_id"] = values.pop("id")
+                values["source_node_id"] = values.pop("source")
+                values["target_node_id"] = values.pop("target")
+                s.add(KnowledgeGraphEdge(**values))
+            for update in patch["update_edges"]:
+                row = existing_edges[update["id"]]
+                for key, value in update["set"].items():
+                    setattr(row, key, value)
+            for update in patch["learner_overlay_updates"]:
+                row = existing_overlay.get(update["node_id"])
+                if row is None:
+                    row = KnowledgeGraphLearnerOverlay(
+                        graph_id=graph.graph_id,
+                        learner_id=learner_id,
+                        node_id=update["node_id"],
+                        is_current=False,
+                        learning_state="unknown",
+                        evidence_ids=[],
+                    )
+                    s.add(row)
+                if "is_current" in update:
+                    row.is_current = bool(update["is_current"])
+                if "learning_state" in update:
+                    row.learning_state = update["learning_state"]
+                if "evidence_ids" in update:
+                    row.evidence_ids = list(update["evidence_ids"])
+            if result["decision"].get("proposed_title"):
+                graph.title = result["decision"]["proposed_title"]
+            if result["decision"].get("proposed_domain"):
+                graph.domain = result["decision"]["proposed_domain"]
+            base_revision = int(graph.revision)
+            graph.revision = base_revision + 1
+            graph.updated_at = utcnow()
+            s.add(
+                KnowledgeGraphEvent(
+                    event_id=f"{task_id}:{graph.graph_id}:{graph.revision}",
+                    learner_id=learner_id,
+                    graph_id=graph.graph_id,
+                    task_id=task_id,
+                    base_revision=None if action == "create_graph" else base_revision,
+                    new_revision=graph.revision,
+                    patch=patch,
+                )
+            )
+            await s.commit()
+        return await self.get_knowledge_graph(graph.graph_id, learner_id)
     # -- events ----------------------------------------------------------
 
     async def next_sequence(self, session_id: str) -> int:
@@ -539,4 +879,20 @@ def _quiz_submission_dict(row: QuizSubmission) -> dict[str, Any]:
         "total_points": row.total_points,
         "handoff_reason": row.handoff_reason,
         "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def _sidecar_dict(row: AgentTaskSidecar) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "task_id": row.task_id,
+        "learner_id": row.learner_id,
+        "kind": row.kind,
+        "status": row.status,
+        "input": row.input or {},
+        "output": row.output or {},
+        "error": row.error,
+        "attempts": row.attempts,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }

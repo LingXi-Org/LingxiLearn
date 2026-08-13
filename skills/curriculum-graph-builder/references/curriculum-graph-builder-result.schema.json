@@ -1,0 +1,812 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "curriculum-graph-builder-result.v1",
+  "title": "Curriculum graph builder result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "status",
+    "decision",
+    "graph_patch",
+    "warnings",
+    "evidence_summary"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "curriculum-graph-builder-result.v1"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "insufficient_context",
+        "conflict"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "target_graph_id",
+        "base_revision",
+        "confidence",
+        "reason"
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "create_graph",
+            "extend_graph",
+            "update_graph",
+            "no_change"
+          ]
+        },
+        "target_graph_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "confidence": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "proposed_title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "proposed_domain": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    },
+    "graph_patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "add_nodes",
+        "update_nodes",
+        "add_edges",
+        "update_edges",
+        "learner_overlay_updates"
+      ],
+      "properties": {
+        "add_nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "type",
+              "importance",
+              "is_current",
+              "learning_state"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "type": {
+                "enum": [
+                  "domain",
+                  "topic",
+                  "concept",
+                  "skill",
+                  "method",
+                  "formula",
+                  "example",
+                  "misconception",
+                  "application"
+                ]
+              },
+              "importance": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "is_current": {
+                "type": "boolean"
+              },
+              "learning_state": {
+                "enum": [
+                  "unknown",
+                  "not_observed",
+                  "emerging",
+                  "demonstrated",
+                  "misconception_evidence",
+                  "needs_recheck"
+                ]
+              },
+              "level": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "position": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  }
+                }
+              },
+              "aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "uniqueItems": true
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        "update_nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "set"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "set": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "type": {
+                    "enum": [
+                      "domain",
+                      "topic",
+                      "concept",
+                      "skill",
+                      "method",
+                      "formula",
+                      "example",
+                      "misconception",
+                      "application"
+                    ]
+                  },
+                  "importance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "level": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "position": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "uniqueItems": true
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "source_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "uniqueItems": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "add_edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "source",
+              "target",
+              "relation",
+              "relation_label",
+              "directed"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1
+              },
+              "relation": {
+                "enum": [
+                  "prerequisite_of",
+                  "foundation_for",
+                  "part_of",
+                  "leads_to",
+                  "applies_to",
+                  "contrasts_with",
+                  "commonly_confused_with",
+                  "related_to"
+                ]
+              },
+              "relation_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              },
+              "directed": {
+                "type": "boolean"
+              },
+              "importance": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        "update_edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "set"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "set": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": false,
+                "properties": {
+                  "relation": {
+                    "enum": [
+                      "prerequisite_of",
+                      "foundation_for",
+                      "part_of",
+                      "leads_to",
+                      "applies_to",
+                      "contrasts_with",
+                      "commonly_confused_with",
+                      "related_to"
+                    ]
+                  },
+                  "relation_label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20
+                  },
+                  "directed": {
+                    "type": "boolean"
+                  },
+                  "importance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "source_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "uniqueItems": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "learner_overlay_updates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "node_id"
+            ],
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "is_current": {
+                "type": "boolean"
+              },
+              "learning_state": {
+                "enum": [
+                  "unknown",
+                  "not_observed",
+                  "emerging",
+                  "demonstrated",
+                  "misconception_evidence",
+                  "needs_recheck"
+                ]
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "is_current"
+                ]
+              },
+              {
+                "required": [
+                  "learning_state"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidence_summary": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim",
+          "source_refs"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "source_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "type",
+        "importance",
+        "is_current",
+        "learning_state"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "type": {
+          "enum": [
+            "domain",
+            "topic",
+            "concept",
+            "skill",
+            "method",
+            "formula",
+            "example",
+            "misconception",
+            "application"
+          ]
+        },
+        "importance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "is_current": {
+          "type": "boolean"
+        },
+        "learning_state": {
+          "enum": [
+            "unknown",
+            "not_observed",
+            "emerging",
+            "demonstrated",
+            "misconception_evidence",
+            "needs_recheck"
+          ]
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "target",
+        "relation",
+        "relation_label",
+        "directed"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relation": {
+          "enum": [
+            "prerequisite_of",
+            "foundation_for",
+            "part_of",
+            "leads_to",
+            "applies_to",
+            "contrasts_with",
+            "commonly_confused_with",
+            "related_to"
+          ]
+        },
+        "relation_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "directed": {
+          "type": "boolean"
+        },
+        "importance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "nodeUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "set"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "set": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "type": {
+              "enum": [
+                "domain",
+                "topic",
+                "concept",
+                "skill",
+                "method",
+                "formula",
+                "example",
+                "misconception",
+                "application"
+              ]
+            },
+            "importance": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "level": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "position": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "x",
+                "y"
+              ],
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              }
+            },
+            "aliases": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "source_refs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
+    "edgeUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "set"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "set": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "relation": {
+              "enum": [
+                "prerequisite_of",
+                "foundation_for",
+                "part_of",
+                "leads_to",
+                "applies_to",
+                "contrasts_with",
+                "commonly_confused_with",
+                "related_to"
+              ]
+            },
+            "relation_label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20
+            },
+            "directed": {
+              "type": "boolean"
+            },
+            "importance": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "source_refs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
+    "overlayUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id"
+      ],
+      "properties": {
+        "node_id": {
+          "type": "string"
+        },
+        "is_current": {
+          "type": "boolean"
+        },
+        "learning_state": {
+          "enum": [
+            "unknown",
+            "not_observed",
+            "emerging",
+            "demonstrated",
+            "misconception_evidence",
+            "needs_recheck"
+          ]
+        },
+        "evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "is_current"
+          ]
+        },
+        {
+          "required": [
+            "learning_state"
+          ]
+        }
+      ]
+    }
+  }
+}

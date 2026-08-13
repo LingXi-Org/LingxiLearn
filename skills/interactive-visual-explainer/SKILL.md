@@ -3,15 +3,21 @@ name: interactive-visual-explainer
 description: >-
   Create a self-contained, offline interactive HTML explainer for concepts that are easier to understand through visual manipulation.
 license: MIT
-compatibility: LingxiGraph Agent Skills runtime
 metadata:
   author: LingXi-Org
-  version: 1.2.0
+  version: 1.3.0
   display-name: 交互式可视化讲解
   display-description: 为适合通过观察和操作理解的概念生成可离线运行的交互式 HTML 讲解页面。
   output-language: zh-CN
   output-contract: interactive-visual-explainer-delivery.v1.2
   execution-mode: artifact-generation
+  phase: teach
+  critical-path: false
+  learner-facing: artifact
+  state-write-mode: none
+  parallel-safe: true
+  latency-class: background
+  eval-suite: interactive-visual-explainer-v1
 ---
 
 # Visual Explainer
@@ -19,8 +25,10 @@ metadata:
 ## Role
 
 Receive a concept from the orchestrating agent and produce one independently openable interactive
-teaching page. Make the conclusion live in the visual interaction, not only in prose. The final
-delivery is exactly one `.html` file with no external requests, offline support, light/dark mode,
+teaching artifact. It is a non-blocking sidecar requested by `adaptive-pedagogy`, not a competing
+learner-facing chat writer. The caller must be able to render useful Chinese fallback text before
+this artifact is ready. Make the conclusion live in the visual interaction, not only in prose. The
+final delivery is exactly one `.html` file with no external requests, offline support, light/dark mode,
 and print support. Do not routinely persist or deliver redundant intermediate files, such as
 standalone image or PowerPoint exports of content already represented in the HTML. Temporary files
 needed for an important design, validation, rendering, or compatibility check may be viewed or

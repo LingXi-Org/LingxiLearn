@@ -30,8 +30,14 @@ from lingxigraph.errors import (
 )
 
 from .agents.artifact_store import ArtifactError, ArtifactStore
-from .agents.graph import EVENT_CHANNEL, build_agent_graph
-from .agents.contracts import QuizGenerationResult, quiz_public
+from .agents.contracts import quiz_public
+from .agents.curriculum_graph import build_curriculum_graph_proposal
+from .agents.graph import EVENT_CHANNEL, build_agent_graph, build_knowledge_deep_dive_graph
+from .agents.sidecars import (
+    build_learner_state_reflection,
+    build_quiz_prefetch,
+    build_visual_sidecar,
+)
 from .brains.base import TutorBrain
 from .config import Settings, get_settings
 from .kernel.graph import build_graph
@@ -39,7 +45,7 @@ from .kernel.state import initial_state
 from .learner import LearnerService
 from .packs.loader import discover_packs, validate_pack
 from .packs.models import Pack
-from .store.db import Database, Repository
+from .store.db import Database, GraphRevisionConflict, Repository
 from .store.learner import LearnerRepository
 from .stream.projector import EventProjector
 from .tools import knowledge
@@ -72,10 +78,18 @@ _AGENT_NODES = frozenset(
         "quiz_generator",
         "answer_user",
         "interactive_visual_explainer",
+        "adaptive_pedagogy",
+        "curriculum_graph_builder",
+        "learner_state_reflector",
     }
 )
 
-_GRAPH_NODE_TO_AGENT = {"recognize_intent": "intent"}
+_GRAPH_NODE_TO_AGENT = {
+    "recognize_intent": "intent",
+    "adaptive_pedagogy": "adaptive_pedagogy",
+    "curriculum_graph_builder": "curriculum_graph_builder",
+    "learner_state_reflector": "learner_state_reflector",
+}
 
 
 def _trace_agent(metadata: Any, default_agent: str = "coordinator") -> str:
@@ -276,7 +290,7 @@ class Service:
             # catalog. Keeping one model instance per role makes the cache
             # prefix stable across tasks and avoids cross-agent drift errors.
             self.agent_model = {}
-            for role in ("intent", "lecture_hook", "lecture_hook_structured", "interactive_lecture_deck", "quiz_generator", "answer_user", "interactive_visual_explainer"):
+            for role in ("intent", "lecture_hook", "lecture_hook_structured", "interactive_lecture_deck", "quiz_generator", "answer_user", "adaptive_pedagogy", "curriculum_graph_builder", "learner_state_reflector", "interactive_visual_explainer"):
                 # Every skill-capable Agent must use the same tool-aware
                 # adapter. The previous native Responses special case could
                 # search the web but silently dropped stage_artifact_file,
@@ -285,6 +299,12 @@ class Service:
                     self.settings.agent_model, **model_options
                 )
         self.checkpointer = build_checkpointer(self.settings)
+        # Sidecars are durable. A process restart must never strand a running
+        # proposal; queue it again and let the normal worker claim it.
+        for sidecar in await self.repo.queued_agent_sidecars():
+            if sidecar["status"] == "running":
+                await self.repo.finish_agent_sidecar(sidecar["id"], status="queued")
+            self._spawn(self._run_agent_sidecar(sidecar["id"]))
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
             len(self.packs),
@@ -392,11 +412,13 @@ class Service:
             id=task_id,
             learner_id=learner_id,
             prompt=normalized,
+            graph_version="knowledge_deep_dive.v1",
             status="queued",
             intent={},
             lecture_result={},
             deck_result={},
             quiz_result={},
+            adaptive_result={},
             handoff_result={},
             user_messages=[],
             visual_result={},
@@ -430,12 +452,34 @@ class Service:
             "id": record.id,
             "status": record.status,
             "prompt": record.prompt,
+            "graph_version": record.graph_version,
             "intent": record.intent or {},
             "agents": {
                 "intent": _agent_snapshot(record.intent),
                 "lecture_hook": _agent_snapshot(record.lecture_result),
                 "interactive_lecture_deck": _agent_snapshot(record.deck_result),
                 "quiz_generator": _agent_snapshot(record.quiz_result),
+                "adaptive_pedagogy": _agent_snapshot(record.adaptive_result),
+                "curriculum_graph_builder": _sidecar_snapshot(
+                    next(
+                        (
+                            item
+                            for item in await self.repo.list_agent_sidecars(record.id, record.learner_id)
+                            if item["kind"] == "knowledge_graph"
+                        ),
+                        None,
+                    )
+                ),
+                "learner_state_reflector": _sidecar_snapshot(
+                    next(
+                        (
+                            item
+                            for item in await self.repo.list_agent_sidecars(record.id, record.learner_id)
+                            if item["kind"] == "learner_reflection"
+                        ),
+                        None,
+                    )
+                ),
                 "interactive_visual_explainer": _agent_snapshot(record.visual_result),
             },
             "artifacts": {
@@ -458,6 +502,7 @@ class Service:
                     "url": f"/api/agent-tasks/{record.id}/artifacts/visual",
                     **({"metadata": record.visual_result} if record.visual_result else {}),
                 },
+                "knowledge_graph": await self._knowledge_graph_artifact_snapshot(record),
             },
             "quiz_submission": await _submission_snapshot(self.repo, record.id),
             "error": record.error,
@@ -515,6 +560,39 @@ class Service:
                 raise KeyError(str(exc)) from exc
         raise KeyError(f"unknown artifact kind: {kind}")
 
+    async def agent_knowledge_graph(
+        self, task_id: str, learner_id: str
+    ) -> dict[str, Any] | None:
+        """Return the graph target recorded by this task, owned by the learner."""
+
+        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        if record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        sidecars = await self.repo.list_agent_sidecars(task_id, learner_id)
+        for sidecar in reversed(sidecars):
+            if sidecar["kind"] != "knowledge_graph":
+                continue
+            graph_id = (sidecar.get("output") or {}).get("graph_id")
+            if graph_id:
+                return await self.repo.get_knowledge_graph(graph_id, learner_id)
+        return None
+
+    async def _knowledge_graph_artifact_snapshot(self, record: Any) -> dict[str, Any]:
+        sidecars = await self.repo.list_agent_sidecars(record.id, record.learner_id)
+        sidecar = next(
+            (item for item in reversed(sidecars) if item["kind"] == "knowledge_graph"),
+            None,
+        )
+        output = (sidecar or {}).get("output") or {}
+        return {
+            "available": bool(output.get("graph_id")),
+            "graph_id": output.get("graph_id"),
+            "revision": output.get("revision"),
+            "url": f"/api/agent-tasks/{record.id}/knowledge-graph",
+            "status": (sidecar or {}).get("status", "pending"),
+            **({"error": sidecar["error"]} if sidecar and sidecar.get("error") else {}),
+        }
+
     async def agent_message(self, task_id: str, message: str, learner_id: str | None = None) -> None:
         record = await (self.repo.get_agent_task_for_learner(task_id, learner_id) if learner_id else self.repo.get_agent_task(task_id))
         if record is None:
@@ -553,12 +631,30 @@ class Service:
             await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
             self._notify_agent(task_id)
             return
+        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        if record is None:
+            return
+        if resume is not None and resume.get("message"):
+            await self.repo.update_agent_task_output(
+                task_id,
+                "user_message",
+                {
+                    "message": str(resume.get("message")),
+                    "kind": str(resume.get("kind") or "chat"),
+                    "answers": _json_safe(resume.get("answers")) if resume.get("answers") is not None else None,
+                },
+            )
         await self.repo.set_agent_task_status(task_id, "running")
         async def persist_result(agent: str, value: dict[str, Any]) -> None:
             await self.repo.update_agent_task_output(task_id, agent, value)
             self._notify_agent(task_id)
 
-        graph = build_agent_graph(
+        graph_builder = (
+            build_knowledge_deep_dive_graph
+            if record.graph_version == "knowledge_deep_dive.v1"
+            else build_agent_graph
+        )
+        graph = graph_builder(
             model=self.agent_model,
             settings=self.settings,
             task_id=task_id,
@@ -570,7 +666,9 @@ class Service:
         config = {
             "configurable": {
                 "thread_id": task_id,
-                "checkpoint_ns": "agent-task@1.0.0",
+                "checkpoint_ns": "knowledge-deep-dive@1.0.0"
+                if record.graph_version == "knowledge_deep_dive.v1"
+                else "agent-task@1.0.0",
             },
             "recursion_limit": 80,
         }
@@ -668,8 +766,223 @@ class Service:
         values = dict(getattr(state, "values", None) or {})
         status = str(values.get("status") or ("awaiting_user" if getattr(state, "interrupts", None) else "partial"))
         errors = [str(item) for item in values.get("errors") or []]
-        await self.repo.set_agent_task_status(task_id, status, "; ".join(errors))
+        await self.repo.set_agent_task_status(
+            task_id, "handed_off" if status == "handed_off" else status, "; ".join(errors)
+        )
         self._notify_agent(task_id)
+        if record.graph_version == "knowledge_deep_dive.v1" and status in {"awaiting_user", "partial"}:
+            latest_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            await self.schedule_agent_sidecar(task_id, learner_id, "knowledge_graph")
+            await self.schedule_agent_sidecar(task_id, learner_id, "quiz_prefetch")
+            await self.schedule_agent_sidecar(task_id, learner_id, "learner_reflection")
+            latest_message = (
+                str((latest_record.user_messages or [])[-1].get("message", ""))
+                if latest_record is not None and latest_record.user_messages
+                else record.prompt
+            )
+            if any(token in latest_message.casefold() for token in ("图解", "可视化", "动画", "visual")):
+                await self.schedule_agent_sidecar(task_id, learner_id, "visual_explainer")
+
+    async def schedule_agent_sidecar(
+        self, task_id: str, learner_id: str, kind: str
+    ) -> None:
+        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        if record is None:
+            return
+        sidecar_id = f"{task_id}:{kind.replace('_', '-')}"
+        snapshot = {
+            "task_updated_at": record.updated_at.isoformat() if record.updated_at else None,
+            "message_count": len(record.user_messages or []),
+            "intent": record.intent or {},
+            "last_message": (record.user_messages or [])[-1] if record.user_messages else None,
+            "lecture_ready": bool(record.lecture_result),
+            "deck_ready": bool(record.deck_result),
+            "quiz_ready": bool(record.quiz_result),
+            "graph_revision": None,
+        }
+        if kind == "knowledge_graph":
+            query = str((record.intent or {}).get("topic") or record.prompt)
+            candidates = await self.repo.list_knowledge_graph_candidates(learner_id, query, limit=3)
+            snapshot["candidate_revisions"] = [
+                {"graph_id": item["graph_id"], "revision": item["revision"]} for item in candidates
+            ]
+        sidecar = await self.repo.upsert_agent_sidecar(
+            sidecar_id=sidecar_id,
+            task_id=task_id,
+            learner_id=learner_id,
+            kind=kind,
+            input=snapshot,
+        )
+        if sidecar["status"] == "queued":
+            self._spawn(self._run_agent_sidecar(sidecar["id"]))
+
+    async def _run_agent_sidecar(self, sidecar_id: str) -> None:
+        sidecar = await self.repo.claim_agent_sidecar(sidecar_id)
+        if sidecar is None:
+            return
+        task_id = sidecar["task_id"]
+        learner_id = sidecar["learner_id"]
+        await self.repo.append_agent_events(
+            task_id,
+            [{"kind": "sidecar.started", "agent": _sidecar_agent_name(sidecar["kind"]), "payload": {"sidecar_id": sidecar_id}}],
+        )
+        self._notify_agent(task_id)
+        try:
+            record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            if record is None:
+                raise KeyError("agent task not found")
+            task_payload = {
+                "id": record.id,
+                "prompt": record.prompt,
+                "intent": record.intent or {},
+                "user_messages": record.user_messages or [],
+                "lecture_result": record.lecture_result or {},
+                "deck_result": record.deck_result or {},
+                "quiz_result": record.quiz_result or {},
+                "quiz_submission": await _submission_snapshot(self.repo, record.id),
+            }
+            if self.agent_model is None:
+                raise RuntimeError("agent model is not configured")
+            kind = sidecar["kind"]
+            if kind == "knowledge_graph":
+                query = str((record.intent or {}).get("topic") or record.prompt)
+                existing = await self.repo.list_knowledge_graph_candidates(learner_id, query, limit=3)
+                proposal = await build_curriculum_graph_proposal(
+                    model=self.agent_model,
+                    task=task_payload,
+                    existing_graphs=existing,
+                    runtime=None,
+                )
+                action = proposal["decision"]["action"]
+                selected_id = proposal["decision"].get("target_graph_id")
+                if action == "create_graph":
+                    selected_id = f"kg-{task_id}"
+                try:
+                    snapshot = await self.repo.apply_knowledge_graph_result(
+                        learner_id=learner_id,
+                        task_id=task_id,
+                        result=proposal,
+                        graph_id=selected_id,
+                    )
+                except GraphRevisionConflict:
+                    # One deterministic retry against the latest owned snapshot;
+                    # a second conflict is surfaced as a failed sidecar only.
+                    latest = await self.repo.get_knowledge_graph(selected_id, learner_id) if selected_id else None
+                    if latest is None:
+                        raise
+                    proposal = await build_curriculum_graph_proposal(
+                        model=self.agent_model,
+                        task=task_payload,
+                        existing_graphs=[latest],
+                        runtime=None,
+                    )
+                    action = proposal["decision"]["action"]
+                    snapshot = await self.repo.apply_knowledge_graph_result(
+                        learner_id=learner_id,
+                        task_id=task_id,
+                        result=proposal,
+                        graph_id=selected_id,
+                    )
+                output = {
+                    "graph_id": snapshot.get("graph_id") if snapshot else None,
+                    "revision": snapshot.get("revision") if snapshot else None,
+                    "action": action,
+                    "proposal_status": proposal.get("status", "ok"),
+                }
+                await self.repo.finish_agent_sidecar(sidecar_id, status="succeeded", output=output)
+                if output["graph_id"]:
+                    await self.repo.append_agent_events(
+                        task_id,
+                        [{
+                            "kind": "artifact.ready",
+                            "agent": "curriculum_graph_builder",
+                            "payload": {"artifact": "knowledge-graph", **output},
+                        }],
+                    )
+                else:
+                    await self.repo.append_agent_events(
+                        task_id,
+                        [{
+                            "kind": "sidecar.completed",
+                            "agent": "curriculum_graph_builder",
+                            "payload": {"sidecar_id": sidecar_id, "proposal_status": output["proposal_status"]},
+                        }],
+                    )
+            elif kind == "quiz_prefetch":
+                value = await build_quiz_prefetch(
+                    model=self.agent_model,
+                    task=task_payload,
+                    artifacts=self.agent_artifacts,
+                    runtime=None,
+                )
+                await self.repo.update_agent_task_output(task_id, "quiz_generator", value)
+                await self.repo.finish_agent_sidecar(
+                    sidecar_id,
+                    status="succeeded",
+                    output={"artifact": "quiz", "question_count": len(value.get("questions", []))},
+                )
+                await self.repo.append_agent_events(
+                    task_id,
+                    [{
+                        "kind": "quiz.ready",
+                        "agent": "quiz_generator",
+                        "payload": {"question_count": len(value.get("questions", [])), "sidecar_id": sidecar_id},
+                    }],
+                )
+            elif kind == "visual_explainer":
+                value = await build_visual_sidecar(
+                    model=self.agent_model,
+                    task={**task_payload, "user_message": (record.user_messages or [])[-1:]},
+                    artifacts=self.agent_artifacts,
+                    runtime=None,
+                )
+                await self.repo.update_agent_task_output(task_id, "visual_explainer", value)
+                await self.repo.finish_agent_sidecar(
+                    sidecar_id,
+                    status="succeeded",
+                    output={"artifact": "visual", "filename": value.get("filename")},
+                )
+                await self.repo.append_agent_events(
+                    task_id,
+                    [{
+                        "kind": "artifact.ready",
+                        "agent": "interactive_visual_explainer",
+                        "payload": {"artifact": "visual", "sidecar_id": sidecar_id},
+                    }],
+                )
+            elif kind == "learner_reflection":
+                events = await self.repo.agent_events_after_for_learner(task_id, learner_id, 0, 500)
+                value = await build_learner_state_reflection(
+                    model=self.agent_model,
+                    task=task_payload,
+                    events=events,
+                    runtime=None,
+                )
+                await self.repo.finish_agent_sidecar(sidecar_id, status="succeeded", output=value)
+                await self.repo.append_agent_events(
+                    task_id,
+                    [{
+                        "kind": "sidecar.completed",
+                        "agent": "learner_state_reflector",
+                        "payload": {"sidecar_id": sidecar_id, "proposal": True},
+                    }],
+                )
+            else:
+                raise ValueError(f"unknown sidecar kind: {kind}")
+        except Exception as exc:  # sidecars never fail the learner-facing run
+            logger.exception("agent sidecar failed: %s", sidecar_id)
+            detail = f"{type(exc).__name__}: {exc}"
+            await self.repo.finish_agent_sidecar(sidecar_id, status="failed", error=detail)
+            await self.repo.append_agent_events(
+                task_id,
+                [{
+                    "kind": "sidecar.failed",
+                    "agent": _sidecar_agent_name(sidecar["kind"]),
+                    "payload": {"sidecar_id": sidecar_id, "error": detail},
+                }],
+            )
+        finally:
+            self._notify_agent(task_id)
 
     async def answer(
         self, session_id: str, payload: Any, learner_id: str | None = None
@@ -912,6 +1225,26 @@ def _agent_snapshot(result: dict[str, Any] | None) -> dict[str, Any]:
     if result.get("status") == "failed":
         return {"status": "failed", "error": result.get("error", "")}
     return {"status": "completed" if result else "pending"}
+
+
+def _sidecar_snapshot(sidecar: dict[str, Any] | None) -> dict[str, Any]:
+    if not sidecar:
+        return {"status": "pending"}
+    status = sidecar.get("status")
+    if status == "failed":
+        return {"status": "failed", "error": sidecar.get("error", "")}
+    if status in {"queued", "running"}:
+        return {"status": status}
+    return {"status": "completed" if status == "succeeded" else "pending"}
+
+
+def _sidecar_agent_name(kind: str) -> str:
+    return {
+        "knowledge_graph": "curriculum_graph_builder",
+        "quiz_prefetch": "quiz_generator",
+        "visual_explainer": "interactive_visual_explainer",
+        "learner_reflection": "learner_state_reflector",
+    }.get(kind, kind)
 
 
 def _lesson_intro_metadata(result: dict[str, Any]) -> dict[str, Any]:

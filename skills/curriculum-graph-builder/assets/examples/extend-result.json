@@ -1,0 +1,65 @@
+{
+  "schema_version": "curriculum-graph-builder-result.v1",
+  "task_id": "turn_math_002",
+  "status": "ok",
+  "decision": {
+    "action": "extend_graph",
+    "target_graph_id": "kg_math_analysis",
+    "base_revision": 7,
+    "confidence": "high",
+    "reason": "新内容与已有“函数图像”节点存在材料明确支持的先修关系，应扩充现有高等数学图谱。",
+    "proposed_title": "高等数学：函数与导数",
+    "proposed_domain": "高等数学"
+  },
+  "graph_patch": {
+    "add_nodes": [
+      {
+        "id": "topic.derivative.application",
+        "label": "导数应用",
+        "type": "topic",
+        "importance": 0.75,
+        "is_current": true,
+        "learning_state": "not_observed",
+        "level": 2,
+        "source_refs": [
+          "msg_002"
+        ]
+      }
+    ],
+    "update_nodes": [],
+    "add_edges": [
+      {
+        "id": "edge.function-graph.prerequisite-of-derivative-application",
+        "source": "concept.function.graph",
+        "target": "topic.derivative.application",
+        "relation": "prerequisite_of",
+        "relation_label": "先修",
+        "directed": true,
+        "importance": 0.85,
+        "source_refs": [
+          "msg_002"
+        ]
+      }
+    ],
+    "update_edges": [],
+    "learner_overlay_updates": [
+      {
+        "node_id": "concept.function.graph",
+        "is_current": false,
+        "learning_state": "needs_recheck",
+        "evidence_ids": [
+          "ev_21"
+        ]
+      }
+    ]
+  },
+  "warnings": [],
+  "evidence_summary": [
+    {
+      "claim": "当前材料明确把函数图像理解作为导数单调性应用的前置基础。",
+      "source_refs": [
+        "msg_002"
+      ]
+    }
+  ]
+}

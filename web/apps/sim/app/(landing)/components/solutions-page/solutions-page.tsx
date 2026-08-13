@@ -60,13 +60,13 @@ export function SolutionsPage({ config }: SolutionsPageProps) {
           )}
         >
           <SolutionsHero hero={config.hero} />
-          <SolutionsLogosRow />
+          {config.showLogos !== false ? <SolutionsLogosRow /> : null}
           {config.rows.map((row) => (
             <SolutionsCardRow key={row.id} row={row} />
           ))}
         </div>
 
-        <Cta />
+        <Cta {...config.footerCta} />
       </main>
     </>
   )

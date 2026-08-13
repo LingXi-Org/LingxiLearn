@@ -1,11 +1,11 @@
 /**
  * Wire protocol for live table presence — which cell(s) each viewer has selected
  * in a table grid. Carried over the shared, already-authenticated Socket.IO
- * connection (the server relay is `apps/realtime/src/handlers/tables.ts`),
+ * connection (the server relay is no longer deployed),
  * separate from the one-way durable cell-status stream (`lib/table/events.ts`).
  *
  * Centralized here so the server emits and the client subscriptions cannot drift.
- * This module is pure so both `apps/sim` and `apps/realtime` can import it.
+ * This module remains pure for browser-side protocol compatibility.
  */
 
 /** Socket.IO event names for the table presence channel. */

@@ -50,7 +50,7 @@ export interface SimActivity {
 export interface SimResourceDescriptor {
   id: string
   title: string
-  kind: 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual'
+  kind: 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual' | 'knowledge-graph'
   available: boolean
   description: string
 }
@@ -171,7 +171,11 @@ export function agentTaskToCanvasGraph(
               ? task.agents.quiz_generator
               : agent === 'interactive_visual_explainer'
                 ? task.agents.interactive_visual_explainer
-                : { status: 'pending' as const }
+                : agent === 'adaptive_pedagogy'
+                  ? (task.agents.adaptive_pedagogy ?? { status: 'pending' as const })
+                  : agent === 'curriculum_graph_builder'
+                    ? (task.agents.curriculum_graph_builder ?? { status: 'pending' as const })
+                    : { status: 'pending' as const }
     const relevant = orderedEvents.filter((event) => event.agent === agent)
     const latest = relevant.at(-1)
     nodes.push({
@@ -216,7 +220,14 @@ export function agentTaskToCanvasGraph(
   }
 
   const postQuizAgents = specialists.filter((agent) =>
-    ['answer_user', 'interactive_visual_explainer', 'quiz_submit', 'handoff'].includes(agent)
+    [
+      'answer_user',
+      'adaptive_pedagogy',
+      'interactive_visual_explainer',
+      'quiz_submit',
+      'handoff',
+      'curriculum_graph_builder',
+    ].includes(agent)
   )
   for (const agent of postQuizAgents) {
     edges.push({
@@ -575,6 +586,8 @@ export function agentLabel(agent: string): string {
   if (agent === 'interactive_lecture_deck') return '交互式讲解课件 Agent'
   if (agent === 'quiz_generator') return '出题 Agent'
   if (agent === 'interactive_visual_explainer') return '交互式可视化讲解'
+  if (agent === 'adaptive_pedagogy') return '自适应教学 Agent'
+  if (agent === 'curriculum_graph_builder') return '知识图谱构建 Agent'
   if (agent === 'answer_user') return '知识点答疑 Agent'
   if (agent === 'quiz_submit') return '答题提交'
   return agent
@@ -593,8 +606,22 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
     return `${agentLabel(event.agent)} 已接收任务${event.payload.skill ? ` · ${String(event.payload.skill)}` : ''}，开始执行。`
   if (event.kind === 'agent.output')
     return message || `${agentLabel(event.agent)} 生成了新的关键输出。`
-  if (event.kind === 'artifact.ready')
-    return `${agentLabel(event.agent)} 的${event.payload.artifact === 'visual' ? '交互页面' : event.payload.artifact === 'lesson-intro' ? '课程引入页面' : '课件产物'}已就绪。`
+  if (event.kind === 'artifact.ready') {
+    const artifact = String(event.payload.artifact || '')
+    const label =
+      artifact === 'visual'
+        ? '交互页面'
+        : artifact === 'lesson-intro'
+          ? '课程引入页面'
+          : artifact === 'knowledge-graph'
+            ? 'Lingxi 知识图谱'
+            : '课件产物'
+    return `${agentLabel(event.agent)} 的${label}已就绪。`
+  }
+  if (event.kind === 'quiz.ready') return '知识点检测已在后台预取完成。'
+  if (event.kind === 'sidecar.started') return `${agentLabel(event.agent)} 已进入后台队列。`
+  if (event.kind === 'sidecar.completed') return `${agentLabel(event.agent)} 的后台反思建议已保存。`
+  if (event.kind === 'sidecar.failed') return `${agentLabel(event.agent)} 后台任务失败，聊天继续。`
   if (event.kind === 'agent.completed') return `${agentLabel(event.agent)} 已完成。`
   if (event.kind === 'agent.failed')
     return `${agentLabel(event.agent)} 执行失败：${message || String(event.payload.error || '未知错误')}`
@@ -724,6 +751,13 @@ export function agentTaskToSimResources(task: AgentTaskSnapshot | null): SimReso
       kind: 'visual',
       available: Boolean(task.artifacts.visual?.available),
       description: '按需调用通用 interactive-visual-explainer 生成的页面',
+    },
+    {
+      id: `${task.id}-knowledge-graph`,
+      title: 'Lingxi 知识图谱',
+      kind: 'knowledge-graph',
+      available: Boolean(task.artifacts.knowledge_graph?.available),
+      description: '当前学习任务持久化的个性化知识图谱',
     },
   ]
 }

@@ -1,6 +1,7 @@
 import type { ComponentType, SVGProps } from 'react'
 import { AgentIcon, AnthropicIcon, GithubIcon, JiraIcon } from '@/components/icons'
 import { CsvIcon, DocxIcon, MarkdownIcon, PdfIcon } from '@/components/icons/document-icons'
+import type { KnowledgeGraphData } from '@/lib/lingxi/types'
 
 /**
  * Shared data + geometry for the hero visual - the single source of truth the
@@ -359,3 +360,76 @@ export const GRAPH_EDGES: Array<[number, number]> = [
   [11, 12],
   [9, 11],
 ]
+
+/** Landing-only sample uses the same normalized shape as persisted graphs. */
+export const LANDING_KNOWLEDGE_GRAPH = {
+  graph_id: 'landing-knowledge-graph',
+  revision: 1,
+  title: 'Lingxi 学习知识图谱',
+  domain: '跨学科学习',
+  nodes: [
+    {
+      id: 'topic',
+      label: '主题',
+      type: 'topic',
+      importance: 0.9,
+      is_current: true,
+      learning_state: 'emerging',
+      position: { x: 120, y: 80 },
+    },
+    {
+      id: 'concept',
+      label: '核心概念',
+      type: 'concept',
+      importance: 0.8,
+      is_current: false,
+      learning_state: 'demonstrated',
+      position: { x: 320, y: 80 },
+    },
+    {
+      id: 'method',
+      label: '方法',
+      type: 'method',
+      importance: 0.7,
+      is_current: false,
+      learning_state: 'unknown',
+      position: { x: 520, y: 80 },
+    },
+    {
+      id: 'application',
+      label: '应用',
+      type: 'application',
+      importance: 0.75,
+      is_current: false,
+      learning_state: 'not_observed',
+      position: { x: 720, y: 80 },
+    },
+  ],
+  edges: [
+    {
+      id: 'topic-concept',
+      source: 'topic',
+      target: 'concept',
+      relation: 'foundation_for',
+      relation_label: '基础',
+      directed: true,
+    },
+    {
+      id: 'concept-method',
+      source: 'concept',
+      target: 'method',
+      relation: 'leads_to',
+      relation_label: '导向',
+      directed: true,
+    },
+    {
+      id: 'method-application',
+      source: 'method',
+      target: 'application',
+      relation: 'applies_to',
+      relation_label: '应用于',
+      directed: true,
+    },
+  ],
+  root_node_ids: ['topic'],
+} satisfies KnowledgeGraphData

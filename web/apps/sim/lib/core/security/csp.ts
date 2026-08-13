@@ -94,6 +94,8 @@ const STATIC_IMG_SRC = ["'self'", 'data:', 'blob:', 'https:'] as const
 
 const STATIC_CONNECT_SRC = [
   "'self'",
+  // LingxiIdentity / Logto OIDC discovery, token exchange, and userinfo.
+  'https://auth.lingxilearn.cn',
   'https://api.browser-use.com',
   'https://api.elevenlabs.io',
   'wss://api.elevenlabs.io',

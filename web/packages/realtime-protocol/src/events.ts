@@ -2,10 +2,9 @@ import type { OperationTarget, SocketOperation } from './constants'
 import type { RoomRef } from './rooms'
 
 /**
- * Wire types for the broadcast/confirmation events the realtime Socket.IO server
+ * Wire types for the broadcast/confirmation events from the retired realtime layer
  * emits to clients. These mirror the exact object literals emitted by
- * `apps/realtime/src/handlers/**` and `apps/realtime/src/rooms/**`, and are the
- * canonical types consumed by the client socket transport
+ * and are the canonical types consumed by the client compatibility transport
  * (`apps/sim/app/workspace/providers/socket-provider.tsx`).
  *
  * Payload bodies that the transport forwards opaquely are typed `unknown` rather

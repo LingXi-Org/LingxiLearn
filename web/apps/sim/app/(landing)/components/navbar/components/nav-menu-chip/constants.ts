@@ -8,32 +8,32 @@ export const LEARNING_EXPERIENCE_MENU: NavMenu = {
     {
       title: '个性化学习',
       description: '动态规划属于你的学习路径',
-      href: LEARNING_HOME,
+      href: '/learning/personalized',
     },
     {
       title: '疑难讲解',
       description: '把抽象知识变成可交互讲解',
-      href: LEARNING_HOME,
+      href: '/learning/explanation',
     },
     {
       title: '作业辅导',
       description: '提示、分析，而非代替思考',
-      href: LEARNING_HOME,
+      href: '/learning/homework',
     },
     {
       title: '自适应练习',
       description: '根据掌握度动态生成训练',
-      href: LEARNING_HOME,
+      href: '/learning/practice',
     },
     {
       title: '学情诊断',
       description: '发现知识薄弱点与关联',
-      href: LEARNING_HOME,
+      href: '/learning/diagnosis',
     },
     {
       title: '学习陪伴',
       description: '持续理解你的学习状态',
-      href: LEARNING_HOME,
+      href: '/learning/companion',
     },
   ],
 }

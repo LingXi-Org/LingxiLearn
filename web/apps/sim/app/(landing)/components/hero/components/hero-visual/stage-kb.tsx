@@ -1,6 +1,7 @@
 import type { CSSProperties, RefObject } from 'react'
 import { cn } from '@sim/emcn'
 import { Upload, X } from '@sim/emcn/icons'
+import { KnowledgeGraphMiniSvg } from '@/lib/lingxi/components/knowledge-graph-canvas'
 import {
   GRAPH_EDGES,
   GRAPH_NODES,
@@ -96,51 +97,11 @@ export function KnowledgeBasePanel({
 
             {creating && (
               <div className='absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-lg border border-[var(--border-1)] bg-[var(--surface-5)] px-3'>
-                <svg
-                  className='h-[140px] w-full'
-                  viewBox={`0 0 ${GRAPH_VIEWBOX.width} ${GRAPH_VIEWBOX.height}`}
-                  fill='none'
-                  aria-hidden='true'
-                >
-                  <title>embedding graph</title>
-                  {GRAPH_EDGES.map(([a, b], i) => {
-                    const from = GRAPH_NODES[a]
-                    const to = GRAPH_NODES[b]
-                    return (
-                      <path
-                        key={`${a}-${b}`}
-                        d={`M ${from.x} ${from.y} L ${to.x} ${to.y}`}
-                        pathLength={1}
-                        className='animate-hero-edge-draw [animation-delay:var(--pop-delay)] [stroke-dasharray:1] [stroke-dashoffset:1] motion-reduce:animate-none motion-reduce:[stroke-dashoffset:0]'
-                        stroke='var(--text-subtle)'
-                        strokeWidth={0.5}
-                        style={{ '--pop-delay': `${i * 45}ms` } as CSSProperties}
-                      />
-                    )
-                  })}
-                  {GRAPH_NODES.map((node, i) => (
-                    <circle
-                      key={`${node.x}-${node.y}`}
-                      cx={node.x}
-                      cy={node.y}
-                      r={node.hub ? 3.4 : i % 3 === 0 ? 2.4 : 1.9}
-                      className={cn(
-                        'opacity-0 [transform-box:fill-box] [transform-origin:center] motion-reduce:animate-none motion-reduce:opacity-100',
-                        node.hub
-                          ? 'animate-[hero-node-pop_440ms_cubic-bezier(0.16,1,0.3,1)_var(--pop-delay)_forwards,hero-graph-pulse_2600ms_ease-in-out_calc(var(--pop-delay)+800ms)_infinite]'
-                          : 'animate-hero-node-pop [animation-delay:var(--pop-delay)]'
-                      )}
-                      fill={
-                        node.hub
-                          ? 'var(--text-primary)'
-                          : i % 2 === 0
-                            ? 'var(--text-secondary)'
-                            : 'var(--text-muted)'
-                      }
-                      style={{ '--pop-delay': `${300 + i * 40}ms` } as CSSProperties}
-                    />
-                  ))}
-                </svg>
+                <KnowledgeGraphMiniSvg
+                  viewBox={GRAPH_VIEWBOX}
+                  nodes={GRAPH_NODES}
+                  edges={GRAPH_EDGES}
+                />
                 <span className='text-[var(--text-muted)] text-caption'>正在生成向量…</span>
               </div>
             )}

@@ -103,11 +103,13 @@ class AgentTask(Base):
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
     prompt: Mapped[str] = mapped_column(Text)
+    graph_version: Mapped[str] = mapped_column(String(32), default="difficult_knowledge.v2")
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
     intent: Mapped[dict] = mapped_column(JSON, default=dict)
     lecture_result: Mapped[dict] = mapped_column(JSON, default=dict)
     deck_result: Mapped[dict] = mapped_column(JSON, default=dict)
     quiz_result: Mapped[dict] = mapped_column(JSON, default=dict)
+    adaptive_result: Mapped[dict] = mapped_column(JSON, default=dict)
     handoff_result: Mapped[dict] = mapped_column(JSON, default=dict)
     user_messages: Mapped[list] = mapped_column(JSON, default=list)
     # Kept for backwards-compatible reads of tasks created before the subgraph
@@ -155,6 +157,137 @@ class AgentTaskEvent(Base):
     kind: Mapped[str] = mapped_column(String(64))
     agent: Mapped[str] = mapped_column(String(64), default="")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AgentTaskSidecar(Base):
+    """Durable background work attached to one intent-driven task."""
+
+    __tablename__ = "agent_task_sidecars"
+    __table_args__ = (
+        UniqueConstraint("task_id", "kind", name="uq_agent_task_sidecars_task_kind"),
+        Index("ix_agent_task_sidecars_task_status", "task_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    input: Mapped[dict] = mapped_column(JSON, default=dict)
+    output: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class KnowledgeGraph(Base):
+    """One learner-owned curriculum graph and its monotonic revision."""
+
+    __tablename__ = "knowledge_graphs"
+    __table_args__ = (
+        UniqueConstraint("learner_id", "graph_id", name="uq_knowledge_graphs_learner_graph"),
+        Index("ix_knowledge_graphs_learner_updated", "learner_id", "updated_at"),
+    )
+
+    graph_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    title: Mapped[str] = mapped_column(String(120))
+    domain: Mapped[str] = mapped_column(String(120), default="")
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class KnowledgeGraphNode(Base):
+    """Curriculum structure for one graph; learner state lives in the overlay."""
+
+    __tablename__ = "knowledge_graph_nodes"
+    __table_args__ = (
+        Index("ix_knowledge_graph_nodes_graph", "graph_id"),
+    )
+
+    graph_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("knowledge_graphs.graph_id"), primary_key=True
+    )
+    node_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    label: Mapped[str] = mapped_column(String(80))
+    type: Mapped[str] = mapped_column(String(32))
+    importance: Mapped[float] = mapped_column(Float, default=0.5)
+    level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    position: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    aliases: Mapped[list] = mapped_column(JSON, default=list)
+    description: Mapped[str] = mapped_column(Text, default="")
+    source_refs: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class KnowledgeGraphEdge(Base):
+    """Explicitly directed or symmetric curricular relation."""
+
+    __tablename__ = "knowledge_graph_edges"
+    __table_args__ = (
+        Index("ix_knowledge_graph_edges_graph", "graph_id"),
+        UniqueConstraint(
+            "graph_id", "source_node_id", "target_node_id", "relation",
+            name="uq_knowledge_graph_edges_semantic",
+        ),
+    )
+
+    graph_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("knowledge_graphs.graph_id"), primary_key=True
+    )
+    edge_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    source_node_id: Mapped[str] = mapped_column(String(128))
+    target_node_id: Mapped[str] = mapped_column(String(128))
+    relation: Mapped[str] = mapped_column(String(48))
+    relation_label: Mapped[str] = mapped_column(String(20))
+    directed: Mapped[bool] = mapped_column(default=True)
+    importance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_refs: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class KnowledgeGraphLearnerOverlay(Base):
+    """Per-learner state labels over immutable curriculum structure."""
+
+    __tablename__ = "knowledge_graph_learner_overlay"
+    graph_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("knowledge_graphs.graph_id"), primary_key=True
+    )
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    node_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    is_current: Mapped[bool] = mapped_column(default=False)
+    learning_state: Mapped[str] = mapped_column(String(32), default="unknown")
+    evidence_ids: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class KnowledgeGraphEvent(Base):
+    """Audit record for every accepted graph patch."""
+
+    __tablename__ = "knowledge_graph_events"
+
+    event_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    graph_id: Mapped[str] = mapped_column(String(128), index=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    base_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    new_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    patch: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@sim/emcn'
 import { api } from '@/lib/lingxi/api'
+import { KnowledgeGraphCanvas } from '@/lib/lingxi/components/knowledge-graph-canvas'
 import { useAgentTask } from '@/lib/lingxi/hooks/use-agent-task'
 import type { PublicQuizQuestion } from '@/lib/lingxi/types'
 import { QuestionDisplay } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
@@ -12,12 +13,13 @@ interface LingxiArtifactResourceProps {
   resourceId: string
 }
 
-type ArtifactKind = 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual'
+type ArtifactKind = 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual' | 'knowledge-graph'
 
 function parseResourceId(resourceId: string) {
   const [, taskId, kind] = resourceId.split(':')
   if (!taskId || !kind) return null
-  if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual'].includes(kind)) return null
+  if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual', 'knowledge-graph'].includes(kind))
+    return null
   return { taskId, kind: kind as ArtifactKind }
 }
 
@@ -45,6 +47,30 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
   const [submittedAnswers, setSubmittedAnswers] = useState<string[]>()
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [graph, setGraph] = useState<import('@/lib/lingxi/types').KnowledgeGraphData | null>(null)
+  const [graphLoading, setGraphLoading] = useState(false)
+
+  useEffect(() => {
+    if (parsed?.kind !== 'knowledge-graph') return
+    setGraphLoading(true)
+    void api
+      .agentKnowledgeGraph(parsed.taskId)
+      .then(setGraph)
+      .catch(() => setGraph(null))
+      .finally(() => setGraphLoading(false))
+  }, [parsed, task?.artifacts.knowledge_graph?.revision])
+
+  useEffect(() => {
+    if (parsed?.kind !== 'knowledge-graph' || task?.artifacts.knowledge_graph?.available) return
+    if (task?.artifacts.knowledge_graph?.status === 'failed') return
+    const timer = setInterval(() => {
+      void api
+        .agentKnowledgeGraph(parsed.taskId)
+        .then(setGraph)
+        .catch(() => {})
+    }, 1800)
+    return () => clearInterval(timer)
+  }, [parsed, task?.artifacts.knowledge_graph?.available, task?.artifacts.knowledge_graph?.status])
 
   const submitQuiz = useCallback(
     async (answers: string[]) => {
@@ -72,7 +98,35 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
     [parsed, refresh, task]
   )
 
-  if (!parsed) return <div className='p-6 text-sm text-[var(--text-secondary)]'>产物地址无效。</div>
+  if (!parsed) return <div className='p-6 text-[var(--text-secondary)] text-sm'>产物地址无效。</div>
+
+  if (parsed.kind === 'knowledge-graph') {
+    if (graphLoading)
+      return (
+        <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载 Lingxi 知识图谱…</div>
+      )
+    if (!graph && task?.artifacts.knowledge_graph?.status === 'failed')
+      return (
+        <div className='flex h-full flex-col items-center justify-center gap-3 p-6 text-center'>
+          <p className='text-[var(--text-secondary)] text-sm'>
+            知识图谱后台生成失败，本次聊天和已有图谱不受影响。
+          </p>
+          <Button variant='outline' onClick={() => void refresh()}>
+            重新加载任务
+          </Button>
+        </div>
+      )
+    if (!graph)
+      return (
+        <div className='flex h-full flex-col items-center justify-center gap-2 p-6 text-center'>
+          <p className='text-[var(--text-secondary)] text-sm'>
+            图谱正在后台生成，完成后会自动出现。
+          </p>
+          <p className='text-[var(--text-muted)] text-xs'>当前聊天可继续接收输入。</p>
+        </div>
+      )
+    return <KnowledgeGraphCanvas graph={graph} />
+  }
 
   if (parsed.kind !== 'quiz') {
     return (
@@ -86,16 +140,13 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
   }
 
   if (loading && !task) {
-    return <div className='p-6 text-sm text-[var(--text-secondary)]'>正在加载知识点检测…</div>
+    return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载知识点检测…</div>
   }
   if (error || !task?.artifacts.quiz.data) {
     return (
       <div className='flex h-full flex-col items-center justify-center gap-3 p-6 text-center'>
-        <p className='text-sm text-[var(--text-secondary)]'>{error || '检测题尚未生成。'}</p>
-        <Button
-          variant='outline'
-          onClick={() => void refresh()}
-        >
+        <p className='text-[var(--text-secondary)] text-sm'>{error || '检测题尚未生成。'}</p>
+        <Button variant='outline' onClick={() => void refresh()}>
           重新加载
         </Button>
       </div>
@@ -115,12 +166,12 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
           onAnswersSubmit={canSubmit ? (answers) => void submitQuiz(answers) : undefined}
         />
         {task.quiz_submission && (
-          <p className='mt-4 text-sm text-[var(--text-secondary)]'>
+          <p className='mt-4 text-[var(--text-secondary)] text-sm'>
             得分：{task.quiz_submission.total_score} / {task.quiz_submission.total_points}
           </p>
         )}
-        {submitting && <p className='mt-4 text-sm text-[var(--text-secondary)]'>正在提交…</p>}
-        {submitError && <p className='mt-4 text-sm text-[var(--text-error)]'>{submitError}</p>}
+        {submitting && <p className='mt-4 text-[var(--text-secondary)] text-sm'>正在提交…</p>}
+        {submitError && <p className='mt-4 text-[var(--text-error)] text-sm'>{submitError}</p>}
       </div>
     </div>
   )

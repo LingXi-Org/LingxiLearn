@@ -22,7 +22,15 @@ interface SolutionsStructuredDataProps {
 }
 
 export function SolutionsStructuredData({ config }: SolutionsStructuredDataProps) {
-  const { module, path, seoDescription, offersFreeTier = true, hero, rows } = config
+  const {
+    module,
+    path,
+    seoDescription,
+    offersFreeTier = true,
+    language = 'en-US',
+    hero,
+    rows,
+  } = config
   const url = `${SITE_URL}${path}`
   const featureList = Array.from(
     new Set(rows.flatMap((row) => row.cards.map((card) => card.title)))
@@ -40,7 +48,7 @@ export function SolutionsStructuredData({ config }: SolutionsStructuredDataProps
         isPartOf: { '@id': `${SITE_URL}#website` },
         about: { '@id': `${url}#application` },
         breadcrumb: { '@id': `${url}#breadcrumb` },
-        inLanguage: 'en-US',
+        inLanguage: language,
       },
       {
         '@type': 'BreadcrumbList',

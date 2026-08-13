@@ -3,23 +3,31 @@ name: quiz-generator
 description: >-
   Generate a compact, evidence-grounded formative quiz from taught lesson content to assess understanding and reveal misconceptions.
 license: MIT
-compatibility: LingxiGraph Agent Skills runtime with Python 3
 metadata:
   author: LingXi-Org
-  version: 1.0.0
+  version: 1.1.0
   display-name: 知识点测评生成
   display-description: 基于已讲授的课程内容生成紧凑、可判分且能识别理解误区的形成性测评。
   output-language: zh-CN
   output-contract: quiz-generation-result.v1
   execution-mode: synchronous-structured-generation
+  phase: assess
+  critical-path: false
+  learner-facing: artifact
+  state-write-mode: none
+  parallel-safe: true
+  latency-class: background
+  eval-suite: quiz-generator-v1
 ---
 
 # Quiz Builder
 
 ## 目标
 
-把已经讲授的知识点转化为一组短小、有诊断价值的形成性测评。测评不是第二篇讲义，也不是
-题库堆砌；它要帮助学习者暴露理解断点，帮助教师知道下一步该补哪里。
+把已经讲授的知识点转化为一组短小、有诊断价值的形成性测评。默认把它作为可预取、可丢弃
+的评测 artifact，不阻塞 `adaptive-pedagogy` 的即时回答，也不承担 assessor 或 learner-facing
+辅导职责。测评不是第二篇讲义，也不是题库堆砌；它要帮助学习者暴露理解断点，帮助教师知道
+下一步该补哪里。
 
 默认一次生成 3–4 道题：先检查核心概念，再辨析一个有依据的误区，然后视材料质量加入应用、
 预测、解释或迁移题。材料只支持一个可靠问题时，生成更少的题；不要为了凑齐题型而编造难题。
@@ -55,6 +63,7 @@ metadata:
 4. 为每道题写答案、解释、评分信息和关键词；`total_points` 必须等于所有题目分值之和。
 5. 按 `references/quality-gate.md` 做一次重写式审查，而不是只做形式检查。
 6. 用 `scripts/quiz_contract.py validate-result` 校验，程序化调用时只返回 JSON，不包 Markdown 代码围栏。
+7. 需要在当前回合展示时，先使用公开快照；不要把内部答案、解析或关键词交给 learner-facing writer。
 
 ## 证据不足与冲突
 

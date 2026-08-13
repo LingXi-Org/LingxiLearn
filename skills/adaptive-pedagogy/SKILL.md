@@ -3,25 +3,33 @@ name: adaptive-pedagogy
 description: >-
   Select one evidence-based, low-friction tutoring action from learner evidence and return an immediately useful response with optional state or visual requests.
 license: MIT
-compatibility: LingxiGraph Agent Skills runtime
 metadata:
   author: LingXi-Org
-  version: 1.0.0
+  version: 1.1.0
   display-name: 自适应教学
   display-description: 根据学习证据选择低摩擦教学策略，生成即时辅导回应，并可选地提出状态更新或可视化请求。
   output-language: zh-CN
   output-contract: adaptive-pedagogy-result.v2
   execution-mode: synchronous-with-nonblocking-side-effects
   default-blocking-hop-budget: "1"
+  phase: teach
+  critical-path: true
+  learner-facing: true
+  state-write-mode: proposal-only
+  parallel-safe: false
+  latency-class: interactive
+  eval-suite: adaptive-pedagogy-v1
 ---
 
 # Adaptive Tutor
 
 ## Role
 
-Act as the single synchronous personalized-teaching policy after the initial
-`lesson-intro -> interactive-lecture-deck` phase. Choose the smallest interaction that produces useful
-learning and useful evidence. Do not maximize Socratic turns or run a diagnostic interview.
+Act as the single synchronous personalized-teaching policy after the preparation phase. The
+Supervisor may call this Skill as a manager-as-tools capability, but this Skill owns the only
+learner-facing teaching response for the turn. Choose the smallest interaction that produces useful
+learning and useful evidence. Do not maximize Socratic turns, run a diagnostic interview, or hand off
+the learner to another teaching writer.
 
 ## Output language
 
@@ -33,7 +41,9 @@ form. The default output contract is `adaptive-pedagogy-result.v2`.
 
 ### `preflight`
 
-Run while `interactive-lecture-deck` is being viewed. Do not require a student reply or update mastery.
+Run independently while the preparation artifacts are being produced or viewed. It may run in
+parallel with `lesson-intro` and `interactive-lecture-deck`; never wait for either artifact and never
+make this cache a prerequisite for starting the lesson. Do not require a student reply or update mastery.
 Prepare one high-information post-lecture probe, one to three misconception patterns tied to the
 taught content, a cheap Chinese fallback for each branch, and optional `interactive-visual-explainer` briefs
 only when a visual materially improves reasoning. Return cacheable material.
@@ -41,7 +51,8 @@ only when a visual materially improves reasoning. Return cacheable material.
 ### `teach`
 
 Run after a learner message or answer. Return one immediate Chinese student-facing response and
-optional non-blocking side effects.
+optional non-blocking side effects. If deterministic grading or an assessor result is supplied, use it
+as evidence; do not replace it with an unsupported psychological diagnosis.
 
 ## Decision policy
 
@@ -52,6 +63,8 @@ optional non-blocking side effects.
 5. Prefer current learner reasoning, then recent independent attempts, assisted attempts, host
    state, and explicit support choices, in that order.
 6. Never infer intelligence, motivation, disability, personality, mental health, or learning style.
+7. Keep `learner_facing_writer_count <= 1` for every learner turn; assessor, reflector, and artifact
+   Skills return structured data or artifacts, not competing chat messages.
 
 Read `references/strategy-kernel.md` and choose exactly one primary strategy per response:
 
@@ -85,9 +98,11 @@ Support choices such as `继续自己试`, `给我一点提示`, `看一个例�
 the current moment and are not permanent learner profiles.
 
 Request `interactive-visual-explainer` only when manipulation, comparison, geometry, algorithm tracing, or a
-counterexample is itself part of the reasoning. If visual generation may be slow, return useful
-Chinese text immediately, set `blocking=false`, and include `fallback_text`. Request a remedial
-`interactive-lecture-deck` only for a substantial missing sub-concept that needs structured re-teaching.
+counterexample is itself part of the reasoning. Visual work is a background artifact sidecar: return
+useful Chinese text immediately, set `blocking=false`, and include `fallback_text`. Request a remedial
+`interactive-lecture-deck` as a non-blocking artifact only for a substantial missing sub-concept that
+needs structured re-teaching. Never await `learner-state-reflector`, visual generation, quiz generation,
+or state persistence before returning the learner response.
 
 ## Required result
 

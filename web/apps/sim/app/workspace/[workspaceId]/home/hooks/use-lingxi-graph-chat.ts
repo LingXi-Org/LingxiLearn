@@ -64,12 +64,17 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
       title: '交互式可视化',
       path: task.artifacts.visual?.url,
     },
+    {
+      key: 'knowledge_graph',
+      title: 'Lingxi 知识图谱',
+      path: task.artifacts.knowledge_graph?.url,
+    },
   ]
   return entries
     .filter(({ key }) => Boolean(task.artifacts[key]?.available))
     .map(({ key, title, path }) => ({
       type: 'file' as const,
-      id: `lingxi-artifact:${task.id}:${key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key}`,
+      id: `lingxi-artifact:${task.id}:${key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key === 'knowledge_graph' ? 'knowledge-graph' : key}`,
       title,
       path,
     }))
@@ -153,8 +158,7 @@ export function useLingxiGraphChat(
       })
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
-        if (artifact)
-          onResourceEventRef.current?.(`lingxi-artifact:${taskId}:${artifact}`)
+        if (artifact) onResourceEventRef.current?.(`lingxi-artifact:${taskId}:${artifact}`)
         void currentAdapter
           .loadTask(taskId)
           .then((refreshed) => {
@@ -210,7 +214,7 @@ export function useLingxiGraphChat(
     [events, task]
   )
   const resources = useMemo(() => artifactResources(task), [task])
-  const assistantStreaming = Boolean(task && !taskIsTerminal(task) && !locallyStopped)
+  const assistantStreaming = Boolean(task && !taskIsTerminal(task) && !locallyStopped && isSending)
   const messages = useMemo(() => {
     if (!task) return localUsers.length > 0 ? localUsers : []
     const currentProjection = projection ?? projectLingxiGraphEvents(task, events)

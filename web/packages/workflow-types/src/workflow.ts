@@ -361,7 +361,7 @@ const SIDE_ANCHORED_TARGET_HANDLE_IDS = new Set<string>(
  *
  * Falsy-coalesce (not nullish-coalesce): persistence normalizes a missing
  * handle to `null` via `edge.sourceHandle || null` (see
- * apps/realtime/src/database/operations.ts), which also maps `''` to `null`.
+ * the retired Sim collaboration persistence layer), which also maps `''` to `null`.
  * Comparing with `??` would treat `''` and `null` as distinct handles
  * pre-insert while both are written as the same `null` value, letting a
  * `sourceHandle: ''` edge slip past the duplicate check.
@@ -512,7 +512,8 @@ export interface WorkflowTriggerCapableBlock {
  * toggle, or the legacy starter block type. Does NOT cover blocks whose
  * trigger status comes from the block registry's `category: 'triggers'`
  * field (most modern trigger blocks) — that classification only exists in
- * the client's block registry (apps/sim/blocks), which apps/realtime is
+ * the client's block registry (apps/sim/blocks), which the retired collaboration
+ * server was
  * architecturally forbidden from importing (see
  * scripts/check-monorepo-boundaries.ts). Persisting a redundant "isTrigger"
  * flag on the block row to cover that case would itself be a driftable

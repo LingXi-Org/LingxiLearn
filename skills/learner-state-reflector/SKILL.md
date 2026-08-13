@@ -3,16 +3,22 @@ name: learner-state-reflector
 description: >-
   Compress recent learning events into cautious, traceable learner-state update proposals without interrupting instruction.
 license: MIT
-compatibility: LingxiGraph Agent Skills runtime
 metadata:
   author: LingXi-Org
-  version: 1.0.0
+  version: 1.1.0
   display-name: 学习状态反思
   display-description: 将近期学习事件整理为谨慎、可追溯的学习状态更新建议，不打断教学流程。
   output-language: zh-CN
   output-contract: learner-state-reflector-result.v1
   execution-mode: non-blocking-background
   blocking: "false"
+  phase: learner-model
+  critical-path: false
+  learner-facing: false
+  state-write-mode: proposal-only
+  parallel-safe: true
+  latency-class: background
+  eval-suite: learner-state-reflector-v1
 ---
 
 # State Observer
@@ -20,8 +26,8 @@ metadata:
 ## Role
 
 Run after or alongside the already-rendered student-facing response. Remove memory and evidence
-compression work from the learner's critical path. Never make this skill a dependency that
-`adaptive-pedagogy` must await.
+compression work from the learner's critical path. Never make this Skill a dependency that
+`adaptive-pedagogy` must await, and never compete with it for learner-facing output.
 
 ## Output language
 
@@ -37,6 +43,8 @@ form. Return `learner-state-reflector-result.v1`.
 4. Never infer intelligence, motivation, disability, personality, mental health, or learning style.
 5. Store confidence only when the learner explicitly supplied it or the UI captured it.
 6. Treat an open learner-model card as optional UI; never interrupt the lesson for agreement.
+7. Return proposals for the host state store; do not write learner state directly.
+8. Preserve raw events when reflection fails so the host can replay them later.
 
 ## Inputs
 

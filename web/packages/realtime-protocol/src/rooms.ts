@@ -2,14 +2,14 @@
  * Room identity for the realtime layer.
  *
  * A {@link RoomRef} is the universal address shared by every realtime mechanism
- * in Sim — the Socket.IO presence server (`apps/realtime`), the durable SSE
+ * in the retired Sim deployment — the Socket.IO presence server, the durable SSE
  * event log, and the ephemeral pub/sub fanout. Each mechanism encodes a room
  * differently on the wire, but they all agree on this `{ type, id }` identity
  * and authorize it through the same workspace-permission resolver
  * (`@sim/platform-authz/rooms`).
  *
- * This module is pure (no runtime dependencies) so both `apps/sim` and
- * `apps/realtime` can import it.
+ * This module is pure (no runtime dependencies) for browser-side protocol
+ * compatibility.
  */
 
 /**

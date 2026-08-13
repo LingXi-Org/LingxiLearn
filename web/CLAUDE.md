@@ -56,15 +56,13 @@ apps/
 │   ├── stores/             # Zustand stores
 │   ├── tools/              # Tool definitions
 │   └── triggers/           # Trigger definitions
-└── realtime/               # Bun Socket.IO server (collaborative canvas)
-
 packages/
 ├── audit/                  # @sim/audit
 ├── auth/                   # @sim/auth — shared Better Auth verifier
 ├── db/                     # @sim/db — drizzle schema + client
 ├── logger/                 # @sim/logger
 ├── platform-authz/         # @sim/platform-authz — workspace + workflow authz (subpath exports)
-├── realtime-protocol/      # @sim/realtime-protocol — socket op constants + zod schemas
+├── realtime-protocol/      # @sim/realtime-protocol — client collaboration wire types
 ├── security/               # @sim/security — safeCompare
 ├── tsconfig/               # shared tsconfig presets
 ├── utils/                  # @sim/utils
@@ -75,8 +73,7 @@ packages/
 ### Package boundaries
 
 - `apps/* → packages/*` only. Packages never import from `apps/*`.
-- `apps/realtime` intentionally avoids Next.js, React, the block/tool registry, provider SDKs, and the executor. Do not add imports from `@/lib/webhooks/providers/*`, `@/executor/*`, `@/blocks/*`, or `@/tools/*` to any package consumed by `apps/realtime`. CI enforces this via `scripts/check-monorepo-boundaries.ts` and `scripts/check-realtime-prune-graph.ts`.
-- Auth is shared across both apps via the Better Auth "Shared Database Session" pattern (same `BETTER_AUTH_SECRET`, same DB via `@sim/db`).
+- The browser keeps the collaboration protocol package for compatible client-side types, but LingxiLearn runtime updates use the FastAPI REST/SSE API. There is no separate Socket.IO service in this deployment.
 
 ### Naming Conventions
 

@@ -1,0 +1,738 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "curriculum-graph-builder-task.v1",
+  "title": "Curriculum graph builder task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "learning_context",
+    "existing_graphs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "curriculum-graph-builder-task.v1"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "learning_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic",
+        "source_materials"
+      ],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "learning_objective": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "course_context": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "source_materials": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_id",
+              "kind",
+              "content"
+            ],
+            "properties": {
+              "source_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "enum": [
+                  "user_message",
+                  "lesson_intro",
+                  "lecture_deck",
+                  "quiz",
+                  "course_pack",
+                  "assessment_evidence",
+                  "learner_state",
+                  "other"
+                ]
+              },
+              "content": {}
+            }
+          }
+        }
+      }
+    },
+    "graph_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "auto",
+            "force_new",
+            "force_extend"
+          ],
+          "default": "auto"
+        },
+        "preferred_graph_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max_new_nodes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 40,
+          "default": 12
+        },
+        "allow_position_hints": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "existing_graphs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "graph_id",
+          "revision",
+          "title",
+          "nodes",
+          "edges"
+        ],
+        "properties": {
+          "graph_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "domain": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "label",
+                "type",
+                "importance",
+                "is_current",
+                "learning_state"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "type": {
+                  "enum": [
+                    "domain",
+                    "topic",
+                    "concept",
+                    "skill",
+                    "method",
+                    "formula",
+                    "example",
+                    "misconception",
+                    "application"
+                  ]
+                },
+                "importance": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "is_current": {
+                  "type": "boolean"
+                },
+                "learning_state": {
+                  "enum": [
+                    "unknown",
+                    "not_observed",
+                    "emerging",
+                    "demonstrated",
+                    "misconception_evidence",
+                    "needs_recheck"
+                  ]
+                },
+                "level": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "position": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "x",
+                    "y"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "aliases": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "uniqueItems": true
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                "source_refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                }
+              }
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "source",
+                "target",
+                "relation",
+                "relation_label",
+                "directed"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "target": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "relation": {
+                  "enum": [
+                    "prerequisite_of",
+                    "foundation_for",
+                    "part_of",
+                    "leads_to",
+                    "applies_to",
+                    "contrasts_with",
+                    "commonly_confused_with",
+                    "related_to"
+                  ]
+                },
+                "relation_label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20
+                },
+                "directed": {
+                  "type": "boolean"
+                },
+                "importance": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "source_refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true
+                }
+              }
+            }
+          },
+          "root_node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "learner_signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "current_concepts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "node_id"
+                ]
+              },
+              {
+                "required": [
+                  "label"
+                ]
+              }
+            ]
+          }
+        },
+        "concept_states": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "state"
+            ],
+            "properties": {
+              "node_id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "unknown",
+                  "not_observed",
+                  "emerging",
+                  "demonstrated",
+                  "misconception_evidence",
+                  "needs_recheck"
+                ]
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "node_id"
+                ]
+              },
+              {
+                "required": [
+                  "label"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "type",
+        "importance",
+        "is_current",
+        "learning_state"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "type": {
+          "enum": [
+            "domain",
+            "topic",
+            "concept",
+            "skill",
+            "method",
+            "formula",
+            "example",
+            "misconception",
+            "application"
+          ]
+        },
+        "importance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "is_current": {
+          "type": "boolean"
+        },
+        "learning_state": {
+          "enum": [
+            "unknown",
+            "not_observed",
+            "emerging",
+            "demonstrated",
+            "misconception_evidence",
+            "needs_recheck"
+          ]
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            }
+          }
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "target",
+        "relation",
+        "relation_label",
+        "directed"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relation": {
+          "enum": [
+            "prerequisite_of",
+            "foundation_for",
+            "part_of",
+            "leads_to",
+            "applies_to",
+            "contrasts_with",
+            "commonly_confused_with",
+            "related_to"
+          ]
+        },
+        "relation_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "directed": {
+          "type": "boolean"
+        },
+        "importance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph_id",
+        "revision",
+        "title",
+        "nodes",
+        "edges"
+      ],
+      "properties": {
+        "graph_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "domain": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "type",
+              "importance",
+              "is_current",
+              "learning_state"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "type": {
+                "enum": [
+                  "domain",
+                  "topic",
+                  "concept",
+                  "skill",
+                  "method",
+                  "formula",
+                  "example",
+                  "misconception",
+                  "application"
+                ]
+              },
+              "importance": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "is_current": {
+                "type": "boolean"
+              },
+              "learning_state": {
+                "enum": [
+                  "unknown",
+                  "not_observed",
+                  "emerging",
+                  "demonstrated",
+                  "misconception_evidence",
+                  "needs_recheck"
+                ]
+              },
+              "level": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "position": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  }
+                }
+              },
+              "aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "uniqueItems": true
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 300
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "source",
+              "target",
+              "relation",
+              "relation_label",
+              "directed"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1
+              },
+              "relation": {
+                "enum": [
+                  "prerequisite_of",
+                  "foundation_for",
+                  "part_of",
+                  "leads_to",
+                  "applies_to",
+                  "contrasts_with",
+                  "commonly_confused_with",
+                  "related_to"
+                ]
+              },
+              "relation_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              },
+              "directed": {
+                "type": "boolean"
+              },
+              "importance": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        "root_node_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

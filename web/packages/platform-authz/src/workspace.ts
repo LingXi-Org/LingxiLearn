@@ -17,8 +17,8 @@ export * from './predicates'
  * admin. `workspace.ownerId` is a lifecycle anchor, not a permission input.
  *
  * Single source of truth for workspace-permission resolution, shared by the Next
- * app (`getEffectiveWorkspacePermission`) and the realtime server (via the
- * `/workflow` entry). Lives in a package because `apps/realtime` needs it and
+ * app (`getEffectiveWorkspacePermission`) and the retired collaboration layer
+ * (via the `/workflow` entry). Lives in a package because packages may not
  * packages may not import app code.
  */
 export async function resolveEffectiveWorkspacePermission(

@@ -29,6 +29,10 @@ export interface SolutionsHeroConfig {
   heading: string
   /** Supporting description beneath the heading, in the body color. */
   description: string
+  /** Optional primary hero CTA; omitted pages keep the shared defaults. */
+  cta?: SolutionsPillCta
+  /** Optional secondary hero CTA; omitted pages keep the shared defaults. */
+  secondaryCta?: SolutionsPillCta | null
   /**
    * ~50-word sr-only atomic summary for AI citation (GEO). Names "Sim" explicitly
    * and states what the module is, who it's for, and what it does.
@@ -72,6 +76,14 @@ export interface SolutionsCardConfig {
 
 /** Controlled surface tones for {@link SolutionsCardConfig.featureTileTone}. */
 export type SolutionsFeatureTileTone = 'light' | 'dark'
+
+/** Configurable pre-footer CTA; omitted pages keep the shared defaults. */
+export interface SolutionsFooterCtaConfig {
+  heading: string
+  description?: string
+  primary?: SolutionsPillCta
+  secondary?: SolutionsPillCta | null
+}
 
 /**
  * A card row - the core repeating unit. A header (title + subtitle + CTA) above a
@@ -129,8 +141,14 @@ export interface SolutionsPageConfig {
    * rich result never claims a $0 price for a quoted product.
    */
   offersFreeTier?: boolean
+  /** Structured-data language for localized product pages. */
+  language?: string
+  /** Whether to render the shared ecosystem-logo row. Defaults to true. */
+  showLogos?: boolean
   /** The hero (the page's only `<h1>`). */
   hero: SolutionsHeroConfig
   /** Card rows rendered in order beneath the logos row. */
   rows: SolutionsCardRowConfig[]
+  /** Optional page-specific closing CTA. */
+  footerCta?: SolutionsFooterCtaConfig
 }

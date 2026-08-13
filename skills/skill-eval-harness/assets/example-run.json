@@ -1,0 +1,64 @@
+{
+  "schema_version": "skill-eval-run.v1",
+  "suite_id": "adaptive-pedagogy-v1-smoke",
+  "skill": "adaptive-pedagogy",
+  "cases": [
+    {
+      "case_id": "low-confidence-slip",
+      "task": {
+        "mode": "teach",
+        "topic": "梯度下降",
+        "current_event": {"id": "ev-1", "correct": false, "confidence": "low"}
+      },
+      "validator": "adaptive-pedagogy-result.v2",
+      "expectations": {
+        "evidence_ids": ["ev-1"],
+        "require_evidence": true,
+        "forbidden_strings": ["答案是"],
+        "max_required_actions": 1,
+        "max_blocking_hops": 1,
+        "max_latency_ms": 3000,
+        "max_tokens": 1600,
+        "traceability_required": true
+      },
+      "output": {
+        "version": "adaptive-pedagogy-result.v2",
+        "mode": "teach",
+        "evidence_used": ["ev-1"],
+        "decision": {
+          "strategy": "minimal_cue",
+          "reason": "已有低置信度错误证据，先缩小比较范围。",
+          "question_value_gate": "ask",
+          "verification_debt": "none"
+        },
+        "student_response": {
+          "text": "先只比较两个数的十分位，再告诉我哪一个更大。",
+          "required_reply": true,
+          "local_scaffolds": []
+        },
+        "visual_request": null,
+        "background_reflection": null,
+        "prefetch_cache": null,
+        "state_update_proposals": []
+      },
+      "trajectory": {
+        "learner_facing_writer_count": 1,
+        "blocking_hops": 1,
+        "latency_ms": 900,
+        "prompt_tokens": 480,
+        "completion_tokens": 220,
+        "response_blocked_by_sidecar": false,
+        "turns": [
+          {"event": "deterministic-judge", "blocking": true},
+          {"event": "adaptive-pedagogy", "writer": "adaptive-pedagogy", "audience": "learner", "blocking": true},
+          {"event": "learner-state-reflector", "sidecar": true, "blocking": false, "blocked_response": false}
+        ]
+      },
+      "outcome": {
+        "independent": true,
+        "independent_transfer_passed": true,
+        "evidence_refs": ["ev-1", "ev-2"]
+      }
+    }
+  ]
+}

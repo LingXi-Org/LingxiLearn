@@ -35,7 +35,7 @@ function getTitleFontSize(title: string): number {
  * serves to browsers cannot be reused here.
  *
  * These live under `public/` so they need no `outputFileTracingIncludes` entry:
- * `docker/app.Dockerfile` copies that directory into the runner, which the
+ * `web/Dockerfile` copies that directory into the static-export runner, which the
  * `force-dynamic` share-token card needs since it renders per request.
  *
  * `process.cwd()` is the app directory in every environment this runs in, not

@@ -2,6 +2,7 @@ ARG DOCKER_REGISTRY=docker.m.daocloud.io
 FROM ${DOCKER_REGISTRY}/oven/bun:1.3.14 AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG NEXT_PUBLIC_API_BASE=
 ARG NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER=
 ARG NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID=
@@ -22,7 +23,7 @@ COPY packages packages
 # copies the package manifests before the source tree, so Bun must resolve the
 # workspace graph after those manifests are staged; a frozen install rejects
 # the generated lock metadata even when the dependency set is valid.
-RUN bun install --ignore-scripts
+RUN bun install --ignore-scripts --registry ${NPM_REGISTRY}
 COPY . .
 # Use Bun's `run --cwd` form. The previous argument order only printed Bun's
 # help text and exited successfully, allowing a stale static export to be

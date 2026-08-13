@@ -1,4 +1,5 @@
 import { ChipLink } from '@sim/emcn'
+import type { SolutionsFooterCtaConfig } from '@/app/(landing)/components/solutions-page/types'
 import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
 
 /**
@@ -15,7 +16,14 @@ import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
  * padding (`px-20`) matches every section above, and the section is capped and
  * centered at the shared `max-w-[1460px]`.
  */
-export function Cta() {
+interface CtaProps extends Partial<SolutionsFooterCtaConfig> {}
+
+export function Cta({
+  heading = '今天就构建你的第一个智能体。',
+  description,
+  primary = { label: '立即开始', href: SIGNUP_HREF },
+  secondary = { label: '联系销售', href: DEMO_HREF },
+}: CtaProps = {}) {
   return (
     <section
       id='cta'
@@ -26,15 +34,22 @@ export function Cta() {
         id='cta-heading'
         className='max-w-[860px] text-balance text-[48px] text-[var(--text-primary)] leading-[1.1] max-sm:text-[32px] max-xl:text-[40px]'
       >
-        今天就构建你的第一个智能体。
+        {heading}
       </h2>
+      {description ? (
+        <p className='max-w-[640px] text-pretty text-[16px] text-[var(--text-muted)] leading-[1.6]'>
+          {description}
+        </p>
+      ) : null}
       <div className='flex items-center gap-1'>
-        <ChipLink variant='primary' href={SIGNUP_HREF}>
-          立即开始
+        <ChipLink variant='primary' href={primary.href}>
+          {primary.label}
         </ChipLink>
-        <ChipLink href={DEMO_HREF} className='border border-[var(--border-1)]'>
-          联系销售
-        </ChipLink>
+        {secondary ? (
+          <ChipLink href={secondary.href} className='border border-[var(--border-1)]'>
+            {secondary.label}
+          </ChipLink>
+        ) : null}
       </div>
     </section>
   )

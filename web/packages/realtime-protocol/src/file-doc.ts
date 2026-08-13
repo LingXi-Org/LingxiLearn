@@ -3,7 +3,7 @@
  * ({@link ROOM_TYPES.WORKSPACE_FILE_DOC}). Live carets and text selection ride
  * Yjs document sync + awareness over the shared Socket.IO connection. These are
  * the event names, binary message tags, and join payloads that the server
- * (`apps/realtime/src/handlers/file-doc.ts`) and the client provider
+ * (the retired server relay) and the client provider
  * (`apps/sim/.../file-doc`) must agree on exactly — the single source of truth
  * for both sides so they can never drift.
  *
@@ -95,7 +95,7 @@ export const FILE_DOC_SEED = {
  * running — orphaning work that lands late (see the assertion in the accompanying test):
  *
  * - `applyEditMs` (app → relay `apply-edit`, in `apps/sim`) wraps `mergeRequestMs` (relay → app
- *   `/merge`, in `apps/realtime`), so `mergeRequestMs < applyEditMs`.
+ *   `/merge`), so `mergeRequestMs < applyEditMs`.
  * - `readinessDeadlineMs` (the client's give-up-and-fall-back-read-only deadline) must outlast
  *   `seedRequestMs` (relay → app `/seed`), so `seedRequestMs < readinessDeadlineMs`.
  *

@@ -78,6 +78,41 @@ function requiredEnv(name: string, value: string | undefined): string {
   return value;
 }
 
+/**
+ * Read the OIDC ID token claims for local UI identity display only.
+ * Authorization still uses the access token and is always verified by the
+ * LingxiLearn API; this fallback avoids making the optional /me endpoint a
+ * prerequisite for completing a successful browser callback.
+ */
+function decodeJwtPayload(token: string | undefined): Record<string, unknown> | null {
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function userFromClaims(claims: Record<string, unknown> | null): LingxiIdentityUser | null {
+  if (!claims || typeof claims.sub !== 'string' || !claims.sub) return null;
+  return {
+    id: claims.sub,
+    email: typeof claims.email === 'string' ? claims.email : undefined,
+    name:
+      typeof claims.name === 'string'
+        ? claims.name
+        : typeof claims.preferred_username === 'string'
+          ? claims.preferred_username
+          : undefined,
+    picture: typeof claims.picture === 'string' ? claims.picture : undefined,
+    emailVerified: claims.email_verified === true,
+  };
+}
+
 export function lingxiIdentityConfig(): LingxiIdentityConfig {
   return {
     issuer: requiredEnv("NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER", process.env.NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER).replace(/\/$/, ""),
@@ -223,20 +258,24 @@ export class LingxiIdentityClient {
   async user(): Promise<LingxiIdentityUser | null> {
     const token = await this.accessToken();
     if (!token) return null;
+    const tokenUser = userFromClaims(decodeJwtPayload(this.tokens?.idToken));
+    if (tokenUser) return tokenUser;
     const metadata = await this.metadata();
-    if (!metadata.userinfo_endpoint) return null;
-    const response = await fetch(metadata.userinfo_endpoint, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) return null;
-    const body = (await response.json()) as Record<string, unknown>;
-    return {
-      id: String(body.sub ?? ""),
-      email: typeof body.email === "string" ? body.email : undefined,
-      name: typeof body.name === "string" ? body.name : undefined,
-      picture: typeof body.picture === "string" ? body.picture : undefined,
-      emailVerified: body.email_verified === true,
-    };
+    if (metadata.userinfo_endpoint) {
+      try {
+        const response = await fetch(metadata.userinfo_endpoint, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const body = (await response.json()) as Record<string, unknown>;
+          const user = userFromClaims(body);
+          if (user) return user;
+        }
+      } catch {
+        // The ID token fallback below keeps local callback handling resilient.
+      }
+    }
+    return userFromClaims(decodeJwtPayload(this.tokens?.idToken));
   }
 
   async logout(): Promise<void> {

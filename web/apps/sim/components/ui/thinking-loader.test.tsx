@@ -25,25 +25,6 @@ afterEach(() => {
 })
 
 describe('ThinkingLoader', () => {
-  it('uses the production Lingxi mark as the entry silhouette', () => {
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    const root = createRoot(host)
-
-    act(() => {
-      root.render(<ThinkingLoader startVariant='lingxi' startHoldMs={120} size={28} />)
-    })
-
-    expect(host.querySelector("path[d^='M44.73 40.05']")).not.toBeNull()
-    expect(
-      host.querySelector("path[d^='M44.73 40.05']")?.closest("g[class*='stage']")?.className.baseVal
-    ).toContain('stageActive')
-
-    act(() => {
-      root.unmount()
-    })
-  })
-
   it('keeps the play silhouette mounted while entering the morph cycle', () => {
     vi.useFakeTimers()
     const host = document.createElement('div')
@@ -93,7 +74,7 @@ describe('ThinkingLoader', () => {
       )
     })
 
-    expect(host.querySelectorAll("g[class*='stage']")).toHaveLength(10)
+    expect(host.querySelectorAll("g[class*='stage']")).toHaveLength(9)
     expect(playPath?.closest('g')?.className.baseVal).toContain('stageActive')
 
     act(() => {

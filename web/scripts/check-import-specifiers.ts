@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const SCAN_DIRS = ['apps/sim', 'apps/realtime', 'apps/docs', 'packages']
+const SCAN_DIRS = ['apps/sim', 'apps/docs', 'packages']
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'build', '.turbo'])
 
 /**
@@ -56,7 +56,7 @@ function isCompiledSource(full: string, name: string): boolean {
   if (!/\.(ts|tsx)$/.test(name) || name.endsWith('.d.ts')) return false
   if (/\.(test|spec)\.tsx?$/.test(name)) return false
   const rel = repoPath(full)
-  return !rel.startsWith('apps/sim/scripts/') && !rel.startsWith('apps/realtime/scripts/')
+  return !rel.startsWith('apps/sim/scripts/')
 }
 
 function walk(dir: string, acc: string[] = []): string[] {
@@ -111,7 +111,7 @@ function probe(base: string): string | null {
 
 /**
  * `paths` from the workspace owning a file. Per-workspace, not global: `@/*` differs between
- * apps/sim and apps/realtime, and apps/sim maps `@sim/db/*` straight at the package directory,
+ * apps/sim and the docs app, and apps/sim maps `@sim/db/*` straight at the package directory,
  * bypassing its `exports` map.
  */
 interface PathRule {

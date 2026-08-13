@@ -1,4 +1,5 @@
 import { ChipLink, cn } from '@sim/emcn'
+import type { SolutionsPillCta } from '@/app/(landing)/components/solutions-page/types'
 import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
 
 /**
@@ -22,19 +23,29 @@ const CTA_SIZE = 'h-[36px] px-[0.571em] text-[15px] [&>span]:[font-size:inherit]
  * Server Component; owns its own internal spacing. Consumers place it in their
  * own stack and pass nothing.
  */
-export function HeroCta() {
+interface HeroCtaProps {
+  primary?: SolutionsPillCta
+  secondary?: SolutionsPillCta | null
+}
+
+export function HeroCta({
+  primary = { label: '预约演示', href: DEMO_HREF },
+  secondary = { label: '立即注册', href: SIGNUP_HREF },
+}: HeroCtaProps = {}) {
   return (
     <div className='flex items-center gap-2 max-sm:w-full max-sm:flex-col max-sm:items-stretch'>
-      <ChipLink variant='primary' href={DEMO_HREF} className={CTA_SIZE}>
-        预约演示
+      <ChipLink variant='primary' href={primary.href} className={CTA_SIZE}>
+        {primary.label}
       </ChipLink>
-      <ChipLink
-        href={SIGNUP_HREF}
-        prefetch={false}
-        className={cn(CTA_SIZE, 'border border-[var(--border-1)] max-sm:justify-center')}
-      >
-        立即注册
-      </ChipLink>
+      {secondary ? (
+        <ChipLink
+          href={secondary.href}
+          prefetch={false}
+          className={cn(CTA_SIZE, 'border border-[var(--border-1)] max-sm:justify-center')}
+        >
+          {secondary.label}
+        </ChipLink>
+      ) : null}
     </div>
   )
 }

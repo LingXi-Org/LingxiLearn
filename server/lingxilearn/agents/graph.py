@@ -60,6 +60,7 @@ class AgentState(TypedDict, total=False):
     deck_result: dict[str, Any]
     quiz_result: dict[str, Any]
     answer_result: dict[str, Any]
+    adaptive_result: dict[str, Any]
     visual_result: dict[str, Any]
     handoff_result: dict[str, Any]
     route: str
@@ -237,6 +238,11 @@ async def _invoke_agent(
     disclosure observable without a second UI event implementation.
     """
 
+    if runtime is None:
+        return await agent.ainvoke(
+            {"messages": [message]},
+            {"recursion_limit": recursion_limit, "tool_permissions": list(tool_permissions)},
+        )
     stream = getattr(agent, "astream", None)
     if not callable(stream):
         return await agent.ainvoke(
@@ -281,8 +287,8 @@ async def _invoke_agent(
             {"messages": [message]},
             config,
             stream_mode=("events", "values"),
-            context=runtime.context,
-            cancellation=runtime.cancellation,
+            context=getattr(runtime, "context", None),
+            cancellation=getattr(runtime, "cancellation", None),
             subgraphs=True,
         ):
             if mode == "values":
@@ -376,7 +382,7 @@ async def _invoke_agent(
 
 def _route_from_state(state: AgentState) -> str:
     route = state.get("route")
-    if route not in {"initialize", "await_user", "answer_user", "interactive_visual_explainer", "quiz_submit", "handoff"}:
+    if route not in {"initialize", "await_user", "answer_user", "adaptive_pedagogy", "interactive_visual_explainer", "quiz_submit", "handoff"}:
         raise ValueError(f"unknown graph route: {route!r}")
     return str(route)
 
@@ -385,7 +391,7 @@ def _public_quiz(state: AgentState) -> dict[str, Any]:
     return quiz_public(state.get("quiz_result") or {})
 
 
-def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts: ArtifactStore, persist_result: PersistResult, checkpointer: Any | None = None, store: Any | None = None):
+def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts: ArtifactStore, persist_result: PersistResult, checkpointer: Any | None = None, store: Any | None = None, knowledge_deep_dive: bool = False):
     """Compile the durable difficult-knowledge subgraph."""
     lecture_registry = SkillRegistry((FilesystemSkillSource(REPO_ROOT / "skills" / "lesson-intro"),))
     deck_registry = SkillRegistry((FilesystemSkillSource(REPO_ROOT / "skills" / "interactive-lecture-deck"),))
@@ -395,6 +401,10 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
     async def recognize_intent(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
         initial = not bool(state.get("intent"))
         raw = state.get("prompt", "") if initial else str((state.get("user_message") or {}).get("message") or "")
+        if knowledge_deep_dive and not initial and (state.get("user_message") or {}).get("kind") == "quiz_submit":
+            route = "adaptive_pedagogy"
+            _emit(runtime, "intent.routed", agent="intent", route=route)
+            return {"route": route}
         _emit(runtime, "intent.started", agent="intent")
         agent = create_agent(_agent_model(model, "intent"), system_prompt=INTENT_PROMPT, name="intent-recognizer")
         result = await _invoke_agent(
@@ -415,11 +425,18 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             _emit(runtime, "intent.completed", agent="intent", topic=intent.topic)
             return {"intent": value, "route": "initialize"}
         if (state.get("user_message") or {}).get("kind") == "quiz_submit":
-            _emit(runtime, "intent.routed", agent="intent", route="quiz_submit")
-            return {"route": "quiz_submit"}
+            route = "adaptive_pedagogy" if knowledge_deep_dive else "quiz_submit"
+            _emit(runtime, "intent.routed", agent="intent", route=route)
+            return {"route": route}
         route = str(parsed.get("route") or "")
+        if knowledge_deep_dive and route != "handoff":
+            # The deep-dive subgraph has exactly one learner-facing writer.
+            # Visuals, quizzes and reflection are sidecars; their request is
+            # still answered immediately by adaptive pedagogy.
+            route = "adaptive_pedagogy"
         if route not in {"answer_user", "interactive_visual_explainer", "quiz_submit", "handoff"}:
-            raise ValueError(f"intent recognizer returned an invalid route: {route!r}")
+            if route != "adaptive_pedagogy":
+                raise ValueError(f"intent recognizer returned an invalid route: {route!r}")
         _emit(runtime, "intent.routed", agent="intent", route=route)
         return {"route": route}
 
@@ -666,6 +683,58 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         _emit(runtime, "agent.output", agent="answer_user", message=text)
         return {"answer_result": value, "status": "awaiting_user"}
 
+    async def adaptive_pedagogy(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
+        """Single learner-facing writer used by the knowledge deep dive."""
+
+        if state.get("route") == "handoff":
+            return {}
+        message = str((state.get("user_message") or {}).get("message") or "")
+        first_turn = not bool(state.get("adaptive_result")) and not message
+        context = {
+            "mode": "teach",
+            "topic": (state.get("intent") or {}).get("topic", "当前知识点"),
+            "intent": state.get("intent") or {},
+            "lesson_intro": state.get("lecture_result") or {},
+            "lecture_deck": state.get("deck_result") or {},
+            "learner_message": message or "请用中文开始这次知识深挖，并告诉我接下来可以如何互动。",
+            "first_turn": first_turn,
+        }
+        prompt = (
+            "你是 adaptive-pedagogy 学习教练。你是本子图唯一的 learner-facing writer。"
+            "使用简体中文，基于已有材料回答；普通追问、答题结果、解释请求都使用 mode=teach。"
+            "如果用户请求图解，先给出可见的中文 fallback，再让后台 sidecar 生成 HTML。"
+            "只输出 JSON：{\"text\":\"...\",\"mode\":\"teach\",\"next_step\":\"...\"}。\n"
+            + json.dumps(context, ensure_ascii=False)
+        )
+        agent = create_agent(
+            _agent_model(model, "adaptive_pedagogy"),
+            system_prompt=prompt,
+            name="adaptive-pedagogy",
+        )
+        parsed = extract_json(
+            _message_text(
+                await _invoke_agent(
+                    agent,
+                    HumanMessage(prompt),
+                    runtime,
+                    agent_name="adaptive_pedagogy",
+                    recursion_limit=10,
+                )
+            )
+        ) or {}
+        text = str(parsed.get("text") or "").strip()
+        if not text:
+            raise ValueError("adaptive-pedagogy returned no learner-facing text")
+        value = {
+            "text": text,
+            "mode": "teach",
+            "next_step": str(parsed.get("next_step") or "继续提问或完成测评"),
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        await persist_result("adaptive_pedagogy", value)
+        _emit(runtime, "agent.output", agent="adaptive_pedagogy", message=text)
+        return {"adaptive_result": value, "status": "awaiting_user"}
+
     async def visual_explainer(state: AgentState, runtime: Runtime[Any]) -> dict[str, Any]:
         _emit(runtime, "agent.started", agent="interactive_visual_explainer", skill="interactive-visual-explainer")
         draft = ArtifactDraft(artifacts, task_id, "visual")
@@ -735,29 +804,65 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         value = {"target": "main_graph.next_node", "reason": reason, "task_id": task_id, "message": message}
         await persist_result("handoff", value)
         _emit(runtime, "handoff.requested", agent="handoff", **value)
-        return {"handoff_result": value}
+        return {"handoff_result": value, "status": "handed_off"}
 
-    builder = StateGraph(AgentState, name="lingxilearn-difficult-knowledge-subgraph", version="2.0.0")
+    graph_name = "lingxilearn-knowledge-deep-dive-subgraph" if knowledge_deep_dive else "lingxilearn-difficult-knowledge-subgraph"
+    graph_version = "3.0.0" if knowledge_deep_dive else "2.0.0"
+    builder = StateGraph(AgentState, name=graph_name, version=graph_version)
     builder.add_node("recognize_intent", _trace_agent_node("intent", recognize_intent), timeout=settings.agent_timeout)
     builder.add_node("lecture_hook", _trace_agent_node("lecture_hook", lecture_hook), timeout=settings.agent_lecture_timeout)
     builder.add_node("interactive_lecture_deck", _trace_agent_node("interactive_lecture_deck", interactive_lecture_deck), timeout=settings.agent_deck_timeout)
-    builder.add_node("quiz_generator", _trace_agent_node("quiz_generator", quiz_generator), timeout=settings.agent_timeout)
+    if not knowledge_deep_dive:
+        builder.add_node("quiz_generator", _trace_agent_node("quiz_generator", quiz_generator), timeout=settings.agent_timeout)
     builder.add_node("await_user", await_user)
-    builder.add_node("answer_user", _trace_agent_node("answer_user", answer_user), timeout=settings.agent_timeout)
-    builder.add_node("interactive_visual_explainer", _trace_agent_node("interactive_visual_explainer", visual_explainer), timeout=settings.agent_visual_timeout)
-    builder.add_node("quiz_submit", quiz_submit)
+    if not knowledge_deep_dive:
+        builder.add_node("answer_user", _trace_agent_node("answer_user", answer_user), timeout=settings.agent_timeout)
+    if knowledge_deep_dive:
+        builder.add_node("adaptive_pedagogy", _trace_agent_node("adaptive_pedagogy", adaptive_pedagogy), timeout=settings.agent_timeout)
+    if not knowledge_deep_dive:
+        builder.add_node("interactive_visual_explainer", _trace_agent_node("interactive_visual_explainer", visual_explainer), timeout=settings.agent_visual_timeout)
+        builder.add_node("quiz_submit", quiz_submit)
     builder.add_node("handoff", handoff)
     builder.add_edge(START, "recognize_intent")
     builder.add_edge("recognize_intent", "lecture_hook")
     builder.add_edge("recognize_intent", "interactive_lecture_deck")
-    builder.add_edge(("lecture_hook", "interactive_lecture_deck"), "quiz_generator", trigger="all")
-    builder.add_conditional_edges("quiz_generator", _route_from_state, {"initialize": "await_user", "await_user": "await_user", "answer_user": "answer_user", "interactive_visual_explainer": "interactive_visual_explainer", "quiz_submit": "quiz_submit", "handoff": "handoff"})
+    if knowledge_deep_dive:
+        builder.add_edge(("lecture_hook", "interactive_lecture_deck"), "adaptive_pedagogy", trigger="all")
+        builder.add_conditional_edges("adaptive_pedagogy", _route_from_state, {"initialize": "await_user", "await_user": "await_user", "adaptive_pedagogy": "await_user", "answer_user": "await_user", "interactive_visual_explainer": "await_user", "quiz_submit": "await_user", "handoff": "handoff"})
+    else:
+        builder.add_edge(("lecture_hook", "interactive_lecture_deck"), "quiz_generator", trigger="all")
+        builder.add_conditional_edges("quiz_generator", _route_from_state, {"initialize": "await_user", "await_user": "await_user", "answer_user": "answer_user", "adaptive_pedagogy": "answer_user", "interactive_visual_explainer": "interactive_visual_explainer", "quiz_submit": "quiz_submit", "handoff": "handoff"})
     builder.add_edge("await_user", "recognize_intent" if checkpointer is not None else END)
-    builder.add_edge("answer_user", "await_user")
-    builder.add_edge("interactive_visual_explainer", "await_user")
-    builder.add_edge("quiz_submit", "handoff")
+    if not knowledge_deep_dive:
+        builder.add_edge("answer_user", "await_user")
+        builder.add_edge("interactive_visual_explainer", "await_user")
+        builder.add_edge("quiz_submit", "handoff")
     builder.add_edge("handoff", END)
     compile_options: dict[str, Any] = {"checkpointer": checkpointer}
     if store is not None:
         compile_options["store"] = store
     return builder.compile(**compile_options)
+
+
+def build_knowledge_deep_dive_graph(
+    *,
+    model: Any,
+    settings: Settings,
+    task_id: str,
+    artifacts: ArtifactStore,
+    persist_result: PersistResult,
+    checkpointer: Any | None = None,
+    store: Any | None = None,
+):
+    """Compile the durable, learner-resumable knowledge deep-dive subgraph."""
+
+    return build_agent_graph(
+        model=model,
+        settings=settings,
+        task_id=task_id,
+        artifacts=artifacts,
+        persist_result=persist_result,
+        checkpointer=checkpointer,
+        store=store,
+        knowledge_deep_dive=True,
+    )

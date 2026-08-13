@@ -3,15 +3,21 @@ name: lesson-intro
 description: >-
   Create a warm, evidence-grounded lesson opening that turns a fact, puzzle, scene, or misconception into curiosity about the target concept.
 license: MIT
-compatibility: LingxiGraph Agent Skills runtime with web research and HTML output
 metadata:
   author: LingXi-Org
-  version: 4.0.0
+  version: 4.1.0
   display-name: 课程引入
   display-description: 基于事实、问题、场景或误区设计自然有趣的课程开场，引导学习者产生对目标概念的兴趣。
   output-language: zh-CN
   output-contract: lesson-intro-html.v1
   execution-mode: research-editorial-html
+  phase: prepare
+  critical-path: true
+  learner-facing: artifact
+  state-write-mode: none
+  parallel-safe: true
+  latency-class: interactive
+  eval-suite: lesson-intro-v1
 ---
 
 # Lesson Opener
@@ -19,8 +25,10 @@ metadata:
 ## Role
 
 Create a small, delightful learning page—not a research report, dashboard, debug log, or agent
-handoff. The learner should see a concrete scene, feel a small moment of surprise, and leave with a
-question that makes the target concept worth learning.
+handoff. This preparation artifact may run in parallel with `interactive-lecture-deck` from the same
+curriculum context; do not wait for the deck or invoke another teaching Skill. The learner should see
+a concrete scene, feel a small moment of surprise, and leave with a question that makes the target
+concept worth learning.
 
 ## Output contract
 
