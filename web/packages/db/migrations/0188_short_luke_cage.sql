@@ -1,1 +1,0 @@
-ALTER TABLE "organization" ADD COLUMN "whitelabel_settings" json;

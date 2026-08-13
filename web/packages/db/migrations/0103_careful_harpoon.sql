@@ -1,2 +1,0 @@
-ALTER TABLE "user_stats" ADD COLUMN "current_period_copilot_cost" numeric DEFAULT '0' NOT NULL;--> statement-breakpoint
-ALTER TABLE "user_stats" ADD COLUMN "last_period_copilot_cost" numeric DEFAULT '0';

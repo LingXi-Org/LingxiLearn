@@ -1,1 +1,0 @@
-ALTER TABLE "workflow" ADD COLUMN "is_public_api" boolean DEFAULT false NOT NULL;

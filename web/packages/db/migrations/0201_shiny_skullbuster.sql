@@ -1,1 +1,0 @@
-ALTER TABLE "user_table_rows" ADD COLUMN "executions" jsonb DEFAULT '{}'::jsonb NOT NULL;

@@ -15,12 +15,7 @@ RUN python -m pip install --no-cache-dir --index-url ${PYPI_INDEX_URL} uv \
 
 ARG DOCKER_REGISTRY=docker.m.daocloud.io
 FROM ${DOCKER_REGISTRY}/library/python:3.13-slim AS runtime
-ARG APT_MIRROR=mirrors.aliyun.com
-RUN sed -i "s@deb.debian.org@${APT_MIRROR}@g; s@security.debian.org@${APT_MIRROR}@g" /etc/apt/sources.list.d/debian.sources \
- && apt-get update \
- && apt-get install -y --no-install-recommends nodejs \
- && rm -rf /var/lib/apt/lists/* \
- && groupadd --gid 10001 lingxi \
+RUN groupadd --gid 10001 lingxi \
  && useradd --uid 10001 --gid 10001 --create-home lingxi
 WORKDIR /app
 ENV PATH=/app/.venv/bin:$PATH \

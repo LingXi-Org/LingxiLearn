@@ -1,40 +1,23 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.0.0-beta.5/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": false },
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": false,
     "includes": [
       "**",
       "!**/.next",
-      "!**/.next",
-      "!**/next-env.d.ts",
       "!**/out",
       "!**/dist",
       "!**/build",
       "!**/node_modules",
-      "!**/.bun",
       "!**/.cache",
       "!**/.turbo",
-      "!**/.DS_Store",
-      "!**/*.pem",
-      "!**/bun-debug.log*",
-      "!**/.env*.local",
-      "!**/.env",
-      "!**/.vercel",
-      "!**/coverage",
+      "!**/.env*",
+      "!**/*.test.*",
+      "!**/*.spec.*",
       "!**/public/sw.js",
       "!**/public/workbox-*.js",
-      "!**/public/worker-*.js",
-      "!**/public/fallback-*.js",
-      "!**/apps/sim/tools/generated",
-      "!**/apps/docs/.source",
-      "!**/apps/desktop/release",
-      "!**/venv",
-      "!**/.venv",
-      "!**/uploads",
-      "!**/apps/sim/lib/execution/sandbox/bundles/*.cjs",
-      "!**/test-results",
-      "!**/playwright-report"
+      "!**/public/worker-*.js"
     ]
   },
   "formatter": {
@@ -45,7 +28,6 @@
     "indentWidth": 2,
     "lineEnding": "lf",
     "lineWidth": 100,
-    "attributePosition": "auto",
     "bracketSpacing": true
   },
   "assist": {
@@ -72,71 +54,40 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "nursery": {
-        "useSortedClasses": "warn"
-      },
       "a11y": {
         "noSvgWithoutTitle": "off",
         "useAltText": "off",
-        "useKeyWithClickEvents": "off",
-        "noRedundantAlt": "off",
-        "useSemanticElements": "off",
         "useButtonType": "off",
         "useFocusableInteractive": "off",
-        "noStaticElementInteractions": "off",
+        "useAriaPropsForRole": "off",
         "useAriaPropsSupportedByRole": "off",
-        "useAriaPropsForRole": "off"
+        "useKeyWithClickEvents": "off",
+        "useSemanticElements": "off",
+        "noStaticElementInteractions": "off"
       },
+      "complexity": { "noStaticOnlyClass": "off" },
+      "performance": { "noImgElement": "off" },
       "suspicious": {
-        "noImplicitAnyLet": "off",
-        "noArrayIndexKey": "off",
-        "noExplicitAny": "off",
         "noControlCharactersInRegex": "off",
-        "noThenProperty": "off",
-        "noAssignInExpressions": "off",
-        "noDocumentCookie": "off"
+        "noExplicitAny": "off",
+        "noArrayIndexKey": "off",
+        "noImplicitAnyLet": "off"
       },
       "correctness": {
         "useExhaustiveDependencies": "off",
         "noUnusedFunctionParameters": "off",
         "noUnusedVariables": "off"
       },
-      "security": {
-        "noDangerouslySetInnerHtml": "off"
-      },
+      "security": { "noDangerouslySetInnerHtml": "off" },
       "style": {
         "noDescendingSpecificity": "off",
-        "noNonNullAssertion": "off",
-        "noParameterAssign": "off",
-        "useNodejsImportProtocol": "off",
+        "useSelfClosingElements": "error",
         "useAsConstAssertion": "error",
         "useDefaultParameterLast": "error",
         "useEnumInitializers": "error",
-        "useSelfClosingElements": "error",
-        "useSingleVarDeclarator": "error",
-        "noUnusedTemplateLiteral": "off",
-        "useNumberNamespace": "error",
-        "noInferrableTypes": "error",
-        "noUselessElse": "error",
-        "noRestrictedImports": {
-          "level": "error",
-          "options": {
-            "paths": {
-              "nanoid": "Use generateId() or generateShortId() from @sim/utils/id instead",
-              "uuid": "Use generateId() from @sim/utils/id instead"
-            }
-          }
-        }
-      },
-      "complexity": {
-        "noForEach": "off",
-        "noUselessFragments": "off",
-        "noStaticOnlyClass": "off"
-      },
-      "performance": {
-        "noAccumulatingSpread": "off",
-        "noDelete": "error",
-        "noImgElement": "off"
+        "noParameterAssign": "off",
+        "noNonNullAssertion": "off",
+        "useNodejsImportProtocol": "off"
       }
     }
   },
@@ -148,24 +99,9 @@
       "semicolons": "asNeeded",
       "arrowParentheses": "always",
       "bracketSameLine": false,
-      "quoteStyle": "single",
-      "attributePosition": "auto",
-      "bracketSpacing": true
+      "quoteStyle": "single"
     }
   },
-  "css": {
-    "parser": {
-      "cssModules": true
-    },
-    "formatter": {
-      "enabled": true,
-      "indentWidth": 2
-    }
-  },
-  "json": {
-    "formatter": {
-      "enabled": true,
-      "indentWidth": 2
-    }
-  }
+  "css": { "parser": { "cssModules": true } },
+  "json": { "formatter": { "indentWidth": 2 } }
 }

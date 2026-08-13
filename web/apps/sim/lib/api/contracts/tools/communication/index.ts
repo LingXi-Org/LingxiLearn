@@ -1,5 +1,0 @@
-export * from '@/lib/api/contracts/tools/communication/discord'
-export * from '@/lib/api/contracts/tools/communication/email'
-export * from '@/lib/api/contracts/tools/communication/messaging'
-export * from '@/lib/api/contracts/tools/communication/shared'
-export * from '@/lib/api/contracts/tools/communication/slack'

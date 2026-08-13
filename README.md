@@ -14,15 +14,16 @@ LingxiLearn 不替你做题。它读懂你当前的状态，调用真实工具�
 
 ## 30 秒跑起来
 
-无需 API Key，无需 Docker，无需数据库。
+本仓库只保留两套 Compose：开发环境绑定本地源码，生产环境把静态前端和
+FastAPI 放进同一个轻量运行容器。
 
 ```bash
-make setup     # 安装依赖，生成教学抓包
-make dev       # 构建前端 + 启动服务
-# 打开 http://localhost:8000
+cp .env.example .env       # 设置数据库密码和身份 client id
+docker compose -f docker-compose.dev.yml up --build
+# 打开 http://localhost:3000
 ```
 
-一条命令的容器部署：
+生产部署：
 
 ```bash
 cp .env.example .env       # 改一下数据库密码
@@ -58,7 +59,8 @@ LINGXILEARN_LLM_BASE_URL=https://兼容接口地址/v1
 LINGXILEARN_LLM_API_KEY=API Key
 ```
 
-Compose 默认是同源访问，`NEXT_PUBLIC_API_BASE` 保持为空；登录回调地址必须与身份服务中登记的地址完全一致，例如本地部署填写 `http://localhost:8080/auth/callback/`。生产环境还必须关闭开发免认证，并填写后端 OIDC 参数：
+开发 Compose 的前端地址是 `http://localhost:3000`，生产 Compose 的同源地址是
+`http://localhost:8080`；登录回调地址必须与身份服务中登记的地址完全一致。生产环境还必须关闭开发免认证，并填写后端 OIDC 参数：
 
 ```dotenv
 LINGXILEARN_INSECURE_DEV_AUTH=false
@@ -243,12 +245,10 @@ make test              # 后端单测、lint、类型检查 + 前端检查
 cd web && npm run verify # 许可证边界、TypeScript、Vitest、静态生产构建
 ```
 
-当前前端采用 Sim 的全站页面结构、workspace chrome、Mothership Chat、UserInput
-和资源视图，并直接连接 Lingxi Agent Task REST/SSE。正式入口为
-`/workspace/lingxi/home`，对话、工作流和 Skills 分别使用 `chat/{taskId}`、
-`w/{taskId}` 与 `skills/{skillId}`。Files、Tables、Knowledge、Integrations、
-Logs、Schedules、组织和计费页面保留完整禁用界面，不调用不存在的 API。
-具体边界见 [`SIM_LINGXIGRAPH_PLACEHOLDERS.md`](SIM_LINGXIGRAPH_PLACEHOLDERS.md)。
+当前前端保留既有产品页和网页对话页的设计语言，同时直接连接 Lingxi Agent
+Task REST/SSE。正式入口为 `/workspace/lingxi/home/`，对话页为
+`/workspace/lingxi/chat/{taskId}/`。课程导入、讲义、知识检测和可视化产物由
+统一资源面板展示；未接入的产品模块只保留明确的静态能力说明，不调用不存在的 API。
 
 
 ---
@@ -265,8 +265,7 @@ server/lingxilearn/
   store/                   SQLAlchemy + Alembic
   eval/                    评测
 skills/                    LingxiSkills 最新技能（含中文展示名称与描述）
-web/                       Next.js Sim 全站前端与 Lingxi 后端适配层
-scripts/                   工件生成、内核/API/UI 冒烟
+web/                       直接位于根目录的 Next.js 前端与 Lingxi API 适配层
 ```
 
 ---

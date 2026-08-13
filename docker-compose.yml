@@ -27,10 +27,7 @@ x-api: &api
     # production Compose deployment. Override these for a different tenant.
     LINGXILEARN_OIDC_ISSUER: ${LINGXILEARN_OIDC_ISSUER:-https://auth.lingxilearn.cn/oidc}
     LINGXILEARN_OIDC_AUDIENCE: ${LINGXILEARN_OIDC_AUDIENCE:-https://lingxilearn.cn/api}
-    # Local Compose runs use the fixed development learner identity so the
-    # static Sim workspace can load skills and graph tasks without OIDC login.
-    # Set LINGXILEARN_INSECURE_DEV_AUTH=false in a production environment.
-    LINGXILEARN_INSECURE_DEV_AUTH: ${LINGXILEARN_INSECURE_DEV_AUTH:-true}
+    LINGXILEARN_INSECURE_DEV_AUTH: ${LINGXILEARN_INSECURE_DEV_AUTH:-false}
   volumes:
     - ./packs:/app/packs:ro
     - ./skills:/app/skills:ro
@@ -72,7 +69,6 @@ services:
         NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI: ${NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI:-}
         NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE: ${NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE:-}
         DATABASE_URL: postgresql://build:build@localhost:5432/build
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:8080}
     volumes:
       - web-dist:/web
     restart: "no"

@@ -1,35 +1,24 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
-PY := server/.venv/bin/python
-BASE ?= http://localhost:8000
 
-.PHONY: help setup dev api web test check clean
+.PHONY: help setup dev prod check clean
 
-help: ## Show this help
+help: ## Show the supported repository commands
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
-setup: ## Install backend and frontend dependencies
-	cd server && uv venv --python 3.13 && uv pip install -e ".[dev]"
-	cd web && npm install --no-audit --no-fund
-dev: ## Build the web app and serve everything from one port (:8000)
-	cd web && npm run build
-	cd server && .venv/bin/python -m uvicorn lingxilearn.main:app --port 8000 --reload
+setup: ## Install the current backend and root frontend dependencies
+	cd server && uv sync --dev
+	cd web && bun install --ignore-scripts --registry https://registry.npmmirror.com
 
-api: ## Run only the API (use with `make web` for hot reload)
-	cd server && .venv/bin/python -m uvicorn lingxilearn.main:app --port 8000 --reload
+dev: ## Start the only local development deployment with bind mounts
+	docker compose -f docker-compose.dev.yml up --build
 
-web: ## Run the Next.js dev server against a local API
-	cd web && NEXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev
+prod: ## Start the only production deployment with a static web export
+	docker compose -f docker-compose.yml up --build -d
 
-test: ## Unit tests and type checks
-	cd server && .venv/bin/python -m pytest -q
-	cd server && .venv/bin/ruff check lingxilearn
-	cd server && .venv/bin/mypy --config-file pyproject.toml lingxilearn
-	cd web && npx tsc --noEmit
-	cd web && npm test -- --run
+check: ## Run frontend type and style checks
+	cd web && bun run type-check
+	cd web && bun run lint:check
 
-check: test ## Everything that does not need a running server
-
-clean: ## Remove build output and local state
-	rm -rf var web/out web/.next server/.pytest_cache server/.ruff_cache
-	find . -name __pycache__ -type d -prune -exec rm -rf {} +
+clean: ## Remove generated frontend and Python cache directories
+	pwsh -NoProfile -Command "foreach ($$path in @('web/.next','web/out','web/node_modules','web/.cache','server/.pytest_cache','server/.ruff_cache')) { if (Test-Path -LiteralPath $$path) { [System.IO.Directory]::Delete((Resolve-Path -LiteralPath $$path).Path, $$true) } }"

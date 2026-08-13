@@ -26,7 +26,7 @@ from .service import Service
 logger = logging.getLogger(__name__)
 
 _configured_web_dist = os.environ.get("LINGXILEARN_WEB_DIST")
-WEB_DIST = Path(_configured_web_dist) if _configured_web_dist else REPO_ROOT / "web" / "apps" / "sim" / "out"
+WEB_DIST = Path(_configured_web_dist) if _configured_web_dist else REPO_ROOT / "web" / "out"
 
 
 @asynccontextmanager

@@ -120,7 +120,7 @@ async def list_skills(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    """Expose the project's native Skills catalogue to the Sim workspace."""
+    """Expose the project's native LingxiSkills catalogue to the workspace."""
 
     del context
     skills_root = REPO_ROOT / "skills"

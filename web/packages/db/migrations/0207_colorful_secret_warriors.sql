@@ -1,1 +1,0 @@
-ALTER TABLE "copilot_chats" ADD COLUMN "pinned" boolean DEFAULT false NOT NULL;

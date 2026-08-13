@@ -1,2 +1,0 @@
-ALTER TABLE "organization" ADD COLUMN "limit_notifications" jsonb DEFAULT '{}'::jsonb NOT NULL;--> statement-breakpoint
-ALTER TABLE "user_stats" ADD COLUMN "limit_notifications" jsonb DEFAULT '{}'::jsonb NOT NULL;
