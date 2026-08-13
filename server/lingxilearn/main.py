@@ -13,9 +13,10 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import httpx
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .api.routes import router
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
         yield
     finally:
         await service.shutdown()
+        await identity.aclose()
 
 
 def create_app() -> FastAPI:
@@ -71,6 +73,65 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+
+    async def proxy_identity(request: Request, upstream_path: str) -> Response:
+        upstream = f"{settings.identity_bff_url.rstrip('/')}{upstream_path}"
+        if request.url.query:
+            upstream = f"{upstream}?{request.url.query}"
+        forwarded_headers = {
+            name: value
+            for name, value in request.headers.items()
+            if name.lower()
+            in {
+                "accept",
+                "content-type",
+                "cookie",
+                "user-agent",
+                "x-csrf-token",
+                "x-logto-verification-id",
+            }
+        }
+        identity = getattr(request.app.state, "identity", None)
+        client = identity.client if identity is not None else None
+        if client is None:
+            raise HTTPException(status_code=503, detail="identity_provider_unavailable")
+        try:
+            upstream_response = await client.request(
+                request.method,
+                upstream,
+                headers=forwarded_headers,
+                content=await request.body(),
+                follow_redirects=False,
+            )
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=503, detail="identity_provider_unavailable") from exc
+        response = Response(
+            content=upstream_response.content,
+            status_code=upstream_response.status_code,
+            media_type=upstream_response.headers.get("content-type"),
+        )
+        for header in ("location", "cache-control"):
+            if value := upstream_response.headers.get(header):
+                response.headers[header] = value
+        for cookie in upstream_response.headers.get_list("set-cookie"):
+            response.headers.append("set-cookie", cookie)
+        return response
+
+    @app.api_route(
+        "/auth/{identity_path:path}",
+        methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+        include_in_schema=False,
+    )
+    async def identity_auth_proxy(request: Request, identity_path: str) -> Response:
+        return await proxy_identity(request, f"/auth/{identity_path}")
+
+    @app.api_route(
+        "/api/v1/{identity_path:path}",
+        methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+        include_in_schema=False,
+    )
+    async def identity_api_proxy(request: Request, identity_path: str) -> Response:
+        return await proxy_identity(request, f"/api/v1/{identity_path}")
 
     if WEB_DIST.exists():
         app.mount("/_next", StaticFiles(directory=WEB_DIST / "_next"), name="next-assets")

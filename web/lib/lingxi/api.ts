@@ -34,8 +34,6 @@ export class ApiError extends Error {
   }
 }
 
-export type AccessTokenProvider = () => string | null | Promise<string | null>
-
 export interface LingxiAttachmentRef {
   key: string
   path?: string
@@ -44,19 +42,8 @@ export interface LingxiAttachmentRef {
   size: number
 }
 
-// The host application owns login/refresh.  LingxiLearn keeps only this
-// in-memory callback and never persists an access token in browser storage.
-let accessTokenProvider: AccessTokenProvider = () => null
 let authenticationFailureHandler: (() => void) | null = null
-let accessTokenRefreshHandler: (() => void | Promise<void>) | null = null
-
-export function setAccessTokenProvider(provider: AccessTokenProvider): () => void {
-  const previous = accessTokenProvider
-  accessTokenProvider = provider
-  return () => {
-    accessTokenProvider = previous
-  }
-}
+let sessionRefreshHandler: (() => void | Promise<void>) | null = null
 
 export function setAuthenticationFailureHandler(handler: (() => void) | null): () => void {
   const previous = authenticationFailureHandler
@@ -66,13 +53,13 @@ export function setAuthenticationFailureHandler(handler: (() => void) | null): (
   }
 }
 
-export function setAccessTokenRefreshHandler(
+export function setSessionRefreshHandler(
   handler: (() => void | Promise<void>) | null
 ): () => void {
-  const previous = accessTokenRefreshHandler
-  accessTokenRefreshHandler = handler
+  const previous = sessionRefreshHandler
+  sessionRefreshHandler = handler
   return () => {
-    accessTokenRefreshHandler = previous
+    sessionRefreshHandler = previous
   }
 }
 
@@ -83,12 +70,10 @@ function apiUrl(path: string): string {
 async function authorizedFetch(url: string, init?: RequestInit): Promise<Response> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const headers = new Headers(init?.headers)
-    const token = await accessTokenProvider()
-    if (token) headers.set('Authorization', `Bearer ${token}`)
-    const response = await fetch(url, { ...init, headers })
-    if (response.status !== 401 || attempt > 0 || !accessTokenRefreshHandler) return response
+    const response = await fetch(url, { ...init, headers, credentials: 'include' })
+    if (response.status !== 401 || attempt > 0 || !sessionRefreshHandler) return response
     try {
-      await accessTokenRefreshHandler()
+      await sessionRefreshHandler()
     } catch {
       authenticationFailureHandler?.()
       return response
@@ -279,8 +264,8 @@ export const api = {
 type SseOptions = { from?: number; onEnd?: (status: string) => void }
 
 /**
- * Fetch-based SSE keeps the existing durable-log replay contract while making
- * it possible to attach the same Authorization header as normal API calls.
+ * Fetch-based SSE keeps the existing durable-log replay contract while sending
+ * the same HttpOnly session cookie as normal API calls.
  */
 function subscribeSse<T extends { sequence?: number }>(
   path: string,

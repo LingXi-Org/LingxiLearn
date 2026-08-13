@@ -37,8 +37,8 @@ export function GET() {
 
 - REST：\`/api/agent-tasks\`、任务详情、消息和产物资源
 - SSE：\`/api/agent-tasks/{task_id}/events\`
-- 认证：Logto OIDC，发行者为 \`https://auth.lingxilearn.cn/oidc\`
-- 前端回调：\`/auth/callback/\`
+- 认证：LingxiIdentity BFF 的 HttpOnly \`lingxi_session\` Cookie
+- 登录入口：\`/login\`、\`/signup\`、\`/reset-password\`
 
 ## 页面
 

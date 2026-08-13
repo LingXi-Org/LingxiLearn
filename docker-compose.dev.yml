@@ -24,8 +24,8 @@ x-api-dev: &api-dev
     LINGXILEARN_AGENT_TASK_DIR: /app/var/agent_tasks
     LINGXILEARN_WEB_DIST: /app/web-dist-disabled
     LINGXILEARN_CORS_ORIGINS: '["http://localhost:3000"]'
-    LINGXILEARN_OIDC_ISSUER: ${LINGXILEARN_OIDC_ISSUER:-https://auth.lingxilearn.cn/oidc}
-    LINGXILEARN_OIDC_AUDIENCE: ${LINGXILEARN_OIDC_AUDIENCE:-https://lingxilearn.cn/api}
+    LINGXILEARN_IDENTITY_BFF_URL: ${LINGXILEARN_IDENTITY_BFF_URL:-http://host.docker.internal:8081}
+    LINGXILEARN_IDENTITY_BFF_TIMEOUT: ${LINGXILEARN_IDENTITY_BFF_TIMEOUT:-10}
     LINGXILEARN_INSECURE_DEV_AUTH: ${LINGXILEARN_INSECURE_DEV_AUTH:-false}
   volumes:
     - ./server/lingxilearn:/app/lingxilearn
@@ -107,11 +107,6 @@ services:
       NODE_ENV: development
       NEXT_STATIC_EXPORT: "0"
       NEXT_PUBLIC_API_BASE: http://localhost:${LINGXILEARN_PORT:-8080}
-      NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER: ${NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER:-https://auth.lingxilearn.cn/oidc}
-      NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID: ${NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID:-}
-      NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE: ${NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE:-https://lingxilearn.cn/api}
-      NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI: ${NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI:-http://localhost:3000/auth/callback/}
-      NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE: ${NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE:-openid profile email offline_access roles urn:logto:scope:organizations urn:logto:scope:organization_roles learn.read learn.write}
       NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     depends_on:
       api:

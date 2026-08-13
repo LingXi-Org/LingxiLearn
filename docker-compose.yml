@@ -23,10 +23,10 @@ x-api: &api
     LINGXILEARN_VAR_DIR: /app/var
     LINGXILEARN_AGENT_TASK_DIR: /app/var/agent_tasks
     LINGXILEARN_WEB_DIST: /app/web
-    # Keep the browser resource and backend JWT audience identical in the
-    # production Compose deployment. Override these for a different tenant.
-    LINGXILEARN_OIDC_ISSUER: ${LINGXILEARN_OIDC_ISSUER:-https://auth.lingxilearn.cn/oidc}
-    LINGXILEARN_OIDC_AUDIENCE: ${LINGXILEARN_OIDC_AUDIENCE:-https://lingxilearn.cn/api}
+    # The API validates the HttpOnly session by calling LingxiIdentity BFF.
+    # Keep this internal when both services share the deployment network.
+    LINGXILEARN_IDENTITY_BFF_URL: ${LINGXILEARN_IDENTITY_BFF_URL:?set LINGXILEARN_IDENTITY_BFF_URL}
+    LINGXILEARN_IDENTITY_BFF_TIMEOUT: ${LINGXILEARN_IDENTITY_BFF_TIMEOUT:-10}
     LINGXILEARN_INSECURE_DEV_AUTH: ${LINGXILEARN_INSECURE_DEV_AUTH:-false}
   volumes:
     - ./packs:/app/packs:ro
@@ -63,11 +63,6 @@ services:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
-        NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER: ${NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER:-}
-        NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID: ${NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID:-}
-        NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE: ${NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE:-}
-        NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI: ${NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI:-}
-        NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE: ${NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE:-}
         DATABASE_URL: postgresql://build:build@localhost:5432/build
     volumes:
       - web-dist:/web

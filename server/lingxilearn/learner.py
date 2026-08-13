@@ -50,7 +50,7 @@ class LearnerService:
         self.settings = settings
 
     async def get_learner_context(self, principal: Principal) -> LearnerContext:
-        issuer = principal.issuer or self.settings.oidc_issuer or "lingxilearn-dev"
+        issuer = principal.issuer or "lingxi-identity"
         if not principal.subject:
             raise ValueError("principal subject is required")
         learner_id = await self.repository.resolve_identity(issuer, principal.subject)

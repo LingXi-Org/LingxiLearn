@@ -16,7 +16,7 @@ export function GET() {
 - LingxiGraph Agent Task REST API
 - Agent Task Server-Sent Events（SSE）事件流
 - 课程导入、讲义、知识检测、可视化四类产物
-- OIDC 登录与受保护的学习任务接口
+- LingxiIdentity BFF Cookie 登录与受保护的学习任务接口
 
 ## 产物类型
 

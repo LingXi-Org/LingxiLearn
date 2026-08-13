@@ -60,22 +60,17 @@ LINGXILEARN_LLM_API_KEY=API Key
 ```
 
 开发 Compose 的前端地址是 `http://localhost:3000`，生产 Compose 的同源地址是
-`http://localhost:8080`；登录回调地址必须与身份服务中登记的地址完全一致。生产环境还必须关闭开发免认证，并填写后端 OIDC 参数：
+`http://localhost:8080`。登录、注册和找回密码由同源 LingxiIdentity BFF 发起，浏览器只持有
+HttpOnly `lingxi_session` Cookie，不保存 OIDC/Bearer token。生产环境必须关闭开发免认证，并填写 BFF 地址：
 
 ```dotenv
 LINGXILEARN_INSECURE_DEV_AUTH=false
-LINGXILEARN_OIDC_ISSUER=https://auth.lingxilearn.cn/oidc
-LINGXILEARN_OIDC_AUDIENCE=https://lingxilearn.cn/api
-NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER=https://auth.lingxilearn.cn/oidc
-NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID=前端 SPA 应用 client id
-NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE=https://lingxilearn.cn/api
-NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI=https://lingxilearn.cn/auth/callback/
-NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE=openid profile email offline_access roles urn:logto:scope:organizations urn:logto:scope:organization_roles learn.read learn.write
+LINGXILEARN_IDENTITY_BFF_URL=http://identity-bff:8080
+LINGXILEARN_IDENTITY_BFF_TIMEOUT=10
 ```
 
-`LINGXILEARN_OIDC_AUDIENCE` 必须与 `NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE` 完全一致；不要填写身份服务
-地址或带额外尾斜杠的变体。若日志出现 `invalid_token`，先确认这两个值和 issuer 已在同一份
-`.env` 中更新，然后重新构建 `web-build` 和 `api`，避免浏览器继续使用旧的静态 token 配置。
+Identity BFF 与 LingxiLearn 共域或由反向代理暴露 `/auth/*`、`/api/v1/*` 时无需额外浏览器配置；
+本地 Next 开发可将 `NEXT_PUBLIC_API_BASE` 指向 `http://localhost:8080`。
 
 修改 `.env` 后执行：
 
@@ -150,7 +145,7 @@ make test
 ```
 Next.js（Sim 全站信息架构 · Lingxi 品牌）
         ↓ REST + fetch-SSE（鉴权、去重、可断线续传）
-LingxiIdentity OIDC ── FastAPI ── Projector ── run_events（投影日志）
+LingxiIdentity BFF ── FastAPI ── Projector ── run_events（投影日志）
         ↓
 LearnerService / SQLAlchemy（学习业务权威源）
         ↓
@@ -190,19 +185,17 @@ Responses API 的原生 `web_search` 工具；不再依赖本地 DuckDuckGo HTML
 
 ### 身份、学习数据与 LingxiGraph 边界
 
-持久化用户数据接口要求 `Authorization: Bearer <OIDC JWT>`。服务端使用
-`LingxiIdentity` 的 `OidcVerifier.verify()` 校验 issuer、audience、签名、过期时间和必需
-claims，并只以 `Principal.subject` 查找 `(issuer, subject) → learner` 的内部映射；客户端
-不能传入 `learner_id`。生产环境必须配置 OIDC issuer/audience。仅在本地显式设置
-`LINGXILEARN_INSECURE_DEV_AUTH=true` 时，缺少 token 的请求才会使用固定的
-`LINGXILEARN_DEV_SUBJECT`，不会接受客户端自报身份。
+持久化用户数据接口使用 LingxiIdentity BFF 的 HttpOnly `lingxi_session` Cookie。服务端把
+Cookie 转发到 BFF 的 `GET /api/v1/me`，只以返回的 `Principal.subject` 查找
+`(issuer, subject) → learner` 的内部映射；客户端不能传入 `learner_id`，也不会保存或发送
+LingxiIdentity Bearer token。仅在本地显式设置 `LINGXILEARN_INSECURE_DEV_AUTH=true` 时，
+缺少会话的请求才会使用固定的 `LINGXILEARN_DEV_SUBJECT`，不会接受客户端自报身份。
 
 `LearnerProfile`、`Mastery`、`Misconception`、`LearningEvidence`、`LearningPreference`、
 `LearningEvent` 以及现有会话/报告表由 LingxiLearn 的 SQLAlchemy/Alembic 数据层负责，
 是教育业务的权威源。LingxiGraph 只负责 StateGraph、checkpoint、Runtime，以及可选的
 Store/Memory 接缝；graph 运行期间不直接写权威学习表。结果在 session 终态通过一次幂等
-事务批量落库。前端只注入内存态 token provider，不把 token 或 learner 缓存在 localStorage；
-artifact 与 SSE 使用带 Bearer 的 fetch。
+事务批量落库。artifact 与 SSE 和普通 API 请求一样使用 HttpOnly Cookie。
 
 常用用户数据接口：`GET /api/me/context`、`GET /api/me/mastery`、`GET/PATCH
 /api/me/preferences`。健康检查和课程包接口保持公开。
@@ -273,7 +266,7 @@ web/                       直接位于根目录的 Next.js 前端与 Lingxi API
 ## 数据与边界
 
 课程数据由课程包声明，**不含任何真实用户流量**；
-学习记录按经 OIDC 验证的 Identity User 映射到服务端内部 learner。旧的匿名 guest 记录
+学习记录按经 LingxiIdentity BFF 验证的 Identity User 映射到服务端内部 learner。旧的匿名 guest 记录
 保留在数据库中，但不会自动映射到 Identity 用户，也不会通过受保护 API 暴露。知识库为 RFC 摘录与原创教学笔记，
 来源见 [DATA_SOURCES.md](DATA_SOURCES.md)。
 

@@ -45,13 +45,11 @@ class Settings(BaseSettings):
     checkpoint_url: str = ""
 
     # --- identity ----------------------------------------------------------
-    # LingxiIdentity verifies OIDC discovery/JWKS and returns Principal. The
-    # resource service never calls the Identity management API.
-    # Defaults match the public LingxiLearn deployment. A tenant-specific
-    # deployment should override both values together through the environment.
-    oidc_issuer: str = "https://auth.lingxilearn.cn/oidc"
-    oidc_audience: str = "https://lingxilearn.cn/api"
-    oidc_timeout: float = 10.0
+    # LingxiIdentity owns OIDC, account operations and the encrypted session.
+    # This resource service only forwards the opaque browser cookie to the BFF
+    # and consumes its verified Principal response.
+    identity_bff_url: str = ""
+    identity_bff_timeout: float = 10.0
     insecure_dev_auth: bool = False
     dev_subject: str = "lingxilearn-dev"
 

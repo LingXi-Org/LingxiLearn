@@ -1,69 +1,121 @@
 import { useContext } from 'react'
-import { ssoClient } from '@better-auth/sso/client'
-import { stripeClient } from '@better-auth/stripe/client'
-import {
-  adminClient,
-  customSessionClient,
-  emailOTPClient,
-  genericOAuthClient,
-  organizationClient,
-} from 'better-auth/client/plugins'
-import { createAuthClient } from 'better-auth/react'
-import type { auth } from '@/lib/auth'
-import { isBillingEnabled, isOrganizationsEnabled, isSsoEnabled } from '@/lib/core/config/env-flags'
-import { getBaseUrl, getBrowserOrigin } from '@/lib/core/utils/urls'
-import { SessionContext, type SessionHookResult } from '@/app/_shell/providers/session-provider'
+import { identityApi } from './identity-api'
+import { SessionContext, type SessionContextValue } from './session-provider'
 
-function getAuthBaseUrl(): string {
-  return getBrowserOrigin() ?? getBaseUrl()
+type SimUser = {
+  id: string
+  email: string
+  emailVerified?: boolean
+  name?: string | null
+  image?: string | null
 }
 
-export const client = createAuthClient({
-  baseURL: getAuthBaseUrl(),
-  plugins: [
-    adminClient(),
-    emailOTPClient(),
-    genericOAuthClient(),
-    customSessionClient<typeof auth>(),
-    ...(isBillingEnabled
-      ? [
-          stripeClient({
-            subscription: true, // Enable subscription management
-          }),
-        ]
-      : []),
-    ...(isOrganizationsEnabled ? [organizationClient()] : []),
-    ...(isSsoEnabled ? [ssoClient()] : []),
-  ],
-})
+type SimSession = {
+  user: SimUser
+  session: { id: string; userId: string }
+} | null
+
+export type SessionHookResult = {
+  data: SimSession
+  isPending: boolean
+  error: Error | null
+  refetch: () => Promise<void>
+}
+
+function toSimSession(value: SessionContextValue['data']): SimSession {
+  if (!value) return null
+  return {
+    user: {
+      id: value.user.id,
+      email: value.user.primaryEmail ?? '',
+      emailVerified: Boolean(value.user.primaryEmail),
+      name: value.user.name ?? value.user.username ?? null,
+      image: value.user.avatar ?? null,
+    },
+    session: {
+      id: value.principal.subject,
+      userId: value.user.id,
+    },
+  }
+}
 
 export function useSession(): SessionHookResult {
-  const ctx = useContext(SessionContext)
-  if (!ctx) {
-    throw new Error(
-      'SessionProvider is not mounted. Wrap your app with <SessionProvider> in app/layout.tsx.'
-    )
-  }
-  return ctx
-}
-
-export const useActiveOrganization = isOrganizationsEnabled
-  ? client.useActiveOrganization
-  : () => ({ data: undefined, isPending: false, error: null })
-
-export const useSubscription = () => {
+  const context = useContext(SessionContext)
+  if (!context) throw new Error('SessionProvider is not mounted.')
   return {
-    list: client.subscription?.list,
-    upgrade: client.subscription?.upgrade,
-    cancel: client.subscription?.cancel,
-    restore: client.subscription?.restore,
+    data: toSimSession(context.data),
+    isPending: !context.ready,
+    error: context.error ? new Error(context.error) : null,
+    refetch: async () => {
+      await context.refresh()
+    },
   }
 }
 
-const { signIn, signUp } = client
+type AuthRedirectOptions = { callbackURL?: string; callbackUrl?: string }
 
-/** LingxiIdentity owns browser logout; keep this compatibility export for the
- * remaining Sim-shaped surfaces while they migrate away from Better Auth. */
+function callbackPath(options?: AuthRedirectOptions): string {
+  return options?.callbackURL ?? options?.callbackUrl ?? '/workspace/lingxi/home/'
+}
+
+export const client = {
+  getSession: async (_options?: unknown) => {
+    try {
+      const value = await identityApi.me()
+      return { data: toSimSession(value), error: null }
+    } catch {
+      return { data: null, error: null }
+    }
+  },
+  signIn: {
+    email: async (_credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
+      window.location.assign(identityApi.authUrl('login', callbackPath(options)))
+      return { data: null, error: null }
+    },
+    social: async (_provider: string, options?: AuthRedirectOptions) => {
+      window.location.assign(identityApi.authUrl('login', callbackPath(options)))
+      return { data: null, error: null }
+    },
+  },
+  signUp: {
+    email: async (_credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
+      window.location.assign(identityApi.authUrl('register', callbackPath(options)))
+      return { data: null, error: null }
+    },
+  },
+  // These namespaces keep the direct Sim query modules type-compatible while
+  // their organization/admin capabilities are migrated to Lingxi APIs.
+  organization: {
+    list: async (..._args: unknown[]) => ({ data: [], error: null }),
+    getFullOrganization: async (..._args: unknown[]) => ({ data: null, error: null }),
+    setActive: async (..._args: unknown[]) => ({ data: null, error: null }),
+  },
+  admin: {
+    createUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+    getUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+    listUsers: async (..._args: unknown[]) => ({ data: { users: [], total: 0 }, error: null }),
+    setRole: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+    banUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+    unbanUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+    impersonateUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+    stopImpersonating: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+  },
+  subscription: {
+    list: async (..._args: unknown[]) => ({ data: [], error: null }),
+  },
+  useActiveOrganization: () => ({ data: null, isPending: false, error: null }),
+} as any
+
+export const useActiveOrganization = client.useActiveOrganization
+
+export const useSubscription = () => ({
+  list: undefined,
+  upgrade: undefined,
+  cancel: undefined,
+  restore: undefined,
+})
+
 export async function signOut(): Promise<void> {
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event('lingxi:logout'))
+  await identityApi.logout()
+  window.location.assign('/')
 }
