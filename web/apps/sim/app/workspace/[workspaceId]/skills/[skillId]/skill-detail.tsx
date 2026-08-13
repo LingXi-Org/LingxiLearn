@@ -44,6 +44,7 @@ interface SkillDetailProps {
  */
 export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
   const router = useRouter()
+  const isLingxiWorkspace = workspaceId === 'lingxi'
   const skillsHref = `/workspace/${workspaceId}/skills`
 
   const { data: skills = [], isPending, isPlaceholderData } = useSkills(workspaceId)
@@ -168,7 +169,7 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
 
   const back = (
     <ChipLink href={skillsHref} onClick={guard.handleBackClick} leftIcon={ArrowLeft}>
-      Skills
+      {isLingxiWorkspace ? '技能' : 'Skills'}
     </ChipLink>
   )
 
@@ -200,7 +201,9 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
   if ((skillsLoading || deleteSkill.isPending || deleteSkill.isSuccess) && !skill) {
     return (
       <CredentialDetailLayout back={back} actions={actions}>
-        <SettingsEmptyState variant='inline'>Loading…</SettingsEmptyState>
+        <SettingsEmptyState variant='inline'>
+          {isLingxiWorkspace ? '正在加载…' : 'Loading…'}
+        </SettingsEmptyState>
       </CredentialDetailLayout>
     )
   }
@@ -208,7 +211,9 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
   if (!skill) {
     return (
       <CredentialDetailLayout back={back} actions={actions}>
-        <SettingsEmptyState variant='inline'>Skill not found.</SettingsEmptyState>
+        <SettingsEmptyState variant='inline'>
+          {isLingxiWorkspace ? '未找到该技能。' : 'Skill not found.'}
+        </SettingsEmptyState>
       </CredentialDetailLayout>
     )
   }
@@ -217,7 +222,9 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
   const lockReason = !readOnly
     ? null
     : isBuiltin
-      ? 'Built-in skills are read-only'
+      ? isLingxiWorkspace
+        ? 'LingxiLearn 内置技能为只读'
+        : 'Built-in skills are read-only'
       : 'You need to be a skill editor to edit this skill'
 
   return (
@@ -226,7 +233,13 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
         <CredentialDetailHeading
           leading={<SkillTile />}
           title={skill.name}
-          subtitle={isBuiltin ? 'Built-in skill' : skill.description}
+          subtitle={
+            isBuiltin
+              ? isLingxiWorkspace
+                ? 'LingxiLearn 内置技能 · 只读'
+                : 'Built-in skill'
+              : skill.description
+          }
         />
 
         <SkillFields
@@ -249,6 +262,7 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
           contentKey={`${skill.id}:${contentSeed}`}
           workspaceId={workspaceId}
           disabled={readOnly}
+          localized={isLingxiWorkspace}
           lockReason={lockReason}
           onPasteText={handleContentPaste}
         />

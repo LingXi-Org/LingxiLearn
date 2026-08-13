@@ -30,6 +30,11 @@ export function LingxiIdentityProvider({ children }: { children: React.ReactNode
     try {
       const identity = createLingxiIdentityClient()
       setClient(identity)
+      // The API client is intentionally independent from the identity UI, so
+      // the provider must explicitly bridge the current OIDC token into it.
+      // Without this mount, every skills/task request is sent anonymously even
+      // after a successful browser login.
+      identity.mountTokenProvider()
       const onLogout = () => {
         void identity.logout()
       }

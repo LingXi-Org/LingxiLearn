@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useParams } from 'next/navigation'
 import { useAnimatedPlaceholder } from '@/hooks/use-animated-placeholder'
 
 interface AnimatedPlaceholderEffectProps {
@@ -12,8 +13,16 @@ export function AnimatedPlaceholderEffect({
   textareaRef,
   isInitialView,
 }: AnimatedPlaceholderEffectProps) {
+  const { workspaceId } = useParams<{ workspaceId: string }>()
   const animatedPlaceholder = useAnimatedPlaceholder(isInitialView)
-  const placeholder = isInitialView ? animatedPlaceholder : 'Send message to Sim'
+  const placeholder =
+    workspaceId === 'lingxi'
+      ? isInitialView
+        ? '输入知识点或学习目标…'
+        : '继续追问这个知识点…'
+      : isInitialView
+        ? animatedPlaceholder
+        : 'Send message to Sim'
 
   useEffect(() => {
     if (textareaRef.current) {

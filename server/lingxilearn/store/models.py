@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     JSON,
     DateTime,
     Float,
@@ -103,6 +104,11 @@ class AgentTask(Base):
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
     prompt: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text, default="")
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_unread: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    resources: Mapped[list] = mapped_column(JSON, default=list)
     graph_version: Mapped[str] = mapped_column(String(32), default="difficult_knowledge.v2")
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
     intent: Mapped[dict] = mapped_column(JSON, default=dict)

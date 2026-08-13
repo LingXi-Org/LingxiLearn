@@ -17,6 +17,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import uuid
+import base64
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -452,6 +454,11 @@ class Service:
             "id": record.id,
             "status": record.status,
             "prompt": record.prompt,
+            "title": record.title or "",
+            "is_pinned": bool(record.is_pinned),
+            "is_unread": bool(record.is_unread),
+            "deleted_at": record.deleted_at.isoformat() if record.deleted_at else None,
+            "resources": record.resources or [],
             "graph_version": record.graph_version,
             "intent": record.intent or {},
             "agents": {
@@ -510,8 +517,96 @@ class Service:
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
         }
 
-    async def list_agent_tasks(self, learner_id: str) -> list[dict[str, Any]]:
-        return await self.repo.list_agent_tasks(learner_id)
+    async def list_agent_tasks(self, learner_id: str, *, scope: str = "active") -> list[dict[str, Any]]:
+        return await self.repo.list_agent_tasks(learner_id, scope=scope)
+
+    async def update_agent_task(
+        self,
+        task_id: str,
+        learner_id: str,
+        *,
+        title: str | None = None,
+        is_pinned: bool | None = None,
+        is_unread: bool | None = None,
+        resources: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        if title is not None:
+            title = " ".join(title.strip().split())
+            if not title:
+                raise ValueError("title must not be empty")
+        if resources is not None and len(resources) > 100:
+            raise ValueError("too many resources")
+        row = await self.repo.update_agent_task_metadata(
+            task_id, learner_id, title=title, is_pinned=is_pinned, is_unread=is_unread, resources=resources
+        )
+        if row is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        return {"id": row.id, "title": row.title, "is_pinned": row.is_pinned, "is_unread": row.is_unread, "resources": row.resources or []}
+
+    async def delete_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
+        row = await self.repo.set_agent_task_deleted(task_id, learner_id, True)
+        if row is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        return {"id": row.id, "deleted_at": row.deleted_at.isoformat() if row.deleted_at else None}
+
+    async def restore_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
+        row = await self.repo.set_agent_task_deleted(task_id, learner_id, False)
+        if row is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        return {"id": row.id, "deleted_at": None}
+
+    async def fork_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
+        source = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        if source is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        new_id = f"t-{uuid.uuid4().hex[:20]}"
+        result = await self.create_agent_task(task_id=new_id, learner_id=learner_id, prompt=source.prompt)
+        await self.repo.update_agent_task_metadata(new_id, learner_id, title=source.title, resources=list(source.resources or []))
+        return result
+
+    async def cancel_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
+        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        if record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        if record.status in {"completed", "partial", "handed_off", "failed", "cancelled"}:
+            return {"id": task_id, "status": record.status}
+        await self.repo.set_agent_task_status(task_id, "cancelled")
+        await self.repo.append_agent_events(task_id, [{"kind": "task.cancelled", "agent": "coordinator", "payload": {}}])
+        self._notify_agent(task_id)
+        return {"id": task_id, "status": "cancelled"}
+
+    async def upload_attachment(
+        self, *, learner_id: str, filename: str, media_type: str, size: int, encoded: str
+    ) -> dict[str, Any]:
+        if size > 20 * 1024 * 1024:
+            raise ValueError("attachment too large")
+        try:
+            content = base64.b64decode(encoded, validate=True)
+        except Exception as exc:
+            raise ValueError("invalid attachment data") from exc
+        if len(content) != size:
+            raise ValueError("attachment size mismatch")
+        attachment_id = uuid.uuid4().hex
+        root = self.settings.agent_task_dir / "uploads" / learner_id
+        root.mkdir(parents=True, exist_ok=True)
+        path = root / attachment_id
+        path.write_bytes(content)
+        return {
+            "key": f"{learner_id}/{attachment_id}",
+            "path": f"/api/attachments/{learner_id}/{attachment_id}",
+            "filename": filename,
+            "media_type": media_type,
+            "size": size,
+        }
+
+    def attachment_path(self, learner_id: str, attachment_id: str) -> tuple[Path, str, str]:
+        if not attachment_id.isalnum() or len(attachment_id) != 32:
+            raise KeyError("unknown attachment")
+        path = (self.settings.agent_task_dir / "uploads" / learner_id / attachment_id).resolve()
+        root = (self.settings.agent_task_dir / "uploads" / learner_id).resolve()
+        if root not in path.parents or not path.is_file():
+            raise KeyError("unknown attachment")
+        return path, "application/octet-stream", attachment_id
 
     def agent_waiter(self, task_id: str) -> asyncio.Event:
         return self._agent_waiters[task_id]
@@ -644,6 +739,9 @@ class Service:
                     "answers": _json_safe(resume.get("answers")) if resume.get("answers") is not None else None,
                 },
             )
+        latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        if latest is None or latest.status == "cancelled":
+            return
         await self.repo.set_agent_task_status(task_id, "running")
         async def persist_result(agent: str, value: dict[str, Any]) -> None:
             await self.repo.update_agent_task_output(task_id, agent, value)
@@ -682,6 +780,9 @@ class Service:
                 stream_mode=("events", "messages"),
                 context={"learner_id": learner_id, "locale": "zh-CN"},
             ):
+                current_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                if current_record is None or current_record.status == "cancelled":
+                    return
                 mode, event = streamed
                 force_flush = False
                 if mode == "messages":

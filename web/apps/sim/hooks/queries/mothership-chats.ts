@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/lingxi/api'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type { AgentTaskListItem, AgentTaskSnapshot } from '@/lib/lingxi/types'
@@ -47,8 +47,8 @@ export const mothershipChatKeys = {
 export const MOTHERSHIP_CHAT_LIST_STALE_TIME = 60 * 1000
 export const MOTHERSHIP_CHAT_HISTORY_STALE_TIME = 30 * 1000
 
-function taskName(task: Pick<AgentTaskListItem, 'prompt' | 'intent'>): string {
-  return task.intent.topic || task.prompt || '新学习任务'
+function taskName(task: Pick<AgentTaskListItem, 'prompt' | 'intent' | 'title'>): string {
+  return task.title || task.intent.topic || task.prompt || '新学习任务'
 }
 
 function mapTask(task: AgentTaskListItem): MothershipChatMetadata {
@@ -58,9 +58,9 @@ function mapTask(task: AgentTaskListItem): MothershipChatMetadata {
     name: taskName(task),
     updatedAt,
     isActive: task.status === 'queued' || task.status === 'running',
-    isUnread: false,
-    isPinned: false,
-    deletedAt: null,
+    isUnread: Boolean(task.is_unread),
+    isPinned: Boolean(task.is_pinned),
+    deletedAt: task.deleted_at ? new Date(task.deleted_at) : null,
   }
 }
 
@@ -74,9 +74,9 @@ export async function fetchMothershipChats(
   scope: MothershipChatScope = 'active',
   signal?: AbortSignal
 ): Promise<MothershipChatMetadata[]> {
-  if (workspaceId !== LINGXI_WORKSPACE_ID || scope === 'archived') return []
+  if (workspaceId !== LINGXI_WORKSPACE_ID) return []
   signal?.throwIfAborted()
-  const { tasks } = await api.agentTasks()
+  const { tasks } = await api.agentTasks(scope)
   return tasks.map(mapTask)
 }
 
@@ -106,7 +106,7 @@ function snapshotToHistory(task: AgentTaskSnapshot): MothershipChatHistory {
       },
     ],
     activeStreamId: active ? task.id : null,
-    resources: [],
+    resources: (task.resources ?? []) as MothershipResource[],
     streamSnapshot: null,
   }
 }
@@ -129,66 +129,104 @@ export function useMothershipChatHistory(chatId: string | undefined) {
   })
 }
 
-function unsupportedMutation<TVariables = unknown, TResult = never>() {
-  return useMutation<TResult, Error, TVariables>({
-    mutationFn: async () => {
-      throw new Error('该 Sim 功能未接入 LingxiGraph')
-    },
-  })
+function invalidateChatLists(queryClient: ReturnType<typeof useQueryClient>, workspaceId?: string) {
+  void queryClient.invalidateQueries({ queryKey: mothershipChatKeys.workspaceLists(workspaceId) })
+  void queryClient.invalidateQueries({ queryKey: mothershipChatKeys.details() })
 }
 
 /** Chat mutations remain visible to copied Sim controls but never issue calls. */
-export function useMarkMothershipChatRead(_workspaceId?: string) {
-  return useMutation<void, Error, string>({ mutationFn: async () => undefined })
+export function useMarkMothershipChatRead(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (chatId: string) => api.updateAgentTask(chatId, { is_unread: false }),
+    onSuccess: () => invalidateChatLists(queryClient, workspaceId),
+  })
 }
 
 /** Compatibility mutations used by the copied workspace sidebar. */
-export function useMarkMothershipChatUnread(_workspaceId?: string) {
-  return useMutation<void, Error, string>({ mutationFn: async () => undefined })
+export function useMarkMothershipChatUnread(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (chatId: string) => api.updateAgentTask(chatId, { is_unread: true }),
+    onSuccess: () => invalidateChatLists(queryClient, workspaceId),
+  })
 }
 
 export function useCreateMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<{ title?: string }>()
+  return useMutation({ mutationFn: async ({ title }: { title?: string }) => api.createAgentTask(title || '新学习任务') })
 }
 
-export function useForkMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string }>()
+export function useForkMothershipChat(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ chatId }: { chatId: string }) => api.forkAgentTask(chatId),
+    onSuccess: () => invalidateChatLists(queryClient, workspaceId),
+  })
 }
 
-export function useDeleteMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<string>()
+export function useDeleteMothershipChat(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: (chatId: string) => api.deleteAgentTask(chatId), onSuccess: () => invalidateChatLists(queryClient, workspaceId) })
 }
 
-export function useDeleteMothershipChats(_workspaceId?: string) {
-  return unsupportedMutation<string[]>()
+export function useDeleteMothershipChats(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: (chatIds: string[]) => Promise.all(chatIds.map((id) => api.deleteAgentTask(id))), onSuccess: () => invalidateChatLists(queryClient, workspaceId) })
 }
 
-export function useRestoreMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<string>()
+export function useRestoreMothershipChat(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: (chatId: string) => api.restoreAgentTask(chatId), onSuccess: () => invalidateChatLists(queryClient, workspaceId) })
 }
 
-export function useUpdateMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; title?: string; name?: string }>()
+export function useUpdateMothershipChat(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ chatId, title, name }: { chatId: string; title?: string; name?: string }) => api.updateAgentTask(chatId, { title: title ?? name }),
+    onSuccess: () => invalidateChatLists(queryClient, workspaceId),
+  })
 }
 
 export function useRenameMothershipChat(_workspaceId?: string) {
   return useUpdateMothershipChat(_workspaceId)
 }
 
-export function useSetMothershipChatPinned(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; pinned: boolean }>()
+export function useSetMothershipChatPinned(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ chatId, pinned }: { chatId: string; pinned: boolean }) => api.updateAgentTask(chatId, { is_pinned: pinned }),
+    onSuccess: () => invalidateChatLists(queryClient, workspaceId),
+  })
 }
 
-export function useAddMothershipChatResource(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; resource: MothershipResource }>()
+export function useAddMothershipChatResource(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ chatId, resource }: { chatId: string; resource: MothershipResource }) => {
+      const current = queryClient.getQueryData<MothershipChatHistory>(mothershipChatKeys.detail(chatId))
+      return api.updateAgentTask(chatId, { resources: [...(current?.resources ?? []), resource] as Array<Record<string, unknown>> })
+    },
+    onSuccess: () => invalidateChatLists(queryClient, workspaceId),
+  })
 }
 
-export function useRemoveMothershipChatResource(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; resourceId: string }>()
+export function useRemoveMothershipChatResource(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ chatId, resourceId }: { chatId: string; resourceId: string }) => {
+      const current = queryClient.getQueryData<MothershipChatHistory>(mothershipChatKeys.detail(chatId))
+      return api.updateAgentTask(chatId, { resources: (current?.resources ?? []).filter((resource) => resource.id !== resourceId) as Array<Record<string, unknown>> })
+    },
+    onSuccess: () => invalidateChatLists(queryClient, workspaceId),
+  })
 }
 
-export function useReorderMothershipChatResources(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; resources: MothershipResource[] }>()
+export function useReorderMothershipChatResources(workspaceId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ chatId, resources }: { chatId: string; resources: MothershipResource[] }) => api.updateAgentTask(chatId, { resources: resources as Array<Record<string, unknown>> }),
+    onSuccess: () => invalidateChatLists(queryClient, workspaceId),
+  })
 }
 
 export function useAddChatResource(_workspaceId?: string) {
@@ -196,11 +234,7 @@ export function useAddChatResource(_workspaceId?: string) {
 }
 
 export function useRemoveChatResource(_workspaceId?: string) {
-  return unsupportedMutation<{
-    chatId: string
-    resourceId?: string
-    resourceType?: MothershipResource['type']
-  }>()
+  return useRemoveMothershipChatResource(_workspaceId)
 }
 
 export function useReorderChatResources(_workspaceId?: string) {

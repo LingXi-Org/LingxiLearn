@@ -16,7 +16,7 @@ import { Button, cn, toast } from '@sim/emcn'
 import { PanelLeft } from '@sim/emcn/icons'
 import { createLogger } from '@sim/logger'
 import { useQueryClient } from '@tanstack/react-query'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, usePathname, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { usePostHog } from 'posthog-js/react'
 import { requestJson } from '@/lib/api/client/request'
@@ -46,6 +46,7 @@ import { useWorkflows } from '@/hooks/queries/workflows'
 import { getWorkspaceFilesQueryOptions, useWorkspaceFiles } from '@/hooks/queries/workspace-files'
 import { useOAuthReturnRouter } from '@/hooks/use-oauth-return'
 import type { ChatContext } from '@/stores/panel'
+import { SkillDetail } from '@/app/workspace/[workspaceId]/skills/[skillId]/skill-detail'
 import {
   ChatSurfaceProvider,
   CreditsChip,
@@ -90,9 +91,30 @@ interface HomeProps {
   tableViewsEnabled?: boolean
 }
 
-export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps) {
+/**
+ * The production web server serves the exported home shell for arbitrary
+ * Lingxi task/skill URLs because those ids are created at runtime. Recover the
+ * route from the browser pathname so a refresh does not silently render a new
+ * chat shell and so skill detail pages remain usable after a direct open.
+ */
+export function Home(props: HomeProps) {
+  const pathname = usePathname()
+  const workspaceMatch = pathname.match(/^\/workspace\/([^/]+)/)
+  const workspaceId = workspaceMatch?.[1] ?? 'lingxi'
+  const chatMatch = pathname.match(/^\/workspace\/[^/]+\/chat\/([^/]+)/)
+  const skillMatch = pathname.match(/^\/workspace\/[^/]+\/skills\/([^/]+)/)
+
+  if (skillMatch && workspaceId === 'lingxi') {
+    return <SkillDetail workspaceId={workspaceId} skillId={skillMatch[1]} />
+  }
+
+  return <HomeChatSurface {...props} chatId={props.chatId ?? chatMatch?.[1]} />
+}
+
+function HomeChatSurface({ chatId, userName, userId, tableViewsEnabled }: HomeProps) {
   useOAuthReturnRouter()
   const { workspaceId } = useParams<{ workspaceId: string }>()
+  const isLingxiWorkspace = workspaceId === 'lingxi'
   const router = useRouter()
   const queryClient = useQueryClient()
   /**
@@ -615,9 +637,16 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
           <div className='h-full overflow-y-auto [scrollbar-gutter:stable_both-edges]'>
             {/* Asymmetric padding biases the group up so the full cluster (heading + input + suggestions) sits at the optical center */}
             <div className='flex min-h-full flex-col items-center justify-center px-6 pt-[2vh] pb-[22vh]'>
-              <h1 className='mb-7 max-w-chat text-balance font-season text-[26px] text-[var(--text-primary)] leading-[1.15] tracking-[-0.01em] sm:text-[28px]'>
-                What should we get done{firstName ? `, ${firstName}` : ''}?
+              <h1 className='mb-3 max-w-chat text-balance font-season text-[26px] text-[var(--text-primary)] leading-[1.15] tracking-[-0.01em] sm:text-[28px]'>
+                {isLingxiWorkspace
+                  ? '今天想学习哪个知识点？'
+                  : `What should we get done${firstName ? `, ${firstName}` : ''}?`}
               </h1>
+              {isLingxiWorkspace && (
+                <p className='mb-7 max-w-chat text-center text-sm text-[var(--text-muted)]'>
+                  输入主题或学习目标，智能体图会为你组织讲解、可视化与知识检测
+                </p>
+              )}
               <div ref={initialViewInputRef} className='relative w-full max-w-chat'>
                 <ChatSurfaceProvider
                   userId={userId}
@@ -635,11 +664,13 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
                 </ChatSurfaceProvider>
                 {/* Anchored out of flow so expanding/collapsing never shifts the centered input */}
                 <div className='absolute inset-x-0 top-full'>
-                  <SuggestedActions
-                    onSelectPrompt={(prompt) =>
-                      initialViewUserInputRef.current?.populatePrompt(prompt)
-                    }
-                  />
+                  {!isLingxiWorkspace && (
+                    <SuggestedActions
+                      onSelectPrompt={(prompt) =>
+                        initialViewUserInputRef.current?.populatePrompt(prompt)
+                      }
+                    />
+                  )}
                 </div>
               </div>
             </div>

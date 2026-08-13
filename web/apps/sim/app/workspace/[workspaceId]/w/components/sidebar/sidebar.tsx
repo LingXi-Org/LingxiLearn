@@ -106,6 +106,7 @@ import type { MothershipChatMetadata } from '@/hooks/queries/mothership-chats'
 import {
   useDeleteMothershipChat,
   useDeleteMothershipChats,
+  useForkMothershipChat,
   useMarkMothershipChatRead,
   useMarkMothershipChatUnread,
   useMothershipChats,
@@ -442,6 +443,7 @@ export const Sidebar = memo(function Sidebar({
   const isCollapsed = isCollapsedProp && !isPeeking
   const params = useParams()
   const workspaceId = params.workspaceId as string
+  const isLingxiWorkspace = workspaceId === 'lingxi'
   const workflowId = params.workflowId as string | undefined
   const router = useRouter()
   const pathname = usePathname()
@@ -454,6 +456,10 @@ export const Sidebar = memo(function Sidebar({
   const { data: sessionData, isPending: sessionLoading } = useSession()
   const { workspace: routeWorkspace } = useWorkspaceHostContext()
   const { canAdmin, canEdit, isLoading: permissionsLoading } = useUserPermissionsContext()
+  // Lingxi task management is learner-owned and does not use Sim workspace
+  // editor permissions. Keep the native menu actions enabled for this host
+  // even though the static host context intentionally exposes read access.
+  const canEditChat = isLingxiWorkspace || canEdit
   const {
     config: permissionConfig,
     filterBlocks,
@@ -703,6 +709,7 @@ export const Sidebar = memo(function Sidebar({
   const markChatUnreadMutation = useMarkMothershipChatUnread(workspaceId)
   const renameChatMutation = useRenameMothershipChat(workspaceId)
   const setChatPinnedMutation = useSetMothershipChatPinned(workspaceId)
+  const forkChatMutation = useForkMothershipChat(workspaceId)
   const chatsHover = useHoverMenu()
   const workflowsHover = useHoverMenu()
 
@@ -811,7 +818,7 @@ export const Sidebar = memo(function Sidebar({
       [
         {
           id: 'home',
-          label: isChatEnabled ? 'New chat' : 'New workflow',
+          label: isLingxiWorkspace ? '新对话' : isChatEnabled ? 'New chat' : 'New workflow',
           icon: isChatEnabled ? Home : Plus,
           href: isChatEnabled ? `/workspace/${workspaceId}/home` : undefined,
           onClick: isChatEnabled ? undefined : createWorkflow,
@@ -821,16 +828,25 @@ export const Sidebar = memo(function Sidebar({
         },
         {
           id: 'integrations',
-          label: 'Integrations',
+          label: isLingxiWorkspace ? '技能' : 'Integrations',
           icon: Integration,
-          href: `/workspace/${workspaceId}/integrations`,
+          href: isLingxiWorkspace
+            ? `/workspace/${workspaceId}/skills`
+            : `/workspace/${workspaceId}/integrations`,
           /* Skills is a tab of this surface, not its own nav item — keep the entry
              lit while the user is on it. */
           additionalActivePaths: [`/workspace/${workspaceId}/skills`],
           hidden: permissionConfig.hideIntegrationsTab,
         },
       ].filter((item) => !item.hidden),
-    [workspaceId, createWorkflow, canEdit, permissionsLoading, permissionConfig.hideIntegrationsTab]
+    [
+      workspaceId,
+      isLingxiWorkspace,
+      createWorkflow,
+      canEdit,
+      permissionsLoading,
+      permissionConfig.hideIntegrationsTab,
+    ]
   )
 
   const workspaceNavItems = useMemo(
@@ -838,34 +854,35 @@ export const Sidebar = memo(function Sidebar({
       [
         {
           id: 'tables',
-          label: 'Tables',
+          label: isLingxiWorkspace ? '表格' : 'Tables',
           icon: Table,
           href: `/workspace/${workspaceId}/tables`,
           hidden: permissionConfig.hideTablesTab,
         },
         {
           id: 'files',
-          label: 'Files',
+          label: isLingxiWorkspace ? '文件' : 'Files',
           icon: Files,
           href: `/workspace/${workspaceId}/files`,
           hidden: permissionConfig.hideFilesTab,
         },
         {
           id: 'knowledge-base',
-          label: 'Knowledge bases',
+          label: isLingxiWorkspace ? '知识库' : 'Knowledge bases',
           icon: Database,
           href: `/workspace/${workspaceId}/knowledge`,
           hidden: permissionConfig.hideKnowledgeBaseTab,
         },
         {
           id: 'logs',
-          label: 'Logs',
+          label: isLingxiWorkspace ? '日志' : 'Logs',
           icon: Library,
           href: `/workspace/${workspaceId}/logs`,
         },
       ].filter((item) => !item.hidden),
     [
       workspaceId,
+      isLingxiWorkspace,
       permissionConfig.hideFilesTab,
       permissionConfig.hideKnowledgeBaseTab,
       permissionConfig.hideTablesTab,
@@ -1071,6 +1088,14 @@ export const Sidebar = memo(function Sidebar({
     if (!chat) return
     setChatPinnedMutation.mutate({ chatId: chatId, pinned: !chat.isPinned })
   }, [chats, setChatPinnedMutation])
+
+  const handleForkChat = useCallback(() => {
+    const { chatIds: ids } = contextMenuSelectionRef.current
+    if (ids.length !== 1) return
+    forkChatMutation.mutate({ chatId: ids[0] }, {
+      onSuccess: (created) => navigateToPage(`/workspace/${workspaceId}/chat/${created.id}`),
+    })
+  }, [forkChatMutation, navigateToPage, workspaceId])
 
   const handleCollapsedWorkflowOpenInNewTab = useCallback(
     (workflow: { id: string }) => {
@@ -1476,14 +1501,14 @@ export const Sidebar = memo(function Sidebar({
                 )}
               >
                 <SidebarTooltip
-                  label='Search'
+                  label={isLingxiWorkspace ? '搜索' : 'Search'}
                   enabled={!isCollapsed}
                   side='bottom'
                   shortcut={isMac ? '⌘K' : 'Ctrl+K'}
                 >
                   <Chip
                     leftIcon={Search}
-                    aria-label='Search'
+                    aria-label={isLingxiWorkspace ? '搜索' : 'Search'}
                     /* Called with no args — the store setter's first parameter is an
                        options object, which a raw handler would fill with the event. */
                     onClick={() => openSearchModal()}
@@ -1492,14 +1517,14 @@ export const Sidebar = memo(function Sidebar({
                   />
                 </SidebarTooltip>
                 <SidebarTooltip
-                  label='Collapse sidebar'
+                  label={isLingxiWorkspace ? '收起侧栏' : 'Collapse sidebar'}
                   enabled={!isCollapsed}
                   side='bottom'
                   shortcut={isMac ? '⌘B' : 'Ctrl+B'}
                 >
                   <Chip
                     leftIcon={PanelLeft}
-                    aria-label='Collapse sidebar'
+                    aria-label={isLingxiWorkspace ? '收起侧栏' : 'Collapse sidebar'}
                     onClick={toggleCollapsed}
                     tabIndex={isCollapsed ? -1 : undefined}
                     className={cn(
@@ -1548,7 +1573,7 @@ export const Sidebar = memo(function Sidebar({
                   <div ref={scrollContentRef} className='flex flex-col'>
                     {isChatEnabled && (
                       <SidebarSection
-                        title='Chats'
+                        title={isLingxiWorkspace ? '对话' : 'Chats'}
                         railCollapsed={isCollapsed}
                         className='chats-section flex-shrink-0'
                       >
@@ -1556,7 +1581,7 @@ export const Sidebar = memo(function Sidebar({
                           <CollapsedSidebarMenu
                             icon={chatsCollapsedIcon}
                             hover={chatsHover}
-                            ariaLabel='Chats'
+                            ariaLabel={isLingxiWorkspace ? '对话' : 'Chats'}
                           >
                             {chatsLoading ? (
                               <DropdownMenuItem disabled>
@@ -1564,7 +1589,9 @@ export const Sidebar = memo(function Sidebar({
                                 Loading...
                               </DropdownMenuItem>
                             ) : chats.length === 0 ? (
-                              <DropdownMenuItem disabled>No chats yet</DropdownMenuItem>
+                              <DropdownMenuItem disabled>
+                                {isLingxiWorkspace ? '暂无对话' : 'No chats yet'}
+                              </DropdownMenuItem>
                             ) : (
                               chats.map((chat) => (
                                 <CollapsedChatFlyoutItem
@@ -1594,7 +1621,7 @@ export const Sidebar = memo(function Sidebar({
                               <>
                                 {chats.length === 0 ? (
                                   <div className='flex h-[30px] items-center px-2 text-[var(--text-muted)] text-small'>
-                                    No chats yet
+                                    {isLingxiWorkspace ? '暂无对话' : 'No chats yet'}
                                   </div>
                                 ) : null}
                                 {/* `selectChatOnly` populates `selectedChats` on every click, so
@@ -1672,7 +1699,7 @@ export const Sidebar = memo(function Sidebar({
                     )}
 
                     <SidebarSection
-                      title='Workspace'
+                      title={isLingxiWorkspace ? '工作区' : 'Workspace'}
                       railCollapsed={isCollapsed}
                       className={cn(SIDEBAR_SECTION_GAP_CLASS, 'flex-shrink-0')}
                     >
@@ -1690,7 +1717,7 @@ export const Sidebar = memo(function Sidebar({
                     </SidebarSection>
 
                     <SidebarSection
-                      title='Workflows'
+                      title={isLingxiWorkspace ? '工作流' : 'Workflows'}
                       railCollapsed={isCollapsed}
                       className={cn(SIDEBAR_SECTION_GAP_CLASS, 'workflows-section relative')}
                       action={
@@ -1714,7 +1741,7 @@ export const Sidebar = memo(function Sidebar({
                                   </DropdownMenuTrigger>
                                 </Tooltip.Trigger>
                                 <Tooltip.Content>
-                                  <p>More actions</p>
+                                  <p>{isLingxiWorkspace ? '更多操作' : 'More actions'}</p>
                                 </Tooltip.Content>
                               </Tooltip.Root>
                               <DropdownMenuContent
@@ -1751,7 +1778,7 @@ export const Sidebar = memo(function Sidebar({
                               </Tooltip.Trigger>
                               <Tooltip.Content>
                                 {isCreatingWorkflow ? (
-                                  <p>Creating workflow...</p>
+                                  <p>{isLingxiWorkspace ? '正在创建工作流…' : 'Creating workflow...'}</p>
                                 ) : (
                                   <Tooltip.Shortcut keys={isMac ? '⌘⇧P' : 'Ctrl+Shift+P'}>
                                     New workflow
@@ -1767,7 +1794,7 @@ export const Sidebar = memo(function Sidebar({
                         <CollapsedSidebarMenu
                           icon={workflowsCollapsedIcon}
                           hover={workflowsHover}
-                          ariaLabel='Workflows'
+                          ariaLabel={isLingxiWorkspace ? '工作流' : 'Workflows'}
                           primaryAction={workflowsPrimaryAction}
                         >
                           {workflowsLoading && regularWorkflows.length === 0 ? (
@@ -1776,7 +1803,9 @@ export const Sidebar = memo(function Sidebar({
                               Loading...
                             </DropdownMenuItem>
                           ) : regularWorkflows.length === 0 ? (
-                            <DropdownMenuItem disabled>No workflows yet</DropdownMenuItem>
+                            <DropdownMenuItem disabled>
+                              {isLingxiWorkspace ? '暂无工作流' : 'No workflows yet'}
+                            </DropdownMenuItem>
                           ) : (
                             <>
                               {collapsedRootItems.map((item) =>
@@ -1875,6 +1904,7 @@ export const Sidebar = memo(function Sidebar({
                   onTogglePin={handleToggleChatPin}
                   onRename={handleStartChatRename}
                   onDelete={handleDeleteChat}
+                  onDuplicate={handleForkChat}
                   showOpenInNewTab={!isMultiChatContextMenu}
                   showMarkAsRead={!isMultiChatContextMenu && !!activeChatContextMenuItem?.isUnread}
                   showMarkAsUnread={
@@ -1885,9 +1915,10 @@ export const Sidebar = memo(function Sidebar({
                   showPin={!isMultiChatContextMenu && !!activeChatContextMenuItem}
                   isPinned={!!activeChatContextMenuItem?.isPinned}
                   showRename={!isMultiChatContextMenu}
-                  showDuplicate={false}
-                  disableRename={!canEdit}
-                  disableDelete={!canEdit}
+                  showDuplicate={!isMultiChatContextMenu}
+                  disableDuplicate={forkChatMutation.isPending}
+                  disableRename={!canEditChat}
+                  disableDelete={!canEditChat}
                 />
 
                 <DeleteModal
@@ -1917,7 +1948,15 @@ export const Sidebar = memo(function Sidebar({
             role={isCollapsed ? 'button' : 'separator'}
             tabIndex={0}
             aria-orientation={isCollapsed ? undefined : 'vertical'}
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Resize sidebar'}
+            aria-label={
+              isCollapsed
+                ? isLingxiWorkspace
+                  ? '展开侧栏'
+                  : 'Expand sidebar'
+                : isLingxiWorkspace
+                  ? '调整侧栏宽度'
+                  : 'Resize sidebar'
+            }
           />
         )}
       </div>

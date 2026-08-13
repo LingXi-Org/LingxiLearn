@@ -154,7 +154,54 @@ export const api = {
       body: JSON.stringify({ message }),
     }),
 
-  agentTasks: () => request<{ tasks: AgentTaskListItem[] }>('/agent-tasks'),
+  agentTasks: (scope: 'active' | 'archived' = 'active') =>
+    request<{ tasks: AgentTaskListItem[] }>(`/agent-tasks?scope=${scope}`),
+
+  updateAgentTask: (
+    taskId: string,
+    patch: {
+      title?: string
+      is_pinned?: boolean
+      is_unread?: boolean
+      resources?: Array<Record<string, unknown>>
+    }
+  ) =>
+    request<{ id: string; title: string; is_pinned: boolean; is_unread: boolean; resources: Array<Record<string, unknown>> }>(
+      `/agent-tasks/${taskId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) }
+    ),
+
+  deleteAgentTask: (taskId: string) =>
+    request<{ id: string; deleted_at: string | null }>(`/agent-tasks/${taskId}`, { method: 'DELETE' }),
+
+  restoreAgentTask: (taskId: string) =>
+    request<{ id: string; deleted_at: null }>(`/agent-tasks/${taskId}/restore`, { method: 'POST' }),
+
+  forkAgentTask: (taskId: string) =>
+    request<{ id: string; status: string }>(`/agent-tasks/${taskId}/fork`, { method: 'POST' }),
+
+  cancelAgentTask: (taskId: string) =>
+    request<{ id: string; status: string }>(`/agent-tasks/${taskId}/cancel`, { method: 'POST' }),
+
+  uploadAttachment: async (file: File) => {
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    let binary = ''
+    for (let index = 0; index < bytes.length; index += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
+    }
+    return request<{ key: string; path: string; filename: string; media_type: string; size: number }>(
+      '/attachments',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          filename: file.name,
+          media_type: file.type || 'application/octet-stream',
+          size: file.size,
+          data: btoa(binary),
+        }),
+      }
+    )
+  },
 
   submitAgentQuiz: (taskId: string, submissionId: string, answers: Record<string, unknown>) =>
     request<{ status: string; submission: QuizSubmissionSnapshot }>(

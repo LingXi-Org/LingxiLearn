@@ -6,7 +6,8 @@ import { Plus } from '@sim/emcn/icons'
 import { getErrorMessage } from '@sim/utils/errors'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
-import { IntegrationTabsHeader, SkillTile } from '@/app/workspace/[workspaceId]/components'
+import { SkillTile } from '@/app/workspace/[workspaceId]/components'
+import { IntegrationTabsHeader } from '@/app/workspace/[workspaceId]/components/integration-tabs-header'
 import { ShowcaseWithExplore } from '@/app/workspace/[workspaceId]/integrations/components/showcase-with-explore'
 import { SettingsEmptyState } from '@/app/workspace/[workspaceId]/settings/components/settings-empty-state'
 import {
@@ -23,12 +24,11 @@ import {
 import { useSkills } from '@/hooks/queries/skills'
 import { useDebouncedSearchSetter } from '@/hooks/use-debounced-search-setter'
 
-const SKILLS_LABEL = 'Skills'
-
 export function Skills() {
   const params = useParams()
   const router = useRouter()
   const workspaceId = (params?.workspaceId as string) || ''
+  const isLingxiWorkspace = workspaceId === 'lingxi'
   const skillsHref = `/workspace/${workspaceId}/skills`
 
   const { data: skills = [], isLoading, error } = useSkills(workspaceId)
@@ -71,14 +71,13 @@ export function Skills() {
 
   const showNoResults = searchTerm.trim() && filteredSkills.length === 0
 
-  const addButton = (
-    <Chip
-      variant='primary'
-      disabled
-      title='未接入：LingxiGraph Skills 当前为只读'
-      leftIcon={Plus}
-    >
-      未接入
+  const addButton = isLingxiWorkspace ? (
+    <Chip variant='quiet' title='LingxiLearn 技能组已接入'>
+      已接入
+    </Chip>
+  ) : (
+    <Chip variant='primary' disabled leftIcon={Plus}>
+      添加 Skill
     </Chip>
   )
 
@@ -87,11 +86,13 @@ export function Skills() {
       <IntegrationTabsHeader active='skills' workspaceId={workspaceId} rightSlot={addButton} />
       <div className='min-h-0 flex-1 overflow-y-auto px-6 [scrollbar-gutter:stable_both-edges]'>
         <div className='mx-auto flex max-w-[48rem] flex-col gap-7 pb-3'>
-          <ShowcaseWithExplore prompt='Explain the skills in Sim and which ones I should add to my agents.' />
+          {!isLingxiWorkspace && (
+            <ShowcaseWithExplore prompt='Explain the skills in Sim and which ones I should add to my agents.' />
+          )}
           <div className='flex items-center gap-2'>
             <ChipInput
               icon={Search}
-              placeholder='搜索 Skills…'
+              placeholder={isLingxiWorkspace ? '搜索技能…' : '搜索 Skills…'}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               disabled={isLoading}
@@ -102,10 +103,10 @@ export function Skills() {
           <div className='flex flex-col gap-7'>
             {error ? (
               <SettingsEmptyState variant='inline' tone='error'>
-                {getErrorMessage(error, 'Failed to load skills')}
+                {getErrorMessage(error, isLingxiWorkspace ? '技能加载失败' : 'Failed to load skills')}
               </SettingsEmptyState>
             ) : filteredSkills.length > 0 ? (
-              <SettingsSection label={SKILLS_LABEL}>
+              <SettingsSection label={isLingxiWorkspace ? 'LingxiLearn 技能组' : 'Skills'}>
                 <div className={RESOURCE_LIST_GRID}>
                   {filteredSkills.map((s) => (
                     <SettingsResourceRow
@@ -115,7 +116,7 @@ export function Skills() {
                       title={s.name}
                       description={s.description || undefined}
                       onClick={() => router.push(`${skillsHref}/${s.id}`)}
-                      clickLabel={`Open ${s.name}`}
+                      clickLabel={isLingxiWorkspace ? `打开 ${s.name}` : `Open ${s.name}`}
                       navigable
                     />
                   ))}

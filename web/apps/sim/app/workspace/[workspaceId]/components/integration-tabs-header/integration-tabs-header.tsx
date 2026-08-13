@@ -25,6 +25,15 @@ export function IntegrationTabsHeader({
   workspaceId,
   rightSlot,
 }: IntegrationTabsHeaderProps) {
+  if (workspaceId === 'lingxi') {
+    return (
+      <div className={cn(PAGE_HEADER_BAR, 'gap-1')}>
+        <span className='px-2 text-sm font-medium text-[var(--text-primary)]'>技能</span>
+        {rightSlot && <div className={cn('ml-auto', HEADER_ACTION_CLUSTER)}>{rightSlot}</div>}
+      </div>
+    )
+  }
+
   return (
     <div className={cn(PAGE_HEADER_BAR, 'gap-1')}>
       <ChipLink href={`/workspace/${workspaceId}/integrations`} active={active === 'integrations'}>

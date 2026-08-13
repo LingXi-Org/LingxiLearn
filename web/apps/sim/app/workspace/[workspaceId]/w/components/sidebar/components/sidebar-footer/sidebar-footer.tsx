@@ -43,10 +43,10 @@ const PROFILE_MENU_ITEMS: readonly {
   label: string
   icon: ComponentType<{ className?: string }>
 }[] = [
-  { section: 'general', label: 'Settings', icon: Settings },
-  { section: 'billing', label: 'Subscription', icon: Credit },
-  { section: 'teammates', label: 'Teammates', icon: Users },
-  { section: 'recently-deleted', label: 'Recently deleted', icon: Trash },
+  { section: 'general', label: '设置', icon: Settings },
+  { section: 'billing', label: '订阅', icon: Credit },
+  { section: 'teammates', label: '成员', icon: Users },
+  { section: 'recently-deleted', label: '最近删除', icon: Trash },
 ]
 
 function hasAvailableDesktopUpdate(state: DesktopUpdateState): boolean {
@@ -147,6 +147,7 @@ export function SidebarFooter({
 
   const name = profile ? profile.name?.trim() || profile.email : ''
   const updateAvailable = hasAvailableDesktopUpdate(updateState)
+  const isLingxiWorkspace = workspaceId === 'lingxi'
 
   const handleUpdateSelect = () => {
     const updates = getDesktopUpdates()
@@ -165,7 +166,8 @@ export function SidebarFooter({
    */
   const menuItems = PROFILE_MENU_ITEMS.filter(
     (item) =>
-      item.section !== 'billing' || canViewWorkspaceBillingSettings(hostContext, session?.user?.id)
+      (!isLingxiWorkspace || (item.section !== 'general' && item.section !== 'teammates')) &&
+      (item.section !== 'billing' || canViewWorkspaceBillingSettings(hostContext, session?.user?.id))
   )
 
   /**
@@ -280,13 +282,29 @@ export function SidebarFooter({
   const helpMenu = (
     <DropdownMenu>
       <SidebarTooltip
-        label={updateAvailable ? 'Help — update available' : 'Help'}
+        label={
+          isLingxiWorkspace
+            ? updateAvailable
+              ? '帮助 — 有可用更新'
+              : '帮助'
+            : updateAvailable
+              ? 'Help — update available'
+              : 'Help'
+        }
         enabled={showCollapsedTooltips}
       >
         <DropdownMenuTrigger asChild>
           <Chip
             data-item-id='help'
-            aria-label={updateAvailable ? 'Help, update available' : 'Help'}
+            aria-label={
+              isLingxiWorkspace
+                ? updateAvailable
+                  ? '帮助，有可用更新'
+                  : '帮助'
+                : updateAvailable
+                  ? 'Help, update available'
+                  : 'Help'
+            }
             leftIcon={updateAvailable ? DesktopUpdateIcon : HelpCircle}
             fullWidth={isCollapsed}
             /* Never shrinks: while the rail animates open the row is briefly wider
@@ -313,15 +331,15 @@ export function SidebarFooter({
         )}
         <DropdownMenuItem onSelect={onOpenDocs}>
           <BookOpen className='size-[14px]' />
-          Docs
+          {isLingxiWorkspace ? '文档' : 'Docs'}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onJoinSlack}>
           <SlackIcon className='size-[14px]' />
-          Join Slack
+          {isLingxiWorkspace ? '加入 Slack 社区' : 'Join Slack'}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onContactSupport}>
           <HelpCircle className='size-[14px]' />
-          Contact support
+          {isLingxiWorkspace ? '联系支持' : 'Contact support'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

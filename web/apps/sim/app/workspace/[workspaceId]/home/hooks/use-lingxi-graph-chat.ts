@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { FilePreviewSession } from '@/lib/copilot/request/session/file-preview-session-contract'
 import type { MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
 import {
+  api,
   type LingxiGraphChatAdapter,
   projectLingxiGraphEvents,
 } from '@/lib/lingxi/lingxi-graph-adapter'
@@ -18,24 +19,35 @@ import type {
 } from '../types'
 import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './use-chat'
 
-const TERMINAL_TASK_STATUSES = new Set(['handed_off', 'completed', 'partial', 'failed'])
+const TERMINAL_TASK_STATUSES = new Set(['handed_off', 'completed', 'partial', 'failed', 'cancelled'])
 
 function taskIsTerminal(task: AgentTaskSnapshot | null): boolean {
   return task !== null && TERMINAL_TASK_STATUSES.has(task.status)
 }
 
-function userMessage(id: string, content: string, contexts?: ChatContext[]): ChatMessage {
+function userMessage(
+  id: string,
+  content: string,
+  contexts?: ChatContext[],
+  fileAttachments?: FileAttachmentForApi[]
+): ChatMessage {
   return {
     id,
     role: 'user',
     content,
     contexts: contexts?.map(({ kind, label }) => ({ kind, label })),
+    fileAttachments,
   }
 }
 
 function contextSuffix(contexts?: ChatContext[]): string {
   const labels = contexts?.map((context) => context.label.trim()).filter(Boolean) ?? []
   return labels.length > 0 ? `\n\n[Context: ${labels.join(', ')}]` : ''
+}
+
+function attachmentSuffix(attachments?: FileAttachmentForApi[]): string {
+  const names = attachments?.map((file) => file.filename.trim()).filter(Boolean) ?? []
+  return names.length > 0 ? `\n\n[附件: ${names.join(', ')}]` : ''
 }
 
 function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[] {
@@ -98,6 +110,7 @@ export function useLingxiGraphChat(
 
   const [resolvedChatId, setResolvedChatId] = useState<string | undefined>(initialChatId)
   const [task, setTask] = useState<AgentTaskSnapshot | null>(null)
+  const [savedResources, setSavedResources] = useState<MothershipResource[]>([])
   const [events, setEvents] = useState<AgentTaskEvent[]>([])
   const [localUsers, setLocalUsers] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
@@ -133,6 +146,7 @@ export function useLingxiGraphChat(
     setTask(null)
     setEvents([])
     setLocalUsers([])
+    setSavedResources([])
     setError(null)
     setLocallyStopped(false)
   }, [initialChatId])
@@ -173,6 +187,7 @@ export function useLingxiGraphChat(
         const loaded = await currentAdapter.loadTask(taskId)
         if (cancelled) return
         setTask(loaded)
+        setSavedResources((loaded.resources ?? []) as MothershipResource[])
         setLocalUsers((current) =>
           current.length > 0 ? current : [userMessage(`lingxi-user:${loaded.id}`, loaded.prompt)]
         )
@@ -213,7 +228,11 @@ export function useLingxiGraphChat(
         : null,
     [events, task]
   )
-  const resources = useMemo(() => artifactResources(task), [task])
+  const resources = useMemo(() => {
+    const artifacts = artifactResources(task)
+    const seen = new Set(artifacts.map((resource) => resource.id))
+    return [...artifacts, ...savedResources.filter((resource) => !seen.has(resource.id))]
+  }, [savedResources, task])
   const assistantStreaming = Boolean(task && !taskIsTerminal(task) && !locallyStopped && isSending)
   const messages = useMemo(() => {
     if (!task) return localUsers.length > 0 ? localUsers : []
@@ -221,7 +240,7 @@ export function useLingxiGraphChat(
     const assistant: ChatMessage = {
       id: `lingxi-assistant:${task.id}`,
       role: 'assistant',
-      content: currentProjection.assistantText || 'Connecting to the learning graph…',
+      content: currentProjection.assistantText || '正在连接学习智能体图…',
       contentBlocks: [
         ...currentProjection.blocks,
         ...(locallyStopped && !currentProjection.isTerminal ? [{ type: 'stopped' as const }] : []),
@@ -248,7 +267,7 @@ export function useLingxiGraphChat(
       if (!currentAdapter || currentAdapter.kind !== 'lingxigraph') return
       const content = message.trim()
       if (!content) return
-      const requestMessage = `${content}${contextSuffix(contexts)}`
+      const requestMessage = `${content}${contextSuffix(contexts)}${attachmentSuffix(_fileAttachments)}`
       const userId = `lingxi-user:${Date.now()}`
       setIsSending(true)
       setError(null)
@@ -281,19 +300,46 @@ export function useLingxiGraphChat(
 
   const stopGeneration = useCallback(async () => {
     setLocallyStopped(true)
-    // The current LingxiGraph server exposes durable task events but no cancel
-    // endpoint. Detaching here is local-only; a subsequent send reattaches to
-    // the same durable SSE log instead of pretending the graph was cancelled.
-  }, [])
+    const taskId = resolvedChatId
+    if (!taskId) return
+    try {
+      await adapterRef.current?.cancelTask(taskId)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }, [resolvedChatId])
 
-  const addResource = useCallback((_resource: MothershipResource) => true, [])
+  const persistResources = useCallback(
+    (next: MothershipResource[]) => {
+      setSavedResources(next)
+      const taskId = resolvedChatId
+      if (taskId) {
+        void adapterRef.current?.updateTaskMetadata(taskId, {
+          resources: next as Array<Record<string, unknown>>,
+        })
+      }
+    },
+    [resolvedChatId]
+  )
+  const addResource = useCallback(
+    (resource: MothershipResource) => {
+      const next = [...savedResources.filter((current) => current.id !== resource.id), resource]
+      persistResources(next)
+      return true
+    },
+    [persistResources, savedResources]
+  )
   const removeResource = useCallback(
     (_type: MothershipResourceType, resourceId: string) => {
       if (effectiveActiveResourceId === resourceId) setEffectiveActiveResourceId(null)
+      persistResources(savedResources.filter((resource) => resource.id !== resourceId))
     },
-    [effectiveActiveResourceId, setEffectiveActiveResourceId]
+    [effectiveActiveResourceId, persistResources, savedResources, setEffectiveActiveResourceId]
   )
-  const reorderResources = useCallback((_next: MothershipResource[]) => {}, [])
+  const reorderResources = useCallback(
+    (next: MothershipResource[]) => persistResources(next),
+    [persistResources]
+  )
   const noQueuedMessages = useMemo<QueuedMessage[]>(() => [], [])
   const noOp = useCallback(() => {}, [])
   const noOpAsync = useCallback(async () => {}, [])

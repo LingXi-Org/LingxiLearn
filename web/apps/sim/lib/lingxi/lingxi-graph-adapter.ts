@@ -27,33 +27,38 @@ export interface LingxiGraphChatAdapter {
   createTask(prompt: string): Promise<{ id: string; status: string }>
   loadTask(taskId: string): Promise<AgentTaskSnapshot>
   sendMessage(taskId: string, message: string): Promise<{ status: string }>
+  cancelTask(taskId: string): Promise<{ id: string; status: string }>
+  updateTaskMetadata(
+    taskId: string,
+    patch: { resources?: Array<Record<string, unknown>> }
+  ): Promise<unknown>
   subscribe(taskId: string, options: LingxiGraphSubscriptionOptions): () => void
   project(task: AgentTaskSnapshot, events: AgentTaskEvent[]): LingxiGraphProjection
 }
 
 const AGENT_LABELS: Record<string, string> = {
-  coordinator: 'Graph Coordinator',
-  intent: 'Intent Agent',
-  adaptive_pedagogy: 'Adaptive Pedagogy Skill',
-  interactive_lecture_deck: 'Interactive Lecture Deck Skill',
-  interactive_visual_explainer: 'Interactive Visual Explainer Skill',
-  learner_state_reflector: 'Learner State Reflector Skill',
-  lesson_intro: 'Lesson Intro Skill',
-  quiz_generator: 'Quiz Generator Skill',
-  answer_user: 'Answer User Agent',
-  quiz_submit: 'Quiz Submit Agent',
+  coordinator: '图谱协调器',
+  intent: '意图智能体',
+  adaptive_pedagogy: '自适应教学技能',
+  interactive_lecture_deck: '交互式讲义技能',
+  interactive_visual_explainer: '交互式可视化讲解技能',
+  learner_state_reflector: '学习状态反思器',
+  lesson_intro: '课程引入技能',
+  quiz_generator: '知识检测技能',
+  answer_user: '答疑智能体',
+  quiz_submit: '测验提交智能体',
 }
 
 const TOOL_LABELS: Record<string, string> = {
-  web_search: 'Research the web',
-  web_fetch: 'Read a source',
-  stage_artifact_file: 'Prepare an artifact',
-  stage_artifact_files: 'Prepare artifacts',
-  read_staged_artifact: 'Read staged artifact',
-  list_staged_artifacts: 'List staged artifacts',
+  web_search: '检索资料',
+  web_fetch: '阅读资料',
+  stage_artifact_file: '准备学习产物',
+  stage_artifact_files: '准备学习产物',
+  read_staged_artifact: '读取学习产物',
+  list_staged_artifacts: '列出学习产物',
 }
 
-const TERMINAL_TASK_STATUSES = new Set(['handed_off', 'completed', 'partial', 'failed'])
+const TERMINAL_TASK_STATUSES = new Set(['handed_off', 'completed', 'partial', 'failed', 'cancelled'])
 const TERMINAL_AGENT_EVENTS = new Set(['agent.completed', 'agent.failed'])
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -120,9 +125,9 @@ function safeArgs(value: unknown): Record<string, unknown> | undefined {
 }
 
 function safePayloadSummary(value: unknown): string {
-  if (value === undefined || value === null) return 'No public result details were returned.'
-  if (typeof value === 'string') return `A result was returned (${value.length} chars).`
-  return 'A structured result was returned.'
+  if (value === undefined || value === null) return '没有返回公开结果详情。'
+  if (typeof value === 'string') return `已返回结果（${value.length} 个字符）。`
+  return '已返回结构化结果。'
 }
 
 function eventPayload(event: AgentTaskEvent): Record<string, unknown> {
@@ -277,7 +282,7 @@ function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
         result: {
           success: !failed,
           output: safePayloadSummary(payload.output ?? payload.content ?? payload.result),
-          error: failed ? stringValue(payload.error) || 'Tool execution failed.' : undefined,
+        error: failed ? stringValue(payload.error) || '工具执行失败。' : undefined,
         },
       })
     }
@@ -313,8 +318,8 @@ function reduceReasoningSteps(
       upsert(
         reasoningStep(
           'task',
-          'Prepare the task',
-          'The learning task has been created and the graph is starting.',
+          '准备学习任务',
+          '学习任务已创建，智能体图正在启动。',
           terminal ? 'complete' : 'active',
           timestamp
         )
@@ -323,8 +328,8 @@ function reduceReasoningSteps(
       upsert(
         reasoningStep(
           'intent',
-          'Understand the learning goal',
-          'The graph is identifying the learner’s intent and scope.',
+          '理解学习目标',
+          '智能体图正在识别你的意图与学习范围。',
           'active',
           timestamp
         )
@@ -334,10 +339,10 @@ function reduceReasoningSteps(
       upsert(
         reasoningStep(
           'intent',
-          'Understand the learning goal',
+          '理解学习目标',
           topic
-            ? `The graph identified the topic “${topic.slice(0, 120)}”.`
-            : 'The graph identified the learner’s intent.',
+            ? `智能体图识别到主题“${topic.slice(0, 120)}”。`
+            : '智能体图已识别学习意图。',
           'complete',
           timestamp,
           timestamp
@@ -353,7 +358,7 @@ function reduceReasoningSteps(
           reasoningStep(
             `agent:${run.startSequence}`,
             agentLabel(run.agent),
-            `${agentLabel(run.agent)} started this learning phase.`,
+            `${agentLabel(run.agent)}已开始这一学习阶段。`,
             run.status === 'executing' ? 'active' : run.status === 'error' ? 'error' : 'complete',
             timestamp
           )
@@ -371,8 +376,8 @@ function reduceReasoningSteps(
             `agent:${run.startSequence}`,
             agentLabel(run.agent),
             event.kind === 'agent.failed'
-              ? `${agentLabel(run.agent)} could not complete this phase.`
-              : `${agentLabel(run.agent)} completed this phase.`,
+              ? `${agentLabel(run.agent)}未能完成这一阶段。`
+              : `${agentLabel(run.agent)}已完成这一阶段。`,
             event.kind === 'agent.failed' ? 'error' : 'complete',
             undefined,
             timestamp
@@ -383,10 +388,10 @@ function reduceReasoningSteps(
       upsert(
         reasoningStep(
           `artifact:${artifact || event.sequence}`,
-          'Prepare the learning output',
+          '准备学习产物',
           artifact
-            ? `The ${humanize(artifact)} output is ready to review.`
-            : 'A learning output is ready to review.',
+            ? `${humanize(artifact)}产物已准备好，可查看。`
+            : '学习产物已准备好，可查看。',
           'complete',
           timestamp,
           timestamp
@@ -396,10 +401,10 @@ function reduceReasoningSteps(
       upsert(
         reasoningStep(
           'task',
-          'Prepare the task',
+          '准备学习任务',
           payload.status === 'partial'
-            ? 'The available learning outputs are ready; some phases were partial.'
-            : 'The learning task and its outputs are complete.',
+            ? '当前学习产物已准备好，但部分阶段只完成了一部分。'
+            : '学习任务及其产物已完成。',
           'complete',
           undefined,
           timestamp
@@ -408,8 +413,8 @@ function reduceReasoningSteps(
       upsert(
         reasoningStep(
           'finish',
-          'Summarize the result',
-          'The graph has returned the current learning result.',
+          '总结学习结果',
+          '智能体图已返回当前学习结果。',
           'complete',
           timestamp,
           timestamp
@@ -419,8 +424,8 @@ function reduceReasoningSteps(
       upsert(
         reasoningStep(
           'finish',
-          'Summarize the result',
-          'The graph stopped before all learning outputs were ready.',
+          '总结学习结果',
+          '智能体图在全部学习产物准备完成前停止了。',
           'error',
           timestamp,
           timestamp
@@ -430,10 +435,10 @@ function reduceReasoningSteps(
       upsert(
         reasoningStep(
           `node:${event.sequence}`,
-          'Advance the graph',
+          '推进智能体图',
           event.kind === 'node.retrying'
-            ? 'A graph node is retrying with the available context.'
-            : 'The graph is advancing through its next node.',
+            ? '图节点正在结合当前上下文重试。'
+            : '智能体图正在推进到下一个节点。',
           'active',
           timestamp
         )
@@ -447,10 +452,10 @@ function reduceReasoningSteps(
         `tool:${tool.id}`,
         toolLabel(tool.name),
         tool.status === 'executing'
-          ? `The graph is collecting evidence with ${toolLabel(tool.name).toLowerCase()}.`
+          ? `智能体图正在通过“${toolLabel(tool.name)}”收集依据。`
           : tool.status === 'error'
-            ? `${toolLabel(tool.name)} returned an error; the graph is preserving the safe status.`
-            : `${toolLabel(tool.name)} returned a result for the current phase.`,
+            ? `${toolLabel(tool.name)}返回了错误；智能体图正在保留安全状态。`
+            : `${toolLabel(tool.name)}已为当前阶段返回结果。`,
         tool.status === 'executing' ? 'active' : tool.status === 'error' ? 'error' : 'complete',
         tool.startedAt,
         tool.status === 'executing' ? undefined : tool.startedAt
@@ -614,14 +619,14 @@ export function projectLingxiGraphEvents(
     if (event.kind === 'task.completed') {
       const summary =
         eventPayload(event).status === 'partial'
-          ? 'The available learning outputs are ready to review.'
-          : 'The learning task is complete.'
+          ? '当前学习产物已准备好，可查看。'
+          : '学习任务已完成。'
       if (!assistantText) {
         assistantText = summary
         blocks.push({ type: 'text', content: summary, timestamp: event.sequence })
       }
     } else if (event.kind === 'task.failed' && !assistantText) {
-      assistantText = task.error || 'The learning task could not be completed.'
+      assistantText = task.error || '学习任务未能完成。'
       blocks.push({ type: 'text', content: assistantText, timestamp: event.sequence })
     }
   }
@@ -641,6 +646,8 @@ export function createLingxiGraphAdapter(): LingxiGraphChatAdapter {
     createTask: api.createAgentTask,
     loadTask: api.agentTask,
     sendMessage: api.agentMessage,
+    cancelTask: api.cancelAgentTask,
+    updateTaskMetadata: (taskId, patch) => api.updateAgentTask(taskId, patch),
     subscribe(taskId, options) {
       return subscribeAgentEvents(taskId, options.onEvent, {
         from: options.from,

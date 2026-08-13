@@ -575,7 +575,7 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
 
       <PromptEditor
         editor={editor}
-        placeholder='Ask Sim to '
+        placeholder={workspaceId === 'lingxi' ? '输入知识点或学习目标…' : 'Ask Sim to '}
         onSubmit={handleEnterSubmit}
         onArrowUpOnEmpty={handleArrowUpOnEmpty}
         className={cn('max-h-[200px]', isInitialView && 'min-h-[56px]')}
@@ -589,13 +589,15 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
                 type='button'
                 variant='ghost'
                 onClick={handlePlusClick}
-                aria-label='Add resources'
+                aria-label={workspaceId === 'lingxi' ? '添加资源' : 'Add resources'}
                 className='size-[28px] rounded-full p-0 hover-hover:bg-[var(--surface-hover)]'
               >
                 <Plus className='size-[16px] text-[var(--text-icon)]' />
               </Button>
             </Tooltip.Trigger>
-            <Tooltip.Content side='top'>Add resources</Tooltip.Content>
+            <Tooltip.Content side='top'>
+              {workspaceId === 'lingxi' ? '添加资源' : 'Add resources'}
+            </Tooltip.Content>
           </Tooltip.Root>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
@@ -603,13 +605,15 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
                 type='button'
                 variant='ghost'
                 onClick={handleFileSelectStable}
-                aria-label='Attach file'
+                aria-label={workspaceId === 'lingxi' ? '附加文件' : 'Attach file'}
                 className='size-[28px] rounded-full p-0 hover-hover:bg-[var(--surface-hover)]'
               >
                 <Paperclip className='size-[16px] text-[var(--text-icon)]' />
               </Button>
             </Tooltip.Trigger>
-            <Tooltip.Content side='top'>Attach file</Tooltip.Content>
+            <Tooltip.Content side='top'>
+              {workspaceId === 'lingxi' ? '附加文件' : 'Attach file'}
+            </Tooltip.Content>
           </Tooltip.Root>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
@@ -617,13 +621,13 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
                 type='button'
                 variant='ghost'
                 onClick={handleSlashTriggerClick}
-                aria-label='Skills'
+                aria-label={workspaceId === 'lingxi' ? '技能' : 'Skills'}
                 className='size-[28px] rounded-full p-0 hover-hover:bg-[var(--surface-hover)]'
               >
                 <Slash className='size-[16px] text-[var(--text-icon)]' />
               </Button>
             </Tooltip.Trigger>
-            <Tooltip.Content side='top'>Skills</Tooltip.Content>
+            <Tooltip.Content side='top'>{workspaceId === 'lingxi' ? '技能' : 'Skills'}</Tooltip.Content>
           </Tooltip.Root>
         </div>
         <div className='flex items-center gap-1.5'>

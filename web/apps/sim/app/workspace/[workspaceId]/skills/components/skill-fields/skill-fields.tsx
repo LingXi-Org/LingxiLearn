@@ -41,6 +41,8 @@ interface SkillFieldsProps {
   contentKey: string | number
   workspaceId: string
   disabled?: boolean
+  /** Use the Lingxi workspace's Chinese read-only copy. */
+  localized?: boolean
   /**
    * Why the fields are locked (built-in skill, or viewer is not an editor).
    * Renders a tooltip explaining it — a disabled control swallows hover, so each
@@ -106,12 +108,13 @@ export function SkillFields({
   contentKey,
   workspaceId,
   disabled = false,
+  localized = false,
   lockReason,
   onPasteText,
 }: SkillFieldsProps) {
   return (
     <>
-      <DetailSection title='Name'>
+      <DetailSection title={localized ? '名称' : 'Name'}>
         <FieldLockTooltip reason={lockReason}>
           <ChipInput
             id='skill-name'
@@ -127,7 +130,7 @@ export function SkillFields({
         <FieldMessage error={errors.name} hint={disabled ? undefined : SKILL_NAME_HINT} />
       </DetailSection>
 
-      <DetailSection title='Description'>
+      <DetailSection title={localized ? '描述' : 'Description'}>
         <FieldLockTooltip reason={lockReason}>
           <ChipTextarea
             id='skill-description'
@@ -145,7 +148,7 @@ export function SkillFields({
         <FieldMessage error={errors.description} />
       </DetailSection>
 
-      <DetailSection title='Content'>
+      <DetailSection title={localized ? '内容' : 'Content'}>
         <FieldLockTooltip reason={lockReason}>
           <RichMarkdownField
             key={contentKey}

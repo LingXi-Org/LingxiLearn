@@ -10,6 +10,8 @@ const LINGXI_HOST_CONTEXT: LingxiWorkspaceHostContext = {
   workspace: {
     id: 'lingxi',
     name: '灵犀智学',
+    logoUrl: '/logo_icon_black.svg',
+    color: '#f59e0b',
     workspaceMode: 'personal',
     billedAccountUserId: 'lingxi-user',
   },

@@ -86,7 +86,7 @@ function DisabledReasonTooltip({ reason, children }: DisabledReasonTooltipProps)
 
 interface WorkspaceHeaderProps {
   /** The active workspace object */
-  activeWorkspace?: { name: string } | null
+  activeWorkspace?: { name: string; logoUrl?: string; color?: string } | null
   /** Current workspace ID */
   workspaceId: string
   /** List of available workspaces, already ordered pinned-first */
@@ -275,6 +275,8 @@ function WorkspaceHeaderImpl({
   const queryClient = useQueryClient()
 
   const activeWorkspaceFull = workspaces.find((w) => w.id === workspaceId) || null
+  const activeLogoUrl = activeWorkspaceFull?.logoUrl ?? activeWorkspace?.logoUrl
+  const activeWorkspaceColor = activeWorkspaceFull?.color ?? activeWorkspace?.color
   const isWorkspaceReady = !isWorkspacesLoading && activeWorkspaceFull !== null
   const canCreateWorkspace = workspaceCreationPolicy?.canCreate ?? true
   const createWorkspaceDisabledReason =
@@ -445,11 +447,11 @@ function WorkspaceHeaderImpl({
           className={chipVariants({ fullWidth: true })}
         >
           <div className='relative flex size-[16px] flex-shrink-0 items-center justify-center'>
-            {activeWorkspaceFull?.logoUrl ? (
-              <>
+            {activeLogoUrl ? (
+                <>
                 <img
-                  src={activeWorkspaceFull.logoUrl}
-                  alt={activeWorkspaceFull.name || 'Workspace logo'}
+                  src={activeLogoUrl}
+                  alt={activeWorkspaceFull?.name || activeWorkspace?.name || '工作区标识'}
                   className='size-[16px] rounded-sm object-cover group-hover:invisible'
                 />
                 <PanelLeft
@@ -462,7 +464,7 @@ function WorkspaceHeaderImpl({
                 <div
                   className='flex size-[16px] items-center justify-center rounded-sm text-[9px] text-white leading-none group-hover:invisible'
                   style={{
-                    backgroundColor: activeWorkspaceFull?.color ?? 'var(--brand-accent)',
+                    backgroundColor: activeWorkspaceColor ?? 'var(--brand-accent)',
                   }}
                 >
                   {workspaceInitial}
@@ -514,17 +516,17 @@ function WorkspaceHeaderImpl({
               }}
             >
               {activeWorkspaceFull ? (
-                activeWorkspaceFull.logoUrl ? (
+                activeLogoUrl ? (
                   <img
-                    src={activeWorkspaceFull.logoUrl}
-                    alt={activeWorkspaceFull.name || 'Workspace logo'}
+                    src={activeLogoUrl}
+                    alt={activeWorkspaceFull.name || activeWorkspace?.name || '工作区标识'}
                     className='size-[16px] flex-shrink-0 rounded-sm object-cover'
                   />
                 ) : (
                   <div
                     className='flex size-[16px] flex-shrink-0 items-center justify-center rounded-sm text-[9px] text-white leading-none'
                     style={{
-                      backgroundColor: activeWorkspaceFull.color ?? 'var(--brand-accent)',
+                      backgroundColor: activeWorkspaceColor ?? 'var(--brand-accent)',
                     }}
                   >
                     {workspaceInitial}
@@ -856,16 +858,16 @@ function WorkspaceHeaderImpl({
           title={activeWorkspace?.name}
           disabled
         >
-          {activeWorkspaceFull?.logoUrl ? (
+          {activeLogoUrl ? (
             <img
-              src={activeWorkspaceFull.logoUrl}
-              alt={activeWorkspaceFull.name || 'Workspace logo'}
+              src={activeLogoUrl}
+              alt={activeWorkspaceFull?.name || activeWorkspace?.name || '工作区标识'}
               className='size-[16px] flex-shrink-0 rounded-sm object-cover'
             />
           ) : activeWorkspace ? (
             <div
               className='flex size-[16px] flex-shrink-0 items-center justify-center rounded-sm text-[9px] text-white leading-none'
-              style={{ backgroundColor: activeWorkspaceFull?.color ?? 'var(--brand-accent)' }}
+              style={{ backgroundColor: activeWorkspaceColor ?? 'var(--brand-accent)' }}
             >
               {workspaceInitial}
             </div>

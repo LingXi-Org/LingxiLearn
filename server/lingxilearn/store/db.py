@@ -311,21 +311,71 @@ class Repository:
             await s.refresh(row)
             return _quiz_submission_dict(row)
 
-    async def list_agent_tasks(self, learner_id: str) -> list[dict[str, Any]]:
+    async def update_agent_task_metadata(
+        self,
+        task_id: str,
+        learner_id: str,
+        *,
+        title: str | None = None,
+        is_pinned: bool | None = None,
+        is_unread: bool | None = None,
+        resources: list[dict[str, Any]] | None = None,
+    ) -> AgentTask | None:
         async with self.db.session() as s:
+            row = await s.scalar(
+                select(AgentTask).where(AgentTask.id == task_id, AgentTask.learner_id == learner_id)
+            )
+            if row is None:
+                return None
+            if title is not None:
+                row.title = title
+            if is_pinned is not None:
+                row.is_pinned = is_pinned
+            if is_unread is not None:
+                row.is_unread = is_unread
+            if resources is not None:
+                row.resources = resources
+            row.updated_at = utcnow()
+            await s.commit()
+            await s.refresh(row)
+            return row
+
+    async def set_agent_task_deleted(self, task_id: str, learner_id: str, deleted: bool) -> AgentTask | None:
+        async with self.db.session() as s:
+            row = await s.scalar(
+                select(AgentTask).where(AgentTask.id == task_id, AgentTask.learner_id == learner_id)
+            )
+            if row is None:
+                return None
+            row.deleted_at = utcnow() if deleted else None
+            row.updated_at = utcnow()
+            await s.commit()
+            await s.refresh(row)
+            return row
+
+    async def list_agent_tasks(
+        self, learner_id: str, scope: str = "active"
+    ) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            deleted_filter = AgentTask.deleted_at.is_not(None) if scope == "archived" else AgentTask.deleted_at.is_(None)
             rows = (
                 await s.execute(
                     select(AgentTask)
-                    .where(AgentTask.learner_id == learner_id)
-                    .order_by(AgentTask.updated_at.desc(), AgentTask.created_at.desc())
+                    .where(AgentTask.learner_id == learner_id, deleted_filter)
+                    .order_by(AgentTask.is_pinned.desc(), AgentTask.updated_at.desc(), AgentTask.created_at.desc())
                 )
             ).scalars()
             return [
                 {
                     "id": row.id,
                     "prompt": row.prompt,
+                    "title": row.title or "",
                     "status": row.status,
                     "intent": row.intent or {},
+                    "is_pinned": bool(row.is_pinned),
+                    "is_unread": bool(row.is_unread),
+                    "deleted_at": row.deleted_at.isoformat() if row.deleted_at else None,
+                    "resources": row.resources or [],
                     "created_at": row.created_at.isoformat() if row.created_at else None,
                     "updated_at": row.updated_at.isoformat() if row.updated_at else None,
                 }

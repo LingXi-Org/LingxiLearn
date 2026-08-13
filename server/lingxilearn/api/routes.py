@@ -31,7 +31,7 @@ from ..service import Service
 router = APIRouter(prefix="/api")
 
 TERMINAL = {"done", "failed", "cancelled"}
-AGENT_TERMINAL = {"handed_off", "completed", "partial", "failed"}
+AGENT_TERMINAL = {"handed_off", "completed", "partial", "failed", "cancelled"}
 
 
 def service_of(request: Request) -> Service:
@@ -207,6 +207,24 @@ class CreateAgentTask(BaseModel):
     prompt: str = Field(min_length=1, max_length=4000)
 
 
+class AgentTaskMetadataPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, max_length=4000)
+    is_pinned: bool | None = None
+    is_unread: bool | None = None
+    resources: list[dict[str, Any]] | None = None
+
+
+class AgentAttachmentUpload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    filename: str = Field(min_length=1, max_length=255)
+    media_type: str = Field(default="application/octet-stream", max_length=128)
+    size: int = Field(ge=0, le=20 * 1024 * 1024)
+    data: str = Field(min_length=1)
+
+
 class AgentMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -303,7 +321,10 @@ async def list_agent_tasks(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    return {"tasks": await service_of(request).list_agent_tasks(context.learner_id)}
+    scope = request.query_params.get("scope", "active")
+    if scope not in {"active", "archived"}:
+        raise HTTPException(status_code=400, detail="invalid_scope")
+    return {"tasks": await service_of(request).list_agent_tasks(context.learner_id, scope=scope)}
 
 
 @router.get("/agent-tasks/{task_id}")
@@ -346,6 +367,112 @@ async def get_agent_knowledge_graph(
         graph = await service_of(request).agent_knowledge_graph(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
+
+
+@router.patch("/agent-tasks/{task_id}")
+async def patch_agent_task(
+    task_id: str,
+    body: AgentTaskMetadataPatch,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        return await service_of(request).update_agent_task(
+            task_id,
+            context.learner_id,
+            title=body.title,
+            is_pinned=body.is_pinned,
+            is_unread=body.is_unread,
+            resources=body.resources,
+        )
+    except KeyError as exc:
+        raise not_found() from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/agent-tasks/{task_id}")
+async def delete_agent_task(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        return await service_of(request).delete_agent_task(task_id, context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+
+
+@router.post("/agent-tasks/{task_id}/restore")
+async def restore_agent_task(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        return await service_of(request).restore_agent_task(task_id, context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+
+
+@router.post("/agent-tasks/{task_id}/fork", status_code=202)
+async def fork_agent_task(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        return await service_of(request).fork_agent_task(task_id, context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+
+
+@router.post("/agent-tasks/{task_id}/cancel")
+async def cancel_agent_task(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        return await service_of(request).cancel_agent_task(task_id, context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+
+
+@router.post("/attachments", status_code=201)
+async def upload_attachment(
+    body: AgentAttachmentUpload,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        return await service_of(request).upload_attachment(
+            learner_id=context.learner_id,
+            filename=body.filename,
+            media_type=body.media_type,
+            size=body.size,
+            encoded=body.data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/attachments/{learner_id}/{attachment_id}")
+async def get_attachment(
+    learner_id: str,
+    attachment_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> FileResponse:
+    if learner_id != context.learner_id:
+        raise not_found()
+    try:
+        path, media_type, filename = service_of(request).attachment_path(
+            learner_id, attachment_id
+        )
+    except KeyError as exc:
+        raise not_found() from exc
+    return FileResponse(path, media_type=media_type, filename=filename)
     if graph is None:
         raise not_found()
     return graph

@@ -186,14 +186,20 @@ export type AgentTaskStatus =
   | 'completed'
   | 'partial'
   | 'failed'
+  | 'cancelled'
 
 export interface AgentTaskListItem {
   id: string
   prompt: string
+  title?: string
   status: AgentTaskStatus
   intent: { topic?: string }
   created_at: string | null
   updated_at: string | null
+  is_pinned?: boolean
+  is_unread?: boolean
+  deleted_at?: string | null
+  resources?: Array<Record<string, unknown>>
 }
 
 /** Static host context used by the Sim workspace chrome without Sim contracts. */
@@ -201,6 +207,8 @@ export interface LingxiWorkspaceHostContext {
   workspace: {
     id: string
     name: string
+    logoUrl?: string
+    color?: string
     workspaceMode: 'personal'
     billedAccountUserId: string
   }
@@ -286,6 +294,11 @@ export interface AgentTaskSnapshot {
   id: string
   status: AgentTaskStatus
   prompt: string
+  title?: string
+  is_pinned?: boolean
+  is_unread?: boolean
+  deleted_at?: string | null
+  resources?: Array<Record<string, unknown>>
   graph_version: string
   intent: {
     topic?: string

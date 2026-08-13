@@ -11,6 +11,7 @@ import { runWithConcurrency, WHOLE_FILE_PARALLEL_UPLOADS } from '@/lib/uploads/c
 import { uploadInternalFileSession } from '@/lib/uploads/client/session-upload'
 import { MAX_WORKSPACE_FILE_SIZE } from '@/lib/uploads/shared/types'
 import { resolveFileType } from '@/lib/uploads/utils/file-utils'
+import { api } from '@/lib/lingxi/api'
 
 const logger = createLogger('useFileAttachments')
 
@@ -148,7 +149,7 @@ export function useFileAttachments(props: UseFileAttachmentsProps) {
    */
   const processFiles = useCallback(
     async (fileList: FileList) => {
-      if (!userId) {
+      if (!userId && workspaceId !== 'lingxi') {
         logger.error('User ID not available for file upload')
         return
       }
@@ -195,12 +196,15 @@ export function useFileAttachments(props: UseFileAttachmentsProps) {
         const placeholder = placeholders[i]
         const controller = controllers[i]
         try {
-          const result = await uploadInternalFileSession({
-            purpose: 'mothership_attachment',
-            file,
-            workspaceId,
-            signal: controller.signal,
-          })
+          const result =
+            workspaceId === 'lingxi'
+              ? await api.uploadAttachment(file)
+              : await uploadInternalFileSession({
+                  purpose: 'mothership_attachment',
+                  file,
+                  workspaceId,
+                  signal: controller.signal,
+                })
 
           logger.info(`File uploaded successfully: ${result.path}`)
 
