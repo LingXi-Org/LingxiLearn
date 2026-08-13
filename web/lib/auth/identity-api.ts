@@ -16,6 +16,10 @@ export interface IdentityUser {
   primaryPhone?: string | null
   name?: string | null
   avatar?: string | null
+  /** Compatibility aliases consumed by the shared account/identity UI. */
+  email?: string | null
+  image?: string | null
+  emailVerified?: boolean | null
   isSuspended?: boolean
   hasPassword?: boolean | null
   customData?: Record<string, unknown>
