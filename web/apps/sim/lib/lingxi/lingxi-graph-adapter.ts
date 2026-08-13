@@ -499,7 +499,12 @@ function quizQuestionTag(task: AgentTaskSnapshot): string | null {
   const quiz = task.artifacts.quiz?.data
   if (!quiz || task.quiz_submission) return null
   const questions = quiz.questions.map((question) => ({
-    type: question.type === 'multi_choice' ? 'multi_select' : 'single_select',
+    type:
+      question.type === 'multi_choice'
+        ? 'multi_select'
+        : question.type === 'short_text'
+          ? 'single_select'
+          : 'single_select',
     prompt: question.prompt,
     options:
       question.options.length > 0
