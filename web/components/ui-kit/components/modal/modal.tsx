@@ -39,7 +39,6 @@
 import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
-import { usePathname } from 'next/navigation'
 import { X } from '../../icons'
 import { cn } from '../../lib/cn'
 import { Button } from '../button/button'
@@ -503,8 +502,6 @@ const ModalContent = React.forwardRef<
     },
     ref
   ) => {
-    const pathname = usePathname()
-    const isWorkflowPage = pathname?.includes('/w/') ?? false
     // Ready-by-default preserves the exact pre-desktop/web render path. A
     // claimed native listener flips this false in the gate's layout effect,
     // still before the browser can paint the opening surface.
@@ -573,13 +570,7 @@ const ModalContent = React.forwardRef<
           )}
           data-native-surface-modal-content-layer=''
           style={{
-            ...(size === 'full'
-              ? {}
-              : {
-                  paddingLeft: isWorkflowPage
-                    ? 'calc(var(--sidebar-width) - var(--panel-width))'
-                    : 'var(--sidebar-width)',
-                }),
+            ...(size === 'full' ? {} : { paddingLeft: 'var(--sidebar-width)' }),
           }}
         >
           <DialogPrimitive.Content

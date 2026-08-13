@@ -60,8 +60,9 @@ LINGXILEARN_LLM_API_KEY=API Key
 ```
 
 开发 Compose 的前端地址是 `http://localhost:3000`，生产 Compose 的同源地址是
-`http://localhost:8080`。登录、注册和找回密码由同源 LingxiIdentity BFF 发起，浏览器只持有
-HttpOnly `lingxi_session` Cookie，不保存 OIDC/Bearer token。生产环境必须关闭开发免认证，并填写 BFF 地址：
+`http://localhost:8080`。登录、注册和找回密码由 LingxiLearn 的同源代理转发到
+LingxiIdentity BFF，浏览器只持有 HttpOnly `lingxi_session` Cookie，不保存 OIDC/Bearer token。
+生产环境必须关闭开发免认证，并填写 BFF 的内部地址：
 
 ```dotenv
 LINGXILEARN_INSECURE_DEV_AUTH=false
@@ -69,8 +70,14 @@ LINGXILEARN_IDENTITY_BFF_URL=http://identity-bff:8080
 LINGXILEARN_IDENTITY_BFF_TIMEOUT=10
 ```
 
-Identity BFF 与 LingxiLearn 共域或由反向代理暴露 `/auth/*`、`/api/v1/*` 时无需额外浏览器配置；
-本地 Next 开发可将 `NEXT_PUBLIC_API_BASE` 指向 `http://localhost:8080`。
+LingxiLearn API 已内置 `/auth/*`、`/api/v1/*` BFF 代理，因此生产静态站点保持
+`NEXT_PUBLIC_API_BASE` 为空即可；本地 Next 开发可将它指向 `http://localhost:8080`。
+Identity 项目中的 `BFF_PUBLIC_URL` 应登记为浏览器实际访问的同源地址（生产通常是
+`https://lingxilearn.cn`），而 `LOGTO_PUBLIC_ENDPOINT`/`LOGTO_ISSUER` 才指向
+`https://auth.lingxilearn.cn`。OIDC 应用密钥只放在 Identity BFF 的服务端环境变量
+`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`，不要放入本项目或任何 `NEXT_PUBLIC_*` 变量。
+旧 Bearer SPA 的 `LINGXI_LEARN_WEB_REDIRECT_URI` 和前端 OIDC client 配置不再参与登录；
+BFF 应用的回调地址应与 `BFF_PUBLIC_URL` 拼成的 `/auth/callback` 完全一致。
 
 修改 `.env` 后执行：
 

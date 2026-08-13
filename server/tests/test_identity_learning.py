@@ -26,7 +26,6 @@ from lingxilearn.store.models import (
     LearningEvent,
     LearningEvidence,
     Misconception,
-    ReportRecord,
 )
 
 
@@ -146,18 +145,13 @@ async def test_learning_writes_merge_and_are_idempotent(learner_store) -> None:
 
 
 @pytest.mark.asyncio
-async def test_authenticator_requires_oidc_or_explicit_fixed_dev_subject() -> None:
-    production = Settings(
-        oidc_issuer="",
-        oidc_audience="",
-        insecure_dev_auth=False,
-    )
+async def test_authenticator_requires_bff_or_explicit_fixed_dev_subject() -> None:
+    production = Settings(identity_bff_url="", insecure_dev_auth=False)
     with pytest.raises(RuntimeError):
         build_authenticator(production)
 
     development = Settings(
-        oidc_issuer="",
-        oidc_audience="",
+        identity_bff_url="",
         insecure_dev_auth=True,
         dev_subject="fixed-dev-user",
     )
@@ -165,9 +159,38 @@ async def test_authenticator_requires_oidc_or_explicit_fixed_dev_subject() -> No
     principal = await authenticator.authenticate(None)
     assert principal.subject == "fixed-dev-user"
 
+    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200)))
     with pytest.raises(HTTPException) as missing:
-        await Authenticator(production).authenticate(None)
+        await Authenticator(production, client).authenticate(None)
     assert missing.value.status_code == 401
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_authenticator_resolves_the_browser_cookie_through_bff() -> None:
+    settings = Settings(identity_bff_url="http://identity-bff")
+
+    def bff(request: httpx.Request) -> httpx.Response:
+        assert request.headers["cookie"] == "lingxi_session=session-1"
+        return httpx.Response(
+            200,
+            json={
+                "principal": {
+                    "subject": "subject-1",
+                    "issuer": "https://auth.lingxilearn.cn/oidc",
+                    "roles": [],
+                    "permissions": [],
+                    "audience": [],
+                },
+                "user": {"id": "subject-1"},
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(bff))
+    principal = await Authenticator(settings, client).authenticate("lingxi_session=session-1")
+    assert principal.subject == "subject-1"
+    assert principal.issuer == "https://auth.lingxilearn.cn/oidc"
+    await client.aclose()
 
 
 def test_oidc_verifier_accepts_valid_jwt_and_rejects_claim_and_key_failures(monkeypatch) -> None:
@@ -244,14 +267,10 @@ def test_oidc_verifier_accepts_valid_jwt_and_rejects_claim_and_key_failures(monk
 
 
 def test_production_authenticator_allows_lingxiidentity_es384() -> None:
-    settings = Settings(
-        oidc_issuer="https://auth.lingxilearn.cn/oidc",
-        oidc_audience="https://lingxilearn.cn/api",
-        insecure_dev_auth=False,
-    )
+    settings = Settings(identity_bff_url="http://identity-bff", insecure_dev_auth=False)
     authenticator = build_authenticator(settings)
-    assert authenticator.verifier is not None
-    assert "ES384" in authenticator.verifier.algorithms
+    assert authenticator.client is not None
+    asyncio.run(authenticator.aclose())
 
 
 @pytest.mark.asyncio
@@ -259,27 +278,42 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     path = Path("var") / f"test-api-ownership-{uuid4().hex}.sqlite3"
     settings = Settings(
         database_url=f"sqlite+aiosqlite:///{path.as_posix()}",
-        oidc_issuer="https://identity.example",
-        oidc_audience="lingxilearn",
+        identity_bff_url="http://identity-bff",
         insecure_dev_auth=False,
     )
+    identity_issuer = "https://auth.lingxilearn.cn/oidc"
     service = Service(settings)
     await service.db.create_all()
-
-    class TokenVerifier:
-        def verify(self, token: str) -> Principal:
-            return Principal(subject=token, issuer=settings.oidc_issuer)
 
     from lingxilearn.auth import Authenticator
 
     app = create_app()
     app.state.service = service
-    app.state.identity = Authenticator(settings=settings, verifier=TokenVerifier())
+    def bff(request: httpx.Request) -> httpx.Response:
+        cookie = request.headers.get("cookie", "")
+        subject = "subject-a" if "session-a" in cookie else "subject-b"
+        return httpx.Response(
+            200,
+            json={
+                "principal": {
+                    "subject": subject,
+                    "issuer": "https://auth.lingxilearn.cn/oidc",
+                    "roles": [],
+                    "permissions": [],
+                    "audience": [],
+                },
+                "user": {"id": subject},
+            },
+        )
+
+    identity_client = httpx.AsyncClient(transport=httpx.MockTransport(bff))
+    authenticator = Authenticator(settings=settings, client=identity_client)
+    app.state.identity = authenticator
     first = await service.learners.get_learner_context(
-        Principal(subject="subject-a", issuer=settings.oidc_issuer)
+        Principal(subject="subject-a", issuer=identity_issuer)
     )
     second = await service.learners.get_learner_context(
-        Principal(subject="subject-b", issuer=settings.oidc_issuer)
+        Principal(subject="subject-b", issuer=identity_issuer)
     )
     legacy = Repository(service.db)
     await legacy.create_session(
@@ -317,8 +351,8 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     monkeypatch.setattr(service, "snapshot", fake_snapshot)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        first_headers = {"Authorization": "Bearer subject-a"}
-        second_headers = {"Authorization": "Bearer subject-b"}
+        first_headers = {"Cookie": "lingxi_session=session-a"}
+        second_headers = {"Cookie": "lingxi_session=session-b"}
         rejected = await client.post(
             "/api/sessions",
             headers=first_headers,
@@ -364,6 +398,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         assert missing_auth.status_code == 401
 
     await service.db.dispose()
+    await authenticator.aclose()
     path.unlink(missing_ok=True)
 
 

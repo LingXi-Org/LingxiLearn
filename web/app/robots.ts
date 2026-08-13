@@ -8,10 +8,8 @@ const DISALLOWED_PATHS = [
   '/api/',
   '/workspace/',
   '/playground/',
-  '/resume/',
   '/invite/',
   '/unsubscribe/',
-  '/w/',
   '/_next/',
   '/private/',
 ]

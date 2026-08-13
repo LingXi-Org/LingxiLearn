@@ -1,1 +1,10 @@
-export { auth, getSession } from './auth'
+export { client, signOut, useActiveOrganization, useSession, useSubscription } from './auth-client'
+export type {
+  IdentityMe,
+  IdentityPrincipal,
+  IdentitySession,
+  IdentityUser,
+  VerificationRecord,
+} from './identity-api'
+export { IdentityApiError, identityApi } from './identity-api'
+export { SessionProvider, useSession as useIdentitySession } from './session-provider'

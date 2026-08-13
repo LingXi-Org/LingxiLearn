@@ -14,6 +14,7 @@ import {
   useLingxiChat,
 } from '@/lib/lingxi/hooks/use-lingxi-chat'
 import { useLingxiIdentity } from '@/lib/lingxi/lingxi-identity-provider'
+import { WorkflowsEditorLoop } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 
 function statusLabel(status: ToolCallStatus): string {
   if (status === 'executing') return '执行中'
@@ -216,52 +217,66 @@ export function LingxiChat({ workspaceId, taskId }: { workspaceId: string; taskI
             </Button>
           )}
           {identity.authenticated && identity.client && (
-            <Button variant='ghost' size='sm' onClick={() => void identity.client?.logout()}>
-              退出
-            </Button>
+            <>
+              <Button
+                variant='ghost'
+                size='sm'
+                onClick={() => window.location.assign('/account/settings/')}
+              >
+                账户
+              </Button>
+              <Button variant='ghost' size='sm' onClick={() => void identity.client?.logout()}>
+                退出
+              </Button>
+            </>
           )}
         </div>
       </header>
 
       <div className='flex min-h-0 flex-1'>
         <section className='flex min-w-0 flex-1 flex-col'>
-          <div className='flex-1 overflow-y-auto px-4 py-8 sm:px-8'>
-            <div className='mx-auto flex max-w-3xl flex-col gap-5'>
-              {chat.messages.length === 0 && (
-                <div className='py-16 text-center'>
-                  <p className='font-medium text-[var(--text-primary)]'>今天想学什么？</p>
-                  <p className='mt-2 text-[var(--text-muted)] text-sm'>
-                    输入一个主题，LingxiGraph 会组织课程引入、讲义、检测和可视化产物。
-                  </p>
-                </div>
-              )}
-              {chat.messages.map((message) =>
-                message.role === 'user' ? (
-                  <div key={message.id} className='flex justify-end'>
-                    <div className='max-w-[min(78%,42rem)] rounded-2xl bg-[var(--text-primary)] px-4 py-3 text-[var(--text-inverse)] text-sm leading-6'>
-                      {message.content}
-                    </div>
-                  </div>
-                ) : (
-                  <article key={message.id} className='max-w-3xl'>
-                    <div className='mb-2 flex items-center gap-2 text-[var(--text-muted)] text-xs'>
-                      <span className='size-1.5 rounded-full bg-[var(--brand-accent)]' />
-                      灵犀学习助手
-                      {chat.isReconnecting && <span>· 正在同步</span>}
-                    </div>
-                    <ThinkingAndTools blocks={message.contentBlocks ?? []} />
-                    <p className='whitespace-pre-wrap text-[var(--text-body)] text-sm leading-7'>
-                      {message.content}
+          <div className='flex min-h-0 flex-1 flex-col xl:flex-row'>
+            <div className='min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-8'>
+              <div className='mx-auto flex max-w-3xl flex-col gap-5'>
+                {chat.messages.length === 0 && (
+                  <div className='py-16 text-center'>
+                    <p className='font-medium text-[var(--text-primary)]'>今天想学什么？</p>
+                    <p className='mt-2 text-[var(--text-muted)] text-sm'>
+                      输入一个主题，LingxiGraph 会组织课程引入、讲义、检测和可视化产物。
                     </p>
-                  </article>
-                )
-              )}
-              {chat.error && (
-                <div className='rounded-xl border border-[var(--text-error)]/30 bg-[var(--text-error)]/5 px-3 py-2 text-[var(--text-error)] text-xs'>
-                  {chat.error}
-                </div>
-              )}
+                  </div>
+                )}
+                {chat.messages.map((message) =>
+                  message.role === 'user' ? (
+                    <div key={message.id} className='flex justify-end'>
+                      <div className='max-w-[min(78%,42rem)] rounded-2xl bg-[var(--text-primary)] px-4 py-3 text-[var(--text-inverse)] text-sm leading-6'>
+                        {message.content}
+                      </div>
+                    </div>
+                  ) : (
+                    <article key={message.id} className='max-w-3xl'>
+                      <div className='mb-2 flex items-center gap-2 text-[var(--text-muted)] text-xs'>
+                        <span className='size-1.5 rounded-full bg-[var(--brand-accent)]' />
+                        灵犀学习助手
+                        {chat.isReconnecting && <span>· 正在同步</span>}
+                      </div>
+                      <ThinkingAndTools blocks={message.contentBlocks ?? []} />
+                      <p className='whitespace-pre-wrap text-[var(--text-body)] text-sm leading-7'>
+                        {message.content}
+                      </p>
+                    </article>
+                  )
+                )}
+                {chat.error && (
+                  <div className='rounded-xl border border-[var(--text-error)]/30 bg-[var(--text-error)]/5 px-3 py-2 text-[var(--text-error)] text-xs'>
+                    {chat.error}
+                  </div>
+                )}
+              </div>
             </div>
+            <aside className='hidden min-h-0 min-w-0 border-[var(--border)] border-l bg-[var(--surface-1)] p-3 xl:flex xl:w-[min(52%,760px)]'>
+              <WorkflowsEditorLoop live runtime={{ task: chat.task, events: chat.events }} />
+            </aside>
           </div>
 
           <div className='border-[var(--border)] border-t bg-[var(--surface-1)] px-4 py-3 sm:px-8'>

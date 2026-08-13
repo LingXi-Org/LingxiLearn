@@ -27,10 +27,10 @@ function toSimSession(value: SessionContextValue['data']): SimSession {
   return {
     user: {
       id: value.user.id,
-      email: value.user.primaryEmail ?? '',
-      emailVerified: Boolean(value.user.primaryEmail),
+      email: value.user.email ?? value.user.primaryEmail ?? '',
+      emailVerified: Boolean(value.user.emailVerified),
       name: value.user.name ?? value.user.username ?? null,
-      image: value.user.avatar ?? null,
+      image: value.user.image ?? value.user.avatar ?? null,
     },
     session: {
       id: value.principal.subject,
@@ -91,14 +91,35 @@ export const client = {
     setActive: async (..._args: unknown[]) => ({ data: null, error: null }),
   },
   admin: {
-    createUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
-    getUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+    createUser: async (..._args: unknown[]) => ({
+      data: null,
+      error: { message: '管理员账户 API 尚未接入' },
+    }),
+    getUser: async (..._args: unknown[]) => ({
+      data: null,
+      error: { message: '管理员账户 API 尚未接入' },
+    }),
     listUsers: async (..._args: unknown[]) => ({ data: { users: [], total: 0 }, error: null }),
-    setRole: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
-    banUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
-    unbanUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
-    impersonateUser: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
-    stopImpersonating: async (..._args: unknown[]) => ({ data: null, error: { message: '管理员账户 API 尚未接入' } }),
+    setRole: async (..._args: unknown[]) => ({
+      data: null,
+      error: { message: '管理员账户 API 尚未接入' },
+    }),
+    banUser: async (..._args: unknown[]) => ({
+      data: null,
+      error: { message: '管理员账户 API 尚未接入' },
+    }),
+    unbanUser: async (..._args: unknown[]) => ({
+      data: null,
+      error: { message: '管理员账户 API 尚未接入' },
+    }),
+    impersonateUser: async (..._args: unknown[]) => ({
+      data: null,
+      error: { message: '管理员账户 API 尚未接入' },
+    }),
+    stopImpersonating: async (..._args: unknown[]) => ({
+      data: null,
+      error: { message: '管理员账户 API 尚未接入' },
+    }),
   },
   subscription: {
     list: async (..._args: unknown[]) => ({ data: [], error: null }),

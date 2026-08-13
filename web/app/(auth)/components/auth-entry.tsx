@@ -7,7 +7,10 @@ import { AuthHeader, AuthLegalFooter } from './auth-shell'
 
 type AuthKind = 'login' | 'register' | 'forgot-password'
 
-const copy: Record<AuthKind, { title: string; description: string; action: string; legal: string }> = {
+const copy: Record<
+  AuthKind,
+  { title: string; description: string; action: string; legal: string }
+> = {
   login: {
     title: '欢迎回来',
     description: '使用灵犀统一身份继续进入学习工作台',
@@ -38,7 +41,7 @@ function safeCallback(value: string | null): string {
 export function AuthEntry({ kind }: { kind: AuthKind }) {
   const searchParams = useSearchParams()
   const content = copy[kind]
-  const nextPath = safeCallback(searchParams.get('callbackUrl'))
+  const nextPath = safeCallback(searchParams.get('callbackUrl') ?? searchParams.get('callbackURL'))
   const target = identityApi.authUrl(kind, nextPath)
 
   return (
@@ -55,7 +58,10 @@ export function AuthEntry({ kind }: { kind: AuthKind }) {
       {kind === 'login' && (
         <div className='flex items-center justify-center gap-2 text-sm'>
           <span className='text-[var(--text-muted)]'>还没有账户？</span>
-          <ChipLink href={`/signup?callbackUrl=${encodeURIComponent(nextPath)}`} className='px-1 text-[var(--text-primary)]'>
+          <ChipLink
+            href={`/signup?callbackUrl=${encodeURIComponent(nextPath)}`}
+            className='px-1 text-[var(--text-primary)]'
+          >
             注册
           </ChipLink>
         </div>
@@ -63,14 +69,19 @@ export function AuthEntry({ kind }: { kind: AuthKind }) {
       {kind === 'register' && (
         <div className='flex items-center justify-center gap-2 text-sm'>
           <span className='text-[var(--text-muted)]'>已有账户？</span>
-          <ChipLink href={`/login?callbackUrl=${encodeURIComponent(nextPath)}`} className='px-1 text-[var(--text-primary)]'>
+          <ChipLink
+            href={`/login?callbackUrl=${encodeURIComponent(nextPath)}`}
+            className='px-1 text-[var(--text-primary)]'
+          >
             登录
           </ChipLink>
         </div>
       )}
       {kind === 'forgot-password' && (
         <div className='text-center text-sm'>
-          <ChipLink href='/login' className='px-1 text-[var(--text-primary)]'>返回登录</ChipLink>
+          <ChipLink href='/login' className='px-1 text-[var(--text-primary)]'>
+            返回登录
+          </ChipLink>
         </div>
       )}
       <AuthLegalFooter action={content.legal} />

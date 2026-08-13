@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button, ChipInput, Label } from '@/components/ui-kit'
-import { identityApi, type IdentitySession } from '@/lib/auth/identity-api'
+import { type IdentitySession, identityApi } from '@/lib/auth/identity-api'
 import { useSession } from '@/lib/auth/session-provider'
 
 type Section = 'profile' | 'security' | 'sessions'
@@ -47,7 +47,13 @@ function SettingsCard({
 
 function Status({ value, error = false }: { value: string; error?: boolean }) {
   if (!value) return null
-  return <p className={error ? 'text-[var(--text-error)] text-xs' : 'text-[var(--text-success)] text-xs'}>{value}</p>
+  return (
+    <p
+      className={error ? 'text-[var(--text-error)] text-xs' : 'text-[var(--text-success)] text-xs'}
+    >
+      {value}
+    </p>
+  )
 }
 
 export function AccountSettings() {
@@ -70,14 +76,15 @@ export function AccountSettings() {
   const [sessions, setSessions] = useState<IdentitySession[]>([])
   const [sessionsStatus, setSessionsStatus] = useState('')
   const [deactivateText, setDeactivateText] = useState('')
+  const [deactivateStatus, setDeactivateStatus] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (user) {
       setName(user.name || '')
-      setUsername('')
-      setAvatar(user.image || '')
-      setNewEmail(user.email || '')
+      setUsername(user.username || '')
+      setAvatar(user.avatar || user.image || '')
+      setNewEmail(user.primaryEmail || user.email || '')
     }
   }, [user])
 
@@ -101,7 +108,11 @@ export function AccountSettings() {
   }, [loadSessions, section, session.authenticated])
 
   if (!session.ready || !user) {
-    return <main className='flex min-h-screen items-center justify-center text-[var(--text-muted)] text-sm'>正在读取账户…</main>
+    return (
+      <main className='flex min-h-screen items-center justify-center text-[var(--text-muted)] text-sm'>
+        正在读取账户…
+      </main>
+    )
   }
 
   const saveProfile = async () => {
@@ -189,24 +200,48 @@ export function AccountSettings() {
     }
   }
 
+  const revokeDeviceSession = async (item: IdentitySession) => {
+    setSessionsStatus('')
+    try {
+      await identityApi.revokeSession(item.id)
+      if (item.isCurrent) {
+        await session.logout()
+      } else {
+        await loadSessions()
+      }
+    } catch (cause) {
+      setSessionsStatus(cause instanceof Error ? cause.message : '设备会话撤销失败')
+    }
+  }
+
   return (
     <main className='min-h-screen bg-[var(--bg)] text-[var(--text-body)]'>
       <header className='border-[var(--border)] border-b bg-[var(--surface-1)]'>
         <div className='mx-auto flex h-14 max-w-5xl items-center justify-between px-5'>
-          <button type='button' onClick={() => window.location.assign('/workspace/lingxi/home/')} className='flex items-center gap-2'>
-            <span className='flex size-7 items-center justify-center rounded-lg bg-[var(--text-primary)] font-semibold text-[var(--text-inverse)] text-xs'>灵</span>
+          <button
+            type='button'
+            onClick={() => window.location.assign('/workspace/lingxi/home/')}
+            className='flex items-center gap-2'
+          >
+            <span className='flex size-7 items-center justify-center rounded-lg bg-[var(--text-primary)] font-semibold text-[var(--text-inverse)] text-xs'>
+              灵
+            </span>
             <span className='font-medium text-sm'>账户设置</span>
           </button>
-          <Button variant='ghost' size='sm' onClick={() => void session.logout()}>退出登录</Button>
+          <Button variant='ghost' size='sm' onClick={() => void session.logout()}>
+            退出登录
+          </Button>
         </div>
       </header>
       <div className='mx-auto grid max-w-5xl gap-8 px-5 py-8 md:grid-cols-[180px_minmax(0,1fr)]'>
         <nav className='flex gap-1 md:flex-col'>
-          {([
-            ['profile', '个人资料'],
-            ['security', '登录与安全'],
-            ['sessions', '设备与账户'],
-          ] as const).map(([value, label]) => (
+          {(
+            [
+              ['profile', '个人资料'],
+              ['security', '登录与安全'],
+              ['sessions', '设备与账户'],
+            ] as const
+          ).map(([value, label]) => (
             <button
               key={value}
               type='button'
@@ -220,30 +255,110 @@ export function AccountSettings() {
 
         <div className='space-y-5'>
           {section === 'profile' && (
-            <SettingsCard title='个人资料' description='这些信息会显示在灵犀智学的账户与协作界面中。'>
-              <Field label='姓名'><ChipInput value={name} onChange={(event) => setName(event.target.value)} /></Field>
-              <Field label='用户名'><ChipInput value={username} onChange={(event) => setUsername(event.target.value)} /></Field>
-              <Field label='头像地址' hint='使用 HTTPS 图片地址。'><ChipInput value={avatar} onChange={(event) => setAvatar(event.target.value)} /></Field>
+            <SettingsCard
+              title='个人资料'
+              description='这些信息会显示在灵犀智学的账户与协作界面中。'
+            >
+              <Field label='姓名'>
+                <ChipInput value={name} onChange={(event) => setName(event.target.value)} />
+              </Field>
+              <Field label='用户名'>
+                <ChipInput value={username} onChange={(event) => setUsername(event.target.value)} />
+              </Field>
+              <Field label='头像地址' hint='使用 HTTPS 图片地址。'>
+                <ChipInput value={avatar} onChange={(event) => setAvatar(event.target.value)} />
+              </Field>
               <Status value={profileStatus} error={profileError} />
-              <div><Button variant='primary' disabled={busy} onClick={() => void saveProfile()}>保存资料</Button></div>
+              <div>
+                <Button variant='primary' disabled={busy} onClick={() => void saveProfile()}>
+                  保存资料
+                </Button>
+              </div>
             </SettingsCard>
           )}
 
           {section === 'security' && (
             <>
-              <SettingsCard title='验证当前密码' description='修改邮箱或密码前需要一次短期身份验证。'>
-                <Field label='当前密码'><ChipInput type='password' autoComplete='current-password' value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></Field>
-                <div><Button variant='primary' disabled={busy || !currentPassword} onClick={() => void verifyCurrentPassword()}>验证密码</Button></div>
+              <SettingsCard
+                title='验证当前密码'
+                description='修改邮箱或密码前需要一次短期身份验证。'
+              >
+                <Field label='当前密码'>
+                  <ChipInput
+                    type='password'
+                    autoComplete='current-password'
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                  />
+                </Field>
+                <div>
+                  <Button
+                    variant='primary'
+                    disabled={busy || !currentPassword}
+                    onClick={() => void verifyCurrentPassword()}
+                  >
+                    验证密码
+                  </Button>
+                </div>
               </SettingsCard>
               <SettingsCard title='修改密码' description='使用至少八位且不易猜测的新密码。'>
-                <Field label='新密码'><ChipInput type='password' autoComplete='new-password' value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></Field>
-                <div><Button variant='primary' disabled={busy || !passwordVerificationId || newPassword.length < 8} onClick={() => void changePassword()}>更新密码</Button></div>
+                <Field label='新密码'>
+                  <ChipInput
+                    type='password'
+                    autoComplete='new-password'
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                  />
+                </Field>
+                <div>
+                  <Button
+                    variant='primary'
+                    disabled={busy || !passwordVerificationId || newPassword.length < 8}
+                    onClick={() => void changePassword()}
+                  >
+                    更新密码
+                  </Button>
+                </div>
               </SettingsCard>
-              <SettingsCard title='修改邮箱' description={`当前邮箱：${user.email || '未设置'}`}>
-                <Field label='新邮箱'><ChipInput type='email' value={newEmail} onChange={(event) => setNewEmail(event.target.value)} /></Field>
-                <div><Button disabled={busy || !passwordVerificationId || !newEmail} onClick={() => void sendEmailCode()}>发送验证码</Button></div>
-                {emailVerificationId && <Field label='邮箱验证码'><ChipInput inputMode='numeric' value={emailCode} onChange={(event) => setEmailCode(event.target.value)} /></Field>}
-                {emailVerificationId && <div><Button variant='primary' disabled={busy || emailCode.length < 4} onClick={() => void changeEmail()}>验证并更新邮箱</Button></div>}
+              <SettingsCard
+                title='修改邮箱'
+                description={`当前邮箱：${user.primaryEmail || user.email || '未设置'}`}
+              >
+                <Field label='新邮箱'>
+                  <ChipInput
+                    type='email'
+                    value={newEmail}
+                    onChange={(event) => setNewEmail(event.target.value)}
+                  />
+                </Field>
+                <div>
+                  <Button
+                    disabled={busy || !passwordVerificationId || !newEmail}
+                    onClick={() => void sendEmailCode()}
+                  >
+                    发送验证码
+                  </Button>
+                </div>
+                {emailVerificationId && (
+                  <Field label='邮箱验证码'>
+                    <ChipInput
+                      inputMode='numeric'
+                      value={emailCode}
+                      onChange={(event) => setEmailCode(event.target.value)}
+                    />
+                  </Field>
+                )}
+                {emailVerificationId && (
+                  <div>
+                    <Button
+                      variant='primary'
+                      disabled={busy || emailCode.length < 4}
+                      onClick={() => void changeEmail()}
+                    >
+                      验证并更新邮箱
+                    </Button>
+                  </div>
+                )}
                 <Status value={securityStatus} error={securityError} />
               </SettingsCard>
             </>
@@ -252,21 +367,67 @@ export function AccountSettings() {
           {section === 'sessions' && (
             <>
               <SettingsCard title='登录设备' description='查看并撤销你的 LingxiIdentity 设备会话。'>
-                {sessions.length === 0 && <p className='text-[var(--text-muted)] text-sm'>暂无可显示的设备会话。</p>}
+                {sessions.length === 0 && (
+                  <p className='text-[var(--text-muted)] text-sm'>暂无可显示的设备会话。</p>
+                )}
                 {sessions.map((item) => (
-                  <div key={item.id} className='flex items-center justify-between gap-4 rounded-lg border border-[var(--border)] px-3 py-3'>
+                  <div
+                    key={item.id}
+                    className='flex items-center justify-between gap-4 rounded-lg border border-[var(--border)] px-3 py-3'
+                  >
                     <div className='min-w-0'>
-                      <p className='truncate text-[var(--text-primary)] text-sm'>{item.applicationName || '灵犀应用'}{item.isCurrent ? ' · 当前设备' : ''}</p>
-                      <p className='mt-1 text-[var(--text-muted)] text-xs'>{item.lastUsedAt ? `最近使用 ${new Date(item.lastUsedAt).toLocaleString()}` : '使用时间未知'}</p>
+                      <p className='truncate text-[var(--text-primary)] text-sm'>
+                        {item.applicationName || '灵犀应用'}
+                        {item.isCurrent ? ' · 当前设备' : ''}
+                      </p>
+                      <p className='mt-1 text-[var(--text-muted)] text-xs'>
+                        {item.lastUsedAt
+                          ? `最近使用 ${new Date(item.lastUsedAt).toLocaleString()}`
+                          : '使用时间未知'}
+                      </p>
                     </div>
-                    <Button variant='outline' size='sm' onClick={async () => { await identityApi.revokeSession(item.id); if (item.isCurrent) window.location.assign('/login'); else await loadSessions() }}>撤销</Button>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => void revokeDeviceSession(item)}
+                    >
+                      撤销
+                    </Button>
                   </div>
                 ))}
                 <Status value={sessionsStatus} error />
               </SettingsCard>
-              <SettingsCard title='停用账户' description='停用后会立即撤销全部会话，需要管理员恢复才能再次登录。'>
-                <Field label='输入“停用账户”以确认'><ChipInput value={deactivateText} onChange={(event) => setDeactivateText(event.target.value)} /></Field>
-                <div><Button variant='destructive' disabled={busy || deactivateText !== '停用账户'} onClick={async () => { setBusy(true); try { await identityApi.deactivate(); window.location.assign('/') } finally { setBusy(false) } }}>停用账户</Button></div>
+              <SettingsCard
+                title='停用账户'
+                description='停用后会立即撤销全部会话，需要管理员恢复才能再次登录。'
+              >
+                <Field label='输入“停用账户”以确认'>
+                  <ChipInput
+                    value={deactivateText}
+                    onChange={(event) => setDeactivateText(event.target.value)}
+                  />
+                </Field>
+                <div>
+                  <Button
+                    variant='destructive'
+                    disabled={busy || deactivateText !== '停用账户'}
+                    onClick={async () => {
+                      setBusy(true)
+                      setDeactivateStatus('')
+                      try {
+                        await identityApi.deactivate()
+                        window.location.assign('/')
+                      } catch (cause) {
+                        setDeactivateStatus(cause instanceof Error ? cause.message : '账户停用失败')
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    停用账户
+                  </Button>
+                </div>
+                <Status value={deactivateStatus} error />
               </SettingsCard>
             </>
           )}

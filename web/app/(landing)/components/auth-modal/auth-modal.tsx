@@ -24,11 +24,12 @@ export function AuthModal({ children, defaultView = 'login' }: AuthModalProps) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  const login = async () => {
+  const startAuth = async () => {
     if (!identity.client) return
     setBusy(true)
     try {
-      await identity.client.login()
+      if (defaultView === 'signup') await identity.client.register()
+      else await identity.client.login()
     } finally {
       setBusy(false)
     }
@@ -58,12 +59,14 @@ export function AuthModal({ children, defaultView = 'login' }: AuthModalProps) {
             className='mt-7 w-full'
             variant='primary'
             disabled={!identity.configured || !identity.client || busy}
-            onClick={() => void login()}
+            onClick={() => void startAuth()}
           >
             {busy
               ? '正在跳转…'
               : identity.configured
-                ? '使用 LingxiIdentity 登录'
+                ? defaultView === 'signup'
+                  ? '使用 LingxiIdentity 注册'
+                  : '使用 LingxiIdentity 登录'
                 : '身份服务未配置'}
           </Button>
         </div>

@@ -60,11 +60,14 @@ export class IdentityApiError extends Error {
 
 let csrfToken: string | null = null
 let csrfPromise: Promise<string> | null = null
+let refreshPromise: Promise<{ ok: boolean; expiresAt?: string | null }> | null = null
 
 const configuredBase = process.env.NEXT_PUBLIC_API_BASE?.trim().replace(/\/$/, '')
+const defaultBase = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : ''
 
 function identityUrl(path: string): string {
-  return configuredBase ? `${configuredBase}${path}` : path
+  const base = configuredBase || defaultBase
+  return base ? `${base}${path}` : path
 }
 
 function safeNextPath(value: string): string {
@@ -92,6 +95,22 @@ async function parseError(response: Response): Promise<IdentityApiError> {
     // Keep the HTTP status text when the upstream did not return JSON.
   }
   return new IdentityApiError(response.status, code, message)
+}
+
+function normalizeIdentityMe(value: IdentityMe): IdentityMe {
+  const user = value.user
+  return {
+    ...value,
+    user: {
+      ...user,
+      // The BFF deliberately preserves Logto's Account API field names. Keep
+      // the Sim-facing aliases in one place so every native surface sees the
+      // same user shape.
+      email: user.email ?? user.primaryEmail ?? null,
+      image: user.image ?? user.avatar ?? null,
+      emailVerified: user.emailVerified ?? null,
+    },
+  }
 }
 
 async function getCsrfToken(force = false): Promise<string> {
@@ -143,9 +162,18 @@ export const identityApi = {
     return `${identityUrl(`/auth/${kind}`)}?${params}`
   },
 
-  me: () => request<IdentityMe>('/api/v1/me'),
+  me: async () => normalizeIdentityMe(await request<IdentityMe>('/api/v1/me')),
 
-  refresh: () => request<{ ok: boolean; expiresAt?: string | null }>('/auth/refresh', { method: 'POST' }),
+  refresh: () => {
+    if (!refreshPromise) {
+      refreshPromise = request<{ ok: boolean; expiresAt?: string | null }>('/auth/refresh', {
+        method: 'POST',
+      }).finally(() => {
+        refreshPromise = null
+      })
+    }
+    return refreshPromise
+  },
 
   async logout(): Promise<void> {
     try {
@@ -164,7 +192,10 @@ export const identityApi = {
     username?: string
     avatar?: string
     customData?: Record<string, unknown>
-  }) => request<IdentityUser>('/api/v1/me/profile', { method: 'PATCH', body: JSON.stringify(changes) }),
+    profile?: Record<string, unknown>
+    verificationId?: string
+  }) =>
+    request<IdentityUser>('/api/v1/me/profile', { method: 'PATCH', body: JSON.stringify(changes) }),
 
   verifyPassword: (password: string) =>
     request<VerificationRecord>('/api/v1/me/verifications/password', {

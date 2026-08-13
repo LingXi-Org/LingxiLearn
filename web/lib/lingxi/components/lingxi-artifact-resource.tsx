@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui-kit'
 import { api } from '@/lib/lingxi/api'
-import { WorkflowsEditorLoop } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 import { useAgentTask } from '@/lib/lingxi/hooks/use-agent-task'
 import type { PublicQuizQuestion } from '@/lib/lingxi/types'
 
@@ -188,7 +187,16 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
   if (!parsed) return <div className='p-6 text-[var(--text-secondary)] text-sm'>产物地址无效。</div>
 
   if (parsed.kind === 'knowledge-graph') {
-    return <WorkflowsEditorLoop />
+    return (
+      <div className='flex h-full flex-col items-center justify-center gap-2 p-6 text-center'>
+        <p className='font-medium text-[var(--text-primary)] text-sm'>
+          知识图谱已接入工作区编排面板
+        </p>
+        <p className='text-[var(--text-muted)] text-xs'>
+          节点的消息、思考和 Skill 会随着 LingxiGraph 事件在右侧画布中实时更新。
+        </p>
+      </div>
+    )
   }
 
   if (parsed.kind !== 'quiz') {

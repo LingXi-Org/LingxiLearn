@@ -1,8 +1,8 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { setAuthenticationFailureHandler, setSessionRefreshHandler } from '@/lib/lingxi/api'
-import { identityApi, type IdentityMe } from './identity-api'
+import { type IdentityMe, identityApi } from './identity-api'
 
 export interface SessionContextValue {
   data: IdentityMe | null
@@ -19,31 +19,43 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<IdentityMe | null>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const refreshInFlight = useRef<Promise<IdentityMe | null> | null>(null)
 
   const refresh = useCallback(async () => {
-    try {
-      const next = await identityApi.me()
-      setData(next)
-      setError(null)
-      return next
-    } catch (cause) {
-      setData(null)
-      if (
-        cause instanceof Error &&
-        !(
-          cause.message.includes('unauthorized') ||
-          (cause as { status?: number }).status === 401 ||
-          (cause as { status?: number }).status === 403
-        )
-      ) {
-        setError(cause.message)
-      } else {
+    if (refreshInFlight.current) return refreshInFlight.current
+
+    const request = (async () => {
+      try {
+        const next = await identityApi.me()
+        setData(next)
         setError(null)
+        return next
+      } catch (cause) {
+        const status = (cause as { status?: number }).status
+        const unauthenticated =
+          status === 401 ||
+          status === 403 ||
+          (cause instanceof Error && /unauthorized|session_expired/i.test(cause.message))
+        if (unauthenticated) {
+          setData(null)
+          setError(null)
+        } else if (cause instanceof Error) {
+          // Preserve a known session during a transient BFF/network failure.
+          // The next focus/visibility event can recover it without flashing
+          // the whole app back to a signed-out state.
+          setError(cause.message)
+        }
+        return null
+      } finally {
+        setReady(true)
       }
-      return null
-    } finally {
-      setReady(true)
-    }
+    })()
+
+    refreshInFlight.current = request
+    void request.finally(() => {
+      if (refreshInFlight.current === request) refreshInFlight.current = null
+    })
+    return request
   }, [])
 
   const logout = useCallback(async () => {
@@ -60,7 +72,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibility)
-    const releaseFailure = setAuthenticationFailureHandler(() => setData(null))
+    const releaseFailure = setAuthenticationFailureHandler(() => {
+      setData(null)
+      setError(null)
+    })
     const releaseRefresh = setSessionRefreshHandler(async () => {
       await identityApi.refresh()
       await refresh()

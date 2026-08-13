@@ -36,6 +36,8 @@ interface HeroWorkflowStageProps {
    * Off by default, so existing stages are unchanged.
    */
   selectedId?: string
+  /** Explicit live nodes to show. When omitted, `builtCount` drives staging. */
+  visibleBlockIds?: ReadonlySet<string>
 }
 
 /**
@@ -63,6 +65,7 @@ export function HeroWorkflowStage({
   edges = STAGE_EDGES,
   canvas = STAGE_CANVAS,
   selectedId,
+  visibleBlockIds,
 }: HeroWorkflowStageProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(MAX_STAGE_SCALE)
@@ -95,8 +98,8 @@ export function HeroWorkflowStage({
   }, [canvas.width, canvas.height])
 
   const builtIds = useMemo(
-    () => new Set(blocks.slice(0, builtCount).map((b) => b.id)),
-    [blocks, builtCount]
+    () => visibleBlockIds ?? new Set(blocks.slice(0, builtCount).map((b) => b.id)),
+    [blocks, builtCount, visibleBlockIds]
   )
 
   return (
