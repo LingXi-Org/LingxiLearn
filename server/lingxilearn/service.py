@@ -909,6 +909,19 @@ class Service:
         except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
             logger.exception("agent task failed: %s", task_id)
             detail = _safe_agent_error(exc, self.settings)
+            recovered_intro = await self.agent_artifacts.recover_lesson_intro_draft(task_id)
+            if recovered_intro is not None:
+                buffer.append(
+                    {
+                        "kind": "artifact.recovered",
+                        "agent": "lecture_hook",
+                        "payload": {
+                            "artifact": "lesson-intro",
+                            "relative_path": recovered_intro["relative_path"],
+                            "message": "课程引入生成被中断，已从已写入草稿恢复可用页面。",
+                        },
+                    }
+                )
             buffer.append(
                 {
                     "kind": "task.failed",

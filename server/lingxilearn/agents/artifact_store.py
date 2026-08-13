@@ -50,6 +50,11 @@ class ArtifactStore:
     def lesson_intro_path(self, task_id: str) -> Path:
         return self.task_root(task_id) / "lesson-intro.html"
 
+    def lesson_intro_draft_path(self, task_id: str) -> Path:
+        """Return the durable private draft path used for timeout recovery."""
+
+        return self.task_root(task_id) / ".draft" / "lesson-intro" / "lesson-intro.html"
+
     def write_lesson_intro_file(self, task_id: str, content: str) -> dict[str, Any]:
         """Persist the current lesson-intro-html.v1 primary artifact."""
 
@@ -211,6 +216,23 @@ class ArtifactStore:
             REPO_ROOT / "skills" / "lesson-intro",
         )
         return {"ok": validation["ok"], "contract": "lesson-intro-html.v1", "validation": validation}
+
+    async def recover_lesson_intro_draft(self, task_id: str) -> dict[str, Any] | None:
+        """Promote a valid lesson draft after the generating Agent was interrupted."""
+
+        draft = self.lesson_intro_draft_path(task_id)
+        if not draft.exists() or not draft.is_file():
+            return None
+        try:
+            content = draft.read_text(encoding="utf-8")
+            artifact = self.write_lesson_intro_file(task_id, content)
+            validation = await self.validate_lesson_intro(task_id)
+        except (OSError, UnicodeError, ArtifactError):
+            return None
+        if not validation["ok"]:
+            return None
+        draft.unlink(missing_ok=True)
+        return {**artifact, "validation": validation, "recovered": True}
 
     async def validate_quiz_result(self, task_id: str, result: dict[str, Any]) -> dict[str, Any]:
         """Run the quiz skill's contract validator against an internal result."""

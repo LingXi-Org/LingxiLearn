@@ -21,7 +21,7 @@ from lingxigraph import (
 
 from lingxilearn.agents.artifact_store import ArtifactError, ArtifactStore
 from lingxilearn.agents.contracts import IntentContext, LectureHookResult, extract_json
-from lingxilearn.agents.graph import _invoke_agent, build_agent_graph
+from lingxilearn.agents.graph import _invoke_agent, _lesson_intro_fallback, build_agent_graph
 from lingxilearn.service import Service, _message_trace_events
 from lingxilearn.agents.web_tools import _assert_public_url
 from lingxilearn.agents.skill_runtime import ArtifactDraft, progressive_skill_prompt, staged_artifact_tools
@@ -119,7 +119,7 @@ def test_agent_skills_are_discoverable_and_have_resources() -> None:
         assert (skill_dir / "SKILL.md").read_text(encoding="utf-8").startswith("---")
         if name == "interactive-lecture-deck":
             spec = source.load(name)
-            assert spec.extra_metadata.get("version") == "1.2.0"
+            assert spec.extra_metadata.get("version") == "1.3.0"
             assert "dist/lecture.html" in spec.content
 
 
@@ -130,7 +130,10 @@ def test_skill_runtime_supports_progressive_disclosure_and_staged_artifacts(tmp_
     result = tools["stage_artifact_file"].func("slides/s01.html", "<!doctype html><html></html>")
     assert "staged" in result
     assert draft.list() == [{"path": "slides/s01.html", "bytes": 28}]
-    assert tools["read_staged_artifact"].func("slides/s01.html") == "<!doctype html><html></html>"
+    tools["stage_artifact_chunk"].func("slides/s01.html", "<body>", "replace")
+    tools["stage_artifact_chunk"].func("slides/s01.html", "chunk</body>", "append")
+    assert draft.read("slides/s01.html") == "<body>chunk</body>"
+    assert tools["read_staged_artifact"].func("slides/s01.html") == "<body>chunk</body>"
     assert "slides/s01.html" in tools["list_staged_artifacts"].func()
     batch = tools["stage_artifact_files"].func(
         [
@@ -304,7 +307,7 @@ async def test_specialists_start_in_parallel(
     assert timeline.index("lesson-intro:start") < first_end
     assert timeline.index("interactive-lecture-deck:start") < first_end
     assert created["lesson-intro"]["skills"].discover()[0].name == "lesson-intro"
-    assert {item.name for item in created["lesson-intro"]["tools"]} == {"web_search", "web_fetch", "stage_artifact_file", "read_staged_artifact", "list_staged_artifacts"}
+    assert {item.name for item in created["lesson-intro"]["tools"]} == {"stage_artifact_file", "stage_artifact_chunk", "read_staged_artifact", "list_staged_artifacts"}
     assert created["lesson-intro"]["config"]["tool_permissions"] == ["artifact:write"]
     deck_tools = {item.name for item in created["interactive-lecture-deck"]["tools"]}
     assert {"stage_artifact_file", "stage_artifact_files", "read_staged_artifact", "list_staged_artifacts"} <= deck_tools
@@ -482,7 +485,7 @@ def test_lesson_intro_artifact_and_skill_deck_are_publishable(tmp_path: Path) ->
     html = (REPO_ROOT / "skills" / "lesson-intro" / "assets" / "example-page.html").read_text(encoding="utf-8")
     intro = store.write_lesson_intro_file("intro-task", html)
     assert intro["artifact_id"] == "lesson-intro"
-    assert "为什么雨后的石板路格外滑" in store.lesson_intro_path("intro-task").read_text(encoding="utf-8")
+    assert "摩擦力" in store.lesson_intro_path("intro-task").read_text(encoding="utf-8")
 
     source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
     files = {
@@ -501,6 +504,21 @@ def test_lesson_intro_artifact_and_skill_deck_are_publishable(tmp_path: Path) ->
 
     with pytest.raises(ArtifactError, match="runtime/index.html"):
         store.write_deck("missing-runtime", {"lecture.json": "{}", "manifest.json": "{}"})
+
+
+@pytest.mark.asyncio
+async def test_lesson_intro_timeout_draft_is_recoverable(tmp_path: Path) -> None:
+    settings = Settings(_env_file="", agent_task_dir=tmp_path)
+    store = ArtifactStore(settings)
+    intent = IntentContext(topic="TCP 协议", learning_objective="理解可靠传输")
+    draft = ArtifactDraft(store, "timeout-task", "lesson-intro")
+    draft.write("lesson-intro.html", _lesson_intro_fallback(intent))
+    recovered = await store.recover_lesson_intro_draft("timeout-task")
+    assert recovered is not None
+    assert recovered["recovered"] is True
+    assert store.lesson_intro_path("timeout-task").exists()
+    assert not store.lesson_intro_draft_path("timeout-task").exists()
+    draft.cleanup()
 
 
 def test_deck_repairs_array_anchor_rect_before_strict_validation(tmp_path: Path) -> None:

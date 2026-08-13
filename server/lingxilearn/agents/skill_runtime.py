@@ -88,6 +88,19 @@ def staged_artifact_tools(draft: ArtifactDraft, *, batch: bool = False) -> list[
 
         return json.dumps(draft.write(path, content), ensure_ascii=False)
 
+    @tool(name="stage_artifact_chunk", timeout=30.0, permissions=("artifact:write",))
+    def stage_artifact_chunk(path: str, content: str, mode: str = "replace") -> str:
+        """Write a bounded chunk when a complete file exceeds one tool payload."""
+
+        if mode not in {"replace", "append"}:
+            raise ArtifactError("stage_artifact_chunk mode must be replace or append")
+        if mode == "append":
+            try:
+                content = draft.read(path) + content
+            except ArtifactError:
+                raise ArtifactError("cannot append before the first replace chunk") from None
+        return json.dumps(draft.write(path, content), ensure_ascii=False)
+
     @tool(name="stage_artifact_files", timeout=45.0, permissions=("artifact:write",))
     def stage_artifact_files(files: list[dict[str, str]]) -> str:
         """Write two or three complete artifact files in one model turn."""
@@ -117,6 +130,7 @@ def staged_artifact_tools(draft: ArtifactDraft, *, batch: bool = False) -> list[
 
     return [
         stage_artifact_file,
+        stage_artifact_chunk,
         *([stage_artifact_files] if batch else []),
         read_staged_artifact,
         list_staged_artifacts,
@@ -138,7 +152,7 @@ def progressive_skill_prompt(
     artifact_step = (
         "4. 生成过程中优先调用 stage_artifact_files 每轮提交 2–3 个完整文件；仅在单文件修复时使用 stage_artifact_file，并可用 list_staged_artifacts、read_staged_artifact 回读检查。"
         if stage_artifacts and batch_artifacts
-        else "4. 生成过程中调用 stage_artifact_file 提交完整文件，并可用 list_staged_artifacts、read_staged_artifact 回读检查。"
+        else "4. 生成过程中调用 stage_artifact_file 提交完整文件；如果单次工具参数可能过长，则用 stage_artifact_chunk 分 2–4KB 分块写入（先 replace，后 append），并可用 list_staged_artifacts、read_staged_artifact 回读检查。"
         if stage_artifacts
         else "4. 按输入/输出契约生成结构化结果；不要回传未要求的内容。"
     )
