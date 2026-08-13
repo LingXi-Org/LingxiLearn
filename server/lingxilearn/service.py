@@ -922,6 +922,20 @@ class Service:
                         },
                     }
                 )
+            recovered_deck = await self.agent_artifacts.recover_deck_draft(task_id)
+            if recovered_deck is not None:
+                buffer.append(
+                    {
+                        "kind": "artifact.recovered",
+                        "agent": "interactive_lecture_deck",
+                        "payload": {
+                            "artifact": "lecture-deck",
+                            "relative_path": f"{task_id}/lecture-deck/dist/lecture.html",
+                            "message": "课件生成被中断或校验失败，已从已写入源文件恢复可用发布物。",
+                            "validation": recovered_deck["validation"],
+                        },
+                    }
+                )
             buffer.append(
                 {
                     "kind": "task.failed",

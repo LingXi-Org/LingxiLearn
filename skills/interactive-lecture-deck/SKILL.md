@@ -67,6 +67,22 @@ risk. Full path adds `design-system.md`, `visual-authoring.md`, and `zoom-contra
 - Preserve the runtime's protected-view, geometry-probe, final guard, and full-bleed behavior.
 - Require `build_standalone.py` followed by `validate_deck.py --strict` before claiming delivery.
 
+### v2 contract checklist (hard requirements)
+
+Before staging `lecture.json`, check every item below. These are schema requirements, not style
+preferences:
+
+- Every anchor object has `id`, non-empty `label`, and `rect: {x,y,w,h}`. Do not omit `label` and do
+  not use the old four-number rect array.
+- Every step has `advance: "manual"`.
+- Every `overview` step uses exactly the full-view camera shape `{ "mode": "fit" }`; it must not
+  carry `anchorId`, `depth`, `scale`, or `focus`. Only a `zoom` step uses `camera.mode: "anchor"`.
+- Every SVG `<text>` in every slide has one of the classes `t`, `ts`, `th`, or `tn`.
+
+Run a final schema/strict validation after staging. If a generated file is incomplete, finish or
+repair that source file before returning the receipt; do not claim a staged deck is ready from a
+partial `lecture.json`.
+
 ## Output language
 
 All slide titles, labels, panel prose, onboarding text, narration, manifest descriptions, and

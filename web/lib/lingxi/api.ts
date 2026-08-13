@@ -442,6 +442,7 @@ export const KNOWN_AGENT_EVENT_KINDS = [
   'node.retrying',
   'interrupt.raised',
   'artifact.ready',
+  'artifact.recovered',
   'task.completed',
   'task.failed',
 ]
