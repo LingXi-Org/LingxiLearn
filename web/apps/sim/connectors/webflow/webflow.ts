@@ -1,0 +1,488 @@
+import { createLogger } from '@sim/logger'
+import { getErrorMessage, toError } from '@sim/utils/errors'
+import { fetchWithRetry, VALIDATE_RETRY_OPTIONS } from '@/lib/knowledge/documents/utils'
+import type { ConnectorConfig, ExternalDocument, ExternalDocumentList } from '@/connectors/types'
+import { htmlToPlainText, parseMultiValue, parseTagDate } from '@/connectors/utils'
+import { webflowConnectorMeta } from '@/connectors/webflow/meta'
+
+const logger = createLogger('WebflowConnector')
+
+const WEBFLOW_API = 'https://api.webflow.com/v2'
+const PAGE_SIZE = 100
+
+interface WebflowCollection {
+  id: string
+  displayName: string
+  slug: string
+}
+
+interface WebflowItem {
+  id: string
+  fieldData: Record<string, unknown>
+  lastPublished?: string
+  lastUpdated?: string
+  createdOn?: string
+  isArchived?: boolean
+  isDraft?: boolean
+}
+
+/**
+ * Keeps only CMS items that are still current in Webflow. The staged
+ * `GET /collections/{id}/items` endpoint returns every item regardless of
+ * state — it exposes `isArchived`/`isDraft` on each item but offers no query
+ * parameter to filter by them — and archiving only unpublishes an item from the
+ * live site while keeping it in the CMS. Without this guard archived items stay
+ * in every full-sync listing forever and are never purged by deletion
+ * reconciliation (which removes only stored documents absent from the listing).
+ *
+ * Only an explicit `isArchived === true` excludes an item: a missing or
+ * malformed flag keeps the item, since wrongly excluding a live item would
+ * hard-delete it from the knowledge base. Drafts are intentionally kept — a
+ * draft is unpublished, not removed, and it still exists in the CMS.
+ */
+export function isCurrentItem(item: { isArchived?: boolean }): boolean {
+  return item.isArchived !== true
+}
+
+interface WebflowPagination {
+  total: number
+  offset: number
+  limit: number
+}
+
+interface CursorState {
+  collectionIndex: number
+  offset: number
+  collections: string[]
+}
+
+/**
+ * Formats a CMS item's field data into structured plain text.
+ */
+function itemToPlainText(item: WebflowItem, collectionName: string): string {
+  const lines: string[] = []
+  const fieldData = item.fieldData || {}
+
+  const title = (fieldData.name as string) || (fieldData.title as string) || 'Untitled'
+  lines.push(`# ${title}`)
+  lines.push(`Collection: ${collectionName}`)
+
+  for (const [key, value] of Object.entries(fieldData)) {
+    if (value == null) continue
+    if (key === 'name' || key === 'title') continue
+
+    if (Array.isArray(value)) {
+      const items = value.map((v) => {
+        if (typeof v === 'object' && v !== null) {
+          return JSON.stringify(v)
+        }
+        return String(v)
+      })
+      lines.push(`${key}: ${items.join(', ')}`)
+    } else if (typeof value === 'object') {
+      lines.push(`${key}: ${JSON.stringify(value)}`)
+    } else if (typeof value === 'string' && /<[a-z][^>]*>/i.test(value)) {
+      lines.push(`${key}: ${htmlToPlainText(value)}`)
+    } else {
+      lines.push(`${key}: ${String(value)}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Extracts a human-readable title from a Webflow CMS item.
+ */
+function extractItemTitle(item: WebflowItem): string {
+  const fieldData = item.fieldData || {}
+  return (fieldData.name as string) || (fieldData.title as string) || 'Untitled'
+}
+
+export const webflowConnector: ConnectorConfig = {
+  ...webflowConnectorMeta,
+
+  listDocuments: async (
+    accessToken: string,
+    sourceConfig: Record<string, unknown>,
+    cursor?: string,
+    syncContext?: Record<string, unknown>
+  ): Promise<ExternalDocumentList> => {
+    const siteId = sourceConfig.siteId as string
+    const collectionIds = parseMultiValue(sourceConfig.collectionId)
+    const maxItems = sourceConfig.maxItems ? Number(sourceConfig.maxItems) : 0
+
+    let cursorState: CursorState
+
+    if (cursor) {
+      cursorState = JSON.parse(cursor) as CursorState
+    } else {
+      const collections = await fetchCollectionIds(accessToken, siteId, collectionIds)
+      cursorState = { collectionIndex: 0, offset: 0, collections }
+    }
+
+    if (cursorState.collections.length === 0) {
+      return { documents: [], hasMore: false }
+    }
+
+    if (syncContext && !syncContext.collectionNames) {
+      syncContext.collectionNames = {}
+    }
+
+    const totalDocsFetched = (syncContext?.totalDocsFetched as number) ?? 0
+    if (maxItems > 0 && totalDocsFetched >= maxItems) {
+      return { documents: [], hasMore: false }
+    }
+
+    const currentCollectionId = cursorState.collections[cursorState.collectionIndex]
+    const collectionName = await fetchCollectionName(accessToken, currentCollectionId, syncContext)
+
+    const params = new URLSearchParams()
+    params.append('limit', String(PAGE_SIZE))
+    params.append('offset', String(cursorState.offset))
+
+    const url = `${WEBFLOW_API}/collections/${currentCollectionId}/items?${params.toString()}`
+
+    logger.info('Listing Webflow CMS items', {
+      siteId,
+      collectionId: currentCollectionId,
+      offset: cursorState.offset,
+    })
+
+    const response = await fetchWithRetry(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'accept-version': '2.0.0',
+      },
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      logger.error('Failed to list Webflow items', {
+        status: response.status,
+        error: errorText,
+      })
+      throw new Error(`Failed to list Webflow items: ${response.status}`)
+    }
+
+    const data = (await response.json()) as {
+      items: WebflowItem[]
+      pagination: WebflowPagination
+    }
+
+    /**
+     * Archived items are filtered out before mapping so they leave the listing
+     * and get purged by deletion reconciliation. Pagination stays driven by the
+     * raw `pagination.limit`/`pagination.total` from the API, never by the
+     * filtered count, so cursor math is unaffected.
+     */
+    const items = (data.items || []).filter(isCurrentItem)
+    const pageDocuments: ExternalDocument[] = items.map((item) =>
+      itemToDocument(item, currentCollectionId, collectionName)
+    )
+
+    let documents = pageDocuments
+    if (maxItems > 0) {
+      const remaining = Math.max(0, maxItems - totalDocsFetched)
+      if (documents.length > remaining) {
+        documents = documents.slice(0, remaining)
+      }
+    }
+
+    if (syncContext) {
+      syncContext.totalDocsFetched = totalDocsFetched + documents.length
+    }
+
+    const { pagination } = data
+    const hasMoreInCollection = cursorState.offset + pagination.limit < pagination.total
+    const hasMoreCollections = cursorState.collectionIndex < cursorState.collections.length - 1
+    const hitMaxItems = maxItems > 0 && totalDocsFetched + documents.length >= maxItems
+    /**
+     * When the cap stops the sync, flag the listing as capped so the sync engine
+     * skips deletion reconciliation — otherwise still-existing documents that
+     * were never listed get hard-deleted. "More" means any of: items dropped
+     * from this page (`pageDocuments.length > documents.length`), more pages in
+     * this collection, or more collections still to visit. The within-page drop
+     * is the only signal when a collection fits in a single API response.
+     */
+    const droppedWithinPage = documents.length < pageDocuments.length
+    if (
+      syncContext &&
+      hitMaxItems &&
+      (droppedWithinPage || hasMoreInCollection || hasMoreCollections)
+    ) {
+      syncContext.listingCapped = true
+    }
+
+    let nextCursor: string | undefined
+    if (hitMaxItems) {
+      nextCursor = undefined
+    } else if (hasMoreInCollection) {
+      nextCursor = JSON.stringify({
+        collectionIndex: cursorState.collectionIndex,
+        offset: cursorState.offset + pagination.limit,
+        collections: cursorState.collections,
+      })
+    } else if (hasMoreCollections) {
+      nextCursor = JSON.stringify({
+        collectionIndex: cursorState.collectionIndex + 1,
+        offset: 0,
+        collections: cursorState.collections,
+      })
+    }
+
+    return {
+      documents,
+      nextCursor,
+      hasMore: Boolean(nextCursor),
+    }
+  },
+
+  getDocument: async (
+    accessToken: string,
+    _sourceConfig: Record<string, unknown>,
+    externalId: string
+  ): Promise<ExternalDocument | null> => {
+    const separatorIndex = externalId.indexOf(':')
+    if (separatorIndex === -1) {
+      logger.error('Invalid externalId format, expected collectionId:itemId', { externalId })
+      return null
+    }
+
+    const docCollectionId = externalId.slice(0, separatorIndex)
+    const itemId = externalId.slice(separatorIndex + 1)
+
+    const url = `${WEBFLOW_API}/collections/${docCollectionId}/items/${itemId}`
+
+    const response = await fetchWithRetry(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'accept-version': '2.0.0',
+      },
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) return null
+      throw new Error(`Failed to get Webflow item: ${response.status}`)
+    }
+
+    const item = (await response.json()) as WebflowItem
+
+    /**
+     * Mirrors the listing filter: an archived item must not be resurrected by an
+     * incremental refresh after reconciliation removed it.
+     */
+    if (!isCurrentItem(item)) return null
+
+    const collectionName = await fetchCollectionNameDirect(accessToken, docCollectionId)
+    return itemToDocument(item, docCollectionId, collectionName)
+  },
+
+  validateConfig: async (
+    accessToken: string,
+    sourceConfig: Record<string, unknown>
+  ): Promise<{ valid: boolean; error?: string }> => {
+    const siteId = sourceConfig.siteId as string
+    const collectionIds = parseMultiValue(sourceConfig.collectionId)
+    const maxItems = sourceConfig.maxItems as string | undefined
+
+    if (!siteId) {
+      return { valid: false, error: 'Site ID is required' }
+    }
+
+    if (maxItems && (Number.isNaN(Number(maxItems)) || Number(maxItems) <= 0)) {
+      return { valid: false, error: 'Max items must be a positive number' }
+    }
+
+    try {
+      const siteUrl = `${WEBFLOW_API}/sites/${siteId}`
+      const siteResponse = await fetchWithRetry(
+        siteUrl,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'accept-version': '2.0.0',
+          },
+        },
+        VALIDATE_RETRY_OPTIONS
+      )
+
+      if (!siteResponse.ok) {
+        if (siteResponse.status === 404) {
+          return { valid: false, error: `Site "${siteId}" not found` }
+        }
+        if (siteResponse.status === 403 || siteResponse.status === 401) {
+          return { valid: false, error: 'Access denied. Check your Webflow permissions.' }
+        }
+        const errorText = await siteResponse.text()
+        return { valid: false, error: `Webflow API error: ${siteResponse.status} - ${errorText}` }
+      }
+
+      for (const collectionId of collectionIds) {
+        const collectionUrl = `${WEBFLOW_API}/collections/${collectionId}`
+        const collectionResponse = await fetchWithRetry(
+          collectionUrl,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'accept-version': '2.0.0',
+            },
+          },
+          VALIDATE_RETRY_OPTIONS
+        )
+
+        if (!collectionResponse.ok) {
+          if (collectionResponse.status === 404) {
+            return { valid: false, error: `Collection "${collectionId}" not found` }
+          }
+          return {
+            valid: false,
+            error: `Failed to verify collection: ${collectionResponse.status}`,
+          }
+        }
+      }
+
+      return { valid: true }
+    } catch (error) {
+      const message = getErrorMessage(error, 'Failed to validate configuration')
+      return { valid: false, error: message }
+    }
+  },
+
+  mapTags: (metadata: Record<string, unknown>): Record<string, unknown> => {
+    const result: Record<string, unknown> = {}
+
+    if (typeof metadata.collectionName === 'string') {
+      result.collectionName = metadata.collectionName
+    }
+
+    const lastModified = parseTagDate(metadata.lastModified)
+    if (lastModified) result.lastModified = lastModified
+
+    if (typeof metadata.slug === 'string') {
+      result.slug = metadata.slug
+    }
+
+    return result
+  },
+}
+
+/**
+ * Converts a Webflow CMS item to an ExternalDocument.
+ */
+function itemToDocument(
+  item: WebflowItem,
+  collectionId: string,
+  collectionName: string
+): ExternalDocument {
+  const plainText = itemToPlainText(item, collectionName)
+  const lastModified = item.lastUpdated || item.lastPublished || item.createdOn || ''
+  const contentHash = `webflow:${item.id}:${lastModified}`
+  const title = extractItemTitle(item)
+  const slug = (item.fieldData?.slug as string) || ''
+
+  return {
+    externalId: `${collectionId}:${item.id}`,
+    title,
+    content: plainText,
+    mimeType: 'text/plain',
+    contentHash,
+    metadata: {
+      collectionName,
+      lastModified: item.lastUpdated || item.lastPublished || item.createdOn,
+      slug,
+    },
+  }
+}
+
+/**
+ * Fetches collection IDs for a site. If a specific collectionId is provided,
+ * returns only that ID. Otherwise fetches all collections from the site.
+ */
+async function fetchCollectionIds(
+  accessToken: string,
+  siteId: string,
+  collectionIds: string[]
+): Promise<string[]> {
+  if (collectionIds.length > 0) {
+    return collectionIds
+  }
+
+  const url = `${WEBFLOW_API}/sites/${siteId}/collections`
+  const response = await fetchWithRetry(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'accept-version': '2.0.0',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to list Webflow collections: ${response.status}`)
+  }
+
+  const data = (await response.json()) as { collections: WebflowCollection[] }
+  return (data.collections || []).map((c) => c.id)
+}
+
+/**
+ * Fetches a collection's display name, caching in syncContext.
+ */
+async function fetchCollectionName(
+  accessToken: string,
+  collectionId: string,
+  syncContext?: Record<string, unknown>
+): Promise<string> {
+  const names = (syncContext?.collectionNames ?? {}) as Record<string, string>
+  if (names[collectionId]) return names[collectionId]
+
+  const name = await fetchCollectionNameDirect(accessToken, collectionId)
+
+  if (syncContext) {
+    const cached = (syncContext.collectionNames ?? {}) as Record<string, string>
+    cached[collectionId] = name
+    syncContext.collectionNames = cached
+  }
+
+  return name
+}
+
+/**
+ * Fetches a collection's display name directly from the API.
+ */
+async function fetchCollectionNameDirect(
+  accessToken: string,
+  collectionId: string
+): Promise<string> {
+  try {
+    const url = `${WEBFLOW_API}/collections/${collectionId}`
+    const response = await fetchWithRetry(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'accept-version': '2.0.0',
+      },
+    })
+
+    if (!response.ok) {
+      logger.warn('Failed to fetch collection name', {
+        collectionId,
+        status: response.status,
+      })
+      return collectionId
+    }
+
+    const data = (await response.json()) as WebflowCollection
+    return data.displayName || data.slug || collectionId
+  } catch (error) {
+    logger.warn('Error fetching collection name', {
+      collectionId,
+      error: toError(error).message,
+    })
+    return collectionId
+  }
+}

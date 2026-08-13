@@ -1,0 +1,110 @@
+import { db } from '@sim/db'
+import { outboxEvent } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { toError } from '@sim/utils/errors'
+import { and, eq, sql } from 'drizzle-orm'
+import { NextResponse } from 'next/server'
+import { adminV1RequeueOutboxEventContract } from '@/lib/api/contracts/v1/admin'
+import { getValidationErrorMessage, parseRequest } from '@/lib/api/server'
+import {
+  ENTERPRISE_METADATA_SYNC_EVENT_TYPE,
+  ENTERPRISE_PROVISION_EVENT_TYPE,
+  enterpriseMetadataSyncPayloadSchema,
+} from '@/lib/billing/enterprise-outbox'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { withAdminAuthParams } from '@/app/api/v1/admin/middleware'
+
+const logger = createLogger('AdminOutboxRequeueAPI')
+
+export const dynamic = 'force-dynamic'
+
+const invalidOutboxEventResponse = (message: string) =>
+  NextResponse.json({ success: false, error: message }, { status: 400 })
+
+/**
+ * POST /api/v1/admin/outbox/[id]/requeue
+ *
+ * Move a dead-lettered outbox event back to `pending` so the worker
+ * will retry it. Resets `attempts`, `lastError`, and `availableAt` so
+ * the next poll picks it up. Only dead-lettered events can be
+ * requeued — completed/pending/processing rows are rejected to avoid
+ * operator errors.
+ */
+export const POST = withRouteHandler(
+  withAdminAuthParams<{ id: string }>(async (request, context) => {
+    const parsed = await parseRequest(adminV1RequeueOutboxEventContract, request, context, {
+      validationErrorResponse: (error) =>
+        invalidOutboxEventResponse(getValidationErrorMessage(error, 'Invalid event ID')),
+    })
+    if (!parsed.success) return parsed.response
+
+    const { id } = parsed.data.params
+
+    try {
+      const [existing] = await db
+        .select({ eventType: outboxEvent.eventType, payload: outboxEvent.payload })
+        .from(outboxEvent)
+        .where(eq(outboxEvent.id, id))
+        .limit(1)
+      if (existing?.eventType === ENTERPRISE_PROVISION_EVENT_TYPE) {
+        return invalidOutboxEventResponse(
+          'Enterprise issuance must be retried through its dedicated admin action'
+        )
+      }
+      const metadataIntent =
+        existing?.eventType === ENTERPRISE_METADATA_SYNC_EVENT_TYPE
+          ? enterpriseMetadataSyncPayloadSchema.safeParse(existing.payload)
+          : null
+      if (metadataIntent && !metadataIntent.success) {
+        return invalidOutboxEventResponse('Enterprise metadata intent payload is invalid')
+      }
+      const deliveryRevision = metadataIntent?.success
+        ? metadataIntent.data.deliveryRevision + 1
+        : null
+      const result = await db
+        .update(outboxEvent)
+        .set({
+          status: 'pending',
+          attempts: 0,
+          lastError: null,
+          availableAt: new Date(),
+          lockedAt: null,
+          processedAt: null,
+          ...(deliveryRevision === null
+            ? {}
+            : {
+                payload: sql`(${outboxEvent.payload}::jsonb || ${JSON.stringify({ deliveryRevision })}::jsonb)::json`,
+              }),
+        })
+        .where(and(eq(outboxEvent.id, id), eq(outboxEvent.status, 'dead_letter')))
+        .returning({ id: outboxEvent.id, eventType: outboxEvent.eventType })
+
+      if (result.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'Event not found or not in dead_letter status. Only dead-lettered events can be requeued.',
+          },
+          { status: 404 }
+        )
+      }
+
+      logger.info('Requeued dead-lettered outbox event', {
+        eventId: result[0].id,
+        eventType: result[0].eventType,
+      })
+
+      return NextResponse.json({
+        success: true,
+        requeued: result[0],
+      })
+    } catch (error) {
+      logger.error('Failed to requeue outbox event', { eventId: id, error: toError(error).message })
+      return NextResponse.json(
+        { success: false, error: 'Failed to requeue outbox event' },
+        { status: 500 }
+      )
+    }
+  })
+)

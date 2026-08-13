@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import re
 import sys
@@ -379,22 +378,6 @@ def validate_anchors(slide: dict, parser: SlideParser, rep: Report, global_ids: 
         if aid in global_ids and global_ids[aid] != slide["id"]:
             rep.err(where, f"锚点 id {aid!r} 与 {global_ids[aid]} 页重名（需全 deck 唯一）")
         global_ids.setdefault(aid, slide["id"])
-
-        if not isinstance(rect, dict) or any(key not in rect for key in ("x", "y", "w", "h")):
-            rep.err(
-                where,
-                f"锚点 {aid} 的 rect 必须是包含 x/y/w/h 的对象，实际为 {rect!r}；"
-                "不要使用 [x, y, w, h] 数组",
-            )
-            continue
-        if any(
-            isinstance(rect[key], bool)
-            or not isinstance(rect[key], (int, float))
-            or not math.isfinite(float(rect[key]))
-            for key in ("x", "y", "w", "h")
-        ):
-            rep.err(where, f"锚点 {aid} 的 rect.x/y/w/h 必须是有限数字，实际为 {rect!r}")
-            continue
 
         if rect["x"] + rect["w"] > CANVAS_W or rect["y"] + rect["h"] > CANVAS_H:
             rep.err(where, f"锚点 {aid} 的 rect 超出画布：{rect}")

@@ -1,0 +1,1588 @@
+import { Users } from '@sim/emcn/icons'
+import { getErrorMessage } from '@sim/utils/errors'
+import { ApolloIcon } from '@/components/icons'
+import type { BlockConfig, BlockMeta } from '@/blocks/types'
+import { AuthMode, IntegrationType } from '@/blocks/types'
+import type { ApolloResponse } from '@/tools/apollo/types'
+
+/** Identifies a person by email when available, otherwise by given name. */
+const PERSON_IDENTITY_FIELD = ['email', 'first_name'] as const
+
+export const ApolloBlock: BlockConfig<ApolloResponse> = {
+  type: 'apollo',
+  name: 'Apollo',
+  description: 'Search, enrich, and manage contacts with Apollo.io',
+  authMode: AuthMode.ApiKey,
+  longDescription:
+    'Integrates Apollo.io into the workflow. Search for people and companies, enrich contact data, manage your CRM contacts and accounts, add contacts to sequences, and create tasks.',
+  docsLink: 'https://docs.sim.ai/integrations/apollo',
+  category: 'tools',
+  integrationType: IntegrationType.Sales,
+  bgColor: '#EBF212',
+  icon: ApolloIcon,
+  canvasPresentation: {
+    defaultTitle: 'Apollo',
+    sentences: {
+      byOperation: {
+        people_search: [
+          'Search for people',
+          { text: ', with title', field: 'person_titles' },
+          { text: ', in', field: 'person_locations' },
+          { text: ', at', field: 'organization_names' },
+        ],
+        people_enrich: [
+          { text: 'Enrich person', field: PERSON_IDENTITY_FIELD, core: true },
+          { text: 'at', field: ['organization_name', 'domain'] },
+        ],
+        people_bulk_enrich: [{ text: 'Enrich the people in', field: 'people', core: true }],
+        organization_search: [
+          'Search for companies',
+          { text: ', named', field: 'q_organization_name' },
+          { text: ', in', field: 'organization_locations' },
+          { text: ', with headcount', field: 'organization_num_employees_ranges' },
+        ],
+        organization_enrich: [{ text: 'Enrich company', field: 'domain', core: true }],
+        organization_bulk_enrich: [
+          { text: 'Enrich the companies in', field: 'domains', core: true },
+        ],
+        contact_create: [
+          { text: 'Create contact', field: PERSON_IDENTITY_FIELD, core: true },
+          { text: ', titled', field: 'title' },
+          { text: ', at', field: 'organization_name' },
+        ],
+        contact_update: [
+          { text: 'Update contact', field: 'contact_id', core: true },
+          { text: ', with new title', field: 'title' },
+          { text: ', at company', field: 'organization_name' },
+        ],
+        contact_search: [
+          'Search saved contacts',
+          { text: ', matching', field: 'q_keywords' },
+          { text: ', in stage', field: 'contact_stage_ids' },
+          { text: ', labeled', field: 'contact_label_ids' },
+        ],
+        contact_bulk_create: [
+          { text: 'Create the contacts in', field: 'contacts', core: true },
+          { text: ', labeled', field: 'append_label_names' },
+        ],
+        contact_bulk_update: [
+          { text: 'Update the contacts in', field: 'contacts', core: true },
+          { text: ', setting', field: 'contact_attributes' },
+        ],
+        account_create: [
+          { text: 'Create account', field: 'account_name', core: true },
+          { text: ', at', field: 'domain' },
+          { text: ', located in', field: 'raw_address' },
+        ],
+        account_update: [
+          { text: 'Update account', field: 'account_id', core: true },
+          { text: ', with new name', field: 'account_name' },
+          { text: ', at domain', field: 'domain' },
+        ],
+        account_search: [
+          'Search saved accounts',
+          { text: ', named', field: 'q_organization_name' },
+          { text: ', in stage', field: 'account_stage_ids' },
+          { text: ', labeled', field: 'account_label_ids' },
+        ],
+        account_bulk_create: [
+          { text: 'Create the accounts in', field: 'accounts', core: true },
+          { text: ', labeled', field: 'append_label_names' },
+        ],
+        account_bulk_update: [
+          { text: 'Update the accounts in', field: 'accounts', core: true },
+          { text: ', renaming each to', field: 'account_bulk_update_name' },
+          { text: ', setting', field: 'account_attributes' },
+        ],
+        opportunity_create: [
+          { text: 'Create deal', field: 'opportunity_name', core: true },
+          { text: ', worth', field: 'amount' },
+          { text: ', closing', field: 'closed_date' },
+        ],
+        opportunity_search: ['List all deals', { text: ', sorted by', field: 'sort_by_field' }],
+        opportunity_get: [{ text: 'Fetch deal', field: 'opportunity_id', core: true }],
+        opportunity_update: [
+          { text: 'Update deal', field: 'opportunity_id', core: true },
+          { text: ', renaming to', field: 'opportunity_name' },
+          { text: ', setting amount to', field: 'amount' },
+        ],
+        sequence_search: ['Search sequences', { text: ', named', field: 'q_name' }],
+        sequence_add: [
+          { text: 'Add', field: 'contact_ids', core: true },
+          { text: 'to sequence', field: 'sequence_id', core: true },
+          { text: ', sending from', field: 'send_email_from_email_address' },
+        ],
+        task_create: [
+          { text: 'Create a task for contacts', field: 'contact_ids', core: true },
+          { text: ', due', field: 'due_at' },
+        ],
+        task_search: ['Search tasks', { text: ', sorted by', field: 'sort_by_field' }],
+        email_accounts: ['List linked email accounts'],
+      },
+    },
+  },
+  subBlocks: [
+    {
+      id: 'operation',
+      title: 'Operation',
+      type: 'dropdown',
+      options: [
+        { label: 'Search People', id: 'people_search' },
+        { label: 'Enrich Person', id: 'people_enrich' },
+        { label: 'Bulk Enrich People', id: 'people_bulk_enrich' },
+        { label: 'Search Organizations', id: 'organization_search' },
+        { label: 'Enrich Organization', id: 'organization_enrich' },
+        { label: 'Bulk Enrich Organizations', id: 'organization_bulk_enrich' },
+        { label: 'Create Contact', id: 'contact_create' },
+        { label: 'Update Contact', id: 'contact_update' },
+        { label: 'Search Contacts', id: 'contact_search' },
+        { label: 'Bulk Create Contacts', id: 'contact_bulk_create' },
+        { label: 'Bulk Update Contacts', id: 'contact_bulk_update' },
+        { label: 'Create Account', id: 'account_create' },
+        { label: 'Update Account', id: 'account_update' },
+        { label: 'Search Accounts', id: 'account_search' },
+        { label: 'Bulk Create Accounts', id: 'account_bulk_create' },
+        { label: 'Bulk Update Accounts', id: 'account_bulk_update' },
+        { label: 'Create Opportunity', id: 'opportunity_create' },
+        { label: 'Search Opportunities', id: 'opportunity_search' },
+        { label: 'Get Opportunity', id: 'opportunity_get' },
+        { label: 'Update Opportunity', id: 'opportunity_update' },
+        { label: 'Search Sequences', id: 'sequence_search' },
+        { label: 'Add to Sequence', id: 'sequence_add' },
+        { label: 'Create Task', id: 'task_create' },
+        { label: 'Search Tasks', id: 'task_search' },
+        { label: 'Get Email Accounts', id: 'email_accounts' },
+      ],
+      value: () => 'people_search',
+    },
+    {
+      id: 'apiKey',
+      title: 'Apollo API Key',
+      type: 'short-input',
+      placeholder: 'Enter your Apollo API key',
+      password: true,
+      required: true,
+    },
+
+    // People Search Fields
+    {
+      id: 'person_titles',
+      title: 'Job Titles',
+      type: 'code',
+      placeholder: '["CEO", "VP of Sales"]',
+      condition: { field: 'operation', value: 'people_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'person_locations',
+      title: 'Locations',
+      type: 'code',
+      placeholder: '["San Francisco, CA", "New York, NY"]',
+      condition: { field: 'operation', value: 'people_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'organization_names',
+      title: 'Company Names',
+      type: 'code',
+      placeholder: '["Company A", "Company B"]',
+      condition: { field: 'operation', value: 'people_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'person_seniorities',
+      title: 'Seniority Levels',
+      type: 'code',
+      placeholder: '["senior", "manager", "director"]',
+      condition: { field: 'operation', value: 'people_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'include_similar_titles',
+      title: 'Include Similar Titles',
+      type: 'switch',
+      condition: { field: 'operation', value: 'people_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'contact_email_status',
+      title: 'Contact Email Status',
+      type: 'code',
+      placeholder: '["verified", "unverified", "likely to engage"]',
+      condition: { field: 'operation', value: 'people_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'contact_stage_ids',
+      title: 'Contact Stage IDs',
+      type: 'code',
+      placeholder: '["stage_id_1", "stage_id_2"]',
+      condition: { field: 'operation', value: 'contact_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'contact_label_ids',
+      title: 'Contact Label IDs',
+      type: 'code',
+      placeholder: '["label_id_1", "label_id_2"]',
+      condition: { field: 'operation', value: 'contact_search' },
+      mode: 'advanced',
+    },
+
+    // People Enrich Fields
+    {
+      id: 'first_name',
+      title: 'First Name',
+      type: 'short-input',
+      placeholder: 'First name',
+      condition: {
+        field: 'operation',
+        value: ['people_enrich', 'contact_create', 'contact_update'],
+      },
+      required: { field: 'operation', value: 'contact_create' },
+    },
+    {
+      id: 'last_name',
+      title: 'Last Name',
+      type: 'short-input',
+      placeholder: 'Last name',
+      condition: {
+        field: 'operation',
+        value: ['people_enrich', 'contact_create', 'contact_update'],
+      },
+      required: { field: 'operation', value: 'contact_create' },
+    },
+    {
+      id: 'email',
+      title: 'Email',
+      type: 'short-input',
+      placeholder: 'email@example.com',
+      condition: {
+        field: 'operation',
+        value: ['people_enrich', 'contact_create', 'contact_update'],
+      },
+    },
+    {
+      id: 'organization_name',
+      title: 'Company Name',
+      type: 'short-input',
+      placeholder: 'Company name',
+      condition: {
+        field: 'operation',
+        value: ['people_enrich', 'contact_create', 'contact_update'],
+      },
+    },
+    {
+      id: 'domain',
+      title: 'Domain',
+      type: 'short-input',
+      placeholder: 'example.com',
+      condition: {
+        field: 'operation',
+        value: ['people_enrich', 'organization_enrich', 'account_create', 'account_update'],
+      },
+      required: {
+        field: 'operation',
+        value: 'organization_enrich',
+      },
+    },
+    {
+      id: 'reveal_personal_emails',
+      title: 'Reveal Personal Emails',
+      type: 'switch',
+      condition: {
+        field: 'operation',
+        value: ['people_enrich', 'people_bulk_enrich'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'reveal_phone_number',
+      title: 'Reveal Phone Numbers',
+      type: 'switch',
+      condition: {
+        field: 'operation',
+        value: ['people_enrich', 'people_bulk_enrich'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'webhook_url',
+      title: 'Phone Reveal Webhook URL',
+      type: 'short-input',
+      placeholder: 'https://your-app.com/apollo-phone-webhook',
+      condition: {
+        field: 'operation',
+        value: ['people_enrich', 'people_bulk_enrich'],
+      },
+      mode: 'advanced',
+    },
+
+    // Bulk Enrich Fields
+    {
+      id: 'people',
+      title: 'People (JSON Array)',
+      canvasNoun: 'a JSON array',
+      type: 'code',
+      placeholder: '[{"first_name": "John", "last_name": "Doe", "email": "john@example.com"}]',
+      condition: { field: 'operation', value: 'people_bulk_enrich' },
+      required: true,
+    },
+    {
+      id: 'domains',
+      title: 'Domains (JSON Array)',
+      type: 'code',
+      placeholder: '["apollo.io", "stripe.com"]',
+      condition: { field: 'operation', value: 'organization_bulk_enrich' },
+      required: true,
+    },
+
+    // Organization Search Fields
+    {
+      id: 'organization_locations',
+      title: 'Organization Locations',
+      type: 'code',
+      placeholder: '["San Francisco, CA"]',
+      condition: { field: 'operation', value: ['organization_search', 'people_search'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'organization_not_locations',
+      title: 'Excluded Organization Locations',
+      type: 'code',
+      placeholder: '["Ireland", "Minnesota"]',
+      condition: { field: 'operation', value: 'organization_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'organization_ids',
+      title: 'Organization IDs',
+      type: 'code',
+      placeholder: '["org_id_1", "org_id_2"]',
+      condition: { field: 'operation', value: ['organization_search', 'people_search'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'q_organization_domains_list',
+      title: 'Organization Domains',
+      type: 'code',
+      placeholder: '["apollo.io", "stripe.com"]',
+      condition: { field: 'operation', value: ['organization_search', 'people_search'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'organization_num_employees_ranges',
+      title: 'Employee Count Ranges',
+      type: 'code',
+      placeholder: '["1,10", "11,50", "51,200"]',
+      condition: { field: 'operation', value: ['organization_search', 'people_search'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'q_organization_keyword_tags',
+      title: 'Keyword Tags',
+      type: 'code',
+      placeholder: '["saas", "b2b", "enterprise"]',
+      condition: { field: 'operation', value: 'organization_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'q_organization_name',
+      title: 'Organization Name',
+      type: 'short-input',
+      placeholder: 'Company name to search',
+      condition: { field: 'operation', value: ['organization_search', 'account_search'] },
+    },
+
+    // Contact Fields
+    {
+      id: 'contact_id',
+      title: 'Contact ID',
+      type: 'short-input',
+      placeholder: 'Apollo contact ID',
+      condition: { field: 'operation', value: 'contact_update' },
+      required: true,
+    },
+    {
+      id: 'title',
+      title: 'Job Title',
+      type: 'short-input',
+      placeholder: 'Job title',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'account_id',
+      title: 'Account ID',
+      type: 'short-input',
+      placeholder: 'Apollo account ID',
+      condition: {
+        field: 'operation',
+        value: ['contact_create', 'contact_update', 'account_update', 'opportunity_create'],
+      },
+      required: {
+        field: 'operation',
+        value: 'account_update',
+      },
+    },
+    {
+      id: 'owner_id',
+      title: 'Owner ID',
+      type: 'short-input',
+      placeholder: 'Apollo user ID',
+      condition: {
+        field: 'operation',
+        value: [
+          'contact_create',
+          'contact_update',
+          'account_create',
+          'account_update',
+          'opportunity_create',
+          'opportunity_update',
+        ],
+      },
+      mode: 'advanced',
+    },
+
+    {
+      id: 'website_url',
+      title: 'Corporate Website URL',
+      type: 'short-input',
+      placeholder: 'https://www.apollo.io/',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'label_names',
+      title: 'Label Names (JSON Array)',
+      type: 'code',
+      placeholder: '["Prospects", "VIP"]',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'contact_stage_id',
+      title: 'Contact Stage ID',
+      type: 'short-input',
+      placeholder: 'Apollo contact stage ID',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'present_raw_address',
+      title: 'Personal Location',
+      type: 'short-input',
+      placeholder: 'Atlanta, United States',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'direct_phone',
+      title: 'Direct Phone',
+      type: 'short-input',
+      placeholder: '+1 555 123 4567',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'corporate_phone',
+      title: 'Corporate Phone',
+      type: 'short-input',
+      placeholder: '+1 555 123 4567',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'mobile_phone',
+      title: 'Mobile Phone',
+      type: 'short-input',
+      placeholder: '+1 555 123 4567',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'home_phone',
+      title: 'Home Phone',
+      type: 'short-input',
+      placeholder: '+1 555 123 4567',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'other_phone',
+      title: 'Other Phone',
+      type: 'short-input',
+      placeholder: '+1 555 123 4567',
+      condition: { field: 'operation', value: ['contact_create', 'contact_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'typed_custom_fields',
+      title: 'Custom Fields (JSON Object)',
+      type: 'code',
+      placeholder: '{"custom_field_id": "value"}',
+      condition: {
+        field: 'operation',
+        value: [
+          'contact_create',
+          'contact_update',
+          'account_create',
+          'account_update',
+          'opportunity_create',
+          'opportunity_update',
+        ],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'contact_run_dedupe',
+      title: 'Run Deduplication',
+      type: 'switch',
+      condition: { field: 'operation', value: 'contact_create' },
+      mode: 'advanced',
+    },
+
+    // Contact Bulk Operations
+    {
+      id: 'contacts',
+      title: 'Contacts (JSON Array)',
+      type: 'code',
+      placeholder:
+        '[{"first_name": "John", "last_name": "Doe", "email": "john@example.com", "title": "CEO"}]',
+      condition: { field: 'operation', value: 'contact_bulk_create' },
+      required: true,
+    },
+    {
+      id: 'contacts',
+      title: 'Contact IDs (JSON Array)',
+      type: 'code',
+      placeholder: '["contact_id_1", "contact_id_2"]',
+      condition: { field: 'operation', value: 'contact_bulk_update' },
+    },
+    {
+      id: 'contact_attributes',
+      title: 'Contact Attributes (JSON Array of Objects)',
+      type: 'code',
+      placeholder:
+        '[{"id": "contact_id_1", "first_name": "John", "title": "VP Sales", "owner_id": "user_id"}]',
+      condition: { field: 'operation', value: 'contact_bulk_update' },
+    },
+    {
+      id: 'async',
+      title: 'Force Asynchronous Processing',
+      type: 'switch',
+      condition: {
+        field: 'operation',
+        value: ['contact_bulk_update', 'account_bulk_update'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'run_dedupe',
+      title: 'Run Deduplication',
+      type: 'switch',
+      condition: {
+        field: 'operation',
+        value: ['contact_bulk_create', 'account_bulk_create'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'append_label_names',
+      title: 'Append Label Names (JSON Array)',
+      type: 'code',
+      placeholder: '["Hot Lead", "Q4 Outreach"]',
+      condition: {
+        field: 'operation',
+        value: ['contact_bulk_create', 'account_bulk_create'],
+      },
+      mode: 'advanced',
+    },
+
+    // Account Fields
+    {
+      id: 'account_name',
+      title: 'Account Name',
+      type: 'short-input',
+      placeholder: 'Company name',
+      condition: { field: 'operation', value: ['account_create', 'account_update'] },
+      required: { field: 'operation', value: 'account_create' },
+    },
+    {
+      id: 'phone',
+      title: 'Phone Number',
+      type: 'short-input',
+      placeholder: 'Company phone',
+      condition: { field: 'operation', value: ['account_create', 'account_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'account_stage_id',
+      title: 'Account Stage ID',
+      type: 'short-input',
+      placeholder: 'Apollo account stage ID',
+      condition: { field: 'operation', value: ['account_create', 'account_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'raw_address',
+      title: 'Account Address',
+      type: 'short-input',
+      placeholder: '123 Main St, San Francisco, CA',
+      condition: { field: 'operation', value: ['account_create', 'account_update'] },
+      mode: 'advanced',
+    },
+
+    // Account Search Fields
+    {
+      id: 'q_keywords',
+      title: 'Keywords',
+      type: 'short-input',
+      placeholder: 'Search keywords',
+      condition: {
+        field: 'operation',
+        value: ['people_search', 'contact_search'],
+      },
+    },
+    {
+      id: 'account_stage_ids',
+      title: 'Account Stage IDs',
+      type: 'code',
+      placeholder: '["stage_id_1", "stage_id_2"]',
+      condition: { field: 'operation', value: 'account_search' },
+      mode: 'advanced',
+    },
+    {
+      id: 'account_label_ids',
+      title: 'Account Label IDs',
+      type: 'code',
+      placeholder: '["label_id_1", "label_id_2"]',
+      condition: { field: 'operation', value: 'account_search' },
+      mode: 'advanced',
+    },
+
+    // Account Bulk Operations
+    {
+      id: 'accounts',
+      title: 'Accounts (JSON Array)',
+      type: 'code',
+      placeholder: '[{"name": "Company A", "domain": "companya.com", "phone": "+1234567890"}]',
+      condition: { field: 'operation', value: 'account_bulk_create' },
+      required: true,
+    },
+    {
+      id: 'accounts',
+      title: 'Account IDs (JSON Array)',
+      type: 'code',
+      placeholder: '["account_id_1", "account_id_2"]',
+      condition: { field: 'operation', value: 'account_bulk_update' },
+    },
+    {
+      id: 'account_bulk_update_name',
+      title: 'Uniform Name (used with Account IDs)',
+      type: 'short-input',
+      placeholder: 'Updated Account Name',
+      condition: { field: 'operation', value: 'account_bulk_update' },
+      mode: 'advanced',
+    },
+    {
+      id: 'account_bulk_update_owner_id',
+      title: 'Uniform Owner ID (used with Account IDs)',
+      type: 'short-input',
+      placeholder: 'Apollo user ID',
+      condition: { field: 'operation', value: 'account_bulk_update' },
+      mode: 'advanced',
+    },
+    {
+      id: 'account_bulk_update_account_stage_id',
+      title: 'Uniform Account Stage ID (used with Account IDs)',
+      type: 'short-input',
+      placeholder: 'Apollo account stage ID',
+      condition: { field: 'operation', value: 'account_bulk_update' },
+      mode: 'advanced',
+    },
+    {
+      id: 'account_attributes',
+      title: 'Account Attributes (JSON Array of Objects)',
+      type: 'code',
+      placeholder:
+        '[{"id": "account_id_1", "name": "Acme", "owner_id": "user_id", "account_stage_id": "stage_id"}]',
+      condition: { field: 'operation', value: 'account_bulk_update' },
+    },
+
+    // Opportunity Fields
+    {
+      id: 'opportunity_name',
+      title: 'Opportunity Name',
+      type: 'short-input',
+      placeholder: 'Opportunity name',
+      condition: { field: 'operation', value: ['opportunity_create', 'opportunity_update'] },
+      required: { field: 'operation', value: 'opportunity_create' },
+    },
+    {
+      id: 'amount',
+      title: 'Amount',
+      type: 'short-input',
+      placeholder: 'Plain number, no commas (e.g., 50000)',
+      condition: { field: 'operation', value: ['opportunity_create', 'opportunity_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'opportunity_stage_id',
+      title: 'Opportunity Stage ID',
+      type: 'short-input',
+      placeholder: 'Apollo opportunity_stage_id',
+      condition: { field: 'operation', value: ['opportunity_create', 'opportunity_update'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'closed_date',
+      title: 'Close Date',
+      type: 'short-input',
+      placeholder: 'YYYY-MM-DD (e.g., 2024-12-31)',
+      condition: { field: 'operation', value: ['opportunity_create', 'opportunity_update'] },
+      mode: 'advanced',
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a date in YYYY-MM-DD format based on the user's description.
+Examples:
+- "end of this quarter" -> Calculate the last day of the current quarter in YYYY-MM-DD format
+- "next month" -> Calculate 30 days from now in YYYY-MM-DD format
+- "in 2 weeks" -> Calculate 14 days from now in YYYY-MM-DD format
+- "end of year" -> December 31st of the current year in YYYY-MM-DD format
+
+Return ONLY the date string in YYYY-MM-DD format - no explanations, no quotes, no extra text.`,
+        placeholder: 'Describe the date (e.g., "end of quarter", "in 2 weeks")...',
+        generationType: 'timestamp',
+      },
+    },
+
+    // Opportunity Get
+    {
+      id: 'opportunity_id',
+      title: 'Opportunity ID',
+      type: 'short-input',
+      placeholder: 'Apollo opportunity ID',
+      condition: { field: 'operation', value: ['opportunity_get', 'opportunity_update'] },
+      required: true,
+    },
+
+    // Opportunity / Account / Task Search shared sort
+    {
+      id: 'sort_by_field',
+      title: 'Sort By Field',
+      type: 'short-input',
+      placeholder: 'Sort field name',
+      condition: {
+        field: 'operation',
+        value: ['opportunity_search', 'account_search', 'task_search', 'contact_search'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'sort_ascending',
+      title: 'Sort Ascending',
+      type: 'switch',
+      condition: { field: 'operation', value: ['account_search', 'contact_search'] },
+      mode: 'advanced',
+    },
+
+    // Sequence Search Fields
+    {
+      id: 'q_name',
+      title: 'Sequence Name',
+      type: 'short-input',
+      placeholder: 'Search by sequence name',
+      condition: { field: 'operation', value: 'sequence_search' },
+    },
+
+    // Sequence Add Fields
+    {
+      id: 'sequence_id',
+      title: 'Sequence ID',
+      type: 'short-input',
+      placeholder: 'Apollo sequence ID',
+      condition: { field: 'operation', value: 'sequence_add' },
+      required: true,
+    },
+    {
+      id: 'contact_ids',
+      title: 'Contact IDs (JSON Array)',
+      type: 'code',
+      placeholder: '["contact_id_1", "contact_id_2"]',
+      condition: { field: 'operation', value: ['sequence_add', 'task_create'] },
+      required: { field: 'operation', value: 'task_create' },
+    },
+    {
+      id: 'sequence_add_label_names',
+      title: 'Label Names (JSON Array)',
+      type: 'code',
+      placeholder: '["Hot Lead", "Q4 Outreach"]',
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+    {
+      id: 'send_email_from_email_account_id',
+      title: 'Send Email From (Email Account ID)',
+      type: 'short-input',
+      placeholder: 'Apollo email account ID',
+      condition: { field: 'operation', value: 'sequence_add' },
+      required: true,
+    },
+    {
+      id: 'send_email_from_email_address',
+      title: 'Send Email From (Email Address)',
+      type: 'short-input',
+      placeholder: 'sender@example.com',
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+    {
+      id: 'sequence_same_company_in_same_campaign',
+      title: 'Allow Same Company in Same Campaign',
+      type: 'switch',
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+    {
+      id: 'contacts_without_ownership_permission',
+      title: 'Add Contacts Without Ownership Permission',
+      type: 'switch',
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+    {
+      id: 'add_if_in_queue',
+      title: 'Add If In Queue',
+      type: 'switch',
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+    {
+      id: 'contact_verification_skipped',
+      title: 'Skip Contact Verification',
+      type: 'switch',
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+    {
+      id: 'sequence_user_id',
+      title: 'Acting User ID',
+      type: 'short-input',
+      placeholder: 'Apollo user ID',
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+    {
+      id: 'sequence_status',
+      title: 'Initial Status',
+      type: 'dropdown',
+      options: [
+        { label: 'Active', id: 'active' },
+        { label: 'Paused', id: 'paused' },
+      ],
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+    {
+      id: 'auto_unpause_at',
+      title: 'Auto Unpause At',
+      type: 'short-input',
+      placeholder: 'ISO 8601 (e.g., 2024-12-31T23:59:59Z)',
+      condition: { field: 'operation', value: 'sequence_add' },
+      mode: 'advanced',
+    },
+
+    // Task Create Fields
+    {
+      id: 'user_id',
+      title: 'Assigned User ID',
+      type: 'short-input',
+      placeholder: 'Apollo user ID',
+      condition: { field: 'operation', value: 'task_create' },
+      required: true,
+    },
+    {
+      id: 'priority',
+      title: 'Priority',
+      type: 'dropdown',
+      options: [
+        { label: 'High', id: 'high' },
+        { label: 'Medium', id: 'medium' },
+        { label: 'Low', id: 'low' },
+      ],
+      value: () => 'medium',
+      condition: { field: 'operation', value: 'task_create' },
+    },
+    {
+      id: 'type',
+      title: 'Task Type',
+      type: 'dropdown',
+      options: [
+        { label: 'Call', id: 'call' },
+        { label: 'Outreach Manual Email', id: 'outreach_manual_email' },
+        { label: 'LinkedIn — Connect', id: 'linkedin_step_connect' },
+        { label: 'LinkedIn — Message', id: 'linkedin_step_message' },
+        { label: 'LinkedIn — View Profile', id: 'linkedin_step_view_profile' },
+        { label: 'LinkedIn — Interact with Post', id: 'linkedin_step_interact_post' },
+        { label: 'Action Item', id: 'action_item' },
+      ],
+      value: () => 'action_item',
+      condition: { field: 'operation', value: 'task_create' },
+      required: true,
+    },
+    {
+      id: 'status',
+      title: 'Status',
+      type: 'dropdown',
+      options: [
+        { label: 'Scheduled', id: 'scheduled' },
+        { label: 'Completed', id: 'completed' },
+        { label: 'Skipped', id: 'skipped' },
+      ],
+      value: () => 'scheduled',
+      condition: { field: 'operation', value: 'task_create' },
+      required: true,
+    },
+    {
+      id: 'due_at',
+      title: 'Due Date',
+      type: 'short-input',
+      placeholder: 'ISO 8601 (e.g., 2024-12-31T23:59:59Z)',
+      condition: { field: 'operation', value: 'task_create' },
+      required: true,
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate an ISO 8601 timestamp based on the user's description.
+The timestamp should be in the format: YYYY-MM-DDTHH:MM:SSZ (UTC timezone).
+Examples:
+- "tomorrow at 5pm" -> Calculate tomorrow's date at 17:00:00Z
+- "end of day" -> Today's date at 23:59:59Z
+- "next week" -> 7 days from now at 17:00:00Z
+- "in 3 days" -> 3 days from now at 17:00:00Z
+
+Return ONLY the timestamp string in ISO 8601 format - no explanations, no quotes, no extra text.`,
+        placeholder: 'Describe the due date (e.g., "tomorrow at 5pm", "end of week")...',
+        generationType: 'timestamp',
+      },
+    },
+    {
+      id: 'task_notes',
+      title: 'Task Notes',
+      type: 'long-input',
+      placeholder: 'Notes for the task',
+      condition: { field: 'operation', value: 'task_create' },
+      mode: 'advanced',
+    },
+
+    // Task Search Fields
+    {
+      id: 'open_factor_names',
+      title: 'Open Factor Names',
+      type: 'code',
+      placeholder: '["task_types"]',
+      condition: { field: 'operation', value: 'task_search' },
+      mode: 'advanced',
+    },
+
+    // Pagination
+    {
+      id: 'page',
+      title: 'Page Number',
+      type: 'short-input',
+      placeholder: '1',
+      condition: {
+        field: 'operation',
+        value: [
+          'people_search',
+          'organization_search',
+          'contact_search',
+          'account_search',
+          'opportunity_search',
+          'sequence_search',
+          'task_search',
+        ],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'per_page',
+      title: 'Results Per Page',
+      type: 'short-input',
+      placeholder: '25 (max: 100)',
+      condition: {
+        field: 'operation',
+        value: [
+          'people_search',
+          'organization_search',
+          'contact_search',
+          'account_search',
+          'opportunity_search',
+          'sequence_search',
+          'task_search',
+        ],
+      },
+      mode: 'advanced',
+    },
+  ],
+  tools: {
+    access: [
+      'apollo_people_search',
+      'apollo_people_enrich',
+      'apollo_people_bulk_enrich',
+      'apollo_organization_search',
+      'apollo_organization_enrich',
+      'apollo_organization_bulk_enrich',
+      'apollo_contact_create',
+      'apollo_contact_update',
+      'apollo_contact_search',
+      'apollo_contact_bulk_create',
+      'apollo_contact_bulk_update',
+      'apollo_account_create',
+      'apollo_account_update',
+      'apollo_account_search',
+      'apollo_account_bulk_create',
+      'apollo_account_bulk_update',
+      'apollo_opportunity_create',
+      'apollo_opportunity_search',
+      'apollo_opportunity_get',
+      'apollo_opportunity_update',
+      'apollo_sequence_search',
+      'apollo_sequence_add_contacts',
+      'apollo_task_create',
+      'apollo_task_search',
+      'apollo_email_accounts',
+    ],
+    config: {
+      tool: (params) => {
+        switch (params.operation) {
+          case 'people_search':
+            return 'apollo_people_search'
+          case 'people_enrich':
+            return 'apollo_people_enrich'
+          case 'people_bulk_enrich':
+            return 'apollo_people_bulk_enrich'
+          case 'organization_search':
+            return 'apollo_organization_search'
+          case 'organization_enrich':
+            return 'apollo_organization_enrich'
+          case 'organization_bulk_enrich':
+            return 'apollo_organization_bulk_enrich'
+          case 'contact_create':
+            return 'apollo_contact_create'
+          case 'contact_update':
+            return 'apollo_contact_update'
+          case 'contact_search':
+            return 'apollo_contact_search'
+          case 'contact_bulk_create':
+            return 'apollo_contact_bulk_create'
+          case 'contact_bulk_update':
+            return 'apollo_contact_bulk_update'
+          case 'account_create':
+            return 'apollo_account_create'
+          case 'account_update':
+            return 'apollo_account_update'
+          case 'account_search':
+            return 'apollo_account_search'
+          case 'account_bulk_create':
+            return 'apollo_account_bulk_create'
+          case 'account_bulk_update':
+            return 'apollo_account_bulk_update'
+          case 'opportunity_create':
+            return 'apollo_opportunity_create'
+          case 'opportunity_search':
+            return 'apollo_opportunity_search'
+          case 'opportunity_get':
+            return 'apollo_opportunity_get'
+          case 'opportunity_update':
+            return 'apollo_opportunity_update'
+          case 'sequence_search':
+            return 'apollo_sequence_search'
+          case 'sequence_add':
+            return 'apollo_sequence_add_contacts'
+          case 'task_create':
+            return 'apollo_task_create'
+          case 'task_search':
+            return 'apollo_task_search'
+          case 'email_accounts':
+            return 'apollo_email_accounts'
+          default:
+            throw new Error(`Invalid Apollo operation: ${params.operation}`)
+        }
+      },
+      params: (params) => {
+        const { apiKey, ...rest } = params
+        const parsedParams: Record<string, unknown> = { apiKey, ...rest }
+
+        const parseJsonField = (field: string) => {
+          const value = (rest as Record<string, unknown>)[field]
+          if (typeof value === 'string' && value.trim() !== '') {
+            parsedParams[field] = JSON.parse(value)
+          }
+        }
+
+        try {
+          for (const field of [
+            'person_titles',
+            'person_locations',
+            'person_seniorities',
+            'organization_names',
+            'organization_locations',
+            'organization_not_locations',
+            'organization_ids',
+            'q_organization_domains_list',
+            'contact_email_status',
+            'organization_num_employees_ranges',
+            'q_organization_keyword_tags',
+            'contact_stage_ids',
+            'contact_label_ids',
+            'account_stage_ids',
+            'account_label_ids',
+            'people',
+            'domains',
+            'organizations',
+            'contacts',
+            'accounts',
+            'contact_ids',
+            'contact_attributes',
+            'account_attributes',
+            'label_names',
+            'sequence_add_label_names',
+            'append_label_names',
+            'typed_custom_fields',
+            'open_factor_names',
+          ]) {
+            parseJsonField(field)
+          }
+        } catch (error) {
+          const message = getErrorMessage(error)
+          throw new Error(`Invalid JSON input: ${message}`)
+        }
+
+        const splitBulkUpdateInput = (
+          raw: unknown
+        ): { ids?: string[]; attributes?: Array<Record<string, unknown>> } => {
+          if (!Array.isArray(raw)) return {}
+          const ids: string[] = []
+          const attributes: Array<Record<string, unknown>> = []
+          for (const item of raw) {
+            if (typeof item === 'string') {
+              ids.push(item)
+              continue
+            }
+            if (item && typeof item === 'object' && 'id' in item) {
+              const obj = item as Record<string, unknown>
+              const id = obj.id
+              if (typeof id !== 'string') continue
+              const otherKeys = Object.keys(obj).filter((k) => k !== 'id')
+              if (otherKeys.length === 0) {
+                ids.push(id)
+              } else {
+                attributes.push(obj)
+              }
+            }
+          }
+          return {
+            ids: ids.length > 0 ? ids : undefined,
+            attributes: attributes.length > 0 ? attributes : undefined,
+          }
+        }
+
+        if (params.operation === 'organization_bulk_enrich') {
+          // Back-compat: workflows saved before the `organizations` → `domains` rename stored an
+          // array of { name, domain? } objects (or plain strings) under `organizations`. Derive
+          // `domains` from it so those workflows keep running without manual migration.
+          if (parsedParams.domains === undefined && parsedParams.organizations !== undefined) {
+            const legacy = parsedParams.organizations
+            if (Array.isArray(legacy)) {
+              const derived = legacy
+                .map((item) => {
+                  if (typeof item === 'string') return item
+                  if (item && typeof item === 'object' && 'domain' in item) {
+                    const domain = (item as Record<string, unknown>).domain
+                    return typeof domain === 'string' ? domain : undefined
+                  }
+                  return undefined
+                })
+                .filter((domain): domain is string => typeof domain === 'string' && domain !== '')
+              if (derived.length > 0) parsedParams.domains = derived
+            }
+          }
+          parsedParams.organizations = undefined
+        }
+
+        if (params.operation === 'contact_bulk_update') {
+          const { ids, attributes } = splitBulkUpdateInput(parsedParams.contacts)
+          if (attributes) {
+            if (parsedParams.contact_attributes === undefined) {
+              parsedParams.contact_attributes = attributes
+            }
+          } else if (ids && parsedParams.contact_ids === undefined) {
+            parsedParams.contact_ids = ids
+          }
+          parsedParams.contacts = undefined
+        }
+
+        if (params.operation === 'account_bulk_update') {
+          const { ids, attributes } = splitBulkUpdateInput(parsedParams.accounts)
+          if (attributes) {
+            if (parsedParams.account_attributes === undefined) {
+              parsedParams.account_attributes = attributes
+            }
+          } else if (ids && parsedParams.account_ids === undefined) {
+            parsedParams.account_ids = ids
+          }
+          parsedParams.accounts = undefined
+          if (rest.account_bulk_update_name) {
+            parsedParams.name = rest.account_bulk_update_name
+          }
+          if (rest.account_bulk_update_owner_id) {
+            parsedParams.owner_id = rest.account_bulk_update_owner_id
+          }
+          if (rest.account_bulk_update_account_stage_id) {
+            parsedParams.account_stage_id = rest.account_bulk_update_account_stage_id
+          }
+          parsedParams.account_bulk_update_name = undefined
+          parsedParams.account_bulk_update_owner_id = undefined
+          parsedParams.account_bulk_update_account_stage_id = undefined
+        }
+
+        if (params.operation === 'contact_create') {
+          if (rest.contact_run_dedupe !== undefined) {
+            parsedParams.run_dedupe = rest.contact_run_dedupe
+          }
+          parsedParams.contact_run_dedupe = undefined
+        }
+
+        if (params.operation === 'account_create' || params.operation === 'account_update') {
+          if (rest.account_name) parsedParams.name = rest.account_name
+          parsedParams.account_name = undefined
+        }
+
+        if (params.operation === 'account_update') {
+          parsedParams.account_id = rest.account_id
+        }
+
+        if (params.operation === 'sequence_add') {
+          if (parsedParams.sequence_add_label_names !== undefined) {
+            parsedParams.label_names = parsedParams.sequence_add_label_names
+          }
+          parsedParams.sequence_add_label_names = undefined
+          if (rest.sequence_user_id !== undefined && rest.sequence_user_id !== '') {
+            parsedParams.user_id = rest.sequence_user_id
+          }
+          parsedParams.sequence_user_id = undefined
+          if (rest.sequence_status !== undefined && rest.sequence_status !== '') {
+            parsedParams.status = rest.sequence_status
+          }
+          parsedParams.sequence_status = undefined
+        }
+
+        if (params.operation === 'task_create') {
+          if (rest.task_notes !== undefined) {
+            parsedParams.note = rest.task_notes
+          }
+          parsedParams.task_notes = undefined
+        }
+
+        if (
+          params.operation === 'opportunity_create' ||
+          params.operation === 'opportunity_update'
+        ) {
+          if (rest.opportunity_name) parsedParams.name = rest.opportunity_name
+          parsedParams.opportunity_name = undefined
+        }
+
+        if (parsedParams.page) parsedParams.page = Number(parsedParams.page)
+        if (parsedParams.per_page) parsedParams.per_page = Number(parsedParams.per_page)
+
+        if (parsedParams.amount !== undefined && parsedParams.amount !== '') {
+          parsedParams.amount = String(parsedParams.amount)
+        }
+
+        return parsedParams
+      },
+    },
+  },
+  inputs: {
+    operation: { type: 'string', description: 'Apollo operation to perform' },
+  },
+  outputs: {
+    people: {
+      type: 'json',
+      description:
+        'Array of people (people_search): [{id, first_name, last_name, name, title, email, organization_name, linkedin_url, phone_numbers}]',
+    },
+    person: {
+      type: 'json',
+      description:
+        'Enriched person (people_enrich): {id, first_name, last_name, name, title, email, organization_name, linkedin_url, phone_numbers}',
+    },
+    matches: {
+      type: 'json',
+      description: 'Array of enriched people (people_bulk_enrich), null entries indicate no match',
+    },
+    organizations: {
+      type: 'json',
+      description:
+        'Array of organizations (organization_search, organization_bulk_enrich): [{id, name, website_url, linkedin_url, industry, phone, employees, founded_year}]',
+    },
+    organization: {
+      type: 'json',
+      description:
+        'Enriched organization (organization_enrich): {id, name, website_url, linkedin_url, industry, phone, employees, founded_year}',
+    },
+    contact: {
+      type: 'json',
+      description:
+        'Contact (contact_create, contact_update): {id, first_name, last_name, email, title, account_id, owner_id, created_at}',
+    },
+    contacts: {
+      type: 'json',
+      description: 'Array of contacts (contact_search)',
+    },
+    created_contacts: {
+      type: 'json',
+      description: 'Newly created contacts (contact_bulk_create)',
+    },
+    existing_contacts: {
+      type: 'json',
+      description: 'Existing contacts (contact_bulk_create with dedupe)',
+    },
+    account: {
+      type: 'json',
+      description:
+        'Account (account_create, account_update): {id, name, domain, website_url, phone, owner_id, account_stage_id, created_at}',
+    },
+    accounts: {
+      type: 'json',
+      description: 'Array of accounts (account_search)',
+    },
+    created_accounts: {
+      type: 'json',
+      description: 'Newly created accounts (account_bulk_create)',
+    },
+    existing_accounts: {
+      type: 'json',
+      description: 'Existing accounts (account_bulk_create with dedupe)',
+    },
+    failed_accounts: {
+      type: 'json',
+      description: 'Accounts that failed (account_bulk_create)',
+    },
+    account_ids: {
+      type: 'json',
+      description: 'IDs of updated accounts (account_bulk_update)',
+    },
+    entity_progress_job: {
+      type: 'json',
+      description: 'Async job descriptor (contact_bulk_update, account_bulk_update async path)',
+    },
+    opportunity: {
+      type: 'json',
+      description:
+        'Opportunity (opportunity_create, opportunity_update, opportunity_get): {id, name, account_id, amount, opportunity_stage_id, owner_id, closed_date, is_closed, is_won, currency, created_at}',
+    },
+    opportunities: {
+      type: 'json',
+      description: 'Array of opportunities (opportunity_search)',
+    },
+    sequences: {
+      type: 'json',
+      description:
+        'Array of sequences (sequence_search): [{id, name, active, num_steps, num_contacts, created_at}]',
+    },
+    added: {
+      type: 'json',
+      description:
+        'Contacts added to sequence (sequence_add): [{id, first_name, last_name, email, status}]',
+    },
+    skipped: {
+      type: 'json',
+      description: 'Contacts skipped by sequence add (sequence_add)',
+    },
+    skipped_contact_ids: {
+      type: 'json',
+      description: 'Skipped contact IDs (sequence_add): array of IDs or {id: reason} map',
+    },
+    emailer_campaign: {
+      type: 'json',
+      description: 'Emailer campaign details (sequence_add): {id, name}',
+    },
+    sequence_id: {
+      type: 'string',
+      description: 'Sequence ID contacts were added to (sequence_add)',
+    },
+    tasks: {
+      type: 'json',
+      description:
+        'Array of tasks (task_create, task_search): [{id, user_id, contact_id, type, priority, status, due_at, note, created_at}]',
+    },
+    email_accounts: {
+      type: 'json',
+      description:
+        'Linked email accounts (email_accounts): [{id, email, type, active, default, linked_at}]',
+    },
+    pagination: {
+      type: 'json',
+      description: 'Pagination info (contact_search, account_search, task_search)',
+    },
+    page: { type: 'number', description: 'Current page (search operations)' },
+    per_page: { type: 'number', description: 'Results per page (search operations)' },
+    total_entries: {
+      type: 'number',
+      description: 'Total entries matching search (search operations)',
+    },
+    total_added: { type: 'number', description: 'Contacts added (sequence_add)' },
+    total_skipped: { type: 'number', description: 'Contacts skipped (sequence_add)' },
+    total_submitted: {
+      type: 'number',
+      description: 'Total submitted (contact_bulk_create, account_bulk_create)',
+    },
+    created: {
+      type: 'boolean',
+      description: 'Created flag for single-item create operations',
+    },
+    updated: { type: 'boolean', description: 'Updated flag for single-item update operations' },
+    found: { type: 'boolean', description: 'Found flag (opportunity_get)' },
+    enriched: {
+      type: 'boolean',
+      description: 'Enriched flag (people_enrich, organization_enrich)',
+    },
+    message: { type: 'string', description: 'Message (bulk_update operations)' },
+    job_id: { type: 'string', description: 'Async job ID (bulk_update operations)' },
+    total: {
+      type: 'number',
+      description: 'Total count (organization_bulk_enrich requested domains; email_accounts count)',
+    },
+    total_requested_enrichments: {
+      type: 'number',
+      description: 'Total requested enrichments (people_bulk_enrich)',
+    },
+    unique_enriched_records: {
+      type: 'number',
+      description: 'Unique enriched records (people_bulk_enrich)',
+    },
+    unique_domains: {
+      type: 'number',
+      description: 'Unique domains processed (organization_bulk_enrich)',
+    },
+    missing_records: {
+      type: 'number',
+      description: 'Missing records (people_bulk_enrich, organization_bulk_enrich)',
+    },
+    credits_consumed: {
+      type: 'number',
+      description: 'Credits consumed (people_bulk_enrich)',
+    },
+  },
+}
+
+export const ApolloBlockMeta = {
+  tags: ['enrichment', 'sales-engagement'],
+  url: 'https://www.apollo.io',
+  templates: [
+    {
+      icon: Users,
+      title: 'Apollo lead enrichment',
+      prompt:
+        'Build a workflow that watches my leads table for new entries, enriches each lead with company size, funding, tech stack, and decision-maker contacts using Apollo and web search, then updates the table with the enriched information.',
+      modules: ['tables', 'agent', 'workflows'],
+      category: 'sales',
+      tags: ['sales', 'crm', 'automation', 'research'],
+    },
+    {
+      icon: ApolloIcon,
+      title: 'Apollo prospect researcher',
+      prompt:
+        'Create an agent that takes a company name, deep-researches them across the web and Apollo, finds key decision-makers, recent news, funding rounds, and pain points, then compiles a prospect brief I can review before outreach.',
+      modules: ['agent', 'files', 'workflows'],
+      category: 'sales',
+      tags: ['sales', 'research'],
+    },
+    {
+      icon: ApolloIcon,
+      title: 'Apollo ICP account builder',
+      prompt:
+        'Build a workflow that runs an Apollo organization search for accounts matching my ideal customer profile — industry, headcount, and tech stack — creates each as an Apollo account, and writes the new target list to a table for the SDR team.',
+      modules: ['tables', 'agent', 'workflows'],
+      category: 'sales',
+      tags: ['sales', 'crm', 'automation'],
+    },
+    {
+      icon: Users,
+      title: 'Apollo buying committee mapper',
+      prompt:
+        'Create a workflow that takes a target account, runs an Apollo people search across the relevant titles, enriches each contact with verified email and role, and writes a mapped buying committee to a table so reps know exactly who to engage.',
+      modules: ['tables', 'agent', 'workflows'],
+      category: 'sales',
+      tags: ['sales', 'research', 'crm'],
+    },
+    {
+      icon: ApolloIcon,
+      title: 'Apollo enrichment to HubSpot',
+      prompt:
+        'Build a workflow that on a new inbound signup enriches the person and their company with Apollo, scores fit against my ICP, and creates or updates the matching contact and company in HubSpot with the enriched fields.',
+      modules: ['agent', 'workflows'],
+      category: 'sales',
+      tags: ['sales', 'crm', 'automation'],
+      alsoIntegrations: ['hubspot'],
+    },
+    {
+      icon: ApolloIcon,
+      title: 'Apollo pipeline tracker',
+      prompt:
+        'Create a scheduled workflow that searches Apollo opportunities by stage, summarizes new and at-risk deals with an agent, logs the snapshot to a pipeline table, and posts a daily deal-movement digest to the sales Slack channel.',
+      modules: ['scheduled', 'tables', 'agent', 'workflows'],
+      category: 'sales',
+      tags: ['sales', 'reporting', 'crm'],
+      alsoIntegrations: ['slack'],
+    },
+    {
+      icon: Users,
+      title: 'Apollo contact freshness sweep',
+      prompt:
+        'Build a scheduled workflow that pulls contacts from my CRM, bulk-enriches them through Apollo to refresh titles, emails, and company data, and bulk-updates the records so the database stays accurate for outbound.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'sales',
+      tags: ['sales', 'crm', 'automation', 'enrichment'],
+    },
+  ],
+  skills: [
+    {
+      name: 'build-prospect-list',
+      description:
+        'Search Apollo for people matching an ideal customer profile and produce a targeted prospect list. Use for outbound prospecting and territory building.',
+      content:
+        '# Build Prospect List\n\nFind decision-makers that match an ICP and assemble a clean prospect list.\n\n## Steps\n1. Translate the ICP into an Apollo people search — job titles, seniorities, locations, and company size or industry filters.\n2. Run the search, paging through results up to the requested count.\n3. For each person capture name, title, company, verified email status, and LinkedIn URL.\n4. Write the deduplicated prospects to a table for review or sequencing.\n\n## Output\nReport how many prospects matched and the filters used. Flag any with unverified or missing emails.',
+    },
+    {
+      name: 'enrich-contacts',
+      description:
+        'Enrich one or many contacts through Apollo to refresh titles, emails, phones, and company data. Use to keep CRM records accurate before outreach.',
+      content:
+        '# Enrich Contacts\n\nFill in or refresh missing contact data using Apollo enrichment.\n\n## Steps\n1. Gather the contacts to enrich — a single person, or a batch for bulk enrich.\n2. Provide the strongest identifiers available (email, name plus company domain).\n3. Run people enrich or bulk enrich, optionally revealing personal emails or phone numbers.\n4. Merge the returned fields back onto each record, keeping existing values when enrichment returns nothing.\n\n## Output\nReport how many records were enriched versus left unmatched, and which fields were newly filled. Note any credits consumed.',
+    },
+    {
+      name: 'sync-leads-to-crm',
+      description:
+        'Create or update Apollo contacts and accounts from an inbound lead, then map them into your CRM. Use to route new signups into pipeline.',
+      content:
+        '# Sync Leads to CRM\n\nTurn an inbound lead into structured Apollo records.\n\n## Steps\n1. Take the lead details and enrich the person and their company through Apollo.\n2. Create or update the matching Apollo account for the company.\n3. Create or update the contact, linking it to the account and setting owner and stage.\n4. Pass the enriched fields to the connected CRM to create or update the matching records.\n\n## Output\nReport whether each record was created or updated, with the resulting contact and account IDs.',
+    },
+    {
+      name: 'add-prospects-to-sequence',
+      description:
+        'Search for matching contacts and add them to an Apollo email sequence. Use to launch or top up outbound campaigns.',
+      content:
+        '# Add Prospects to Sequence\n\nEnroll the right contacts into an outbound sequence.\n\n## Steps\n1. Identify the target sequence by name or ID, and confirm the sending email account.\n2. Gather the contact IDs to enroll — from a prior search or a provided list.\n3. Add the contacts to the sequence with the chosen sending account and initial status.\n4. Review which contacts were added versus skipped.\n\n## Output\nReport totals added and skipped, and the reason for each skip (already enrolled, unverified, missing ownership).',
+    },
+    {
+      name: 'pipeline-deal-digest',
+      description:
+        'Search Apollo opportunities by stage and summarize new and at-risk deals into a digest. Use for recurring pipeline reviews.',
+      content:
+        '# Pipeline Deal Digest\n\nSummarize opportunity movement for a sales pipeline review.\n\n## Steps\n1. Search Apollo opportunities filtered by the stages you care about.\n2. For each deal capture name, amount, stage, owner, and close date.\n3. Group deals into new, advancing, and at-risk (stalled or past close date).\n4. Write a concise digest grouped by category.\n\n## Output\nA short digest: deal counts and total value per stage, with at-risk deals called out by name, owner, and reason.',
+    },
+  ],
+} as const satisfies BlockMeta

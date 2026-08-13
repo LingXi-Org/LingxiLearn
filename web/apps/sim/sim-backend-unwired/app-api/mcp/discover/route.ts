@@ -1,0 +1,117 @@
+import { db } from '@sim/db'
+import { workflowMcpServer, workspace } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { and, eq, isNull, sql } from 'drizzle-orm'
+import { type NextRequest, NextResponse } from 'next/server'
+import { checkHybridAuth } from '@/lib/auth/hybrid'
+import { getBaseUrl } from '@/lib/core/utils/urls'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { listAccessibleWorkspaceRowsForUser } from '@/lib/workspaces/utils'
+
+const logger = createLogger('McpDiscoverAPI')
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * Discover all MCP servers available to the authenticated user.
+ */
+export const GET = withRouteHandler(async (request: NextRequest) => {
+  try {
+    const auth = await checkHybridAuth(request, { requireWorkflowId: false })
+
+    if (!auth.success || !auth.userId) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required. Provide X-API-Key header.' },
+        { status: 401 }
+      )
+    }
+
+    const userId = auth.userId
+
+    if (auth.apiKeyType === 'workspace' && !auth.workspaceId) {
+      return NextResponse.json(
+        { success: false, error: 'Workspace API key missing workspace scope' },
+        { status: 403 }
+      )
+    }
+
+    const accessibleRows = await listAccessibleWorkspaceRowsForUser(userId)
+    const accessibleWorkspaceIds = accessibleRows.map((row) => row.workspace.id)
+
+    const workspaceIds =
+      auth.apiKeyType === 'workspace' && auth.workspaceId
+        ? accessibleWorkspaceIds.filter((workspaceId) => workspaceId === auth.workspaceId)
+        : accessibleWorkspaceIds
+
+    if (workspaceIds.length === 0) {
+      return NextResponse.json({ success: true, servers: [] })
+    }
+
+    const servers = await db
+      .select({
+        id: workflowMcpServer.id,
+        name: workflowMcpServer.name,
+        description: workflowMcpServer.description,
+        workspaceId: workflowMcpServer.workspaceId,
+        workspaceName: workspace.name,
+        isPublic: workflowMcpServer.isPublic,
+        workspaceAllowsPersonalApiKeys: workspace.allowPersonalApiKeys,
+        createdAt: workflowMcpServer.createdAt,
+        toolCount: sql<number>`(
+          SELECT COUNT(*)::int 
+          FROM "workflow_mcp_tool" 
+          WHERE "workflow_mcp_tool"."server_id" = "workflow_mcp_server"."id"
+            AND "workflow_mcp_tool"."archived_at" IS NULL
+        )`.as('tool_count'),
+      })
+      .from(workflowMcpServer)
+      .leftJoin(workspace, eq(workflowMcpServer.workspaceId, workspace.id))
+      .where(
+        and(
+          sql`${workflowMcpServer.workspaceId} IN ${workspaceIds}`,
+          isNull(workflowMcpServer.deletedAt),
+          isNull(workspace.archivedAt)
+        )
+      )
+      .orderBy(workflowMcpServer.name)
+
+    const baseUrl = getBaseUrl()
+
+    /**
+     * `/api/mcp/serve/[serverId]` rejects a personal key on a workspace that
+     * disabled them, so listing those servers would advertise unusable
+     * endpoints. Public servers skip that check entirely, so they stay listed.
+     */
+    const visibleServers =
+      auth.apiKeyType === 'personal'
+        ? servers.filter((server) => server.isPublic || server.workspaceAllowsPersonalApiKeys)
+        : servers
+
+    const formattedServers = visibleServers.map((server) => ({
+      id: server.id,
+      name: server.name,
+      description: server.description,
+      workspace: { id: server.workspaceId, name: server.workspaceName },
+      toolCount: server.toolCount || 0,
+      createdAt: server.createdAt,
+      url: `${baseUrl}/api/mcp/serve/${server.id}`,
+    }))
+
+    logger.info(`User ${userId} discovered ${formattedServers.length} MCP servers`)
+
+    return NextResponse.json({
+      success: true,
+      servers: formattedServers,
+      authentication: {
+        method: 'API Key',
+        header: 'X-API-Key',
+      },
+    })
+  } catch (error) {
+    logger.error('Error discovering MCP servers:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to discover MCP servers' },
+      { status: 500 }
+    )
+  }
+})

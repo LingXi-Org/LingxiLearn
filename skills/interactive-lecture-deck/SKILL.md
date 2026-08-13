@@ -1,25 +1,20 @@
 ---
 name: interactive-lecture-deck
 description: >-
-  Create a fixed-size, self-contained HTML lecture deck with visual-first academic slides,
-  structured `lecture.json` zoom data, anchored explanations, protected viewport behavior, a local
-  presentation runtime, and an offline standalone build. Use for lessons, problem walkthroughs,
-  course slides, zoomable HTML presentations, lecture manifests, and step-by-step teaching visuals.
-  Use the bundled templates, schemas, references, runtime, build script, and validator. Chinese
-  display name: 交互式讲解课件。Chinese display description: 生成视觉优先、可缩放、可离线运行的中文 HTML 课程课件及讲解数据。
+  Build a fixed-size, self-contained HTML lecture deck with visual slides, structured explanations, zoom data, and offline delivery.
 license: MIT
 compatibility: LingxiGraph Agent Skills runtime with Python 3
 metadata:
   author: LingXi-Org
   version: 1.1.0
   display-name: 交互式讲解课件
-  display-description: 生成视觉优先、可缩放、可离线运行的中文 HTML 课程课件及讲解数据。
+  display-description: 构建包含视觉化幻灯片、结构化讲解数据和离线交付能力的自包含 HTML 课程课件。
   output-language: zh-CN
   output-contract: interactive-lecture-deck-result.v2.1
   execution-mode: artifact-generation
 ---
 
-# Lecture Deck
+# Lecture Builder
 
 ## Role
 

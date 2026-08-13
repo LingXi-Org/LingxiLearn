@@ -1,0 +1,1347 @@
+import { CloudWatchIcon } from '@/components/icons'
+import type { BlockConfig, BlockMeta } from '@/blocks/types'
+import { IntegrationType } from '@/blocks/types'
+import type {
+  CloudWatchDescribeAlarmHistoryResponse,
+  CloudWatchDescribeAlarmsResponse,
+  CloudWatchDescribeLogGroupsResponse,
+  CloudWatchDescribeLogStreamsResponse,
+  CloudWatchFilterLogEventsResponse,
+  CloudWatchGetLogEventsResponse,
+  CloudWatchGetMetricStatisticsResponse,
+  CloudWatchListMetricsResponse,
+  CloudWatchMuteAlarmResponse,
+  CloudWatchPutLogGroupRetentionResponse,
+  CloudWatchPutMetricDataResponse,
+  CloudWatchQueryLogsResponse,
+  CloudWatchUnmuteAlarmResponse,
+} from '@/tools/cloudwatch/types'
+
+/*
+ * Canonical basic/advanced pairs, shared by the card sentences below. Listing
+ * both members is what keeps the sentence working for an advanced-mode user,
+ * who has only the typed-in name filled. Log Insights takes a set of groups
+ * under its own canonical id, so it cannot reuse the single-group pair.
+ */
+const LOG_GROUPS_FIELD = ['logGroupSelector', 'logGroupNamesInput'] as const
+const LOG_GROUP_FIELD = ['logGroupNameSelector', 'logGroupNameInput'] as const
+const LOG_STREAM_FIELD = ['logStreamNameSelector', 'logStreamNameInput'] as const
+
+export const CloudWatchBlock: BlockConfig<
+  | CloudWatchQueryLogsResponse
+  | CloudWatchDescribeLogGroupsResponse
+  | CloudWatchDescribeLogStreamsResponse
+  | CloudWatchGetLogEventsResponse
+  | CloudWatchFilterLogEventsResponse
+  | CloudWatchDescribeAlarmsResponse
+  | CloudWatchDescribeAlarmHistoryResponse
+  | CloudWatchListMetricsResponse
+  | CloudWatchGetMetricStatisticsResponse
+  | CloudWatchPutMetricDataResponse
+  | CloudWatchMuteAlarmResponse
+  | CloudWatchUnmuteAlarmResponse
+  | CloudWatchPutLogGroupRetentionResponse
+> = {
+  type: 'cloudwatch',
+  name: 'CloudWatch',
+  description: 'Query and monitor AWS CloudWatch logs, metrics, and alarms',
+  longDescription:
+    'Integrate AWS CloudWatch into workflows. Run Log Insights queries, list log groups, retrieve log events, list and get metrics, and monitor alarms. Requires AWS access key and secret access key.',
+  category: 'tools',
+  integrationType: IntegrationType.Observability,
+  docsLink: 'https://docs.sim.ai/integrations/cloudwatch',
+  bgColor: 'linear-gradient(45deg, #B0084D 0%, #FF4F8B 100%)',
+  iconColor: '#FF4F8B',
+  icon: CloudWatchIcon,
+  canvasPresentation: {
+    defaultTitle: 'CloudWatch',
+    sentences: {
+      byOperation: {
+        query_logs: [
+          { text: 'Run an Insights query against', field: LOG_GROUPS_FIELD, core: true },
+          { text: ', up to', field: 'limit', after: 'results' },
+        ],
+        filter_log_events: [
+          { text: 'Search log group', field: LOG_GROUP_FIELD, core: true },
+          { text: 'for pattern', field: 'filterPattern' },
+          { text: ', in streams under', field: 'filterLogStreamPrefix' },
+        ],
+        describe_log_groups: [
+          'List log groups',
+          { text: 'starting with', field: 'prefix' },
+          { text: ', up to', field: 'limit', after: 'groups' },
+        ],
+        get_log_events: [
+          { text: 'Read events from log stream', field: LOG_STREAM_FIELD, core: true },
+          { text: 'in', field: LOG_GROUP_FIELD },
+          { text: ', up to', field: 'limit', after: 'events' },
+        ],
+        describe_log_streams: [
+          { text: 'List log streams in', field: LOG_GROUP_FIELD, core: true },
+          { text: ', starting with', field: 'streamPrefix' },
+        ],
+        put_log_group_retention: [
+          { text: 'Keep logs in', field: LOG_GROUP_FIELD, core: true },
+          { text: 'for', field: 'retentionInDays' },
+        ],
+        list_metrics: [
+          'List metrics',
+          { text: 'in namespace', field: 'metricNamespace' },
+          { text: ', named', field: 'metricName' },
+        ],
+        get_metric_statistics: [
+          { text: 'Read statistics for metric', field: 'metricName', core: true },
+          { text: 'in', field: 'metricNamespace' },
+          { text: ', computing', field: 'metricStatistics' },
+        ],
+        put_metric_data: [
+          { text: 'Publish', field: 'metricValue', core: true },
+          { text: 'to metric', field: 'metricName', core: true },
+          { text: 'in', field: 'metricNamespace' },
+        ],
+        describe_alarms: [
+          'List alarms',
+          { text: 'starting with', field: 'alarmNamePrefix' },
+          { text: ', in state', field: 'stateValue' },
+        ],
+        describe_alarm_history: [
+          'Read alarm history',
+          { text: 'for', field: 'historyAlarmName' },
+          { text: ', of type', field: 'historyItemType' },
+        ],
+        mute_alarm: [
+          { text: 'Mute', field: 'alarmNames', core: true },
+          { text: 'under rule', field: 'muteRuleName' },
+        ],
+        unmute_alarm: [{ text: 'Unmute the alarms under rule', field: 'muteRuleName', core: true }],
+      },
+    },
+  },
+  subBlocks: [
+    {
+      id: 'operation',
+      title: 'Operation',
+      type: 'dropdown',
+      options: [
+        { label: 'Query Logs (Insights)', id: 'query_logs' },
+        { label: 'Filter Log Events', id: 'filter_log_events' },
+        { label: 'Describe Log Groups', id: 'describe_log_groups' },
+        { label: 'Get Log Events', id: 'get_log_events' },
+        { label: 'Describe Log Streams', id: 'describe_log_streams' },
+        { label: 'Set Log Group Retention', id: 'put_log_group_retention' },
+        { label: 'List Metrics', id: 'list_metrics' },
+        { label: 'Get Metric Statistics', id: 'get_metric_statistics' },
+        { label: 'Publish Metric', id: 'put_metric_data' },
+        { label: 'Describe Alarms', id: 'describe_alarms' },
+        { label: 'Describe Alarm History', id: 'describe_alarm_history' },
+        { label: 'Mute Alarm', id: 'mute_alarm' },
+        { label: 'Unmute Alarm', id: 'unmute_alarm' },
+      ],
+      value: () => 'query_logs',
+    },
+    {
+      id: 'awsRegion',
+      title: 'AWS Region',
+      type: 'short-input',
+      placeholder: 'us-east-1',
+      required: true,
+    },
+    {
+      id: 'awsAccessKeyId',
+      title: 'AWS Access Key ID',
+      type: 'short-input',
+      placeholder: 'AKIA...',
+      password: true,
+      required: true,
+    },
+    {
+      id: 'awsSecretAccessKey',
+      title: 'AWS Secret Access Key',
+      type: 'short-input',
+      placeholder: 'Your secret access key',
+      password: true,
+      required: true,
+    },
+    {
+      id: 'logGroupSelector',
+      title: 'Log Group',
+      type: 'file-selector',
+      canonicalParamId: 'logGroupNames',
+      selectorKey: 'cloudwatch.logGroups',
+      dependsOn: ['awsAccessKeyId', 'awsSecretAccessKey', 'awsRegion'],
+      placeholder: 'Select a log group',
+      condition: { field: 'operation', value: 'query_logs' },
+      required: { field: 'operation', value: 'query_logs' },
+      mode: 'basic',
+    },
+    {
+      id: 'logGroupNamesInput',
+      title: 'Log Group Names',
+      type: 'short-input',
+      canonicalParamId: 'logGroupNames',
+      placeholder: '/aws/lambda/my-func, /aws/ecs/my-service',
+      condition: { field: 'operation', value: 'query_logs' },
+      required: { field: 'operation', value: 'query_logs' },
+      mode: 'advanced',
+    },
+    {
+      id: 'queryString',
+      title: 'Query',
+      type: 'code',
+      placeholder: 'fields @timestamp, @message\n| sort @timestamp desc\n| limit 20',
+      condition: { field: 'operation', value: 'query_logs' },
+      required: { field: 'operation', value: 'query_logs' },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a CloudWatch Log Insights query based on the user's description.
+The query language supports: fields, filter, stats, sort, limit, parse, display.
+Common patterns:
+- fields @timestamp, @message | sort @timestamp desc | limit 20
+- filter @message like /ERROR/ | stats count(*) by bin(1h)
+- stats avg(duration) as avgDuration by functionName | sort avgDuration desc
+- filter @message like /Exception/ | parse @message "* Exception: *" as prefix, errorMsg
+- stats count(*) as requestCount by status | sort requestCount desc
+
+Return ONLY the query — no explanations, no markdown code blocks.`,
+        placeholder: 'Describe what you want to find in the logs...',
+      },
+    },
+    {
+      id: 'startTime',
+      title: 'Start Time (Unix epoch seconds)',
+      type: 'short-input',
+      placeholder: 'e.g., 1711900800',
+      condition: {
+        field: 'operation',
+        value: ['query_logs', 'get_log_events', 'get_metric_statistics', 'filter_log_events'],
+      },
+      required: { field: 'operation', value: ['query_logs', 'get_metric_statistics'] },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a Unix epoch timestamp (in seconds) based on the user's description of a point in time.
+
+Return ONLY the numeric timestamp - no explanations, no quotes, no extra text.`,
+        placeholder: 'Describe the start time (e.g., "1 hour ago", "beginning of today")...',
+        generationType: 'timestamp',
+      },
+    },
+    {
+      id: 'endTime',
+      title: 'End Time (Unix epoch seconds)',
+      type: 'short-input',
+      placeholder: 'e.g., 1711987200',
+      condition: {
+        field: 'operation',
+        value: ['query_logs', 'get_log_events', 'get_metric_statistics', 'filter_log_events'],
+      },
+      required: { field: 'operation', value: ['query_logs', 'get_metric_statistics'] },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a Unix epoch timestamp (in seconds) based on the user's description of a point in time.
+
+Return ONLY the numeric timestamp - no explanations, no quotes, no extra text.`,
+        placeholder: 'Describe the end time (e.g., "now", "end of yesterday")...',
+        generationType: 'timestamp',
+      },
+    },
+    {
+      id: 'prefix',
+      title: 'Log Group Name Prefix',
+      type: 'short-input',
+      placeholder: '/aws/lambda/',
+      condition: { field: 'operation', value: 'describe_log_groups' },
+    },
+    {
+      id: 'logGroupNameSelector',
+      title: 'Log Group',
+      type: 'file-selector',
+      canonicalParamId: 'logGroupName',
+      selectorKey: 'cloudwatch.logGroups',
+      dependsOn: ['awsAccessKeyId', 'awsSecretAccessKey', 'awsRegion'],
+      placeholder: 'Select a log group',
+      condition: {
+        field: 'operation',
+        value: [
+          'get_log_events',
+          'describe_log_streams',
+          'filter_log_events',
+          'put_log_group_retention',
+        ],
+      },
+      required: {
+        field: 'operation',
+        value: [
+          'get_log_events',
+          'describe_log_streams',
+          'filter_log_events',
+          'put_log_group_retention',
+        ],
+      },
+      mode: 'basic',
+    },
+    {
+      id: 'logGroupNameInput',
+      title: 'Log Group Name',
+      type: 'short-input',
+      canonicalParamId: 'logGroupName',
+      placeholder: '/aws/lambda/my-func',
+      condition: {
+        field: 'operation',
+        value: [
+          'get_log_events',
+          'describe_log_streams',
+          'filter_log_events',
+          'put_log_group_retention',
+        ],
+      },
+      required: {
+        field: 'operation',
+        value: [
+          'get_log_events',
+          'describe_log_streams',
+          'filter_log_events',
+          'put_log_group_retention',
+        ],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'streamPrefix',
+      title: 'Stream Name Prefix',
+      type: 'short-input',
+      placeholder: '2024/03/31/',
+      condition: { field: 'operation', value: 'describe_log_streams' },
+    },
+    {
+      id: 'filterPattern',
+      title: 'Filter Pattern',
+      type: 'short-input',
+      placeholder: 'ERROR, ?ERROR ?Exception, %timeout%',
+      condition: { field: 'operation', value: 'filter_log_events' },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a CloudWatch Logs filter pattern based on the user's description.
+Common patterns:
+- ERROR (matches lines containing ERROR)
+- ?ERROR ?Exception (matches lines containing either term)
+- "Failed to connect" (matches an exact phrase)
+- %timeout%error% (matches lines matching a regular expression)
+
+Return ONLY the filter pattern - no explanations, no extra text.`,
+        placeholder: 'Describe what you want to find in the logs...',
+      },
+    },
+    {
+      id: 'filterLogStreamPrefix',
+      title: 'Log Stream Name Prefix',
+      type: 'short-input',
+      placeholder: '2024/03/31/',
+      condition: { field: 'operation', value: 'filter_log_events' },
+      mode: 'advanced',
+      description: 'Only search log streams whose name starts with this prefix',
+    },
+    {
+      id: 'startFromHead',
+      title: 'Return Oldest First',
+      type: 'dropdown',
+      options: [
+        { label: 'No (newest first)', id: 'false' },
+        { label: 'Yes (oldest first)', id: 'true' },
+      ],
+      value: () => 'true',
+      condition: { field: 'operation', value: 'filter_log_events' },
+      mode: 'advanced',
+    },
+    {
+      id: 'retentionInDays',
+      title: 'Retention Period',
+      type: 'dropdown',
+      options: [
+        { label: 'Never expire', id: '' },
+        { label: '1 day', id: '1' },
+        { label: '3 days', id: '3' },
+        { label: '5 days', id: '5' },
+        { label: '1 week', id: '7' },
+        { label: '2 weeks', id: '14' },
+        { label: '1 month', id: '30' },
+        { label: '2 months', id: '60' },
+        { label: '3 months', id: '90' },
+        { label: '4 months', id: '120' },
+        { label: '5 months', id: '150' },
+        { label: '6 months', id: '180' },
+        { label: '1 year', id: '365' },
+        { label: '13 months', id: '400' },
+        { label: '18 months', id: '545' },
+        { label: '2 years', id: '731' },
+        { label: '3 years', id: '1096' },
+        { label: '5 years', id: '1827' },
+        { label: '6 years', id: '2192' },
+        { label: '7 years', id: '2557' },
+        { label: '8 years', id: '2922' },
+        { label: '9 years', id: '3288' },
+        { label: '10 years', id: '3653' },
+      ],
+      value: () => '30',
+      condition: { field: 'operation', value: 'put_log_group_retention' },
+      description:
+        'How long to keep log events. Choose "Never expire" to remove any retention limit.',
+    },
+    {
+      id: 'logStreamNameSelector',
+      title: 'Log Stream',
+      type: 'file-selector',
+      canonicalParamId: 'logStreamName',
+      selectorKey: 'cloudwatch.logStreams',
+      dependsOn: ['awsAccessKeyId', 'awsSecretAccessKey', 'awsRegion', 'logGroupNameSelector'],
+      placeholder: 'Select a log stream',
+      condition: { field: 'operation', value: 'get_log_events' },
+      required: { field: 'operation', value: 'get_log_events' },
+      mode: 'basic',
+    },
+    {
+      id: 'logStreamNameInput',
+      title: 'Log Stream Name',
+      type: 'short-input',
+      canonicalParamId: 'logStreamName',
+      placeholder: '2024/03/31/[$LATEST]abc123',
+      condition: { field: 'operation', value: 'get_log_events' },
+      required: { field: 'operation', value: 'get_log_events' },
+      mode: 'advanced',
+    },
+    {
+      id: 'metricNamespace',
+      title: 'Namespace',
+      type: 'short-input',
+      placeholder: 'e.g., AWS/EC2, AWS/Lambda, Custom/MyApp',
+      condition: {
+        field: 'operation',
+        value: ['list_metrics', 'get_metric_statistics', 'put_metric_data'],
+      },
+      required: {
+        field: 'operation',
+        value: ['get_metric_statistics', 'put_metric_data'],
+      },
+    },
+    {
+      id: 'metricName',
+      title: 'Metric Name',
+      type: 'short-input',
+      placeholder: 'e.g., CPUUtilization, Invocations, ErrorCount',
+      condition: {
+        field: 'operation',
+        value: ['list_metrics', 'get_metric_statistics', 'put_metric_data'],
+      },
+      required: {
+        field: 'operation',
+        value: ['get_metric_statistics', 'put_metric_data'],
+      },
+    },
+    {
+      id: 'recentlyActive',
+      title: 'Recently Active Only',
+      type: 'switch',
+      condition: { field: 'operation', value: 'list_metrics' },
+      mode: 'advanced',
+    },
+    {
+      id: 'metricValue',
+      title: 'Value',
+      type: 'short-input',
+      placeholder: 'e.g., 1, 42.5',
+      condition: { field: 'operation', value: 'put_metric_data' },
+      required: { field: 'operation', value: 'put_metric_data' },
+    },
+    {
+      id: 'metricUnit',
+      title: 'Unit',
+      type: 'dropdown',
+      options: [
+        { label: 'None', id: 'None' },
+        { label: 'Count', id: 'Count' },
+        { label: 'Percent', id: 'Percent' },
+        { label: 'Seconds', id: 'Seconds' },
+        { label: 'Milliseconds', id: 'Milliseconds' },
+        { label: 'Microseconds', id: 'Microseconds' },
+        { label: 'Bytes', id: 'Bytes' },
+        { label: 'Kilobytes', id: 'Kilobytes' },
+        { label: 'Megabytes', id: 'Megabytes' },
+        { label: 'Gigabytes', id: 'Gigabytes' },
+        { label: 'Terabytes', id: 'Terabytes' },
+        { label: 'Bits', id: 'Bits' },
+        { label: 'Kilobits', id: 'Kilobits' },
+        { label: 'Megabits', id: 'Megabits' },
+        { label: 'Gigabits', id: 'Gigabits' },
+        { label: 'Terabits', id: 'Terabits' },
+        { label: 'Bytes/Second', id: 'Bytes/Second' },
+        { label: 'Kilobytes/Second', id: 'Kilobytes/Second' },
+        { label: 'Megabytes/Second', id: 'Megabytes/Second' },
+        { label: 'Gigabytes/Second', id: 'Gigabytes/Second' },
+        { label: 'Terabytes/Second', id: 'Terabytes/Second' },
+        { label: 'Bits/Second', id: 'Bits/Second' },
+        { label: 'Kilobits/Second', id: 'Kilobits/Second' },
+        { label: 'Megabits/Second', id: 'Megabits/Second' },
+        { label: 'Gigabits/Second', id: 'Gigabits/Second' },
+        { label: 'Terabits/Second', id: 'Terabits/Second' },
+        { label: 'Count/Second', id: 'Count/Second' },
+      ],
+      value: () => 'None',
+      condition: { field: 'operation', value: 'put_metric_data' },
+    },
+    {
+      id: 'publishDimensions',
+      title: 'Dimensions',
+      type: 'table',
+      columns: ['name', 'value'],
+      condition: { field: 'operation', value: 'put_metric_data' },
+    },
+    {
+      id: 'metricPeriod',
+      title: 'Period (seconds)',
+      type: 'short-input',
+      placeholder: 'e.g., 60, 300, 3600',
+      condition: { field: 'operation', value: 'get_metric_statistics' },
+      required: { field: 'operation', value: 'get_metric_statistics' },
+    },
+    {
+      id: 'metricStatistics',
+      title: 'Statistics',
+      type: 'dropdown',
+      options: [
+        { label: 'Average', id: 'Average' },
+        { label: 'Sum', id: 'Sum' },
+        { label: 'Minimum', id: 'Minimum' },
+        { label: 'Maximum', id: 'Maximum' },
+        { label: 'Sample Count', id: 'SampleCount' },
+      ],
+      condition: { field: 'operation', value: 'get_metric_statistics' },
+      required: { field: 'operation', value: 'get_metric_statistics' },
+    },
+    {
+      id: 'metricDimensions',
+      title: 'Dimensions',
+      type: 'table',
+      columns: ['name', 'value'],
+      condition: { field: 'operation', value: 'get_metric_statistics' },
+    },
+    {
+      id: 'alarmNamePrefix',
+      title: 'Alarm Name Prefix',
+      type: 'short-input',
+      placeholder: 'my-service-',
+      condition: { field: 'operation', value: 'describe_alarms' },
+    },
+    {
+      id: 'stateValue',
+      title: 'State',
+      type: 'dropdown',
+      options: [
+        { label: 'All States', id: '' },
+        { label: 'OK', id: 'OK' },
+        { label: 'ALARM', id: 'ALARM' },
+        { label: 'INSUFFICIENT_DATA', id: 'INSUFFICIENT_DATA' },
+      ],
+      value: () => '',
+      condition: { field: 'operation', value: 'describe_alarms' },
+    },
+    {
+      id: 'alarmType',
+      title: 'Alarm Type',
+      type: 'dropdown',
+      options: [
+        { label: 'All Types', id: '' },
+        { label: 'Metric Alarm', id: 'MetricAlarm' },
+        { label: 'Composite Alarm', id: 'CompositeAlarm' },
+      ],
+      value: () => '',
+      condition: { field: 'operation', value: 'describe_alarms' },
+    },
+    {
+      id: 'historyAlarmName',
+      title: 'Alarm Name',
+      type: 'short-input',
+      placeholder: 'my-service-high-cpu',
+      condition: { field: 'operation', value: 'describe_alarm_history' },
+      description: 'Exact alarm name. Omit to retrieve history across all alarms.',
+    },
+    {
+      id: 'historyItemType',
+      title: 'History Item Type',
+      type: 'dropdown',
+      options: [
+        { label: 'All Types', id: '' },
+        { label: 'State Update', id: 'StateUpdate' },
+        { label: 'Configuration Update', id: 'ConfigurationUpdate' },
+        { label: 'Action', id: 'Action' },
+        { label: 'Contributor State Update', id: 'AlarmContributorStateUpdate' },
+        { label: 'Contributor Action', id: 'AlarmContributorAction' },
+      ],
+      value: () => '',
+      condition: { field: 'operation', value: 'describe_alarm_history' },
+      mode: 'advanced',
+    },
+    {
+      id: 'alarmHistoryStartDate',
+      title: 'Start Date (Unix epoch seconds)',
+      type: 'short-input',
+      placeholder: 'e.g., 1711900800',
+      condition: { field: 'operation', value: 'describe_alarm_history' },
+      mode: 'advanced',
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a Unix epoch timestamp (in seconds) based on the user's description of a point in time.
+
+Return ONLY the numeric timestamp - no explanations, no quotes, no extra text.`,
+        placeholder: 'Describe the start of the history window (e.g., "7 days ago")...',
+        generationType: 'timestamp',
+      },
+    },
+    {
+      id: 'alarmHistoryEndDate',
+      title: 'End Date (Unix epoch seconds)',
+      type: 'short-input',
+      placeholder: 'e.g., 1711987200',
+      condition: { field: 'operation', value: 'describe_alarm_history' },
+      mode: 'advanced',
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a Unix epoch timestamp (in seconds) based on the user's description of a point in time.
+
+Return ONLY the numeric timestamp - no explanations, no quotes, no extra text.`,
+        placeholder: 'Describe the end of the history window (e.g., "now")...',
+        generationType: 'timestamp',
+      },
+    },
+    {
+      id: 'scanBy',
+      title: 'Sort Order',
+      type: 'dropdown',
+      options: [
+        { label: 'Newest First', id: 'TimestampDescending' },
+        { label: 'Oldest First', id: 'TimestampAscending' },
+      ],
+      value: () => 'TimestampDescending',
+      condition: { field: 'operation', value: 'describe_alarm_history' },
+      mode: 'advanced',
+    },
+    {
+      id: 'muteRuleName',
+      title: 'Mute Rule Name',
+      type: 'short-input',
+      placeholder: 'my-mute-rule',
+      condition: { field: 'operation', value: ['mute_alarm', 'unmute_alarm'] },
+      required: { field: 'operation', value: ['mute_alarm', 'unmute_alarm'] },
+    },
+    {
+      id: 'alarmNames',
+      title: 'Alarm Names',
+      type: 'short-input',
+      placeholder: 'my-alarm-1, my-alarm-2',
+      condition: { field: 'operation', value: 'mute_alarm' },
+      required: { field: 'operation', value: 'mute_alarm' },
+    },
+    {
+      id: 'durationValue',
+      title: 'Duration',
+      type: 'short-input',
+      placeholder: '1',
+      condition: { field: 'operation', value: 'mute_alarm' },
+      required: { field: 'operation', value: 'mute_alarm' },
+    },
+    {
+      id: 'durationUnit',
+      title: 'Duration Unit',
+      type: 'dropdown',
+      options: [
+        { label: 'Minutes', id: 'minutes' },
+        { label: 'Hours', id: 'hours' },
+        { label: 'Days', id: 'days' },
+      ],
+      value: () => 'hours',
+      condition: { field: 'operation', value: 'mute_alarm' },
+      required: { field: 'operation', value: 'mute_alarm' },
+    },
+    {
+      id: 'muteDescription',
+      title: 'Description',
+      type: 'short-input',
+      placeholder: 'Why these alarms are being muted',
+      condition: { field: 'operation', value: 'mute_alarm' },
+      mode: 'advanced',
+    },
+    {
+      id: 'muteStartDate',
+      title: 'Start Date',
+      type: 'short-input',
+      placeholder: 'e.g., 1711900800',
+      condition: { field: 'operation', value: 'mute_alarm' },
+      mode: 'advanced',
+      description: 'Unix epoch seconds. Defaults to now (mute starts immediately).',
+    },
+    {
+      id: 'limit',
+      title: 'Limit',
+      type: 'short-input',
+      placeholder: '100',
+      condition: {
+        field: 'operation',
+        value: [
+          'query_logs',
+          'describe_log_groups',
+          'get_log_events',
+          'describe_log_streams',
+          'filter_log_events',
+          'list_metrics',
+          'describe_alarms',
+          'describe_alarm_history',
+        ],
+      },
+      mode: 'advanced',
+    },
+  ],
+  tools: {
+    access: [
+      'cloudwatch_query_logs',
+      'cloudwatch_filter_log_events',
+      'cloudwatch_describe_log_groups',
+      'cloudwatch_get_log_events',
+      'cloudwatch_describe_log_streams',
+      'cloudwatch_put_log_group_retention',
+      'cloudwatch_list_metrics',
+      'cloudwatch_get_metric_statistics',
+      'cloudwatch_put_metric_data',
+      'cloudwatch_describe_alarms',
+      'cloudwatch_describe_alarm_history',
+      'cloudwatch_mute_alarm',
+      'cloudwatch_unmute_alarm',
+    ],
+    config: {
+      tool: (params) => {
+        switch (params.operation) {
+          case 'query_logs':
+            return 'cloudwatch_query_logs'
+          case 'describe_log_groups':
+            return 'cloudwatch_describe_log_groups'
+          case 'get_log_events':
+            return 'cloudwatch_get_log_events'
+          case 'describe_log_streams':
+            return 'cloudwatch_describe_log_streams'
+          case 'filter_log_events':
+            return 'cloudwatch_filter_log_events'
+          case 'put_log_group_retention':
+            return 'cloudwatch_put_log_group_retention'
+          case 'list_metrics':
+            return 'cloudwatch_list_metrics'
+          case 'get_metric_statistics':
+            return 'cloudwatch_get_metric_statistics'
+          case 'put_metric_data':
+            return 'cloudwatch_put_metric_data'
+          case 'describe_alarms':
+            return 'cloudwatch_describe_alarms'
+          case 'describe_alarm_history':
+            return 'cloudwatch_describe_alarm_history'
+          case 'mute_alarm':
+            return 'cloudwatch_mute_alarm'
+          case 'unmute_alarm':
+            return 'cloudwatch_unmute_alarm'
+          default:
+            throw new Error(`Invalid CloudWatch operation: ${params.operation}`)
+        }
+      },
+      params: (params) => {
+        const { operation, startTime, endTime, limit, ...rest } = params
+
+        const awsRegion = rest.awsRegion
+        const awsAccessKeyId = rest.awsAccessKeyId
+        const awsSecretAccessKey = rest.awsSecretAccessKey
+        const parsedLimit = limit ? Number.parseInt(String(limit), 10) : undefined
+
+        switch (operation) {
+          case 'query_logs': {
+            const logGroupNames = rest.logGroupNames
+            if (!logGroupNames) {
+              throw new Error('Log group names are required')
+            }
+            if (!startTime) {
+              throw new Error('Start time is required')
+            }
+            if (!endTime) {
+              throw new Error('End time is required')
+            }
+
+            const groupNames =
+              typeof logGroupNames === 'string'
+                ? logGroupNames
+                    .split(',')
+                    .map((n: string) => n.trim())
+                    .filter(Boolean)
+                : logGroupNames
+
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              logGroupNames: groupNames,
+              queryString: rest.queryString,
+              startTime: Number(startTime),
+              endTime: Number(endTime),
+              ...(parsedLimit !== undefined && { limit: parsedLimit }),
+            }
+          }
+
+          case 'describe_log_groups':
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              ...(rest.prefix && { prefix: rest.prefix }),
+              ...(parsedLimit !== undefined && { limit: parsedLimit }),
+            }
+
+          case 'get_log_events': {
+            if (!rest.logGroupName) {
+              throw new Error('Log group name is required')
+            }
+            if (!rest.logStreamName) {
+              throw new Error('Log stream name is required')
+            }
+
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              logGroupName: rest.logGroupName,
+              logStreamName: rest.logStreamName,
+              ...(startTime && { startTime: Number(startTime) }),
+              ...(endTime && { endTime: Number(endTime) }),
+              ...(parsedLimit !== undefined && { limit: parsedLimit }),
+            }
+          }
+
+          case 'describe_log_streams': {
+            if (!rest.logGroupName) {
+              throw new Error('Log group name is required')
+            }
+
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              logGroupName: rest.logGroupName,
+              ...(rest.streamPrefix && { prefix: rest.streamPrefix }),
+              ...(parsedLimit !== undefined && { limit: parsedLimit }),
+            }
+          }
+
+          case 'filter_log_events': {
+            if (!rest.logGroupName) {
+              throw new Error('Log group name is required')
+            }
+
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              logGroupName: rest.logGroupName,
+              ...(rest.filterPattern && { filterPattern: rest.filterPattern }),
+              ...(rest.filterLogStreamPrefix && {
+                logStreamNamePrefix: rest.filterLogStreamPrefix,
+              }),
+              ...(startTime && { startTime: Number(startTime) }),
+              ...(endTime && { endTime: Number(endTime) }),
+              ...(rest.startFromHead !== undefined && {
+                startFromHead: rest.startFromHead === 'true' || rest.startFromHead === true,
+              }),
+              ...(parsedLimit !== undefined && { limit: parsedLimit }),
+            }
+          }
+
+          case 'put_log_group_retention': {
+            if (!rest.logGroupName) {
+              throw new Error('Log group name is required')
+            }
+
+            const retentionRaw = rest.retentionInDays
+            const parsedRetention =
+              retentionRaw === undefined || retentionRaw === ''
+                ? undefined
+                : Number.parseInt(String(retentionRaw), 10)
+
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              logGroupName: rest.logGroupName,
+              ...(parsedRetention !== undefined && { retentionInDays: parsedRetention }),
+            }
+          }
+
+          case 'list_metrics':
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              ...(rest.metricNamespace && { namespace: rest.metricNamespace }),
+              ...(rest.metricName && { metricName: rest.metricName }),
+              ...(rest.recentlyActive && { recentlyActive: true }),
+              ...(parsedLimit !== undefined && { limit: parsedLimit }),
+            }
+
+          case 'get_metric_statistics': {
+            if (!rest.metricNamespace) {
+              throw new Error('Namespace is required')
+            }
+            if (!rest.metricName) {
+              throw new Error('Metric name is required')
+            }
+            if (!startTime) {
+              throw new Error('Start time is required')
+            }
+            if (!endTime) {
+              throw new Error('End time is required')
+            }
+            if (!rest.metricPeriod) {
+              throw new Error('Period is required')
+            }
+
+            const stat = rest.metricStatistics
+            if (!stat) {
+              throw new Error('Statistics is required')
+            }
+
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              namespace: rest.metricNamespace,
+              metricName: rest.metricName,
+              startTime: Number(startTime),
+              endTime: Number(endTime),
+              period: Number(rest.metricPeriod),
+              statistics: Array.isArray(stat) ? stat : [stat],
+              ...(rest.metricDimensions && {
+                dimensions: (() => {
+                  const dims = rest.metricDimensions
+                  if (typeof dims === 'string') return dims
+                  if (Array.isArray(dims)) {
+                    const obj: Record<string, string> = {}
+                    for (const row of dims) {
+                      const name = row.cells?.name
+                      const value = row.cells?.value
+                      if (name && value !== undefined) obj[name] = String(value)
+                    }
+                    return JSON.stringify(obj)
+                  }
+                  return JSON.stringify(dims)
+                })(),
+              }),
+            }
+          }
+
+          case 'put_metric_data': {
+            if (!rest.metricNamespace) {
+              throw new Error('Namespace is required')
+            }
+            if (!rest.metricName) {
+              throw new Error('Metric name is required')
+            }
+            if (rest.metricValue === undefined || rest.metricValue === '') {
+              throw new Error('Metric value is required')
+            }
+            const numericValue = Number(rest.metricValue)
+            if (!Number.isFinite(numericValue)) {
+              throw new Error('Metric value must be a finite number')
+            }
+
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              namespace: rest.metricNamespace,
+              metricName: rest.metricName,
+              value: numericValue,
+              ...(rest.metricUnit && rest.metricUnit !== 'None' && { unit: rest.metricUnit }),
+              ...(rest.publishDimensions && {
+                dimensions: (() => {
+                  const dims = rest.publishDimensions
+                  if (typeof dims === 'string') return dims
+                  if (Array.isArray(dims)) {
+                    const obj: Record<string, string> = {}
+                    for (const row of dims) {
+                      const name = row.cells?.name
+                      const value = row.cells?.value
+                      if (name && value !== undefined) obj[name] = String(value)
+                    }
+                    return JSON.stringify(obj)
+                  }
+                  return JSON.stringify(dims)
+                })(),
+              }),
+            }
+          }
+
+          case 'describe_alarms':
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              ...(rest.alarmNamePrefix && { alarmNamePrefix: rest.alarmNamePrefix }),
+              ...(rest.stateValue && { stateValue: rest.stateValue }),
+              ...(rest.alarmType && { alarmType: rest.alarmType }),
+              ...(parsedLimit !== undefined && { limit: parsedLimit }),
+            }
+
+          case 'describe_alarm_history':
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              ...(rest.historyAlarmName && { alarmName: rest.historyAlarmName }),
+              ...(rest.historyItemType && { historyItemType: rest.historyItemType }),
+              ...(rest.alarmHistoryStartDate && {
+                startDate: Number(rest.alarmHistoryStartDate),
+              }),
+              ...(rest.alarmHistoryEndDate && { endDate: Number(rest.alarmHistoryEndDate) }),
+              ...(rest.scanBy && { scanBy: rest.scanBy }),
+              ...(parsedLimit !== undefined && { limit: parsedLimit }),
+            }
+
+          case 'mute_alarm': {
+            const alarmNames = rest.alarmNames
+            if (!alarmNames) {
+              throw new Error('Alarm names are required')
+            }
+
+            const names =
+              typeof alarmNames === 'string'
+                ? alarmNames
+                    .split(',')
+                    .map((n: string) => n.trim())
+                    .filter(Boolean)
+                : alarmNames
+
+            if (!Array.isArray(names) || names.length === 0) {
+              throw new Error('At least one alarm name is required')
+            }
+
+            const durationValueRaw = rest.durationValue
+            const parsedDurationValue =
+              typeof durationValueRaw === 'number'
+                ? durationValueRaw
+                : Number.parseInt(String(durationValueRaw ?? ''), 10)
+            if (!Number.isFinite(parsedDurationValue) || parsedDurationValue < 1) {
+              throw new Error('Duration must be a positive integer')
+            }
+
+            const startDateRaw = rest.muteStartDate
+            const parsedStartDate =
+              startDateRaw === undefined || startDateRaw === ''
+                ? undefined
+                : typeof startDateRaw === 'number'
+                  ? startDateRaw
+                  : Number.parseInt(String(startDateRaw), 10)
+            if (parsedStartDate !== undefined && !Number.isFinite(parsedStartDate)) {
+              throw new Error('Start date must be a Unix epoch in seconds')
+            }
+
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              muteRuleName: rest.muteRuleName,
+              alarmNames: names,
+              durationValue: parsedDurationValue,
+              durationUnit: rest.durationUnit,
+              ...(rest.muteDescription && { description: rest.muteDescription }),
+              ...(parsedStartDate !== undefined && { startDate: parsedStartDate }),
+            }
+          }
+
+          case 'unmute_alarm': {
+            return {
+              awsRegion,
+              awsAccessKeyId,
+              awsSecretAccessKey,
+              muteRuleName: rest.muteRuleName,
+            }
+          }
+
+          default:
+            throw new Error(`Invalid CloudWatch operation: ${operation}`)
+        }
+      },
+    },
+  },
+  inputs: {
+    operation: { type: 'string', description: 'CloudWatch operation to perform' },
+    awsRegion: { type: 'string', description: 'AWS region' },
+    awsAccessKeyId: { type: 'string', description: 'AWS access key ID' },
+    awsSecretAccessKey: { type: 'string', description: 'AWS secret access key' },
+    logGroupNames: { type: 'string', description: 'Log group name(s) for query' },
+    queryString: { type: 'string', description: 'CloudWatch Log Insights query string' },
+    startTime: { type: 'string', description: 'Start time as Unix epoch seconds' },
+    endTime: { type: 'string', description: 'End time as Unix epoch seconds' },
+    prefix: { type: 'string', description: 'Log group name prefix filter' },
+    logGroupName: {
+      type: 'string',
+      description:
+        'Log group name for get events / describe streams / filter events / set retention',
+    },
+    logStreamName: { type: 'string', description: 'Log stream name for get events' },
+    streamPrefix: { type: 'string', description: 'Log stream name prefix filter' },
+    filterPattern: { type: 'string', description: 'CloudWatch Logs filter pattern' },
+    filterLogStreamPrefix: {
+      type: 'string',
+      description: 'Only search log streams whose name starts with this prefix',
+    },
+    startFromHead: {
+      type: 'boolean',
+      description: 'Return the earliest matching events first instead of the latest',
+    },
+    retentionInDays: {
+      type: 'number',
+      description: 'Retention period in days for a log group. Omit to never expire.',
+    },
+    historyAlarmName: { type: 'string', description: 'Exact alarm name for history lookup' },
+    historyItemType: {
+      type: 'string',
+      description:
+        'Alarm history item type filter (StateUpdate, ConfigurationUpdate, Action, etc.)',
+    },
+    alarmHistoryStartDate: {
+      type: 'number',
+      description: 'Start of the alarm history window as Unix epoch seconds',
+    },
+    alarmHistoryEndDate: {
+      type: 'number',
+      description: 'End of the alarm history window as Unix epoch seconds',
+    },
+    scanBy: {
+      type: 'string',
+      description: 'Alarm history sort order: TimestampDescending or TimestampAscending',
+    },
+    metricNamespace: { type: 'string', description: 'Metric namespace (e.g., AWS/EC2)' },
+    metricName: { type: 'string', description: 'Metric name (e.g., CPUUtilization)' },
+    recentlyActive: { type: 'boolean', description: 'Only show recently active metrics' },
+    metricPeriod: { type: 'number', description: 'Granularity in seconds' },
+    metricStatistics: { type: 'string', description: 'Statistic type (Average, Sum, etc.)' },
+    metricDimensions: { type: 'json', description: 'Metric dimensions (Name/Value pairs)' },
+    metricValue: { type: 'number', description: 'Metric value to publish' },
+    metricUnit: { type: 'string', description: 'Metric unit (Count, Seconds, Bytes, etc.)' },
+    publishDimensions: {
+      type: 'json',
+      description: 'Dimensions for published metric (Name/Value pairs)',
+    },
+    alarmNamePrefix: { type: 'string', description: 'Alarm name prefix filter' },
+    stateValue: {
+      type: 'string',
+      description: 'Alarm state filter (OK, ALARM, INSUFFICIENT_DATA)',
+    },
+    alarmType: { type: 'string', description: 'Alarm type filter (MetricAlarm, CompositeAlarm)' },
+    muteRuleName: { type: 'string', description: 'Unique name for the alarm mute rule' },
+    alarmNames: { type: 'string', description: 'Comma-separated alarm names to mute' },
+    durationValue: { type: 'number', description: 'Length of the mute window' },
+    durationUnit: {
+      type: 'string',
+      description: 'Unit for durationValue: minutes, hours, or days',
+    },
+    muteDescription: { type: 'string', description: 'Description of the mute rule' },
+    muteStartDate: {
+      type: 'number',
+      description: 'When the mute begins (Unix epoch seconds). Defaults to now.',
+    },
+    limit: { type: 'number', description: 'Maximum number of results' },
+  },
+  outputs: {
+    results: {
+      type: 'array',
+      description: 'Log Insights query result rows',
+    },
+    statistics: {
+      type: 'json',
+      description: 'Query statistics (bytesScanned, recordsMatched, recordsScanned)',
+    },
+    status: {
+      type: 'string',
+      description: 'Query completion status',
+    },
+    logGroups: {
+      type: 'array',
+      description: 'List of CloudWatch log groups',
+    },
+    events: {
+      type: 'array',
+      description: 'Log events with timestamp and message',
+    },
+    logStreams: {
+      type: 'array',
+      description: 'Log streams with metadata',
+    },
+    metrics: {
+      type: 'array',
+      description: 'List of available metrics',
+    },
+    label: {
+      type: 'string',
+      description: 'Metric label',
+    },
+    datapoints: {
+      type: 'array',
+      description: 'Metric datapoints with timestamps and values',
+    },
+    alarms: {
+      type: 'array',
+      description: 'CloudWatch alarms with state and configuration',
+    },
+    alarmHistoryItems: {
+      type: 'array',
+      description: 'Alarm history items (state changes, configuration updates, actions)',
+    },
+    alarmNames: {
+      type: 'array',
+      description: 'Names of the alarms targeted by the mute rule',
+    },
+    muteRuleName: {
+      type: 'string',
+      description: 'Name of the alarm mute rule that was created or deleted',
+    },
+    expression: {
+      type: 'string',
+      description: 'Schedule expression used by the mute rule',
+    },
+    duration: {
+      type: 'string',
+      description: 'ISO 8601 duration of the mute window',
+    },
+    success: {
+      type: 'boolean',
+      description: 'Whether the operation completed successfully',
+    },
+    namespace: {
+      type: 'string',
+      description: 'Metric namespace',
+    },
+    metricName: {
+      type: 'string',
+      description: 'Metric name',
+    },
+    value: {
+      type: 'number',
+      description: 'Published metric value',
+    },
+    unit: {
+      type: 'string',
+      description: 'Metric unit',
+    },
+    timestamp: {
+      type: 'string',
+      description: 'Timestamp when metric was published',
+    },
+    logGroupName: {
+      type: 'string',
+      description: 'Log group the retention policy was applied to',
+    },
+    retentionInDays: {
+      type: 'number',
+      description: 'Retention period in days, or null if events never expire',
+    },
+  },
+}
+
+export const CloudWatchBlockMeta = {
+  tags: ['cloud', 'monitoring'],
+  url: 'https://aws.amazon.com/cloudwatch',
+  templates: [
+    {
+      icon: CloudWatchIcon,
+      title: 'CloudWatch alarm digest',
+      prompt:
+        'Create a scheduled daily workflow that summarizes the past 24 hours of CloudWatch alarms by service and severity, identifies repeat offenders, and posts a digest to Slack.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'engineering',
+      tags: ['devops', 'reporting'],
+      alsoIntegrations: ['slack'],
+    },
+    {
+      icon: CloudWatchIcon,
+      title: 'CloudWatch log triage',
+      prompt:
+        'Build a scheduled workflow that runs CloudWatch Logs Insights queries hourly for error patterns, clusters matches, writes top groups to a triage table, and pings the on-call engineer.',
+      modules: ['scheduled', 'tables', 'agent', 'workflows'],
+      category: 'engineering',
+      tags: ['devops', 'monitoring'],
+      alsoIntegrations: ['pagerduty'],
+    },
+    {
+      icon: CloudWatchIcon,
+      title: 'CloudWatch cost-control alerts',
+      prompt:
+        'Create a scheduled workflow that pulls CloudWatch billing alarms daily, projects month-end spend by service, and posts an alert when projection exceeds budget thresholds.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'operations',
+      tags: ['finance', 'monitoring'],
+      alsoIntegrations: ['slack'],
+    },
+    {
+      icon: CloudWatchIcon,
+      title: 'CloudWatch incident scribe',
+      prompt:
+        'Build a scheduled workflow that polls CloudWatch alarms every few minutes for any in ALARM state, captures the surrounding metrics and recent log excerpts, and writes a timeline file for the incident review.',
+      modules: ['scheduled', 'agent', 'files', 'workflows'],
+      category: 'engineering',
+      tags: ['devops', 'monitoring'],
+    },
+    {
+      icon: CloudWatchIcon,
+      title: 'CloudWatch SLO burn-rate watcher',
+      prompt:
+        'Create a workflow that monitors CloudWatch SLO burn rate every five minutes, classifies severity, and pages the on-call team via PagerDuty when burn exceeds fast-burn thresholds.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'engineering',
+      tags: ['devops', 'monitoring'],
+      alsoIntegrations: ['pagerduty'],
+    },
+    {
+      icon: CloudWatchIcon,
+      title: 'CloudWatch metric archiver',
+      prompt:
+        'Build a scheduled workflow that exports CloudWatch metric snapshots into S3 long-term storage, preserving granularity for compliance, and writing a manifest table.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'operations',
+      tags: ['devops', 'enterprise'],
+      alsoIntegrations: ['s3'],
+    },
+    {
+      icon: CloudWatchIcon,
+      title: 'CloudWatch log error triager',
+      prompt:
+        'Create a workflow that runs a CloudWatch Logs Insights query against application log groups every few minutes, groups recurring error signatures with an agent, opens a Linear issue for any new error pattern, and posts a Slack alert.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'engineering',
+      tags: ['devops', 'monitoring', 'engineering'],
+      alsoIntegrations: ['linear', 'slack'],
+    },
+  ],
+  skills: [
+    {
+      name: 'investigate-error-spike',
+      description:
+        'Run a CloudWatch Logs Insights query to find and summarize error spikes in a log group over a time window.',
+      content:
+        '# Investigate CloudWatch Error Spike\n\nFind the cause of an error spike using Logs Insights.\n\n## Steps\n1. Identify the relevant log group and the time window to investigate.\n2. Run a Logs Insights query that filters for error or exception lines and aggregates by error type.\n3. Pull representative sample log events for the top error groups.\n4. Correlate timing with any recent deploys or traffic changes.\n\n## Output\nA summary of the top error types, their counts, sample messages, and the likely cause.',
+    },
+    {
+      name: 'check-metric-health',
+      description:
+        'Pull CloudWatch metric statistics for a resource and report whether key metrics are within healthy ranges.',
+      content:
+        '# Check CloudWatch Metric Health\n\nReview key metrics for a resource against expected thresholds.\n\n## Steps\n1. Identify the namespace, metric names, and dimensions for the resource (e.g. CPUUtilization, latency, error rate).\n2. Get metric statistics over the chosen window with an appropriate period and statistic (Average, p99, Sum).\n3. Compare values against healthy thresholds.\n\n## Output\nA per-metric summary with the current value, trend, and whether it is within a healthy range.',
+    },
+    {
+      name: 'review-alarm-state',
+      description:
+        'List CloudWatch alarms, report which are in ALARM or INSUFFICIENT_DATA, and optionally mute noisy alarms.',
+      content:
+        '# Review CloudWatch Alarm State\n\nGet a snapshot of alarm health across the account.\n\n## Steps\n1. Describe alarms and group them by state (OK, ALARM, INSUFFICIENT_DATA).\n2. For alarms in ALARM, capture the metric, threshold, and reason.\n3. If asked, mute alarms that are known-noisy during a maintenance window and note them.\n\n## Output\nA list of alarms currently firing or missing data, with the metric and threshold for each.',
+    },
+  ],
+} as const satisfies BlockMeta

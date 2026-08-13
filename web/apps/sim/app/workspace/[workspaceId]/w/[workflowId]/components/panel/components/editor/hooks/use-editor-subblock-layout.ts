@@ -1,0 +1,173 @@
+import { useCallback, useMemo } from 'react'
+import {
+  buildCanonicalIndex,
+  evaluateSubBlockCondition,
+  isSubBlockFeatureEnabled,
+  isSubBlockHidden,
+  isSubBlockVisibleForMode,
+  isSubBlockVisibleForTriggerMode,
+  isToolInputOnlySubBlock,
+  shouldUseSubBlockForTriggerModeCanonicalIndex,
+} from '@/lib/workflows/subblocks/visibility'
+import type { BlockConfig, SubBlockConfig } from '@/blocks/types'
+import { usePermissionConfig } from '@/hooks/use-permission-config'
+import { useReactiveConditions } from '@/hooks/use-reactive-conditions'
+import { useWorkflowDiffStore } from '@/stores/workflow-diff'
+import { mergeSubblockState } from '@/stores/workflows/utils'
+import { useWorkflowStore } from '@/stores/workflows/workflow/store'
+
+/**
+ * Custom hook for computing subblock layout in the editor panel.
+ * Determines which subblocks should be visible based on mode, conditions, and feature flags.
+ *
+ * @param config - The block configuration containing subblock definitions
+ * @param blockId - The ID of the current block being edited
+ * @param displayAdvancedMode - Whether advanced mode is enabled for this block
+ * @param displayTriggerMode - Whether trigger mode is enabled for this block
+ * @param activeWorkflowId - The active workflow ID
+ * @param blockSubBlockValues - Current subblock values from the store
+ * @param isDiffMode - Whether we're currently viewing a diff
+ * @returns Object containing subBlocks array and stateToUse for stable key generation
+ */
+export function useEditorSubblockLayout(
+  config: BlockConfig,
+  blockId: string,
+  displayAdvancedMode: boolean,
+  displayTriggerMode: boolean,
+  activeWorkflowId: string | null,
+  blockSubBlockValues: Record<string, any>,
+  isSnapshotView: boolean
+) {
+  const blockDataFromStore = useWorkflowStore(
+    useCallback((state) => state.blocks?.[blockId]?.data, [blockId])
+  )
+  const { config: permissionConfig } = usePermissionConfig()
+
+  // Evaluate reactive conditions (hooks-based, must be called before useMemo)
+  const hiddenByReactiveCondition = useReactiveConditions(
+    config?.subBlocks || [],
+    blockId,
+    activeWorkflowId,
+    blockDataFromStore?.canonicalModes
+  )
+
+  return useMemo(() => {
+    // Guard against missing config or block selection
+    if (!config || !Array.isArray((config as any).subBlocks) || !blockId) {
+      return { subBlocks: [] as SubBlockConfig[], stateToUse: {} }
+    }
+
+    const diffStore = useWorkflowDiffStore.getState()
+    const workflowBlocks = useWorkflowStore.getState().blocks || {}
+
+    const sourceBlocks = isSnapshotView
+      ? (diffStore.baselineWorkflow?.blocks as Record<string, any>) || {}
+      : workflowBlocks
+
+    const mergedMap = isSnapshotView
+      ? { [blockId]: structuredClone(sourceBlocks[blockId]) }
+      : mergeSubblockState(sourceBlocks, activeWorkflowId || undefined, blockId)
+
+    const mergedState = mergedMap ? mergedMap[blockId] : undefined
+    const mergedSubBlocks = mergedState?.subBlocks || {}
+    const blockData = isSnapshotView ? mergedState?.data || {} : blockDataFromStore || {}
+
+    const stateToUse = Object.keys(mergedSubBlocks).reduce(
+      (acc, key) => {
+        const baselineValue = mergedSubBlocks[key]?.value ?? null
+        const liveValue =
+          blockSubBlockValues[key] !== undefined ? blockSubBlockValues[key] : baselineValue
+        acc[key] = {
+          value: isSnapshotView ? baselineValue : liveValue,
+        }
+        return acc
+      },
+      {} as Record<string, { value: unknown }>
+    )
+
+    if (!isSnapshotView) {
+      Object.keys(blockSubBlockValues).forEach((key) => {
+        if (!(key in stateToUse)) {
+          stateToUse[key] = { value: blockSubBlockValues[key] }
+        }
+      })
+    }
+
+    // Filter visible blocks and those that meet their conditions
+    const rawValues = Object.entries(stateToUse).reduce<Record<string, unknown>>(
+      (acc, [key, entry]) => {
+        acc[key] = entry?.value
+        return acc
+      },
+      {}
+    )
+
+    const subBlocksForCanonical = displayTriggerMode
+      ? (config.subBlocks || []).filter(shouldUseSubBlockForTriggerModeCanonicalIndex)
+      : config.subBlocks || []
+    const canonicalIndex = buildCanonicalIndex(subBlocksForCanonical)
+    const effectiveAdvanced = displayAdvancedMode
+    const canonicalModeOverrides = blockData?.canonicalModes
+
+    // Expose canonical mode overrides to condition functions so they can
+    // react to basic/advanced credential toggles (e.g. SERVICE_ACCOUNT_SUBBLOCKS).
+    if (canonicalModeOverrides) {
+      rawValues.__canonicalModes = canonicalModeOverrides
+    }
+
+    const visibleSubBlocks = (config.subBlocks || []).filter((block) => {
+      if (block.hidden) return false
+
+      // Configures the block as an agent tool; it has no meaning on the canvas.
+      if (isToolInputOnlySubBlock(block)) return false
+
+      // Filter by reactive condition (evaluated via hooks before useMemo)
+      if (hiddenByReactiveCondition.has(block.id)) return false
+
+      // Hide skill-input subblock when skills are disabled via permissions
+      if (block.type === 'skill-input' && permissionConfig.disableSkills) return false
+
+      // Check required feature if specified - declarative feature gating
+      if (!isSubBlockFeatureEnabled(block)) return false
+
+      // Hide tool API key fields when hosted or when env var is set
+      if (isSubBlockHidden(block)) return false
+
+      if (!isSubBlockVisibleForTriggerMode(block, displayTriggerMode, config)) {
+        return false
+      }
+
+      if (
+        !isSubBlockVisibleForMode(
+          block,
+          effectiveAdvanced,
+          canonicalIndex,
+          rawValues,
+          canonicalModeOverrides
+        )
+      ) {
+        return false
+      }
+
+      // If there's no condition, the block should be shown
+      if (!block.condition) return true
+
+      return evaluateSubBlockCondition(block.condition, rawValues)
+    })
+
+    return { subBlocks: visibleSubBlocks, stateToUse }
+  }, [
+    config.subBlocks,
+    config.triggers,
+    config.category,
+    blockId,
+    displayAdvancedMode,
+    displayTriggerMode,
+    blockSubBlockValues,
+    activeWorkflowId,
+    isSnapshotView,
+    blockDataFromStore,
+    hiddenByReactiveCondition,
+    permissionConfig.disableSkills,
+  ])
+}

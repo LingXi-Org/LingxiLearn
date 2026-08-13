@@ -1,0 +1,1112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * CSS-based sidebar and panel widths to prevent SSR hydration mismatches.
+ * Default widths are set here and updated via blocking script before React hydrates.
+ *
+ * @important These values must stay in sync with stores/constants.ts
+ * @see stores/constants.ts for the source of truth
+ */
+:root {
+  --sidebar-width: 0px; /* 0 outside workspace; blocking script always sets actual value on workspace pages */
+  --sidebar-collapsed-width: 51px; /* icon rail on web; desktop overrides to 0 before first paint */
+  --sidebar-expanded-width: 238px; /* SIDEBAR_WIDTH.DEFAULT; the width to restore to, held even while collapsed */
+  --desktop-title-bar-height: 0px; /* macOS traffic-light lane; desktop overrides before first paint */
+  --workspace-content-title-bar-inset: 0px; /* lane the content pane must leave clear; only non-zero when the pane, not the sidebar, sits under it */
+  --desktop-title-bar-inset-x: 0px; /* clearance past the traffic lights; desktop overrides */
+  --desktop-title-bar-control-offset: 0px; /* centres a lane control; desktop overrides */
+  --desktop-title-bar-control-size: 0px; /* control seated in the lane; desktop overrides */
+  --desktop-title-bar-control-icon-size: 0px; /* its glyph; desktop overrides */
+  --panel-width: 320px; /* PANEL_WIDTH.DEFAULT */
+  --editor-connections-height: 172px; /* EDITOR_CONNECTIONS_HEIGHT.DEFAULT */
+  --terminal-height: 206px; /* TERMINAL_HEIGHT.DEFAULT */
+  /**
+   * The padding `.workspace-content-shell` insets the panel and terminal from
+   * the viewport by (CONTENT_WINDOW_GAP).
+   *
+   * Published here because surfaces portalled to `<body>` — the toast stack —
+   * position against those elements from the viewport, so they must add back
+   * whatever separates the element from the viewport edge. Reading it rather
+   * than hardcoding 8px is what keeps the toast and the canvas controls on the
+   * same clearance when the shell drops its padding; the controls are laid out
+   * inside the shell and so need no correction.
+   */
+  --workspace-content-gap: 8px;
+  --output-panel-width: 560px; /* OUTPUT_PANEL_WIDTH.DEFAULT */
+  /**
+   * Neutral border and divider thickness. Standard-density displays cannot draw
+   * a sub-pixel line crisply, so they keep a full pixel; the hidpi override below
+   * thins it. Consumed by Tailwind's `border*`, `divide-*`, and `h-px`/`w-px`.
+   */
+  --border-width: 1px;
+  --auth-primary-btn-bg: #ffffff;
+  --auth-primary-btn-border: #ffffff;
+  --auth-primary-btn-text: #000000;
+  --auth-primary-btn-hover-bg: #e0e0e0;
+  --auth-primary-btn-hover-border: #e0e0e0;
+  --auth-primary-btn-hover-text: #000000;
+
+  /* z-index scale. The toast/notification stack is ambient: it sits above page
+     content but BELOW the modal and the transient poppers (menus, selects,
+     popovers, tooltips), so an open modal or dropdown menu is never occluded by
+     a background notification. Poppers sit above --z-modal so they stay
+     clickable over the modal's semi-transparent overlay. */
+  --z-dropdown: 100;
+  --z-toast: 150;
+  --z-modal: 200;
+  --z-popover: 300;
+  --z-tooltip: 400;
+
+  /* Shadow scale */
+  --shadow-subtle: 0 2px 4px 0 rgba(0, 0, 0, 0.08);
+  --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-overlay: 0 10px 30px rgba(0, 0, 0, 0.11);
+  --shadow-kbd: 0 4px 0 0 rgba(48, 48, 48, 1);
+  --shadow-kbd-sm: 0 2px 0 0 rgba(48, 48, 48, 1);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  /**
+   * The scale's around-shape entry: one layer like every other, borrowing
+   * `--shadow-subtle`'s alpha and `--shadow-medium`'s blur, with the y-offset
+   * dropped so the spread lands evenly on all four sides instead of pooling
+   * underneath. For a raised surface that floats in open space (the chat input);
+   * the directional entries above still own menus, cards, and overlays.
+   */
+  --shadow-ambient: 0 0 12px 0 rgba(0, 0, 0, 0.08);
+}
+
+/**
+ * One device pixel on high-density displays. Browsers floor a border to whole
+ * device pixels, so every value in (0, 1px) collapses to this same hairline and
+ * the next drawable step is a full 1px — i.e. double. Line weight between those
+ * two is therefore tuned on `--border`, never here.
+ */
+@media (min-resolution: 2dppx) {
+  :root {
+    --border-width: 0.5px;
+  }
+}
+
+/**
+ * Electron's `titleBarOverlay` publishes the window controls' geometry as these
+ * `titlebar-area-*` env vars, and Chromium rescales them under page zoom so the
+ * lane holds its physical size. Fallbacks are the platform's measured values, for
+ * a shell predating the overlay; the `:root` zeros cover the different case of the
+ * attribute being absent entirely, where this block never matches.
+ */
+html[data-sim-desktop-title-bar="inset"] {
+  --sidebar-collapsed-width: 0px;
+  --desktop-title-bar-height: env(titlebar-area-height, 38px);
+  --desktop-title-bar-inset-x: env(titlebar-area-x, 81px);
+  /* 0.79 = 30px of the 38px lane, and 0.53 of that = 16px. Proportions rather
+     than px because px would scale with page zoom while the OS-drawn lights
+     would not — and calc cannot divide a length by a length to get a scale.
+     `navigator.windowControlsOverlay` could, but reading it in JS would race
+     first paint for a value the blocking script needs. */
+  --desktop-title-bar-control-size: calc(var(--desktop-title-bar-height) * 0.79);
+  --desktop-title-bar-control-icon-size: calc(var(--desktop-title-bar-control-size) * 0.53);
+  --desktop-title-bar-control-offset: calc(
+    (var(--desktop-title-bar-height) - var(--desktop-title-bar-control-size)) /
+    2
+  );
+}
+
+/** The macOS desktop login shell reserves the native traffic-light lane. */
+.desktop-title-bar-page {
+  /* Reserve the lane with padding INSIDE the box, never `margin-top` + a
+     `calc(100vh - lane)` height. `body` carries `min-height: 100vh` of its own, and
+     a top margin here has nothing to collapse against (body is a block box with no
+     padding, border, or BFC), so it collapses through and displaces body itself —
+     leaving a document one full lane taller than the viewport. Global
+     `box-sizing: border-box` keeps this padding inside the 100vh. */
+  padding-top: var(--desktop-title-bar-height);
+  min-height: 100vh;
+}
+
+.desktop-window-drag-region {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.desktop-login-window-drag-region {
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--desktop-title-bar-height);
+  background: inherit;
+}
+
+.desktop-workspace-window-drag-region {
+  position: absolute;
+  inset: 0 0 auto;
+  display: none;
+}
+
+html[data-sim-desktop-title-bar="inset"] .desktop-workspace-window-drag-region {
+  display: block;
+}
+
+html[data-sim-desktop-title-bar="inset"]
+  .desktop-workspace-window-frame
+  :is(
+    a,
+    button,
+    input,
+    select,
+    textarea,
+    [contenteditable="true"],
+    [role="button"],
+    [role="link"],
+    [role="menuitem"],
+    [role="tab"]
+  ) {
+  -webkit-app-region: no-drag;
+}
+
+.workspace-root {
+  letter-spacing: 0.02em;
+}
+
+/* The pane owns the lane whenever the sidebar is not there to own it: collapsed to
+   zero width, or slid away for a fullscreen route. */
+.workspace-content-shell[data-sidebar-collapsed],
+.workspace-content-shell[data-content-fullscreen] {
+  --workspace-content-title-bar-inset: var(--desktop-title-bar-height);
+}
+
+/* The one case the shell drops its padding entirely (see `workspace-chrome.tsx`:
+   `isCollapsed && '[[data-sim-desktop-title-bar=inset]_&]:p-0'`). Declared on the
+   root so the portalled toast stack — which cannot inherit from the shell — sees
+   it too, and keeps the same clearance the in-shell canvas controls keep. */
+html[data-sim-desktop-title-bar="inset"]:has(.workspace-content-shell[data-sidebar-collapsed]) {
+  --workspace-content-gap: 0px;
+}
+
+.workspace-root code,
+.workspace-root kbd,
+.workspace-root samp,
+.workspace-root pre,
+.workspace-root .font-mono {
+  letter-spacing: normal;
+}
+
+.sidebar-container {
+  width: var(--sidebar-width);
+  transition: width 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/**
+ * Collapsed width is driven by the server-rendered `data-collapsed` attribute —
+ * the same cookie source as the collapsed structure — so the rail can never paint
+ * at the expanded width and then snap narrow. Overrides `--sidebar-width` for the
+ * shell subtree (outer, inner, and the aside cascade from it). Must equal
+ * `--sidebar-collapsed-width` is set once per host: the web app uses the
+ * SIDEBAR_WIDTH.COLLAPSED icon rail, while macOS desktop uses a full collapse.
+ */
+.sidebar-shell-outer[data-collapsed] {
+  --sidebar-width: var(--sidebar-collapsed-width);
+}
+
+/**
+ * Hover-peek: the shell floats out of flow as a card, so its subtree reads the restore
+ * width instead of the collapsed one. Re-declaring the same variable the rule above
+ * sets carries the inner shell and the aside along with no per-element overrides.
+ *
+ * Lives here rather than on the component because a Tailwind arbitrary property is one
+ * class (0,1,0) and would lose to that rule's (0,2,0) selector.
+ */
+.sidebar-shell-outer[data-collapsed][data-peek] {
+  --sidebar-width: var(--sidebar-expanded-width);
+}
+
+/* The card appears at full width, so the aside's own width transition would animate
+   0 -> expanded inside it. */
+.sidebar-shell-outer[data-peek] .sidebar-container {
+  transition: none;
+}
+
+/* The card is a flex column sized to its content, so the shell must be allowed to
+   shrink for the sidebar's own scroll region to bound itself once the card hits its
+   max height. Docked, this element is not a flex item and the rule is inert. */
+.sidebar-shell-outer[data-peek] .sidebar-shell-inner {
+  min-height: 0;
+  flex-shrink: 1;
+}
+
+.sidebar-container span,
+.sidebar-container .text-small {
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+}
+
+.sidebar-container[data-collapsed] span,
+.sidebar-container[data-collapsed] .text-small {
+  opacity: 0;
+}
+
+.sidebar-container .sidebar-collapse-hide {
+  transition: opacity 60ms ease;
+}
+
+.sidebar-container[data-collapsed] .sidebar-collapse-hide {
+  opacity: 0;
+}
+
+@keyframes sidebar-collapse-guard {
+  from {
+    pointer-events: none;
+  }
+  to {
+    pointer-events: auto;
+  }
+}
+
+.sidebar-container[data-collapsed] {
+  animation: sidebar-collapse-guard 250ms step-end;
+}
+
+.sidebar-container.is-resizing {
+  transition: none;
+}
+
+/* Suppress width/transform transitions on the chrome wrappers during a
+   drag-resize so the outer overflow-hidden clip doesn't lag behind the inner
+   sidebar content, which is already at the correct width instantly. */
+html.sidebar-resizing .sidebar-shell-outer,
+html.sidebar-resizing .sidebar-shell-inner {
+  transition: none !important;
+}
+
+/* Suppress sidebar transitions during the initial hydration window. The
+   pre-paint script sets the correct --sidebar-width, but store rehydration
+   re-applies it a tick later; without this guard that re-apply animates the
+   rail, reading as a collapse -> expand flash on a fresh page load. Removed
+   after the first paint (see workspace-chrome.tsx) so user-driven toggles and
+   the fullscreen slide still animate. */
+html.sidebar-booting .sidebar-container,
+html.sidebar-booting .sidebar-shell-outer,
+html.sidebar-booting .sidebar-shell-inner {
+  transition: none !important;
+}
+
+.panel-container {
+  width: var(--panel-width);
+}
+
+.terminal-container {
+  height: var(--terminal-height);
+}
+
+/**
+ * Landing loop animation styles (keyframes defined in tailwind.config.ts)
+ */
+.landing-loop-animated-dash {
+  animation: dash-animation 1.5s linear infinite;
+  will-change: stroke-dashoffset;
+  transform: translateZ(0);
+}
+
+.react-flow__node-landingLoop svg rect.landing-loop-animated-dash {
+  animation: dash-animation 1.5s linear infinite !important;
+}
+
+/**
+ * React Flow selection box styling
+ * Uses brand-secondary color for selection highlighting
+ */
+.react-flow__selection {
+  background: rgba(51, 180, 255, 0.08) !important;
+  border: 1px solid var(--brand-secondary) !important;
+}
+
+.react-flow__nodesselection-rect,
+.react-flow__nodesselection {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none !important;
+}
+
+/**
+ * Workflow canvas cursor styles
+ * Override React Flow's default selection cursor based on canvas mode
+ */
+.workflow-container.canvas-mode-cursor .react-flow__pane,
+.workflow-container.canvas-mode-cursor .react-flow__selectionpane {
+  cursor: default !important;
+}
+
+.workflow-container.canvas-mode-hand .react-flow__pane,
+.workflow-container.canvas-mode-hand .react-flow__selectionpane {
+  cursor: grab !important;
+}
+
+.workflow-container.canvas-mode-hand .react-flow__pane:active,
+.workflow-container.canvas-mode-hand .react-flow__selectionpane:active {
+  cursor: grabbing !important;
+}
+
+/**
+ * Color tokens - single source of truth for all colors
+ * Light mode: Warm theme
+ * Dark mode: Dark neutral theme
+ */
+@layer base {
+  :root,
+  .light {
+    --bg: #fefefe; /* main canvas - neutral near-white */
+    --surface-1: #fbfbfb; /* sidebar, panels */
+    --surface-2: #ffffff; /* blocks, cards, modals - pure white */
+    --surface-3: #f7f7f7; /* popovers, headers */
+    --surface-4: #f5f5f5; /* buttons base */
+    --surface-5: #f3f3f3; /* inputs, form elements */
+    --surface-6: #e5e5e5; /* popovers, elevated surfaces */
+    --surface-7: #d9d9d9;
+    --surface-hover: #f2f2f2; /* hover state */
+    --surface-active: #ececec; /* active/selected state */
+
+    --workflow-edge: #e0e0e0; /* workflow handles/edges - matches border-1 */
+
+    /* Text - neutral */
+    --text-primary: #1a1a1a;
+    --text-secondary: #525252;
+    --text-tertiary: #5c5c5c;
+    --text-muted: #7a7a7a;
+    --text-subtle: #8c8c8c;
+    --text-body: #434343;
+    --text-icon: #5a5a5a;
+    --text-icon-muted: #5c5c5c;
+
+    /* Shared ThinkingLoader ink treatment. */
+    --thinking-ink-current: #2c2c2c;
+    --thinking-ink-inner: #2c2c2c;
+    --thinking-ink-outer: #5f5f5f;
+    --thinking-ink-glow: rgba(255, 255, 255, 0.6);
+
+    --text-inverse: #ffffff;
+    --text-muted-inverse: #a0a0a0;
+    --text-error: #ef4444;
+
+    /* Borders / dividers */
+    --border: #d8d8d8;
+    --border-success: #e0e0e0;
+
+    /** Legacy neutral-border aliases. New work should use --border. */
+    --border-1: var(--border);
+    --border-muted: var(--border);
+
+    /* Brand & state */
+    --brand-agent: #6f3dfa;
+    --brand-secondary: #33b4ff;
+    --brand-accent: #33c482;
+    --brand-accent-hover: #2dac72;
+    --selection: #1a5cf6;
+    --selection-muted: #1a5cf647;
+    --warning: #ea580c;
+
+    /* Inverted surface (dark chrome on light page, e.g. tag dropdown) */
+    --surface-inverted: #1b1b1b;
+    --surface-inverted-hover: #363636;
+    --border-inverted: #363636;
+
+    /* Tooltip (true inversion: always opposite of page) */
+    --tooltip-bg: #1b1b1b;
+
+    /* Utility */
+    --white: #ffffff;
+
+    /* Landing / marketing - text (static dark-section colors) */
+    --landing-text: #ececec;
+    --landing-text-muted: #999999;
+    --landing-text-subtle: #f6f6f6;
+    --landing-text-dark: #1c1c1c;
+    --landing-text-secondary: #666666;
+    --landing-text-body: #cdcdcd;
+    --landing-text-icon: #939393;
+
+    /* Landing / marketing - surfaces */
+    --landing-bg: #1c1c1c;
+    --landing-bg-elevated: #2a2a2a;
+    --landing-bg-card: #232323;
+    --landing-bg-section: #f6f6f6;
+    --landing-bg-subtle: #fafafa;
+    --landing-bg-surface: #1e1e1e;
+    --landing-bg-hover: #f0f0f0;
+    --landing-bg-skeleton: #e8e8e8;
+
+    /* Landing / marketing - borders */
+    --landing-border: #2a2a2a;
+    --landing-border-light: #e5e5e5;
+    --landing-border-strong: #3d3d3d;
+    --landing-border-subtle: #d4d4d4;
+
+    /* Code editor (theme-aware) */
+    --code-bg: #f5f5f5;
+    --code-foreground: #1a1a1a;
+    --code-line-number: #737373;
+
+    /* Workspace: additional text */
+    --text-placeholder: #8d8d8d;
+    --text-success: #22c55e;
+
+    /* Status / semantic colors */
+    --error: #dc2626;
+    --error-muted: #fecaca;
+    --error-emphasis: #b91c1c;
+    --caution: #f59e0b;
+    --success: #22c55e;
+
+    /* Brand extended */
+    --brand-knowledge: #00b0b0;
+    --selection-dark: #264f78;
+
+    /* Terminal status badges */
+    --terminal-status-error-bg: #fef2f2;
+    --terminal-status-error-border: #f87171;
+    --terminal-status-info-bg: #f7f7f7;
+    --terminal-status-info-border: #a3a3a3;
+    --terminal-status-info-color: #525252;
+    --terminal-status-warning-bg: #fefce8;
+    --terminal-status-warning-border: #facc15;
+    --terminal-status-warning-color: #a16207;
+
+    /* Badge semantic colors */
+    --badge-success-bg: #bbf7d0;
+    --badge-success-text: #15803d;
+    --badge-error-bg: #fecaca;
+    --badge-error-text: #dc2626;
+    --badge-gray-bg: #e7e5e4;
+    --badge-gray-text: #57534e;
+    --badge-blue-bg: #bfdbfe;
+    --badge-blue-text: #1d4ed8;
+    --badge-blue-secondary-bg: #bae6fd;
+    --badge-blue-secondary-text: #0369a1;
+    --badge-purple-bg: #e9d5ff;
+    --badge-purple-text: #7c3aed;
+    --badge-orange-bg: #fed7aa;
+    --badge-orange-text: #c2410c;
+    --badge-amber-bg: #fde68a;
+    --badge-amber-text: #a16207;
+    --badge-teal-bg: #99f6e4;
+    --badge-teal-text: #0f766e;
+    --badge-cyan-bg: #cffafe;
+    --badge-cyan-text: #0891b2;
+    --badge-pink-bg: #fbcfe8;
+    --badge-pink-text: #be185d;
+
+    /* Search/highlight */
+    --highlight-search-active: #f6ad55;
+    --highlight-search: #fcd34d;
+    --highlight-match-bg: #bae6fd;
+    --highlight-match-text: #0369a1;
+
+    /* Selection */
+    --selection-bg: #add6ff;
+
+    /* Active indicator */
+    --indicator-online: #33c482;
+    --indicator-active: #4ade80;
+    --indicator-inactive: #b7b7b7;
+    --indicator-seat-filled: #34b5ff;
+
+    /* Scrollbar colors */
+    --scrollbar-thumb-color: #c0c0c0;
+    --scrollbar-thumb-hover-color: #a8a8a8;
+  }
+  .dark {
+    /* Surface */
+    --bg: #1b1b1b;
+    --surface-1: #1e1e1e;
+    --surface-2: #232323;
+    --surface-3: #242424;
+    --surface-4: #292929;
+    --surface-5: #363636;
+    --surface-6: #454545;
+    --surface-7: #505050;
+    --surface-hover: #262626; /* hover state */
+    --surface-active: #2c2c2c; /* active/selected state */
+
+    --workflow-edge: #454545; /* workflow handles/edges - same as surface-6 in dark */
+
+    /* Text */
+    --text-primary: #e6e6e6;
+    --text-secondary: #cccccc;
+    --text-tertiary: #b3b3b3;
+    --text-muted: #6e6e6e;
+    --text-subtle: #7d7d7d;
+    --text-body: #c1c1c1;
+    --text-icon: #969696;
+    --text-icon-muted: #949494;
+
+    /* Shared ThinkingLoader ink treatment. */
+    --thinking-ink-current: #d6d6d6;
+    --thinking-ink-inner: #a7a7a7;
+    --thinking-ink-outer: #d6d6d6;
+    --thinking-ink-glow: rgba(255, 255, 255, 0.9);
+
+    --text-inverse: #1b1b1b;
+    --text-muted-inverse: #b3b3b3;
+    --text-error: #ef4444;
+
+    /* Borders / dividers */
+    --border: #444444;
+    --border-success: #575757;
+
+    /** Legacy neutral-border aliases. New work should use --border. */
+    --border-1: var(--border);
+    --border-muted: var(--border);
+
+    /* Brand & state */
+    --brand-agent: #701ffc;
+    --brand-secondary: #33b4ff;
+    --brand-accent: #33c482;
+    --brand-accent-hover: #2dac72;
+    --selection: #4b83f7;
+    --selection-muted: #4b83f759;
+    --warning: #ff6600;
+
+    /* Inverted surface (in dark mode, falls back to standard surfaces) */
+    --surface-inverted: #242424;
+    --surface-inverted-hover: #363636;
+    --border-inverted: #3d3d3d;
+
+    /* Tooltip (true inversion: always opposite of page) */
+    --tooltip-bg: #fdfdfd;
+
+    /* Utility */
+    --white: #ffffff;
+
+    /* Code editor (dark mode overrides) */
+    --code-bg: #1f1f1f;
+    --code-foreground: #eeeeee;
+    --code-line-number: #a8a8a8;
+
+    /* Workspace text */
+    --text-placeholder: #8d8d8d;
+    --text-success: #22c55e;
+
+    /* Status / semantic (dark overrides where needed) */
+    --error: #f87171;
+    --error-muted: #f6d2d2;
+    --error-emphasis: #b91c1c;
+    --caution: #f59e0b;
+    --success: #22c55e;
+
+    /* Brand extended */
+    --brand-knowledge: #00b0b0;
+    --selection-dark: #264f78;
+
+    /* Terminal status badges */
+    --terminal-status-error-bg: #491515;
+    --terminal-status-error-border: #883827;
+    --terminal-status-info-bg: #383838;
+    --terminal-status-info-border: #686868;
+    --terminal-status-info-color: #b7b7b7;
+    --terminal-status-warning-bg: #3d3520;
+    --terminal-status-warning-border: #5c4d1f;
+    --terminal-status-warning-color: #d4a72c;
+
+    /* Badge semantic colors */
+    --badge-success-bg: rgba(34, 197, 94, 0.2);
+    --badge-success-text: #86efac;
+    --badge-error-bg: #551a1a;
+    --badge-error-text: #fca5a5;
+    --badge-gray-bg: #3a3a3a;
+    --badge-gray-text: #a8a8a8;
+    --badge-blue-bg: rgba(59, 130, 246, 0.2);
+    --badge-blue-text: #93c5fd;
+    --badge-blue-secondary-bg: rgba(51, 180, 255, 0.2);
+    --badge-blue-secondary-text: #7dd3fc;
+    --badge-purple-bg: rgba(168, 85, 247, 0.2);
+    --badge-purple-text: #d8b4fe;
+    --badge-orange-bg: rgba(249, 115, 22, 0.2);
+    --badge-orange-text: #fdba74;
+    --badge-amber-bg: rgba(245, 158, 11, 0.2);
+    --badge-amber-text: #fcd34d;
+    --badge-teal-bg: rgba(20, 184, 166, 0.2);
+    --badge-teal-text: #5eead4;
+    --badge-cyan-bg: rgba(14, 165, 233, 0.2);
+    --badge-cyan-text: #7dd3fc;
+    --badge-pink-bg: rgba(236, 72, 153, 0.2);
+    --badge-pink-text: #f9a8d4;
+
+    /* Search/highlight */
+    --highlight-search-active: #f6ad55;
+    --highlight-search: #fcd34d;
+    --highlight-match-bg: rgba(51, 180, 255, 0.2);
+    --highlight-match-text: #7dd3fc;
+
+    /* Selection */
+    --selection-bg: #264f78;
+
+    /* Active indicator */
+    --indicator-online: #33c482;
+    --indicator-active: #4ade80;
+    --indicator-inactive: #b7b7b7;
+    --indicator-seat-filled: #34b5ff;
+
+    /* Scrollbar colors */
+    --scrollbar-thumb-color: #5a5a5a;
+    --scrollbar-thumb-hover-color: #6a6a6a;
+
+    /* Shadow scale - dark */
+    --shadow-overlay: 0 10px 30px rgba(0, 0, 0, 0.3);
+    /* Same 2.7x light-to-dark alpha step --shadow-overlay takes (0.11 -> 0.3). */
+    --shadow-ambient: 0 0 12px 0 rgba(0, 0, 0, 0.22);
+  }
+}
+
+/**
+ * Base styles for body, scrollbars, and global elements
+ */
+@layer base {
+  * {
+    border-color: var(--border);
+    overscroll-behavior-x: none;
+  }
+
+  *:focus {
+    outline: none;
+  }
+
+  /* Consistent branded text-selection color everywhere, independent of the
+     browser/OS default (which dims when the window loses focus). Translucent,
+     with no color override, so selected text keeps its own paint on every
+     surface — solid-brand + forced white broke wherever glyphs aren't the
+     selected element's own (Chromium ignores ::selection color in form
+     controls, and the chat/workflow inputs render transparent textareas over
+     styled mirrors, which left black text on solid brand blue). */
+  ::selection {
+    background-color: var(--selection-muted);
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text-primary);
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: none;
+    min-height: 100vh;
+    scrollbar-gutter: stable;
+    text-rendering: optimizeSpeed;
+    letter-spacing: 0.28px;
+  }
+
+  /* Completes Preflight, which resets h1-h6 to `inherit` but leaves `th` at the
+     UA `bold`. Without this a table header, and every label, input, and button
+     inside it, silently renders at 700 — so `font-medium` on a header reads as
+     a step DOWN, and removing it makes the header heavier. Normalized here once
+     rather than neutralized at each `<th>`. */
+  th {
+    font-weight: inherit;
+  }
+
+  /* Ensure visible text caret across inputs and editors */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    caret-color: var(--text-primary);
+  }
+
+  .dark input,
+  .dark textarea,
+  .dark [contenteditable="true"] {
+    caret-color: var(--text-primary);
+  }
+
+  ::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-color);
+    border-radius: var(--radius);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover-color);
+  }
+
+  /* Dark Mode Global Scrollbar */
+  .dark ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-color);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover-color);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
+
+  .dark * {
+    scrollbar-color: var(--scrollbar-thumb-color) transparent;
+  }
+
+  .copilot-scrollable {
+    scrollbar-gutter: stable;
+  }
+}
+
+/**
+ * Panel tab styles
+ */
+.panel-tab-base {
+  color: var(--base-muted-foreground);
+}
+
+.panel-tab-active {
+  background-color: var(--surface-5);
+  color: var(--text-primary);
+  border-color: var(--border-muted);
+}
+
+.dark .panel-tab-active {
+  background-color: var(--surface-1);
+  color: var(--white);
+  border-color: var(--border-muted);
+}
+
+.panel-tab-inactive:hover {
+  background-color: var(--surface-5);
+  color: var(--text-primary);
+}
+
+/**
+ * Subblock divider visibility
+ * Hides dividers when adjacent subblocks render empty content (e.g., schedule-info without data).
+ * Uses CSS :has() to detect empty .subblock-content elements and hide associated dividers.
+ * Selectors ordered by ascending specificity: (0,4,0) then (0,5,0)
+ */
+.subblock-row:has(> .subblock-content:empty) > .subblock-divider,
+.subblock-row:has(+ .subblock-row > .subblock-content:empty) > .subblock-divider {
+  display: none;
+}
+
+/**
+ * Dark mode specific overrides
+ */
+.dark .bg-red-500 {
+  @apply bg-red-700;
+}
+
+/**
+ * Browser input overrides
+ */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="search"]::-moz-search-cancel-button {
+  display: none;
+}
+
+input[type="search"]::-ms-clear {
+  display: none;
+}
+
+/**
+ * Utilities and special effects
+ * Animation keyframes are defined in tailwind.config.ts
+ */
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -webkit-scrollbar: none;
+    -webkit-scrollbar-width: none;
+    -webkit-scrollbar-track: transparent;
+    -webkit-scrollbar-thumb: transparent;
+    scrollbar-width: none;
+    scrollbar-color: transparent transparent;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+    background: transparent;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar-track {
+    display: none;
+    background: transparent;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar-thumb {
+    display: none;
+    background: transparent;
+  }
+
+  .gradient-text {
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .bg-input-background {
+    background-color: hsl(var(--input-background));
+  }
+
+  .transition-ring {
+    transition-property: box-shadow, transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+  }
+
+  .loading-placeholder::placeholder {
+    animation: placeholder-pulse 1.5s ease-in-out infinite;
+  }
+
+  /**
+   * Panel tab visibility and styling to prevent hydration flash
+   */
+  html[data-panel-active-tab="copilot"] .panel-container [data-tab-content="toolbar"],
+  html[data-panel-active-tab="copilot"] .panel-container [data-tab-content="editor"] {
+    display: none !important;
+  }
+
+  html[data-panel-active-tab="toolbar"] .panel-container [data-tab-content="copilot"],
+  html[data-panel-active-tab="toolbar"] .panel-container [data-tab-content="editor"] {
+    display: none !important;
+  }
+
+  html[data-panel-active-tab="editor"] .panel-container [data-tab-content="copilot"],
+  html[data-panel-active-tab="editor"] .panel-container [data-tab-content="toolbar"] {
+    display: none !important;
+  }
+
+  html[data-panel-active-tab="copilot"] .panel-container [data-tab-button="copilot"] {
+    background-color: var(--border-1) !important;
+    color: var(--text-primary) !important;
+  }
+  html[data-panel-active-tab="copilot"] .panel-container [data-tab-button="toolbar"],
+  html[data-panel-active-tab="copilot"] .panel-container [data-tab-button="editor"] {
+    background-color: transparent !important;
+    color: var(--text-tertiary) !important;
+  }
+
+  html[data-panel-active-tab="toolbar"] .panel-container [data-tab-button="toolbar"] {
+    background-color: var(--border-1) !important;
+    color: var(--text-primary) !important;
+  }
+  html[data-panel-active-tab="toolbar"] .panel-container [data-tab-button="copilot"],
+  html[data-panel-active-tab="toolbar"] .panel-container [data-tab-button="editor"] {
+    background-color: transparent !important;
+    color: var(--text-tertiary) !important;
+  }
+
+  html[data-panel-active-tab="editor"] .panel-container [data-tab-button="editor"] {
+    background-color: var(--border-1) !important;
+    color: var(--text-primary) !important;
+  }
+  html[data-panel-active-tab="editor"] .panel-container [data-tab-button="copilot"],
+  html[data-panel-active-tab="editor"] .panel-container [data-tab-button="toolbar"] {
+    background-color: transparent !important;
+    color: var(--text-tertiary) !important;
+  }
+}
+
+/**
+ * @depricated
+ * Legacy globals (light/dark) kept for backward-compat with old classes.
+ * Do not modify; remove after migration.
+ */
+@layer base {
+  :root,
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 99.2%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 11.2%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 11.2%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 46.9%;
+    --accent: 0 0% 92.5%;
+    --accent-foreground: 0 0% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --input: 0 0% 89.8%;
+    --input-background: 0 0% 100%;
+    --ring: 0 0% 3.9%;
+    --radius: 0.5rem;
+    --scrollbar-track: 0 0% 85%;
+    --scrollbar-thumb: 0 0% 65%;
+    --scrollbar-thumb-hover: 0 0% 55%;
+    --scrollbar-size: 8px;
+    --workflow-background: 0 0% 100%;
+    --card-background: 0 0% 99.2%;
+    --card-border: 0 0% 89.8%;
+    --card-text: 0 0% 3.9%;
+    --card-hover: 0 0% 96.1%;
+    --base-muted-foreground: #737373;
+    --brand: #33c482;
+    --brand-hover: #2dac72;
+  }
+
+  .dark {
+    --background: 0 0% 10.59%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 9.0%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 9.0%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 11.2%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 12.0%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 17.5%;
+    /* --muted-foreground: 0 0% 65.1%; */
+    --accent: 0 0% 17.5%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --input: 0 0% 16.1%;
+    --input-background: 0 0% 20.78%;
+    --ring: 0 0% 83.9%;
+    --scrollbar-track: 0 0% 17.5%;
+    --scrollbar-thumb: 0 0% 30%;
+    --scrollbar-thumb-hover: 0 0% 40%;
+    --workflow-background: 0 0% 10.59%;
+    --card-background: 0 0% 9.0%;
+    --card-border: 0 0% 22.7%;
+    --card-text: 0 0% 98%;
+    --card-hover: 0 0% 12.0%;
+    --base-muted-foreground: #a3a3a3;
+    --brand: #33c482;
+    --brand-hover: #2dac72;
+  }
+}
+
+/**
+ * Remove backticks from inline code in prose (Tailwind Typography default)
+ */
+.prose code::before,
+.prose code::after {
+  content: none !important;
+}
+
+/**
+ * Remove underlines from heading anchor links in prose
+ */
+.prose h1 a,
+.prose h2 a,
+.prose h3 a,
+.prose h4 a,
+.prose h5 a,
+.prose h6 a {
+  text-decoration: none !important;
+  color: inherit !important;
+}
+
+/**
+ * Respect user's prefers-reduced-motion setting (WCAG 2.3.3)
+ * Disables animations and transitions for users who prefer reduced motion.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* WandPromptBar status indicator */
+@keyframes smoke-pulse {
+  0%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.status-indicator {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: hsl(var(--muted-foreground) / 0.5);
+  transition: background-color 0.3s ease;
+}
+
+.status-indicator.streaming {
+  background-color: transparent;
+}
+
+.status-indicator.streaming::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    hsl(var(--primary) / 0.9) 0%,
+    hsl(var(--primary) / 0.4) 60%,
+    transparent 80%
+  );
+  animation: smoke-pulse 1.8s ease-in-out infinite;
+  opacity: 0.9;
+}
+
+.dark .status-indicator.streaming::before {
+  background: #6b7280;
+  opacity: 0.9;
+  animation: smoke-pulse 1.8s ease-in-out infinite;
+}
+
+/* MessageContainer loading dot */
+@keyframes growShrink {
+  0%,
+  100% {
+    transform: scale(0.9);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.loading-dot {
+  animation: growShrink 1.5s infinite ease-in-out;
+}
+
+/* Subflow node drag-over styles */
+.loop-node-drag-over,
+.parallel-node-drag-over {
+  box-shadow: 0 0 0 1.75px var(--brand-secondary) !important;
+  border-radius: 8px !important;
+}
+
+.react-flow__node[data-parent-node-id] .react-flow__handle {
+  z-index: 30;
+}

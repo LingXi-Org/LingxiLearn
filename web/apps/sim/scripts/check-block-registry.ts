@@ -1,0 +1,372 @@
+#!/usr/bin/env bun
+
+/**
+ * CI check: enforces block-registry invariants that protect the runtime.
+ *
+ * Two checks run in sequence:
+ *
+ * 1. **Subblock ID stability** — diffs the current registry against a base ref
+ *    and fails if any subblock ID was removed without a corresponding entry in
+ *    `SUBBLOCK_ID_MIGRATIONS`. Removing IDs without a migration breaks
+ *    deployed workflows.
+ *
+ * 2. **Canonical-id contract** — for every (block, tool) pair where the tool
+ *    param is `required: true` and `visibility: 'user-only'`, the block must
+ *    expose a subBlock whose `id` or `canonicalParamId` equals the tool param
+ *    id. The serializer's pre-execution validator depends on this contract to
+ *    resolve values via direct lookup; mismatches false-flag fields as missing
+ *    at submit time.
+ *
+ * Usage:
+ *   bun run apps/sim/scripts/check-block-registry.ts [base-ref]
+ *
+ * `base-ref` defaults to `HEAD~1`. In a PR CI pipeline, pass the merge base:
+ *   bun run apps/sim/scripts/check-block-registry.ts origin/main
+ */
+
+import { execSync } from 'child_process'
+import { SUBBLOCK_ID_MIGRATIONS } from '@/lib/workflows/migrations/subblock-migrations'
+import { getAllBlocks, getBlock, getBlockMeta } from '@/blocks/registry'
+import { getToolParams } from '@/tools/metadata'
+
+const baseRef = process.argv[2] || 'HEAD~1'
+
+const gitRoot = execSync('git rev-parse --show-toplevel', { encoding: 'utf-8' }).trim()
+const gitOpts = { encoding: 'utf-8' as const, cwd: gitRoot }
+
+type IdMap = Record<string, Set<string>>
+
+/**
+ * Extracts subblock IDs from the `subBlocks: [ ... ]` section of a block
+ * definition. Only grabs the top-level `id:` of each subblock object —
+ * ignores nested IDs inside `options`, `columns`, etc.
+ */
+function extractSubBlockIds(source: string): string[] {
+  const startIdx = source.indexOf('subBlocks:')
+  if (startIdx === -1) return []
+
+  const bracketStart = source.indexOf('[', startIdx)
+  if (bracketStart === -1) return []
+
+  const ids: string[] = []
+  let braceDepth = 0
+  let bracketDepth = 0
+  let i = bracketStart + 1
+  bracketDepth = 1
+
+  while (i < source.length && bracketDepth > 0) {
+    const ch = source[i]
+
+    if (ch === '[') bracketDepth++
+    else if (ch === ']') {
+      bracketDepth--
+      if (bracketDepth === 0) break
+    } else if (ch === '{') {
+      braceDepth++
+      if (braceDepth === 1) {
+        const ahead = source.slice(i, i + 200)
+        const idMatch = ahead.match(/{\s*(?:\/\/[^\n]*\n\s*)*id:\s*['"]([^'"]+)['"]/)
+        if (idMatch) {
+          ids.push(idMatch[1])
+        }
+      }
+    } else if (ch === '}') {
+      braceDepth--
+    }
+
+    i++
+  }
+
+  return ids
+}
+
+function getCurrentIds(): IdMap {
+  const map: IdMap = {}
+  for (const block of getAllBlocks()) {
+    map[block.type] = new Set(block.subBlocks.map((sb) => sb.id))
+  }
+  return map
+}
+
+type PreviousIdsResult =
+  | { kind: 'skip'; reason: string }
+  | { kind: 'noop' }
+  | { kind: 'ok'; map: IdMap }
+
+function getPreviousIds(): PreviousIdsResult {
+  const registryPath = 'apps/sim/blocks/registry.ts'
+  const blocksDir = 'apps/sim/blocks/blocks'
+
+  let hasChanges = false
+  try {
+    const diff = execSync(
+      `git diff --name-only ${baseRef} HEAD -- ${registryPath} ${blocksDir}`,
+      gitOpts
+    ).trim()
+    hasChanges = diff.length > 0
+  } catch {
+    return { kind: 'skip', reason: 'Could not diff against base ref' }
+  }
+
+  if (!hasChanges) {
+    return { kind: 'noop' }
+  }
+
+  const map: IdMap = {}
+
+  try {
+    const blockFiles = execSync(`git ls-tree -r --name-only ${baseRef} -- ${blocksDir}`, gitOpts)
+      .trim()
+      .split('\n')
+      .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+
+    for (const filePath of blockFiles) {
+      let content: string
+      try {
+        content = execSync(`git show ${baseRef}:${filePath}`, gitOpts)
+      } catch {
+        continue
+      }
+
+      const typeMatch = content.match(
+        /BlockConfig(?:<[^>]*>)?\s*=\s*\{[\s\S]*?type:\s*['"]([^'"]+)['"]/
+      )
+      if (!typeMatch) continue
+      const blockType = typeMatch[1]
+
+      const ids = extractSubBlockIds(content)
+      if (ids.length === 0) continue
+
+      map[blockType] = new Set(ids)
+    }
+  } catch (err) {
+    return { kind: 'skip', reason: `Could not read previous block files from ${baseRef}: ${err}` }
+  }
+
+  return { kind: 'ok', map }
+}
+
+type CheckResult =
+  | { kind: 'pass'; message: string }
+  | { kind: 'skip'; message: string }
+  | { kind: 'fail'; errors: string[] }
+
+function checkSubblockIdStability(): CheckResult {
+  const previous = getPreviousIds()
+
+  if (previous.kind === 'skip') {
+    return { kind: 'skip', message: `${previous.reason} — skipping subblock ID stability check` }
+  }
+  if (previous.kind === 'noop') {
+    return {
+      kind: 'skip',
+      message: 'No block definition changes detected — skipping subblock ID stability check',
+    }
+  }
+
+  const current = getCurrentIds()
+  const errors: string[] = []
+
+  for (const [blockType, prevIds] of Object.entries(previous.map)) {
+    const currIds = current[blockType]
+    if (!currIds) continue
+
+    const migrations = SUBBLOCK_ID_MIGRATIONS[blockType] ?? {}
+
+    for (const oldId of prevIds) {
+      if (currIds.has(oldId)) continue
+      if (oldId in migrations) continue
+
+      errors.push(
+        `Block "${blockType}": subblock ID "${oldId}" was removed.\n` +
+          `  → Add a migration in SUBBLOCK_ID_MIGRATIONS (lib/workflows/migrations/subblock-migrations.ts)\n` +
+          `    mapping "${oldId}" to its replacement ID.`
+      )
+    }
+  }
+
+  if (errors.length === 0) {
+    return { kind: 'pass', message: 'Subblock ID stability check passed' }
+  }
+  return { kind: 'fail', errors }
+}
+
+function checkCanonicalIdContract(): CheckResult {
+  const errors: string[] = []
+
+  for (const block of getAllBlocks()) {
+    const access: string[] = block.tools?.access ?? []
+    if (access.length === 0) continue
+
+    // A subBlock with `canonicalParamId` has its raw `id` deleted from `params` during
+    // canonical-group resolution in `extractParams` (serializer/index.ts), so the raw id is
+    // NOT a valid lookup key at execution time — only the canonical is. Tool params must
+    // align with the canonical, not the raw id.
+    const subBlockKeys = new Set<string>()
+    for (const sb of block.subBlocks ?? []) {
+      const canonical = (sb as { canonicalParamId?: string }).canonicalParamId
+      if (canonical) {
+        subBlockKeys.add(canonical)
+      } else if (sb.id) {
+        subBlockKeys.add(sb.id)
+      }
+    }
+
+    for (const toolId of access) {
+      const toolParams = getToolParams(toolId)
+      if (!toolParams) continue
+
+      for (const [paramId, paramConfig] of Object.entries(toolParams)) {
+        if (!paramConfig || typeof paramConfig !== 'object') continue
+        const required = (paramConfig as { required?: boolean }).required === true
+        const userOnly = (paramConfig as { visibility?: string }).visibility === 'user-only'
+        if (!required || !userOnly) continue
+
+        if (!subBlockKeys.has(paramId)) {
+          errors.push(
+            `Block "${block.type}" → tool "${toolId}": required user-only param "${paramId}" has no subBlock with id or canonicalParamId === "${paramId}".\n` +
+              '  → Rename a subBlock id or canonicalParamId to match the tool param id,\n' +
+              "    and update the block's inputs + tools.config.params mapper to read from that key."
+          )
+        }
+      }
+    }
+  }
+
+  if (errors.length === 0) {
+    return { kind: 'pass', message: 'Canonical-id contract check passed' }
+  }
+  return { kind: 'fail', errors }
+}
+
+/**
+ * Every catalog-visible integration block must expose a `BlockMeta` entry in
+ * `BLOCK_META_REGISTRY`. The integration detail pages
+ * (`getTemplatesForBlock`/`getSuggestedSkillsForBlock`) and the landing catalog
+ * read metas by block type; a `tools`-category block that ships in the toolbar
+ * without a meta renders an empty detail page (no templates, no skills).
+ *
+ * "Catalog-visible integration" mirrors the `isIntegrationBlock` predicate in
+ * `scripts/generate-docs.ts`: `category === 'tools' && !hideFromToolbar`. Core
+ * primitives (`agent`/`api`/`function`/…), hidden/legacy base versions, and
+ * first-party `blocks`-category blocks intentionally carry no meta and are not
+ * checked. `getBlockMeta` resolves through the version suffix, so a versioned
+ * block (e.g. `github_v2`) passes via its base meta.
+ */
+function checkIntegrationMetaCoverage(): CheckResult {
+  const errors: string[] = []
+
+  for (const block of getAllBlocks()) {
+    // Unreleased preview blocks ship no BlockMeta until GA (they are absent
+    // from every catalog surface), so meta coverage must not force one. The
+    // registry projection already hides them here (no visibility context in a
+    // script), but the explicit check keeps this true regardless.
+    const isCatalogIntegration =
+      block.category === 'tools' && !block.hideFromToolbar && !block.preview
+    if (!isCatalogIntegration) continue
+
+    if (!getBlockMeta(block.type)) {
+      errors.push(
+        `Block "${block.type}" is a catalog integration (category: 'tools', not hidden) but has no BlockMeta.\n` +
+          `  → Export a \`${block.type}\`-keyed \`{Service}BlockMeta\` (tags + templates + skills) from its block file\n` +
+          '    and register it in BLOCK_META_REGISTRY (apps/sim/blocks/registry-maps.ts), alphabetically.'
+      )
+    }
+  }
+
+  if (errors.length === 0) {
+    return { kind: 'pass', message: 'Integration meta coverage check passed' }
+  }
+  return { kind: 'fail', errors }
+}
+
+function checkSunsetReplacedBy(): CheckResult {
+  const errors: string[] = []
+
+  for (const block of getAllBlocks()) {
+    const sunset = block.sunset
+    if (!sunset) continue
+
+    if (!sunset.replacedBy) {
+      // `legacy` needs a successor to render its badge + upgrade action; `deprecated`
+      // (red) legitimately badges without one.
+      if (sunset.status === 'legacy') {
+        errors.push(
+          `Block "${block.type}" is sunset (legacy) but has no replacedBy — legacy blocks must name a successor or they render no badge.`
+        )
+      }
+      continue
+    }
+
+    const target = getBlock(sunset.replacedBy)
+    if (!target) {
+      errors.push(
+        `Block "${block.type}" is sunset with replacedBy: '${sunset.replacedBy}', but no such block exists.`
+      )
+      continue
+    }
+    if (target.sunset) {
+      errors.push(
+        `Block "${block.type}" points replacedBy: '${sunset.replacedBy}', but that block is itself sunset.`
+      )
+    }
+    if (target.preview) {
+      errors.push(
+        `Block "${block.type}" points replacedBy: '${sunset.replacedBy}', but that block is preview (not GA).`
+      )
+    }
+  }
+
+  if (errors.length === 0) {
+    return { kind: 'pass', message: 'Sunset replacedBy check passed' }
+  }
+  return { kind: 'fail', errors }
+}
+
+function reportResult(label: string, failureHeader: string, result: CheckResult): boolean {
+  if (result.kind === 'pass') {
+    console.log(`✓ ${result.message}`)
+    return true
+  }
+  if (result.kind === 'skip') {
+    console.log(`⚠ ${result.message}`)
+    return true
+  }
+  console.error(`\n✗ ${label} FAILED\n`)
+  if (failureHeader) console.error(`${failureHeader}\n`)
+  for (const err of result.errors) {
+    console.error(`  ${err}\n`)
+  }
+  return false
+}
+
+const stabilityResult = checkSubblockIdStability()
+const canonicalResult = checkCanonicalIdContract()
+const metaCoverageResult = checkIntegrationMetaCoverage()
+const sunsetResult = checkSunsetReplacedBy()
+
+const stabilityOk = reportResult(
+  'Subblock ID stability check',
+  'Removing subblock IDs breaks deployed workflows.\nEither revert the rename or add a migration entry.',
+  stabilityResult
+)
+
+const canonicalOk = reportResult(
+  'Canonical-id contract check',
+  "Misaligned ids cause the serializer's pre-execution validator to false-flag fields as missing at submit time.",
+  canonicalResult
+)
+
+const metaCoverageOk = reportResult(
+  'Integration meta coverage check',
+  'Catalog integrations without a BlockMeta render empty detail pages (no templates, no skills).',
+  metaCoverageResult
+)
+
+const sunsetOk = reportResult(
+  'Sunset replacedBy check',
+  'A sunset block must point replacedBy at a real, GA, non-sunset successor.',
+  sunsetResult
+)
+
+process.exit(stabilityOk && canonicalOk && metaCoverageOk && sunsetOk ? 0 : 1)

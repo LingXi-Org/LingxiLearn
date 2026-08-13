@@ -1,26 +1,20 @@
 ---
 name: lesson-intro
 description: >-
-  Create an effective, human-sounding Chinese course introduction as a self-contained single-file
-  HTML page. Turn the strongest available fact, puzzle, failure, everyday scene, misconception,
-  thought experiment, or modern application into a warm and memorable doorway to a target concept.
-  Use when a teaching system needs a learner-facing course opening or curiosity-driven HTML handoff.
-  Choose the simplest output and research depth that work; do not fabricate missing evidence or force
-  every chapter, field, candidate, or citation into the result. Chinese display name: 课程引入页面设计。
-  Chinese display description: 自主生成有趣自然、可直接打开的中文单文件课程引入 HTML 页面，证据不足时灵活改用可靠的观察或思想实验。
+  Create a warm, evidence-grounded lesson opening that turns a fact, puzzle, scene, or misconception into curiosity about the target concept.
 license: MIT
 compatibility: LingxiGraph Agent Skills runtime with web research and HTML output
 metadata:
   author: LingXi-Org
   version: 4.0.0
-  display-name: 课程引入页面设计
-  display-description: 自主生成有趣自然、可直接打开的中文单文件课程引入 HTML 页面，证据不足时灵活改用可靠的观察或思想实验。
+  display-name: 课程引入
+  display-description: 基于事实、问题、场景或误区设计自然有趣的课程开场，引导学习者产生对目标概念的兴趣。
   output-language: zh-CN
   output-contract: lesson-intro-html.v1
   execution-mode: research-editorial-html
 ---
 
-# Lesson Introduction Page
+# Lesson Opener
 
 ## Role
 

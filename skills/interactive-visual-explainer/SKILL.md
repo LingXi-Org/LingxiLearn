@@ -1,21 +1,16 @@
 ---
 name: interactive-visual-explainer
 description: >-
-  Create a self-contained, offline interactive HTML explainer for an algorithm, mathematical idea,
-  physical mechanism, system, protocol, or other concept that is easier to understand by seeing
-  and manipulating it. Use one to three meaningful controls, light/dark support, and an embedded
-  explanation. Do not use for text-only answers, static reports, slides, or ordinary charts with
-  no explanatory interaction. Chinese display name: 交互式可视化讲解。Chinese display description:
-  生成零依赖、可离线打开的中文交互式 HTML 知识讲解页面。
+  Create a self-contained, offline interactive HTML explainer for concepts that are easier to understand through visual manipulation.
 license: MIT
 compatibility: LingxiGraph Agent Skills runtime
 metadata:
   author: LingXi-Org
-  version: 1.0.0
+  version: 1.2.0
   display-name: 交互式可视化讲解
-  display-description: 生成零依赖、可离线打开的中文交互式 HTML 知识讲解页面。
+  display-description: 为适合通过观察和操作理解的概念生成可离线运行的交互式 HTML 讲解页面。
   output-language: zh-CN
-  output-contract: interactive-visual-explainer-delivery.v1
+  output-contract: interactive-visual-explainer-delivery.v1.2
   execution-mode: artifact-generation
 ---
 
@@ -24,9 +19,14 @@ metadata:
 ## Role
 
 Receive a concept from the orchestrating agent and produce one independently openable interactive
-teaching page. Make the conclusion live in the visual interaction, not only in prose. The default
-artifact is exactly one `.html` file with no external requests, offline support, light/dark mode,
-and print support.
+teaching page. Make the conclusion live in the visual interaction, not only in prose. The final
+delivery is exactly one `.html` file with no external requests, offline support, light/dark mode,
+and print support. Do not routinely persist or deliver redundant intermediate files, such as
+standalone image or PowerPoint exports of content already represented in the HTML. Temporary files
+needed for an important design, validation, rendering, or compatibility check may be viewed or
+written to the host; keep them ephemeral when possible and never include them in the final
+delivery unless explicitly requested. All explanatory graphics in the final HTML must be authored
+inline with SVG and/or CSS.
 
 ## Output language
 
@@ -58,7 +58,10 @@ Follow this order:
 3. Choose the teaching pattern first, then the chart or SVG form. Read the relevant references.
 4. Lay out coordinates in a 680-wide viewBox using `L=60 R=640 T=40 B=300`; budget Chinese text
    at 14 px per character and verify bounds and overlap.
-5. Start from `assets/template.html` and inline `assets/lingxi.css` without changing its tokens.
+5. Start from `assets/template.html`, inline `assets/lingxi.css` without changing its tokens, and
+   keep every graphic in the final HTML as inline SVG and/or CSS. Do not routinely export a
+   standalone image or presentation file; if a temporary file is necessary for a key check, use it
+   only for that check and do not deliver it.
 6. Assign colors by semantic role. Rerun both palette checks after every color change:
 
    ```text
@@ -67,8 +70,10 @@ Follow this order:
    ```
 
    Fix every FAIL before continuing.
-7. Run `node scripts/check_page.js <page>.html`, render light and dark screenshots, and inspect
-   them. The static checker cannot see DOM created at runtime.
+7. Run `node scripts/check_page.js <page>.html`. Resolve every FAIL before delivery and explain
+   any remaining WARN in the delivery note. This static check is the required artifact validation
+   gate. Screenshots may be generated temporarily when a visual check is useful, but they are not
+   required and are not delivery files.
 8. Compare the result with `references/anti-patterns.md` before delivery.
 
 ## Non-negotiable design rules
@@ -84,7 +89,8 @@ Follow this order:
 9. Select a dedicated dark palette; never create dark mode by inversion.
 10. Use only 400/500 font weights, 0.5 px hairlines, no gradients or shadows, sentence case, and
     no emoji.
-11. Inspect rendered light and dark screenshots before delivery.
+11. Deliver only the final self-contained HTML and the short delivery note. Any optional
+    screenshots or other temporary validation artifacts must not be delivered.
 
 ## Required delivery note
 
@@ -97,7 +103,6 @@ Return a short Chinese note, not the full HTML, with:
 主交互：<pattern> + <control and changed variable>
 图形清单：图1 <description> / 图2 <description>
 校验：validate_palette <light PASS / dark PASS>；check_page <FAIL count / WARN count>
-截图核对：亮色 ✓ 暗色 ✓
 补的假设：<assumptions>
 已知取舍：<removed content and reason>
 ```

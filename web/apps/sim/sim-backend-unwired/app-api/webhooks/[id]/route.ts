@@ -1,0 +1,286 @@
+import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
+import { db } from '@sim/db'
+import { webhook, workflow } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import {
+  assertWorkflowMutable,
+  authorizeWorkflowByWorkspacePermission,
+  WorkflowLockedError,
+} from '@sim/platform-authz/workflow'
+import { and, eq, isNull } from 'drizzle-orm'
+import { type NextRequest, NextResponse } from 'next/server'
+import {
+  deleteWebhookContract,
+  getWebhookContract,
+  updateWebhookContract,
+} from '@/lib/api/contracts/webhooks'
+import { parseRequest } from '@/lib/api/server'
+import { checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
+import { PlatformEvents } from '@/lib/core/telemetry'
+import { generateRequestId } from '@/lib/core/utils/request'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { captureServerEvent } from '@/lib/posthog/server'
+import { cleanupExternalWebhook } from '@/lib/webhooks/provider-subscriptions'
+
+const logger = createLogger('WebhookAPI')
+
+export const dynamic = 'force-dynamic'
+
+// Get a specific webhook
+export const GET = withRouteHandler(
+  async (request: NextRequest, context: { params: Promise<{ id: string }> }) => {
+    const requestId = generateRequestId()
+
+    try {
+      const parsed = await parseRequest(getWebhookContract, request, context)
+      if (!parsed.success) return parsed.response
+      const { id } = parsed.data.params
+
+      const auth = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
+      if (!auth.success || !auth.userId) {
+        logger.warn(`[${requestId}] Unauthorized webhook access attempt`)
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const userId = auth.userId
+
+      const webhooks = await db
+        .select({
+          webhook: webhook,
+          workflow: {
+            id: workflow.id,
+            name: workflow.name,
+            userId: workflow.userId,
+            workspaceId: workflow.workspaceId,
+          },
+        })
+        .from(webhook)
+        .innerJoin(workflow, eq(webhook.workflowId, workflow.id))
+        .where(and(eq(webhook.id, id), isNull(webhook.archivedAt)))
+        .limit(1)
+
+      if (webhooks.length === 0) {
+        logger.warn(`[${requestId}] Webhook not found: ${id}`)
+        return NextResponse.json({ error: 'Webhook not found' }, { status: 404 })
+      }
+
+      const webhookData = webhooks[0]
+
+      const authorization = await authorizeWorkflowByWorkspacePermission({
+        workflowId: webhookData.workflow.id,
+        userId,
+        action: 'read',
+      })
+      const hasAccess = authorization.allowed
+
+      if (!hasAccess) {
+        logger.warn(`[${requestId}] User ${userId} denied access to webhook: ${id}`)
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
+
+      logger.info(`[${requestId}] Successfully retrieved webhook: ${id}`)
+      return NextResponse.json({ webhook: webhooks[0] }, { status: 200 })
+    } catch (error) {
+      logger.error(`[${requestId}] Error fetching webhook`, error)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
+  }
+)
+
+export const PATCH = withRouteHandler(
+  async (request: NextRequest, context: { params: Promise<{ id: string }> }) => {
+    const requestId = generateRequestId()
+
+    try {
+      const parsed = await parseRequest(updateWebhookContract, request, context)
+      if (!parsed.success) return parsed.response
+      const { id } = parsed.data.params
+
+      const auth = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
+      if (!auth.success || !auth.userId) {
+        logger.warn(`[${requestId}] Unauthorized webhook update attempt`)
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const userId = auth.userId
+
+      const { isActive, failedCount } = parsed.data.body
+
+      const webhooks = await db
+        .select({
+          webhook: webhook,
+          workflow: {
+            id: workflow.id,
+            userId: workflow.userId,
+            workspaceId: workflow.workspaceId,
+          },
+        })
+        .from(webhook)
+        .innerJoin(workflow, eq(webhook.workflowId, workflow.id))
+        .where(and(eq(webhook.id, id), isNull(webhook.archivedAt)))
+        .limit(1)
+
+      if (webhooks.length === 0) {
+        logger.warn(`[${requestId}] Webhook not found: ${id}`)
+        return NextResponse.json({ error: 'Webhook not found' }, { status: 404 })
+      }
+
+      const webhookData = webhooks[0]
+      const authorization = await authorizeWorkflowByWorkspacePermission({
+        workflowId: webhookData.workflow.id,
+        userId,
+        action: 'write',
+      })
+      const canModify = authorization.allowed
+
+      if (!canModify) {
+        logger.warn(`[${requestId}] User ${userId} denied permission to modify webhook: ${id}`)
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
+      await assertWorkflowMutable(webhookData.workflow.id)
+
+      const setClause: Partial<typeof webhook.$inferInsert> = {}
+      if (isActive !== undefined && isActive !== webhooks[0].webhook.isActive) {
+        setClause.isActive = isActive
+      }
+      if (failedCount !== undefined && failedCount !== webhooks[0].webhook.failedCount) {
+        setClause.failedCount = failedCount
+      }
+
+      if (Object.keys(setClause).length === 0) {
+        logger.info(`[${requestId}] No-op webhook PATCH (no field changes): ${id}`)
+        return NextResponse.json({ webhook: webhooks[0].webhook }, { status: 200 })
+      }
+
+      setClause.updatedAt = new Date()
+      const updatedWebhook = await db
+        .update(webhook)
+        .set(setClause)
+        .where(eq(webhook.id, id))
+        .returning()
+
+      logger.info(`[${requestId}] Successfully updated webhook: ${id}`)
+      return NextResponse.json({ webhook: updatedWebhook[0] }, { status: 200 })
+    } catch (error) {
+      if (error instanceof WorkflowLockedError) {
+        return NextResponse.json({ error: error.message }, { status: error.status })
+      }
+
+      logger.error(`[${requestId}] Error updating webhook`, error)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
+  }
+)
+
+// Delete a webhook
+export const DELETE = withRouteHandler(
+  async (request: NextRequest, context: { params: Promise<{ id: string }> }) => {
+    const requestId = generateRequestId()
+
+    try {
+      const parsed = await parseRequest(deleteWebhookContract, request, context)
+      if (!parsed.success) return parsed.response
+      const { id } = parsed.data.params
+
+      const auth = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
+      if (!auth.success || !auth.userId) {
+        logger.warn(`[${requestId}] Unauthorized webhook deletion attempt`)
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const userId = auth.userId
+
+      // Find the webhook and check permissions
+      const webhooks = await db
+        .select({
+          webhook: webhook,
+          workflow: {
+            id: workflow.id,
+            userId: workflow.userId,
+            workspaceId: workflow.workspaceId,
+          },
+        })
+        .from(webhook)
+        .innerJoin(workflow, eq(webhook.workflowId, workflow.id))
+        .where(eq(webhook.id, id))
+        .limit(1)
+
+      if (webhooks.length === 0) {
+        logger.warn(`[${requestId}] Webhook not found: ${id}`)
+        return NextResponse.json({ error: 'Webhook not found' }, { status: 404 })
+      }
+
+      const webhookData = webhooks[0]
+
+      const authorization = await authorizeWorkflowByWorkspacePermission({
+        workflowId: webhookData.workflow.id,
+        userId,
+        action: 'write',
+      })
+      const canDelete = authorization.allowed
+
+      if (!canDelete) {
+        logger.warn(`[${requestId}] User ${userId} denied permission to delete webhook: ${id}`)
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
+      await assertWorkflowMutable(webhookData.workflow.id)
+
+      const foundWebhook = webhookData.webhook
+
+      await cleanupExternalWebhook(foundWebhook, webhookData.workflow, requestId)
+      await db.delete(webhook).where(eq(webhook.id, id))
+
+      try {
+        PlatformEvents.webhookDeleted({
+          webhookId: id,
+          workflowId: webhookData.workflow.id,
+        })
+      } catch {
+        // Telemetry should not fail the operation
+      }
+
+      logger.info(`[${requestId}] Successfully deleted webhook: ${id}`)
+
+      recordAudit({
+        workspaceId: webhookData.workflow.workspaceId || null,
+        actorId: userId,
+        actorName: auth.userName,
+        actorEmail: auth.userEmail,
+        action: AuditAction.WEBHOOK_DELETED,
+        resourceType: AuditResourceType.WEBHOOK,
+        resourceId: id,
+        resourceName: foundWebhook.provider || 'generic',
+        description: `Deleted ${foundWebhook.provider || 'generic'} webhook`,
+        metadata: {
+          provider: foundWebhook.provider || 'generic',
+          workflowId: webhookData.workflow.id,
+          webhookPath: foundWebhook.path || undefined,
+          blockId: foundWebhook.blockId || undefined,
+        },
+        request,
+      })
+
+      const wsId = webhookData.workflow.workspaceId || undefined
+      captureServerEvent(
+        userId,
+        'webhook_trigger_deleted',
+        {
+          webhook_id: id,
+          workflow_id: webhookData.workflow.id,
+          provider: foundWebhook.provider || 'generic',
+          workspace_id: wsId ?? '',
+        },
+        wsId ? { groups: { workspace: wsId } } : undefined
+      )
+
+      return NextResponse.json({ success: true }, { status: 200 })
+    } catch (error: any) {
+      if (error instanceof WorkflowLockedError) {
+        return NextResponse.json({ error: error.message }, { status: error.status })
+      }
+
+      logger.error(`[${requestId}] Error deleting webhook`, {
+        error: error.message,
+        stack: error.stack,
+      })
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
+  }
+)

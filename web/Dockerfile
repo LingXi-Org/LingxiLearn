@@ -1,30 +1,32 @@
-# Builds the static export. The result is copied into the API image's web root
-# by compose, so production serves one process on one port.
-
 ARG DOCKER_REGISTRY=docker.m.daocloud.io
-FROM ${DOCKER_REGISTRY}/library/node:22-slim AS builder
+FROM ${DOCKER_REGISTRY}/oven/bun:1.3.14 AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG NEXT_PUBLIC_API_BASE=
-ARG NEXT_PUBLIC_LOGTO_ENDPOINT=
-ARG NEXT_PUBLIC_LOGTO_APP_ID=
-ARG NEXT_PUBLIC_LOGTO_RESOURCE=
-ARG NEXT_PUBLIC_LOGTO_REDIRECT_URI=
+ARG NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER=
+ARG NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID=
+ARG NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE=
+ARG NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI=
+ARG NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE=
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE \
-    NEXT_PUBLIC_LOGTO_ENDPOINT=$NEXT_PUBLIC_LOGTO_ENDPOINT \
-    NEXT_PUBLIC_LOGTO_APP_ID=$NEXT_PUBLIC_LOGTO_APP_ID \
-    NEXT_PUBLIC_LOGTO_RESOURCE=$NEXT_PUBLIC_LOGTO_RESOURCE \
-    NEXT_PUBLIC_LOGTO_REDIRECT_URI=$NEXT_PUBLIC_LOGTO_REDIRECT_URI
-COPY package.json package-lock.json* ./
-RUN npm config set registry ${NPM_REGISTRY} \
- && npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+    NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER=$NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER \
+    NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID=$NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID \
+    NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE=$NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE \
+    NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI=$NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI \
+    NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE=$NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE
+COPY package.json bun.lock bunfig.toml ./
+COPY apps/sim/package.json apps/sim/package.json
+COPY packages packages
+# The Sim workspace is assembled from a large set of local packages. Docker
+# copies the package manifests before the source tree, so Bun must resolve the
+# workspace graph after those manifests are staged; a frozen install rejects
+# the generated lock metadata even when the dependency set is valid.
+RUN bun install --ignore-scripts
 COPY . .
-RUN npm run build
+RUN bun --cwd apps/sim run build
 
-# A tiny stage whose only job is to hand `out/` to the compose volume.
 ARG DOCKER_REGISTRY=docker.m.daocloud.io
 FROM ${DOCKER_REGISTRY}/library/busybox:1.37 AS dist
 WORKDIR /dist
-COPY --from=builder /app/out ./
-CMD ["sh", "-c", "cp -r /dist/. /web/ && echo 'web assets published to /web' && ls /web"]
+COPY --from=builder /app/apps/sim/out ./
+CMD ["sh", "-c", "cp -r /dist/. /web/ && echo 'Sim/Lingxi assets published to /web' && ls /web"]

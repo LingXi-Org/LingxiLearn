@@ -1,0 +1,131 @@
+import type { HunterDiscoverParams, HunterDiscoverResponse } from '@/tools/hunter/types'
+import { DISCOVER_RESULTS_OUTPUT, HUNTER_API_KEY_PREFIX } from '@/tools/hunter/types'
+import type { ToolConfig } from '@/tools/types'
+
+export const discoverTool: ToolConfig<HunterDiscoverParams, HunterDiscoverResponse> = {
+  id: 'hunter_discover',
+  name: 'Hunter Discover',
+  description: 'Returns companies matching a set of criteria using Hunter.io AI-powered search.',
+  version: '1.0.0',
+
+  hosting: {
+    envKeyPrefix: HUNTER_API_KEY_PREFIX,
+    apiKeyParam: 'apiKey',
+    byokProviderId: 'hunter',
+    // Discover is free on Hunter — no credits consumed.
+    pricing: { type: 'per_request', cost: 0 },
+    rateLimit: {
+      mode: 'per_request',
+      requestsPerMinute: 30,
+    },
+  },
+
+  params: {
+    query: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Natural language search query for companies',
+    },
+    domain: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Company domain name to filter by (e.g., "stripe.com", "company.io")',
+    },
+    headcount: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Company size filter (e.g., "1-10", "11-50")',
+    },
+    company_type: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Type of organization',
+    },
+    technology: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Technology used by companies',
+    },
+    apiKey: {
+      type: 'string',
+      required: true,
+      visibility: 'user-only',
+      description: 'Hunter.io API Key',
+    },
+  },
+
+  request: {
+    modelInput: {
+      mode: 'project',
+      select: (params) => ({ query: params.query }),
+    },
+    url: (params) => {
+      // Validate that at least one search parameter is provided
+      if (
+        !params.query &&
+        !params.domain &&
+        !params.headcount &&
+        !params.company_type &&
+        !params.technology
+      ) {
+        throw new Error(
+          'At least one search parameter (query, domain, headcount, company_type, or technology) must be provided'
+        )
+      }
+
+      const url = new URL('https://api.hunter.io/v2/discover')
+      url.searchParams.append('api_key', params.apiKey)
+      return url.toString()
+    },
+    method: 'POST',
+    headers: () => ({
+      'Content-Type': 'application/json',
+    }),
+    body: (params) => {
+      const body: Record<string, unknown> = {}
+
+      if (params.query) body.query = params.query
+      if (params.domain) body.organization = { domain: [params.domain] }
+      if (params.headcount) body.headcount = [params.headcount]
+      if (params.company_type) body.company_type = { include: [params.company_type] }
+      if (params.technology) {
+        body.technology = {
+          include: [params.technology],
+        }
+      }
+
+      return body
+    },
+  },
+
+  transformResponse: async (response: Response) => {
+    const data = await response.json()
+    const companies: Array<{
+      domain?: string
+      organization?: string
+      emails_count?: { personal?: number; generic?: number; total?: number }
+    }> = Array.isArray(data?.data) ? data.data : []
+
+    return {
+      success: true,
+      output: {
+        results: companies.map((c) => ({
+          domain: c.domain ?? '',
+          organization: c.organization ?? '',
+          personal_emails: c.emails_count?.personal ?? 0,
+          generic_emails: c.emails_count?.generic ?? 0,
+          total_emails: c.emails_count?.total ?? 0,
+        })),
+      },
+    }
+  },
+
+  outputs: {
+    results: DISCOVER_RESULTS_OUTPUT,
+  },
+}

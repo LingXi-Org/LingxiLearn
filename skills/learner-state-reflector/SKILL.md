@@ -1,26 +1,21 @@
 ---
 name: learner-state-reflector
 description: >-
-  Compress recent learning events into cautious, traceable learner-state update proposals after
-  the student-facing response has rendered. Use for long-term personalization, evidence
-  de-duplication, verification-debt and checkpoint suggestions, and optional open-learner-model
-  cards. Never ask a question, block adaptive-pedagogy, or turn model-derived inferences into a
-  formal educational judgment. Chinese display name: 学习状态反思。Chinese display description:
-  将学习事件压缩为可追溯、谨慎的状态更新建议，不打断学习流程。
+  Compress recent learning events into cautious, traceable learner-state update proposals without interrupting instruction.
 license: MIT
 compatibility: LingxiGraph Agent Skills runtime
 metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 学习状态反思
-  display-description: 将学习事件压缩为可追溯、谨慎的状态更新建议，不打断学习流程。
+  display-description: 将近期学习事件整理为谨慎、可追溯的学习状态更新建议，不打断教学流程。
   output-language: zh-CN
   output-contract: learner-state-reflector-result.v1
   execution-mode: non-blocking-background
   blocking: "false"
 ---
 
-# Learning State Reflector
+# State Observer
 
 ## Role
 

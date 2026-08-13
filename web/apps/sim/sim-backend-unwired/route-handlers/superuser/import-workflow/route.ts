@@ -1,0 +1,226 @@
+import { db } from '@sim/db'
+import { copilotChats, workflow, workspace } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { generateId } from '@sim/utils/id'
+import { and, eq, isNull } from 'drizzle-orm'
+import { type NextRequest, NextResponse } from 'next/server'
+import { importWorkflowAsSuperuserContract } from '@/lib/api/contracts/workflows'
+import { parseRequest } from '@/lib/api/server'
+import { getSession } from '@/lib/auth'
+import { loadCopilotChatMessages } from '@/lib/copilot/chat/lifecycle'
+import { appendCopilotChatMessages } from '@/lib/copilot/chat/messages-store'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { verifyEffectiveSuperUser } from '@/lib/permissions/super-user'
+import { parseWorkflowJson } from '@/lib/workflows/operations/import-export'
+import {
+  loadWorkflowFromNormalizedTables,
+  saveWorkflowToNormalizedTables,
+} from '@/lib/workflows/persistence/utils'
+import { sanitizeForExport } from '@/lib/workflows/sanitization/json-sanitizer'
+import { deduplicateWorkflowName } from '@/lib/workflows/utils'
+
+const logger = createLogger('SuperUserImportWorkflow')
+
+/**
+ * POST /api/superuser/import-workflow
+ *
+ * Superuser endpoint to import a workflow by ID along with its copilot chats.
+ * This creates a copy of the workflow in the target workspace with new IDs.
+ * Only the workflow structure and copilot chats are copied - no deployments,
+ * webhooks, triggers, or other sensitive data.
+ *
+ * Requires both isSuperUser flag AND superUserModeEnabled setting.
+ */
+export const POST = withRouteHandler(async (request: NextRequest) => {
+  try {
+    const session = await getSession()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { effectiveSuperUser, isSuperUser, superUserModeEnabled } =
+      await verifyEffectiveSuperUser(session.user.id)
+
+    if (!effectiveSuperUser) {
+      logger.warn('Non-effective-superuser attempted to access import-workflow endpoint', {
+        userId: session.user.id,
+        isSuperUser,
+        superUserModeEnabled,
+      })
+      return NextResponse.json({ error: 'Forbidden: Superuser access required' }, { status: 403 })
+    }
+
+    const parsed = await parseRequest(
+      importWorkflowAsSuperuserContract,
+      request,
+      {},
+      {
+        validationErrorResponse: (error) => {
+          const missingPath = error.issues[0]?.path[0]
+          if (missingPath === 'workflowId') {
+            return NextResponse.json({ error: 'workflowId is required' }, { status: 400 })
+          }
+          if (missingPath === 'targetWorkspaceId') {
+            return NextResponse.json({ error: 'targetWorkspaceId is required' }, { status: 400 })
+          }
+          return NextResponse.json({ error: 'workflowId is required' }, { status: 400 })
+        },
+      }
+    )
+    if (!parsed.success) return parsed.response
+
+    const { workflowId, targetWorkspaceId } = parsed.data.body
+
+    // Verify target workspace exists
+    const [targetWorkspace] = await db
+      .select({ id: workspace.id, ownerId: workspace.ownerId })
+      .from(workspace)
+      .where(and(eq(workspace.id, targetWorkspaceId), isNull(workspace.archivedAt)))
+      .limit(1)
+
+    if (!targetWorkspace) {
+      return NextResponse.json({ error: 'Target workspace not found' }, { status: 404 })
+    }
+
+    // Get the source workflow
+    const [sourceWorkflow] = await db
+      .select()
+      .from(workflow)
+      .where(eq(workflow.id, workflowId))
+      .limit(1)
+
+    if (!sourceWorkflow) {
+      return NextResponse.json({ error: 'Source workflow not found' }, { status: 404 })
+    }
+
+    // Load the workflow state from normalized tables
+    const normalizedData = await loadWorkflowFromNormalizedTables(workflowId)
+
+    if (!normalizedData) {
+      return NextResponse.json(
+        { error: 'Workflow has no normalized data - cannot import' },
+        { status: 400 }
+      )
+    }
+
+    // Use existing export logic to create export format
+    const workflowState = {
+      blocks: normalizedData.blocks,
+      edges: normalizedData.edges,
+      loops: normalizedData.loops,
+      parallels: normalizedData.parallels,
+      metadata: {
+        name: sourceWorkflow.name,
+        description: sourceWorkflow.description ?? undefined,
+      },
+    }
+
+    const exportData = sanitizeForExport(workflowState)
+
+    // Use existing import logic (parseWorkflowJson regenerates IDs automatically)
+    const { data: importedData, errors } = parseWorkflowJson(JSON.stringify(exportData))
+
+    if (!importedData || errors.length > 0) {
+      return NextResponse.json(
+        { error: `Failed to parse workflow: ${errors.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // Create new workflow record
+    const newWorkflowId = generateId()
+    const now = new Date()
+    const dedupedName = await deduplicateWorkflowName(
+      `[Debug Import] ${sourceWorkflow.name}`,
+      targetWorkspaceId,
+      null
+    )
+
+    await db.insert(workflow).values({
+      id: newWorkflowId,
+      userId: session.user.id,
+      workspaceId: targetWorkspaceId,
+      folderId: null,
+      name: dedupedName,
+      description: sourceWorkflow.description,
+      lastSynced: now,
+      createdAt: now,
+      updatedAt: now,
+      isDeployed: false, // Never copy deployment status
+      runCount: 0,
+      variables: sourceWorkflow.variables || {},
+    })
+
+    // Save using existing persistence logic
+    const saveResult = await saveWorkflowToNormalizedTables(newWorkflowId, importedData)
+
+    if (!saveResult.success) {
+      // Clean up the workflow record if save failed
+      await db.delete(workflow).where(eq(workflow.id, newWorkflowId))
+      return NextResponse.json(
+        { error: `Failed to save workflow state: ${saveResult.error}` },
+        { status: 500 }
+      )
+    }
+
+    // Copy copilot chats associated with the source workflow
+    const sourceCopilotChats = await db
+      .select({
+        id: copilotChats.id,
+        title: copilotChats.title,
+        model: copilotChats.model,
+        previewYaml: copilotChats.previewYaml,
+        config: copilotChats.config,
+      })
+      .from(copilotChats)
+      .where(eq(copilotChats.workflowId, workflowId))
+
+    let copilotChatsImported = 0
+
+    for (const chat of sourceCopilotChats) {
+      const sourceMessages = await loadCopilotChatMessages(chat.id)
+      await db.transaction(async (tx) => {
+        const [imported] = await tx
+          .insert(copilotChats)
+          .values({
+            userId: session.user.id,
+            workflowId: newWorkflowId,
+            title: chat.title ? `[Import] ${chat.title}` : null,
+            model: chat.model,
+            conversationId: null, // Don't copy conversation ID
+            previewYaml: chat.previewYaml,
+            config: chat.config,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .returning({ id: copilotChats.id })
+        if (imported && sourceMessages.length > 0) {
+          await appendCopilotChatMessages(
+            imported.id,
+            sourceMessages,
+            { chatModel: chat.model },
+            tx
+          )
+        }
+      })
+      copilotChatsImported++
+    }
+
+    logger.info('Superuser imported workflow', {
+      userId: session.user.id,
+      sourceWorkflowId: workflowId,
+      newWorkflowId,
+      targetWorkspaceId,
+      copilotChatsImported,
+    })
+
+    return NextResponse.json({
+      success: true,
+      newWorkflowId,
+      copilotChatsImported,
+    })
+  } catch (error) {
+    logger.error('Error importing workflow', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+})

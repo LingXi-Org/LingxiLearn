@@ -29,16 +29,16 @@ lecture_hook       interactive_lecture_deck
 
 ## 前端数据流
 
-- 首页仅负责把问题带到 `/workspace/?prompt=...`。
-- 工作区首次加载时创建 Agent Task，并将 URL 替换为 `/workspace/?task=<task-id>`。
+- `/workspace/lingxi/home` 直接创建 Agent Task，然后进入 `/workspace/lingxi/chat/<task-id>`。
+- `/workspace/lingxi/w/<task-id>` 使用同一任务快照展示只读工作流。
 - `web/hooks/use-agent-task.ts` 读取任务快照并订阅 `/api/agent-tasks/<task-id>/events`。
-- `web/lib/sim-adapter.ts` 将快照和事件转换为聊天消息、活动摘要和 Canvas 图。
+- `web/lib/lingxi-projection.ts` 将快照和事件转换为聊天消息、活动摘要和 Canvas 图。
 - 右侧工作区由 Canvas、课程引入、Lecture deck、结构化 Quiz 和按需 Visual explainer 页面组成。
 - Artifact 必须通过 `api.fetchArtifact` 读取，以便携带现有内存鉴权令牌；可视化 HTML 使用受限 iframe 展示。
 
 ## Canvas
 
-`web/components/sim/source/workflow-canvas.tsx` 使用 `@xyflow/react` 原生 Canvas，包含：
+`web/packages/emcn/workflow-canvas.tsx` 使用 `@xyflow/react` 原生 Canvas，包含：
 
 - User input
 - Intent recognizer
@@ -60,15 +60,17 @@ lecture_hook       interactive_lecture_deck
 
 产物尚未生成时显示等待状态；任务部分失败时保留已成功产物；读取失败时显示错误状态。Blob URL 在页面卸载或任务切换时释放。
 
-## 已移除设计
+## 禁用能力
 
-以下内容不属于当前 Agent 学习链路，已从前端移除：
+以下内容不属于当前 Agent 学习链路。它们保留 Sim 风格的页面结构和明确禁用态，
+但不产生网络请求或虚假成功状态：
 
-- Sim Files、Tables、Knowledge、Integrations、Scheduled Tasks、Skills、Tools、Logs、Settings 页面
+- Files、Tables、Knowledge、Integrations、Scheduled Tasks、Logs、组织和计费写操作
 - 本地 `SimMockRun`、mock graph、mock session 和 `localStorage` 资源仓库
 - 浏览器本地文件元数据、假 OAuth、假终端、假语音和假工具反馈
 
-Sim 的布局、Composer、聊天消息外壳和 Canvas 视觉结构仍作为 UI 适配使用，但业务数据只来自 LingxiGraph。
+Skills、账户偏好、聊天、测验和学习产物是真实接入能力。Sim EE 源码始终排除；
+`web/vendor/sim/NOTICE.md` 记录上游 SHA、Apache-2.0 归属和许可边界。
 
 ## 验证
 

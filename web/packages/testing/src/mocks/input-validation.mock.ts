@@ -1,0 +1,49 @@
+import { vi } from 'vitest'
+
+/**
+ * Controllable mock functions for `@/lib/core/security/input-validation.server`.
+ *
+ * @example
+ * ```ts
+ * import { inputValidationMockFns } from '@sim/testing'
+ *
+ * inputValidationMockFns.mockValidateUrlWithDNS.mockResolvedValue({ valid: true })
+ * inputValidationMockFns.mockSecureFetchWithPinnedIP.mockResolvedValue({ response: new Response() })
+ * ```
+ */
+export const inputValidationMockFns = {
+  mockValidateUrlWithDNS: vi.fn(),
+  mockValidateAndPinProxyUrl: vi.fn(),
+  mockValidateDatabaseHost: vi.fn(),
+  mockSecureFetchWithPinnedIP: vi.fn(),
+  mockSecureFetchWithValidation: vi.fn(),
+  mockCreatePinnedLookup: vi.fn(),
+}
+
+/**
+ * Static mock module for `@/lib/core/security/input-validation.server`.
+ *
+ * @example
+ * ```ts
+ * vi.mock('@/lib/core/security/input-validation.server', () => inputValidationMock)
+ * ```
+ */
+export const inputValidationMock = {
+  DEFAULT_MAX_RESPONSE_BYTES: 100 * 1024 * 1024,
+  MAX_JSON_API_RESPONSE_BYTES: 10 * 1024 * 1024,
+  validateUrlWithDNS: inputValidationMockFns.mockValidateUrlWithDNS,
+  validateAndPinProxyUrl: inputValidationMockFns.mockValidateAndPinProxyUrl,
+  validateDatabaseHost: inputValidationMockFns.mockValidateDatabaseHost,
+  secureFetchWithPinnedIP: inputValidationMockFns.mockSecureFetchWithPinnedIP,
+  secureFetchWithValidation: inputValidationMockFns.mockSecureFetchWithValidation,
+  createPinnedLookup: inputValidationMockFns.mockCreatePinnedLookup,
+  SecureFetchHeaders: class {
+    headers: Record<string, string> = {}
+    set(k: string, v: string) {
+      this.headers[k] = v
+    }
+    get(k: string) {
+      return this.headers[k]
+    }
+  },
+}

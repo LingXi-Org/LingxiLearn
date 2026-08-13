@@ -1,0 +1,194 @@
+/**
+ * GET /api/v1/admin/workspaces/[id]/export
+ *
+ * Export an entire workspace as a ZIP file or JSON (raw, unsanitized for admin backup/restore).
+ *
+ * Query Parameters:
+ *   - format: 'zip' (default) or 'json'
+ *
+ * Response:
+ *   - ZIP file download (Content-Type: application/zip)
+ *   - JSON: WorkspaceExportPayload
+ */
+
+import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
+import { db } from '@sim/db'
+import { folder as folderTable, workflow, workspace } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { and, eq } from 'drizzle-orm'
+import { NextResponse } from 'next/server'
+import { adminV1ExportWorkspaceContract } from '@/lib/api/contracts/v1/admin'
+import { parseRequest } from '@/lib/api/server'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { exportWorkspaceToZip, sanitizePathSegment } from '@/lib/workflows/operations/import-export'
+import { loadWorkflowFromNormalizedTables } from '@/lib/workflows/persistence/utils'
+import { parseWorkflowVariables } from '@/lib/workflows/variables/parse'
+import { encodeFilenameForHeader } from '@/app/api/files/utils'
+import { withAdminAuthParams } from '@/app/api/v1/admin/middleware'
+import {
+  internalErrorResponse,
+  notFoundResponse,
+  singleResponse,
+} from '@/app/api/v1/admin/responses'
+import type {
+  FolderExportPayload,
+  WorkflowExportState,
+  WorkspaceExportPayload,
+} from '@/app/api/v1/admin/types'
+
+const logger = createLogger('AdminWorkspaceExportAPI')
+
+interface RouteParams {
+  id: string
+}
+
+export const GET = withRouteHandler(
+  withAdminAuthParams<RouteParams>(async (request, context) => {
+    const parsed = await parseRequest(adminV1ExportWorkspaceContract, request, context)
+    if (!parsed.success) return parsed.response
+
+    const { id: workspaceId } = parsed.data.params
+    const { format } = parsed.data.query
+
+    try {
+      const [workspaceData] = await db
+        .select({ id: workspace.id, name: workspace.name })
+        .from(workspace)
+        .where(eq(workspace.id, workspaceId))
+        .limit(1)
+
+      if (!workspaceData) {
+        return notFoundResponse('Workspace')
+      }
+
+      const workflows = await db
+        .select()
+        .from(workflow)
+        .where(eq(workflow.workspaceId, workspaceId))
+
+      const folders = await db
+        .select()
+        .from(folderTable)
+        .where(
+          and(eq(folderTable.workspaceId, workspaceId), eq(folderTable.resourceType, 'workflow'))
+        )
+
+      const workflowExports: Array<{
+        workflow: WorkspaceExportPayload['workflows'][number]['workflow']
+        state: WorkflowExportState
+      }> = []
+
+      for (const wf of workflows) {
+        try {
+          const normalizedData = await loadWorkflowFromNormalizedTables(wf.id)
+
+          if (!normalizedData) {
+            logger.warn(`Skipping workflow ${wf.id} - no normalized data found`)
+            continue
+          }
+
+          const variables = parseWorkflowVariables(wf.variables)
+
+          const state: WorkflowExportState = {
+            blocks: normalizedData.blocks,
+            edges: normalizedData.edges,
+            loops: normalizedData.loops,
+            parallels: normalizedData.parallels,
+            metadata: {
+              name: wf.name,
+              description: wf.description ?? undefined,
+              exportedAt: new Date().toISOString(),
+            },
+            variables,
+          }
+
+          workflowExports.push({
+            workflow: {
+              id: wf.id,
+              name: wf.name,
+              description: wf.description,
+              workspaceId: wf.workspaceId,
+              folderId: wf.folderId,
+            },
+            state,
+          })
+        } catch (error) {
+          logger.error(`Failed to load workflow ${wf.id}:`, { error })
+        }
+      }
+
+      const folderExports: FolderExportPayload[] = folders.map((f) => ({
+        id: f.id,
+        name: f.name,
+        parentId: f.parentId,
+      }))
+
+      logger.info(
+        `Admin API: Exporting workspace ${workspaceId} with ${workflowExports.length} workflows and ${folderExports.length} folders`
+      )
+
+      const auditExport = () =>
+        recordAudit({
+          workspaceId,
+          actorId: 'admin-api',
+          action: AuditAction.WORKSPACE_EXPORTED,
+          resourceType: AuditResourceType.WORKSPACE,
+          resourceId: workspaceId,
+          resourceName: workspaceData.name,
+          description: `Admin API exported workspace "${workspaceData.name}"`,
+          metadata: {
+            format,
+            workflowCount: workflowExports.length,
+            folderCount: folderExports.length,
+          },
+          request,
+        })
+
+      if (format === 'json') {
+        auditExport()
+        const exportPayload: WorkspaceExportPayload = {
+          version: '1.0',
+          exportedAt: new Date().toISOString(),
+          workspace: {
+            id: workspaceData.id,
+            name: workspaceData.name,
+          },
+          workflows: workflowExports,
+          folders: folderExports,
+        }
+
+        return singleResponse(exportPayload)
+      }
+
+      const zipWorkflows = workflowExports.map((wf) => ({
+        workflow: {
+          id: wf.workflow.id,
+          name: wf.workflow.name,
+          description: wf.workflow.description ?? undefined,
+          folderId: wf.workflow.folderId,
+        },
+        state: wf.state,
+        variables: wf.state.variables,
+      }))
+
+      const zipBlob = await exportWorkspaceToZip(workspaceData.name, zipWorkflows, folderExports)
+      const arrayBuffer = await zipBlob.arrayBuffer()
+
+      const sanitizedName = sanitizePathSegment(workspaceData.name)
+      const filename = `${sanitizedName}-${new Date().toISOString().split('T')[0]}.zip`
+
+      auditExport()
+      return new NextResponse(arrayBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; ${encodeFilenameForHeader(filename)}`,
+          'Content-Length': arrayBuffer.byteLength.toString(),
+        },
+      })
+    } catch (error) {
+      logger.error('Admin API: Failed to export workspace', { error, workspaceId })
+      return internalErrorResponse('Failed to export workspace')
+    }
+  })
+)

@@ -1,0 +1,113 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/apps/**/node_modules
+/packages/**/node_modules
+/scripts/node_modules
+
+# bun specific
+bun-debug.log*
+
+# cursor debug logs
+.cursor/debug-*.log
+
+# this repo uses bun.lock; package-lock.json files are accidental
+package-lock.json
+
+# testing
+/coverage
+/apps/**/coverage
+
+# next.js
+/.next/
+/apps/**/out/
+/apps/**/.next/
+/apps/**/build
+# apps/desktop/build holds electron-builder INPUTS (icon, entitlements), not outputs
+!/apps/desktop/build
+
+# production
+/build
+/dist
+**/dist/
+**/standalone/
+sim-standalone.tar.gz
+
+# redis
+dump.rdb
+
+# misc
+.DS_Store
+*.pem
+
+# env files
+.env
+*.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# editor swap files
+*.sw?
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# cursorrules
+# .cursorrules
+
+# docs
+/apps/docs/.source
+/apps/docs/.contentlayer
+/apps/docs/.content-collections
+
+# database instantiation
+**/postgres_data/
+
+# collector configuration
+collector-config.yaml
+docker-compose.collector.yml
+start-collector.sh
+
+# Turborepo
+.turbo
+
+# VSCode
+.vscode
+
+# IntelliJ
+.idea
+
+## Helm Chart Tests
+helm/sim/test
+i18n.cache
+
+## Claude Code
+.claude/launch.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.deepsec/
+
+# Personal Cursor Skills
+.cursor/skills/ask-sim/
+
+# Python (apps/pii tests/tooling)
+__pycache__/
+.pytest_cache/
+
+# Local file-upload spill directory. `UPLOAD_DIR_SERVER` is
+# `join(process.cwd(), 'uploads')`, so it follows the cwd rather than a fixed
+# root: under `turbo run test` the cwd is apps/sim and `apps/sim/.gitignore`'s
+# `/uploads` catches it, but running vitest from the repo root drops ~40
+# `uploads/execution/**/large-value-*.json` files here instead.
+#
+# Anchored deliberately. An unanchored `uploads/` would also match
+# `apps/sim/lib/uploads/` — 61 files of tracked source — and silently ignore
+# anything added there later.
+/uploads

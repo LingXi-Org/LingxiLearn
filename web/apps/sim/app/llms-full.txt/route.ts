@@ -1,0 +1,180 @@
+export const dynamic = 'force-static'
+export const revalidate = 86400
+
+export function GET() {
+  const llmsFullContent = `# 灵犀 Lingxi — AI 学习与智能工作区
+
+> Sim is the open-source AI workspace where teams build, deploy, and manage AI agents. Connect 1,000+ integrations and every major LLM to create agents that automate real work.
+
+## Overview
+
+Sim is the AI workspace where teams create agents visually with the workflow builder, conversationally through Chat, or programmatically with the API. Over 100,000 builders use Sim — from startups to Fortune 500 companies. Teams connect their tools and data, build agents that automate real work across systems, and manage them with full observability. SOC2 compliant.
+
+## Product Details
+
+- **Product Name**: Sim
+- **Category**: AI Workspace / AI Agent Builder
+- **Deployment**: Cloud (SaaS) and Self-hosted options
+- **Pricing**: Free tier, Pro ($25/month, 6K credits), Max ($100/month, 25K credits), Team plans available, Enterprise (custom)
+- **Compliance**: SOC2 Type II
+
+## Core Concepts
+
+### Workspace
+A workspace is the top-level container in Sim. It holds workflows, data sources, credentials, and execution history. Users can create multiple workspaces for different projects or teams.
+
+### Workflow
+A workflow is a directed graph of blocks that defines an agentic process. Workflows can be triggered manually, on a schedule, or via webhooks. Each workflow has a unique ID and can be versioned.
+
+### Block
+A block is an individual step in a workflow. Types include:
+- **Agent Block**: Executes an LLM call with system prompts and tools
+- **Function Block**: Runs custom JavaScript/TypeScript code
+- **API Block**: Makes HTTP requests to external services
+- **Condition Block**: Branches workflow based on conditions
+- **Loop Block**: Iterates over arrays or until conditions are met
+- **Router Block**: Routes to different paths based on LLM classification
+
+### Trigger
+A trigger initiates workflow execution. Types include:
+- **Manual**: User clicks "Run" button
+- **Schedule**: Cron-based scheduling (e.g., every hour, daily at 9am)
+- **Webhook**: HTTP endpoint that triggers on incoming requests
+- **Event**: Triggered by external events (email received, Slack message, etc.)
+
+### Execution
+An execution is a single run of a workflow. It includes:
+- Input parameters
+- Block-by-block execution logs
+- Output data
+- Token usage and cost tracking
+- Duration and performance metrics
+
+## Capabilities
+
+### LLM Orchestration
+Sim supports all major LLM providers:
+- OpenAI (GPT-5.2, GPT-5.1, GPT-5, GPT-4o, GPT-4.1)
+- Anthropic (Claude Opus 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5)
+- Google (Gemini Pro 3, Gemini Pro 3 Preview, Gemini 2.5 Pro, Gemini 2.5 Flash)
+- Mistral (Mistral Large, Mistral Medium)
+- xAI (Grok)
+- Perplexity
+- Ollama or VLLM (self-hosted open-source models) 
+- Azure OpenAI
+- Amazon Bedrock
+
+### Integrations
+1,000+ pre-built integrations including:
+- **Communication**: Slack, Discord, Email (Gmail, Outlook), SMS (Twilio)
+- **Productivity**: Notion, Airtable, Google Sheets, Google Docs
+- **Development**: GitHub, GitLab, Jira, Linear
+- **Data**: PostgreSQL, MySQL, MongoDB, Supabase, Pinecone
+- **Storage**: AWS S3, Google Cloud Storage, Dropbox
+- **CRM**: Salesforce, HubSpot, Pipedrive
+
+### RAG (Retrieval-Augmented Generation)
+Built-in support for:
+- Document ingestion (PDF, DOCX, TXT, Markdown)
+- Vector database integration (Pinecone, Weaviate, Qdrant)
+- Semantic search and retrieval
+- Chunking strategies (fixed size, semantic, recursive)
+
+### Tables
+Built-in table creation and management:
+- Structured data storage
+- Queryable tables for agent workflows
+- Native integrations
+
+### Code Execution
+- Sandboxed JavaScript/TypeScript execution
+- Access to npm packages
+- Persistent state across executions
+- Error handling and retry logic
+
+## Use Cases
+
+### Customer Support Automation
+- Classify incoming tickets by urgency and topic
+- Generate draft responses using RAG over knowledge base
+- Route to appropriate team members
+- Auto-close resolved tickets
+
+### Content Generation Pipeline
+- Research topics using web search tools
+- Generate outlines and drafts with LLMs
+- Review and edit with human-in-the-loop
+- Publish to CMS platforms
+
+### Data Processing Workflows
+- Extract data from documents (invoices, receipts, forms)
+- Transform and validate data
+- Load into databases or spreadsheets
+- Generate reports and summaries
+
+### Sales and Marketing Automation
+- Enrich leads with company data
+- Score leads based on fit criteria
+- Generate personalized outreach emails
+- Sync with CRM systems
+
+## Technical Architecture
+
+### Frontend
+- Next.js 16 with App Router
+- React Flow for the visual builder
+- Tailwind CSS for styling
+- Zustand for state management
+
+### Backend
+- Node.js with TypeScript
+- PostgreSQL for persistent storage
+- Redis for caching and queues
+- S3-compatible storage for files
+
+### Execution Engine
+- Isolated execution per workflow run
+- Parallel block execution where possible
+- Retry logic with exponential backoff
+- Real-time streaming of outputs
+
+## Getting Started
+
+1. **开始使用**：访问 /workspace/lingxi/home 进入灵犀工作区
+2. **Create Workspace**: Set up your first workspace
+3. **Build Workflow**: Drag blocks onto the workflow builder and connect them
+4. **Configure Blocks**: Set up LLM providers, tools, and integrations
+5. **Test**: Run the workflow manually to verify
+6. **Deploy**: Set up triggers for automated execution
+
+## Links
+
+- [Website](/): 灵犀产品首页
+- [Documentation](https://docs.sim.ai): Product guides and technical reference
+- [API Reference](https://docs.sim.ai/api): API documentation
+- [GitHub](https://github.com/simstudioai/sim): Open-source codebase
+- [Slack](https://join.slack.com/t/sim-ott9864/shared_invite/zt-43lp8tc5v-0qrrqHGBKUsvQlpoouH~TA): Community workspace
+- [X/Twitter](https://x.com/simdotai): Announcements and updates
+- [LinkedIn](https://linkedin.com/company/simstudioai): Company page
+
+## Support
+
+- [Documentation](https://docs.sim.ai): Self-serve guides and reference
+- [Community Slack](https://join.slack.com/t/sim-ott9864/shared_invite/zt-43lp8tc5v-0qrrqHGBKUsvQlpoouH~TA): Community support
+- Email: help@sim.ai
+- Security issues: security@sim.ai
+
+## Legal
+
+- [Terms of Service](/terms): 服务条款
+- [Privacy Policy](/privacy): 隐私政策
+- [Security](/.well-known/security.txt): 安全漏洞披露政策
+`
+
+  return new Response(llmsFullContent, {
+    headers: {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+    },
+  })
+}

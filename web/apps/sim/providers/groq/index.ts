@@ -1,0 +1,578 @@
+import { createLogger } from '@sim/logger'
+import { getErrorMessage, toError } from '@sim/utils/errors'
+import { isRecordLike } from '@sim/utils/object'
+import { Groq } from 'groq-sdk'
+import type { ChatCompletionCreateParamsStreaming as GroqChatCompletionCreateParamsStreaming } from 'groq-sdk/resources/chat/completions'
+import type {
+  ChatCompletionChunk,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions'
+import type { NormalizedBlockOutput, StreamingExecution } from '@/executor/types'
+import { MAX_TOOL_ITERATIONS } from '@/providers'
+import { formatMessagesForProvider } from '@/providers/attachments'
+import { createReadableStreamFromGroqStream } from '@/providers/groq/utils'
+import { getProviderDefaultModel, getProviderModels } from '@/providers/models'
+import { createOpenAICompatStreamingToolLoopStream } from '@/providers/openai-compat/streaming-tool-loop'
+import { executeProviderTool } from '@/providers/runtime-context'
+import { createStreamingExecution } from '@/providers/streaming-execution'
+import { isAbortError, parseToolArguments } from '@/providers/streaming-tool-loop-shared'
+import { adaptOpenAIChatToolSchema } from '@/providers/tool-schema-adapter'
+import { enrichLastModelSegmentFromChatCompletions } from '@/providers/trace-enrichment'
+import { openAICompatTransport } from '@/providers/transport'
+import type {
+  ProviderConfig,
+  ProviderRequest,
+  ProviderResponse,
+  TimeSegment,
+} from '@/providers/types'
+import { ProviderError } from '@/providers/types'
+import {
+  calculateCost,
+  isFunctionToolCall,
+  prepareToolExecution,
+  prepareToolsWithUsageControl,
+  trackForcedToolUsage,
+} from '@/providers/utils'
+
+const logger = createLogger('GroqProvider')
+
+export const groqProvider: ProviderConfig = {
+  id: 'groq',
+  name: 'Groq',
+  description: "Groq's LLM models with high-performance inference",
+  version: '1.0.0',
+  models: getProviderModels('groq'),
+  defaultModel: getProviderDefaultModel('groq'),
+
+  executeRequest: async (
+    request: ProviderRequest
+  ): Promise<ProviderResponse | StreamingExecution> => {
+    if (!request.apiKey) {
+      throw new Error('API key is required for Groq')
+    }
+
+    const groq = new Groq({ apiKey: request.apiKey, ...openAICompatTransport() })
+
+    const allMessages = []
+
+    if (request.systemPrompt) {
+      allMessages.push({
+        role: 'system',
+        content: request.systemPrompt,
+      })
+    }
+
+    if (request.context) {
+      allMessages.push({
+        role: 'user',
+        content: request.context,
+      })
+    }
+
+    if (request.messages) {
+      allMessages.push(...request.messages)
+    }
+    const formattedMessages = formatMessagesForProvider(allMessages, 'groq')
+
+    const tools = request.tools?.length
+      ? request.tools.map((tool) => adaptOpenAIChatToolSchema(tool))
+      : undefined
+
+    const payload: any = {
+      model: request.model.replace('groq/', ''),
+      messages: formattedMessages,
+    }
+
+    if (request.temperature !== undefined) payload.temperature = request.temperature
+    if (request.maxTokens != null) payload.max_completion_tokens = request.maxTokens
+
+    /**
+     * Groq reasoning: GPT-OSS uses include_reasoning + reasoning_effort; Qwen
+     * uses reasoning_format: parsed (compatible with tools) and disables via
+     * reasoning_effort: none. Reasoning params are only sent when the user set
+     * a thinking level or an explicit effort — otherwise the request keeps the
+     * legacy shape (Groq's server defaults already match what would be sent).
+     */
+    const groqModelId = payload.model as string
+    const isGptOss = groqModelId.includes('gpt-oss')
+    const isQwenReasoning = /qwen3/i.test(groqModelId)
+    const hasExplicitEffort = Boolean(request.reasoningEffort && request.reasoningEffort !== 'auto')
+    const hasThinkingLevel = Boolean(request.thinkingLevel && request.thinkingLevel !== 'none')
+    if (isGptOss && (hasExplicitEffort || hasThinkingLevel)) {
+      payload.include_reasoning = true
+      payload.reasoning_effort = hasExplicitEffort ? request.reasoningEffort : 'medium'
+    } else if (isQwenReasoning && hasThinkingLevel) {
+      payload.reasoning_format = 'parsed'
+    } else if (isQwenReasoning && request.thinkingLevel === 'none') {
+      payload.reasoning_effort = 'none'
+    }
+
+    if (request.responseFormat) {
+      payload.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          name: request.responseFormat.name || 'response_schema',
+          schema: request.responseFormat.schema || request.responseFormat,
+          strict: request.responseFormat.strict !== false,
+        },
+      }
+    }
+
+    let originalToolChoice: any
+    let forcedTools: string[] = []
+    let hasFilteredTools = false
+
+    if (tools?.length) {
+      const preparedTools = prepareToolsWithUsageControl(tools, request.tools, logger, 'openai')
+
+      if (preparedTools.tools?.length) {
+        payload.tools = preparedTools.tools
+        payload.tool_choice = preparedTools.toolChoice || 'auto'
+        originalToolChoice = preparedTools.toolChoice
+        forcedTools = preparedTools.forcedTools || []
+        hasFilteredTools = preparedTools.hasFilteredTools
+
+        logger.info('Groq request configuration:', {
+          toolCount: preparedTools.tools.length,
+          toolChoice: payload.tool_choice,
+          forcedToolsCount: forcedTools.length,
+          hasFilteredTools,
+          model: request.model,
+        })
+      }
+    }
+
+    if (request.stream && payload.tools?.length) {
+      logger.info('Using streaming tool loop for Groq request')
+
+      const providerStartTime = Date.now()
+      const providerStartTimeISO = new Date(providerStartTime).toISOString()
+      const timeSegments: TimeSegment[] = []
+
+      return createStreamingExecution({
+        model: request.model,
+        providerStartTime,
+        providerStartTimeISO,
+        timing: {
+          kind: 'accumulated',
+          modelTime: 0,
+          toolsTime: 0,
+          firstResponseTime: 0,
+          iterations: 1,
+          timeSegments,
+        },
+        initialTokens: { input: 0, output: 0, total: 0 },
+        initialCost: { total: 0.0, input: 0.0, output: 0.0 },
+        isStreaming: true,
+        streamFormat: 'agent-events-v1',
+        createStream: ({ output, finalizeTiming }) =>
+          createOpenAICompatStreamingToolLoopStream({
+            providerName: 'Groq',
+            request,
+            basePayload: payload,
+            // double-cast-allowed: formatMessagesForProvider returns loosely-typed provider messages that are wire-compatible with the OpenAI chat.completions message params the shared loop expects
+            messages: formattedMessages as unknown as ChatCompletionMessageParam[],
+            createStream: async (params, options) => {
+              const groqParams = {
+                ...params,
+                stream: true,
+                // double-cast-allowed: groq-sdk chat params are wire-compatible with the OpenAI-typed payload built by the shared compat tool loop
+              } as unknown as GroqChatCompletionCreateParamsStreaming
+              const stream = await groq.chat.completions.create(groqParams, options)
+              // double-cast-allowed: groq-sdk stream chunks are wire-compatible with the OpenAI ChatCompletionChunk shape the shared compat loop consumes
+              return stream as unknown as AsyncIterable<ChatCompletionChunk>
+            },
+            logger,
+            timeSegments,
+            forcedTools,
+            preserveAssistantReasoning: true,
+            onComplete: (result) => {
+              output.content = result.content
+              output.tokens = result.tokens
+              output.cost = result.cost
+              output.toolCalls = result.toolCalls as NormalizedBlockOutput['toolCalls']
+              if (output.providerTiming) {
+                output.providerTiming.modelTime = result.modelTime
+                output.providerTiming.toolsTime = result.toolsTime
+                output.providerTiming.firstResponseTime = result.firstResponseTime
+                output.providerTiming.iterations = result.iterations
+              }
+              finalizeTiming()
+            },
+          }),
+      })
+    }
+
+    if (request.stream && !payload.tools?.length) {
+      logger.info('Using streaming response for Groq request (no tools)')
+
+      const providerStartTime = Date.now()
+      const providerStartTimeISO = new Date(providerStartTime).toISOString()
+
+      const streamResponse = await groq.chat.completions.create(
+        {
+          ...payload,
+          stream: true,
+        },
+        request.abortSignal ? { signal: request.abortSignal } : undefined
+      )
+
+      const streamingResult = createStreamingExecution({
+        model: request.model,
+        providerStartTime,
+        providerStartTimeISO,
+        timing: { kind: 'simple', segmentName: request.model },
+        initialTokens: { input: 0, output: 0, total: 0 },
+        initialCost: { input: 0, output: 0, total: 0 },
+        isStreaming: true,
+        streamFormat: 'agent-events-v1',
+        createStream: ({ output, finalizeTiming }) =>
+          createReadableStreamFromGroqStream(
+            // double-cast-allowed: payload is untyped so the SDK cannot resolve the streaming overload; groq-sdk stream chunks are wire-compatible with the OpenAI ChatCompletionChunk shape the adapter consumes
+            streamResponse as unknown as AsyncIterable<ChatCompletionChunk>,
+            (content, usage, thinking) => {
+              output.content = content
+              output.tokens = {
+                input: usage.prompt_tokens,
+                output: usage.completion_tokens,
+                total: usage.total_tokens,
+              }
+
+              const costResult = calculateCost(
+                request.model,
+                usage.prompt_tokens,
+                usage.completion_tokens
+              )
+              output.cost = {
+                input: costResult.input,
+                output: costResult.output,
+                total: costResult.total,
+              }
+
+              if (thinking) {
+                const segment = output.providerTiming?.timeSegments?.[0]
+                if (segment) {
+                  segment.thinkingContent = thinking
+                }
+              }
+              finalizeTiming()
+            }
+          ),
+      })
+
+      return streamingResult
+    }
+
+    const providerStartTime = Date.now()
+    const providerStartTimeISO = new Date(providerStartTime).toISOString()
+
+    try {
+      const initialCallTime = Date.now()
+
+      let currentResponse = await groq.chat.completions.create(
+        payload,
+        request.abortSignal ? { signal: request.abortSignal } : undefined
+      )
+      const firstResponseTime = Date.now() - initialCallTime
+
+      let content = currentResponse.choices[0]?.message?.content || ''
+      const tokens = {
+        input: currentResponse.usage?.prompt_tokens || 0,
+        output: currentResponse.usage?.completion_tokens || 0,
+        total: currentResponse.usage?.total_tokens || 0,
+      }
+      const toolCalls = []
+      const toolResults: Record<string, unknown>[] = []
+      const currentMessages = [...formattedMessages]
+      let iterationCount = 0
+      let modelTime = firstResponseTime
+      let toolsTime = 0
+
+      const timeSegments: TimeSegment[] = [
+        {
+          type: 'model',
+          name: request.model,
+          startTime: initialCallTime,
+          endTime: initialCallTime + firstResponseTime,
+          duration: firstResponseTime,
+        },
+      ]
+
+      try {
+        while (iterationCount < MAX_TOOL_ITERATIONS) {
+          if (currentResponse.choices[0]?.message?.content) {
+            content = currentResponse.choices[0].message.content
+          }
+
+          const toolCallsInResponse =
+            currentResponse.choices[0]?.message?.tool_calls?.filter(isFunctionToolCall)
+
+          enrichLastModelSegmentFromChatCompletions(
+            timeSegments,
+            currentResponse,
+            toolCallsInResponse,
+            { model: request.model, provider: 'groq' }
+          )
+
+          if (!toolCallsInResponse || toolCallsInResponse.length === 0) {
+            break
+          }
+
+          const toolsStartTime = Date.now()
+
+          const toolExecutionPromises = toolCallsInResponse.map(async (toolCall) => {
+            const toolCallStartTime = Date.now()
+            const toolName = toolCall.function.name
+
+            try {
+              const toolArgs = parseToolArguments(toolCall.function.arguments, toolName)
+              const tool = request.tools?.find((t) => t.id === toolName)
+
+              if (!tool) {
+                const toolCallEndTime = Date.now()
+                return {
+                  toolCall,
+                  toolName,
+                  toolParams: {},
+                  result: {
+                    success: false,
+                    output: undefined,
+                    error: `Tool "${toolName}" is not available`,
+                  },
+                  startTime: toolCallStartTime,
+                  endTime: toolCallEndTime,
+                  duration: toolCallEndTime - toolCallStartTime,
+                }
+              }
+
+              const { toolParams, executionParams } = prepareToolExecution(tool, toolArgs, request)
+              const { rawResponse, modelResponse } = await executeProviderTool(
+                toolName,
+                executionParams,
+                {
+                  signal: request.abortSignal,
+                }
+              )
+              const toolCallEndTime = Date.now()
+
+              return {
+                toolCall,
+                toolName,
+                toolParams,
+                result: rawResponse,
+                modelResult: modelResponse,
+                startTime: toolCallStartTime,
+                endTime: toolCallEndTime,
+                duration: toolCallEndTime - toolCallStartTime,
+              }
+            } catch (error) {
+              if (isAbortError(error) || request.abortSignal?.aborted) {
+                throw error
+              }
+              const toolCallEndTime = Date.now()
+              logger.error('Error processing tool call:', { error, toolName })
+
+              return {
+                toolCall,
+                toolName,
+                toolParams: {},
+                result: {
+                  success: false,
+                  output: undefined,
+                  error: getErrorMessage(error, 'Tool execution failed'),
+                },
+                startTime: toolCallStartTime,
+                endTime: toolCallEndTime,
+                duration: toolCallEndTime - toolCallStartTime,
+              }
+            }
+          })
+
+          const executionResults = await Promise.all(toolExecutionPromises)
+
+          const assistantMessage = currentResponse.choices[0]?.message
+          const assistantReasoning = (assistantMessage as { reasoning?: string } | undefined)
+            ?.reasoning
+          currentMessages.push({
+            role: 'assistant',
+            content: assistantMessage?.content ?? '',
+            tool_calls: toolCallsInResponse.map((tc) => ({
+              id: tc.id,
+              type: 'function',
+              function: {
+                name: tc.function.name,
+                arguments: tc.function.arguments,
+              },
+            })),
+            ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
+          })
+
+          for (const executionResult of executionResults) {
+            const { toolCall, toolName, toolParams, result, startTime, endTime, duration } =
+              executionResult
+            const modelResult =
+              'modelResult' in executionResult ? (executionResult.modelResult ?? result) : result
+
+            timeSegments.push({
+              type: 'tool',
+              name: toolName,
+              startTime: startTime,
+              endTime: endTime,
+              duration: duration,
+              toolCallId: toolCall.id,
+            })
+
+            let resultContent: unknown
+            if (result.success) {
+              if (isRecordLike(result.output)) {
+                toolResults.push(result.output)
+              }
+              resultContent = result.output ?? null
+            } else {
+              resultContent = {
+                error: true,
+                message: result.error || 'Tool execution failed',
+                tool: toolName,
+              }
+            }
+            const modelResultContent = modelResult.success
+              ? (modelResult.output ?? null)
+              : {
+                  error: true,
+                  message: modelResult.error || 'Tool execution failed',
+                  tool: toolName,
+                }
+
+            toolCalls.push({
+              name: toolName,
+              arguments: toolParams,
+              startTime: new Date(startTime).toISOString(),
+              endTime: new Date(endTime).toISOString(),
+              duration: duration,
+              result: resultContent,
+              success: result.success,
+            })
+
+            currentMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: toolName,
+              content: JSON.stringify(modelResultContent),
+            })
+          }
+
+          const thisToolsTime = Date.now() - toolsStartTime
+          toolsTime += thisToolsTime
+
+          let usedForcedTools: string[] = []
+          if (typeof originalToolChoice === 'object' && forcedTools.length > 0) {
+            const toolTracking = trackForcedToolUsage(
+              currentResponse.choices[0]?.message?.tool_calls?.filter(isFunctionToolCall),
+              originalToolChoice,
+              logger,
+              'openai',
+              forcedTools,
+              usedForcedTools
+            )
+            usedForcedTools = toolTracking.usedForcedTools
+            const nextToolChoice = toolTracking.nextToolChoice
+
+            if (nextToolChoice && typeof nextToolChoice === 'object') {
+              payload.tool_choice = nextToolChoice
+            } else if (nextToolChoice === 'auto' || !nextToolChoice) {
+              payload.tool_choice = 'auto'
+            }
+          }
+
+          const nextPayload = {
+            ...payload,
+            messages: currentMessages,
+          }
+
+          const nextModelStartTime = Date.now()
+          currentResponse = await groq.chat.completions.create(
+            nextPayload,
+            request.abortSignal ? { signal: request.abortSignal } : undefined
+          )
+
+          const nextModelEndTime = Date.now()
+          const thisModelTime = nextModelEndTime - nextModelStartTime
+
+          timeSegments.push({
+            type: 'model',
+            name: request.model,
+            startTime: nextModelStartTime,
+            endTime: nextModelEndTime,
+            duration: thisModelTime,
+          })
+
+          modelTime += thisModelTime
+
+          if (currentResponse.choices[0]?.message?.content) {
+            content = currentResponse.choices[0].message.content
+          }
+
+          if (currentResponse.usage) {
+            tokens.input += currentResponse.usage.prompt_tokens || 0
+            tokens.output += currentResponse.usage.completion_tokens || 0
+            tokens.total += currentResponse.usage.total_tokens || 0
+          }
+
+          iterationCount++
+        }
+
+        if (iterationCount === MAX_TOOL_ITERATIONS) {
+          enrichLastModelSegmentFromChatCompletions(
+            timeSegments,
+            currentResponse,
+            currentResponse.choices[0]?.message?.tool_calls?.filter(isFunctionToolCall),
+            { model: request.model, provider: 'groq' }
+          )
+        }
+      } catch (error) {
+        logger.error('Error in Groq request:', { error })
+        throw error
+      }
+
+      const providerEndTime = Date.now()
+      const providerEndTimeISO = new Date(providerEndTime).toISOString()
+      const totalDuration = providerEndTime - providerStartTime
+
+      return {
+        content,
+        model: request.model,
+        tokens,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        toolResults: toolResults.length > 0 ? toolResults : undefined,
+        timing: {
+          startTime: providerStartTimeISO,
+          endTime: providerEndTimeISO,
+          duration: totalDuration,
+          modelTime: modelTime,
+          toolsTime: toolsTime,
+          firstResponseTime: firstResponseTime,
+          iterations: iterationCount + 1,
+          timeSegments: timeSegments,
+        },
+      }
+    } catch (error) {
+      const providerEndTime = Date.now()
+      const providerEndTimeISO = new Date(providerEndTime).toISOString()
+      const totalDuration = providerEndTime - providerStartTime
+
+      logger.error('Error in Groq request:', {
+        error,
+        duration: totalDuration,
+      })
+
+      if (isAbortError(error) || request.abortSignal?.aborted) {
+        throw error
+      }
+      throw new ProviderError(toError(error).message, {
+        startTime: providerStartTimeISO,
+        endTime: providerEndTimeISO,
+        duration: totalDuration,
+      })
+    }
+  },
+}

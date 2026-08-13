@@ -1,0 +1,234 @@
+import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
+import { db } from '@sim/db'
+import { subscription as subscriptionTable } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { getErrorMessage, toError } from '@sim/utils/errors'
+import { eq } from 'drizzle-orm'
+import { type NextRequest, NextResponse } from 'next/server'
+import { billingSwitchPlanContract } from '@/lib/api/contracts/subscription'
+import { parseRequest } from '@/lib/api/server'
+import { getSession } from '@/lib/auth'
+import { getEffectiveBillingStatus } from '@/lib/billing/core/access'
+import { getOrganizationSubscription } from '@/lib/billing/core/billing'
+import { isOrganizationOwnerOrAdmin } from '@/lib/billing/core/organization'
+import {
+  getHighestPriorityPersonalSubscription,
+  getHighestPrioritySubscription,
+} from '@/lib/billing/core/plan'
+import { writeBillingInterval } from '@/lib/billing/core/subscription'
+import { getPlanType, isEnterprise } from '@/lib/billing/plan-helpers'
+import { getPlanByName } from '@/lib/billing/plans'
+import { requireStripeClient } from '@/lib/billing/stripe-client'
+import {
+  hasUsableSubscriptionAccess,
+  hasUsableSubscriptionStatus,
+  isOrgScopedSubscription,
+} from '@/lib/billing/subscriptions/utils'
+import { canManageWorkspaceBilling } from '@/lib/billing/workspace-permissions'
+import { isBillingEnabled } from '@/lib/core/config/env-flags'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { captureServerEvent } from '@/lib/posthog/server'
+import { getWorkspaceHostContextForViewer } from '@/lib/workspaces/host-context'
+
+const logger = createLogger('SwitchPlan')
+
+/**
+ * POST /api/billing/switch-plan
+ *
+ * Switches a subscription's tier and/or billing interval via direct Stripe API.
+ * Covers: Pro <-> Max, monthly <-> annual, and team tier changes.
+ * Uses proration -- no Billing Portal redirect.
+ *
+ * Body:
+ *   targetPlanName: string  -- e.g. 'pro_6000', 'team_25000'
+ *   interval?: 'month' | 'year'  -- if omitted, keeps the current interval
+ */
+export const POST = withRouteHandler(async (request: NextRequest) => {
+  const session = await getSession()
+
+  try {
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (!isBillingEnabled) {
+      return NextResponse.json({ error: 'Billing is not enabled' }, { status: 400 })
+    }
+
+    const parsed = await parseRequest(billingSwitchPlanContract, request, {})
+    if (!parsed.success) return parsed.response
+
+    const { targetPlanName, interval, workspaceId } = parsed.data.body
+    const userId = session.user.id
+
+    const hostContext = workspaceId
+      ? await getWorkspaceHostContextForViewer(workspaceId, userId)
+      : null
+    if (workspaceId && (!hostContext || !canManageWorkspaceBilling(hostContext, userId))) {
+      return NextResponse.json(
+        { error: 'Only workspace billing administrators can change this plan' },
+        { status: 403 }
+      )
+    }
+
+    const sub = hostContext
+      ? hostContext.hostOrganizationId
+        ? await getOrganizationSubscription(hostContext.hostOrganizationId)
+        : await getHighestPriorityPersonalSubscription(hostContext.workspace.billedAccountUserId)
+      : await getHighestPrioritySubscription(userId)
+    if (!sub || !sub.stripeSubscriptionId) {
+      return NextResponse.json({ error: 'No active subscription found' }, { status: 404 })
+    }
+
+    const billingBlocked = hostContext
+      ? hostContext.ownerBilling.billingBlocked
+      : (await getEffectiveBillingStatus(userId)).billingBlocked
+    if (!hasUsableSubscriptionAccess(sub.status, billingBlocked)) {
+      return NextResponse.json({ error: 'An active subscription is required' }, { status: 400 })
+    }
+
+    if (isEnterprise(sub.plan) || isEnterprise(targetPlanName)) {
+      return NextResponse.json(
+        { error: 'Enterprise plan changes must be handled via support' },
+        { status: 400 }
+      )
+    }
+
+    const targetPlan = getPlanByName(targetPlanName)
+    if (!targetPlan) {
+      return NextResponse.json({ error: 'Target plan not found' }, { status: 400 })
+    }
+
+    const currentPlanType = getPlanType(sub.plan)
+    const targetPlanType = getPlanType(targetPlanName)
+    if (currentPlanType !== targetPlanType) {
+      return NextResponse.json(
+        { error: 'Cannot switch between individual and team plans via this endpoint' },
+        { status: 400 }
+      )
+    }
+
+    if (isOrgScopedSubscription(sub, userId)) {
+      const hasPermission = await isOrganizationOwnerOrAdmin(userId, sub.referenceId)
+      if (!hasPermission) {
+        return NextResponse.json({ error: 'Only team admins can change the plan' }, { status: 403 })
+      }
+    }
+
+    const stripe = requireStripeClient()
+    const stripeSubscription = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId)
+
+    if (!hasUsableSubscriptionStatus(stripeSubscription.status)) {
+      return NextResponse.json({ error: 'Stripe subscription is not active' }, { status: 400 })
+    }
+
+    const subscriptionItem = stripeSubscription.items.data[0]
+    if (!subscriptionItem) {
+      return NextResponse.json({ error: 'No subscription item found in Stripe' }, { status: 500 })
+    }
+
+    const currentInterval = subscriptionItem.price?.recurring?.interval
+    const targetInterval = interval ?? currentInterval ?? 'month'
+
+    const targetPriceId =
+      targetInterval === 'year' ? targetPlan.annualDiscountPriceId : targetPlan.priceId
+
+    if (!targetPriceId) {
+      return NextResponse.json(
+        { error: `No ${targetInterval} price configured for plan ${targetPlanName}` },
+        { status: 400 }
+      )
+    }
+
+    const alreadyOnStripePrice = subscriptionItem.price?.id === targetPriceId
+    const alreadyInDb = sub.plan === targetPlanName
+
+    if (alreadyOnStripePrice && alreadyInDb) {
+      return NextResponse.json({ success: true, message: 'Already on this plan and interval' })
+    }
+
+    logger.info('Switching subscription', {
+      userId,
+      subscriptionId: sub.id,
+      stripeSubscriptionId: sub.stripeSubscriptionId,
+      fromPlan: sub.plan,
+      toPlan: targetPlanName,
+      fromInterval: currentInterval,
+      toInterval: targetInterval,
+      targetPriceId,
+    })
+
+    if (!alreadyOnStripePrice) {
+      const currentQuantity = subscriptionItem.quantity ?? 1
+
+      await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        items: [
+          {
+            id: subscriptionItem.id,
+            price: targetPriceId,
+            quantity: currentQuantity,
+          },
+        ],
+        proration_behavior: 'always_invoice',
+      })
+    }
+
+    if (!alreadyInDb) {
+      await db
+        .update(subscriptionTable)
+        .set({ plan: targetPlanName })
+        .where(eq(subscriptionTable.id, sub.id))
+    }
+
+    await writeBillingInterval(sub.id, targetInterval as 'month' | 'year')
+
+    logger.info('Subscription switched successfully', {
+      userId,
+      subscriptionId: sub.id,
+      fromPlan: sub.plan,
+      toPlan: targetPlanName,
+      interval: targetInterval,
+    })
+
+    captureServerEvent(
+      userId,
+      'subscription_changed',
+      { from_plan: sub.plan ?? 'unknown', to_plan: targetPlanName, interval: targetInterval },
+      { set: { plan: targetPlanName } }
+    )
+
+    if (isOrgScopedSubscription(sub, userId)) {
+      recordAudit({
+        actorId: userId,
+        action: AuditAction.ORG_PLAN_CONVERTED,
+        resourceType: AuditResourceType.ORGANIZATION,
+        resourceId: sub.referenceId,
+        description: `Plan converted from ${sub.plan ?? 'unknown'} to ${targetPlanName}`,
+        metadata: {
+          organizationId: sub.referenceId,
+          subscriptionId: sub.id,
+          fromPlan: sub.plan,
+          toPlan: targetPlanName,
+          interval: targetInterval,
+        },
+        request,
+      })
+      captureServerEvent(userId, 'plan_converted', {
+        organization_id: sub.referenceId,
+        from_plan: sub.plan ?? 'unknown',
+        to_plan: targetPlanName,
+      })
+    }
+
+    return NextResponse.json({ success: true, plan: targetPlanName, interval: targetInterval })
+  } catch (error) {
+    logger.error('Failed to switch subscription', {
+      userId: session?.user?.id,
+      error: toError(error).message,
+    })
+    return NextResponse.json(
+      { error: getErrorMessage(error, 'Failed to switch plan') },
+      { status: 500 }
+    )
+  }
+})

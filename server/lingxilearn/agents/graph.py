@@ -173,16 +173,19 @@ ANSWER_PROMPT = """你是知识点答疑 Agent。只回答当前知识点的追�
 
 VISUAL_PROMPT = progressive_skill_prompt(
     "interactive-visual-explainer",
-    "interactive-visual-explainer-delivery.v1",
+    "interactive-visual-explainer-delivery.v1.2",
     referenced_resources=(
         "references/interaction-patterns.md",
         "references/anti-patterns.md",
+        "references/design-tokens.md",
+        "references/svg-craft.md",
         "assets/template.html",
         "assets/lingxi.css",
     ),
-    artifact_instructions="""这是分阶段单文件 artifact 生成。先选择一个主交互模式，再从模板构建
-visual-explainer.html，并通过 stage_artifact_file 写入该文件。服务端会执行 palette 和 static
-check。最终只返回简短中文 delivery receipt，不要返回 HTML。""",
+    artifact_instructions="""这是单文件 artifact 生成。先选择一个主交互模式，再从最新模板构建
+visual-explainer.html，并通过 stage_artifact_file 写入该文件。严格遵循
+interactive-visual-explainer-delivery.v1.2：离线、无外部请求、支持明暗模式和打印，服务端会执行
+palette 与 static check。最终只返回简短中文 delivery receipt，不要返回 HTML。""",
 )
 
 
@@ -667,7 +670,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         _emit(runtime, "agent.started", agent="interactive_visual_explainer", skill="interactive-visual-explainer")
         draft = ArtifactDraft(artifacts, task_id, "visual")
         prompt = (
-            "按分阶段协议完成 interactive-visual-explainer-delivery.v1。\n"
+            "按最新协议完成 interactive-visual-explainer-delivery.v1.2。\n"
             "先读取 skill 和直接相关参考资料，选择一个主交互模式；然后通过 stage_artifact_file 写入"
             " visual-explainer.html，最后只返回 delivery receipt。\nINTENT JSON:\n"
             + json.dumps(state.get("intent", {}), ensure_ascii=False)
@@ -690,6 +693,8 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
                 (
                     "references/interaction-patterns.md",
                     "references/anti-patterns.md",
+                    "references/design-tokens.md",
+                    "references/svg-craft.md",
                     "assets/template.html",
                     "assets/lingxi.css",
                 ),

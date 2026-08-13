@@ -1,0 +1,517 @@
+{{- if .Values.networkPolicy.enabled }}
+---
+# Network Policy for main application
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sim.fullname" . }}-app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sim.app.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sim.app.selectorLabels" . | nindent 6 }}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from realtime pods (defensive — current traffic flows app -> realtime only)
+  {{- if .Values.realtime.enabled }}
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.realtime.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.app.service.targetPort }}
+  {{- end }}
+  # Allow ingress from cron pods (every cron job curls /api/schedules/execute,
+  # webhook polls, etc. against the app service)
+  {{- if .Values.cronjobs.enabled }}
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.selectorLabels" . | nindent 10 }}
+          simstudio.ai/component-group: cronjob
+    ports:
+    - protocol: TCP
+      port: {{ .Values.app.service.targetPort }}
+  {{- end }}
+  # Allow ingress from ingress controller (configurable peers; defaults to any)
+  {{- if .Values.ingress.enabled }}
+  - from:
+      {{- toYaml (default (list (dict)) .Values.networkPolicy.ingressFrom) | nindent 6 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.app.service.targetPort }}
+  {{- end }}
+  # Allow custom ingress rules
+  {{- with .Values.networkPolicy.ingress }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  egress:
+  # Allow egress to PostgreSQL
+  {{- if .Values.postgresql.enabled }}
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.postgresql.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.postgresql.service.targetPort }}
+  {{- end }}
+  # Allow egress to the bundled Redis
+  {{- if include "sim.chartManagesRedis" . }}
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.redis.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: 6379
+  {{- end }}
+  # Allow egress to realtime service
+  {{- if .Values.realtime.enabled }}
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.realtime.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.realtime.service.targetPort }}
+  {{- end }}
+  # Allow egress to Ollama
+  {{- if .Values.ollama.enabled }}
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.ollama.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.ollama.service.targetPort }}
+  {{- end }}
+  # Allow egress to the PII (Presidio) service
+  {{- if .Values.pii.enabled }}
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.pii.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.pii.service.targetPort }}
+  {{- end }}
+  # Allow egress to OpenTelemetry collector (OTLP gRPC + HTTP)
+  {{- if .Values.telemetry.enabled }}
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: {{ include "sim.name" . }}
+          app.kubernetes.io/instance: {{ .Release.Name }}
+          app.kubernetes.io/component: telemetry
+    ports:
+    - protocol: TCP
+      port: 4317
+    - protocol: TCP
+      port: 4318
+  {{- end }}
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  {{- if .Values.networkPolicy.allowExternalEgress }}
+  # Unrestricted egress (still excluding cloud metadata endpoints). Opt-in for
+  # deployments running managed datastores on non-443 ports.
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          {{- range (default (list "169.254.169.254/32" "169.254.170.2/32") .Values.networkPolicy.egressExceptCidrs) }}
+          - {{ . | quote }}
+          {{- end }}
+  {{- else }}
+  # Allow HTTPS egress for external APIs (excludes cloud metadata endpoints)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          {{- range (default (list "169.254.169.254/32" "169.254.170.2/32") .Values.networkPolicy.egressExceptCidrs) }}
+          - {{ . | quote }}
+          {{- end }}
+    ports:
+    - protocol: TCP
+      port: 443
+  {{- end }}
+  # Allow custom egress rules
+  {{- with .Values.networkPolicy.egress }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+
+{{- if .Values.realtime.enabled }}
+---
+# Network Policy for realtime service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sim.fullname" . }}-realtime
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sim.realtime.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sim.realtime.selectorLabels" . | nindent 6 }}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from main application
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.app.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.realtime.service.targetPort }}
+  # Allow ingress from ingress controller (configurable peers; defaults to any)
+  {{- if .Values.ingress.enabled }}
+  - from:
+      {{- toYaml (default (list (dict)) .Values.networkPolicy.ingressFrom) | nindent 6 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.realtime.service.targetPort }}
+  {{- end }}
+  egress:
+  # Allow egress to PostgreSQL
+  {{- if .Values.postgresql.enabled }}
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.postgresql.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.postgresql.service.targetPort }}
+  {{- end }}
+  # Allow egress to the bundled Redis (realtime uses the Socket.IO Redis adapter)
+  {{- if include "sim.chartManagesRedis" . }}
+  - to:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.redis.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: 6379
+  {{- end }}
+  # Allow egress to OpenTelemetry collector (OTLP gRPC + HTTP)
+  {{- if .Values.telemetry.enabled }}
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: {{ include "sim.name" . }}
+          app.kubernetes.io/instance: {{ .Release.Name }}
+          app.kubernetes.io/component: telemetry
+    ports:
+    - protocol: TCP
+      port: 4317
+    - protocol: TCP
+      port: 4318
+  {{- end }}
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  {{- if .Values.networkPolicy.allowExternalEgress }}
+  # Unrestricted egress (still excluding cloud metadata endpoints). Opt-in for
+  # deployments running managed datastores on non-443 ports.
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          {{- range (default (list "169.254.169.254/32" "169.254.170.2/32") .Values.networkPolicy.egressExceptCidrs) }}
+          - {{ . | quote }}
+          {{- end }}
+  {{- else }}
+  # Allow HTTPS egress for external APIs (excludes cloud metadata endpoints)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          {{- range (default (list "169.254.169.254/32" "169.254.170.2/32") .Values.networkPolicy.egressExceptCidrs) }}
+          - {{ . | quote }}
+          {{- end }}
+    ports:
+    - protocol: TCP
+      port: 443
+  {{- end }}
+  # Allow custom egress rules
+  {{- with .Values.networkPolicy.egress }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.postgresql.enabled }}
+---
+# Network Policy for PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sim.fullname" . }}-postgresql
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sim.postgresql.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sim.postgresql.selectorLabels" . | nindent 6 }}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from main application
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.app.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.postgresql.service.targetPort }}
+  # Allow ingress from realtime pods (defensive — current traffic flows app -> realtime only)
+  {{- if .Values.realtime.enabled }}
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.realtime.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.postgresql.service.targetPort }}
+  {{- end }}
+  egress:
+  # Allow minimal egress (for health checks, etc.)
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+{{- end }}
+
+{{- if .Values.ollama.enabled }}
+---
+# Network Policy for Ollama
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sim.fullname" . }}-ollama
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sim.ollama.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sim.ollama.selectorLabels" . | nindent 6 }}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from main application
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.app.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.ollama.service.targetPort }}
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS egress for model downloads (excludes cloud metadata endpoints)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          {{- range (default (list "169.254.169.254/32" "169.254.170.2/32") .Values.networkPolicy.egressExceptCidrs) }}
+          - {{ . | quote }}
+          {{- end }}
+    ports:
+    - protocol: TCP
+      port: 443
+{{- end }}
+
+{{- if .Values.pii.enabled }}
+---
+# Network Policy for the PII (Presidio) service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sim.fullname" . }}-pii
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sim.pii.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sim.pii.selectorLabels" . | nindent 6 }}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from main application
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.app.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.pii.service.targetPort }}
+  egress:
+  # Allow DNS resolution. Models are baked into the image, so no external egress.
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+{{- end }}
+
+{{- if .Values.telemetry.enabled }}
+---
+# Network Policy for OpenTelemetry Collector
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sim.fullname" . }}-otel-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sim.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telemetry
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sim.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: telemetry
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # OTLP from app
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.app.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: 4317
+    - protocol: TCP
+      port: 4318
+  # OTLP from realtime
+  {{- if .Values.realtime.enabled }}
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.realtime.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: 4317
+    - protocol: TCP
+      port: 4318
+  {{- end }}
+  # OTLP from copilot
+  {{- if .Values.copilot.enabled }}
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: copilot
+    ports:
+    - protocol: TCP
+      port: 4317
+    - protocol: TCP
+      port: 4318
+  {{- end }}
+  egress:
+  # DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # HTTPS for forwarding to external observability backends (Datadog, Honeycomb, etc.)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+          {{- range (default (list "169.254.169.254/32" "169.254.170.2/32") .Values.networkPolicy.egressExceptCidrs) }}
+          - {{ . | quote }}
+          {{- end }}
+    ports:
+    - protocol: TCP
+      port: 443
+{{- end }}
+
+{{- /*
+  Copilot + copilot-postgresql intentionally do NOT ship dedicated NetworkPolicies.
+  Copilot requires REDIS_URL (external Redis on a non-443 port), and the chart
+  cannot know the user's Redis host/port at render time — a default egress rule
+  would silently block Redis on most installs. Users running networkPolicy.enabled=true
+  with copilot enabled should add their own NPs (or extend networkPolicy.egress
+  with the appropriate egress rules).
+*/}}
+{{- if include "sim.chartManagesRedis" . }}
+---
+# Network Policy for the bundled Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "sim.fullname" . }}-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sim.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "sim.redis.selectorLabels" . | nindent 6 }}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from the main application
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.app.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow ingress from realtime (Socket.IO Redis adapter)
+  {{- if .Values.realtime.enabled }}
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- include "sim.realtime.selectorLabels" . | nindent 10 }}
+    ports:
+    - protocol: TCP
+      port: 6379
+  {{- end }}
+  egress:
+  # DNS only — Redis initiates nothing else
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+{{- end }}
+{{- end }}

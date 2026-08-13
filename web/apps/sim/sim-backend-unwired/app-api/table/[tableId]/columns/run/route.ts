@@ -1,0 +1,87 @@
+import { createLogger } from '@sim/logger'
+import { type NextRequest, NextResponse } from 'next/server'
+import { runColumnContract } from '@/lib/api/contracts/tables'
+import { parseRequest } from '@/lib/api/server'
+import { checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
+import { generateRequestId } from '@/lib/core/utils/request'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { TableQueryValidationError } from '@/lib/table/errors'
+import { signalTableRowsChanged } from '@/lib/table/events'
+import { toLegacyFilter } from '@/lib/table/query-builder/converters'
+import { runWorkflowColumn } from '@/lib/table/workflow-columns'
+import {
+  accessError,
+  checkAccess,
+  orchestrationErrorResponse,
+  tableFilterError,
+} from '@/app/api/table/utils'
+
+const logger = createLogger('TableRunColumnAPI')
+
+interface RouteParams {
+  params: Promise<{ tableId: string }>
+}
+
+/** POST /api/table/[tableId]/columns/run */
+export const POST = withRouteHandler(async (request: NextRequest, { params }: RouteParams) => {
+  const requestId = generateRequestId()
+  try {
+    const auth = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
+    if (!auth.success || !auth.userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const parsed = await parseRequest(runColumnContract, request, { params })
+    if (!parsed.success) return parsed.response
+    const { tableId } = parsed.data.params
+    const {
+      workspaceId,
+      groupIds,
+      runMode,
+      rowIds,
+      filter: wireFilter,
+      excludeRowIds,
+      limit,
+    } = parsed.data.body
+    // Dual-grammar wire: downgrade a predicate to the legacy Filter the
+    // dispatcher and scheduled runs still compile.
+    const filter = toLegacyFilter(wireFilter)
+    const access = await checkAccess(tableId, auth.userId, 'write')
+    if (!access.ok) return accessError(access, requestId, tableId)
+
+    // Validate the filter up front (the dispatcher reuses it) so a bad field fails fast.
+    const filterError = tableFilterError(wireFilter, access.table.schema.columns)
+    if (filterError) return filterError
+
+    const { dispatchId } = await runWorkflowColumn({
+      tableId,
+      workspaceId,
+      groupIds,
+      mode: runMode,
+      rowIds,
+      filter,
+      excludeRowIds,
+      limit,
+      requestId,
+      triggeredByUserId: auth.userId,
+    })
+
+    // Starting a run clears the target group's cells to pending (`bulkClearWorkflowGroupCells`) — a DB
+    // row change. The `dispatch: dispatching` events drive the run overlay, but the cleared cell values
+    // come from the rows query, so refetch the grid. Unconditional: the bulk clear can run even on a path
+    // that then returns a null `dispatchId` (dispatch cancelled post-clear), and a stale-but-harmless
+    // refetch beats a missed one.
+    signalTableRowsChanged(tableId)
+
+    return NextResponse.json({ success: true, data: { dispatchId } })
+  } catch (error) {
+    // A predicate that Zod accepts but the downgrade rejects (hybrid node,
+    // eq-with-array, valueless op) is caller error, not a server fault.
+    if (error instanceof TableQueryValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    const classified = orchestrationErrorResponse(error)
+    if (classified) return classified
+    logger.error(`run-column failed:`, error)
+    return NextResponse.json({ error: 'Failed to run columns' }, { status: 500 })
+  }
+})

@@ -1,25 +1,21 @@
 ---
 name: adaptive-pedagogy
 description: >-
-  Select one evidence-based, low-friction teaching action after a lesson or learner event and
-  return an immediately useful response plus optional non-blocking state and visual requests.
-  Use for personalized tutoring, misconception repair, hints, worked-example fading, transfer
-  checks, teach-back, or learner-model challenges. Chinese display name: 自适应教学。Chinese
-  display description: 根据学习证据选择低摩擦教学策略，并生成即时中文辅导回应与可选的状态更新。
+  Select one evidence-based, low-friction tutoring action from learner evidence and return an immediately useful response with optional state or visual requests.
 license: MIT
 compatibility: LingxiGraph Agent Skills runtime
 metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 自适应教学
-  display-description: 根据学习证据选择低摩擦教学策略，并生成即时中文辅导回应与可选的状态更新。
+  display-description: 根据学习证据选择低摩擦教学策略，生成即时辅导回应，并可选地提出状态更新或可视化请求。
   output-language: zh-CN
   output-contract: adaptive-pedagogy-result.v2
   execution-mode: synchronous-with-nonblocking-side-effects
   default-blocking-hop-budget: "1"
 ---
 
-# Adaptive Pedagogy
+# Adaptive Tutor
 
 ## Role
 

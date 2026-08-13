@@ -1,0 +1,88 @@
+import type { ApolloTaskSearchParams, ApolloTaskSearchResponse } from '@/tools/apollo/types'
+import type { ToolConfig } from '@/tools/types'
+
+export const apolloTaskSearchTool: ToolConfig<ApolloTaskSearchParams, ApolloTaskSearchResponse> = {
+  id: 'apollo_task_search',
+  name: 'Apollo Search Tasks',
+  description: 'Search for tasks in Apollo',
+  version: '1.0.0',
+
+  params: {
+    apiKey: {
+      type: 'string',
+      required: true,
+      visibility: 'user-only',
+      description: 'Apollo API key (master key required)',
+    },
+    sort_by_field: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Sort field: "task_due_at" or "task_priority"',
+    },
+    open_factor_names: {
+      type: 'array',
+      required: false,
+      visibility: 'user-or-llm',
+      description:
+        'Filter by status. Common values: ["task_types"] for open tasks, ["task_completed_at"] for completed tasks.',
+    },
+    page: {
+      type: 'number',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Page number for pagination (e.g., 1, 2, 3)',
+    },
+    per_page: {
+      type: 'number',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Results per page, max 100 (e.g., 25, 50, 100)',
+    },
+  },
+
+  request: {
+    url: (params: ApolloTaskSearchParams) => {
+      const qs = new URLSearchParams()
+      qs.set('page', String(params.page || 1))
+      qs.set('per_page', String(Math.min(params.per_page || 25, 100)))
+      if (params.sort_by_field) qs.set('sort_by_field', params.sort_by_field)
+      if (params.open_factor_names?.length) {
+        for (const name of params.open_factor_names) {
+          if (typeof name === 'string' && name) qs.append('open_factor_names[]', name)
+        }
+      }
+      return `https://api.apollo.io/api/v1/tasks/search?${qs.toString()}`
+    },
+    method: 'POST',
+    headers: (params: ApolloTaskSearchParams) => ({
+      'Cache-Control': 'no-cache',
+      'X-Api-Key': params.apiKey,
+    }),
+  },
+
+  transformResponse: async (response: Response) => {
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Apollo API error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+
+    return {
+      success: true,
+      output: {
+        tasks: data.tasks ?? [],
+        pagination: data.pagination ?? null,
+      },
+    }
+  },
+
+  outputs: {
+    tasks: {
+      type: 'json',
+      description: 'Array of tasks matching the search criteria',
+    },
+    pagination: { type: 'json', description: 'Pagination information', optional: true },
+  },
+}

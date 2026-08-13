@@ -1,0 +1,339 @@
+# values-aws.yaml
+#
+# When to use: Amazon EKS. Configures EBS GP3 storage, ALB ingress with
+# AWS Certificate Manager, IRSA-style ServiceAccount annotations, and
+# GPU-instance node selectors for Ollama.
+#
+# Prerequisites:
+#   - EKS cluster (Kubernetes 1.25+)
+#   - EBS CSI driver add-on (aws eks create-addon --addon-name aws-ebs-csi-driver)
+#   - AWS Load Balancer Controller (for ALB ingress)
+#   - An ACM certificate for your domains (ALB auto-discovers it from the ingress
+#     hosts, or pin it with alb.ingress.kubernetes.io/certificate-arn). cert-manager
+#     does not work with ALB — ALB cannot serve Kubernetes TLS Secrets
+#
+# Install:
+#   helm install sim ./helm/sim \
+#     --namespace sim --create-namespace \
+#     --values ./helm/sim/examples/values-aws.yaml \
+#     --set app.env.BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
+#     --set app.env.ENCRYPTION_KEY="$ENCRYPTION_KEY" \
+#     --set app.env.INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
+#     --set app.env.CRON_SECRET="$CRON_SECRET" \
+#     --set postgresql.auth.password="$POSTGRES_PASSWORD"
+#
+# Choosing a secret strategy
+# --------------------------
+# Pick one of three modes — see helm/sim/README.md for details.
+#
+#   1. Inline (default below): set values directly in app.env. The chart
+#      writes every key into a chart-managed Secret. Simplest, but stores
+#      plaintext in your values file.
+#
+#   2. existingSecret: pre-create a Kubernetes Secret out-of-band and
+#      reference it via app.secrets.existingSecret.name. You are
+#      responsible for ensuring the Secret contains every key your app
+#      needs (BETTER_AUTH_SECRET, ENCRYPTION_KEY, INTERNAL_API_SECRET,
+#      AWS_SECRET_ACCESS_KEY, OPENAI_API_KEY, ...). The chart-managed
+#      Secret is not rendered in this mode, so anything missing from your
+#      Secret will be empty at runtime.
+#
+#   3. External Secrets Operator (ESO): sync from AWS Secrets Manager /
+#      Parameter Store via the External Secrets Operator. Map every key
+#      via externalSecrets.remoteRefs.app.<KEY>. The chart fails template
+#      rendering if a key is set in app.env but not mapped — see the
+#      commented ESO block at the bottom of this file.
+
+# Global configuration
+global:
+  imageRegistry: "ghcr.io"
+  storageClass: "gp3"  # gp3 is the recommended EBS type (cheaper + faster than gp2). Requires a gp3 StorageClass — create one if your cluster only ships gp2.
+
+# Main application
+app:
+  enabled: true
+  replicaCount: 2
+
+  # Node selector for application pods
+  # Uncomment and customize based on your EKS node labels:
+  # nodeSelector:
+  #   node.kubernetes.io/instance-type: "t3.large"
+  
+  resources:
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  # Production URLs (REQUIRED - update with your actual domain names)
+  env:
+    NEXT_PUBLIC_APP_URL: "https://simstudio.acme.com"
+    BETTER_AUTH_URL: "https://simstudio.acme.com"
+    # SOCKET_SERVER_URL is auto-detected (uses internal service http://sim-realtime:3002)
+    NEXT_PUBLIC_SOCKET_URL: "https://simstudio-ws.acme.com"  # Public WebSocket URL for browsers
+    
+    # Security settings (REQUIRED - replace with your own secure secrets)
+    # Generate using: openssl rand -hex 32
+    BETTER_AUTH_SECRET: "your-secure-production-auth-secret-here"
+    ENCRYPTION_KEY: "your-secure-production-encryption-key-here"
+    INTERNAL_API_SECRET: "your-secure-production-internal-api-secret-here"
+    CRON_SECRET: "your-secure-production-cron-secret-here"
+
+    # Optional: API Key Encryption (RECOMMENDED for production)
+    # Generate 64-character hex string using: openssl rand -hex 32
+    API_ENCRYPTION_KEY: "your-64-char-hex-api-encryption-key-here"  # Optional but recommended
+    
+    NODE_ENV: "production"
+    NEXT_TELEMETRY_DISABLED: "1"
+
+    # AWS Bedrock - when using IRSA (see serviceAccount below), the default credential chain
+    # resolves automatically. Setting this hides the credential fields in the Agent block UI.
+    NEXT_PUBLIC_BEDROCK_DEFAULT_CREDENTIALS: "true"     # Uncomment if using Bedrock with IRSA
+
+    # AWS S3 Cloud Storage Configuration (RECOMMENDED for production)
+    # Create S3 buckets in your AWS account and configure IAM permissions
+    STORAGE_PROVIDER: "s3"
+    AWS_REGION: "us-west-2"
+    AWS_ACCESS_KEY_ID: ""                               # AWS access key (or use IRSA for EKS)
+    AWS_SECRET_ACCESS_KEY: ""                           # AWS secret key (or use IRSA for EKS)
+    S3_BUCKET_NAME: "workspace-files"         # Workspace files
+    S3_KB_BUCKET_NAME: "knowledge-base"       # Knowledge base documents
+    S3_EXECUTION_FILES_BUCKET_NAME: "execution-files"  # Workflow execution outputs
+    S3_CHAT_BUCKET_NAME: "chat-files"         # Deployed chat assets
+    S3_COPILOT_BUCKET_NAME: "copilot-files"   # Copilot attachments
+    S3_PROFILE_PICTURES_BUCKET_NAME: "profile-pictures"  # User avatars
+    S3_OG_IMAGES_BUCKET_NAME: "og-images"                 # OpenGraph preview images
+    S3_WORKSPACE_LOGOS_BUCKET_NAME: "workspace-logos"     # Workspace logos
+    # For S3-compatible storage (Cloudflare R2, MinIO, Backblaze B2) instead of AWS S3:
+    #   S3_ENDPOINT: "https://<account>.r2.cloudflarestorage.com"  # custom endpoint; set AWS_REGION: "auto" for R2
+    #   S3_FORCE_PATH_STYLE: "true"                                 # required for MinIO/Ceph; omit for AWS S3 and R2
+
+# Realtime service
+realtime:
+  enabled: true
+  # Safe to scale past 1: Socket.IO bridges cross-pod events through its Redis
+  # adapter, and the chart bundles Redis by default. Only keep this at 1 if you
+  # set redis.enabled=false without supplying app.env.REDIS_URL.
+  replicaCount: 1
+
+  # Node selector for realtime pods
+  # Uncomment and customize based on your EKS node labels:
+  # nodeSelector:
+  #   node.kubernetes.io/instance-type: "t3.medium"
+  
+  resources:
+    limits:
+      memory: "4Gi"
+      cpu: "1000m"
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+  
+  env:
+    NEXT_PUBLIC_APP_URL: "https://simstudio.acme.com"
+    BETTER_AUTH_URL: "https://simstudio.acme.com"
+    BETTER_AUTH_SECRET: "your-secure-production-auth-secret-here"
+    ALLOWED_ORIGINS: "https://simstudio.acme.com"
+    NODE_ENV: "production"
+
+# Database migrations
+migrations:
+  enabled: true
+  
+  resources:
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+
+# PostgreSQL database
+postgresql:
+  enabled: true
+
+  # Node selector for database pods
+  # Uncomment and customize (recommended: memory-optimized EC2 instances like r5.large):
+  # nodeSelector:
+  #   node.kubernetes.io/instance-type: "r5.large"
+  
+  # Database authentication (REQUIRED - set secure credentials)
+  auth:
+    username: postgres
+    password: "your-secure-postgres-password"
+    database: simstudio
+  
+  # Resource allocation optimized for AWS EKS
+  resources:
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  # Persistent storage using AWS EBS volumes
+  persistence:
+    enabled: true
+    storageClass: "gp3"  # Matches the global gp3 StorageClass above
+    size: 50Gi
+    accessModes:
+      - ReadWriteOnce
+  
+  # SSL/TLS configuration (requires cert-manager to be installed)
+  tls:
+    enabled: false  # Set to true if cert-manager is installed
+    certificatesSecret: postgres-tls-secret
+  
+  # PostgreSQL performance tuning for AWS infrastructure
+  config:
+    maxConnections: 1000
+    sharedBuffers: "2GB"
+    maxWalSize: "8GB"
+    minWalSize: "160MB"
+
+# Ollama AI models with GPU acceleration (AWS EC2 GPU instances)
+# Set ollama.enabled: false if you don't need local AI models
+ollama:
+  enabled: false
+  replicaCount: 1
+
+  # GPU node targeting - uncomment and customize for GPU instances
+  # Recommended: g4dn.xlarge or p3.2xlarge instances
+  # nodeSelector:
+  #   node.kubernetes.io/instance-type: "g4dn.xlarge"
+  
+  tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+  
+  # GPU resource allocation for AI model serving
+  gpu:
+    enabled: true
+    count: 1
+  
+  resources:
+    limits:
+      memory: "16Gi"
+      cpu: "4000m"
+      nvidia.com/gpu: "1"
+    requests:
+      memory: "8Gi"
+      cpu: "2000m"
+  
+  # High-performance storage for AI models
+  persistence:
+    enabled: true
+    storageClass: "gp3"  # Matches the global gp3 StorageClass above
+    size: 100Gi
+    accessModes:
+      - ReadWriteOnce
+  
+  env:
+    NVIDIA_DRIVER_CAPABILITIES: "all"
+    OLLAMA_LOAD_TIMEOUT: "-1"
+    OLLAMA_KEEP_ALIVE: "-1"
+    OLLAMA_DEBUG: "1"
+
+# Ingress using AWS Application Load Balancer (ALB)
+ingress:
+  enabled: true
+  className: alb
+  
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-west-2:123456789012:certificate/your-cert-arn"
+  
+  # Main application
+  app:
+    host: simstudio.acme.com
+    paths:
+      - path: /
+        pathType: Prefix
+  
+  # Realtime service
+  realtime:
+    host: simstudio-ws.acme.com
+    paths:
+      - path: /
+        pathType: Prefix
+  
+  # TLS configuration
+  tls:
+    enabled: true
+    secretName: simstudio-tls-secret
+
+# Pod disruption budget for high availability
+podDisruptionBudget:
+  enabled: true
+  minAvailable: null
+  maxUnavailable: 1  
+  unhealthyPodEvictionPolicy: AlwaysAllow 
+# Network policies
+networkPolicy:
+  enabled: true
+
+# Pod anti-affinity for high availability across AWS Availability Zones
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["sim"]
+          topologyKey: kubernetes.io/hostname
+      - weight: 50
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["sim"]
+          topologyKey: topology.kubernetes.io/zone
+
+# Service Account with IAM roles for service account (IRSA) integration
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/SimStudioServiceRole"
+# -----------------------------------------------------------------------------
+# External Secrets Operator (ESO) — recommended for production on AWS
+# -----------------------------------------------------------------------------
+# To switch from inline secrets to ESO:
+#   1. Install external-secrets in the cluster (https://external-secrets.io).
+#   2. Create a ClusterSecretStore backed by AWS Secrets Manager or
+#      SSM Parameter Store and grant IRSA access from this namespace.
+#   3. Remove entries from app.env above (or leave them and the chart will
+#      fail-fast naming each unmapped key).
+#   4. Uncomment the block below and replace the paths with the names of the
+#      secrets in your store.
+#
+# externalSecrets:
+#   enabled: true
+#   secretStoreRef:
+#     name: "aws-secret-store"        # name of your ClusterSecretStore
+#     kind: "ClusterSecretStore"
+#   remoteRefs:
+#     app:
+#       BETTER_AUTH_SECRET:    "sim/app/better-auth-secret"
+#       ENCRYPTION_KEY:        "sim/app/encryption-key"
+#       INTERNAL_API_SECRET:   "sim/app/internal-api-secret"
+#       CRON_SECRET:           "sim/app/cron-secret"
+#       API_ENCRYPTION_KEY:    "sim/app/api-encryption-key"
+#       # AWS provider keys — required when not using IRSA for S3/Bedrock.
+#       AWS_ACCESS_KEY_ID:     "sim/aws/access-key-id"
+#       AWS_SECRET_ACCESS_KEY: "sim/aws/secret-access-key"
+#       # Add any other keys your deployment needs:
+#       OPENAI_API_KEY:        "sim/providers/openai-api-key"
+#       # ANTHROPIC_API_KEY:   "sim/providers/anthropic-api-key"
+#     postgresql:
+#       password: "sim/postgresql/password"

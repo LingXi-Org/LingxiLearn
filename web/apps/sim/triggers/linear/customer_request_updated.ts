@@ -1,0 +1,96 @@
+import { LinearIcon } from '@/components/icons'
+import {
+  buildCustomerRequestOutputs,
+  buildLinearV2SubBlocks,
+  linearSetupInstructions,
+} from '@/triggers/linear/utils'
+import type { TriggerConfig } from '@/triggers/types'
+
+export const linearCustomerRequestUpdatedTrigger: TriggerConfig = {
+  id: 'linear_customer_request_updated',
+  name: 'Linear Customer Request Updated',
+  provider: 'linear',
+  description: 'Trigger workflow when a customer request is updated in Linear',
+  version: '1.0.0',
+  icon: LinearIcon,
+
+  subBlocks: [
+    {
+      id: 'webhookUrlDisplay',
+      title: 'Webhook URL',
+      type: 'short-input',
+      readOnly: true,
+      showCopyButton: true,
+      useWebhookUrl: true,
+      placeholder: 'Webhook URL will be generated',
+      mode: 'trigger',
+      condition: {
+        field: 'selectedTriggerId',
+        value: 'linear_customer_request_updated',
+      },
+    },
+    {
+      id: 'webhookSecret',
+      title: 'Webhook Secret',
+      type: 'short-input',
+      placeholder: 'Enter a strong secret',
+      description: 'Validates that webhook deliveries originate from Linear.',
+      password: true,
+      required: false,
+      mode: 'trigger',
+      condition: {
+        field: 'selectedTriggerId',
+        value: 'linear_customer_request_updated',
+      },
+    },
+    {
+      id: 'triggerInstructions',
+      title: 'Setup Instructions',
+      hideFromPreview: true,
+      type: 'text',
+      defaultValue: linearSetupInstructions('CustomerNeed (update)'),
+      mode: 'trigger',
+      condition: {
+        field: 'selectedTriggerId',
+        value: 'linear_customer_request_updated',
+      },
+    },
+  ],
+
+  outputs: buildCustomerRequestOutputs(),
+
+  webhook: {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Linear-Event': 'CustomerNeed',
+      'Linear-Delivery': 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+      'Linear-Signature': 'sha256...',
+      'User-Agent': 'Linear-Webhook',
+    },
+  },
+}
+
+export const linearCustomerRequestUpdatedV2Trigger: TriggerConfig = {
+  id: 'linear_customer_request_updated_v2',
+  name: 'Linear Customer Request Updated',
+  provider: 'linear',
+  description: 'Trigger workflow when a customer request is updated in Linear',
+  version: '2.0.0',
+  icon: LinearIcon,
+  subBlocks: buildLinearV2SubBlocks({
+    triggerId: 'linear_customer_request_updated_v2',
+    eventType: 'CustomerNeed (update)',
+  }),
+  outputs: buildCustomerRequestOutputs(),
+  webhook: {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Linear-Event': 'CustomerNeed',
+      'Linear-Delivery': 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+      'Linear-Signature': 'sha256...',
+      'User-Agent': 'Linear-Webhook',
+    },
+  },
+}

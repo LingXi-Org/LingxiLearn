@@ -1,24 +1,20 @@
 ---
 name: quiz-generator
 description: >-
-  Generate a compact, evidence-grounded Chinese formative quiz from supplied lesson context and
-  taught lecture material. Use after teaching to check retrieval, conceptual distinctions,
-  misconceptions, application, prediction, explanation, or transfer. Produce grading-safe internal
-  JSON and a clean public snapshot when requested. Do not browse by default and never import facts
-  that were not taught. Chinese display name: 知识点测评生成。Chinese display description: 基于已讲授的中文课程内容生成紧凑、无泄题、可诊断理解误区的知识点测评。
+  Generate a compact, evidence-grounded formative quiz from taught lesson content to assess understanding and reveal misconceptions.
 license: MIT
 compatibility: LingxiGraph Agent Skills runtime with Python 3
 metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 知识点测评生成
-  display-description: 基于已讲授的中文课程内容生成紧凑、无泄题、可诊断理解误区的知识点测评。
+  display-description: 基于已讲授的课程内容生成紧凑、可判分且能识别理解误区的形成性测评。
   output-language: zh-CN
   output-contract: quiz-generation-result.v1
   execution-mode: synchronous-structured-generation
 ---
 
-# 知识点测评生成
+# Quiz Builder
 
 ## 目标
 

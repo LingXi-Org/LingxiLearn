@@ -1,0 +1,264 @@
+# values-production.yaml
+#
+# When to use: generic production deployment on any cluster. Enables HA
+# (replicaCount > 1, PDB), NetworkPolicy, HPA, ServiceMonitor, and
+# PSS-restricted security defaults.
+#
+# Prerequisites:
+#   - A premium StorageClass with reclaimPolicy: Retain
+#   - cert-manager (for TLS) or pre-provisioned certs
+#   - ingress-nginx (or equivalent) for ingress
+#   - metrics-server in the cluster (HPA)
+#   - (recommended) Prometheus Operator for ServiceMonitor
+#   - (recommended) External Secrets Operator — see values-external-secrets.yaml
+#
+# Install:
+#   helm install sim ./helm/sim \
+#     --namespace sim --create-namespace \
+#     --values ./helm/sim/examples/values-production.yaml \
+#     --set app.env.BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
+#     --set app.env.ENCRYPTION_KEY="$ENCRYPTION_KEY" \
+#     --set app.env.INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
+#     --set app.env.CRON_SECRET="$CRON_SECRET" \
+#     --set postgresql.auth.password="$POSTGRES_PASSWORD"
+
+# Global configuration
+global:
+  imageRegistry: "ghcr.io"
+  # For production, use a StorageClass with reclaimPolicy: Retain
+  # Set to YOUR cluster's StorageClass: gp3 (EKS), standard-rwo (GKE),
+  # managed-csi-premium (AKS). Empty uses the cluster default.
+  storageClass: ""
+
+# Main application
+app:
+  enabled: true
+  replicaCount: 2
+
+  resources:
+    limits:
+      memory: "8Gi"
+      cpu: "2000m"
+    requests:
+      memory: "6Gi"
+      cpu: "1000m"
+  
+  # Production URLs (REQUIRED - update with your actual domain names)
+  env:
+    NEXT_PUBLIC_APP_URL: "https://sim.acme.ai"
+    BETTER_AUTH_URL: "https://sim.acme.ai"
+    NEXT_PUBLIC_SOCKET_URL: "https://sim-ws.acme.ai"
+    
+    # Security settings (REQUIRED - replace with your own secure secrets)
+    # Generate using: openssl rand -hex 32
+    BETTER_AUTH_SECRET: "your-production-auth-secret-here"
+    ENCRYPTION_KEY: "your-production-encryption-key-here"
+    INTERNAL_API_SECRET: "your-production-internal-api-secret-here"
+    CRON_SECRET: "your-production-cron-secret-here"
+
+    # Optional: API Key Encryption (RECOMMENDED for production)
+    # Generate 64-character hex string using: openssl rand -hex 32
+    API_ENCRYPTION_KEY: "your-64-char-hex-api-encryption-key-here"  # Optional but recommended
+    
+    # Email verification (set to true if you want to require email verification)
+    EMAIL_VERIFICATION_ENABLED: "false"
+    
+    # Optional third-party service integrations (configure as needed)
+    RESEND_API_KEY: "your-resend-api-key"
+    GOOGLE_CLIENT_ID: "your-google-client-id"
+    GOOGLE_CLIENT_SECRET: "your-google-client-secret"
+    # DISABLE_GOOGLE_AUTH: "true"                      # Uncomment to hide Google OAuth login
+    # DISABLE_GITHUB_AUTH: "true"                      # Uncomment to hide GitHub OAuth login
+
+# Realtime service
+realtime:
+  enabled: true
+  # Safe to scale: Socket.IO bridges events across pods through its Redis
+  # adapter, and the chart bundles Redis by default (redis.enabled). If you
+  # set redis.enabled=false without supplying app.env.REDIS_URL, drop this
+  # back to 1 and disable autoscaling.realtime below — multi-replica realtime
+  # without Redis silently drops cross-pod collaboration updates.
+  replicaCount: 2
+
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+  
+  env:
+    NEXT_PUBLIC_APP_URL: "https://sim.acme.ai"
+    BETTER_AUTH_URL: "https://sim.acme.ai"
+    BETTER_AUTH_SECRET: "your-production-auth-secret-here"
+    ALLOWED_ORIGINS: "https://sim.acme.ai"
+
+# Database migrations
+migrations:
+  enabled: true
+  resources:
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+
+# PostgreSQL database
+postgresql:
+  enabled: true
+  
+  # Database authentication (REQUIRED - set secure credentials)
+  auth:
+    username: postgres
+    password: "your-secure-postgres-password"
+    database: simstudio
+  
+  # Resource allocation for production workloads
+  resources:
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  # Persistent storage configuration
+  persistence:
+    enabled: true
+    storageClass: ""  # your cluster's StorageClass (empty = cluster default)
+    size: 50Gi
+  
+  # SSL/TLS configuration (recommended for production). Requires
+  # certManager.enabled below — the Certificate's issuerRef (sim-ca-issuer)
+  # only exists when the chart creates its CA issuer.
+  tls:
+    enabled: true
+    certificatesSecret: postgres-tls-secret
+  
+  # PostgreSQL performance configuration for production
+  config:
+    maxConnections: 1000
+    sharedBuffers: "2GB"
+    maxWalSize: "8GB"
+    minWalSize: "160MB"
+
+# Ollama AI models (optional - enable if you need local AI model serving)
+ollama:
+  enabled: false
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  
+  # Main application
+  app:
+    host: sim.acme.ai
+    paths:
+      - path: /
+        pathType: Prefix
+  
+  # Realtime service
+  realtime:
+    host: sim-ws.acme.ai
+    paths:
+      - path: /
+        pathType: Prefix
+  
+  # TLS configuration
+  tls:
+    enabled: true
+    secretName: sim-tls-secret
+
+# Chart-managed CA issuer — required for postgresql.tls above (issuerRef sim-ca-issuer)
+certManager:
+  enabled: true
+
+# Horizontal Pod Autoscaler (automatically scales pods based on CPU/memory usage)
+autoscaling:
+  enabled: true
+  # Realtime scales with the app because Redis is available by default. Set
+  # this to false if you run without Redis (redis.enabled=false and no
+  # app.env.REDIS_URL) — multi-replica realtime would drop cross-pod events.
+  realtime:
+    enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+
+# Pod disruption budget (ensures minimum availability during cluster maintenance)
+podDisruptionBudget:
+  enabled: true
+  minAvailable: null
+  maxUnavailable: 1  
+  unhealthyPodEvictionPolicy: AlwaysAllow 
+
+# Monitoring integration with Prometheus
+monitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      monitoring: "prometheus"
+    interval: 15s
+    scrapeTimeout: 10s
+
+# Network policies (restricts pod-to-pod communication for security)
+networkPolicy:
+  enabled: true
+
+# Shared storage for data sharing between pods (enterprise feature)
+sharedStorage:
+  enabled: true
+  storageClass: "managed-csi-premium"
+  volumes:
+    - name: output-share
+      size: 100Gi
+      accessModes:
+        - ReadWriteMany
+    - name: model-share
+      size: 200Gi
+      accessModes:
+        - ReadWriteMany
+
+# Telemetry and observability (comprehensive monitoring and tracing)
+telemetry:
+  enabled: true
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+    requests:
+      memory: "512Mi"
+      cpu: "200m"
+  # Configure endpoints based on your observability infrastructure
+  prometheus:
+    enabled: true
+    endpoint: "http://prometheus-server/api/v1/write"
+  jaeger:
+    enabled: true
+    # Jaeger's OTLP gRPC endpoint (the chart exports via otlp/jaeger;
+    # Jaeger >=1.35 ingests OTLP natively)
+    endpoint: "jaeger-collector:4317"

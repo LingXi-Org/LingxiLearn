@@ -1,0 +1,358 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { act, type ReactNode } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/hooks/queries/skills', () => ({ useSkills: () => ({ data: [] }) }))
+vi.mock('@/hooks/queries/mcp', () => ({ useMcpServers: () => ({ data: [] }) }))
+vi.mock('@/blocks/integration-matcher', () => ({
+  getIntegrationMatcher: () => ({ regex: null, byName: new Map() }),
+}))
+
+import type { PlusMenuHandle } from '@/app/workspace/[workspaceId]/home/components/user-input/components/constants'
+import {
+  type UsePromptEditorProps,
+  usePromptEditor,
+} from '@/app/workspace/[workspaceId]/home/components/user-input/components/prompt-editor/use-prompt-editor'
+import type { SkillsMenuHandle } from '@/app/workspace/[workspaceId]/home/components/user-input/components/skills-menu-dropdown/skills-menu-dropdown'
+import type { ChatContext } from '@/stores/panel'
+
+/**
+ * Mounts `usePromptEditor` in a real React 19 root under jsdom (no
+ * `@testing-library/react` in this repo — see `hooks/queries/unsubscribe.test.tsx`
+ * for the established pattern) and wires a real `<textarea>` into its
+ * `textareaRef` so selection/caret-driven behavior (`handleSelectAdjust`,
+ * `syncMentionState`) runs exactly as it does in the rendered `PromptEditor`.
+ */
+function renderPromptEditor(props: UsePromptEditorProps) {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root: Root = createRoot(container)
+  let latest: ReturnType<typeof usePromptEditor>
+
+  function Probe() {
+    latest = usePromptEditor(props)
+    return null
+  }
+
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <>{children}</>
+  }
+
+  act(() => {
+    root.render(
+      <Wrapper>
+        <Probe />
+      </Wrapper>
+    )
+  })
+
+  const textarea = document.createElement('textarea')
+  document.body.appendChild(textarea)
+  latest!.textareaRef.current = textarea
+
+  return {
+    result: () => latest,
+    textarea,
+    unmount: () => {
+      act(() => root.unmount())
+      container.remove()
+      textarea.remove()
+    },
+  }
+}
+
+/** Fires a native `input` event carrying the new value, as the textarea would on a keystroke. */
+function typeInto(textarea: HTMLTextAreaElement, value: string, caret = value.length) {
+  textarea.value = value
+  textarea.setSelectionRange(caret, caret)
+  textarea.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+describe('usePromptEditor mention menu dismissal', () => {
+  let openMenu: PlusMenuHandle
+
+  beforeEach(() => {
+    openMenu = {
+      open: vi.fn(),
+      close: vi.fn(),
+      moveActive: vi.fn(),
+      selectActive: vi.fn(() => 'empty' as const),
+    }
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('reopens the menu while the user keeps typing an unmatched mention', () => {
+    const { result, textarea, unmount } = renderPromptEditor({ workspaceId: 'ws-1' })
+    result().plusMenuRef.current = openMenu
+
+    act(() => {
+      typeInto(textarea, '@f')
+      result().handleInputChange({
+        target: textarea,
+        currentTarget: textarea,
+      } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+    })
+
+    expect(result().mentionQuery).toBe('f')
+    expect(openMenu.open).toHaveBeenCalledTimes(1)
+
+    unmount()
+  })
+
+  it('stays closed across repeated clicks at the same position after the user clicks away, even if the caret lands back inside the open mention', () => {
+    const { result, textarea, unmount } = renderPromptEditor({ workspaceId: 'ws-1' })
+    result().plusMenuRef.current = openMenu
+
+    act(() => {
+      typeInto(textarea, '@f')
+      result().handleInputChange({
+        target: textarea,
+        currentTarget: textarea,
+      } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+    })
+    expect(result().mentionQuery).toBe('f')
+
+    act(() => {
+      result().handlePlusMenuClose()
+    })
+    expect(result().mentionQuery).toBeNull()
+
+    for (let i = 0; i < 3; i++) {
+      act(() => {
+        textarea.setSelectionRange(2, 2)
+        result().handleSelectAdjust()
+      })
+    }
+
+    expect(result().mentionQuery).toBeNull()
+    expect(openMenu.open).toHaveBeenCalledTimes(1)
+
+    unmount()
+  })
+
+  it('lets a further keystroke reopen the same mention after a dismiss', () => {
+    const { result, textarea, unmount } = renderPromptEditor({ workspaceId: 'ws-1' })
+    result().plusMenuRef.current = openMenu
+
+    act(() => {
+      typeInto(textarea, '@f')
+      result().handleInputChange({
+        target: textarea,
+        currentTarget: textarea,
+      } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+    })
+    act(() => {
+      result().handlePlusMenuClose()
+    })
+    act(() => {
+      textarea.setSelectionRange(2, 2)
+      result().handleSelectAdjust()
+    })
+    expect(openMenu.open).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      typeInto(textarea, '@fo', 3)
+      result().handleInputChange({
+        target: textarea,
+        currentTarget: textarea,
+      } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+    })
+
+    expect(result().mentionQuery).toBe('fo')
+    expect(openMenu.open).toHaveBeenCalledTimes(2)
+
+    unmount()
+  })
+
+  it('does not suppress a different mention typed after a dismiss', () => {
+    const { result, textarea, unmount } = renderPromptEditor({ workspaceId: 'ws-1' })
+    result().plusMenuRef.current = openMenu
+
+    act(() => {
+      typeInto(textarea, '@f')
+      result().handleInputChange({
+        target: textarea,
+        currentTarget: textarea,
+      } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+    })
+    act(() => {
+      result().handlePlusMenuClose()
+    })
+    act(() => {
+      textarea.setSelectionRange(2, 2)
+      result().handleSelectAdjust()
+    })
+    expect(openMenu.open).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      typeInto(textarea, '@f done. @g', 11)
+      result().handleInputChange({
+        target: textarea,
+        currentTarget: textarea,
+      } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+    })
+
+    expect(result().mentionQuery).toBe('g')
+    expect(openMenu.open).toHaveBeenCalledTimes(2)
+
+    unmount()
+  })
+})
+
+describe('usePromptEditor toolbar slash trigger after a dismiss', () => {
+  it('still opens the skills menu when the caret sits at the start of the previously dismissed token', () => {
+    const skillsMenu: SkillsMenuHandle = {
+      open: vi.fn(),
+      close: vi.fn(),
+      moveActive: vi.fn(),
+      selectActive: vi.fn(() => false),
+    }
+    const { result, textarea, unmount } = renderPromptEditor({ workspaceId: 'ws-1' })
+    result().skillsMenuRef.current = skillsMenu
+
+    act(() => {
+      result().insertSlashTrigger()
+    })
+    expect(skillsMenu.open).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      result().handleSkillsMenuClose()
+    })
+
+    act(() => {
+      textarea.setSelectionRange(0, 0)
+      result().insertSlashTrigger()
+    })
+
+    expect(skillsMenu.open).toHaveBeenCalledTimes(2)
+
+    unmount()
+  })
+})
+
+describe('usePromptEditor context insertion', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('appends a real mention token and context, then focuses the editor', () => {
+    const onContextAdd = vi.fn()
+    let focusFrame: FrameRequestCallback | undefined
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      focusFrame = callback
+      return 1
+    })
+    const context = {
+      kind: 'terminal_tab',
+      terminalId: 'terminal-1',
+      label: 'Terminal (L9-11)',
+      selection: { text: 'selected output', startLine: 9, endLine: 11 },
+    } satisfies ChatContext
+    const { result, textarea, unmount } = renderPromptEditor({
+      workspaceId: 'ws-1',
+      initialValue: 'Explain this',
+      onContextAdd,
+    })
+
+    act(() => {
+      result().insertContext(context)
+    })
+
+    expect(result().value).toBe('Explain this @Terminal (L9-11) ')
+    expect(result().contexts).toEqual([context])
+    expect(onContextAdd).toHaveBeenCalledWith(context)
+
+    textarea.value = result().value
+    act(() => focusFrame?.(0))
+    expect(document.activeElement).toBe(textarea)
+    expect(textarea.selectionStart).toBe(textarea.value.length)
+    expect(textarea.selectionEnd).toBe(textarea.value.length)
+
+    unmount()
+  })
+
+  it('suffixes duplicate visible labels so two browser selections coexist', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+    const first = {
+      kind: 'browser_tab',
+      tabId: 'tab-1',
+      label: 'Browser · Example page title',
+      selection: { text: 'first selection', url: 'https://example.com' },
+    } satisfies ChatContext
+    const second = {
+      kind: 'browser_tab',
+      tabId: 'tab-1',
+      label: 'Browser · Another page title',
+      selection: { text: 'second selection', url: 'https://example.com' },
+    } satisfies ChatContext
+    const { result, textarea, unmount } = renderPromptEditor({ workspaceId: 'ws-1' })
+
+    act(() => {
+      result().insertContext(first)
+    })
+    act(() => {
+      result().insertContext(second)
+    })
+
+    expect(result().value).toBe('@Browser @Browser (1) ')
+    expect(result().contexts).toEqual([
+      { ...first, label: 'Browser' },
+      { ...second, label: 'Browser (1)' },
+    ])
+
+    let contextsAtSubmit: ChatContext[] = []
+    act(() => {
+      typeInto(textarea, '@Browser (1) ')
+      result().handleInputChange({
+        target: textarea,
+        currentTarget: textarea,
+      } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+      contextsAtSubmit = result().getActiveContexts()
+    })
+    expect(contextsAtSubmit).toEqual([{ ...second, label: 'Browser (1)' }])
+
+    unmount()
+  })
+
+  it('excludes a deleted chip from submission before the cleanup effect runs', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callback(0)
+      return 1
+    })
+    const context = {
+      kind: 'browser_tab',
+      tabId: 'tab-1',
+      label: 'Browser',
+      selection: { text: 'selected text', url: 'https://example.com' },
+    } satisfies ChatContext
+    const { result, textarea, unmount } = renderPromptEditor({
+      workspaceId: 'ws-1',
+      initialValue: 'Explain this',
+    })
+
+    act(() => result().insertContext(context))
+
+    let contextsAtSubmit: ChatContext[] = []
+    act(() => {
+      typeInto(textarea, 'Explain this')
+      result().handleInputChange({
+        target: textarea,
+        currentTarget: textarea,
+      } as unknown as React.ChangeEvent<HTMLTextAreaElement>)
+      contextsAtSubmit = result().getActiveContexts()
+    })
+
+    expect(contextsAtSubmit).toEqual([])
+    unmount()
+  })
+})

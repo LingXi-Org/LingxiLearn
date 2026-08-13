@@ -1,0 +1,338 @@
+# values-azure.yaml
+#
+# When to use: Azure Kubernetes Service (AKS). Configures managed-csi /
+# managed-csi-premium storage, NGINX ingress, role-based node targeting,
+# and NVIDIA GPU node pool tolerations for Ollama.
+#
+# Prerequisites:
+#   - AKS cluster (Kubernetes 1.25+)
+#   - NGINX ingress controller installed
+#   - cert-manager installed with a ClusterIssuer (issues the ingress TLS secret)
+#   - (optional) GPU node pool tainted with sku=gpu:NoSchedule for Ollama
+#
+# Install:
+#   helm install sim ./helm/sim \
+#     --namespace sim --create-namespace \
+#     --values ./helm/sim/examples/values-azure.yaml \
+#     --set app.env.BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
+#     --set app.env.ENCRYPTION_KEY="$ENCRYPTION_KEY" \
+#     --set app.env.INTERNAL_API_SECRET="$INTERNAL_API_SECRET" \
+#     --set app.env.CRON_SECRET="$CRON_SECRET" \
+#     --set postgresql.auth.password="$POSTGRES_PASSWORD"
+#
+# Choosing a secret strategy
+# --------------------------
+# Pick one of three modes — see helm/sim/README.md for details.
+#
+#   1. Inline (default below): set values directly in app.env. The chart
+#      writes every key into a chart-managed Secret. Simplest, but stores
+#      plaintext in your values file.
+#
+#   2. existingSecret: pre-create a Kubernetes Secret out-of-band and
+#      reference it via app.secrets.existingSecret.name. You are
+#      responsible for ensuring the Secret contains every key your app
+#      needs (BETTER_AUTH_SECRET, ENCRYPTION_KEY, INTERNAL_API_SECRET,
+#      AZURE_OPENAI_API_KEY, AZURE_ACCOUNT_KEY, ...). The chart-managed
+#      Secret is not rendered in this mode, so anything missing from your
+#      Secret will be empty at runtime.
+#
+#   3. External Secrets Operator (ESO): sync from Azure Key Vault via the
+#      External Secrets Operator. Map every key via
+#      externalSecrets.remoteRefs.app.<KEY>. The chart fails template
+#      rendering if a key is set in app.env but not mapped — see the
+#      commented ESO block at the bottom of this file.
+
+# Global configuration
+global:
+  imageRegistry: "ghcr.io"
+  # Use "managed-csi-premium" for Premium SSD, "managed-csi" for Standard SSD
+  # IMPORTANT: For production, use a StorageClass with reclaimPolicy: Retain
+  # to protect database volumes from accidental deletion.
+  storageClass: "managed-csi"
+
+# Main application
+app:
+  enabled: true
+  replicaCount: 2
+
+  # Node selector for application pods
+  # Uncomment and customize based on your AKS node labels:
+  # nodeSelector:
+  #   agentpool: "application"
+  
+  resources:
+    limits:
+      memory: "4Gi"
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+  
+  # Production URLs (REQUIRED - update with your actual domain names)
+  env:
+    NEXT_PUBLIC_APP_URL: "https://simstudio.acme.com"
+    BETTER_AUTH_URL: "https://simstudio.acme.com"
+    # SOCKET_SERVER_URL is auto-detected (uses internal service http://sim-realtime:3002)
+    NEXT_PUBLIC_SOCKET_URL: "https://simstudio-ws.acme.com"  # Public WebSocket URL for browsers
+    
+    # Security settings (REQUIRED - replace with your own secure secrets)
+    # Generate using: openssl rand -hex 32
+    BETTER_AUTH_SECRET: "your-secure-production-auth-secret-here"
+    ENCRYPTION_KEY: "your-secure-production-encryption-key-here"
+    INTERNAL_API_SECRET: "your-secure-production-internal-api-secret-here"
+    CRON_SECRET: "your-secure-production-cron-secret-here"
+
+    # Optional: API Key Encryption (RECOMMENDED for production)
+    # Generate 64-character hex string using: openssl rand -hex 32
+    API_ENCRYPTION_KEY: "your-64-char-hex-api-encryption-key-here"  # Optional but recommended
+
+    NODE_ENV: "production"
+    NEXT_TELEMETRY_DISABLED: "1"
+
+    # Azure OpenAI / Azure Anthropic (Azure AI Foundry) — set to use server-side credentials.
+    # When NEXT_PUBLIC_AZURE_CONFIGURED is true, the endpoint/key/version fields are hidden in
+    # the Agent block UI so users just pick a model and run.
+    AZURE_OPENAI_ENDPOINT: ""                             # e.g. https://your-resource.openai.azure.com
+    AZURE_OPENAI_API_KEY: ""                              # Azure OpenAI API key
+    AZURE_OPENAI_API_VERSION: ""                          # e.g. 2024-07-01-preview
+    AZURE_ANTHROPIC_ENDPOINT: ""                          # Azure AI Foundry endpoint for Anthropic models
+    AZURE_ANTHROPIC_API_KEY: ""                           # Azure Anthropic API key
+    AZURE_ANTHROPIC_API_VERSION: ""                       # Azure Anthropic API version (e.g., 2023-06-01)
+    NEXT_PUBLIC_AZURE_CONFIGURED: "true"                  # Set to "true" once credentials are configured above
+    KB_OPENAI_MODEL_NAME: ""                              # Azure deployment name serving the KB embedding model (used only when AZURE_OPENAI_* is set)
+    WAND_OPENAI_MODEL_NAME: ""                            # Wand generation model deployment name
+
+    # Azure Mistral OCR (optional — Azure-hosted document OCR for knowledge base processing)
+    OCR_AZURE_ENDPOINT: ""                                # Azure Mistral OCR service endpoint
+    OCR_AZURE_MODEL_NAME: ""                              # Azure Mistral OCR model name
+    OCR_AZURE_API_KEY: ""                                 # Azure Mistral OCR API key
+
+    # Email — Azure Communication Services (recommended on Azure; alternative to Resend/SES/SMTP)
+    AZURE_ACS_CONNECTION_STRING: ""                       # Azure Communication Services connection string
+
+    # Azure Blob Storage Configuration (RECOMMENDED for production)
+    # Create a storage account and containers in your Azure subscription
+    STORAGE_PROVIDER: "azure"
+    AZURE_ACCOUNT_NAME: "simstudiostorageacct"           # Azure storage account name
+    AZURE_ACCOUNT_KEY: ""                                 # Storage account access key
+    # Or use connection string instead of account name/key:
+    # AZURE_CONNECTION_STRING: "DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net"
+    AZURE_STORAGE_CONTAINER_NAME: "workspace-files"       # Workspace files container
+    AZURE_STORAGE_KB_CONTAINER_NAME: "knowledge-base"     # Knowledge base documents container
+    AZURE_STORAGE_EXECUTION_FILES_CONTAINER_NAME: "execution-files"  # Workflow execution outputs
+    AZURE_STORAGE_CHAT_CONTAINER_NAME: "chat-files"       # Deployed chat assets container
+    AZURE_STORAGE_COPILOT_CONTAINER_NAME: "copilot-files" # Copilot attachments container
+    AZURE_STORAGE_PROFILE_PICTURES_CONTAINER_NAME: "profile-pictures"  # User avatars container
+    AZURE_STORAGE_OG_IMAGES_CONTAINER_NAME: "og-images"   # OpenGraph preview images container
+    AZURE_STORAGE_WORKSPACE_LOGOS_CONTAINER_NAME: "workspace-logos"  # Workspace logos container
+
+# Realtime service
+realtime:
+  enabled: true
+  # Safe to scale past 1: Socket.IO bridges cross-pod events through its Redis
+  # adapter, and the chart bundles Redis by default. Only keep this at 1 if you
+  # set redis.enabled=false without supplying app.env.REDIS_URL.
+  replicaCount: 1
+
+  # Node selector for realtime pods
+  # Uncomment and customize based on your AKS node labels:
+  # nodeSelector:
+  #   agentpool: "application"
+  
+  resources:
+    limits:
+      memory: "4Gi"
+    requests:
+      memory: "1Gi"
+      cpu: "250m"
+  
+  env:
+    NEXT_PUBLIC_APP_URL: "https://simstudio.acme.com"
+    BETTER_AUTH_URL: "https://simstudio.acme.com"
+    BETTER_AUTH_SECRET: "your-secure-production-auth-secret-here"
+    ALLOWED_ORIGINS: "https://simstudio.acme.com"
+    NODE_ENV: "production"
+
+# Database migrations
+migrations:
+  enabled: true
+
+# PostgreSQL database
+postgresql:
+  enabled: true
+
+  # Node selector for database pods
+  # Uncomment and customize (recommended: memory-optimized VM sizes):
+  # nodeSelector:
+  #   agentpool: "database"
+  
+  # Database authentication (REQUIRED - set secure credentials)
+  auth:
+    username: postgres
+    password: "your-secure-postgres-password"
+    database: simstudio
+  
+  # Resource allocation for production workloads
+  resources:
+    limits:
+      memory: "2Gi"
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+  
+  # Persistent storage using Azure Managed Disk
+  persistence:
+    enabled: true
+    storageClass: "managed-csi"
+    size: 10Gi
+  
+  # SSL/TLS configuration (requires cert-manager to be installed)
+  tls:
+    enabled: false  # Set to true if cert-manager is installed
+    certificatesSecret: postgres-tls-secret
+  
+  # PostgreSQL performance tuning for Azure infrastructure
+  config:
+    maxConnections: 1000
+    sharedBuffers: "1280MB"
+    maxWalSize: "4GB"
+    minWalSize: "80MB"
+
+# Ollama AI models with GPU acceleration (Azure NC-series VMs)
+# Set ollama.enabled: false if you don't need local AI models
+ollama:
+  enabled: false
+  replicaCount: 1
+
+  # GPU node targeting - uncomment and customize for GPU node pools
+  # Recommended: NC6s_v3 or NC12s_v3 VMs
+  # nodeSelector:
+  #   agentpool: "gpu"
+  
+  tolerations:
+    - key: "sku"
+      operator: "Equal"
+      value: "gpu"
+      effect: "NoSchedule"
+  
+  # GPU resource allocation for AI model serving
+  gpu:
+    enabled: true
+    count: 1
+  
+  resources:
+    limits:
+      memory: "8Gi"
+      nvidia.com/gpu: "1"
+    requests:
+      memory: "4Gi"
+      cpu: "1000m"
+  
+  # High-performance storage for AI models (use managed-csi-premium for GPU workloads)
+  persistence:
+    enabled: true
+    storageClass: "managed-csi-premium"
+    size: 100Gi
+  
+  env:
+    NVIDIA_DRIVER_CAPABILITIES: "all"
+    OLLAMA_LOAD_TIMEOUT: "-1"
+    OLLAMA_KEEP_ALIVE: "-1"
+    OLLAMA_DEBUG: "1"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # cert-manager issues the certificate into ingress.tls.secretName below —
+    # without this annotation (and cert-manager installed) nginx serves its
+    # self-signed fake certificate forever.
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+  # Main application
+  app:
+    host: simstudio.acme.com
+    paths:
+      - path: /
+        pathType: Prefix
+
+  # Realtime service
+  realtime:
+    host: simstudio-ws.acme.com
+    paths:
+      - path: /
+        pathType: Prefix
+
+  # TLS configuration
+  tls:
+    enabled: true
+    secretName: simstudio-tls-secret
+
+# Internal Ingress configuration
+ingressInternal:
+  enabled: false
+  className: azure-application-gateway
+
+  annotations:
+    appgw.ingress.kubernetes.io/use-private-ip: "true"
+
+  # Main application
+  app:
+    host: simstudio-internal.acme.local
+    paths:
+      - path: /
+        pathType: Prefix
+
+  # Realtime service
+  realtime:
+    host: simstudio-internal.acme.local
+    paths:
+      - path: /socket.io
+        pathType: Prefix
+
+  # TLS configuration
+  tls:
+    enabled: true
+    secretName: simstudio-internal-tls-secret
+# -----------------------------------------------------------------------------
+# External Secrets Operator (ESO) — recommended for production on Azure
+# -----------------------------------------------------------------------------
+# To switch from inline secrets to ESO:
+#   1. Install external-secrets in the cluster (https://external-secrets.io).
+#   2. Create a ClusterSecretStore backed by Azure Key Vault and grant
+#      Workload Identity / managed-identity access from this namespace.
+#   3. Remove entries from app.env above (or leave them and the chart will
+#      fail-fast naming each unmapped key).
+#   4. Uncomment the block below and replace the paths with the names of the
+#      secrets in your Key Vault.
+#
+# externalSecrets:
+#   enabled: true
+#   secretStoreRef:
+#     name: "azure-keyvault-store"      # name of your ClusterSecretStore
+#     kind: "ClusterSecretStore"
+#   remoteRefs:
+#     app:
+#       BETTER_AUTH_SECRET:      "sim-better-auth-secret"
+#       ENCRYPTION_KEY:          "sim-encryption-key"
+#       INTERNAL_API_SECRET:     "sim-internal-api-secret"
+#       CRON_SECRET:             "sim-cron-secret"
+#       API_ENCRYPTION_KEY:      "sim-api-encryption-key"
+#       # Azure provider keys
+#       AZURE_OPENAI_API_KEY:    "sim-azure-openai-api-key"
+#       AZURE_ANTHROPIC_API_KEY: "sim-azure-anthropic-api-key"
+#       AZURE_ACCOUNT_KEY:       "sim-azure-storage-account-key"
+#       # Use AZURE_CONNECTION_STRING instead if you prefer a single connection string:
+#       # AZURE_CONNECTION_STRING: "sim-azure-storage-connection-string"
+#       OCR_AZURE_API_KEY:       "sim-azure-ocr-api-key"
+#       AZURE_ACS_CONNECTION_STRING: "sim-azure-acs-connection-string"
+#       # Non-secret config (deployment names, endpoints) — still required here: ESO mode requires
+#       # every non-empty app.env key to be mapped, even ones that aren't sensitive.
+#       KB_OPENAI_MODEL_NAME:    "sim-kb-openai-model-name"
+#       WAND_OPENAI_MODEL_NAME:  "sim-wand-openai-model-name"
+#       OCR_AZURE_ENDPOINT:      "sim-azure-ocr-endpoint"
+#       OCR_AZURE_MODEL_NAME:    "sim-azure-ocr-model-name"
+#     postgresql:
+#       password: "sim-postgresql-password"

@@ -1,0 +1,92 @@
+/**
+ * GET /api/v1/admin/workflows/[id]/export
+ *
+ * Export a single workflow as JSON (raw, unsanitized for admin backup/restore).
+ *
+ * Response: AdminSingleResponse<WorkflowExportPayload>
+ */
+
+import { db } from '@sim/db'
+import { workflow } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { eq } from 'drizzle-orm'
+import { adminV1ExportWorkflowContract } from '@/lib/api/contracts/v1/admin'
+import { parseRequest } from '@/lib/api/server'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { loadWorkflowFromNormalizedTables } from '@/lib/workflows/persistence/utils'
+import { parseWorkflowVariables } from '@/lib/workflows/variables/parse'
+import { withAdminAuthParams } from '@/app/api/v1/admin/middleware'
+import {
+  internalErrorResponse,
+  notFoundResponse,
+  singleResponse,
+} from '@/app/api/v1/admin/responses'
+import type { WorkflowExportPayload, WorkflowExportState } from '@/app/api/v1/admin/types'
+
+const logger = createLogger('AdminWorkflowExportAPI')
+
+interface RouteParams {
+  id: string
+}
+
+export const GET = withRouteHandler(
+  withAdminAuthParams<RouteParams>(async (request, context) => {
+    const parsed = await parseRequest(adminV1ExportWorkflowContract, request, context)
+    if (!parsed.success) return parsed.response
+
+    const { id: workflowId } = parsed.data.params
+
+    try {
+      const [workflowData] = await db
+        .select()
+        .from(workflow)
+        .where(eq(workflow.id, workflowId))
+        .limit(1)
+
+      if (!workflowData) {
+        return notFoundResponse('Workflow')
+      }
+
+      const normalizedData = await loadWorkflowFromNormalizedTables(workflowId)
+
+      if (!normalizedData) {
+        return notFoundResponse('Workflow state')
+      }
+
+      const variables = parseWorkflowVariables(workflowData.variables)
+
+      const state: WorkflowExportState = {
+        blocks: normalizedData.blocks,
+        edges: normalizedData.edges,
+        loops: normalizedData.loops,
+        parallels: normalizedData.parallels,
+        metadata: {
+          name: workflowData.name,
+          description: workflowData.description ?? undefined,
+          exportedAt: new Date().toISOString(),
+        },
+        variables,
+      }
+
+      const exportPayload: WorkflowExportPayload = {
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        workflow: {
+          id: workflowData.id,
+          name: workflowData.name,
+          description: workflowData.description,
+          workspaceId: workflowData.workspaceId,
+          folderId: workflowData.folderId,
+        },
+        state,
+      }
+
+      logger.info(`Admin API: Exported workflow ${workflowId}`)
+
+      return singleResponse(exportPayload)
+    } catch (error) {
+      logger.error('Admin API: Failed to export workflow', { error, workflowId })
+      return internalErrorResponse('Failed to export workflow')
+    }
+  })
+)

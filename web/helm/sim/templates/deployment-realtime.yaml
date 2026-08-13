@@ -1,0 +1,189 @@
+{{- if .Values.realtime.enabled }}
+{{- include "sim.validateSecrets" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sim.fullname" . }}-realtime
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sim.realtime.labels" . | nindent 4 }}
+spec:
+  {{- /* The HPA owns replicas only when the realtime HPA actually renders —
+      with autoscaling.realtime.enabled=false, replicaCount stays in charge. */}}
+  {{- if not (and .Values.autoscaling.enabled .Values.autoscaling.realtime.enabled) }}
+  replicas: {{ .Values.realtime.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sim.realtime.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- /* Hash the inline Secret AND the ExternalSecret manifest so spec
+          changes under externalSecrets.remoteRefs.app roll the pods (with ESO
+          enabled the inline Secret renders empty and would hash to a constant).
+          Rotated values inside the external store still can't be detected at
+          render time — ESO's own reconciliation handles those. */}}
+        checksum/secret: {{ printf "%s%s" (include (print $.Template.BasePath "/secrets-app.yaml") .) (include (print $.Template.BasePath "/external-secret-app.yaml") .) | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "sim.realtime.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sim.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- include "sim.podSecurityContext" .Values.realtime | nindent 6 }}
+      {{- include "sim.nodeSelector" .Values.realtime | nindent 6 }}
+      {{- include "sim.tolerations" .Values | nindent 6 }}
+      {{- include "sim.affinity" .Values | nindent 6 }}
+      {{- include "sim.topologySpreadConstraints" .Values.realtime | nindent 6 }}
+      containers:
+        - name: realtime
+          image: {{ include "sim.image" (dict "imageRoot" .Values.realtime.image "global" .Values.global "chartAppVersion" .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.realtime.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.realtime.service.targetPort }}
+              protocol: TCP
+          {{- /*
+            All keys from .Values.realtime.env are mounted via envFrom (see below).
+            Chart-computed values and operational tunables (.Values.realtime.envDefaults)
+            are inlined here so they don't leak into the chart-managed Secret and don't
+            need to be mapped when externalSecrets.enabled=true.
+          */}}
+          env:
+            - name: DATABASE_URL
+              value: {{ include "sim.databaseUrl" . | quote }}
+            {{- if .Values.telemetry.enabled }}
+            {{- $nodeEnv := default (default "production" (index (.Values.realtime.envDefaults | default dict) "NODE_ENV")) (index (.Values.realtime.env | default dict) "NODE_ENV") }}
+            # OpenTelemetry configuration
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://{{ include "sim.fullname" . }}-otel-collector:4318"
+            - name: OTEL_SERVICE_NAME
+              value: sim-realtime
+            - name: OTEL_SERVICE_VERSION
+              value: {{ .Chart.AppVersion | quote }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=sim-realtime,service.version={{ .Chart.AppVersion }},deployment.environment={{ $nodeEnv }}"
+            {{- end }}
+            {{- /*
+              Inline realtime.envDefaults, skipping keys explicitly set in realtime.env
+              OR app.env (K8s `env` overrides `envFrom`, so an inline default would
+              otherwise mask a Secret-bound value). The chart-managed Secret is shared
+              between app and realtime via envFrom, so a key set in app.env (e.g.
+              NEXT_PUBLIC_APP_URL=https://prod.example.com) lands on the realtime pod
+              too — inlining the localhost envDefault here would mask it.
+            */}}
+            {{- $rtEnv := .Values.realtime.env | default dict }}
+            {{- $appEnv := .Values.app.env | default dict }}
+            {{- $useExistingSecret := and .Values.app.secrets.existingSecret.enabled (not .Values.externalSecrets.enabled) }}
+            {{- /*
+              Skip envDefaults entirely in existingSecret mode — same rationale as
+              deployment-app.yaml: the pre-existing Secret is the source of truth,
+              and inlining localhost defaults would shadow URL keys (BETTER_AUTH_URL,
+              ALLOWED_ORIGINS, NEXT_PUBLIC_APP_URL, etc.) stored in the Secret.
+            */}}
+            {{- if not $useExistingSecret }}
+            {{- range $key, $value := .Values.realtime.envDefaults | default dict }}
+            {{- $rtOverride := index $rtEnv $key }}
+            {{- $appOverride := index $appEnv $key }}
+            {{- $hasRt := and $rtOverride (ne (toString $rtOverride) "") (ne (toString $rtOverride) "<nil>") }}
+            {{- $hasApp := and $appOverride (ne (toString $appOverride) "") (ne (toString $appOverride) "<nil>") }}
+            {{- if and (ne (toString $value) "") (ne (toString $value) "<nil>") (not $hasRt) (not $hasApp) }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- /*
+              In existingSecret mode the chart-managed Secret is not rendered, so
+              non-empty values in realtime.env / app.env would otherwise go nowhere
+              — inline them here so the user's overrides actually reach the pod.
+              realtime.env wins over app.env on collision (realtime-specific intent).
+              Skipped in ESO mode and inline mode for the same reasons as the app
+              deployment.
+            */}}
+            {{- if and .Values.app.secrets.existingSecret.enabled (not .Values.externalSecrets.enabled) }}
+            {{- $chartComputed := list "DATABASE_URL" "SOCKET_SERVER_URL" "OLLAMA_URL" "PII_URL" }}
+            {{- /*
+              Build the effective realtime env from app.env as the base, then
+              overlay non-empty realtime.env values. Sprig's `merge` keeps the
+              first source on collision and treats "" as a real value, which
+              would shadow non-empty app.env entries — so do the overlay
+              manually with an explicit empty-string check.
+            */}}
+            {{- $effective := deepCopy $appEnv }}
+            {{- range $key, $value := $rtEnv }}
+            {{- if and (ne (toString $value) "") (ne (toString $value) "<nil>") }}
+            {{- $_ := set $effective $key $value }}
+            {{- end }}
+            {{- end }}
+            {{- range $key, $value := $effective }}
+            {{- if and (ne (toString $value) "") (ne (toString $value) "<nil>") (not (has $key $chartComputed)) }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.extraEnvVars }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            # Bundled Redis URL. Listed FIRST so any operator-supplied REDIS_URL
+            # in a later source overrides it — see templates/configmap-redis.yaml.
+            {{- if include "sim.chartManagesRedis" . }}
+            - configMapRef:
+                name: {{ include "sim.fullname" . }}-redis
+            {{- end }}
+            # App secrets (authentication keys shared with main app)
+            - secretRef:
+                name: {{ include "sim.appSecretName" . }}
+            # Database secrets
+            {{- if .Values.postgresql.enabled }}
+            - secretRef:
+                name: {{ include "sim.postgresqlSecretName" . }}
+            {{- else if .Values.externalDatabase.enabled }}
+            - secretRef:
+                name: {{ include "sim.externalDbSecretName" . }}
+            {{- end }}
+          {{- if .Values.realtime.startupProbe }}
+          startupProbe:
+            {{- toYaml .Values.realtime.startupProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.realtime.livenessProbe }}
+          livenessProbe:
+            {{- toYaml .Values.realtime.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.realtime.readinessProbe }}
+          readinessProbe:
+            {{- toYaml .Values.realtime.readinessProbe | nindent 12 }}
+          {{- end }}
+          {{- include "sim.resources" .Values.realtime | nindent 10 }}
+          {{- include "sim.containerSecurityContext" .Values.realtime | nindent 10 }}
+          {{- if or .Values.extraVolumeMounts .Values.realtime.extraVolumeMounts }}
+          volumeMounts:
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.realtime.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+      {{- if or .Values.extraVolumes .Values.realtime.extraVolumes }}
+      volumes:
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.realtime.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+{{- end }}

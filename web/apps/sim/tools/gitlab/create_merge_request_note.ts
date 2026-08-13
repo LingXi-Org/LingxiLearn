@@ -1,0 +1,99 @@
+import type {
+  GitLabCreateMergeRequestNoteParams,
+  GitLabCreateNoteResponse,
+} from '@/tools/gitlab/types'
+import { getGitLabApiBase } from '@/tools/gitlab/utils'
+import type { ToolConfig } from '@/tools/types'
+
+export const gitlabCreateMergeRequestNoteTool: ToolConfig<
+  GitLabCreateMergeRequestNoteParams,
+  GitLabCreateNoteResponse
+> = {
+  id: 'gitlab_create_merge_request_note',
+  name: 'GitLab Create Merge Request Comment',
+  description: 'Add a comment to a GitLab merge request',
+  version: '1.0.0',
+
+  params: {
+    accessToken: {
+      type: 'string',
+      required: true,
+      visibility: 'user-only',
+      description: 'GitLab Personal Access Token',
+    },
+    host: {
+      type: 'string',
+      required: false,
+      visibility: 'user-only',
+      description: 'Self-managed GitLab host (e.g. gitlab.example.com). Defaults to gitlab.com.',
+    },
+    projectId: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description: 'Project ID or path (e.g. mygroup/myproject)',
+    },
+    mergeRequestIid: {
+      type: 'number',
+      required: true,
+      visibility: 'user-or-llm',
+      description: 'Merge request internal ID (IID)',
+    },
+    body: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description: 'Comment body (Markdown supported)',
+    },
+    internal: {
+      type: 'boolean',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Create the comment as an internal note visible only to project members',
+    },
+  },
+
+  request: {
+    url: (params) => {
+      const encodedId = encodeURIComponent(String(params.projectId).trim())
+      return `${getGitLabApiBase(params.host)}/projects/${encodedId}/merge_requests/${params.mergeRequestIid}/notes`
+    },
+    method: 'POST',
+    headers: (params) => ({
+      'Content-Type': 'application/json',
+      'PRIVATE-TOKEN': params.accessToken,
+    }),
+    body: (params) => {
+      const body: Record<string, unknown> = { body: params.body }
+      if (params.internal !== undefined) body.internal = params.internal
+      return body
+    },
+  },
+
+  transformResponse: async (response) => {
+    if (!response.ok) {
+      const errorText = await response.text()
+      return {
+        success: false,
+        error: `GitLab API error: ${response.status} ${errorText}`,
+        output: {},
+      }
+    }
+
+    const note = await response.json()
+
+    return {
+      success: true,
+      output: {
+        note,
+      },
+    }
+  },
+
+  outputs: {
+    note: {
+      type: 'object',
+      description: 'The created comment',
+    },
+  },
+}

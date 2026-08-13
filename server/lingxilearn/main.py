@@ -25,7 +25,8 @@ from .service import Service
 
 logger = logging.getLogger(__name__)
 
-WEB_DIST = Path(os.environ.get("LINGXILEARN_WEB_DIST", REPO_ROOT / "web" / "out"))
+_configured_web_dist = os.environ.get("LINGXILEARN_WEB_DIST")
+WEB_DIST = Path(_configured_web_dist) if _configured_web_dist else REPO_ROOT / "web" / "apps" / "sim" / "out"
 
 
 @asynccontextmanager
@@ -84,6 +85,14 @@ def create_app() -> FastAPI:
             page = WEB_DIST / full_path / "index.html"
             if page.is_file():
                 return FileResponse(page)
+            # The task id is intentionally client-routed. A browser refresh on
+            # `/workspace/lingxi/chat/<task-id>` must bootstrap the exported
+            # Lingxi workspace shell even though that id cannot be enumerated
+            # by Next's static export.
+            if full_path.startswith("workspace/"):
+                workspace_home = WEB_DIST / "workspace" / "lingxi" / "home" / "index.html"
+                if workspace_home.is_file():
+                    return FileResponse(workspace_home)
             return FileResponse(WEB_DIST / "index.html")
 
     return app

@@ -265,36 +265,29 @@ Next.js 16 / React 19 / Tailwind v4, **statically exported** and served by
 FastAPI: one process, one port, no Node in the production image. Nothing needs
 server rendering — every byte the learner sees comes from the API at runtime.
 
-The frontend uses the Sim workspace interaction model: a persistent workspace
-chrome and sidebar, a streaming-shaped chat lane, and a Resource Panel for the
-learning artifact or Agent-produced document. The current application-facing mode
-is deterministic local placeholder mode: `web/lib/sim-mock.ts` produces the Sim
-conversation, tool, sub-agent, resource and orchestration states without making a
-network request. `web/lib/sim-adapter.ts` remains the boundary/reference for a
-future LingxiGraph session/agent snapshot and replayable SSE integration. It maps
-transcript turns, assistant deltas, plans, tool lifecycle, subagent progress,
-evidence and terminal states without changing the backend graph.
+The frontend follows Sim's full-site information architecture: marketing pages,
+a persistent WorkspaceChrome and sidebar, Mothership Chat, UserInput, resource
+tabs and the workflow renderer. `LingxiWorkspaceClient` is the only browser data
+boundary. `web/lib/lingxi-projection.ts` maps durable Agent Task snapshots and
+replayable SSE events into messages, tool/agent activity and a read-only workflow.
 
-The current deep links (`/workspace/?id=<session>` and `/workspace/?task=<agent>`)
-remain stable. In placeholder mode they open a local mock run rather than querying
-the identifier. The Sim backend, Better Auth, and Sim workspace database are not
-used. Modules without a LingxiGraph contract are hidden, explicitly disabled, or
-listed in `SIM_LINGXIGRAPH_PLACEHOLDERS.md`.
+The fixed workspace is `lingxi`. Canonical links are
+`/workspace/lingxi/home`, `/workspace/lingxi/chat/{taskId}`,
+`/workspace/lingxi/w/{taskId}` and `/workspace/lingxi/skills/{skillId}`.
+FastAPI's static fallback serves the exported root entry for deep links. Sim's
+backend, Better Auth, database and executor are not used.
 
-Domain-specific learning visualizations are intentionally no longer part of the
-active frontend tree. They are represented by Sim Resource Panel placeholders until
-they can be expressed through Sim's native resource protocol:
+Lingxi learning resources are real authenticated API projections:
 
 | Component | Note |
 |---|---|
-| `SimResourcePanel` | Sim-style Graph, Artifacts, Sim native capability, and execution-log tabs. Unsupported domain renderers are explicit placeholders. |
+| `MothershipView` | Read-only workflow, task list, Skills, lesson intro, lecture deck, quiz and visual tabs. |
 
-The active frontend does not mount the former LingxiLearn conversation, UI,
-visualization, or AI-element component families. The Sim-derived shell, composer,
-chat message model, resource panel, local placeholder Agent graph, and disabled
-capability states are the only application-facing interaction surfaces. The complete
-placeholder inventory and the missing LingxiGraph contracts are documented in
-`SIM_LINGXIGRAPH_PLACEHOLDERS.md`.
+Apache-2.0 source-derived primitives live under `web/packages/emcn`; application
+surfaces live under `web/components/platform`. Enterprise Edition source is
+excluded and a license guard rejects EE paths/imports. Files, Tables, Knowledge,
+Integrations, Logs, Schedules, organization and billing preserve their navigation
+and layout in an explicit disabled state without issuing unsupported requests.
 
 ---
 

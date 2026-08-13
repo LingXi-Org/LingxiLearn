@@ -64,13 +64,14 @@ Compose 默认是同源访问，`NEXT_PUBLIC_API_BASE` 保持为空；登录回�
 LINGXILEARN_INSECURE_DEV_AUTH=false
 LINGXILEARN_OIDC_ISSUER=https://auth.lingxilearn.cn/oidc
 LINGXILEARN_OIDC_AUDIENCE=https://lingxilearn.cn/api
-NEXT_PUBLIC_LOGTO_ENDPOINT=https://auth.lingxilearn.cn
-NEXT_PUBLIC_LOGTO_APP_ID=前端应用 client id
-NEXT_PUBLIC_LOGTO_RESOURCE=https://lingxilearn.cn/api
-NEXT_PUBLIC_LOGTO_REDIRECT_URI=https://lingxilearn.cn/auth/callback/
+NEXT_PUBLIC_LINGXI_IDENTITY_ISSUER=https://auth.lingxilearn.cn/oidc
+NEXT_PUBLIC_LINGXI_IDENTITY_CLIENT_ID=前端 SPA 应用 client id
+NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE=https://lingxilearn.cn/api
+NEXT_PUBLIC_LINGXI_IDENTITY_REDIRECT_URI=https://lingxilearn.cn/auth/callback/
+NEXT_PUBLIC_LINGXI_IDENTITY_SCOPE=openid profile email offline_access roles urn:logto:scope:organizations urn:logto:scope:organization_roles learn.read learn.write
 ```
 
-`LINGXILEARN_OIDC_AUDIENCE` 必须与 `NEXT_PUBLIC_LOGTO_RESOURCE` 完全一致；不要填写身份服务
+`LINGXILEARN_OIDC_AUDIENCE` 必须与 `NEXT_PUBLIC_LINGXI_IDENTITY_RESOURCE` 完全一致；不要填写身份服务
 地址或带额外尾斜杠的变体。若日志出现 `invalid_token`，先确认这两个值和 issuer 已在同一份
 `.env` 中更新，然后重新构建 `web-build` 和 `api`，避免浏览器继续使用旧的静态 token 配置。
 
@@ -145,8 +146,8 @@ make test
 ## 架构
 
 ```
-Next.js（Sim workspace UI · local placeholder mode）
-        ↓ future adapter: REST + fetch-SSE（可断线续传）
+Next.js（Sim 全站信息架构 · Lingxi 品牌）
+        ↓ REST + fetch-SSE（鉴权、去重、可断线续传）
 LingxiIdentity OIDC ── FastAPI ── Projector ── run_events（投影日志）
         ↓
 LearnerService / SQLAlchemy（学习业务权威源）
@@ -238,11 +239,16 @@ DeepSeek 原生 prompt cache 不会被不同 system prompt/tool schema 互相污
 ## 验证方式
 
 ```bash
-make test     # Python 单测 + ruff + mypy + frontend typecheck/test
-make test     # 后端单测 + 前端类型检查与测试
+make test              # 后端单测、lint、类型检查 + 前端检查
+cd web && npm run verify # 许可证边界、TypeScript、Vitest、静态生产构建
 ```
 
-当前前端默认展示 Sim 原生占位工作区：发送消息会在浏览器内生成占位 Agent 输出、工具/子 Agent 状态、编排图和资源面板，不调用真实 API。所有尚未对齐 LingxiGraph 的能力与恢复真实接口所需的契约记录在 [`SIM_LINGXIGRAPH_PLACEHOLDERS.md`](SIM_LINGXIGRAPH_PLACEHOLDERS.md)。
+当前前端采用 Sim 的全站页面结构、workspace chrome、Mothership Chat、UserInput
+和资源视图，并直接连接 Lingxi Agent Task REST/SSE。正式入口为
+`/workspace/lingxi/home`，对话、工作流和 Skills 分别使用 `chat/{taskId}`、
+`w/{taskId}` 与 `skills/{skillId}`。Files、Tables、Knowledge、Integrations、
+Logs、Schedules、组织和计费页面保留完整禁用界面，不调用不存在的 API。
+具体边界见 [`SIM_LINGXIGRAPH_PLACEHOLDERS.md`](SIM_LINGXIGRAPH_PLACEHOLDERS.md)。
 
 
 ---
@@ -259,7 +265,7 @@ server/lingxilearn/
   store/                   SQLAlchemy + Alembic
   eval/                    评测
 skills/                    LingxiSkills 最新技能（含中文展示名称与描述）
-web/                       Next.js Sim 前端与 LingxiGraph 适配层
+web/                       Next.js Sim 全站前端与 Lingxi 后端适配层
 scripts/                   工件生成、内核/API/UI 冒烟
 ```
 

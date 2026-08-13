@@ -1,0 +1,953 @@
+import { createLogger } from '@sim/logger'
+import { getErrorMessage } from '@sim/utils/errors'
+import { isRecordLike, omit } from '@sim/utils/object'
+import { createTimeoutAbortController, getTimeoutErrorMessage } from '@/lib/core/execution-limits'
+import {
+  extractBlockIdFromOutputId,
+  extractPathFromOutputId,
+  parseOutputContentSafely,
+} from '@/lib/core/utils/response-format'
+import { encodeSSE } from '@/lib/core/utils/sse'
+import {
+  getInlineJsonByteLength,
+  materializeInlineExecutionValue,
+} from '@/lib/execution/payloads/inline-materialization.server'
+import { MAX_INLINE_MATERIALIZATION_BYTES } from '@/lib/execution/payloads/limits'
+import {
+  assertInlineMaterializationSize,
+  type ExecutionMaterializationContext,
+} from '@/lib/execution/payloads/materialization.server'
+import { compactExecutionPayload } from '@/lib/execution/payloads/serializer'
+import { isExecutionResourceLimitError } from '@/lib/execution/resource-errors'
+import { buildTraceSpans } from '@/lib/logs/execution/trace-spans/trace-spans'
+import { processStreamingBlockLogs } from '@/lib/tokenization'
+import {
+  cleanupExecutionBase64Cache,
+  hydrateUserFilesWithBase64,
+} from '@/lib/uploads/utils/user-file-base64.server'
+import {
+  AGENT_STREAM_PROTOCOL_HEADER,
+  AGENT_STREAM_PROTOCOL_V1,
+  type ChatStreamChunkFrame,
+  type ChatStreamChunkResetFrame,
+  type ChatStreamErrorFrame,
+  type ChatStreamFinalFrame,
+  type ChatStreamStreamErrorFrame,
+  type ChatStreamThinkingFrame,
+  type ChatStreamToolFrame,
+  clientAcceptsAgentStreamProtocol,
+} from '@/lib/workflows/streaming/agent-stream-protocol'
+import type { BlockLog, ExecutionResult, StreamingExecution } from '@/executor/types'
+import { projectResolvedSecretDiagnosticError } from '@/executor/utils/resolved-secret-content-projection'
+import { navigatePathAsync } from '@/executor/variables/resolvers/reference-async.server'
+import type { ToolCallEndStatus } from '@/providers/stream-events'
+import { DEFAULT_MAX_THINKING_CHARS } from '@/providers/stream-pump'
+
+/**
+ * Extended streaming execution type that includes blockId on the execution.
+ * The runtime passes blockId but the base StreamingExecution type doesn't declare it.
+ */
+interface StreamingExecutionWithBlockId extends Omit<StreamingExecution, 'execution'> {
+  execution?: StreamingExecution['execution'] & { blockId?: string }
+}
+
+const logger = createLogger('WorkflowStreaming')
+
+const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype']
+const SELECTED_OUTPUT_TOO_LARGE_MESSAGE =
+  'Selected output is too large to inline; select a nested field or use pagination/preview.'
+
+/**
+ * Simple SSE stream contract — frame shapes are the `ChatStreamFrame` union in
+ * `agent-stream-protocol.ts`, consumed by both these emitters and the chat client:
+ * - Answer text: `{ blockId, chunk }` only (`chunk` is forever answer text).
+ *   Legacy clients get settled final-turn text; protocol-negotiated clients get
+ *   answer text live from the agent-events sink, reconciled by
+ *   `{ blockId, event: 'chunk_reset' }` when a turn resolves to tool calls.
+ * - Thinking (opt-in): `{ blockId, event: 'thinking', data }` — never uses `chunk`.
+ * - Tool lifecycle (opt-in): `{ blockId, event: 'tool', ... }` — name/status only.
+ * - Success terminal: `{ event: 'final', data }` then `[DONE]`.
+ * - Failure terminal: exactly one `{ event: 'error', ... }` then `[DONE]`. No `final` after failure.
+ * - Mid-block read issues may emit non-terminal `{ event: 'stream_error', blockId, error }`.
+ * - Thinking never enters `streamedChunks` / log rewrite / tokenization — the
+ *   log/tokenization source is always the byte stream (final-turn text only).
+ */
+
+interface StreamingConfig {
+  selectedOutputs?: string[]
+  isSecureMode?: boolean
+  workflowTriggerType?: 'api' | 'chat'
+  includeFileBase64?: boolean
+  base64MaxBytes?: number
+  timeoutMs?: number
+  /** Thinking SSE policy; still requires the negotiated agent-events protocol. */
+  includeThinking?: boolean
+  /** Tool lifecycle SSE policy; still requires the negotiated agent-events protocol. */
+  includeToolCalls?: boolean
+}
+
+export type StreamingExecutorFn = (callbacks: {
+  onStream: (streamingExec: StreamingExecution) => Promise<void>
+  onBlockComplete: (blockId: string, output: unknown) => Promise<void>
+  abortSignal: AbortSignal
+}) => Promise<ExecutionResult>
+
+export interface StreamingResponseOptions {
+  requestId: string
+  streamConfig: StreamingConfig
+  executionId?: string
+  largeValueExecutionIds?: string[]
+  largeValueKeys?: string[]
+  fileKeys?: string[]
+  allowLargeValueWorkflowScope?: boolean
+  workspaceId?: string
+  workflowId?: string
+  userId?: string
+  /** Incoming fetch/request abort — combined with the stream timeout. */
+  requestSignal?: AbortSignal
+  /** Used with the independent event policies to negotiate agent-events SSE. */
+  requestHeaders?: Headers | { get(name: string): string | null }
+  executeFn: StreamingExecutorFn
+}
+
+/**
+ * Echoes the stream protocol back when the client negotiated it, so the client
+ * knows v1 framing is in effect and that `chunk_reset` may arrive. Driven by
+ * client capability alone — a negotiated client streams live answer text even
+ * when both event policies are off. Merge into the SSE response alongside
+ * {@link SSE_HEADERS}.
+ */
+export function agentStreamProtocolResponseHeaders(options: {
+  requestHeaders?: Headers | { get(name: string): string | null }
+}): Record<string, string> {
+  if (!options.requestHeaders) return {}
+  if (!clientAcceptsAgentStreamProtocol(options.requestHeaders)) {
+    return {}
+  }
+  return { [AGENT_STREAM_PROTOCOL_HEADER]: AGENT_STREAM_PROTOCOL_V1 }
+}
+
+interface StreamingState {
+  streamedChunks: Map<string, string[]>
+  processedOutputs: Set<string>
+  streamCompletionTimes: Map<string, number>
+  completedBlockIds: Set<string>
+  selectedOutputBytes: number
+  streamedSelectedOutputKeys: Set<string>
+  selectedOutputError?: string
+}
+
+interface SelectedOutputDescriptor {
+  outputId: string
+  blockId: string
+  path: string
+  key: string
+}
+
+function resolveStreamedContent(state: StreamingState): Map<string, string> {
+  const result = new Map<string, string>()
+  for (const [blockId, chunks] of state.streamedChunks) {
+    result.set(blockId, chunks.join(''))
+  }
+  return result
+}
+
+type OutputExtractionContext = Pick<
+  StreamingResponseOptions,
+  | 'requestId'
+  | 'workspaceId'
+  | 'workflowId'
+  | 'executionId'
+  | 'largeValueExecutionIds'
+  | 'largeValueKeys'
+  | 'fileKeys'
+  | 'allowLargeValueWorkflowScope'
+  | 'userId'
+> & { base64MaxBytes?: number }
+
+async function extractOutputValue(
+  output: unknown,
+  path: string,
+  context: OutputExtractionContext
+): Promise<unknown> {
+  const parsedOutput = parseOutputContentSafely(output)
+  const outputValue = path
+    ? await navigatePathAsync(parsedOutput, path.split('.'), {
+        executionContext: {
+          workflowId: context.workflowId ?? '',
+          workspaceId: context.workspaceId,
+          executionId: context.executionId,
+          largeValueExecutionIds: context.largeValueExecutionIds,
+          largeValueKeys: context.largeValueKeys,
+          fileKeys: context.fileKeys,
+          allowLargeValueWorkflowScope: context.allowLargeValueWorkflowScope,
+          userId: context.userId,
+          metadata: { requestId: context.requestId },
+          base64MaxBytes: context.base64MaxBytes,
+        },
+        allowLargeValueRefs: true,
+      })
+    : parsedOutput
+
+  return outputValue
+}
+
+function isDangerousKey(key: string): boolean {
+  return DANGEROUS_KEYS.includes(key)
+}
+
+function getSelectedOutputDescriptors(
+  selectedOutputs: string[] | undefined
+): SelectedOutputDescriptor[] {
+  const descriptors: SelectedOutputDescriptor[] = []
+  const seen = new Set<string>()
+  for (const outputId of selectedOutputs ?? []) {
+    const blockId = extractBlockIdFromOutputId(outputId)
+    const path = extractPathFromOutputId(outputId, blockId)
+    const key = `${blockId}\u0000${path}`
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    descriptors.push({ outputId, blockId, path, key })
+  }
+  return descriptors
+}
+
+function getSelectedOutputErrorMessage(error: unknown): string {
+  if (isExecutionResourceLimitError(error)) {
+    return SELECTED_OUTPUT_TOO_LARGE_MESSAGE
+  }
+  return getErrorMessage(error, 'Selected output could not be materialized')
+}
+
+function buildMaterializationContext(
+  context: Omit<OutputExtractionContext, 'requestId'>
+): ExecutionMaterializationContext {
+  return {
+    workspaceId: context.workspaceId,
+    workflowId: context.workflowId,
+    executionId: context.executionId,
+    largeValueExecutionIds: context.largeValueExecutionIds,
+    largeValueKeys: context.largeValueKeys,
+    fileKeys: context.fileKeys,
+    allowLargeValueWorkflowScope: context.allowLargeValueWorkflowScope,
+    userId: context.userId,
+  }
+}
+
+function getRemainingSelectedOutputBytes(usedBytes: number): number {
+  return MAX_INLINE_MATERIALIZATION_BYTES - usedBytes
+}
+
+function getBase64DecodedByteBudget(remainingJsonBytes: number): number {
+  return Math.max(0, Math.floor(((remainingJsonBytes - 2) * 3) / 4))
+}
+
+function assertSelectedOutputBytes(value: unknown): number {
+  const bytes = getInlineJsonByteLength(value) ?? 0
+  assertInlineMaterializationSize(bytes, MAX_INLINE_MATERIALIZATION_BYTES)
+  return bytes
+}
+
+/** Tool-call payload keys that must never ride a public `final` envelope. */
+const TOOL_PAYLOAD_KEYS = ['arguments', 'input', 'result', 'output'] as const
+
+function redactToolCallPayloads(toolCall: unknown): unknown {
+  if (!toolCall || typeof toolCall !== 'object') return toolCall
+  return omit(toolCall as Record<string, unknown>, [...TOOL_PAYLOAD_KEYS])
+}
+
+/**
+ * Strips model internals from an output before it rides a simple-SSE `final`
+ * envelope.
+ *
+ * `thinkingContent`, intermediate `assistantContent`, and tool-call arguments
+ * inside `providerTiming.timeSegments` would otherwise reach clients wholesale,
+ * bypassing the independently gated thinking/tool frames. Timing numbers and
+ * tool names stay — they carry no model internals.
+ *
+ * With `redactToolPayloads` (public chat, where the caller is an anonymous end
+ * user rather than the workflow owner), the block's own top-level `toolCalls`
+ * are reduced the same way. Without it, the authenticated workflow API keeps
+ * returning tool results, which callers legitimately consume.
+ */
+function sanitizeOutputForEnvelope(
+  output: Record<string, unknown>,
+  options: { redactToolPayloads: boolean }
+): Record<string, unknown> {
+  let sanitized = output
+
+  const providerTiming = output.providerTiming as { timeSegments?: unknown } | undefined
+  if (providerTiming && Array.isArray(providerTiming.timeSegments)) {
+    sanitized = {
+      ...sanitized,
+      providerTiming: {
+        ...providerTiming,
+        timeSegments: providerTiming.timeSegments.map((segment) => {
+          if (!segment || typeof segment !== 'object') return segment
+          const { toolCalls, ...rest } = omit(segment as Record<string, unknown>, [
+            'thinkingContent',
+            'assistantContent',
+          ]) as Record<string, unknown> & { toolCalls?: unknown }
+          return {
+            ...rest,
+            ...(Array.isArray(toolCalls)
+              ? { toolCalls: toolCalls.map(redactToolCallPayloads) }
+              : {}),
+          }
+        }),
+      },
+    }
+  }
+
+  const blockToolCalls = sanitized.toolCalls as { list?: unknown } | undefined
+  if (options.redactToolPayloads && blockToolCalls && Array.isArray(blockToolCalls.list)) {
+    sanitized = {
+      ...sanitized,
+      toolCalls: {
+        ...blockToolCalls,
+        list: blockToolCalls.list.map(redactToolCallPayloads),
+      },
+    }
+  }
+
+  return sanitized
+}
+
+async function buildMinimalResult(
+  result: ExecutionResult,
+  selectedOutputs: string[] | undefined,
+  streamedContent: Map<string, string>,
+  completedBlockIds: Set<string>,
+  streamedSelectedOutputKeys: Set<string>,
+  requestId: string,
+  includeFileBase64: boolean,
+  base64MaxBytes: number | undefined,
+  executionId?: string,
+  context: Omit<OutputExtractionContext, 'executionId'> & {
+    /** Public chat: reduce the block's own tool calls to name + lifecycle. */
+    redactToolPayloads?: boolean
+  } = { requestId }
+): Promise<{ success: boolean; error?: string; output: Record<string, unknown> }> {
+  const envelopeOptions = { redactToolPayloads: context.redactToolPayloads === true }
+  const durableContext = {
+    workspaceId: context.workspaceId,
+    workflowId: context.workflowId,
+    executionId,
+    userId: context.userId,
+    requireDurable: Boolean(context.workspaceId && context.workflowId && executionId),
+  }
+
+  const minimalResult = {
+    success: result.success,
+    error: result.error,
+    output: {} as Record<string, unknown>,
+  }
+
+  if (result.status === 'paused') {
+    minimalResult.output = sanitizeOutputForEnvelope(result.output || {}, envelopeOptions)
+    return compactExecutionPayload(minimalResult, {
+      ...durableContext,
+      preserveUserFileBase64: includeFileBase64,
+      preserveRoot: true,
+    })
+  }
+
+  if (!selectedOutputs?.length) {
+    minimalResult.output = sanitizeOutputForEnvelope(result.output || {}, envelopeOptions)
+    return compactExecutionPayload(minimalResult, {
+      ...durableContext,
+      preserveUserFileBase64: includeFileBase64,
+      preserveRoot: true,
+    })
+  }
+
+  if (!result.output || !result.logs) {
+    return minimalResult
+  }
+
+  /**
+   * Selected outputs are extracted from the sanitized block output, not the raw
+   * log. A deployment can select `toolCalls` or `providerTiming` directly, so
+   * sanitizing per selected path would leave the leak open for whichever path
+   * was missed; sanitizing the source closes it for every path at once. Cached
+   * per block because several descriptors can target the same one.
+   */
+  const sanitizedBlockOutputs = new Map<string, Record<string, unknown>>()
+  const sanitizedOutputFor = (blockId: string, output: Record<string, unknown>) => {
+    const cached = sanitizedBlockOutputs.get(blockId)
+    if (cached) return cached
+
+    const sanitized = sanitizeOutputForEnvelope(output, envelopeOptions)
+    sanitizedBlockOutputs.set(blockId, sanitized)
+    return sanitized
+  }
+
+  let selectedOutputBytes = assertSelectedOutputBytes(minimalResult.output)
+  for (const descriptor of getSelectedOutputDescriptors(selectedOutputs)) {
+    const { blockId, path } = descriptor
+
+    if (streamedContent.has(blockId)) {
+      continue
+    }
+
+    if (streamedSelectedOutputKeys.has(descriptor.key)) {
+      continue
+    }
+
+    if (!completedBlockIds.has(blockId)) {
+      continue
+    }
+
+    if (isDangerousKey(blockId)) {
+      logger.warn(`[${requestId}] Blocked dangerous blockId: ${blockId}`)
+      continue
+    }
+
+    if (isDangerousKey(path)) {
+      logger.warn(`[${requestId}] Blocked dangerous path: ${path}`)
+      continue
+    }
+
+    const blockLog = result.logs.find((log: BlockLog) => log.blockId === blockId)
+    if (!blockLog?.output) {
+      continue
+    }
+
+    const remainingBytes = getRemainingSelectedOutputBytes(selectedOutputBytes)
+    const extractionContext = {
+      ...context,
+      executionId,
+      base64MaxBytes: Math.min(
+        base64MaxBytes ?? MAX_INLINE_MATERIALIZATION_BYTES,
+        getBase64DecodedByteBudget(remainingBytes)
+      ),
+    }
+    const value = await extractOutputValue(
+      sanitizedOutputFor(blockId, blockLog.output),
+      path,
+      extractionContext
+    )
+    if (value === undefined) {
+      continue
+    }
+    const materializedValue = await materializeInlineExecutionValue(
+      value,
+      buildMaterializationContext(extractionContext),
+      { maxBytes: remainingBytes }
+    )
+
+    if (!minimalResult.output[blockId]) {
+      minimalResult.output[blockId] = Object.create(null) as Record<string, unknown>
+    }
+    ;(minimalResult.output[blockId] as Record<string, unknown>)[path] = materializedValue
+    selectedOutputBytes = assertSelectedOutputBytes(minimalResult.output)
+  }
+
+  return minimalResult
+}
+
+function updateLogsWithStreamedContent(
+  logs: BlockLog[],
+  streamedContent: Map<string, string>,
+  streamCompletionTimes: Map<string, number>
+): BlockLog[] {
+  return logs.map((log: BlockLog) => {
+    if (!streamedContent.has(log.blockId)) {
+      return log
+    }
+
+    const content = streamedContent.get(log.blockId)
+    const updatedLog = { ...log }
+
+    if (streamCompletionTimes.has(log.blockId)) {
+      const completionTime = streamCompletionTimes.get(log.blockId)!
+      const startTime = new Date(log.startedAt).getTime()
+      updatedLog.endedAt = new Date(completionTime).toISOString()
+      updatedLog.durationMs = completionTime - startTime
+    }
+
+    if (log.output && content) {
+      updatedLog.output = { ...log.output, content }
+    }
+
+    return updatedLog
+  })
+}
+
+async function completeLoggingSession(result: ExecutionResult): Promise<void> {
+  if (!result._streamingMetadata?.loggingSession) {
+    return
+  }
+
+  const { traceSpans, totalDuration } = buildTraceSpans(result)
+
+  await result._streamingMetadata.loggingSession.safeComplete({
+    endedAt: new Date().toISOString(),
+    totalDurationMs: totalDuration || 0,
+    finalOutput: result.output || {},
+    traceSpans: (traceSpans || []) as any,
+    workflowInput: result._streamingMetadata.processedInput,
+    executionState: result.executionState,
+  })
+
+  result._streamingMetadata = undefined
+}
+
+export async function createStreamingResponse(
+  options: StreamingResponseOptions
+): Promise<ReadableStream> {
+  const { requestId, streamConfig, executionId, executeFn } = options
+  const timeoutController = createTimeoutAbortController(streamConfig.timeoutMs)
+  /**
+   * Answer-text cadence only. A negotiated client renders live text and honors
+   * `chunk_reset`; one that did not negotiate keeps settled final-turn text,
+   * because retracting text it already rendered would corrupt the answer.
+   */
+  const clientAcceptsProtocol =
+    Boolean(options.requestHeaders) && clientAcceptsAgentStreamProtocol(options.requestHeaders!)
+  /**
+   * Frames additionally require the negotiated protocol: a client that never
+   * declared a version has no contract for their shape, so it keeps the text
+   * stream it already understands.
+   */
+  const emitThinking = clientAcceptsProtocol && streamConfig.includeThinking === true
+  const emitToolCalls = clientAcceptsProtocol && streamConfig.includeToolCalls === true
+  const maxThinkingChars = DEFAULT_MAX_THINKING_CHARS
+
+  let requestAborted = false
+  const onRequestAbort = () => {
+    requestAborted = true
+    timeoutController.abort()
+  }
+  if (options.requestSignal) {
+    if (options.requestSignal.aborted) {
+      onRequestAbort()
+    } else {
+      options.requestSignal.addEventListener('abort', onRequestAbort, { once: true })
+    }
+  }
+
+  const cleanupRequestAbort = () => {
+    options.requestSignal?.removeEventListener('abort', onRequestAbort)
+  }
+
+  return new ReadableStream({
+    async start(controller) {
+      const state: StreamingState = {
+        streamedChunks: new Map(),
+        processedOutputs: new Set(),
+        streamCompletionTimes: new Map(),
+        completedBlockIds: new Set(),
+        selectedOutputBytes: 0,
+        streamedSelectedOutputKeys: new Set(),
+      }
+      let thinkingCharsEmitted = 0
+
+      const sendChunk = (
+        blockId: string,
+        content: string,
+        options: { selectedOutputKey?: string; selectedOutputBytes?: number } = {}
+      ) => {
+        const separator = state.processedOutputs.size > 0 ? '\n\n' : ''
+        const chunk = separator + content
+        if (options.selectedOutputKey) {
+          const selectedOutputBytes =
+            options.selectedOutputBytes ?? Buffer.byteLength(chunk, 'utf8')
+          const nextSelectedOutputBytes = state.selectedOutputBytes + selectedOutputBytes
+          assertInlineMaterializationSize(nextSelectedOutputBytes, MAX_INLINE_MATERIALIZATION_BYTES)
+          state.selectedOutputBytes = nextSelectedOutputBytes
+          state.streamedSelectedOutputKeys.add(options.selectedOutputKey)
+        }
+        const frame: ChatStreamChunkFrame = { blockId, chunk }
+        controller.enqueue(encodeSSE(frame))
+        state.processedOutputs.add(blockId)
+      }
+
+      const sendThinking = (blockId: string, text: string) => {
+        if (!text || thinkingCharsEmitted >= maxThinkingChars) return
+        const remaining = maxThinkingChars - thinkingCharsEmitted
+        const forwarded = text.length > remaining ? text.slice(0, remaining) : text
+        thinkingCharsEmitted += forwarded.length
+        // Never push thinking into streamedChunks — logs stay answer-text only.
+        const frame: ChatStreamThinkingFrame = {
+          blockId,
+          event: 'thinking',
+          data: forwarded,
+        }
+        controller.enqueue(encodeSSE(frame))
+      }
+
+      const sendTool = (
+        blockId: string,
+        phase: 'start' | 'end',
+        id: string,
+        name: string,
+        status?: ToolCallEndStatus
+      ) => {
+        const frame: ChatStreamToolFrame = {
+          blockId,
+          event: 'tool',
+          phase,
+          id,
+          name,
+          ...(phase === 'end' && status ? { status } : {}),
+        }
+        controller.enqueue(encodeSSE(frame))
+      }
+
+      /**
+       * Callback for handling streaming execution events.
+       * Subscribe synchronously before the first await so the executor pump
+       * can attach sinks before pulling provider chunks.
+       */
+      const onStreamCallback = async (streamingExec: StreamingExecutionWithBlockId) => {
+        const blockId = streamingExec.execution?.blockId
+        if (!blockId) {
+          logger.warn(`[${requestId}] Streaming execution missing blockId`)
+          return
+        }
+
+        /**
+         * Negotiated clients get answer text live from the sink (pending deltas
+         * stream as the model generates; `chunk_reset` clears an intermediate
+         * turn). The byte stream then only feeds `streamedChunks` for logs.
+         *
+         * Legacy clients stay on the byte stream, which a streaming tool loop
+         * only writes once the turn is classified — correct for a consumer that
+         * cannot retract, at the cost of arriving in one piece.
+         *
+         * Response-format projections rewrite the bytes, so those blocks keep
+         * the byte stream as the frame source either way.
+         */
+        const sinkAnswerText =
+          clientAcceptsProtocol &&
+          Boolean(streamingExec.subscribe) &&
+          streamingExec.clientStreamTransformed !== true
+
+        /** False until the first chunk since block start or since a reset. */
+        let emittedSinceReset = false
+
+        const emitAnswerChunk = (text: string) => {
+          if (!text) return
+          if (!emittedSinceReset) {
+            // sendChunk adds the cross-block separator + output bookkeeping.
+            sendChunk(blockId, text)
+            emittedSinceReset = true
+          } else {
+            const frame: ChatStreamChunkFrame = { blockId, chunk: text }
+            controller.enqueue(encodeSSE(frame))
+          }
+        }
+
+        let unsubscribe: (() => void) | undefined
+        if (clientAcceptsProtocol && streamingExec.subscribe) {
+          unsubscribe = streamingExec.subscribe({
+            onEvent: async (event) => {
+              if (event.type === 'thinking_delta') {
+                if (emitThinking) sendThinking(blockId, event.text)
+              } else if (event.type === 'tool_call_start') {
+                if (emitToolCalls) sendTool(blockId, 'start', event.id, event.name)
+              } else if (event.type === 'tool_call_end') {
+                if (emitToolCalls) sendTool(blockId, 'end', event.id, event.name, event.status)
+              } else if (sinkAnswerText && event.type === 'text_delta') {
+                if (event.turn !== 'intermediate') {
+                  emitAnswerChunk(event.text)
+                }
+              } else if (sinkAnswerText && event.type === 'turn_end') {
+                if (event.turn === 'intermediate' && emittedSinceReset) {
+                  const frame: ChatStreamChunkResetFrame = { blockId, event: 'chunk_reset' }
+                  controller.enqueue(encodeSSE(frame))
+                  // Re-arm separator bookkeeping so re-streamed text starts clean.
+                  emittedSinceReset = false
+                  state.processedOutputs.delete(blockId)
+                }
+              }
+            },
+          })
+        }
+
+        const reader = streamingExec.stream.getReader()
+        const decoder = new TextDecoder()
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) {
+              state.streamCompletionTimes.set(blockId, Date.now())
+              break
+            }
+
+            const textChunk = decoder.decode(value, { stream: true })
+            if (!state.streamedChunks.has(blockId)) {
+              state.streamedChunks.set(blockId, [])
+            }
+            state.streamedChunks.get(blockId)!.push(textChunk)
+
+            if (!sinkAnswerText) {
+              emitAnswerChunk(textChunk)
+            }
+          }
+        } catch (error) {
+          logger.error(
+            `[${requestId}] Error reading stream for block ${blockId}`,
+            projectResolvedSecretDiagnosticError(error, undefined)
+          )
+          const frame: ChatStreamStreamErrorFrame = {
+            event: 'stream_error',
+            blockId,
+            error: getErrorMessage(error, 'Stream reading error'),
+          }
+          controller.enqueue(encodeSSE(frame))
+        } finally {
+          unsubscribe?.()
+        }
+      }
+
+      const includeFileBase64 = streamConfig.includeFileBase64 ?? true
+      const base64MaxBytes = streamConfig.base64MaxBytes
+
+      const onBlockCompleteCallback = async (blockId: string, output: unknown) => {
+        state.completedBlockIds.add(blockId)
+
+        if (!streamConfig.selectedOutputs?.length) {
+          return
+        }
+
+        if (state.streamedChunks.has(blockId)) {
+          return
+        }
+
+        const matchingOutputs = getSelectedOutputDescriptors(streamConfig.selectedOutputs).filter(
+          (descriptor) => descriptor.blockId === blockId
+        )
+
+        /**
+         * A selected output is streamed here and then skipped in the `final`
+         * envelope, so this is the reachable path for a deployment that selects
+         * `toolCalls` or `providerTiming` — sanitizing only the envelope would
+         * leave the payload flowing through the chunk frame instead.
+         */
+        const sanitizedOutput = isRecordLike(output)
+          ? sanitizeOutputForEnvelope(output, {
+              redactToolPayloads: streamConfig.isSecureMode === true,
+            })
+          : output
+
+        for (const descriptor of matchingOutputs) {
+          if (state.selectedOutputError) {
+            break
+          }
+          try {
+            const remainingBytes = getRemainingSelectedOutputBytes(state.selectedOutputBytes)
+            const extractionContext = {
+              requestId,
+              workspaceId: options.workspaceId,
+              workflowId: options.workflowId,
+              executionId,
+              largeValueExecutionIds: options.largeValueExecutionIds,
+              largeValueKeys: options.largeValueKeys,
+              fileKeys: options.fileKeys,
+              allowLargeValueWorkflowScope: options.allowLargeValueWorkflowScope,
+              userId: options.userId,
+              base64MaxBytes: Math.min(
+                base64MaxBytes ?? MAX_INLINE_MATERIALIZATION_BYTES,
+                getBase64DecodedByteBudget(remainingBytes)
+              ),
+            }
+            const materializationContext = buildMaterializationContext(extractionContext)
+            const outputValue = await extractOutputValue(
+              sanitizedOutput,
+              descriptor.path,
+              extractionContext
+            )
+
+            if (outputValue !== undefined) {
+              const materializedOutput = await materializeInlineExecutionValue(
+                outputValue,
+                materializationContext,
+                { maxBytes: remainingBytes }
+              )
+              const shouldHydrateOutput = includeFileBase64
+              const hydratedOutput = shouldHydrateOutput
+                ? await hydrateUserFilesWithBase64(materializedOutput, {
+                    requestId,
+                    ...materializationContext,
+                    maxBytes: Math.min(
+                      base64MaxBytes ?? MAX_INLINE_MATERIALIZATION_BYTES,
+                      getBase64DecodedByteBudget(remainingBytes)
+                    ),
+                    preserveLargeValueMetadata: true,
+                  })
+                : materializedOutput
+              await materializeInlineExecutionValue(hydratedOutput, materializationContext, {
+                maxBytes: getRemainingSelectedOutputBytes(state.selectedOutputBytes),
+              })
+              const formattedOutput =
+                typeof hydratedOutput === 'string'
+                  ? hydratedOutput
+                  : JSON.stringify(hydratedOutput, null, 2)
+              const selectedOutputBytes = Math.max(
+                getInlineJsonByteLength(hydratedOutput) ?? 0,
+                Buffer.byteLength(formattedOutput, 'utf8')
+              )
+              sendChunk(blockId, formattedOutput, {
+                selectedOutputKey: descriptor.key,
+                selectedOutputBytes,
+              })
+            }
+          } catch (error) {
+            logger.warn(`[${requestId}] Failed to materialize selected output`, {
+              blockId,
+              outputId: descriptor.outputId,
+              ...projectResolvedSecretDiagnosticError(error, undefined),
+            })
+            const errorMessage = getSelectedOutputErrorMessage(error)
+            state.selectedOutputError ??= errorMessage
+            const frame: ChatStreamErrorFrame = {
+              event: 'error',
+              blockId,
+              error: errorMessage,
+            }
+            controller.enqueue(encodeSSE(frame))
+            break
+          }
+        }
+      }
+
+      try {
+        const result = await executeFn({
+          onStream: onStreamCallback,
+          onBlockComplete: onBlockCompleteCallback,
+          abortSignal: timeoutController.signal,
+        })
+
+        const streamedContent =
+          state.streamedChunks.size > 0 ? resolveStreamedContent(state) : new Map<string, string>()
+
+        if (result.logs && streamedContent.size > 0) {
+          result.logs = updateLogsWithStreamedContent(
+            result.logs,
+            streamedContent,
+            state.streamCompletionTimes
+          )
+          processStreamingBlockLogs(result.logs, streamedContent)
+        }
+
+        if (
+          result.status === 'cancelled' &&
+          timeoutController.isTimedOut() &&
+          timeoutController.timeoutMs &&
+          !requestAborted
+        ) {
+          const timeoutErrorMessage = getTimeoutErrorMessage(null, timeoutController.timeoutMs)
+          logger.info(`[${requestId}] Streaming execution timed out`, {
+            timeoutMs: timeoutController.timeoutMs,
+          })
+          if (result._streamingMetadata?.loggingSession) {
+            await result._streamingMetadata.loggingSession.markAsFailed(timeoutErrorMessage)
+          }
+          const frame: ChatStreamErrorFrame = { event: 'error', error: timeoutErrorMessage }
+          controller.enqueue(encodeSSE(frame))
+        } else if (result.status === 'cancelled' && requestAborted) {
+          logger.info(`[${requestId}] Streaming execution aborted by client disconnect`)
+          if (result._streamingMetadata?.loggingSession) {
+            // LoggingSession has no cancelled status; match workflow execute route wording.
+            await result._streamingMetadata.loggingSession.markAsFailed('Client cancelled request')
+          }
+          // No `final` after abort; clients that already disconnected ignore these.
+          const frame: ChatStreamErrorFrame = { event: 'error', error: 'Client cancelled request' }
+          controller.enqueue(encodeSSE(frame))
+        } else {
+          await completeLoggingSession(result)
+
+          if (!state.selectedOutputError) {
+            const minimalResult = await buildMinimalResult(
+              result,
+              streamConfig.selectedOutputs,
+              streamedContent,
+              state.completedBlockIds,
+              state.streamedSelectedOutputKeys,
+              requestId,
+              streamConfig.includeFileBase64 ?? true,
+              streamConfig.base64MaxBytes,
+              executionId,
+              {
+                requestId,
+                workspaceId: options.workspaceId,
+                workflowId: options.workflowId,
+                largeValueExecutionIds: options.largeValueExecutionIds,
+                largeValueKeys: result.metadata?.largeValueKeys ?? options.largeValueKeys,
+                fileKeys: result.metadata?.fileKeys ?? options.fileKeys,
+                allowLargeValueWorkflowScope: options.allowLargeValueWorkflowScope,
+                userId: options.userId,
+                redactToolPayloads: streamConfig.isSecureMode === true,
+              }
+            )
+
+            const frame: ChatStreamFinalFrame = {
+              event: 'final',
+              data: {
+                ...minimalResult,
+                ...(result.status === 'paused' && { status: 'paused' }),
+              },
+            }
+            controller.enqueue(encodeSSE(frame))
+          }
+        }
+
+        // Terminal marker: always follows success `final` or a single terminal `error`.
+        controller.enqueue(encodeSSE('[DONE]'))
+
+        if (executionId) {
+          await cleanupExecutionBase64Cache(executionId)
+        }
+
+        controller.close()
+      } catch (error) {
+        logger.error(
+          `[${requestId}] Stream error`,
+          projectResolvedSecretDiagnosticError(error, undefined)
+        )
+        const errorMessage =
+          streamConfig.selectedOutputs?.length && isExecutionResourceLimitError(error)
+            ? SELECTED_OUTPUT_TOO_LARGE_MESSAGE
+            : getErrorMessage(error, 'Stream processing error')
+        const frame: ChatStreamErrorFrame = { event: 'error', error: errorMessage }
+        controller.enqueue(encodeSSE(frame))
+        // Same terminal rule as timeout/abort: one error, then [DONE], never `final`.
+        controller.enqueue(encodeSSE('[DONE]'))
+
+        if (executionId) {
+          await cleanupExecutionBase64Cache(executionId)
+        }
+
+        controller.close()
+      } finally {
+        cleanupRequestAbort()
+        timeoutController.cleanup()
+      }
+    },
+    async cancel(reason) {
+      logger.info(
+        `[${requestId}] Streaming response cancelled`,
+        projectResolvedSecretDiagnosticError(reason, undefined)
+      )
+      requestAborted = true
+      timeoutController.abort()
+      cleanupRequestAbort()
+      timeoutController.cleanup()
+      if (executionId) {
+        try {
+          await cleanupExecutionBase64Cache(executionId)
+        } catch (error) {
+          logger.error(
+            `[${requestId}] Failed to cleanup base64 cache`,
+            projectResolvedSecretDiagnosticError(error, undefined)
+          )
+        }
+      }
+    },
+  })
+}
