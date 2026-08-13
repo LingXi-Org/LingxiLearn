@@ -40,7 +40,9 @@ RUN rm -rf apps/sim/out apps/sim/.next \
 # the already-pulled builder image instead of pulling a second busybox image;
 # the latter made Compose deployments depend on an unrelated registry request
 # and frequently failed during TLS metadata resolution.
-FROM builder AS dist
+# Keep the final image small. Do not inherit the builder image here: it contains
+# the full source tree, node_modules, Bun cache, and build-time dependencies.
+FROM alpine:3.20 AS dist
 WORKDIR /dist
 COPY --from=builder /app/apps/sim/out ./
 CMD ["sh", "-c", "cp -r /dist/. /web/ && echo 'Sim/Lingxi assets published to /web' && ls /web"]
