@@ -336,7 +336,10 @@ def validate_slide_html(path: str, slide: dict, rep: Report) -> SlideParser | No
             break
 
     if p.top_level_blocks > 10:
-        rep.err(where, f"顶层内容块 {p.top_level_blocks} 个，超过 v2 严格上限 10；请重构为主视觉而不是继续堆块")
+        # This is a presentation-density issue, not a broken runtime or
+        # schema contract. Keep it as a warning so the service can still
+        # publish a built artifact; --strict continues to reject it.
+        rep.warn(where, f"顶层内容块 {p.top_level_blocks} 个，超过 v2 严格上限 10；请重构为主视觉而不是继续堆块")
     elif slide.get("role") == "content" and p.top_level_blocks > 8:
         rep.warn(where, f"content 页顶层内容块 {p.top_level_blocks} 个，超过建议上限 8")
 

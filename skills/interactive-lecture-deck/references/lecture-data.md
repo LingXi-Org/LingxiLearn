@@ -15,6 +15,24 @@ Schema：`references/lecture.schema.json`；`schemaVersion` 固定为 `zoom-lect
 
 `deck.style` 固定为 `anthropic-academic`；画布固定 1280×720。
 
+### v2 最小 step/anchor 形状
+
+生成时直接套用下面的形状，避免混入旧版字段：
+
+```json
+{
+  "anchors": [{"id":"a-main","label":"主关系","rect":{"x":64,"y":208,"w":720,"h":320}}],
+  "steps": [
+    {"id":"s02-01","order":1,"kind":"overview","camera":{"mode":"fit"},"advance":"manual"},
+    {"id":"s02-02","order":2,"kind":"zoom","camera":{"mode":"anchor","anchorId":"a-main"},"panel":{"placement":"auto","title":"局部关系","body":"……"},"advance":"manual"}
+  ]
+}
+```
+
+`label`、`advance` 和 overview 的 `camera.mode` 都是硬性 schema 字段。overview 不得携带
+`anchorId`、`depth`、`scale`、`focus`；SVG 中每个 `<text>` 也必须带 `t`、`ts`、`th` 或 `tn`
+类名。
+
 ## 2. slides[]
 
 每页新增必填 `role`：

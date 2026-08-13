@@ -353,7 +353,7 @@ export function agentTaskToAssistantSegments(
       content,
       status: event.kind.endsWith('failed')
         ? ('error' as const)
-        : event.kind.endsWith('completed') || event.kind === 'artifact.ready'
+        : event.kind.endsWith('completed') || event.kind === 'artifact.ready' || event.kind === 'artifact.recovered'
           ? ('complete' as const)
           : ('running' as const),
     }
@@ -414,6 +414,7 @@ export function agentTaskToAssistantSegments(
       event.kind === 'agent.started' ||
       event.kind === 'agent.output' ||
       event.kind === 'artifact.ready' ||
+      event.kind === 'artifact.recovered' ||
       event.kind === 'agent.completed' ||
       event.kind === 'agent.failed'
     ) {
@@ -574,7 +575,7 @@ function eventToGroupItem(
     content,
     status: event.kind.endsWith('failed')
       ? 'error'
-      : event.kind.endsWith('completed') || event.kind === 'artifact.ready'
+      : event.kind.endsWith('completed') || event.kind === 'artifact.ready' || event.kind === 'artifact.recovered'
         ? 'complete'
         : 'running',
   }
@@ -607,7 +608,7 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
     return `${agentLabel(event.agent)} 已接收任务${event.payload.skill ? ` · ${String(event.payload.skill)}` : ''}，开始执行。`
   if (event.kind === 'agent.output')
     return message || `${agentLabel(event.agent)} 生成了新的关键输出。`
-  if (event.kind === 'artifact.ready') {
+  if (event.kind === 'artifact.ready' || event.kind === 'artifact.recovered') {
     const artifact = String(event.payload.artifact || '')
     const label =
       artifact === 'visual'

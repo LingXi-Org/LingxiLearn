@@ -218,7 +218,7 @@ export function useLingxiGraphChat(
         if (current.some((candidate) => candidate.sequence === event.sequence)) return current
         return [...current, event].sort((a, b) => a.sequence - b.sequence)
       })
-      if (event.kind === 'artifact.ready') {
+      if (event.kind === 'artifact.ready' || event.kind === 'artifact.recovered') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
         if (artifact) {
           const resourceId =

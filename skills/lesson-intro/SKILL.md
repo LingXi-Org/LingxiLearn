@@ -77,6 +77,12 @@ metadata into the page.
 7. Run the HTML quality gate, the shared palette checker when colors change, and
    `scripts/validate_output.py`.
 
+When artifact staging is available, write the complete `lesson-intro.html` as soon as the page is
+usable, then validate and refine it. Do not postpone the first artifact write until after a long
+reasoning pass: the host may promote the staged page if generation is interrupted. If a later
+revision fails validation, keep the last valid staged page rather than replacing it with an
+incomplete draft.
+
 ## Editorial autonomy
 
 - Prefer a specific, understandable moment over generic “this topic is important” language.

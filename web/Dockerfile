@@ -36,8 +36,11 @@ RUN rm -rf apps/sim/out apps/sim/.next \
   && bun run --cwd apps/sim build \
   && test -f apps/sim/out/index.html
 
-ARG DOCKER_REGISTRY=docker.m.daocloud.io
-FROM ${DOCKER_REGISTRY}/library/busybox:1.37 AS dist
+# The dist stage only copies the static export into the shared volume. Reuse
+# the already-pulled builder image instead of pulling a second busybox image;
+# the latter made Compose deployments depend on an unrelated registry request
+# and frequently failed during TLS metadata resolution.
+FROM builder AS dist
 WORKDIR /dist
 COPY --from=builder /app/apps/sim/out ./
 CMD ["sh", "-c", "cp -r /dist/. /web/ && echo 'Sim/Lingxi assets published to /web' && ls /web"]

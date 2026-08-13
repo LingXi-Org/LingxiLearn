@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -542,6 +543,78 @@ def test_deck_repairs_array_anchor_rect_before_strict_validation(tmp_path: Path)
     assert stored["slides"][1]["anchors"][0]["rect"] == rect
     validation = asyncio.run(store.build_and_validate_deck("array-rect-task"))
     assert validation["ok"] is True
+
+
+def test_deck_repairs_v2_required_fields_and_svg_text_classes(tmp_path: Path) -> None:
+    settings = Settings(_env_file="", agent_task_dir=tmp_path)
+    store = ArtifactStore(settings)
+    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
+    lecture = json.loads((source / "lecture.json").read_text(encoding="utf-8"))
+    content_slide = next(slide for slide in lecture["slides"] if slide["role"] == "content")
+    for anchor in content_slide["anchors"]:
+        anchor.pop("label", None)
+    for step in content_slide["steps"]:
+        step.pop("advance", None)
+        if step["kind"] == "overview":
+            step["camera"] = {
+                "mode": "anchor",
+                "anchorId": content_slide["anchors"][0]["id"],
+                "depth": 2,
+                "focus": {"cx": 0.5, "cy": 0.5},
+            }
+
+    files = {
+        "lecture.json": json.dumps(lecture, ensure_ascii=False),
+        "manifest.json": (source / "manifest.json").read_text(encoding="utf-8"),
+        "runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"),
+    }
+    for slide in (source / "slides").glob("s*.html"):
+        html = slide.read_text(encoding="utf-8")
+        if slide.name == "s02.html":
+            html = re.sub(r' class="(?:th|ts|tn|t)"', "", html, count=1)
+        files[f"slides/{slide.name}"] = html
+
+    store.write_deck("v2-repair-task", files)
+    stored = json.loads(store.deck_root("v2-repair-task").joinpath("lecture.json").read_text(encoding="utf-8"))
+    repaired_slide = next(slide for slide in stored["slides"] if slide["role"] == "content")
+    assert all(anchor["label"] for anchor in repaired_slide["anchors"])
+    assert all(step["advance"] == "manual" for step in repaired_slide["steps"])
+    assert repaired_slide["steps"][0]["camera"] == {"mode": "fit"}
+    validation = asyncio.run(store.build_and_validate_deck("v2-repair-task"))
+    assert validation["ok"] is True
+
+
+def test_deck_migrates_legacy_envelope_before_validation(tmp_path: Path) -> None:
+    settings = Settings(_env_file="", agent_task_dir=tmp_path)
+    store = ArtifactStore(settings)
+    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
+    lecture = json.loads((source / "lecture.json").read_text(encoding="utf-8"))
+    deck = lecture["deck"]
+    deck["canvas"] = {"w": 1280, "h": 720}
+    deck["course"] = "数学"
+    deck["subtitle"] = "旧版字段"
+    deck["durationSec"] = 75
+    deck.pop("slideDir", None)
+    deck.pop("createdAt", None)
+    lecture["defaults"]["advance"] = "manual"
+    lecture["defaults"]["panelPlacement"] = "right"
+    files = {
+        "lecture.json": json.dumps(lecture, ensure_ascii=False),
+        "manifest.json": (source / "manifest.json").read_text(encoding="utf-8"),
+        "runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"),
+    }
+    for slide in (source / "slides").glob("s*.html"):
+        files[f"slides/{slide.name}"] = slide.read_text(encoding="utf-8")
+
+    store.write_deck("legacy-envelope-task", files)
+    stored = json.loads(store.deck_root("legacy-envelope-task").joinpath("lecture.json").read_text(encoding="utf-8"))
+    assert stored["deck"]["canvas"] == {"width": 1280, "height": 720, "format": "ppt169"}
+    assert stored["deck"]["slideDir"] == "slides"
+    assert stored["deck"]["createdAt"].endswith("Z")
+    assert stored["extensions"]["legacyDeck"]["course"] == "数学"
+    assert "advance" not in stored["defaults"]
+    assert stored["defaults"]["panel"]["placement"] == "auto"
+    assert asyncio.run(store.build_and_validate_deck("legacy-envelope-task"))["ok"] is True
 
 
 def test_web_fetch_rejects_private_addresses() -> None:

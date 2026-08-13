@@ -31,6 +31,7 @@ from lingxigraph import (
     create_agent,
     interrupt,
 )
+from lingxigraph.errors import GraphTimeoutError
 
 from ..config import REPO_ROOT, Settings
 from .artifact_store import ArtifactStore
@@ -151,7 +152,8 @@ DECK_PROMPT = progressive_skill_prompt(
 stage_artifact_files：先生成 slides，再生成 lecture.json 与 manifest.json。runtime/index.html
 由宿主从 assets/runtime/index.html 原样预置；不要重复生成或覆盖它。不要生成 PNG/JPG、PowerPoint/
 PPTX 或重复的 HTML/JSON 导出。dist/lecture.html 由服务端执行 standalone build，是唯一主要学习者
-交付物。最终只返回简短 JSON receipt：
+交付物。每页 slide 根节点下的直接内容块最多 8 个，绝不能超过 10 个；把装饰性元素合并进主视觉，
+不要为了填满画布继续堆块。最终只返回简短 JSON receipt：
 {"status":"staged","title":"...","files":["lecture.json","slides/s01.html"],"assumptions":[],"deviations":[]}。""",
     batch_artifacts=True,
 )
@@ -467,7 +469,8 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         # Seed a valid learner-facing page before the model starts. If the
         # model is interrupted while composing a long HTML payload, the
         # service can still promote this page instead of losing the artifact.
-        draft.write("lesson-intro.html", _lesson_intro_fallback(intent))
+        fallback_html = _lesson_intro_fallback(intent)
+        draft.write("lesson-intro.html", fallback_html)
         prompt = (
             "按 lesson-intro-html.v1 直接生成课程引入页面，不联网检索。先读取 skill 和直接相关资源，"
             "尽快通过 stage_artifact_file 写入 lesson-intro.html；内容较长时用 stage_artifact_chunk 分块写入，"
@@ -494,16 +497,22 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         try:
             try:
                 response_text = _message_text(
-                    await _invoke_agent(
-                        agent,
-                        HumanMessage(prompt),
-                        runtime,
-                        agent_name="lecture_hook",
-                        recursion_limit=20,
-                        tool_permissions=("artifact:write",),
+                    await asyncio.wait_for(
+                        _invoke_agent(
+                            agent,
+                            HumanMessage(prompt),
+                            runtime,
+                            agent_name="lecture_hook",
+                            # The fallback is already staged. Bound the model
+                            # work so a verbose resource-reading/tool loop
+                            # cannot consume the parent task timeout.
+                            recursion_limit=20,
+                            tool_permissions=("artifact:write",),
+                        ),
+                        timeout=max(5.0, min(90.0, settings.agent_lecture_timeout - 15.0)),
                     )
                 )
-            except (asyncio.TimeoutError, GraphRecursionError):
+            except (asyncio.TimeoutError, GraphTimeoutError, GraphRecursionError):
                 # Keep the durable draft; the seeded page is already valid and
                 # can be promoted even when the model never emits its receipt.
                 _emit(runtime, "agent.output", agent="lecture_hook", message="课程引入生成超时，已保留可用页面并继续发布。")
@@ -515,13 +524,25 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             artifacts.write_lesson_intro_file(state["task_id"], html)
             validation = await artifacts.validate_lesson_intro(state["task_id"])
             if not validation["ok"]:
-                raise ValueError(f"lesson-intro HTML validation failed: {validation}")
+                # A model can finish with a malformed page even when it did
+                # stage a file successfully.  Restore the already validated
+                # fallback so a content timeout or syntax slip never removes
+                # the learner-facing artifact.
+                html = fallback_html
+                draft.write("lesson-intro.html", html)
+                artifacts.write_lesson_intro_file(state["task_id"], html)
+                validation = await artifacts.validate_lesson_intro(state["task_id"])
+                if not validation["ok"]:
+                    raise ValueError(f"lesson-intro fallback validation failed: {validation}")
             published = True
+            warnings = list(parsed.get("warnings") or [])
+            if html == fallback_html and draft.snapshot().get("lesson-intro.html") == fallback_html:
+                warnings.append("生成页面未通过校验，已回退到可用课程引入页面")
             value = {
                 "html": html,
                 "topic": str(parsed.get("topic") or intent.topic),
                 "status": str(parsed.get("status") or "ok"),
-                "warnings": list(parsed.get("warnings") or []),
+                "warnings": warnings,
                 "structured_data": parsed.get("structured_data") or {},
                 "validation": validation,
             }
@@ -559,7 +580,8 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             "阶段 3：每次调用 stage_artifact_files 批量写入 2–3 个完整源文件；禁止逐张幻灯片单独进行一次模型续轮。\n"
             "阶段 3.1：宿主已预置 runtime/index.html；禁止读取 runtime 模板或重写 runtime/index.html。\n"
             "阶段 3.2：不要生成 PNG/JPG、PowerPoint/PPTX 或重复 HTML/JSON 导出；dist/lecture.html 由服务端构建。\n"
-            "lecture.json 中每个 anchor.rect 必须写成对象 {\"x\":整数,\"y\":整数,\"w\":整数,\"h\":整数}，禁止写成 [x,y,w,h] 数组。\n"
+            "lecture.json 必须严格使用 v2：每个 anchor 都有 id、label、rect 对象；每个 step 都有 advance:\"manual\"；overview 的 camera 只能是 {\"mode\":\"fit\"}，不得带 anchorId/depth/scale/focus；zoom 才能使用 mode:\"anchor\"。anchor.rect 必须是对象 {\"x\":整数,\"y\":整数,\"w\":整数,\"h\":整数}，禁止写成 [x,y,w,h] 数组。每个 SVG 的每个 <text> 都必须带 class t/ts/th/tn。\n"
+            "每页 slide 根节点下的直接内容块最多 8 个，绝不能超过 10 个；装饰元素应并入主视觉，不要单独堆叠。\n"
             "阶段 4：返回 JSON receipt，不要回传完整文件。\n"
             "INTENT JSON:\n"
             + json.dumps(intent.model_dump(mode="json"), ensure_ascii=False)
@@ -589,46 +611,50 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             name="interactive-lecture-deck",
         )
         try:
-            try:
-                parsed = extract_json(
-                    _message_text(
-                        await _invoke_agent(
-                            agent,
-                            HumanMessage(prompt),
-                            runtime,
-                            agent_name="interactive_lecture_deck",
-                            recursion_limit=settings.agent_deck_recursion_limit,
-                            tool_permissions=("artifact:write",),
-                        )
+            parsed = extract_json(
+                _message_text(
+                    await _invoke_agent(
+                        agent,
+                        HumanMessage(prompt),
+                        runtime,
+                        agent_name="interactive_lecture_deck",
+                        recursion_limit=settings.agent_deck_recursion_limit,
+                        tool_permissions=("artifact:write",),
                     )
-                ) or {}
-            except GraphRecursionError:
-                # Artifact writes are durable within the private draft. A
-                # child Agent can hit its own budget after staging the final
-                # file but before emitting its JSON receipt; let the normal
-                # deck build/validator decide whether that draft is usable.
-                # Without this boundary the child error aborts the parent
-                # graph even when all required files are already present.
-                staged = draft.list()
-                _emit(
-                    runtime,
-                    "agent.output",
-                    agent="interactive_lecture_deck",
-                    message=(
-                        "课件生成达到子 Agent 步数上限，已写入文件将继续进入完整性校验。"
-                        f"当前已写入 {len(staged)} 个文件。"
-                    ),
                 )
-                parsed = {}
-            files = draft.snapshot()
-            if not files:
-                raise ValueError("interactive-lecture-deck did not stage any artifact")
+            ) or {}
+        except (asyncio.TimeoutError, GraphTimeoutError, GraphRecursionError):
+            # Artifact writes are durable within the private draft. A child
+            # Agent can hit its time or step budget after staging the final file
+            # but before emitting its JSON receipt; let the normal deck
+            # build/validator decide whether that draft is usable.
+            staged = draft.list()
+            _emit(
+                runtime,
+                "agent.output",
+                agent="interactive_lecture_deck",
+                message=(
+                    "课件生成达到子 Agent 时间或步数上限，已写入文件将继续进入完整性校验。"
+                    f"当前已写入 {len(staged)} 个文件。"
+                ),
+            )
+            parsed = {}
+        files = draft.snapshot()
+        if not files:
+            raise ValueError("interactive-lecture-deck did not stage any artifact")
+        published = False
+        try:
+            artifacts.write_deck(task_id, files)
+            validation = await artifacts.build_and_validate_deck(task_id)
+            if not validation["ok"]:
+                raise ValueError(f"interactive-lecture-deck validation failed: {validation}")
+            published = True
         finally:
-            draft.cleanup()
-        artifacts.write_deck(task_id, files)
-        validation = await artifacts.build_and_validate_deck(task_id)
-        if not validation["ok"]:
-            raise ValueError(f"interactive-lecture-deck validation failed: {validation}")
+            # Keep a private multi-file draft when the final build or validator
+            # fails.  The service-level recovery path can retry the same
+            # normalized source after the graph unwinds.
+            if published:
+                draft.cleanup()
         value = DeckResult.model_validate({"schema_version": "interactive-lecture-deck-result.v2.1", "task_id": task_id, "title": str(parsed.get("title") or intent.topic), "status": "ready", "files": {"lecture": "lecture.json", "slides": sorted(name for name in files if name.startswith("slides/")), "runtime": "runtime/index.html", "standalone": "dist/lecture.html", "manifest": "manifest.json"}, "manifest": parsed.get("manifest") or {}, "validation": validation, "assumptions": parsed.get("assumptions") or [], "deviations": parsed.get("deviations") or []}).model_dump(mode="json")
         await persist_result("interactive_lecture_deck", value)
         _emit(runtime, "artifact.ready", agent="interactive_lecture_deck", artifact="lecture-deck", validation=validation)

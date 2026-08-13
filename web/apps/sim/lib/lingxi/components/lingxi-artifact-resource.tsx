@@ -4,10 +4,9 @@ import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@sim/emcn'
 import { api } from '@/lib/lingxi/api'
 import { LingxiWorkflow } from '@/lib/lingxi/components/lingxi-workflow'
+import { useAgentArtifact } from '@/lib/lingxi/hooks/use-agent-artifact'
 import { useAgentTask } from '@/lib/lingxi/hooks/use-agent-task'
 import type { PublicQuizQuestion } from '@/lib/lingxi/types'
-import type { FileContentSource } from '@/hooks/use-file-content-source'
-import { FileViewer } from '@/app/workspace/[workspaceId]/files/components/file-viewer'
 import { QuestionDisplay } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
 import type { QuestionItem } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
 
@@ -43,23 +42,28 @@ function normalizeQuizAnswer(question: PublicQuizQuestion, answer: string): stri
   return question.type === 'multi_choice' ? ids : (ids[0] ?? '')
 }
 
-function artifactFileSource(taskId: string, kind: 'lesson-intro' | 'lecture-deck' | 'visual'):
-  FileContentSource {
-  return {
-    buildUrl: () => api.agentArtifactUrl(taskId, kind),
-    resolveImageSrc: (src) => src,
-  }
-}
-
-const ARTIFACT_FILE_TYPES = {
-  'lesson-intro': 'text/html',
-  'lecture-deck': 'text/html',
-  visual: 'text/html',
-} as const
-
 export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourceProps) {
   const parsed = useMemo(() => parseResourceId(resourceId), [resourceId])
   const { task, loading, error, refresh } = useAgentTask(parsed?.taskId ?? '')
+  const fileKind = parsed?.kind === 'lesson-intro' || parsed?.kind === 'lecture-deck' || parsed?.kind === 'visual'
+    ? parsed.kind
+    : 'lesson-intro'
+  const artifactAvailable = Boolean(
+    parsed && parsed.kind !== 'quiz' && parsed.kind !== 'knowledge-graph' &&
+      task?.artifacts[
+        parsed.kind === 'lesson-intro'
+          ? 'lesson_intro'
+          : parsed.kind === 'lecture-deck'
+            ? 'lecture_deck'
+            : 'visual'
+      ]?.available,
+  )
+  const artifact = useAgentArtifact(
+    parsed?.taskId,
+    fileKind,
+    artifactAvailable,
+    task?.updated_at,
+  )
   const [submittedAnswers, setSubmittedAnswers] = useState<string[]>()
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -97,28 +101,43 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
   }
 
   if (parsed.kind !== 'quiz') {
+    if (loading && !task) {
+      return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载学习产物…</div>
+    }
+    if (error) {
+      return (
+        <div className='flex h-full flex-col items-center justify-center gap-3 p-6 text-center'>
+          <p className='text-[var(--text-secondary)] text-sm'>{error}</p>
+          <Button variant='outline' onClick={() => void refresh()}>重新加载</Button>
+        </div>
+      )
+    }
+    if (!artifactAvailable) {
+      return (
+        <div className='flex h-full flex-col items-center justify-center gap-3 p-6 text-center'>
+          <p className='text-[var(--text-secondary)] text-sm'>产物正在生成，请稍候。</p>
+          <Button variant='outline' onClick={() => void refresh()}>刷新状态</Button>
+        </div>
+      )
+    }
+    if (artifact.loading && !artifact.content) {
+      return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在打开学习产物…</div>
+    }
+    if (artifact.error || !artifact.content) {
+      return (
+        <div className='flex h-full flex-col items-center justify-center gap-3 p-6 text-center'>
+          <p className='text-[var(--text-secondary)] text-sm'>{artifact.error || '产物暂时无法打开。'}</p>
+          <Button variant='outline' onClick={() => void refresh()}>重新加载</Button>
+        </div>
+      )
+    }
     return (
-      <FileViewer
-        contentSource={artifactFileSource(
-          parsed.taskId,
-          parsed.kind as 'lesson-intro' | 'lecture-deck' | 'visual'
-        )}
-        file={{
-          id: resourceId,
-          workspaceId: 'lingxi',
-          name: `${parsed.kind}.html`,
-          key: resourceId,
-          path: resourceId,
-          size: 0,
-          type: ARTIFACT_FILE_TYPES[parsed.kind as keyof typeof ARTIFACT_FILE_TYPES],
-          uploadedBy: 'lingxilearn',
-          uploadedAt: new Date(0),
-          updatedAt: new Date(0),
-        }}
-        workspaceId='lingxi'
-        canEdit={false}
-        readOnly
-        previewMode='preview'
+      <iframe
+        key={artifact.content}
+        src={artifact.content}
+        title={`${parsed.kind} 学习产物`}
+        className='block h-full min-h-0 w-full border-0'
+        sandbox='allow-scripts'
       />
     )
   }
