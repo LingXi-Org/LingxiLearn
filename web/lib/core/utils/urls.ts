@@ -1,0 +1,256 @@
+import { isLoopbackHostname } from '@sim/security/hostnames'
+import { env, getEnv } from '@/lib/core/config/env'
+import { isProd } from '@/lib/core/config/env-flags'
+
+/** Canonical base URL for the public-facing marketing site. No trailing slash. */
+export const SITE_URL = 'https://www.sim.ai'
+
+/** Host of the canonical marketing site, e.g. `www.sim.ai`. */
+export const CANONICAL_SITE_HOST = new URL(SITE_URL).host
+
+function hasHttpProtocol(url: string): boolean {
+  return /^https?:\/\//i.test(url)
+}
+
+function normalizeBaseUrl(url: string): string {
+  if (hasHttpProtocol(url)) {
+    return url
+  }
+
+  const protocol = isProd ? 'https://' : 'http://'
+  return `${protocol}${url}`
+}
+
+/**
+ * Returns the base URL of the application from NEXT_PUBLIC_APP_URL
+ * This ensures webhooks, callbacks, and other integrations always use the correct public URL
+ *
+ * Deliberately has no browser fallback to `window.location.origin`. The value is
+ * injected before hydration by `<PublicEnvScript>`, so an empty read means the
+ * deployment is misconfigured — and a same-origin guess would hide that. It also
+ * would not be safe to guess: an opaque origin (a sandboxed iframe, and `/chat/*`
+ * is embeddable) serializes to the string `'null'`, which is truthy and would
+ * silently produce `null/api/...` at every call site.
+ *
+ * @returns The base URL string (e.g., 'http://localhost:3000' or 'https://example.com')
+ * @throws Error if NEXT_PUBLIC_APP_URL is not configured
+ */
+export function getBaseUrl(): string {
+  const baseUrl = getEnv('NEXT_PUBLIC_APP_URL')?.trim()
+
+  if (!baseUrl) {
+    throw new Error(
+      'NEXT_PUBLIC_APP_URL must be configured for webhooks and callbacks to work correctly'
+    )
+  }
+
+  return normalizeBaseUrl(baseUrl)
+}
+
+/**
+ * Returns the base URL used by server-side internal API calls.
+ * Falls back to NEXT_PUBLIC_APP_URL when INTERNAL_API_BASE_URL is not set.
+ */
+export function getInternalApiBaseUrl(): string {
+  const internalBaseUrl = getEnv('INTERNAL_API_BASE_URL')?.trim()
+  if (!internalBaseUrl) {
+    return getBaseUrl()
+  }
+
+  if (!hasHttpProtocol(internalBaseUrl)) {
+    throw new Error(
+      'INTERNAL_API_BASE_URL must include protocol (http:// or https://), e.g. http://sim-app.default.svc.cluster.local:3000'
+    )
+  }
+
+  return internalBaseUrl
+}
+
+/**
+ * Ensures a URL is absolute by prefixing the base URL when a relative path is provided.
+ * @param pathOrUrl - Relative path (e.g., /api/files/serve/...) or absolute URL
+ */
+export function ensureAbsoluteUrl(pathOrUrl: string): string {
+  if (!pathOrUrl) {
+    throw new Error('URL is required')
+  }
+
+  if (pathOrUrl.startsWith('/')) {
+    return `${getBaseUrl()}${pathOrUrl}`
+  }
+
+  return pathOrUrl
+}
+
+/**
+ * Returns just the domain and port part of the application URL
+ * @returns The domain with port if applicable (e.g., 'localhost:3000' or 'sim.ai')
+ */
+export function getBaseDomain(): string {
+  try {
+    const url = new URL(getBaseUrl())
+    return url.host // host includes port if specified
+  } catch (_e) {
+    const fallbackUrl = getEnv('NEXT_PUBLIC_APP_URL') || 'http://localhost:3000'
+    try {
+      return new URL(fallbackUrl).host
+    } catch {
+      return isProd ? 'sim.ai' : 'localhost:3000'
+    }
+  }
+}
+
+/** Drops a leading `www.` label, e.g. `www.sim.ai` -> `sim.ai`. */
+function stripWwwPrefix(host: string): string {
+  return host.startsWith('www.') ? host.slice(4) : host
+}
+
+/**
+ * True for a sim.ai host that is not the canonical marketing site — dev.sim.ai,
+ * staging.sim.ai, and their www variants serve the same build as www.sim.ai, so
+ * search engines treat them as duplicates unless told otherwise.
+ *
+ * `sim.ai` and `www.sim.ai` are both canonical. Self-hosted domains return
+ * false, as do lookalikes such as `notsim.ai`.
+ *
+ * Takes the first entry of a comma-joined forwarded host so a chained proxy
+ * can't make the canonical site look non-canonical via a trailing entry.
+ */
+export function isNonCanonicalSimHost(host: string): boolean {
+  const first = host.split(',')[0]?.trim() ?? ''
+  const hostname = stripWwwPrefix(first.toLowerCase().split(':')[0])
+  const canonical = stripWwwPrefix(CANONICAL_SITE_HOST)
+  return hostname !== canonical && hostname.endsWith(`.${canonical}`)
+}
+
+/**
+ * Returns the domain for email addresses, stripping www subdomain for Resend compatibility
+ * @returns The email domain (e.g., 'sim.ai' instead of 'www.sim.ai')
+ */
+export function getEmailDomain(): string {
+  try {
+    return stripWwwPrefix(getBaseDomain())
+  } catch (_e) {
+    return isProd ? 'sim.ai' : 'localhost:3000'
+  }
+}
+
+const DEFAULT_SOCKET_URL = 'http://localhost:3002'
+const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
+/**
+ * Parses a comma-separated list of origins (e.g. from a `TRUSTED_ORIGINS` env
+ * var) into a deduped array of normalized origins. Invalid entries are dropped.
+ *
+ * @param raw - Comma-separated origin list, or undefined/empty
+ * @param onInvalid - Optional callback invoked once per invalid entry
+ */
+export function parseOriginList(
+  raw: string | undefined | null,
+  onInvalid?: (value: string) => void
+): string[] {
+  if (!raw) return []
+  const seen = new Set<string>()
+  const origins: string[] = []
+  for (const candidate of raw.split(',')) {
+    const trimmed = candidate.trim()
+    if (!trimmed) continue
+    try {
+      const { origin } = new URL(trimmed)
+      if (!seen.has(origin)) {
+        seen.add(origin)
+        origins.push(origin)
+      }
+    } catch {
+      onInvalid?.(trimmed)
+    }
+  }
+  return origins
+}
+
+/**
+ * Returns true when the given URL points at a localhost loopback host.
+ * Used to detect misconfigured deployments where `NEXT_PUBLIC_APP_URL` is left
+ * at its development default in production.
+ */
+export function isLocalhostUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url)
+    return isLoopbackHostname(hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Returns the current browser origin, or `null` when called server-side.
+ *
+ * Use this when an absolute URL is needed for a same-origin resource (auth API,
+ * reverse-proxied socket, etc.) so a misconfigured `NEXT_PUBLIC_*` env var
+ * baked into the client bundle at build time can't pin requests to the wrong host.
+ */
+export function getBrowserOrigin(): string | null {
+  return typeof window !== 'undefined' ? window.location.origin : null
+}
+
+/**
+ * Validates that a URL uses an http(s) scheme before it is opened in a new window.
+ * Rejects `javascript:`, `data:`, `blob:`, `vbscript:`, and other schemes that could
+ * execute script in the chat origin, since `file.url` originates from untrusted
+ * workflow/agent output.
+ */
+export function isSafeHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, getBrowserOrigin() ?? undefined)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Returns the socket server URL for server-side internal API calls.
+ * Reads from SOCKET_SERVER_URL with a localhost fallback for development.
+ */
+export function getSocketServerUrl(): string {
+  return env.SOCKET_SERVER_URL || DEFAULT_SOCKET_URL
+}
+
+/**
+ * Returns the socket server URL for client-side Socket.IO connections.
+ *
+ * Resolution order:
+ * 1. `NEXT_PUBLIC_SOCKET_URL` if explicitly set (subdomain, separate host:port)
+ * 2. In the browser when the page is served from a non-localhost origin, the
+ *    page's own origin — assumes the reverse proxy routes `/socket.io` to the
+ *    realtime service. This avoids shipping a hardcoded `localhost:3002` to
+ *    self-hosters behind nginx/Cloudflare.
+ * 3. `http://localhost:3002` for local development and SSR.
+ */
+export function getSocketUrl(): string {
+  const explicit = getEnv('NEXT_PUBLIC_SOCKET_URL')?.trim()
+  if (explicit) return explicit
+
+  const browserOrigin = getBrowserOrigin()
+  if (browserOrigin && !isLoopbackHostname(new URL(browserOrigin).hostname)) {
+    return browserOrigin
+  }
+
+  return DEFAULT_SOCKET_URL
+}
+
+/**
+ * Returns the Ollama server URL.
+ * Reads from OLLAMA_URL with a localhost fallback for development.
+ */
+export function getOllamaUrl(): string {
+  return env.OLLAMA_URL || DEFAULT_OLLAMA_URL
+}
+
+/**
+ * Whether OLLAMA_URL names a server, as opposed to {@link getOllamaUrl} falling
+ * back to the loopback default. Callers use this to tell "someone pointed us at
+ * an Ollama" apart from "nobody configured one".
+ */
+export function isOllamaUrlConfigured(): boolean {
+  return Boolean(env.OLLAMA_URL)
+}

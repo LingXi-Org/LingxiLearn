@@ -163,6 +163,8 @@ fit → spatial transform → camera transform → protected target
 
 并用浏览器 `getBoundingClientRect()` 取得经过 perspective / rotateX / rotateY / Z-depth 后的真实屏幕包围框。
 
+蓝色标记层必须与课件 iframe 共面：两者都使用 `translateZ(0)`，不能为了“浮在上方”给标记层增加 Z 深度。因为 runtime 使用 perspective，任何额外的 Z 位移都会改变标记框的投影缩放与位置，使它与实际锚点发生偏移。不可见的 `geometry-probe` 锚点也必须保持在同一平面，才能让保护视图测量与最终标记一致。
+
 ### 6.3 求解顺序
 
 进入 zoom 前：

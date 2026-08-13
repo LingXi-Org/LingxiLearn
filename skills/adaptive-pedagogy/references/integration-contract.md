@@ -16,12 +16,18 @@ Use a Supervisor with manager-as-tools boundaries rather than peer-to-peer hando
 
 It may:
 - answer in text itself;
+- consume `formative-assessor` only on the ambiguous-evidence branch;
+- consume a validated `retrieval-practice-builder` cache after checking that it still matches the
+  current learner event;
 - request `interactive-visual-explainer` as a non-blocking artifact;
 - rarely request a remedial `interactive-lecture-deck` as a non-blocking artifact;
 - emit background data for `learner-state-reflector`.
 
 Each learner turn should have exactly one learner-facing writer. Structured assessor data and
 background artifacts are inputs or sidecars, not additional chat responses.
+
+`formative-assessor` must never emit a student response. `retrieval-practice-builder` must never
+block the current response; its `public_task` is a discardable artifact, not an automatic question.
 
 ## Do not register these v0.1 Skills on the blocking path
 

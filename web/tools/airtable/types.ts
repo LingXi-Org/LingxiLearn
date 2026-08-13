@@ -1,0 +1,212 @@
+import type { AirtableGetBaseSchemaResponse } from '@/tools/airtable/get_base_schema'
+import type { ToolResponse } from '@/tools/types'
+
+// Common types
+interface AirtableRecord {
+  id: string
+  createdTime: string
+  fields: Record<string, any>
+}
+
+interface AirtableBase {
+  id: string
+  name: string
+  permissionLevel: 'none' | 'read' | 'comment' | 'edit' | 'create'
+}
+
+interface AirtableFieldOption {
+  id: string
+  name: string
+  color?: string
+}
+
+export interface AirtableField {
+  id: string
+  name: string
+  type: string
+  description?: string
+  options?: {
+    choices?: AirtableFieldOption[]
+    linkedTableId?: string
+    isReversed?: boolean
+    prefersSingleRecordLink?: boolean
+    inverseLinkFieldId?: string
+    [key: string]: unknown
+  }
+}
+
+export interface AirtableTable {
+  id: string
+  name: string
+  description?: string
+  primaryFieldId: string
+  fields: AirtableField[]
+}
+
+interface AirtableBaseParams {
+  accessToken: string
+  baseId: string
+  tableId: string
+}
+
+interface AirtableTypecastParams {
+  typecast?: boolean
+}
+
+// List Bases Types
+export interface AirtableListBasesParams {
+  accessToken: string
+  offset?: string
+}
+
+export interface AirtableListBasesResponse extends ToolResponse {
+  output: {
+    bases: AirtableBase[]
+    metadata: {
+      offset?: string
+      totalBases: number
+    }
+  }
+}
+
+// List Tables Types (Get Base Schema)
+export interface AirtableListTablesParams {
+  accessToken: string
+  baseId: string
+}
+
+export interface AirtableListTablesResponse extends ToolResponse {
+  output: {
+    tables: AirtableTable[]
+    metadata: {
+      baseId: string
+      totalTables: number
+    }
+  }
+}
+
+// List Records Types
+export interface AirtableListParams extends AirtableBaseParams {
+  maxRecords?: number
+  filterFormula?: string
+}
+
+export interface AirtableListResponse extends ToolResponse {
+  output: {
+    records: AirtableRecord[]
+    metadata: {
+      offset?: string
+      totalRecords: number
+    }
+  }
+}
+
+// Get Record Types
+export interface AirtableGetParams extends AirtableBaseParams {
+  recordId: string
+}
+
+export interface AirtableGetResponse extends ToolResponse {
+  output: {
+    record: AirtableRecord
+    metadata: {
+      recordCount: 1
+    }
+  }
+}
+
+// Create Records Types
+export interface AirtableCreateParams extends AirtableBaseParams, AirtableTypecastParams {
+  records: Array<{ fields: Record<string, any> }>
+}
+
+export interface AirtableCreateResponse extends ToolResponse {
+  output: {
+    records: AirtableRecord[]
+    metadata: {
+      recordCount: number
+    }
+  }
+}
+
+// Update Record Types (Single)
+export interface AirtableUpdateParams extends AirtableBaseParams, AirtableTypecastParams {
+  recordId: string
+  fields: Record<string, any>
+}
+
+export interface AirtableUpdateResponse extends ToolResponse {
+  output: {
+    record: AirtableRecord // Airtable returns the single updated record
+    metadata: {
+      recordCount: 1
+      updatedFields: string[]
+    }
+  }
+}
+
+// Update Multiple Records Types
+export interface AirtableUpdateMultipleParams extends AirtableBaseParams, AirtableTypecastParams {
+  records: Array<{ id: string; fields: Record<string, any> }>
+}
+
+export interface AirtableUpdateMultipleResponse extends ToolResponse {
+  output: {
+    records: AirtableRecord[] // Airtable returns the array of updated records
+    metadata: {
+      recordCount: number
+      updatedRecordIds: string[]
+    }
+  }
+}
+
+// Delete Records Types
+export interface AirtableDeleteParams extends AirtableBaseParams {
+  recordIds: string[]
+}
+
+interface AirtableDeletedRecord {
+  id: string
+  deleted: boolean
+}
+
+export interface AirtableDeleteResponse extends ToolResponse {
+  output: {
+    records: AirtableDeletedRecord[]
+    metadata: {
+      recordCount: number
+      deletedRecordIds: string[]
+    }
+  }
+}
+
+// Upsert Records Types
+export interface AirtableUpsertParams extends AirtableBaseParams, AirtableTypecastParams {
+  records: Array<{ fields: Record<string, any> }>
+  fieldsToMergeOn: string[]
+}
+
+export interface AirtableUpsertResponse extends ToolResponse {
+  output: {
+    records: AirtableRecord[]
+    createdRecords: string[]
+    updatedRecords: string[]
+    metadata: {
+      recordCount: number
+      createdCount: number
+      updatedCount: number
+    }
+  }
+}
+
+export type AirtableResponse =
+  | AirtableListBasesResponse
+  | AirtableListTablesResponse
+  | AirtableListResponse
+  | AirtableGetResponse
+  | AirtableCreateResponse
+  | AirtableUpdateResponse
+  | AirtableUpdateMultipleResponse
+  | AirtableDeleteResponse
+  | AirtableUpsertResponse
+  | AirtableGetBaseSchemaResponse

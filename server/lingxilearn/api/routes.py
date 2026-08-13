@@ -205,6 +205,7 @@ class CreateAgentTask(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prompt: str = Field(min_length=1, max_length=4000)
+    attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
 
 
 class AgentTaskMetadataPatch(BaseModel):
@@ -229,6 +230,7 @@ class AgentMessage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     message: str = Field(min_length=1, max_length=4000)
+    attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
 
 
 class QuizSubmissionBody(BaseModel):
@@ -310,6 +312,7 @@ async def create_agent_task(
             task_id=task_id,
             learner_id=context.learner_id,
             prompt=body.prompt,
+            attachments=body.attachments,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -349,7 +352,12 @@ async def post_agent_message(
 ) -> dict[str, Any]:
     svc = service_of(request)
     try:
-        await svc.agent_message(task_id, body.message, learner_id=context.learner_id)
+        await svc.agent_message(
+            task_id,
+            body.message,
+            attachments=body.attachments,
+            learner_id=context.learner_id,
+        )
     except KeyError as exc:
         raise not_found() from exc
     except ValueError as exc:

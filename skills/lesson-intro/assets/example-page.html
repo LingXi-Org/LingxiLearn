@@ -3,39 +3,224 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>为什么雨后的石板路格外滑？</title>
+  <title>路面没变，为什么脚下变滑了？</title>
   <style>
-    :root { color-scheme: light; --ink: #1d2a24; --muted: #5f7067; --paper: #f4f1e8; --accent: #c96c43; --line: #d8d3c5; }
+    :root {
+      color-scheme: light dark;
+      --paper: #fbfaf7;
+      --surface: #ffffff;
+      --sunken: #f4f2ec;
+      --ink-1: #23231f;
+      --ink-2: #5f5e5a;
+      --ink-3: #8a8880;
+      --rule: rgba(35,35,31,.14);
+      --rule-strong: rgba(35,35,31,.30);
+      --accent: #534ab7;
+      --c1: #7f77dd; --c1-fill: #eeedfe; --c1-ink: #3c3489;
+      --c2: #1d9e75; --c2-fill: #e1f5ee; --c2-ink: #085041;
+      --c3: #d85a30; --c3-fill: #faece7; --c3-ink: #712b13;
+      --font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif SC", "SimSun", Georgia, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", "Noto Sans SC", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --hairline: .5px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #1a1a19;
+        --surface: #232322;
+        --sunken: #2c2c2a;
+        --ink-1: #edebe4;
+        --ink-2: #b4b2a9;
+        --ink-3: #888780;
+        --rule: rgba(237,235,228,.16);
+        --rule-strong: rgba(237,235,228,.32);
+        --accent: #afa9ec;
+        --c1-fill: #3c3489; --c1-ink: #cecbf6;
+        --c2-fill: #085041; --c2-ink: #9fe1cb;
+        --c3-fill: #712b13; --c3-ink: #f5c4b3;
+      }
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 32px 18px; background: var(--paper); color: var(--ink); font: 16px/1.75 system-ui, -apple-system, "Noto Sans SC", sans-serif; }
-    main { width: min(720px, 100%); }
-    .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 750; letter-spacing: .14em; }
-    h1 { max-width: 12em; margin: 12px 0 24px; font-size: clamp(2.2rem, 7vw, 4.5rem); line-height: 1.04; letter-spacing: -.055em; }
-    .scene, .question { border: 1px solid var(--line); border-radius: 22px; padding: clamp(22px, 5vw, 38px); background: rgba(255,255,255,.42); }
-    .scene { position: relative; overflow: hidden; }
-    .scene::after { content: ""; position: absolute; width: 140px; height: 140px; right: -42px; top: -42px; border: 20px solid rgba(201,108,67,.18); border-radius: 50%; }
-    p { margin: 0 0 1em; }
-    p:last-child { margin-bottom: 0; }
-    .question { margin-top: 16px; background: var(--ink); color: #f9f6ed; }
-    .question strong { display: block; margin-bottom: 8px; color: #f6b18d; }
-    .continue { margin: 22px 4px 0; color: var(--muted); }
-    @media (prefers-reduced-motion: no-preference) { .scene::after { animation: drift 8s ease-in-out infinite alternate; } @keyframes drift { to { transform: translate(-18px, 20px); } } }
-    @media (max-width: 520px) { body { padding-top: 22px; } h1 { font-size: clamp(2.35rem, 14vw, 3.4rem); } }
+    html { background: #141412; }
+    body {
+      max-width: 1280px;
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 42px clamp(24px, 5vw, 64px) 56px;
+      background: var(--paper);
+      color: var(--ink-1);
+      font: 400 18px/1.65 var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    main { max-width: 1152px; margin: 0 auto; }
+    .topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      padding-bottom: 14px;
+      border-bottom: var(--hairline) solid var(--rule);
+    }
+    .eyebrow, .chapter, .index {
+      color: var(--ink-3);
+      font: 400 13px/1.4 var(--font-mono);
+      letter-spacing: .06em;
+    }
+    .index { color: var(--accent); }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, .82fr) minmax(420px, 1.18fr);
+      gap: clamp(42px, 7vw, 88px);
+      align-items: center;
+      padding: clamp(56px, 8vw, 88px) 0 48px;
+      border-bottom: var(--hairline) solid var(--rule);
+    }
+    .copy { max-width: 520px; }
+    h1 {
+      max-width: 9em;
+      margin: 18px 0 24px;
+      font: 500 clamp(44px, 5vw, 62px)/1.1 var(--font-serif);
+      letter-spacing: -.04em;
+    }
+    .lead { max-width: 31em; margin: 0; color: var(--ink-2); font-size: 21px; line-height: 1.7; }
+    .promise {
+      margin: 32px 0 0;
+      padding: 10px 0 10px 18px;
+      border-left: 2px solid var(--accent);
+      color: var(--ink-1);
+      font-size: 16px;
+    }
+    figure { min-width: 0; margin: 0; }
+    svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .visual-frame { fill: var(--surface); stroke: var(--rule-strong); stroke-width: .5; }
+    .hairline { stroke: var(--rule); stroke-width: .5; fill: none; }
+    .structure { stroke: var(--ink-3); stroke-width: 1.2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .water { fill: var(--c1-fill); stroke: var(--c1); stroke-width: .5; }
+    .contact { stroke: var(--c2); stroke-width: 2; fill: none; stroke-linecap: round; }
+    .slip { stroke: var(--c3); stroke-width: 2; fill: none; stroke-linecap: round; }
+    .t { font: 400 14px var(--font-sans); fill: var(--ink-1); }
+    .ts { font: 400 12px var(--font-sans); fill: var(--ink-2); }
+    .th { font: 500 14px var(--font-sans); fill: var(--ink-1); }
+    .tn { font: 400 12px var(--font-mono); fill: var(--ink-2); }
+    .c1-text { fill: var(--c1-ink); }
+    .c2-text { fill: var(--c2-ink); }
+    .c3-text { fill: var(--c3-ink); }
+    figcaption {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: var(--hairline) solid var(--rule);
+      color: var(--ink-2);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    figcaption::before {
+      content: "图 1 · ";
+      color: var(--ink-1);
+      font-family: var(--font-mono);
+    }
+    .handoff {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr);
+      gap: 48px;
+      padding: 30px 0 0;
+    }
+    .question { margin: 0; font: 500 28px/1.35 var(--font-serif); }
+    .question span { color: var(--accent); }
+    .next {
+      align-self: end;
+      margin: 0;
+      color: var(--ink-2);
+      font-size: 15px;
+    }
+    .next strong { display: block; margin-bottom: 6px; color: var(--ink-1); font-weight: 500; }
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      margin-top: 48px;
+      padding-top: 14px;
+      border-top: var(--hairline) solid var(--rule);
+      color: var(--ink-3);
+      font: 400 13px/1.4 var(--font-mono);
+    }
+    @media (max-width: 820px) {
+      .hero { grid-template-columns: 1fr; gap: 44px; }
+      .copy { max-width: 680px; }
+      h1 { max-width: 12em; }
+      .handoff { grid-template-columns: 1fr; gap: 20px; }
+      .next { align-self: start; }
+    }
+    @media (max-width: 520px) {
+      body { padding: 24px 18px 42px; font-size: 16px; }
+      .topline { align-items: flex-start; }
+      .chapter { max-width: 14ch; text-align: right; }
+      .hero { padding: 48px 0 36px; }
+      h1 { font-size: clamp(40px, 13vw, 54px); }
+      .lead { font-size: 18px; }
+      .question { font-size: 24px; }
+      footer { flex-direction: column; gap: 8px; }
+    }
+    @media print {
+      html { background: #fff; }
+      body { max-width: none; padding: 24px; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <div class="eyebrow">从脚底开始的一堂力学课</div>
-    <h1>为什么雨后的石板路格外滑？</h1>
-    <section class="scene" aria-label="雨后石板路的场景">
-      <p>刚下过雨，石板路只是多了一层亮晶晶的水。可脚底一落下去，熟悉的路面忽然像换了性格：鞋底轻轻一偏，身体就开始往前溜。</p>
-      <p>石板没有突然变陡，鞋底也没有凭空消失。真正改变的，可能是鞋底和地面之间那场我们看不见的“较量”。</p>
+    <div class="topline">
+      <span class="eyebrow">从脚底开始的一堂力学课</span>
+      <span class="chapter">01 · 先看见问题</span>
+    </div>
+
+    <section class="hero" aria-labelledby="lesson-title">
+      <div class="copy">
+        <h1 id="lesson-title">路面没变，为什么脚下变滑了？</h1>
+        <p class="lead">雨后的石板路看起来只是多了一层水。可鞋底轻轻一偏，身体就开始向前溜。真正改变的，也许不是路面，而是鞋底与路面相遇的方式。</p>
+        <p class="promise">先别急着记公式。我们先把这场发生在脚底的“较量”画出来。</p>
+      </div>
+
+      <figure aria-labelledby="figure-title figure-caption">
+        <svg viewBox="0 0 680 380" role="img" aria-labelledby="figure-title figure-desc">
+          <title id="figure-title">干燥接触与水膜介入的对照图</title>
+          <desc id="figure-desc">左侧显示鞋底与路面在多个接触点相遇，右侧显示水膜介入后接触界面改变，并用箭头提示相对滑动。</desc>
+          <rect class="visual-frame" x="24" y="24" width="632" height="304" rx="12"></rect>
+          <line class="hairline" x1="340" y1="52" x2="340" y2="296"></line>
+
+          <g transform="translate(54 48)">
+            <text class="th" x="0" y="0" dominant-baseline="hanging">干燥接触</text>
+            <text class="ts" x="0" y="26">多个接触点共同限制滑动</text>
+            <path class="structure" d="M4 124 C34 112 46 138 78 124 S124 136 158 122 S198 136 228 122"></path>
+            <path class="structure" d="M4 226 C34 214 46 240 78 226 S124 238 158 224 S198 238 228 224"></path>
+            <path class="contact" d="M34 126 V214 M76 125 V216 M120 127 V212 M164 123 V214 M206 126 V212"></path>
+            <text class="ts c2-text" x="0" y="270">接触点多，滑动被逐段打断</text>
+          </g>
+
+          <g transform="translate(376 48)">
+            <text class="th" x="0" y="0" dominant-baseline="hanging">水膜介入</text>
+            <text class="ts" x="0" y="26">接触界面换了一种传力方式</text>
+            <path class="structure" d="M4 124 C34 112 46 138 78 124 S124 136 158 122 S198 136 228 122"></path>
+            <rect class="water" x="4" y="154" width="228" height="20" rx="4"></rect>
+            <path class="structure" d="M4 226 C34 214 46 240 78 226 S124 238 158 224 S198 238 228 224"></path>
+            <path class="slip" d="M70 196 H164 M150 188 L164 196 L150 204"></path>
+            <text class="ts c1-text" x="4" y="270">水膜让相对滑动更容易发生</text>
+          </g>
+
+          <text class="tn" x="40" y="352">同一条路面 · 不同的接触界面</text>
+          <text class="tn" x="640" y="352" text-anchor="end">力从哪里传过去？</text>
+        </svg>
+        <figcaption id="figure-caption">先把“滑不滑”拆成一个更具体的问题：鞋底与地面之间，究竟怎样传递力？</figcaption>
+      </figure>
     </section>
-    <section class="question" aria-label="带着问题出发">
-      <strong>先猜一猜</strong>
-      <p>水到底让摩擦变小了吗？如果只是让两样东西更容易滑开，为什么有些湿地面反而更“黏”？</p>
+
+    <section class="handoff" aria-label="带着问题进入课程">
+      <p class="question">如果水改变的不是路面的坡度，而是<span>接触界面</span>，摩擦力究竟在什么时候帮我们站稳？</p>
+      <p class="next"><strong>接下来</strong>从摩擦力的方向和大小开始，把脚底的感觉变成可以判断的规律。</p>
     </section>
-    <p class="continue">接下来，我们就从这个小小的脚底打滑开始，看看摩擦力究竟在什么时候帮我们站稳，又在什么时候悄悄放手。</p>
+
+    <footer>
+      <span>摩擦力 · 课程引入</span>
+      <span>一个场景，一张图，一个值得继续追问的问题</span>
+    </footer>
   </main>
 </body>
 </html>

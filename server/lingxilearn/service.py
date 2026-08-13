@@ -94,6 +94,43 @@ _GRAPH_NODE_TO_AGENT = {
 }
 
 
+def _normalize_attachment_refs(
+    value: list[dict[str, Any]] | None, learner_id: str
+) -> list[dict[str, Any]]:
+    """Keep only the metadata needed to let agents retrieve uploaded files."""
+
+    refs: list[dict[str, Any]] = []
+    for item in value or []:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "").strip()
+        filename = str(item.get("filename") or "").strip()
+        if not key or not filename or not key.startswith(f"{learner_id}/"):
+            continue
+        try:
+            size = max(0, int(item.get("size") or 0))
+        except (TypeError, ValueError):
+            size = 0
+        refs.append(
+            {
+                "key": key[:512],
+                "path": f"/api/attachments/{key[:512]}",
+                "filename": filename[:255],
+                "media_type": str(item.get("media_type") or "application/octet-stream")[:128],
+                "size": size,
+            }
+        )
+    return refs[:10]
+
+
+def _prompt_with_attachments(prompt: str, attachments: list[dict[str, Any]]) -> str:
+    if not attachments:
+        return prompt
+    lines = ["\n\n[已上传附件]"]
+    lines.extend(f"- {item['filename']} ({item['media_type']}, {item['path'] or item['key']})" for item in attachments)
+    return prompt + "\n".join(lines)
+
+
 def _trace_agent(metadata: Any, default_agent: str = "coordinator") -> str:
     """Resolve the outer Agent Task node from a LingxiGraph message envelope."""
     if not isinstance(metadata, dict):
@@ -402,13 +439,19 @@ class Service:
     # -- Agent Tasks ------------------------------------------------------
 
     async def create_agent_task(
-        self, *, task_id: str, learner_id: str, prompt: str
+        self,
+        *,
+        task_id: str,
+        learner_id: str,
+        prompt: str,
+        attachments: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         normalized = " ".join(prompt.strip().split())
         if not normalized:
             raise ValueError("prompt must not be empty")
         if len(normalized) > 4000:
             raise ValueError("prompt is too long")
+        attachment_refs = _normalize_attachment_refs(attachments, learner_id)
         await self.repo.ensure_learner(learner_id)
         await self.repo.create_agent_task(
             id=task_id,
@@ -437,7 +480,13 @@ class Service:
                 [{"kind": "task.failed", "agent": "coordinator", "payload": {"message": message}}],
             )
             return {"id": task_id, "status": "failed", "error": message}
-        self._spawn(self._drive_agent_task(task_id, learner_id, normalized))
+        self._spawn(
+            self._drive_agent_task(
+                task_id,
+                learner_id,
+                _prompt_with_attachments(normalized, attachment_refs),
+            )
+        )
         return {"id": task_id, "status": "queued"}
 
     async def agent_task_snapshot(
@@ -688,7 +737,14 @@ class Service:
             **({"error": sidecar["error"]} if sidecar and sidecar.get("error") else {}),
         }
 
-    async def agent_message(self, task_id: str, message: str, learner_id: str | None = None) -> None:
+    async def agent_message(
+        self,
+        task_id: str,
+        message: str,
+        *,
+        attachments: list[dict[str, Any]] | None = None,
+        learner_id: str | None = None,
+    ) -> None:
         record = await (self.repo.get_agent_task_for_learner(task_id, learner_id) if learner_id else self.repo.get_agent_task(task_id))
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
@@ -696,7 +752,15 @@ class Service:
             raise ValueError(f"task_not_waiting:{record.status}")
         if not message.strip():
             raise ValueError("message must not be empty")
-        self._spawn(self._drive_agent_task(task_id, record.learner_id, "", resume={"message": message, "kind": "chat"}))
+        attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
+        self._spawn(
+            self._drive_agent_task(
+                task_id,
+                record.learner_id,
+                "",
+                resume={"message": message, "kind": "chat", "attachments": attachment_refs},
+            )
+        )
 
     async def submit_agent_quiz(
         self,
@@ -737,6 +801,7 @@ class Service:
                     "message": str(resume.get("message")),
                     "kind": str(resume.get("kind") or "chat"),
                     "answers": _json_safe(resume.get("answers")) if resume.get("answers") is not None else None,
+                    "attachments": _json_safe(resume.get("attachments") or []),
                 },
             )
         latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
@@ -844,6 +909,19 @@ class Service:
         except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
             logger.exception("agent task failed: %s", task_id)
             detail = _safe_agent_error(exc, self.settings)
+            recovered_intro = await self.agent_artifacts.recover_lesson_intro_draft(task_id)
+            if recovered_intro is not None:
+                buffer.append(
+                    {
+                        "kind": "artifact.recovered",
+                        "agent": "lecture_hook",
+                        "payload": {
+                            "artifact": "lesson-intro",
+                            "relative_path": recovered_intro["relative_path"],
+                            "message": "课程引入生成被中断，已从已写入草稿恢复可用页面。",
+                        },
+                    }
+                )
             buffer.append(
                 {
                     "kind": "task.failed",

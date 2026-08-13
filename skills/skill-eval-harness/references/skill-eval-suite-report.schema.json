@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lingxi:skill-eval-suite-report.v1",
+  "title": "Lingxi Skill evaluation suite report",
+  "type": "object",
+  "required": ["schema_version", "status", "summary", "suites", "errors"],
+  "properties": {
+    "schema_version": {"const": "skill-eval-suite-report.v1"},
+    "status": {"enum": ["pass", "fail"]},
+    "summary": {
+      "type": "object",
+      "required": ["suite_count", "case_count", "failed_suites", "score"],
+      "properties": {
+        "suite_count": {"type": "integer", "minimum": 0},
+        "case_count": {"type": "integer", "minimum": 0},
+        "failed_suites": {"type": "integer", "minimum": 0},
+        "score": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": true
+    },
+    "suites": {"type": "array"},
+    "errors": {"type": "array"}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,83 @@
+import { db } from '@sim/db'
+import { account } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { eq } from 'drizzle-orm'
+import { canUseCredential, getCredentialActorContext } from '@/lib/credentials/access'
+import { getServiceAccountToken, refreshTokenIfNeeded } from '@/lib/oauth/credential-service'
+
+const logger = createLogger('VertexCredential')
+
+export interface ResolveVertexCredentialParams {
+  credentialId: string
+  actingUserId: string | undefined
+  /** Workspace of the executing workflow. The credential must belong to it. */
+  workspaceId: string | null | undefined
+  callerLabel?: string
+}
+
+/**
+ * Resolves a Vertex AI OAuth credential to an access token.
+ * Shared across agent, evaluator, and router handlers. Enforces the same two
+ * predicates as `authorizeCredentialUse`: the executing user must be a member
+ * (or derived workspace admin) of the credential, and the credential must belong
+ * to the workspace the workflow is executing in.
+ */
+export async function resolveVertexCredential({
+  credentialId,
+  actingUserId,
+  workspaceId,
+  callerLabel = 'vertex',
+}: ResolveVertexCredentialParams): Promise<string> {
+  const requestId = `${callerLabel}-${Date.now()}`
+
+  logger.info(`[${requestId}] Resolving Vertex AI credential: ${credentialId}`)
+
+  if (!actingUserId) {
+    throw new Error('Vertex AI credential use requires an authenticated user')
+  }
+
+  const access = await getCredentialActorContext(credentialId, actingUserId)
+  const cred = access.credential
+  if (!cred) {
+    throw new Error(`Vertex AI credential not found: ${credentialId}`)
+  }
+  if (workspaceId && cred.workspaceId !== workspaceId) {
+    logger.warn(`[${requestId}] Vertex AI credential belongs to a different workspace`, {
+      credentialId,
+      executingWorkspaceId: workspaceId,
+    })
+    throw new Error('Credential is not accessible from this workflow workspace')
+  }
+  if (!canUseCredential(access)) {
+    throw new Error('Not authorized to use this Vertex AI credential')
+  }
+
+  if (cred.type === 'service_account') {
+    const accessToken = await getServiceAccountToken(cred.id, [
+      'https://www.googleapis.com/auth/cloud-platform',
+    ])
+    logger.info(`[${requestId}] Successfully resolved Vertex AI service account credential`)
+    return accessToken
+  }
+
+  if (cred.type !== 'oauth' || !cred.accountId) {
+    throw new Error(`Vertex AI credential is not a valid OAuth credential: ${credentialId}`)
+  }
+
+  const accountRow = await db.query.account.findFirst({
+    where: eq(account.id, cred.accountId),
+  })
+
+  if (!accountRow) {
+    throw new Error(`Vertex AI credential not found: ${credentialId}`)
+  }
+
+  const { accessToken } = await refreshTokenIfNeeded(requestId, accountRow, cred.accountId)
+
+  if (!accessToken) {
+    throw new Error('Failed to get Vertex AI access token')
+  }
+
+  logger.info(`[${requestId}] Successfully resolved Vertex AI credential`)
+  return accessToken
+}

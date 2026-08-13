@@ -1,0 +1,428 @@
+import { ZepIcon } from '@/components/icons'
+import { AuthMode, type BlockConfig, type BlockMeta, IntegrationType } from '@/blocks/types'
+import type { ZepResponse } from '@/tools/zep/types'
+
+export const ZepBlock: BlockConfig<ZepResponse> = {
+  type: 'zep',
+  name: 'Zep',
+  description: 'Long-term memory for AI agents',
+  authMode: AuthMode.ApiKey,
+  longDescription:
+    'Integrate Zep for long-term memory management. Create threads, add messages, retrieve context with AI-powered summaries and facts extraction.',
+  bgColor: '#E8E8E8',
+  icon: ZepIcon,
+  canvasPresentation: {
+    defaultTitle: 'Zep',
+    sentences: {
+      byOperation: {
+        create_thread: [
+          { text: 'Create thread', field: 'threadId', core: true },
+          { text: 'for user', field: 'userId' },
+        ],
+        add_messages: [{ text: 'Add messages to thread', field: 'threadId', core: true }],
+        get_context: [{ text: 'Fetch user context from thread', field: 'threadId', core: true }],
+        get_messages: [
+          {
+            text: 'Read the latest',
+            field: 'limit',
+            after: 'messages',
+            core: true,
+          },
+          { text: 'from thread', field: 'threadId', core: true },
+        ],
+        get_threads: [{ text: 'List up to', field: 'limit', after: 'threads', core: true }],
+        delete_thread: [{ text: 'Delete thread', field: 'threadId', core: true }],
+        add_user: [
+          { text: 'Create user', field: 'userId', core: true },
+          { text: 'with email', field: 'email' },
+        ],
+        get_user: [{ text: 'Fetch user', field: 'userId', core: true }],
+        get_user_threads: [{ text: 'List threads for user', field: 'userId', core: true }],
+      },
+    },
+  },
+  category: 'tools',
+  integrationType: IntegrationType.AI,
+  docsLink: 'https://docs.sim.ai/integrations/zep',
+  subBlocks: [
+    {
+      id: 'operation',
+      title: 'Operation',
+      type: 'dropdown',
+      options: [
+        { label: 'Create Thread', id: 'create_thread' },
+        { label: 'Add Messages', id: 'add_messages' },
+        { label: 'Get Context', id: 'get_context' },
+        { label: 'Get Messages', id: 'get_messages' },
+        { label: 'Get Threads', id: 'get_threads' },
+        { label: 'Delete Thread', id: 'delete_thread' },
+        { label: 'Add User', id: 'add_user' },
+        { label: 'Get User', id: 'get_user' },
+        { label: 'Get User Threads', id: 'get_user_threads' },
+      ],
+      placeholder: 'Select an operation',
+      value: () => 'create_thread',
+    },
+    {
+      id: 'threadId',
+      title: 'Thread ID',
+      type: 'short-input',
+      placeholder: 'Enter unique thread identifier',
+      condition: {
+        field: 'operation',
+        value: ['create_thread', 'add_messages', 'get_context', 'get_messages', 'delete_thread'],
+      },
+      required: true,
+    },
+    {
+      id: 'userId',
+      title: 'User ID',
+      type: 'short-input',
+      placeholder: 'Enter user identifier',
+      condition: {
+        field: 'operation',
+        value: ['create_thread', 'add_user', 'get_user', 'get_user_threads'],
+      },
+      required: true,
+    },
+    {
+      id: 'email',
+      title: 'Email',
+      type: 'short-input',
+      placeholder: 'user@example.com',
+      condition: {
+        field: 'operation',
+        value: 'add_user',
+      },
+    },
+    {
+      id: 'firstName',
+      title: 'First Name',
+      type: 'short-input',
+      placeholder: 'John',
+      condition: {
+        field: 'operation',
+        value: 'add_user',
+      },
+    },
+    {
+      id: 'lastName',
+      title: 'Last Name',
+      type: 'short-input',
+      placeholder: 'Doe',
+      condition: {
+        field: 'operation',
+        value: 'add_user',
+      },
+    },
+    {
+      id: 'metadata',
+      title: 'Metadata',
+      type: 'code',
+      placeholder: '{"key": "value"}',
+      language: 'json',
+      condition: {
+        field: 'operation',
+        value: 'add_user',
+      },
+    },
+    {
+      id: 'messages',
+      title: 'Messages',
+      type: 'code',
+      placeholder: '[{"role": "user", "content": "Hello!"}]',
+      language: 'json',
+      condition: {
+        field: 'operation',
+        value: 'add_messages',
+      },
+      required: true,
+    },
+    {
+      id: 'mode',
+      title: 'Context Mode',
+      type: 'dropdown',
+      options: [
+        { label: 'Summary (Natural Language)', id: 'summary' },
+        { label: 'Basic (Raw Facts)', id: 'basic' },
+      ],
+      placeholder: 'Select context mode',
+      value: () => 'summary',
+      condition: {
+        field: 'operation',
+        value: 'get_context',
+      },
+    },
+    {
+      id: 'apiKey',
+      title: 'API Key',
+      type: 'short-input',
+      placeholder: 'Enter your Zep API key',
+      password: true,
+      required: true,
+    },
+    {
+      id: 'limit',
+      title: 'Result Limit',
+      type: 'slider',
+      min: 1,
+      max: 100,
+      step: 1,
+      integer: true,
+      condition: {
+        field: 'operation',
+        value: ['get_messages', 'get_threads'],
+      },
+    },
+  ],
+  tools: {
+    access: [
+      'zep_create_thread',
+      'zep_get_threads',
+      'zep_delete_thread',
+      'zep_get_context',
+      'zep_get_messages',
+      'zep_add_messages',
+      'zep_add_user',
+      'zep_get_user',
+      'zep_get_user_threads',
+    ],
+    config: {
+      tool: (params: Record<string, any>) => {
+        const operation = params.operation || 'create_thread'
+        switch (operation) {
+          case 'create_thread':
+            return 'zep_create_thread'
+          case 'add_messages':
+            return 'zep_add_messages'
+          case 'get_context':
+            return 'zep_get_context'
+          case 'get_messages':
+            return 'zep_get_messages'
+          case 'get_threads':
+            return 'zep_get_threads'
+          case 'delete_thread':
+            return 'zep_delete_thread'
+          case 'add_user':
+            return 'zep_add_user'
+          case 'get_user':
+            return 'zep_get_user'
+          case 'get_user_threads':
+            return 'zep_get_user_threads'
+          default:
+            return 'zep_create_thread'
+        }
+      },
+      params: (params: Record<string, any>) => {
+        const errors: string[] = []
+
+        // Validate required API key for all operations
+        if (!params.apiKey) {
+          errors.push('API Key is required')
+        }
+
+        const operation = params.operation || 'create_thread'
+
+        // Validate operation-specific required fields
+        if (
+          [
+            'create_thread',
+            'add_messages',
+            'get_context',
+            'get_messages',
+            'delete_thread',
+          ].includes(operation)
+        ) {
+          if (!params.threadId) {
+            errors.push('Thread ID is required')
+          }
+        }
+
+        if (operation === 'create_thread' || operation === 'add_user') {
+          if (!params.userId) {
+            errors.push('User ID is required')
+          }
+        }
+
+        if (operation === 'get_user' || operation === 'get_user_threads') {
+          if (!params.userId) {
+            errors.push('User ID is required')
+          }
+        }
+
+        if (operation === 'add_messages') {
+          if (!params.messages) {
+            errors.push('Messages are required')
+          } else if (!Array.isArray(params.messages) || params.messages.length === 0) {
+            errors.push('Messages must be a non-empty array')
+          } else {
+            for (const msg of params.messages) {
+              if (!msg.role || !msg.content) {
+                errors.push("Each message must have 'role' and 'content' properties")
+                break
+              }
+            }
+          }
+        }
+
+        // Throw error if any required fields are missing
+        if (errors.length > 0) {
+          throw new Error(`Zep Block Error: ${errors.join(', ')}`)
+        }
+
+        // Build the result params
+        const result: Record<string, any> = {
+          apiKey: params.apiKey,
+        }
+
+        if (params.threadId) result.threadId = params.threadId
+        if (params.userId) result.userId = params.userId
+        if (params.mode) result.mode = params.mode
+        if (params.limit) result.limit = Number(params.limit)
+        if (params.email) result.email = params.email
+        if (params.firstName) result.firstName = params.firstName
+        if (params.lastName) result.lastName = params.lastName
+        if (params.metadata) result.metadata = params.metadata
+
+        // Add messages for add operation
+        if (operation === 'add_messages' && params.messages) {
+          result.messages = params.messages
+        }
+
+        return result
+      },
+    },
+  },
+  inputs: {
+    operation: { type: 'string', description: 'Operation to perform' },
+    apiKey: { type: 'string', description: 'Zep API key' },
+    threadId: { type: 'string', description: 'Thread identifier' },
+    userId: { type: 'string', description: 'User identifier' },
+    messages: { type: 'json', description: 'Message data array' },
+    mode: { type: 'string', description: 'Context mode (summary or basic)' },
+    limit: { type: 'number', description: 'Result limit' },
+    email: { type: 'string', description: 'User email' },
+    firstName: { type: 'string', description: 'User first name' },
+    lastName: { type: 'string', description: 'User last name' },
+    metadata: { type: 'json', description: 'User metadata' },
+  },
+  outputs: {
+    // Thread operations
+    threadId: { type: 'string', description: 'Thread identifier' },
+    uuid: { type: 'string', description: 'Internal UUID' },
+    createdAt: { type: 'string', description: 'Creation timestamp' },
+    updatedAt: { type: 'string', description: 'Update timestamp' },
+    threads: { type: 'json', description: 'Array of threads' },
+    deleted: { type: 'boolean', description: 'Deletion status' },
+    // Message operations
+    messages: { type: 'json', description: 'Message data' },
+    messageIds: { type: 'json', description: 'Array of added message UUIDs' },
+    added: { type: 'boolean', description: 'Whether messages were added successfully' },
+    // Context operations
+    context: { type: 'string', description: 'User context string (summary or basic mode)' },
+    // User operations
+    userId: { type: 'string', description: 'User identifier' },
+    email: { type: 'string', description: 'User email' },
+    firstName: { type: 'string', description: 'User first name' },
+    lastName: { type: 'string', description: 'User last name' },
+    metadata: { type: 'json', description: 'User metadata' },
+    // Counts
+    totalCount: { type: 'number', description: 'Total number of items returned' },
+  },
+}
+
+export const ZepBlockMeta = {
+  tags: ['knowledge-base', 'agentic'],
+  url: 'https://www.getzep.com',
+  templates: [
+    {
+      icon: ZepIcon,
+      title: 'Zep session memory for chat',
+      prompt:
+        'Create a chat agent that stores every turn in Zep with user metadata, retrieves the most relevant prior context on each new question, and answers with continuity instead of forgetting.',
+      modules: ['agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'communication'],
+    },
+    {
+      icon: ZepIcon,
+      title: 'Zep + knowledge base support bot',
+      prompt:
+        'Build a support agent that combines Zep session memory with a knowledge base, so it remembers what the customer has already tried while still grounding answers in product docs.',
+      modules: ['knowledge-base', 'agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'automation'],
+    },
+    {
+      icon: ZepIcon,
+      title: 'Zep + Salesforce account memory',
+      prompt:
+        'Build a workflow that for each Salesforce account writes meeting and email context into Zep keyed by account, so any future agent interaction has full history.',
+      modules: ['agent', 'workflows'],
+      category: 'sales',
+      tags: ['sales', 'crm'],
+      alsoIntegrations: ['salesforce'],
+    },
+    {
+      icon: ZepIcon,
+      title: 'Zep + Intercom support continuity',
+      prompt:
+        'Create a Zep-backed support agent for Intercom that remembers what each customer has tried before, prefers, or escalated, so support conversations never restart from scratch.',
+      modules: ['agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'communication'],
+      alsoIntegrations: ['intercom'],
+    },
+    {
+      icon: ZepIcon,
+      title: 'Zep evaluation harness',
+      prompt:
+        'Build a scheduled workflow that evaluates Zep memory recall accuracy weekly against a labeled eval set, captures regressions, and writes a quality report.',
+      modules: ['scheduled', 'agent', 'files', 'workflows'],
+      category: 'engineering',
+      tags: ['engineering', 'analysis'],
+    },
+    {
+      icon: ZepIcon,
+      title: 'Zep personal-assistant memory',
+      prompt:
+        'Create a personal assistant agent that records preferences, recurring tasks, and prior decisions in Zep, then retrieves the relevant facts on each request so it stays consistent across days instead of asking the same questions again.',
+      modules: ['agent', 'workflows'],
+      category: 'productivity',
+      tags: ['individual', 'automation'],
+    },
+    {
+      icon: ZepIcon,
+      title: 'Zep + Slack team-context bot',
+      prompt:
+        'Build a Slack bot that stores each conversation in Zep keyed by channel and user, retrieves the relevant prior context when someone asks a follow-up, and answers in thread with continuity across the whole team’s history.',
+      modules: ['agent', 'workflows'],
+      category: 'productivity',
+      tags: ['team', 'communication', 'automation'],
+      alsoIntegrations: ['slack'],
+    },
+  ],
+  skills: [
+    {
+      name: 'persist-conversation-turn',
+      description:
+        'Record the latest user and agent messages into a Zep thread so memory builds over time.',
+      content:
+        '# Persist a Conversation Turn in Zep\n\nSave each exchange so the agent remembers it later.\n\n## Steps\n1. Ensure a user exists for the person, adding the user if this is their first interaction.\n2. Ensure a thread exists for this conversation, creating one if needed and tying it to the user.\n3. Add the latest messages to the thread, tagging roles as user or assistant.\n4. Confirm the messages were stored.\n\n## Output\nReturn the thread ID and user ID used, and confirm how many messages were added. These IDs are reused on the next turn.',
+    },
+    {
+      name: 'recall-user-context',
+      description:
+        'Fetch the assembled memory context for a Zep thread to ground the next agent response.',
+      content:
+        '# Recall User Context from Zep\n\nPull relevant long-term memory before the agent replies.\n\n## Steps\n1. Identify the thread for the current conversation, and the user behind it.\n2. Call get-context for the thread, choosing summary mode for natural language or basic mode for raw facts.\n3. Use the returned context block to inform the next response, since it spans all of this user prior threads.\n\n## Output\nReturn the context block as relevant facts and history about the user. Note the thread and user it was drawn from, and feed it into the agent prompt rather than echoing it to the user.',
+    },
+    {
+      name: 'review-user-memory',
+      description:
+        'List a user threads and messages in Zep to inspect what the agent remembers about them.',
+      content:
+        '# Review What Zep Remembers\n\nInspect the stored memory for a user.\n\n## Steps\n1. Get the user to confirm they exist and read their profile.\n2. Get the user threads to see every conversation tied to them.\n3. Get messages from a thread of interest to read the stored history.\n\n## Output\nReturn a summary of the user threads with counts and key facts surfaced, plus the messages from any thread inspected. Cite the user ID and thread IDs.',
+    },
+  ],
+} as const satisfies BlockMeta

@@ -1,0 +1,1928 @@
+import { JiraServiceManagementIcon } from '@/components/icons'
+import { getScopesForService } from '@/lib/oauth/utils'
+import type { BlockConfig, BlockMeta } from '@/blocks/types'
+import { AuthMode, IntegrationType } from '@/blocks/types'
+import type { JsmResponse } from '@/tools/jsm/types'
+import { getTrigger } from '@/triggers'
+
+/** Operations that accept Atlassian's `start`/`limit` pagination query params. */
+const PAGINATED_OPERATIONS = [
+  'get_service_desks',
+  'get_request_types',
+  'get_requests',
+  'get_comments',
+  'get_customers',
+  'get_organizations',
+  'get_queues',
+  'get_sla',
+  'get_transitions',
+  'get_participants',
+  'get_approvals',
+] as const
+
+/**
+ * Coerce an optional numeric block input into an integer, returning undefined for
+ * empty or non-numeric values so no `NaN` reaches the API query string.
+ */
+function toOptionalInt(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const parsed = Number.parseInt(value, 10)
+  return Number.isNaN(parsed) ? undefined : parsed
+}
+
+/**
+ * Parse the Assets attributes input into the API payload array. Accepts either a
+ * JSON string (from the block input) or an already-parsed array (from a dynamic
+ * reference). Throws a clear error when the value is not a valid array.
+ */
+function parseAssetAttributes(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(value)
+    } catch {
+      throw new Error('Attributes must be a valid JSON array')
+    }
+    if (!Array.isArray(parsed)) {
+      throw new Error('Attributes must be a JSON array')
+    }
+    return parsed
+  }
+  throw new Error('Attributes are required')
+}
+
+/** Canonical basic/advanced pair for the service desk. */
+const SERVICE_DESK_FIELD = ['serviceDeskSelector', 'serviceDeskId'] as const
+/** Canonical basic/advanced pair for the request type. */
+const REQUEST_TYPE_FIELD = ['requestTypeSelector', 'requestTypeId'] as const
+
+export const JiraServiceManagementBlock: BlockConfig<JsmResponse> = {
+  type: 'jira_service_management',
+  name: 'Jira Service Management',
+  description: 'Interact with Jira Service Management',
+  authMode: AuthMode.OAuth,
+  longDescription:
+    'Integrate with Jira Service Management for IT service management. Create and manage service requests, handle customers and organizations, track SLAs, and manage queues.',
+  docsLink: 'https://docs.sim.ai/integrations/jira_service_management',
+  category: 'tools',
+  integrationType: IntegrationType.Support,
+  bgColor: '#FFFFFF',
+  icon: JiraServiceManagementIcon,
+  canvasPresentation: {
+    defaultTitle: 'Jira Service Management',
+    triggerSentences: {
+      default: [
+        'Run on',
+        { field: 'selectedTriggerId', core: true },
+        { text: ', matching', field: 'jqlFilter' },
+      ],
+    },
+    sentences: {
+      byOperation: {
+        get_service_desks: ['List all service desks'],
+        get_request_types: [
+          { text: 'List request types in', field: SERVICE_DESK_FIELD, core: true },
+          { text: ', matching', field: 'searchQuery' },
+        ],
+        create_request: [
+          { text: 'Create request', field: 'summary', core: true },
+          { text: 'in', field: SERVICE_DESK_FIELD, core: true },
+        ],
+        get_request: [{ text: 'Read request', field: 'issueIdOrKey', core: true }],
+        get_requests: [
+          'List requests',
+          { text: 'in', field: SERVICE_DESK_FIELD },
+          { text: ', matching', field: 'searchTerm' },
+        ],
+        add_comment: [
+          { text: 'Add comment', field: 'commentBody', core: true },
+          { text: 'to request', field: 'issueIdOrKey', core: true },
+        ],
+        get_comments: [{ text: 'List comments on request', field: 'issueIdOrKey', core: true }],
+        get_customers: [
+          { text: 'List customers of', field: SERVICE_DESK_FIELD, core: true },
+          { text: ', matching', field: 'customerQuery' },
+        ],
+        add_customer: [
+          { text: 'Add customers', field: 'accountIds', core: true },
+          { text: 'to', field: SERVICE_DESK_FIELD, core: true },
+        ],
+        get_organizations: [
+          { text: 'List organizations in', field: SERVICE_DESK_FIELD, core: true },
+        ],
+        create_organization: [
+          { text: 'Create organization', field: 'organizationName', core: true },
+        ],
+        add_organization: [
+          { text: 'Add organization', field: 'organizationId', core: true },
+          { text: 'to', field: SERVICE_DESK_FIELD, core: true },
+        ],
+        get_queues: [{ text: 'List queues in', field: SERVICE_DESK_FIELD, core: true }],
+        get_sla: [{ text: 'Read the SLA metrics of request', field: 'issueIdOrKey', core: true }],
+        get_transitions: [
+          {
+            text: 'List transitions available on request',
+            field: 'issueIdOrKey',
+            core: true,
+          },
+        ],
+        transition_request: [
+          { text: 'Apply transition', field: 'transitionId', core: true },
+          { text: 'to request', field: 'issueIdOrKey', core: true },
+        ],
+        get_participants: [
+          { text: 'List participants on request', field: 'issueIdOrKey', core: true },
+        ],
+        add_participants: [
+          {
+            text: 'Add participants',
+            field: 'participantAccountIds',
+            core: true,
+          },
+          { text: 'to request', field: 'issueIdOrKey', core: true },
+        ],
+        get_approvals: [{ text: 'List approvals on request', field: 'issueIdOrKey', core: true }],
+        answer_approval: [
+          { text: 'Answer the approval on request', field: 'issueIdOrKey', core: true },
+          { text: 'with', field: 'approvalDecision' },
+        ],
+        get_request_type_fields: [
+          { text: 'Read the fields of request type', field: REQUEST_TYPE_FIELD, core: true },
+          { text: 'in', field: SERVICE_DESK_FIELD },
+        ],
+        get_form_templates: [
+          { text: 'List form templates in project', field: 'projectIdOrKey', core: true },
+        ],
+        get_form_structure: [
+          { text: 'Read the question structure of form', field: 'formId', core: true },
+          { text: 'in project', field: 'projectIdOrKey' },
+        ],
+        get_issue_forms: [
+          { text: 'List forms attached to request', field: 'issueIdOrKey', core: true },
+        ],
+        attach_form: [
+          {
+            text: 'Attach form template',
+            field: 'formTemplateId',
+            core: true,
+          },
+          { text: 'to request', field: 'issueIdOrKey', core: true },
+        ],
+        save_form_answers: [
+          { text: 'Save answers to form', field: 'formId', core: true },
+          { text: 'on request', field: 'issueIdOrKey', core: true },
+        ],
+        submit_form: [
+          { text: 'Submit form', field: 'formId', core: true },
+          { text: 'on request', field: 'issueIdOrKey', core: true },
+        ],
+        get_form: [
+          { text: 'Read form', field: 'formId', core: true },
+          { text: 'on request', field: 'issueIdOrKey', core: true },
+        ],
+        get_form_answers: [
+          { text: 'Read the answers of form', field: 'formId', core: true },
+          { text: 'on request', field: 'issueIdOrKey', core: true },
+        ],
+        reopen_form: [
+          { text: 'Reopen form', field: 'formId', core: true },
+          { text: 'on request', field: 'issueIdOrKey', core: true },
+        ],
+        delete_form: [
+          { text: 'Remove form', field: 'formId', core: true },
+          { text: 'from request', field: 'issueIdOrKey', core: true },
+        ],
+        externalise_form: [
+          { text: 'Make form', field: 'formId', core: true },
+          {
+            text: 'on request',
+            field: 'issueIdOrKey',
+            after: 'visible to customers',
+            core: true,
+          },
+        ],
+        internalise_form: [
+          { text: 'Make form', field: 'formId', core: true },
+          { text: 'on request', field: 'issueIdOrKey', after: 'internal only', core: true },
+        ],
+        copy_forms: [
+          { text: 'Copy forms from request', field: 'sourceIssueIdOrKey', core: true },
+          { text: 'to', field: 'targetIssueIdOrKey' },
+        ],
+        list_object_schemas: ['List all asset schemas'],
+        get_object_schema: [{ text: 'Read asset schema', field: 'assetSchemaId', core: true }],
+        list_object_types: [
+          {
+            text: 'List object types in asset schema',
+            field: 'assetSchemaId',
+            core: true,
+          },
+        ],
+        get_object_type_attributes: [
+          {
+            text: 'Read the attributes of asset object type',
+            field: 'assetObjectTypeId',
+            core: true,
+          },
+        ],
+        search_objects_aql: [
+          { text: 'Search asset objects matching', field: 'assetQlQuery', core: true },
+        ],
+        get_object: [{ text: 'Read asset object', field: 'assetObjectId', core: true }],
+        create_object: [
+          { text: 'Create an asset object of type', field: 'assetObjectTypeId', core: true },
+          { text: ', with', field: 'assetAttributes' },
+        ],
+        update_object: [
+          { text: 'Update asset object', field: 'assetObjectId', core: true },
+          { text: ', setting', field: 'assetAttributes' },
+        ],
+        delete_object: [{ text: 'Delete asset object', field: 'assetObjectId', core: true }],
+      },
+    },
+  },
+  subBlocks: [
+    {
+      id: 'operation',
+      title: 'Operation',
+      type: 'dropdown',
+      options: [
+        { label: 'Get Service Desks', id: 'get_service_desks' },
+        { label: 'Get Request Types', id: 'get_request_types' },
+        { label: 'Create Request', id: 'create_request' },
+        { label: 'Get Request', id: 'get_request' },
+        { label: 'Get Requests', id: 'get_requests' },
+        { label: 'Add Comment', id: 'add_comment' },
+        { label: 'Get Comments', id: 'get_comments' },
+        { label: 'Get Customers', id: 'get_customers' },
+        { label: 'Add Customer', id: 'add_customer' },
+        { label: 'Get Organizations', id: 'get_organizations' },
+        { label: 'Create Organization', id: 'create_organization' },
+        { label: 'Add Organization', id: 'add_organization' },
+        { label: 'Get Queues', id: 'get_queues' },
+        { label: 'Get SLA', id: 'get_sla' },
+        { label: 'Get Transitions', id: 'get_transitions' },
+        { label: 'Transition Request', id: 'transition_request' },
+        { label: 'Get Participants', id: 'get_participants' },
+        { label: 'Add Participants', id: 'add_participants' },
+        { label: 'Get Approvals', id: 'get_approvals' },
+        { label: 'Answer Approval', id: 'answer_approval' },
+        { label: 'Get Request Type Fields', id: 'get_request_type_fields' },
+        { label: 'Get Form Templates', id: 'get_form_templates' },
+        { label: 'Get Form Structure', id: 'get_form_structure' },
+        { label: 'Get Issue Forms', id: 'get_issue_forms' },
+        { label: 'Attach Form', id: 'attach_form' },
+        { label: 'Save Form Answers', id: 'save_form_answers' },
+        { label: 'Submit Form', id: 'submit_form' },
+        { label: 'Get Form', id: 'get_form' },
+        { label: 'Get Form Answers', id: 'get_form_answers' },
+        { label: 'Reopen Form', id: 'reopen_form' },
+        { label: 'Delete Form', id: 'delete_form' },
+        { label: 'Externalise Form', id: 'externalise_form' },
+        { label: 'Internalise Form', id: 'internalise_form' },
+        { label: 'Copy Forms', id: 'copy_forms' },
+        { label: 'List Asset Schemas', id: 'list_object_schemas' },
+        { label: 'Get Asset Schema', id: 'get_object_schema' },
+        { label: 'List Asset Object Types', id: 'list_object_types' },
+        { label: 'Get Asset Object Type Attributes', id: 'get_object_type_attributes' },
+        { label: 'Search Assets (AQL)', id: 'search_objects_aql' },
+        { label: 'Get Asset Object', id: 'get_object' },
+        { label: 'Create Asset Object', id: 'create_object' },
+        { label: 'Update Asset Object', id: 'update_object' },
+        { label: 'Delete Asset Object', id: 'delete_object' },
+      ],
+      value: () => 'get_service_desks',
+    },
+    {
+      id: 'domain',
+      title: 'Domain',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Enter Jira domain (e.g., company.atlassian.net)',
+    },
+    {
+      id: 'credential',
+      title: 'Jira Account',
+      type: 'oauth-input',
+      canonicalParamId: 'oauthCredential',
+      mode: 'basic',
+      required: true,
+      serviceId: 'jira',
+      requiredScopes: getScopesForService('jira'),
+      placeholder: 'Select Jira account',
+    },
+    {
+      id: 'manualCredential',
+      title: 'Jira Account',
+      type: 'short-input',
+      canonicalParamId: 'oauthCredential',
+      mode: 'advanced',
+      placeholder: 'Enter credential ID',
+      required: true,
+    },
+    {
+      id: 'serviceDeskSelector',
+      title: 'Service Desk',
+      type: 'project-selector',
+      canonicalParamId: 'serviceDeskId',
+      serviceId: 'jira',
+      selectorKey: 'jsm.serviceDesks',
+      placeholder: 'Select service desk',
+      dependsOn: ['credential', 'domain'],
+      mode: 'basic',
+      required: {
+        field: 'operation',
+        value: [
+          'get_request_types',
+          'create_request',
+          'get_customers',
+          'add_customer',
+          'get_organizations',
+          'add_organization',
+          'get_queues',
+          'get_request_type_fields',
+        ],
+      },
+      condition: {
+        field: 'operation',
+        value: [
+          'get_request_types',
+          'create_request',
+          'get_customers',
+          'add_customer',
+          'get_organizations',
+          'add_organization',
+          'get_queues',
+          'get_requests',
+          'get_request_type_fields',
+        ],
+      },
+    },
+    {
+      id: 'serviceDeskId',
+      title: 'Service Desk ID',
+      type: 'short-input',
+      canonicalParamId: 'serviceDeskId',
+      placeholder: 'Enter service desk ID',
+      dependsOn: ['credential', 'domain'],
+      mode: 'advanced',
+      required: {
+        field: 'operation',
+        value: [
+          'get_request_types',
+          'create_request',
+          'get_customers',
+          'add_customer',
+          'get_organizations',
+          'add_organization',
+          'get_queues',
+          'get_request_type_fields',
+        ],
+      },
+      condition: {
+        field: 'operation',
+        value: [
+          'get_request_types',
+          'create_request',
+          'get_customers',
+          'add_customer',
+          'get_organizations',
+          'add_organization',
+          'get_queues',
+          'get_requests',
+          'get_request_type_fields',
+        ],
+      },
+    },
+    {
+      id: 'requestTypeSelector',
+      title: 'Request Type',
+      type: 'file-selector',
+      canonicalParamId: 'requestTypeId',
+      serviceId: 'jira',
+      selectorKey: 'jsm.requestTypes',
+      placeholder: 'Select request type',
+      dependsOn: ['credential', 'domain', 'serviceDeskSelector'],
+      mode: 'basic',
+      required: true,
+      condition: { field: 'operation', value: ['create_request', 'get_request_type_fields'] },
+    },
+    {
+      id: 'requestTypeId',
+      title: 'Request Type ID',
+      type: 'short-input',
+      canonicalParamId: 'requestTypeId',
+      required: true,
+      placeholder: 'Enter request type ID',
+      dependsOn: ['credential', 'domain', 'serviceDeskId'],
+      mode: 'advanced',
+      condition: { field: 'operation', value: ['create_request', 'get_request_type_fields'] },
+    },
+    {
+      id: 'issueIdOrKey',
+      title: 'Issue ID or Key',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Enter issue ID or key (e.g., SD-123)',
+      condition: {
+        field: 'operation',
+        value: [
+          'get_request',
+          'add_comment',
+          'get_comments',
+          'get_sla',
+          'get_transitions',
+          'transition_request',
+          'get_participants',
+          'add_participants',
+          'get_approvals',
+          'answer_approval',
+          'get_issue_forms',
+          'attach_form',
+          'save_form_answers',
+          'submit_form',
+          'get_form',
+          'get_form_answers',
+          'reopen_form',
+          'delete_form',
+          'externalise_form',
+          'internalise_form',
+        ],
+      },
+    },
+    {
+      id: 'projectIdOrKey',
+      title: 'Project ID or Key',
+      type: 'short-input',
+      required: { field: 'operation', value: ['get_form_templates', 'get_form_structure'] },
+      placeholder: 'Enter Jira project ID or key (e.g., 10001 or SD)',
+      condition: { field: 'operation', value: ['get_form_templates', 'get_form_structure'] },
+    },
+    {
+      id: 'formId',
+      title: 'Form ID',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Enter form ID (UUID from Get Form Templates or Attach Form)',
+      condition: {
+        field: 'operation',
+        value: [
+          'get_form_structure',
+          'save_form_answers',
+          'submit_form',
+          'get_form',
+          'get_form_answers',
+          'reopen_form',
+          'delete_form',
+          'externalise_form',
+          'internalise_form',
+        ],
+      },
+    },
+    {
+      id: 'formTemplateId',
+      title: 'Form Template ID',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Enter form template UUID (from Get Form Templates)',
+      condition: { field: 'operation', value: 'attach_form' },
+    },
+    {
+      id: 'sourceIssueIdOrKey',
+      title: 'Source Issue ID or Key',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Issue to copy forms from (e.g., SD-123)',
+      condition: { field: 'operation', value: 'copy_forms' },
+    },
+    {
+      id: 'targetIssueIdOrKey',
+      title: 'Target Issue ID or Key',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Issue to copy forms to (e.g., SD-456)',
+      condition: { field: 'operation', value: 'copy_forms' },
+    },
+    {
+      id: 'formIds',
+      title: 'Form IDs to Copy',
+      type: 'long-input',
+      placeholder:
+        'JSON array of form UUIDs (e.g., ["uuid1", "uuid2"]). Leave empty to copy all forms.',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'copy_forms' },
+    },
+    {
+      id: 'summary',
+      title: 'Summary',
+      type: 'short-input',
+      placeholder: 'Enter request summary',
+      condition: { field: 'operation', value: 'create_request' },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a concise service request summary based on the user's description.
+The summary should:
+- Be clear and descriptive
+- Capture the essence of the request
+- Be suitable for service desk tracking
+
+Return ONLY the summary text - no explanations.`,
+        placeholder:
+          'Describe the service request (e.g., "need VPN access", "laptop keyboard not working")...',
+      },
+    },
+    {
+      id: 'description',
+      title: 'Description',
+      type: 'long-input',
+      placeholder: 'Enter request description',
+      condition: { field: 'operation', value: 'create_request' },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a detailed service request description based on the user's description.
+The description should:
+- Provide context and details about the request
+- Include relevant information for the service desk agent
+- Be professional and clear
+
+Return ONLY the description text - no explanations.`,
+        placeholder:
+          'Describe the request details (e.g., "need access to shared drive for new project")...',
+      },
+    },
+    {
+      id: 'raiseOnBehalfOf',
+      title: 'Raise on Behalf Of',
+      type: 'short-input',
+      placeholder: 'Account ID to raise request on behalf of',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'create_request' },
+    },
+    {
+      id: 'requestParticipants',
+      title: 'Request Participants',
+      type: 'short-input',
+      placeholder: 'Comma-separated account IDs to add as participants',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'create_request' },
+    },
+    {
+      id: 'channel',
+      title: 'Channel',
+      type: 'short-input',
+      placeholder: 'Channel (e.g., portal, email)',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'create_request' },
+    },
+    {
+      id: 'requestFieldValues',
+      title: 'Request Field Values',
+      type: 'long-input',
+      placeholder:
+        'JSON object of field values (e.g., {"summary": "Title", "customfield_10010": "value"})',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'create_request' },
+    },
+    {
+      id: 'formAnswers',
+      title: 'Form Answers',
+      type: 'long-input',
+      placeholder:
+        'JSON object using form question IDs as keys (e.g., {"1": {"text": "Title"}, "4": {"choices": ["5"]}, "14": {"text": "Details"}})',
+      required: { field: 'operation', value: 'save_form_answers' },
+      condition: { field: 'operation', value: ['create_request', 'save_form_answers'] },
+    },
+    {
+      id: 'searchQuery',
+      title: 'Search Query',
+      type: 'short-input',
+      placeholder: 'Filter request types by name',
+      condition: { field: 'operation', value: 'get_request_types' },
+    },
+    {
+      id: 'groupId',
+      title: 'Group ID',
+      type: 'short-input',
+      placeholder: 'Filter by request type group',
+      condition: { field: 'operation', value: 'get_request_types' },
+    },
+    {
+      id: 'expand',
+      title: 'Expand',
+      type: 'short-input',
+      placeholder: 'Comma-separated fields to expand',
+      condition: {
+        field: 'operation',
+        value: ['get_request', 'get_requests', 'get_comments'],
+      },
+    },
+    {
+      id: 'commentBody',
+      title: 'Comment',
+      type: 'long-input',
+      required: true,
+      placeholder: 'Enter comment text',
+      condition: { field: 'operation', value: 'add_comment' },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a service request comment based on the user's description.
+The comment should:
+- Be professional and helpful
+- Provide relevant information or updates
+- Be suitable for customer or internal communication
+
+Return ONLY the comment text - no explanations.`,
+        placeholder:
+          'Describe what you want to communicate (e.g., "update on ticket progress", "request more information")...',
+      },
+    },
+    {
+      id: 'isPublic',
+      title: 'Comment Visibility',
+      type: 'dropdown',
+      options: [
+        { label: 'Public (visible to customer)', id: 'true' },
+        { label: 'Internal (agents only)', id: 'false' },
+      ],
+      value: () => 'true',
+      condition: { field: 'operation', value: 'add_comment' },
+    },
+    {
+      id: 'accountIds',
+      title: 'Account IDs',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Comma-separated Atlassian account IDs',
+      condition: { field: 'operation', value: 'add_customer' },
+    },
+    {
+      id: 'customerQuery',
+      title: 'Search Query',
+      type: 'short-input',
+      placeholder: 'Search customers by name or email',
+      condition: { field: 'operation', value: 'get_customers' },
+    },
+    {
+      id: 'transitionId',
+      title: 'Transition ID',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Enter transition ID',
+      condition: { field: 'operation', value: 'transition_request' },
+    },
+    {
+      id: 'transitionComment',
+      title: 'Comment',
+      type: 'long-input',
+      placeholder: 'Add optional comment during transition',
+      condition: { field: 'operation', value: 'transition_request' },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a transition comment for a service request based on the user's description.
+The comment should:
+- Explain the reason for the status change
+- Provide any relevant context
+- Be professional and informative
+
+Return ONLY the comment text - no explanations.`,
+        placeholder:
+          'Describe the transition reason (e.g., "resolved issue", "waiting for customer input")...',
+      },
+    },
+    {
+      id: 'requestOwnership',
+      title: 'Request Ownership',
+      type: 'dropdown',
+      options: [
+        { label: 'All Requests', id: 'ALL_REQUESTS' },
+        { label: 'My Requests', id: 'OWNED_REQUESTS' },
+        { label: 'Participated', id: 'PARTICIPATED_REQUESTS' },
+        { label: 'Approver', id: 'APPROVER' },
+      ],
+      value: () => 'ALL_REQUESTS',
+      condition: { field: 'operation', value: 'get_requests' },
+    },
+    {
+      id: 'requestStatus',
+      title: 'Request Status',
+      type: 'dropdown',
+      options: [
+        { label: 'All', id: 'ALL_REQUESTS' },
+        { label: 'Open', id: 'OPEN_REQUESTS' },
+        { label: 'Closed', id: 'CLOSED_REQUESTS' },
+      ],
+      value: () => 'ALL_REQUESTS',
+      condition: { field: 'operation', value: 'get_requests' },
+    },
+    {
+      id: 'searchTerm',
+      title: 'Search Term',
+      type: 'short-input',
+      placeholder: 'Search requests',
+      condition: { field: 'operation', value: 'get_requests' },
+    },
+    {
+      id: 'includeCount',
+      title: 'Include Issue Count',
+      type: 'dropdown',
+      options: [
+        { label: 'No', id: 'false' },
+        { label: 'Yes', id: 'true' },
+      ],
+      value: () => 'false',
+      condition: { field: 'operation', value: 'get_queues' },
+    },
+    {
+      id: 'organizationName',
+      title: 'Organization Name',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Enter organization name',
+      condition: { field: 'operation', value: 'create_organization' },
+    },
+    {
+      id: 'organizationId',
+      title: 'Organization ID',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Enter organization ID',
+      condition: { field: 'operation', value: 'add_organization' },
+    },
+    {
+      id: 'participantAccountIds',
+      title: 'Account IDs',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Comma-separated account IDs',
+      condition: { field: 'operation', value: 'add_participants' },
+    },
+    {
+      id: 'approvalId',
+      title: 'Approval ID',
+      type: 'short-input',
+      required: true,
+      placeholder: 'Enter approval ID',
+      condition: { field: 'operation', value: 'answer_approval' },
+    },
+    {
+      id: 'approvalDecision',
+      title: 'Decision',
+      type: 'dropdown',
+      options: [
+        { label: 'Approve', id: 'approve' },
+        { label: 'Decline', id: 'decline' },
+      ],
+      value: () => 'approve',
+      condition: { field: 'operation', value: 'answer_approval' },
+    },
+    {
+      id: 'startIndex',
+      title: 'Start Index',
+      type: 'short-input',
+      placeholder: 'Pagination start index (default: 0)',
+      mode: 'advanced',
+      condition: { field: 'operation', value: [...PAGINATED_OPERATIONS] },
+    },
+    {
+      id: 'maxResults',
+      title: 'Max Results',
+      type: 'short-input',
+      placeholder: 'Maximum results (default: 50)',
+      mode: 'advanced',
+      condition: { field: 'operation', value: [...PAGINATED_OPERATIONS] },
+    },
+    {
+      id: 'assetSchemaId',
+      title: 'Schema ID',
+      type: 'short-input',
+      placeholder: 'e.g., 1',
+      required: { field: 'operation', value: ['get_object_schema', 'list_object_types'] },
+      condition: { field: 'operation', value: ['get_object_schema', 'list_object_types'] },
+    },
+    {
+      id: 'assetObjectTypeId',
+      title: 'Object Type ID',
+      type: 'short-input',
+      placeholder: 'e.g., 23',
+      required: { field: 'operation', value: ['get_object_type_attributes', 'create_object'] },
+      condition: {
+        field: 'operation',
+        value: [
+          'get_object_type_attributes',
+          'create_object',
+          'update_object',
+          'search_objects_aql',
+        ],
+      },
+    },
+    {
+      id: 'assetObjectId',
+      title: 'Object ID',
+      type: 'short-input',
+      placeholder: 'e.g., 1234',
+      required: { field: 'operation', value: ['get_object', 'update_object', 'delete_object'] },
+      condition: { field: 'operation', value: ['get_object', 'update_object', 'delete_object'] },
+    },
+    {
+      id: 'assetQlQuery',
+      title: 'AQL Query',
+      type: 'long-input',
+      placeholder: 'objectType = "Host" AND "Operating System" = "Ubuntu"',
+      required: { field: 'operation', value: 'search_objects_aql' },
+      condition: { field: 'operation', value: 'search_objects_aql' },
+      wandConfig: {
+        enabled: true,
+        placeholder: 'Describe which assets to find',
+        prompt:
+          'Generate an Atlassian Assets AQL (Assets Query Language) query for the user request. Use attribute = "value" comparisons, AND/OR, IN, LIKE, and objectType filters. Example: objectType = "Host" AND Status = "Running". Return ONLY the AQL query - no explanations, no extra text.',
+      },
+    },
+    {
+      id: 'assetAttributes',
+      title: 'Attributes',
+      type: 'long-input',
+      placeholder:
+        '[{ "objectTypeAttributeId": "135", "objectAttributeValues": [{ "value": "Server-1" }] }]',
+      required: { field: 'operation', value: ['create_object', 'update_object'] },
+      condition: { field: 'operation', value: ['create_object', 'update_object'] },
+      wandConfig: {
+        enabled: true,
+        generationType: 'json-object',
+        placeholder: 'Describe the attribute values to set',
+        prompt:
+          'Generate a JSON array of Atlassian Assets object attributes. Each element is { "objectTypeAttributeId": "<id>", "objectAttributeValues": [{ "value": "<value>" }] }. Use objectTypeAttributeId values from the object type attribute definitions. Return ONLY the JSON array - no explanations, no extra text.',
+      },
+    },
+    {
+      id: 'assetStartAt',
+      title: 'Start At',
+      type: 'short-input',
+      placeholder: 'Pagination start index (default: 0)',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'list_object_schemas' },
+    },
+    {
+      id: 'assetMaxResults',
+      title: 'Max Results',
+      type: 'short-input',
+      placeholder: 'Maximum schemas to return (default: 25)',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'list_object_schemas' },
+    },
+    {
+      id: 'assetIncludeCounts',
+      title: 'Include Counts',
+      type: 'dropdown',
+      options: [
+        { label: 'No', id: 'false' },
+        { label: 'Yes', id: 'true' },
+      ],
+      value: () => 'false',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'list_object_schemas' },
+    },
+    {
+      id: 'assetExcludeAbstract',
+      title: 'Exclude Abstract Types',
+      type: 'dropdown',
+      options: [
+        { label: 'No', id: 'false' },
+        { label: 'Yes', id: 'true' },
+      ],
+      value: () => 'false',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'list_object_types' },
+    },
+    {
+      id: 'assetOnlyValueEditable',
+      title: 'Only Editable Attributes',
+      type: 'dropdown',
+      options: [
+        { label: 'No', id: 'false' },
+        { label: 'Yes', id: 'true' },
+      ],
+      value: () => 'false',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'get_object_type_attributes' },
+    },
+    {
+      id: 'assetAttributeQuery',
+      title: 'Attribute Filter',
+      type: 'short-input',
+      placeholder: 'Filter attributes by name',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'get_object_type_attributes' },
+    },
+    {
+      id: 'assetPage',
+      title: 'Page',
+      type: 'short-input',
+      placeholder: 'Page number (default: 1)',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'search_objects_aql' },
+    },
+    {
+      id: 'assetResultsPerPage',
+      title: 'Results Per Page',
+      type: 'short-input',
+      placeholder: 'Results per page (default: 25)',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'search_objects_aql' },
+    },
+    {
+      id: 'assetIncludeAttributes',
+      title: 'Include Attributes',
+      type: 'dropdown',
+      options: [
+        { label: 'Yes', id: 'true' },
+        { label: 'No', id: 'false' },
+      ],
+      value: () => 'true',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'search_objects_aql' },
+    },
+    {
+      id: 'assetObjectSchemaId',
+      title: 'Object Schema ID',
+      type: 'short-input',
+      placeholder: 'Scope the search to a schema ID',
+      mode: 'advanced',
+      condition: { field: 'operation', value: 'search_objects_aql' },
+    },
+    {
+      id: 'assetWorkspaceId',
+      title: 'Assets Workspace ID',
+      type: 'short-input',
+      placeholder: 'Override the auto-resolved Assets workspace',
+      mode: 'advanced',
+      condition: {
+        field: 'operation',
+        value: [
+          'list_object_schemas',
+          'get_object_schema',
+          'list_object_types',
+          'get_object_type_attributes',
+          'search_objects_aql',
+          'get_object',
+          'create_object',
+          'update_object',
+          'delete_object',
+        ],
+      },
+    },
+    ...getTrigger('jsm_request_created').subBlocks,
+    ...getTrigger('jsm_request_updated').subBlocks,
+    ...getTrigger('jsm_request_commented').subBlocks,
+    ...getTrigger('jsm_request_resolved').subBlocks,
+    ...getTrigger('jsm_webhook').subBlocks,
+  ],
+  tools: {
+    access: [
+      'jsm_get_service_desks',
+      'jsm_get_request_types',
+      'jsm_create_request',
+      'jsm_get_request',
+      'jsm_get_requests',
+      'jsm_add_comment',
+      'jsm_get_comments',
+      'jsm_get_customers',
+      'jsm_add_customer',
+      'jsm_get_organizations',
+      'jsm_create_organization',
+      'jsm_add_organization',
+      'jsm_get_queues',
+      'jsm_get_sla',
+      'jsm_get_transitions',
+      'jsm_transition_request',
+      'jsm_get_participants',
+      'jsm_add_participants',
+      'jsm_get_approvals',
+      'jsm_answer_approval',
+      'jsm_get_request_type_fields',
+      'jsm_get_form_templates',
+      'jsm_get_form_structure',
+      'jsm_get_issue_forms',
+      'jsm_attach_form',
+      'jsm_save_form_answers',
+      'jsm_submit_form',
+      'jsm_get_form',
+      'jsm_get_form_answers',
+      'jsm_reopen_form',
+      'jsm_delete_form',
+      'jsm_externalise_form',
+      'jsm_internalise_form',
+      'jsm_copy_forms',
+      'jsm_list_object_schemas',
+      'jsm_get_object_schema',
+      'jsm_list_object_types',
+      'jsm_get_object_type_attributes',
+      'jsm_search_objects_aql',
+      'jsm_get_object',
+      'jsm_create_object',
+      'jsm_update_object',
+      'jsm_delete_object',
+    ],
+    config: {
+      tool: (params) => {
+        switch (params.operation) {
+          case 'get_service_desks':
+            return 'jsm_get_service_desks'
+          case 'get_request_types':
+            return 'jsm_get_request_types'
+          case 'create_request':
+            return 'jsm_create_request'
+          case 'get_request':
+            return 'jsm_get_request'
+          case 'get_requests':
+            return 'jsm_get_requests'
+          case 'add_comment':
+            return 'jsm_add_comment'
+          case 'get_comments':
+            return 'jsm_get_comments'
+          case 'get_customers':
+            return 'jsm_get_customers'
+          case 'add_customer':
+            return 'jsm_add_customer'
+          case 'get_organizations':
+            return 'jsm_get_organizations'
+          case 'create_organization':
+            return 'jsm_create_organization'
+          case 'add_organization':
+            return 'jsm_add_organization'
+          case 'get_queues':
+            return 'jsm_get_queues'
+          case 'get_sla':
+            return 'jsm_get_sla'
+          case 'get_transitions':
+            return 'jsm_get_transitions'
+          case 'transition_request':
+            return 'jsm_transition_request'
+          case 'get_participants':
+            return 'jsm_get_participants'
+          case 'add_participants':
+            return 'jsm_add_participants'
+          case 'get_approvals':
+            return 'jsm_get_approvals'
+          case 'answer_approval':
+            return 'jsm_answer_approval'
+          case 'get_request_type_fields':
+            return 'jsm_get_request_type_fields'
+          case 'get_form_templates':
+            return 'jsm_get_form_templates'
+          case 'get_form_structure':
+            return 'jsm_get_form_structure'
+          case 'get_issue_forms':
+            return 'jsm_get_issue_forms'
+          case 'attach_form':
+            return 'jsm_attach_form'
+          case 'save_form_answers':
+            return 'jsm_save_form_answers'
+          case 'submit_form':
+            return 'jsm_submit_form'
+          case 'get_form':
+            return 'jsm_get_form'
+          case 'get_form_answers':
+            return 'jsm_get_form_answers'
+          case 'reopen_form':
+            return 'jsm_reopen_form'
+          case 'delete_form':
+            return 'jsm_delete_form'
+          case 'externalise_form':
+            return 'jsm_externalise_form'
+          case 'internalise_form':
+            return 'jsm_internalise_form'
+          case 'copy_forms':
+            return 'jsm_copy_forms'
+          case 'list_object_schemas':
+            return 'jsm_list_object_schemas'
+          case 'get_object_schema':
+            return 'jsm_get_object_schema'
+          case 'list_object_types':
+            return 'jsm_list_object_types'
+          case 'get_object_type_attributes':
+            return 'jsm_get_object_type_attributes'
+          case 'search_objects_aql':
+            return 'jsm_search_objects_aql'
+          case 'get_object':
+            return 'jsm_get_object'
+          case 'create_object':
+            return 'jsm_create_object'
+          case 'update_object':
+            return 'jsm_update_object'
+          case 'delete_object':
+            return 'jsm_delete_object'
+          default:
+            return 'jsm_get_service_desks'
+        }
+      },
+      params: (params) => {
+        const baseParams = {
+          oauthCredential: params.oauthCredential,
+          domain: params.domain,
+        }
+
+        // Assets tools accept an optional workspaceId override; when omitted the
+        // route resolves the site's single Assets workspace automatically.
+        const assetBaseParams = {
+          ...baseParams,
+          workspaceId: params.assetWorkspaceId || undefined,
+        }
+
+        switch (params.operation) {
+          case 'get_service_desks':
+            return {
+              ...baseParams,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'get_request_types':
+            if (!params.serviceDeskId) {
+              throw new Error('Service Desk ID is required')
+            }
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              searchQuery: params.searchQuery,
+              groupId: params.groupId,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'create_request':
+            if (!params.serviceDeskId) {
+              throw new Error('Service Desk ID is required')
+            }
+            if (!params.requestTypeId) {
+              throw new Error('Request Type ID is required')
+            }
+            if (!params.summary && !params.formAnswers) {
+              throw new Error('Summary is required (unless using Form Answers)')
+            }
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              requestTypeId: params.requestTypeId,
+              summary: params.summary,
+              description: params.description,
+              raiseOnBehalfOf: params.raiseOnBehalfOf,
+              requestParticipants: params.requestParticipants,
+              channel: params.channel,
+              requestFieldValues: params.requestFieldValues
+                ? (() => {
+                    try {
+                      return JSON.parse(params.requestFieldValues)
+                    } catch {
+                      throw new Error('requestFieldValues must be valid JSON')
+                    }
+                  })()
+                : undefined,
+              formAnswers: params.formAnswers
+                ? (() => {
+                    try {
+                      return JSON.parse(params.formAnswers)
+                    } catch {
+                      throw new Error('formAnswers must be valid JSON')
+                    }
+                  })()
+                : undefined,
+            }
+          case 'get_request':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              expand: params.expand,
+            }
+          case 'get_requests':
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              requestOwnership: params.requestOwnership,
+              requestStatus: params.requestStatus,
+              searchTerm: params.searchTerm,
+              expand: params.expand,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'add_comment':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.commentBody) {
+              throw new Error('Comment body is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              body: params.commentBody,
+              isPublic: params.isPublic === 'true',
+            }
+          case 'get_comments':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              expand: params.expand,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'get_customers':
+            if (!params.serviceDeskId) {
+              throw new Error('Service Desk ID is required')
+            }
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              query: params.customerQuery,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'add_customer': {
+            if (!params.serviceDeskId) {
+              throw new Error('Service Desk ID is required')
+            }
+            if (!params.accountIds) {
+              throw new Error('Account IDs are required')
+            }
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              accountIds: params.accountIds,
+            }
+          }
+          case 'get_organizations':
+            if (!params.serviceDeskId) {
+              throw new Error('Service Desk ID is required')
+            }
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'get_queues':
+            if (!params.serviceDeskId) {
+              throw new Error('Service Desk ID is required')
+            }
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              includeCount: params.includeCount === 'true',
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'get_sla':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'get_transitions':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'transition_request':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.transitionId) {
+              throw new Error('Transition ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              transitionId: params.transitionId,
+              comment: params.transitionComment,
+            }
+          case 'create_organization':
+            if (!params.organizationName) {
+              throw new Error('Organization name is required')
+            }
+            return {
+              ...baseParams,
+              name: params.organizationName,
+            }
+          case 'add_organization':
+            if (!params.serviceDeskId) {
+              throw new Error('Service Desk ID is required')
+            }
+            if (!params.organizationId) {
+              throw new Error('Organization ID is required')
+            }
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              organizationId: params.organizationId,
+            }
+          case 'get_participants':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'add_participants':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.participantAccountIds) {
+              throw new Error('Account IDs are required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              accountIds: params.participantAccountIds,
+            }
+          case 'get_approvals':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              start: toOptionalInt(params.startIndex),
+              limit: toOptionalInt(params.maxResults),
+            }
+          case 'answer_approval':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.approvalId) {
+              throw new Error('Approval ID is required')
+            }
+            if (!params.approvalDecision) {
+              throw new Error('Decision is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              approvalId: params.approvalId,
+              decision: params.approvalDecision,
+            }
+          case 'get_request_type_fields':
+            if (!params.serviceDeskId) {
+              throw new Error('Service Desk ID is required')
+            }
+            if (!params.requestTypeId) {
+              throw new Error('Request Type ID is required')
+            }
+            return {
+              ...baseParams,
+              serviceDeskId: params.serviceDeskId,
+              requestTypeId: params.requestTypeId,
+            }
+          case 'get_form_templates':
+            if (!params.projectIdOrKey) {
+              throw new Error('Project ID or key is required')
+            }
+            return {
+              ...baseParams,
+              projectIdOrKey: params.projectIdOrKey,
+            }
+          case 'get_form_structure':
+            if (!params.projectIdOrKey) {
+              throw new Error('Project ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            return {
+              ...baseParams,
+              projectIdOrKey: params.projectIdOrKey,
+              formId: params.formId,
+            }
+          case 'get_issue_forms':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+            }
+          case 'attach_form':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formTemplateId) {
+              throw new Error('Form template ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formTemplateId: params.formTemplateId,
+            }
+          case 'save_form_answers':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            if (!params.formAnswers) {
+              throw new Error('Form answers are required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formId: params.formId,
+              answers: (() => {
+                try {
+                  return JSON.parse(params.formAnswers)
+                } catch {
+                  throw new Error('formAnswers must be valid JSON')
+                }
+              })(),
+            }
+          case 'submit_form':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formId: params.formId,
+            }
+          case 'get_form_answers':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formId: params.formId,
+            }
+          case 'reopen_form':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formId: params.formId,
+            }
+          case 'get_form':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formId: params.formId,
+            }
+          case 'delete_form':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formId: params.formId,
+            }
+          case 'externalise_form':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formId: params.formId,
+            }
+          case 'internalise_form':
+            if (!params.issueIdOrKey) {
+              throw new Error('Issue ID or key is required')
+            }
+            if (!params.formId) {
+              throw new Error('Form ID is required')
+            }
+            return {
+              ...baseParams,
+              issueIdOrKey: params.issueIdOrKey,
+              formId: params.formId,
+            }
+          case 'copy_forms':
+            if (!params.sourceIssueIdOrKey) {
+              throw new Error('Source issue ID or key is required')
+            }
+            if (!params.targetIssueIdOrKey) {
+              throw new Error('Target issue ID or key is required')
+            }
+            return {
+              ...baseParams,
+              sourceIssueIdOrKey: params.sourceIssueIdOrKey,
+              targetIssueIdOrKey: params.targetIssueIdOrKey,
+              formIds: params.formIds
+                ? (() => {
+                    try {
+                      const parsed = JSON.parse(params.formIds)
+                      if (!Array.isArray(parsed)) {
+                        throw new Error('formIds must be a JSON array')
+                      }
+                      return parsed
+                    } catch (e) {
+                      throw e instanceof Error && e.message === 'formIds must be a JSON array'
+                        ? e
+                        : new Error('formIds must be valid JSON array')
+                    }
+                  })()
+                : undefined,
+            }
+          case 'list_object_schemas':
+            return {
+              ...assetBaseParams,
+              startAt: toOptionalInt(params.assetStartAt),
+              maxResults: toOptionalInt(params.assetMaxResults),
+              includeCounts: params.assetIncludeCounts === 'true' ? true : undefined,
+            }
+          case 'get_object_schema':
+            if (!params.assetSchemaId) {
+              throw new Error('Schema ID is required')
+            }
+            return { ...assetBaseParams, schemaId: params.assetSchemaId }
+          case 'list_object_types':
+            if (!params.assetSchemaId) {
+              throw new Error('Schema ID is required')
+            }
+            return {
+              ...assetBaseParams,
+              schemaId: params.assetSchemaId,
+              excludeAbstract: params.assetExcludeAbstract === 'true' ? true : undefined,
+            }
+          case 'get_object_type_attributes':
+            if (!params.assetObjectTypeId) {
+              throw new Error('Object type ID is required')
+            }
+            return {
+              ...assetBaseParams,
+              objectTypeId: params.assetObjectTypeId,
+              onlyValueEditable: params.assetOnlyValueEditable === 'true' ? true : undefined,
+              query: params.assetAttributeQuery || undefined,
+            }
+          case 'search_objects_aql':
+            if (!params.assetQlQuery) {
+              throw new Error('AQL query is required')
+            }
+            return {
+              ...assetBaseParams,
+              qlQuery: params.assetQlQuery,
+              page: toOptionalInt(params.assetPage),
+              resultsPerPage: toOptionalInt(params.assetResultsPerPage),
+              includeAttributes: params.assetIncludeAttributes === 'false' ? false : undefined,
+              objectTypeId: params.assetObjectTypeId || undefined,
+              objectSchemaId: params.assetObjectSchemaId || undefined,
+            }
+          case 'get_object':
+            if (!params.assetObjectId) {
+              throw new Error('Object ID is required')
+            }
+            return { ...assetBaseParams, objectId: params.assetObjectId }
+          case 'create_object':
+            if (!params.assetObjectTypeId) {
+              throw new Error('Object type ID is required')
+            }
+            return {
+              ...assetBaseParams,
+              objectTypeId: params.assetObjectTypeId,
+              attributes: parseAssetAttributes(params.assetAttributes),
+            }
+          case 'update_object':
+            if (!params.assetObjectId) {
+              throw new Error('Object ID is required')
+            }
+            return {
+              ...assetBaseParams,
+              objectId: params.assetObjectId,
+              attributes: parseAssetAttributes(params.assetAttributes),
+              objectTypeId: params.assetObjectTypeId || undefined,
+            }
+          case 'delete_object':
+            if (!params.assetObjectId) {
+              throw new Error('Object ID is required')
+            }
+            return { ...assetBaseParams, objectId: params.assetObjectId }
+          default:
+            return baseParams
+        }
+      },
+    },
+  },
+  inputs: {
+    operation: { type: 'string', description: 'Operation to perform' },
+    domain: { type: 'string', description: 'Jira domain' },
+    oauthCredential: { type: 'string', description: 'Jira Service Management access token' },
+    serviceDeskId: { type: 'string', description: 'Service desk ID' },
+    requestTypeId: { type: 'string', description: 'Request type ID' },
+    issueIdOrKey: { type: 'string', description: 'Issue ID or key' },
+    summary: { type: 'string', description: 'Request summary' },
+    description: { type: 'string', description: 'Request description' },
+    raiseOnBehalfOf: { type: 'string', description: 'Account ID to raise request on behalf of' },
+    commentBody: { type: 'string', description: 'Comment text' },
+    isPublic: { type: 'string', description: 'Whether comment is public or internal' },
+    accountIds: { type: 'string', description: 'Comma-separated Atlassian account IDs' },
+    emails: {
+      type: 'string',
+      description: 'Comma-separated email addresses',
+    },
+    customerQuery: { type: 'string', description: 'Customer search query' },
+    transitionId: { type: 'string', description: 'Transition ID' },
+    transitionComment: { type: 'string', description: 'Transition comment' },
+    requestOwnership: { type: 'string', description: 'Request ownership filter' },
+    requestStatus: { type: 'string', description: 'Request status filter' },
+    searchTerm: { type: 'string', description: 'Search term for requests' },
+    includeCount: { type: 'string', description: 'Include issue count for queues' },
+    startIndex: { type: 'string', description: 'Pagination start index' },
+    maxResults: { type: 'string', description: 'Maximum results to return' },
+    organizationName: { type: 'string', description: 'Organization name' },
+    organizationId: { type: 'string', description: 'Organization ID' },
+    participantAccountIds: {
+      type: 'string',
+      description: 'Comma-separated account IDs for participants',
+    },
+    approvalId: { type: 'string', description: 'Approval ID' },
+    approvalDecision: { type: 'string', description: 'Approval decision (approve/decline)' },
+    requestParticipants: {
+      type: 'string',
+      description: 'Comma-separated account IDs for request participants',
+    },
+    channel: { type: 'string', description: 'Channel (e.g., portal, email)' },
+    requestFieldValues: { type: 'string', description: 'JSON object of request field values' },
+    formAnswers: {
+      type: 'string',
+      description: 'JSON object of form answers for form-based request types',
+    },
+    projectIdOrKey: { type: 'string', description: 'Jira project ID or key' },
+    formId: { type: 'string', description: 'Form ID (UUID)' },
+    formTemplateId: { type: 'string', description: 'Form template UUID' },
+    sourceIssueIdOrKey: { type: 'string', description: 'Source issue ID or key for copy' },
+    targetIssueIdOrKey: { type: 'string', description: 'Target issue ID or key for copy' },
+    formIds: { type: 'string', description: 'JSON array of form UUIDs to copy' },
+    searchQuery: { type: 'string', description: 'Filter request types by name' },
+    groupId: { type: 'string', description: 'Filter by request type group ID' },
+    expand: { type: 'string', description: 'Comma-separated fields to expand' },
+    assetSchemaId: { type: 'string', description: 'Assets object schema ID' },
+    assetObjectTypeId: { type: 'string', description: 'Assets object type ID' },
+    assetObjectId: { type: 'string', description: 'Assets object ID' },
+    assetQlQuery: { type: 'string', description: 'AQL query string' },
+    assetAttributes: { type: 'string', description: 'JSON array of Assets object attributes' },
+    assetStartAt: { type: 'string', description: 'Schema pagination start index' },
+    assetMaxResults: { type: 'string', description: 'Maximum schemas to return' },
+    assetIncludeCounts: { type: 'string', description: 'Include object/type counts per schema' },
+    assetExcludeAbstract: { type: 'string', description: 'Exclude abstract object types' },
+    assetOnlyValueEditable: { type: 'string', description: 'Return only editable attributes' },
+    assetAttributeQuery: { type: 'string', description: 'Filter attributes by name' },
+    assetPage: { type: 'string', description: 'AQL search page number' },
+    assetResultsPerPage: { type: 'string', description: 'AQL search results per page' },
+    assetIncludeAttributes: { type: 'string', description: 'Include attribute values in results' },
+    assetObjectSchemaId: { type: 'string', description: 'Scope AQL search to a schema ID' },
+    assetWorkspaceId: {
+      type: 'string',
+      description: 'Override the auto-resolved Assets workspace ID',
+    },
+  },
+  outputs: {
+    ts: { type: 'string', description: 'Timestamp of the operation' },
+    success: { type: 'boolean', description: 'Whether the operation succeeded' },
+    serviceDesks: { type: 'json', description: 'Array of service desks' },
+    requestTypes: { type: 'json', description: 'Array of request types' },
+    issueId: { type: 'string', description: 'Issue ID' },
+    issueKey: { type: 'string', description: 'Issue key (e.g., SD-123)' },
+    request: { type: 'json', description: 'Request object' },
+    requests: { type: 'json', description: 'Array of requests' },
+    url: { type: 'string', description: 'URL to the request' },
+    commentId: { type: 'string', description: 'Comment ID' },
+    body: { type: 'string', description: 'Comment body' },
+    isPublic: { type: 'boolean', description: 'Whether comment is public' },
+    comments: { type: 'json', description: 'Array of comments' },
+    customers: { type: 'json', description: 'Array of customers' },
+    organizations: { type: 'json', description: 'Array of organizations' },
+    organizationId: { type: 'string', description: 'Created organization ID' },
+    name: { type: 'string', description: 'Organization name' },
+    queues: { type: 'json', description: 'Array of queues' },
+    slas: { type: 'json', description: 'Array of SLA information' },
+    transitions: { type: 'json', description: 'Array of available transitions' },
+    transitionId: { type: 'string', description: 'Applied transition ID' },
+    participants: { type: 'json', description: 'Array of participants' },
+    approvals: { type: 'json', description: 'Array of approvals' },
+    approval: { type: 'json', description: 'Approval object' },
+    approvalId: { type: 'string', description: 'Approval ID' },
+    decision: { type: 'string', description: 'Approval decision' },
+    total: { type: 'number', description: 'Total count' },
+    isLastPage: { type: 'boolean', description: 'Whether this is the last page' },
+    requestTypeFields: { type: 'json', description: 'Array of request type fields' },
+    canAddRequestParticipants: {
+      type: 'boolean',
+      description: 'Whether participants can be added to this request type',
+    },
+    canRaiseOnBehalfOf: {
+      type: 'boolean',
+      description: 'Whether requests can be raised on behalf of another user',
+    },
+    templates: {
+      type: 'json',
+      description:
+        'Array of form templates (id, name, updated, portalRequestTypeIds, issueCreateIssueTypeIds)',
+    },
+    design: {
+      type: 'json',
+      description:
+        'Full form design with questions (labels, types, choices, validation), layout, conditions, sections, settings',
+    },
+    publish: {
+      type: 'json',
+      description: 'Form publishing and request type configuration',
+    },
+    updated: { type: 'string', description: 'Last updated timestamp' },
+    forms: {
+      type: 'json',
+      description:
+        'Array of forms attached to an issue (id, name, updated, submitted, lock, internal, formTemplateId)',
+    },
+    formId: { type: 'string', description: 'Form instance UUID' },
+    formTemplateId: { type: 'string', description: 'Form template ID' },
+    submitted: { type: 'boolean', description: 'Whether the form has been submitted' },
+    lock: { type: 'boolean', description: 'Whether the form is locked' },
+    internal: { type: 'boolean', description: 'Whether the form is internal only' },
+    state: {
+      type: 'json',
+      description: 'Form state with status (open, submitted, locked)',
+    },
+    status: { type: 'string', description: 'Form status (open, submitted, locked)' },
+    answers: {
+      type: 'json',
+      description:
+        'Array of simplified form answers, each with label, answer, fieldKey, and choice',
+    },
+    deleted: { type: 'boolean', description: 'Whether the form was successfully deleted' },
+    visibility: {
+      type: 'string',
+      description: 'Form visibility (internal or external)',
+    },
+    copiedForms: { type: 'json', description: 'Array of successfully copied forms' },
+    errors: { type: 'json', description: 'Array of errors from copy forms operation' },
+    sourceIssueIdOrKey: { type: 'string', description: 'Source issue ID or key' },
+    targetIssueIdOrKey: { type: 'string', description: 'Target issue ID or key' },
+    schemas: {
+      type: 'json',
+      description: 'Array of Assets object schemas (id, name, objectSchemaKey, status)',
+    },
+    schema: { type: 'json', description: 'Single Assets object schema' },
+    objectTypes: {
+      type: 'json',
+      description: 'Array of Assets object types (id, name, objectSchemaId, objectCount)',
+    },
+    attributes: {
+      type: 'json',
+      description:
+        'Array of object type attribute definitions (id, name, type, minimumCardinality)',
+    },
+    objects: {
+      type: 'json',
+      description: 'Array of Assets objects from an AQL search (id, label, objectKey, attributes)',
+    },
+    object: {
+      type: 'json',
+      description: 'Single Assets object (id, label, objectKey, objectType, attributes)',
+    },
+    objectId: { type: 'string', description: 'Assets object ID (delete operation)' },
+    isLast: { type: 'boolean', description: 'Whether this is the last page of schemas' },
+  },
+  triggers: {
+    enabled: true,
+    available: [
+      'jsm_request_created',
+      'jsm_request_updated',
+      'jsm_request_commented',
+      'jsm_request_resolved',
+      'jsm_webhook',
+    ],
+  },
+}
+
+export const JiraServiceManagementBlockMeta = {
+  tags: ['customer-support', 'ticketing', 'incident-management'],
+  url: 'https://www.atlassian.com/software/jira/service-management',
+  templates: [
+    {
+      icon: JiraServiceManagementIcon,
+      title: 'JSM major incident broadcaster',
+      prompt:
+        'Build a workflow triggered when a major-incident request is created in Jira Service Management that pulls the affected service from PagerDuty, identifies the current on-call, posts a structured incident brief to a Slack war-room channel, and adds the responders as JSM request participants.',
+      modules: ['agent', 'workflows'],
+      category: 'operations',
+      tags: ['devops', 'engineering', 'automation'],
+      alsoIntegrations: ['slack', 'pagerduty'],
+    },
+    {
+      icon: JiraServiceManagementIcon,
+      title: 'JSM request auto-triage',
+      prompt:
+        'Create a workflow triggered by new Jira Service Management requests that classifies the request type, sets the correct priority based on impact and urgency, transitions it to the right initial status, and adds the assignment-group customer organization as a participant.',
+      modules: ['agent', 'workflows'],
+      category: 'operations',
+      tags: ['support', 'automation', 'enterprise'],
+    },
+    {
+      icon: JiraServiceManagementIcon,
+      title: 'JSM approval router',
+      prompt:
+        'Build a workflow that watches Jira Service Management requests for new approval steps, posts a Slack DM to each approver with request context and quick-action buttons, and answers the approval in JSM based on their response while keeping the request in sync.',
+      modules: ['agent', 'workflows'],
+      category: 'operations',
+      tags: ['enterprise', 'automation', 'team'],
+      alsoIntegrations: ['slack'],
+    },
+    {
+      icon: JiraServiceManagementIcon,
+      title: 'JSM form auto-completer',
+      prompt:
+        'Create a workflow that when a Jira Service Management request is created with an attached ProForma form, pre-fills the answers from the requester profile, attached email, and CMDB lookup, and saves the answers so agents only review rather than retype.',
+      modules: ['agent', 'workflows'],
+      category: 'operations',
+      tags: ['automation', 'enterprise'],
+    },
+    {
+      icon: JiraServiceManagementIcon,
+      title: 'JSM weekly service desk report',
+      prompt:
+        'Build a scheduled weekly workflow that pulls Jira Service Management request volume by queue, SLA performance, top request types, and bottleneck assignees, and generates a service desk health report file for the operations review.',
+      modules: ['scheduled', 'agent', 'files', 'workflows'],
+      category: 'operations',
+      tags: ['reporting', 'analysis', 'enterprise'],
+    },
+    {
+      icon: JiraServiceManagementIcon,
+      title: 'JSM-to-ServiceNow bridge',
+      prompt:
+        'Create a workflow that mirrors Jira Service Management incident requests into ServiceNow incident records and vice versa, keeping status, assignment, and comments in sync so teams on either side see the same truth.',
+      modules: ['tables', 'agent', 'workflows'],
+      category: 'operations',
+      tags: ['enterprise', 'sync', 'automation'],
+      alsoIntegrations: ['servicenow'],
+    },
+    {
+      icon: JiraServiceManagementIcon,
+      title: 'JSM self-service deflection bot',
+      prompt:
+        "Create a knowledge base from internal IT docs, then build a Slack agent that answers employee help requests with cited steps and, when it can't resolve the issue, creates a Jira Service Management request with the right request type so nothing falls through.",
+      modules: ['knowledge-base', 'agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'automation', 'team'],
+      alsoIntegrations: ['slack'],
+    },
+  ],
+  skills: [
+    {
+      name: 'raise-service-request',
+      description:
+        'Create a customer request on the right service desk with the correct request type.',
+      content:
+        '# Raise a Service Request\n\nLog an inbound customer request into the correct Jira Service Management queue.\n\n## Steps\n1. Get service desks and identify the right one for the request.\n2. Get request types for that service desk and choose the matching type.\n3. Create the request with a clear summary, description, and any required request-type fields.\n4. Capture the request key and reporter.\n\n## Output\nReturn the request key, the service desk and request type used, and the reporter. Confirm required fields were filled.',
+    },
+    {
+      name: 'respond-and-update-request',
+      description: 'Add a public reply to a customer request and move it to the right status.',
+      content:
+        '# Respond and Update a Request\n\nReply to a customer on their request and advance it.\n\n## Steps\n1. Get the request and read its history and current status.\n2. Add a comment with the response (public to the customer).\n3. Get available transitions and move the request to the appropriate status.\n\n## Output\nReturn the request key, the comment added, and the new status.',
+    },
+    {
+      name: 'sla-breach-watch',
+      description: 'Scan open requests on a queue and flag ones at risk of breaching SLA.',
+      content:
+        '# SLA Breach Watch\n\nSurface requests that are about to miss their SLA so the team can act.\n\n## Steps\n1. Get the service desk and its queues, then get requests in the target queue.\n2. For each request, get its SLA information and time remaining.\n3. Flag requests that are breached or close to breaching their target.\n\n## Output\nReturn a prioritized list of at-risk requests with key, summary, SLA metric, and time remaining, worst first.',
+    },
+  ],
+} as const satisfies BlockMeta

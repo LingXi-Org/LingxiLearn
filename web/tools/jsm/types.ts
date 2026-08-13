@@ -1,0 +1,1308 @@
+import type { ToolResponse } from '@/tools/types'
+
+/** Reusable date output properties with ISO 8601, friendly, and epoch formats */
+export const DATE_OUTPUT_PROPERTIES = {
+  iso8601: { type: 'string', description: 'ISO 8601 formatted date' },
+  friendly: { type: 'string', description: 'Human-readable date' },
+  epochMillis: { type: 'number', description: 'Unix epoch milliseconds' },
+} as const
+
+/** Reusable user output properties */
+export const USER_OUTPUT_PROPERTIES = {
+  accountId: { type: 'string', description: 'Atlassian account ID' },
+  displayName: { type: 'string', description: 'User display name' },
+  emailAddress: { type: 'string', description: 'User email address', optional: true },
+  active: { type: 'boolean', description: 'Whether the account is active' },
+} as const
+
+/** Output properties for a service desk item */
+export const SERVICE_DESK_ITEM_PROPERTIES = {
+  id: { type: 'string', description: 'Service desk ID' },
+  projectId: { type: 'string', description: 'Associated Jira project ID' },
+  projectName: { type: 'string', description: 'Associated project name' },
+  projectKey: { type: 'string', description: 'Associated project key' },
+  name: { type: 'string', description: 'Service desk name' },
+  description: { type: 'string', description: 'Service desk description', optional: true },
+  leadDisplayName: { type: 'string', description: 'Project lead display name', optional: true },
+} as const
+
+/** Output properties for a request type item */
+export const REQUEST_TYPE_ITEM_PROPERTIES = {
+  id: { type: 'string', description: 'Request type ID' },
+  name: { type: 'string', description: 'Request type name' },
+  description: { type: 'string', description: 'Request type description' },
+  helpText: { type: 'string', description: 'Help text for customers', optional: true },
+  issueTypeId: { type: 'string', description: 'Associated Jira issue type ID' },
+  serviceDeskId: { type: 'string', description: 'Parent service desk ID' },
+  groupIds: { type: 'json', description: 'Groups this request type belongs to' },
+  icon: { type: 'json', description: 'Request type icon with id and links', optional: true },
+  restrictionStatus: { type: 'string', description: 'OPEN or RESTRICTED', optional: true },
+} as const
+
+/** Output properties for a request field value */
+export const REQUEST_FIELD_VALUE_PROPERTIES = {
+  fieldId: { type: 'string', description: 'Field identifier' },
+  label: { type: 'string', description: 'Human-readable field label' },
+  value: { type: 'json', description: 'Field value' },
+  renderedValue: { type: 'json', description: 'HTML-rendered field value', optional: true },
+} as const
+
+/** Output properties for a request status */
+export const REQUEST_STATUS_PROPERTIES = {
+  status: { type: 'string', description: 'Status name' },
+  statusCategory: { type: 'string', description: 'Status category (NEW, INDETERMINATE, DONE)' },
+  statusDate: {
+    type: 'json',
+    description: 'Status change date with iso8601, friendly, epochMillis',
+  },
+} as const
+
+/** Output properties for a request (ticket) item */
+export const REQUEST_ITEM_PROPERTIES = {
+  issueId: { type: 'string', description: 'Jira issue ID' },
+  issueKey: { type: 'string', description: 'Issue key (e.g., SD-123)' },
+  requestTypeId: { type: 'string', description: 'Request type ID' },
+  serviceDeskId: { type: 'string', description: 'Service desk ID' },
+  createdDate: {
+    type: 'json',
+    description: 'Creation date with iso8601, friendly, epochMillis',
+  },
+  currentStatus: {
+    type: 'object',
+    description: 'Current request status',
+    properties: REQUEST_STATUS_PROPERTIES,
+  },
+  reporter: {
+    type: 'object',
+    description: 'Reporter user details',
+    properties: USER_OUTPUT_PROPERTIES,
+  },
+  requestFieldValues: {
+    type: 'array',
+    description: 'Request field values',
+    items: {
+      type: 'object',
+      properties: REQUEST_FIELD_VALUE_PROPERTIES,
+    },
+  },
+} as const
+
+/** Output properties for a comment item */
+export const COMMENT_ITEM_PROPERTIES = {
+  id: { type: 'string', description: 'Comment ID' },
+  body: { type: 'string', description: 'Comment body text' },
+  public: { type: 'boolean', description: 'Whether the comment is public' },
+  author: {
+    type: 'object',
+    description: 'Comment author',
+    properties: USER_OUTPUT_PROPERTIES,
+  },
+  created: {
+    type: 'json',
+    description: 'Creation date with iso8601, friendly, epochMillis',
+  },
+  renderedBody: {
+    type: 'json',
+    description: 'HTML-rendered comment body (when expand=renderedBody)',
+    optional: true,
+  },
+} as const
+
+/** Output properties for a queue item */
+export const QUEUE_ITEM_PROPERTIES = {
+  id: { type: 'string', description: 'Queue ID' },
+  name: { type: 'string', description: 'Queue name' },
+  jql: { type: 'string', description: 'JQL filter for the queue' },
+  fields: { type: 'json', description: 'Fields displayed in the queue' },
+  issueCount: { type: 'number', description: 'Number of issues in the queue' },
+} as const
+
+/** Output properties for an SLA item */
+export const SLA_ITEM_PROPERTIES = {
+  id: { type: 'string', description: 'SLA metric ID' },
+  name: { type: 'string', description: 'SLA metric name' },
+  completedCycles: {
+    type: 'json',
+    description:
+      'Completed SLA cycles with startTime, stopTime, breachTime, breached, goalDuration, elapsedTime, remainingTime (each time as DateDTO, durations as DurationDTO)',
+  },
+  ongoingCycle: {
+    type: 'json',
+    description:
+      'Ongoing SLA cycle with startTime, breachTime, breached, paused, withinCalendarHours, goalDuration, elapsedTime, remainingTime',
+    optional: true,
+  },
+} as const
+
+/** Output properties for a transition item */
+export const TRANSITION_ITEM_PROPERTIES = {
+  id: { type: 'string', description: 'Transition ID' },
+  name: { type: 'string', description: 'Transition name' },
+} as const
+
+/** Output properties for a participant item */
+export const PARTICIPANT_ITEM_PROPERTIES = {
+  accountId: { type: 'string', description: 'Atlassian account ID' },
+  displayName: { type: 'string', description: 'Display name' },
+  emailAddress: { type: 'string', description: 'Email address', optional: true },
+  active: { type: 'boolean', description: 'Whether the account is active' },
+} as const
+
+/** Output properties for an organization item */
+export const ORGANIZATION_ITEM_PROPERTIES = {
+  id: { type: 'string', description: 'Organization ID' },
+  name: { type: 'string', description: 'Organization name' },
+} as const
+
+/** Output properties for a customer item */
+export const CUSTOMER_ITEM_PROPERTIES = {
+  accountId: { type: 'string', description: 'Atlassian account ID' },
+  displayName: { type: 'string', description: 'Display name' },
+  emailAddress: { type: 'string', description: 'Email address' },
+  active: { type: 'boolean', description: 'Whether the account is active' },
+  timeZone: { type: 'string', description: 'User timezone', optional: true },
+} as const
+
+/** Output properties for an approver item */
+export const APPROVER_ITEM_PROPERTIES = {
+  approver: {
+    type: 'object',
+    description: 'Approver user details',
+    properties: USER_OUTPUT_PROPERTIES,
+  },
+  approverDecision: { type: 'string', description: 'Decision: pending, approved, or declined' },
+} as const
+
+/** Output properties for an approval item */
+export const APPROVAL_ITEM_PROPERTIES = {
+  id: { type: 'string', description: 'Approval ID' },
+  name: { type: 'string', description: 'Approval description' },
+  finalDecision: { type: 'string', description: 'Final decision: pending, approved, or declined' },
+  canAnswerApproval: { type: 'boolean', description: 'Whether current user can respond' },
+  approvers: {
+    type: 'array',
+    description: 'List of approvers with their decisions',
+    items: {
+      type: 'object',
+      properties: APPROVER_ITEM_PROPERTIES,
+    },
+  },
+  createdDate: {
+    type: 'json',
+    description: 'Creation date',
+    optional: true,
+  },
+  completedDate: {
+    type: 'json',
+    description: 'Completion date',
+    optional: true,
+  },
+} as const
+
+/** Output properties for a request type field */
+export const REQUEST_TYPE_FIELD_PROPERTIES = {
+  fieldId: {
+    type: 'string',
+    description: 'Field identifier (e.g., summary, description, customfield_10010)',
+  },
+  name: { type: 'string', description: 'Human-readable field name' },
+  description: { type: 'string', description: 'Help text for the field', optional: true },
+  required: { type: 'boolean', description: 'Whether the field is required' },
+  visible: { type: 'boolean', description: 'Whether the field is visible' },
+  validValues: { type: 'json', description: 'Allowed values for select fields' },
+  presetValues: { type: 'json', description: 'Pre-populated values', optional: true },
+  defaultValues: { type: 'json', description: 'Default values for the field', optional: true },
+  jiraSchema: {
+    type: 'json',
+    description: 'Jira field schema with type, system, custom, customId',
+  },
+} as const
+
+/** Output properties for a FormTemplateIndexEntry (list endpoint) per OpenAPI spec */
+export const FORM_TEMPLATE_PROPERTIES = {
+  id: { type: 'string', description: 'Form template ID (UUID)' },
+  name: { type: 'string', description: 'Form template name' },
+  updated: { type: 'string', description: 'Last updated timestamp (ISO 8601)' },
+  issueCreateIssueTypeIds: {
+    type: 'json',
+    description: 'Issue type IDs that auto-attach this form on issue create',
+  },
+  issueCreateRequestTypeIds: {
+    type: 'json',
+    description: 'Request type IDs that auto-attach this form on issue create',
+  },
+  portalRequestTypeIds: {
+    type: 'json',
+    description: 'Request type IDs that show this form on the customer portal',
+  },
+  recommendedIssueRequestTypeIds: {
+    type: 'json',
+    description: 'Request type IDs that recommend this form',
+  },
+} as const
+
+/** Output properties for a FormIndexEntry (issue forms list endpoint) per OpenAPI spec */
+export const ISSUE_FORM_PROPERTIES = {
+  id: { type: 'string', description: 'Form instance ID (UUID)' },
+  name: { type: 'string', description: 'Form name' },
+  updated: { type: 'string', description: 'Last updated timestamp (ISO 8601)' },
+  submitted: { type: 'boolean', description: 'Whether the form has been submitted' },
+  lock: { type: 'boolean', description: 'Whether the form is locked' },
+  internal: { type: 'boolean', description: 'Whether the form is internal-only', optional: true },
+  formTemplateId: {
+    type: 'string',
+    description: 'Source form template ID (UUID)',
+    optional: true,
+  },
+} as const
+
+/** Common parameters for all JSM API calls */
+interface JsmBaseParams {
+  accessToken: string
+  domain: string
+  cloudId?: string
+}
+
+/** Service Desk representation */
+interface JsmServiceDesk {
+  id: string
+  projectId: string
+  projectName: string
+  projectKey: string
+  name: string
+  description?: string
+  leadDisplayName?: string
+}
+
+/** Request Type representation */
+interface JsmRequestType {
+  id: string
+  name: string
+  description: string
+  helpText?: string
+  issueTypeId?: string
+  serviceDeskId: string
+  groupIds: string[]
+  icon: {
+    id: string
+    name: string
+  }
+}
+
+/** Customer representation */
+interface JsmCustomer {
+  accountId: string
+  name: string
+  key: string
+  emailAddress: string
+  displayName: string
+  active: boolean
+  timeZone: string
+}
+
+/** Organization representation */
+interface JsmOrganization {
+  id: string
+  name: string
+}
+
+/** Queue representation */
+interface JsmQueue {
+  id: string
+  name: string
+  jql: string
+  fields: string[]
+  issueCount: number
+}
+
+/** SLA representation */
+interface JsmSla {
+  id: string
+  name: string
+  completedCycles: Array<{
+    startTime: { iso8601: string; friendly: string; epochMillis: number }
+    stopTime: { iso8601: string; friendly: string; epochMillis: number }
+    breachTime?: { iso8601: string; friendly: string; epochMillis: number }
+    breached: boolean
+    goalDuration?: { millis: number; friendly: string }
+    elapsedTime?: { millis: number; friendly: string }
+    remainingTime?: { millis: number; friendly: string }
+  }>
+  ongoingCycle?: {
+    startTime: { iso8601: string }
+    breachTime?: { iso8601: string }
+    breached: boolean
+    paused: boolean
+    withinCalendarHours: boolean
+    goalDuration?: { millis: number; friendly: string }
+    elapsedTime?: { millis: number; friendly: string }
+    remainingTime?: { millis: number; friendly: string }
+  }
+}
+
+/** Request (ticket) representation */
+interface JsmRequest {
+  issueId: string
+  issueKey: string
+  requestTypeId: string
+  serviceDeskId: string
+  createdDate: { iso8601: string; friendly: string }
+  reporter: JsmCustomer
+  requestFieldValues: Array<{
+    fieldId: string
+    label: string
+    value: unknown
+  }>
+  currentStatus: {
+    status: string
+    statusCategory: string
+    statusDate: { iso8601: string; friendly: string }
+  }
+}
+
+/** Comment representation */
+interface JsmComment {
+  id: string
+  body: string
+  public: boolean
+  author: {
+    accountId: string
+    displayName: string
+    emailAddress?: string
+  }
+  created: { iso8601: string; friendly: string }
+}
+
+/** Transition representation */
+interface JsmTransition {
+  id: string
+  name: string
+}
+
+/** Participant representation */
+interface JsmParticipant {
+  accountId: string
+  displayName: string
+  emailAddress?: string
+  active: boolean
+}
+
+/** Approver representation */
+interface JsmApprover {
+  accountId: string
+  displayName: string
+  emailAddress?: string
+  approverDecision: 'pending' | 'approved' | 'declined'
+}
+
+/** Approval representation */
+interface JsmApproval {
+  id: string
+  name: string
+  finalDecision: 'pending' | 'approved' | 'declined'
+  canAnswerApproval: boolean
+  approvers: JsmApprover[]
+  createdDate?: { iso8601: string; friendly: string }
+  completedDate?: { iso8601: string; friendly: string }
+}
+
+/** Request type field representation */
+interface JsmRequestTypeField {
+  fieldId: string
+  name: string
+  description?: string
+  required: boolean
+  visible?: boolean
+  validValues: Array<{ value: string; label: string; children?: unknown[] }>
+  presetValues?: unknown[]
+  defaultValues?: unknown[]
+  jiraSchema: { type: string; system?: string; custom?: string; customId?: number }
+}
+
+export interface JsmGetServiceDesksParams extends JsmBaseParams {
+  expand?: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmGetRequestTypesParams extends JsmBaseParams {
+  serviceDeskId: string
+  searchQuery?: string
+  groupId?: string
+  expand?: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmCreateRequestParams extends JsmBaseParams {
+  serviceDeskId: string
+  requestTypeId: string
+  summary?: string
+  description?: string
+  requestFieldValues?: Record<string, unknown>
+  formAnswers?: Record<string, unknown>
+  raiseOnBehalfOf?: string
+  requestParticipants?: string[]
+  channel?: string
+}
+
+export interface JsmGetRequestParams extends JsmBaseParams {
+  issueIdOrKey: string
+  expand?: string
+}
+
+export interface JsmGetRequestsParams extends JsmBaseParams {
+  serviceDeskId?: string
+  requestOwnership?: 'OWNED_REQUESTS' | 'PARTICIPATED_REQUESTS' | 'APPROVER' | 'ALL_REQUESTS'
+  requestStatus?: 'OPEN_REQUESTS' | 'CLOSED_REQUESTS' | 'ALL_REQUESTS'
+  requestTypeId?: string
+  searchTerm?: string
+  expand?: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmAddCommentParams extends JsmBaseParams {
+  issueIdOrKey: string
+  body: string
+  isPublic: boolean
+}
+
+export interface JsmGetCommentsParams extends JsmBaseParams {
+  issueIdOrKey: string
+  isPublic?: boolean
+  internal?: boolean
+  expand?: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmGetCustomersParams extends JsmBaseParams {
+  serviceDeskId: string
+  query?: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmAddCustomerParams extends JsmBaseParams {
+  serviceDeskId: string
+  accountIds: string
+}
+
+export interface JsmGetOrganizationsParams extends JsmBaseParams {
+  serviceDeskId: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmGetQueuesParams extends JsmBaseParams {
+  serviceDeskId: string
+  includeCount?: boolean
+  start?: number
+  limit?: number
+}
+
+export interface JsmGetSlaParams extends JsmBaseParams {
+  issueIdOrKey: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmTransitionRequestParams extends JsmBaseParams {
+  issueIdOrKey: string
+  transitionId: string
+  comment?: string
+}
+
+export interface JsmGetTransitionsParams extends JsmBaseParams {
+  issueIdOrKey: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmCreateOrganizationParams extends JsmBaseParams {
+  name: string
+}
+
+export interface JsmAddOrganizationParams extends JsmBaseParams {
+  serviceDeskId: string
+  organizationId: string
+}
+
+export interface JsmGetParticipantsParams extends JsmBaseParams {
+  issueIdOrKey: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmAddParticipantsParams extends JsmBaseParams {
+  issueIdOrKey: string
+  accountIds: string
+}
+
+export interface JsmGetApprovalsParams extends JsmBaseParams {
+  issueIdOrKey: string
+  start?: number
+  limit?: number
+}
+
+export interface JsmAnswerApprovalParams extends JsmBaseParams {
+  issueIdOrKey: string
+  approvalId: string
+  decision: 'approve' | 'decline'
+}
+
+export interface JsmGetRequestTypeFieldsParams extends JsmBaseParams {
+  serviceDeskId: string
+  requestTypeId: string
+}
+
+export interface JsmGetServiceDesksResponse extends ToolResponse {
+  output: {
+    ts: string
+    serviceDesks: JsmServiceDesk[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmGetRequestTypesResponse extends ToolResponse {
+  output: {
+    ts: string
+    requestTypes: JsmRequestType[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmCreateRequestResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueId: string
+    issueKey: string
+    requestTypeId: string
+    serviceDeskId: string
+    createdDate: { iso8601: string; friendly: string; epochMillis: number } | null
+    currentStatus: {
+      status: string
+      statusCategory: string
+      statusDate?: { iso8601: string; friendly: string }
+    } | null
+    reporter: { accountId: string; displayName: string; emailAddress?: string } | null
+    success: boolean
+    url: string
+  }
+}
+
+export interface JsmGetRequestResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueId: string
+    issueKey: string
+    requestTypeId: string
+    serviceDeskId: string
+    createdDate: { iso8601: string; friendly: string; epochMillis: number } | null
+    currentStatus: {
+      status: string
+      statusCategory: string
+      statusDate: { iso8601: string; friendly: string }
+    } | null
+    reporter: {
+      accountId: string
+      displayName: string
+      emailAddress?: string
+      active: boolean
+    } | null
+    requestFieldValues: Array<{ fieldId: string; label: string; value: unknown }>
+    url: string
+    request?: Record<string, unknown>
+  }
+}
+
+export interface JsmGetRequestsResponse extends ToolResponse {
+  output: {
+    ts: string
+    requests: JsmRequest[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmAddCommentResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    commentId: string
+    body: string
+    isPublic: boolean
+    author: { accountId: string; displayName: string; emailAddress?: string } | null
+    createdDate: { iso8601: string; friendly: string } | null
+    success: boolean
+  }
+}
+
+export interface JsmGetCommentsResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    comments: JsmComment[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmGetCustomersResponse extends ToolResponse {
+  output: {
+    ts: string
+    customers: JsmCustomer[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmAddCustomerResponse extends ToolResponse {
+  output: {
+    ts: string
+    serviceDeskId: string
+    success: boolean
+  }
+}
+
+export interface JsmGetOrganizationsResponse extends ToolResponse {
+  output: {
+    ts: string
+    organizations: JsmOrganization[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmGetQueuesResponse extends ToolResponse {
+  output: {
+    ts: string
+    queues: JsmQueue[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmGetSlaResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    slas: JsmSla[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmTransitionRequestResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    transitionId: string
+    success: boolean
+  }
+}
+
+export interface JsmGetTransitionsResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    transitions: JsmTransition[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmCreateOrganizationResponse extends ToolResponse {
+  output: {
+    ts: string
+    organizationId: string
+    name: string
+    success: boolean
+  }
+}
+
+export interface JsmAddOrganizationResponse extends ToolResponse {
+  output: {
+    ts: string
+    serviceDeskId: string
+    organizationId: string
+    success: boolean
+  }
+}
+
+export interface JsmGetParticipantsResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    participants: JsmParticipant[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmAddParticipantsResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    participants: JsmParticipant[]
+    success: boolean
+  }
+}
+
+export interface JsmGetApprovalsResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    approvals: JsmApproval[]
+    total: number
+    isLastPage: boolean
+  }
+}
+
+export interface JsmAnswerApprovalResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    approvalId: string
+    decision: string
+    id: string | null
+    name: string | null
+    finalDecision: string | null
+    canAnswerApproval: boolean | null
+    approvers: Array<{
+      approver: {
+        accountId: string
+        displayName: string
+        emailAddress?: string
+        active?: boolean
+      }
+      approverDecision: string
+    }> | null
+    createdDate: { iso8601: string; friendly: string; epochMillis: number } | null
+    completedDate: { iso8601: string; friendly: string; epochMillis: number } | null
+    approval?: Record<string, unknown>
+    success: boolean
+  }
+}
+
+export interface JsmGetRequestTypeFieldsResponse extends ToolResponse {
+  output: {
+    ts: string
+    serviceDeskId: string
+    requestTypeId: string
+    canAddRequestParticipants: boolean
+    canRaiseOnBehalfOf: boolean
+    requestTypeFields: JsmRequestTypeField[]
+  }
+}
+
+export interface JsmGetFormTemplatesParams extends JsmBaseParams {
+  projectIdOrKey: string
+}
+
+export interface JsmGetFormStructureParams extends JsmBaseParams {
+  projectIdOrKey: string
+  formId: string
+}
+
+export interface JsmGetIssueFormsParams extends JsmBaseParams {
+  issueIdOrKey: string
+}
+
+/** FormQuestion per OpenAPI spec */
+interface JsmFormQuestion {
+  label: string
+  type: string
+  validation: { rq?: boolean; [key: string]: unknown }
+  choices?: Array<{ id: string; label: string; other?: boolean }>
+  dcId?: string
+  defaultAnswer?: Record<string, unknown>
+  description?: string
+  jiraField?: string
+  questionKey?: string
+}
+
+/** FormTemplateIndexEntry per OpenAPI spec */
+interface JsmFormTemplate {
+  id: string
+  name: string
+  updated: string
+  issueCreateIssueTypeIds: number[]
+  issueCreateRequestTypeIds: number[]
+  portalRequestTypeIds: number[]
+  recommendedIssueRequestTypeIds: number[]
+}
+
+/** FormIndexEntry (issue form) per OpenAPI spec */
+interface JsmIssueForm {
+  id: string
+  name: string
+  updated: string
+  submitted: boolean
+  lock: boolean
+  internal?: boolean
+  formTemplateId?: string
+}
+
+export interface JsmGetFormTemplatesResponse extends ToolResponse {
+  output: {
+    ts: string
+    projectIdOrKey: string
+    templates: JsmFormTemplate[]
+    total: number
+  }
+}
+
+export interface JsmGetFormStructureResponse extends ToolResponse {
+  output: {
+    ts: string
+    projectIdOrKey: string
+    formId: string
+    design: {
+      questions: Record<string, JsmFormQuestion>
+      layout: unknown[]
+      conditions: Record<string, unknown>
+      sections: Record<string, unknown>
+      settings: { name: string; submit: { lock: boolean; pdf: boolean }; language?: string }
+    } | null
+    updated: string | null
+    publish: Record<string, unknown> | null
+  }
+}
+
+export interface JsmGetIssueFormsResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    forms: JsmIssueForm[]
+    total: number
+  }
+}
+
+export interface JsmAttachFormParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formTemplateId: string
+}
+
+export interface JsmAttachFormResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    id: string
+    name: string
+    updated: string | null
+    submitted: boolean
+    lock: boolean
+    internal: boolean | null
+    formTemplateId: string | null
+  }
+}
+
+export interface JsmSaveFormAnswersParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formId: string
+  answers: Record<string, unknown>
+}
+
+export interface JsmSaveFormAnswersResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    formId: string
+    state: { status: string } | null
+    updated: string | null
+  }
+}
+
+export interface JsmSubmitFormParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formId: string
+}
+
+export interface JsmSubmitFormResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    formId: string
+    status: string
+  }
+}
+
+export interface JsmGetFormParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formId: string
+}
+
+export interface JsmGetFormResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    formId: string
+    design: Record<string, unknown> | null
+    state: {
+      answers: Record<string, unknown>
+      status: string
+      visibility: string
+    } | null
+    updated: string | null
+  }
+}
+
+export interface JsmDeleteFormParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formId: string
+}
+
+export interface JsmDeleteFormResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    formId: string
+    deleted: boolean
+  }
+}
+
+export interface JsmExternaliseFormParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formId: string
+}
+
+export interface JsmExternaliseFormResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    formId: string
+    visibility: string
+  }
+}
+
+export interface JsmInternaliseFormParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formId: string
+}
+
+export interface JsmInternaliseFormResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    formId: string
+    visibility: string
+  }
+}
+
+export interface JsmCopyFormsParams extends JsmBaseParams {
+  sourceIssueIdOrKey: string
+  targetIssueIdOrKey: string
+  formIds?: string[]
+}
+
+export interface JsmCopyFormsResponse extends ToolResponse {
+  output: {
+    ts: string
+    sourceIssueIdOrKey: string
+    targetIssueIdOrKey: string
+    copiedForms: Array<Record<string, unknown>>
+    errors: Array<Record<string, unknown>>
+  }
+}
+
+export interface JsmGetFormAnswersParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formId: string
+}
+
+interface JsmFormSimplifiedAnswer {
+  label?: string
+  answer?: string
+  fieldKey?: string
+  choice?: string
+}
+
+export interface JsmGetFormAnswersResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    formId: string
+    answers: JsmFormSimplifiedAnswer[] | null
+  }
+}
+
+export interface JsmReopenFormParams extends JsmBaseParams {
+  issueIdOrKey: string
+  formId: string
+}
+
+export interface JsmReopenFormResponse extends ToolResponse {
+  output: {
+    ts: string
+    issueIdOrKey: string
+    formId: string
+    status: string
+  }
+}
+
+/** Union type for all JSM responses */
+export type JsmResponse =
+  | JsmGetServiceDesksResponse
+  | JsmGetRequestTypesResponse
+  | JsmCreateRequestResponse
+  | JsmGetRequestResponse
+  | JsmGetRequestsResponse
+  | JsmAddCommentResponse
+  | JsmGetCommentsResponse
+  | JsmGetCustomersResponse
+  | JsmAddCustomerResponse
+  | JsmGetOrganizationsResponse
+  | JsmGetQueuesResponse
+  | JsmGetSlaResponse
+  | JsmTransitionRequestResponse
+  | JsmGetTransitionsResponse
+  | JsmCreateOrganizationResponse
+  | JsmAddOrganizationResponse
+  | JsmGetParticipantsResponse
+  | JsmAddParticipantsResponse
+  | JsmGetApprovalsResponse
+  | JsmAnswerApprovalResponse
+  | JsmGetRequestTypeFieldsResponse
+  | JsmGetFormTemplatesResponse
+  | JsmGetFormStructureResponse
+  | JsmGetIssueFormsResponse
+  | JsmAttachFormResponse
+  | JsmSaveFormAnswersResponse
+  | JsmSubmitFormResponse
+  | JsmGetFormResponse
+  | JsmDeleteFormResponse
+  | JsmExternaliseFormResponse
+  | JsmInternaliseFormResponse
+  | JsmCopyFormsResponse
+  | JsmGetFormAnswersResponse
+  | JsmReopenFormResponse
+  | JsmListObjectSchemasResponse
+  | JsmGetObjectSchemaResponse
+  | JsmListObjectTypesResponse
+  | JsmGetObjectTypeAttributesResponse
+  | JsmSearchObjectsAqlResponse
+  | JsmGetObjectResponse
+  | JsmCreateObjectResponse
+  | JsmUpdateObjectResponse
+  | JsmDeleteObjectResponse
+
+/**
+ * JSM Assets (Insight / CMDB) tool types.
+ *
+ * The Assets API is keyed by an Assets `workspaceId` (resolved server-side from
+ * the Jira `cloudId`). All tools share {@link JsmAssetsBaseParams}.
+ */
+
+/** Base params shared by every JSM Assets tool */
+export interface JsmAssetsBaseParams {
+  accessToken: string
+  domain: string
+  /** Jira Cloud ID (resolved server-side from the domain when omitted) */
+  cloudId?: string
+  /** Assets workspace ID (resolved server-side from the cloudId when omitted) */
+  workspaceId?: string
+}
+
+/** A single attribute value entry on an Assets object */
+export interface AssetObjectAttributeValue {
+  value: string | null
+  displayValue: string | null
+  searchValue?: string | null
+  referencedType?: boolean
+  referencedObject?: Record<string, unknown> | null
+}
+
+/** A resolved attribute on an Assets object (read shape) */
+export interface AssetObjectAttribute {
+  id: string
+  objectTypeAttributeId: string
+  objectAttributeValues: AssetObjectAttributeValue[]
+}
+
+/** An Assets object as returned by get/create/update */
+export interface AssetObject {
+  id: string
+  label: string | null
+  objectKey: string | null
+  globalId: string | null
+  created: string | null
+  updated: string | null
+  hasAvatar: boolean
+  objectType: Record<string, unknown> | null
+  attributes: AssetObjectAttribute[]
+  link: string | null
+}
+
+/** Attribute payload for creating/updating an Assets object */
+export interface AssetObjectAttributeInput {
+  objectTypeAttributeId: string
+  objectAttributeValues: Array<{ value: unknown }>
+}
+
+/** Raw attribute value as returned by the Assets API (before normalization) */
+export interface RawAssetObjectAttributeValue {
+  value?: string | null
+  displayValue?: string | null
+  searchValue?: string | null
+  referencedType?: boolean
+  referencedObject?: Record<string, unknown> | null
+}
+
+/** Raw attribute as returned by the Assets API (before normalization) */
+export interface RawAssetObjectAttribute {
+  id?: string
+  objectTypeAttributeId?: string
+  objectAttributeValues?: RawAssetObjectAttributeValue[]
+}
+
+/** Raw Assets object as returned by get/create/update/AQL (before normalization) */
+export interface RawAssetObject {
+  id: string
+  label?: string | null
+  objectKey?: string | null
+  globalId?: string | null
+  created?: string | null
+  updated?: string | null
+  hasAvatar?: boolean
+  objectType?: Record<string, unknown> | null
+  attributes?: RawAssetObjectAttribute[]
+  _links?: { self?: string } | null
+}
+
+/** Output property descriptors reused across Assets object responses */
+export const ASSET_OBJECT_PROPERTIES = {
+  id: { type: 'string', description: 'Object ID' },
+  label: { type: 'string', description: 'Human-readable object label', optional: true },
+  objectKey: { type: 'string', description: 'Object key (e.g., HOST-123)', optional: true },
+  globalId: { type: 'string', description: 'Global object ID', optional: true },
+  objectType: { type: 'json', description: 'Object type metadata', optional: true },
+  attributes: { type: 'json', description: 'Resolved attribute values for the object' },
+  hasAvatar: { type: 'boolean', description: 'Whether the object has an avatar', optional: true },
+  created: { type: 'string', description: 'Creation timestamp', optional: true },
+  updated: { type: 'string', description: 'Last update timestamp', optional: true },
+  link: { type: 'string', description: 'Self link to the object', optional: true },
+} as const
+
+export interface JsmListObjectSchemasParams extends JsmAssetsBaseParams {
+  startAt?: number
+  maxResults?: number
+  includeCounts?: boolean
+}
+
+export interface JsmListObjectSchemasResponse extends ToolResponse {
+  output: {
+    ts: string
+    schemas: Array<Record<string, unknown>>
+    total: number
+    isLast: boolean
+  }
+}
+
+export interface JsmGetObjectSchemaParams extends JsmAssetsBaseParams {
+  schemaId: string
+}
+
+export interface JsmGetObjectSchemaResponse extends ToolResponse {
+  output: {
+    ts: string
+    schema: Record<string, unknown> | null
+  }
+}
+
+export interface JsmListObjectTypesParams extends JsmAssetsBaseParams {
+  schemaId: string
+  excludeAbstract?: boolean
+}
+
+export interface JsmListObjectTypesResponse extends ToolResponse {
+  output: {
+    ts: string
+    objectTypes: Array<Record<string, unknown>>
+    total: number
+  }
+}
+
+export interface JsmGetObjectTypeAttributesParams extends JsmAssetsBaseParams {
+  objectTypeId: string
+  onlyValueEditable?: boolean
+  query?: string
+}
+
+export interface JsmGetObjectTypeAttributesResponse extends ToolResponse {
+  output: {
+    ts: string
+    attributes: Array<Record<string, unknown>>
+    total: number
+  }
+}
+
+export interface JsmSearchObjectsAqlParams extends JsmAssetsBaseParams {
+  qlQuery: string
+  page?: number
+  resultsPerPage?: number
+  includeAttributes?: boolean
+  objectTypeId?: string
+  objectSchemaId?: string
+}
+
+export interface JsmSearchObjectsAqlResponse extends ToolResponse {
+  output: {
+    ts: string
+    objects: Array<Record<string, unknown>>
+    total: number
+    pageNumber: number
+    pageSize: number
+  }
+}
+
+export interface JsmGetObjectParams extends JsmAssetsBaseParams {
+  objectId: string
+}
+
+export interface JsmGetObjectResponse extends ToolResponse {
+  output: {
+    ts: string
+    object: AssetObject | null
+  }
+}
+
+export interface JsmCreateObjectParams extends JsmAssetsBaseParams {
+  objectTypeId: string
+  attributes: AssetObjectAttributeInput[]
+}
+
+export interface JsmCreateObjectResponse extends ToolResponse {
+  output: {
+    ts: string
+    object: AssetObject | null
+  }
+}
+
+export interface JsmUpdateObjectParams extends JsmAssetsBaseParams {
+  objectId: string
+  attributes: AssetObjectAttributeInput[]
+  objectTypeId?: string
+}
+
+export interface JsmUpdateObjectResponse extends ToolResponse {
+  output: {
+    ts: string
+    object: AssetObject | null
+  }
+}
+
+export interface JsmDeleteObjectParams extends JsmAssetsBaseParams {
+  objectId: string
+}
+
+export interface JsmDeleteObjectResponse extends ToolResponse {
+  output: {
+    ts: string
+    objectId: string
+    deleted: boolean
+  }
+}

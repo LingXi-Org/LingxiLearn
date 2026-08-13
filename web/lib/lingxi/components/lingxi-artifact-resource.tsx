@@ -1,11 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button } from '@/components/ui-kit'
+import { useCallback, useMemo, useState } from 'react'
+import { Button } from '@sim/emcn'
 import { api } from '@/lib/lingxi/api'
-import { KnowledgeGraphCanvas } from '@/lib/lingxi/components/knowledge-graph-canvas'
+import { LingxiWorkflow } from '@/lib/lingxi/components/lingxi-workflow'
 import { useAgentTask } from '@/lib/lingxi/hooks/use-agent-task'
 import type { PublicQuizQuestion } from '@/lib/lingxi/types'
+import type { FileContentSource } from '@/hooks/use-file-content-source'
+import { FileViewer } from '@/app/workspace/[workspaceId]/files/components/file-viewer'
+import { QuestionDisplay } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
+import type { QuestionItem } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
 
 interface LingxiArtifactResourceProps {
   resourceId: string
@@ -16,177 +20,54 @@ type ArtifactKind = 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual' | 'knowl
 function parseResourceId(resourceId: string) {
   const [, taskId, kind] = resourceId.split(':')
   if (!taskId || !kind) return null
-  if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual', 'knowledge-graph'].includes(kind)) {
+  if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual', 'knowledge-graph'].includes(kind))
     return null
-  }
   return { taskId, kind: kind as ArtifactKind }
 }
 
-function normalizeAnswer(question: PublicQuizQuestion, answer: string): string | string[] {
-  if (question.type === 'short_text') return answer.trim()
-  const labels = question.type === 'multi_choice' ? answer.split(' · ').filter(Boolean) : [answer]
+function toQuestionItem(question: PublicQuizQuestion): QuestionItem {
+  return {
+    type: question.type === 'multi_choice' ? 'multi_select' : 'single_select',
+    prompt: question.prompt,
+    options: question.options,
+  }
+}
+
+function normalizeQuizAnswer(question: PublicQuizQuestion, answer: string): string | string[] {
+  if (question.type === 'short_text') return answer
+
+  const labels = question.type === 'multi_choice' ? answer.split(', ').filter(Boolean) : [answer]
   const ids = labels.map(
     (label) => question.options.find((option) => option.label === label)?.id ?? label
   )
   return question.type === 'multi_choice' ? ids : (ids[0] ?? '')
 }
 
-function QuizQuestionList({
-  questions,
-  disabled,
-  onSubmit,
-}: {
-  questions: PublicQuizQuestion[]
-  disabled: boolean
-  onSubmit: (answers: string[]) => void
-}) {
-  const [answers, setAnswers] = useState<string[]>(() => questions.map(() => ''))
-
-  const setAnswer = (index: number, value: string, multi: boolean) => {
-    setAnswers((current) => {
-      const next = [...current]
-      if (!multi) {
-        next[index] = value
-        return next
-      }
-      const selected = next[index] ? next[index].split(' · ') : []
-      next[index] = selected.includes(value)
-        ? selected.filter((item) => item !== value).join(' · ')
-        : [...selected, value].join(' · ')
-      return next
-    })
+function artifactFileSource(taskId: string, kind: 'lesson-intro' | 'lecture-deck' | 'visual'):
+  FileContentSource {
+  return {
+    buildUrl: () => api.agentArtifactUrl(taskId, kind),
+    resolveImageSrc: (src) => src,
   }
-
-  return (
-    <div className='space-y-4'>
-      {questions.map((question, index) => {
-        const selected = answers[index]?.split(' · ').filter(Boolean) ?? []
-        return (
-          <section
-            key={question.id}
-            className='rounded-2xl border border-[var(--border-1)] bg-[var(--surface-2)] p-4'
-          >
-            <div className='flex items-start justify-between gap-4'>
-              <h3 className='font-medium text-[var(--text-primary)] text-sm'>
-                {index + 1}. {question.prompt}
-              </h3>
-              <span className='shrink-0 text-[var(--text-muted)] text-xs'>
-                {question.points} 分
-              </span>
-            </div>
-            {question.type === 'short_text' ? (
-              <input
-                className='mt-3 w-full rounded-xl border border-[var(--border-1)] bg-[var(--surface-1)] px-3 py-2 text-[var(--text-body)] text-sm outline-none focus:border-[var(--text-primary)]'
-                value={answers[index] ?? ''}
-                disabled={disabled}
-                onChange={(event) => setAnswer(index, event.target.value, false)}
-                placeholder='输入你的答案'
-              />
-            ) : (
-              <div className='mt-3 space-y-2'>
-                {question.options.map((option) => {
-                  const checked = selected.includes(option.label)
-                  return (
-                    <button
-                      key={option.id}
-                      type='button'
-                      disabled={disabled}
-                      onClick={() =>
-                        setAnswer(index, option.label, question.type === 'multi_choice')
-                      }
-                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
-                        checked
-                          ? 'border-[var(--text-primary)] bg-[var(--surface-4)] text-[var(--text-primary)]'
-                          : 'border-[var(--border-1)] bg-[var(--surface-1)] text-[var(--text-body)] hover:bg-[var(--surface-4)]'
-                      }`}
-                    >
-                      <span
-                        aria-hidden='true'
-                        className={`flex size-4 shrink-0 items-center justify-center border text-[10px] ${
-                          question.type === 'multi_choice' ? 'rounded-[4px]' : 'rounded-full'
-                        } ${
-                          checked
-                            ? 'border-[var(--text-primary)] bg-[var(--text-primary)] text-[var(--text-inverse)]'
-                            : 'border-[var(--border-1)]'
-                        }`}
-                      >
-                        {checked ? '✓' : ''}
-                      </span>
-                      <span className='min-w-0 flex-1'>{option.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </section>
-        )
-      })}
-      <Button
-        className='w-full'
-        variant='primary'
-        disabled={disabled || answers.some((answer) => !answer.trim())}
-        onClick={() => onSubmit(answers)}
-      >
-        提交检测
-      </Button>
-    </div>
-  )
 }
+
+const ARTIFACT_FILE_TYPES = {
+  'lesson-intro': 'text/html',
+  'lecture-deck': 'text/html',
+  visual: 'text/html',
+} as const
 
 export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourceProps) {
   const parsed = useMemo(() => parseResourceId(resourceId), [resourceId])
   const { task, loading, error, refresh } = useAgentTask(parsed?.taskId ?? '')
-  const [submittedAnswers, setSubmittedAnswers] = useState<string[] | null>(null)
+  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>()
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [graph, setGraph] = useState<import('@/lib/lingxi/types').KnowledgeGraphData | null>(null)
-  const [graphLoading, setGraphLoading] = useState(false)
-  const [artifactUrl, setArtifactUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (parsed?.kind !== 'knowledge-graph') return
-    setGraphLoading(true)
-    void api
-      .agentKnowledgeGraph(parsed.taskId)
-      .then(setGraph)
-      .catch(() => setGraph(null))
-      .finally(() => setGraphLoading(false))
-  }, [parsed, task?.artifacts.knowledge_graph?.revision])
-
-  useEffect(() => {
-    if (!parsed || parsed.kind === 'quiz' || parsed.kind === 'knowledge-graph') return
-    let disposed = false
-    let objectUrl: string | null = null
-    void api
-      .fetchArtifact(api.agentArtifactUrl(parsed.taskId, parsed.kind))
-      .then((blob) => {
-        if (disposed) return
-        objectUrl = URL.createObjectURL(blob)
-        setArtifactUrl(objectUrl)
-      })
-      .catch(() => setArtifactUrl(null))
-    return () => {
-      disposed = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-      setArtifactUrl(null)
-    }
-  }, [parsed])
-
-  useEffect(() => {
-    if (parsed?.kind !== 'knowledge-graph' || task?.artifacts.knowledge_graph?.available) return
-    if (task?.artifacts.knowledge_graph?.status === 'failed') return
-    const timer = setInterval(() => {
-      void api
-        .agentKnowledgeGraph(parsed.taskId)
-        .then(setGraph)
-        .catch(() => {})
-    }, 1800)
-    return () => clearInterval(timer)
-  }, [parsed, task?.artifacts.knowledge_graph?.available, task?.artifacts.knowledge_graph?.status])
 
   const submitQuiz = useCallback(
     async (answers: string[]) => {
       if (!parsed || parsed.kind !== 'quiz' || !task?.artifacts.quiz.data) return
+
       setSubmitting(true)
       setSubmitError(null)
       try {
@@ -194,7 +75,7 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
         const normalizedAnswers = Object.fromEntries(
           quiz.questions.map((question, index) => [
             question.id,
-            normalizeAnswer(question, answers[index] ?? ''),
+            normalizeQuizAnswer(question, answers[index] ?? ''),
           ])
         )
         await api.submitAgentQuiz(parsed.taskId, crypto.randomUUID(), normalizedAnswers)
@@ -212,35 +93,39 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
   if (!parsed) return <div className='p-6 text-[var(--text-secondary)] text-sm'>产物地址无效。</div>
 
   if (parsed.kind === 'knowledge-graph') {
-    if (graphLoading)
-      return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载知识图谱…</div>
-    if (!graph)
-      return (
-        <div className='flex h-full flex-col items-center justify-center gap-3 p-6 text-center'>
-          <p className='text-[var(--text-secondary)] text-sm'>知识图谱正在生成或暂不可用。</p>
-          <Button variant='outline' onClick={() => void refresh()}>
-            重新加载
-          </Button>
-        </div>
-      )
-    return <KnowledgeGraphCanvas graph={graph} />
+    return <LingxiWorkflow taskId={parsed.taskId} />
   }
 
   if (parsed.kind !== 'quiz') {
-    if (!artifactUrl)
-      return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载学习产物…</div>
     return (
-      <iframe
-        className='h-full w-full border-0 bg-white'
-        src={artifactUrl}
-        title='LingxiGraph 学习产物'
-        sandbox='allow-scripts allow-same-origin allow-forms allow-popups'
+      <FileViewer
+        contentSource={artifactFileSource(
+          parsed.taskId,
+          parsed.kind as 'lesson-intro' | 'lecture-deck' | 'visual'
+        )}
+        file={{
+          id: resourceId,
+          workspaceId: 'lingxi',
+          name: `${parsed.kind}.html`,
+          key: resourceId,
+          path: resourceId,
+          size: 0,
+          type: ARTIFACT_FILE_TYPES[parsed.kind as keyof typeof ARTIFACT_FILE_TYPES],
+          uploadedBy: 'lingxilearn',
+          uploadedAt: new Date(0),
+          updatedAt: new Date(0),
+        }}
+        workspaceId='lingxi'
+        canEdit={false}
+        readOnly
+        previewMode='preview'
       />
     )
   }
 
-  if (loading && !task)
-    return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载知识检测…</div>
+  if (loading && !task) {
+    return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载知识点检测…</div>
+  }
   if (error || !task?.artifacts.quiz.data) {
     return (
       <div className='flex h-full flex-col items-center justify-center gap-3 p-6 text-center'>
@@ -253,17 +138,16 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
   }
 
   const quiz = task.artifacts.quiz.data
+  const questions = quiz.questions.map(toQuestionItem)
+  const canSubmit = !task.quiz_submission && !submittedAnswers
+
   return (
     <div className='h-full overflow-y-auto bg-[var(--surface-1)] p-5 sm:p-7'>
       <div className='mx-auto max-w-2xl'>
-        <div className='mb-5'>
-          <p className='font-medium text-[var(--text-primary)]'>{quiz.title}</p>
-          <p className='mt-1 text-[var(--text-muted)] text-sm'>{quiz.instructions}</p>
-        </div>
-        <QuizQuestionList
-          questions={quiz.questions}
-          disabled={Boolean(task.quiz_submission || submittedAnswers || submitting)}
-          onSubmit={(answers) => void submitQuiz(answers)}
+        <QuestionDisplay
+          data={questions}
+          answers={submittedAnswers}
+          onAnswersSubmit={canSubmit ? (answers) => void submitQuiz(answers) : undefined}
         />
         {task.quiz_submission && (
           <p className='mt-4 text-[var(--text-secondary)] text-sm'>

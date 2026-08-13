@@ -1,0 +1,128 @@
+import type { AshbyCreateNoteParams, AshbyCreateNoteResponse } from '@/tools/ashby/types'
+import { ashbyAuthHeaders, ashbyErrorMessage } from '@/tools/ashby/utils'
+import type { ToolConfig } from '@/tools/types'
+
+export const createNoteTool: ToolConfig<AshbyCreateNoteParams, AshbyCreateNoteResponse> = {
+  id: 'ashby_create_note',
+  name: 'Ashby Create Note',
+  description:
+    'Creates a note on a candidate in Ashby. Supports plain text and HTML content (bold, italic, underline, links, lists, code).',
+  version: '1.0.0',
+
+  params: {
+    apiKey: {
+      type: 'string',
+      required: true,
+      visibility: 'user-only',
+      description: 'Ashby API Key',
+    },
+    candidateId: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description: 'The UUID of the candidate to add the note to',
+    },
+    note: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description:
+        'The note content. If noteType is text/html, supports: <b>, <i>, <u>, <a>, <ul>, <ol>, <li>, <code>, <pre>',
+    },
+    noteType: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Content type of the note: text/plain (default) or text/html',
+    },
+    sendNotifications: {
+      type: 'boolean',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Whether to send notifications to subscribed users (default false)',
+    },
+    isPrivate: {
+      type: 'boolean',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Whether the note is private (only visible to the author)',
+    },
+    createdAt: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description:
+        'Backdated creation timestamp in ISO 8601 (e.g. 2024-01-01T00:00:00Z). Defaults to now.',
+    },
+  },
+
+  request: {
+    url: 'https://api.ashbyhq.com/candidate.createNote',
+    method: 'POST',
+    headers: (params) => ashbyAuthHeaders(params.apiKey),
+    body: (params) => {
+      const body: Record<string, unknown> = {
+        candidateId: params.candidateId.trim(),
+        sendNotifications: params.sendNotifications ?? false,
+      }
+      if (params.noteType === 'text/html') {
+        body.note = {
+          type: 'text/html',
+          value: params.note,
+        }
+      } else {
+        body.note = params.note
+      }
+      if (params.isPrivate !== undefined) body.isPrivate = params.isPrivate
+      if (params.createdAt) body.createdAt = params.createdAt
+      return body
+    },
+  },
+
+  transformResponse: async (response: Response) => {
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(ashbyErrorMessage(data, 'Failed to create note'))
+    }
+
+    const r = data.results
+    const author = r.author
+
+    return {
+      success: true,
+      output: {
+        id: r.id ?? '',
+        createdAt: r.createdAt ?? null,
+        isPrivate: r.isPrivate ?? false,
+        content: r.content ?? null,
+        author: author
+          ? {
+              id: author.id ?? '',
+              firstName: author.firstName ?? null,
+              lastName: author.lastName ?? null,
+              email: author.email ?? null,
+            }
+          : null,
+      },
+    }
+  },
+
+  outputs: {
+    id: { type: 'string', description: 'Created note UUID' },
+    createdAt: { type: 'string', description: 'ISO 8601 creation timestamp', optional: true },
+    isPrivate: { type: 'boolean', description: 'Whether the note is private' },
+    content: { type: 'string', description: 'Note content', optional: true },
+    author: {
+      type: 'object',
+      description: 'Author of the note',
+      optional: true,
+      properties: {
+        id: { type: 'string', description: 'Author user UUID' },
+        firstName: { type: 'string', description: 'Author first name', optional: true },
+        lastName: { type: 'string', description: 'Author last name', optional: true },
+        email: { type: 'string', description: 'Author email', optional: true },
+      },
+    },
+  },
+}

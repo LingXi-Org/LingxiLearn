@@ -1,0 +1,263 @@
+import { createLogger } from '@sim/logger'
+import { toError } from '@sim/utils/errors'
+import { isOrgScopedSubscription } from '@/lib/billing/subscriptions/utils'
+import { createStorageAdapter, type RateLimitStorageAdapter } from './storage'
+import {
+  getRateLimit,
+  MANUAL_EXECUTION_LIMIT,
+  RATE_LIMIT_WINDOW_MS,
+  type RateLimitCounterType,
+  type SubscriptionPlan,
+  type TriggerType,
+} from './types'
+
+const logger = createLogger('RateLimiter')
+
+interface SubscriptionInfo {
+  plan: string
+  referenceId: string
+}
+
+export interface RateLimitResult {
+  allowed: boolean
+  remaining: number
+  resetAt: Date
+  retryAfterMs?: number
+}
+
+export interface RateLimitStatus {
+  requestsPerMinute: number
+  maxBurst: number
+  remaining: number
+  resetAt: Date
+}
+
+export class RateLimiter {
+  private storage: RateLimitStorageAdapter
+
+  constructor(storage?: RateLimitStorageAdapter) {
+    this.storage = storage ?? createStorageAdapter()
+  }
+
+  private getRateLimitKey(userId: string, subscription: SubscriptionInfo | null): string {
+    if (!subscription) return userId
+
+    if (isOrgScopedSubscription(subscription, userId)) {
+      return subscription.referenceId
+    }
+
+    return userId
+  }
+
+  private getCounterType(triggerType: TriggerType, isAsync: boolean): RateLimitCounterType {
+    if (triggerType === 'api-endpoint') return 'api-endpoint'
+    return isAsync ? 'async' : 'sync'
+  }
+
+  private buildStorageKey(rateLimitKey: string, counterType: RateLimitCounterType): string {
+    return `${rateLimitKey}:${counterType}`
+  }
+
+  private createUnlimitedResult(): RateLimitResult {
+    return {
+      allowed: true,
+      remaining: MANUAL_EXECUTION_LIMIT,
+      resetAt: new Date(Date.now() + RATE_LIMIT_WINDOW_MS),
+    }
+  }
+
+  private async consumeWithSubscription(
+    subjectId: string,
+    subscription: SubscriptionInfo | null,
+    triggerType: TriggerType,
+    isAsync: boolean
+  ): Promise<RateLimitResult> {
+    if (triggerType === 'manual') {
+      return this.createUnlimitedResult()
+    }
+
+    const plan = (subscription?.plan || 'free') as SubscriptionPlan
+    const rateLimitKey = this.getRateLimitKey(subjectId, subscription)
+    const counterType = this.getCounterType(triggerType, isAsync)
+    const config = getRateLimit(plan, counterType)
+    const storageKey = this.buildStorageKey(rateLimitKey, counterType)
+    const result = await this.storage.consumeTokens(storageKey, 1, config)
+
+    if (!result.allowed) {
+      logger.info('Rate limit exceeded', {
+        rateLimitKey,
+        counterType,
+        plan,
+        tokensRemaining: result.tokensRemaining,
+      })
+    }
+
+    return {
+      allowed: result.allowed,
+      remaining: result.tokensRemaining,
+      resetAt: result.resetAt,
+      retryAfterMs: result.retryAfterMs,
+    }
+  }
+
+  async checkRateLimitWithSubscription(
+    userId: string,
+    subscription: SubscriptionInfo | null,
+    triggerType: TriggerType = 'manual',
+    isAsync = false
+  ): Promise<RateLimitResult> {
+    try {
+      return await this.consumeWithSubscription(userId, subscription, triggerType, isAsync)
+    } catch (error) {
+      logger.error('Rate limit storage error - failing open (allowing request)', {
+        error: toError(error).message,
+        userId,
+        triggerType,
+        isAsync,
+      })
+      return {
+        allowed: true,
+        remaining: 1,
+        resetAt: new Date(Date.now() + RATE_LIMIT_WINDOW_MS),
+      }
+    }
+  }
+
+  /**
+   * Consumes an authenticated request token and propagates storage failures.
+   * Security-sensitive adapters use this instead of the compatibility method
+   * above so an unavailable limiter cannot silently admit traffic.
+   */
+  async checkRateLimitWithSubscriptionOrThrow(
+    subjectId: string,
+    subscription: SubscriptionInfo | null,
+    triggerType: TriggerType = 'manual',
+    isAsync = false
+  ): Promise<RateLimitResult> {
+    return this.consumeWithSubscription(subjectId, subscription, triggerType, isAsync)
+  }
+
+  async getRateLimitStatusWithSubscription(
+    userId: string,
+    subscription: SubscriptionInfo | null,
+    triggerType: TriggerType = 'manual',
+    isAsync = false
+  ): Promise<RateLimitStatus> {
+    try {
+      const plan = (subscription?.plan || 'free') as SubscriptionPlan
+      const counterType = this.getCounterType(triggerType, isAsync)
+      const config = getRateLimit(plan, counterType)
+
+      if (triggerType === 'manual') {
+        return {
+          requestsPerMinute: MANUAL_EXECUTION_LIMIT,
+          maxBurst: MANUAL_EXECUTION_LIMIT,
+          remaining: MANUAL_EXECUTION_LIMIT,
+          resetAt: new Date(Date.now() + config.refillIntervalMs),
+        }
+      }
+
+      const rateLimitKey = this.getRateLimitKey(userId, subscription)
+      const storageKey = this.buildStorageKey(rateLimitKey, counterType)
+
+      const status = await this.storage.getTokenStatus(storageKey, config)
+
+      return {
+        requestsPerMinute: config.refillRate,
+        maxBurst: config.maxTokens,
+        remaining: Math.floor(status.tokensAvailable),
+        resetAt: status.nextRefillAt,
+      }
+    } catch (error) {
+      logger.error('Error getting rate limit status - returning default config', {
+        error: toError(error).message,
+        userId,
+        triggerType,
+        isAsync,
+      })
+      const plan = (subscription?.plan || 'free') as SubscriptionPlan
+      const counterType = this.getCounterType(triggerType, isAsync)
+      const config = getRateLimit(plan, counterType)
+      return {
+        requestsPerMinute: config.refillRate,
+        maxBurst: config.maxTokens,
+        remaining: 0,
+        resetAt: new Date(Date.now() + RATE_LIMIT_WINDOW_MS),
+      }
+    }
+  }
+
+  /**
+   * Consume one token from a bucket. On storage failure the default is to fail
+   * open (allow the request) so a limiter outage never takes down normal traffic.
+   * Pass `failClosed: true` for security-critical checks — e.g. a captcha
+   * backstop — where an unenforceable limit must reject rather than admit.
+   */
+  async checkRateLimitDirect(
+    storageKey: string,
+    config: { maxTokens: number; refillRate: number; refillIntervalMs: number },
+    options?: { failClosed?: boolean }
+  ): Promise<RateLimitResult> {
+    try {
+      const result = await this.storage.consumeTokens(storageKey, 1, config)
+      if (!result.allowed) {
+        logger.info('Rate limit exceeded', { storageKey, tokensRemaining: result.tokensRemaining })
+      }
+      return {
+        allowed: result.allowed,
+        remaining: result.tokensRemaining,
+        resetAt: result.resetAt,
+        retryAfterMs: result.retryAfterMs,
+      }
+    } catch (error) {
+      const failClosed = options?.failClosed === true
+      logger.error(
+        `Rate limit storage error - failing ${failClosed ? 'closed (rejecting request)' : 'open (allowing request)'}`,
+        {
+          error: toError(error).message,
+          storageKey,
+        }
+      )
+      return {
+        allowed: !failClosed,
+        remaining: failClosed ? 0 : 1,
+        resetAt: new Date(Date.now() + RATE_LIMIT_WINDOW_MS),
+      }
+    }
+  }
+
+  /**
+   * Consume one token from an already-namespaced bucket and propagate storage
+   * failures. Declarative API adapters use this for credential/workspace
+   * buckets so an unavailable limiter is never mistaken for spare capacity.
+   */
+  async checkRateLimitDirectOrThrow(
+    storageKey: string,
+    config: { maxTokens: number; refillRate: number; refillIntervalMs: number }
+  ): Promise<RateLimitResult> {
+    const result = await this.storage.consumeTokens(storageKey, 1, config)
+    if (!result.allowed) {
+      logger.info('Rate limit exceeded', { storageKey, tokensRemaining: result.tokensRemaining })
+    }
+    return {
+      allowed: result.allowed,
+      remaining: result.tokensRemaining,
+      resetAt: result.resetAt,
+      retryAfterMs: result.retryAfterMs,
+    }
+  }
+
+  async resetRateLimit(rateLimitKey: string): Promise<void> {
+    try {
+      await Promise.all([
+        this.storage.resetBucket(`${rateLimitKey}:sync`),
+        this.storage.resetBucket(`${rateLimitKey}:async`),
+        this.storage.resetBucket(`${rateLimitKey}:api-endpoint`),
+      ])
+      logger.info(`Reset rate limit for ${rateLimitKey}`)
+    } catch (error) {
+      logger.error('Error resetting rate limit:', error)
+      throw error
+    }
+  }
+}

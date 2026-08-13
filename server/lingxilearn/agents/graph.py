@@ -6,12 +6,14 @@ artifacts in parallel. The task then pauses for learner interaction.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import operator
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from html import escape
 from typing import Annotated, Any, TypedDict
 
 from lingxigraph import (
@@ -45,7 +47,6 @@ from .skill_runtime import (
     skill_constraints,
     staged_artifact_tools,
 )
-from .web_tools import build_web_tools
 
 logger = logging.getLogger(__name__)
 EVENT_CHANNEL = "agent_task"
@@ -127,9 +128,11 @@ LECTURE_PROMPT = progressive_skill_prompt(
         "assets/example-page.html",
         "scripts/validate_output.py",
     ),
-    artifact_instructions="""这是课程引入 HTML 生成 Agent。完成必要检索后，生成一个完整的
-lesson-intro.html 并通过 stage_artifact_file 写入；HTML 必须是零依赖、简体中文、可直接打开的
-学习者页面。最后只返回包含 topic/status/warnings 的简短 JSON 回执，不要复制 HTML。""",
+    artifact_instructions="""这是课程引入 HTML 生成 Agent。当前 lesson-intro 只允许基于输入上下文直接生成，
+禁止联网检索、禁止调用 web_search/web_fetch，也不要等待其他 Agent。先尽快生成并通过
+stage_artifact_file 写入一个完整的 lesson-intro.html；如果内容较长，改用 stage_artifact_chunk
+分块写入。HTML 必须是零依赖、简体中文、可直接打开的学习者页面。最后只返回包含 topic/status/warnings
+的简短 JSON 回执，不要复制 HTML。""",
 )
 
 DECK_PROMPT = progressive_skill_prompt(
@@ -206,6 +209,21 @@ def _message_text(result: Any) -> str:
         if content:
             return str(content)
     return ""
+
+
+def _lesson_intro_fallback(intent: IntentContext) -> str:
+    """Create a valid small page before generation so interruption is recoverable."""
+
+    topic = escape(intent.topic)
+    objective = escape(intent.learning_objective or f"理解{intent.topic}的核心概念")
+    return f'''<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{topic}：先看见问题</title><style>
+:root{{--paper:#fbfaf7;--surface:#fff;--ink-1:#23231f;--ink-2:#5f5e5a;--rule:rgba(35,35,31,.16);--accent:#534ab7;--font-serif:Georgia,"Songti SC",serif;--font-sans:Arial,"Microsoft YaHei",sans-serif;--font-mono:monospace}}
+@media(prefers-color-scheme:dark){{:root{{--paper:#1a1a19;--surface:#232322;--ink-1:#edebe4;--ink-2:#b4b2a9;--rule:rgba(237,235,228,.2);--accent:#afa9ec}}}}
+*{{box-sizing:border-box}}body{{max-width:1100px;margin:0 auto;padding:40px 6vw 56px;background:var(--paper);color:var(--ink-1);font:400 18px/1.65 var(--font-sans)}}main{{max-width:980px;margin:auto}}.top{{padding-bottom:14px;border-bottom:.5px solid var(--rule);color:var(--ink-2);font:400 13px var(--font-mono)}}.hero{{display:grid;grid-template-columns:minmax(0,.8fr) minmax(360px,1.2fr);gap:48px;align-items:center;padding:56px 0 42px;border-bottom:.5px solid var(--rule)}}h1{{margin:0 0 22px;font:500 clamp(42px,6vw,66px)/1.08 var(--font-serif);letter-spacing:-.04em}}.lead{{color:var(--ink-2);font-size:20px}}.question{{margin:28px 0 0;padding-left:16px;border-left:2px solid var(--accent)}}figure{{margin:0}}svg{{display:block;width:100%;height:auto}}.frame{{fill:var(--surface);stroke:var(--rule);stroke-width:.6}}.line{{stroke:var(--ink-2);stroke-width:1.5;fill:none}}.accent{{stroke:var(--accent);stroke-width:3;fill:none;stroke-linecap:round}}.t{{font:400 14px var(--font-sans);fill:var(--ink-1)}}.ts{{font:400 12px var(--font-sans);fill:var(--ink-2)}}.th{{font:500 15px var(--font-sans);fill:var(--ink-1)}}.tn{{font:400 12px var(--font-mono);fill:var(--ink-2)}}figcaption{{margin-top:10px;padding-top:10px;border-top:.5px solid var(--rule);color:var(--ink-2);font-size:14px}}footer{{margin-top:30px;color:var(--ink-2);font-size:15px}}@media(max-width:760px){{.hero{{grid-template-columns:1fr;gap:32px}}}}@media print{{body{{padding:20px}}}}
+</style></head><body><main><div class="top">课程引入 · 先看见一个问题</div><section class="hero"><div><h1>{topic}，为什么值得先问一个问题？</h1><p class="lead">我们先不急着记定义。把熟悉的现象拆开，看看哪些变化真正决定了结果。</p><p class="question">本节目标：{objective}。接下来要追问的是：我们究竟需要观察哪一个关键关系？</p></div>
+<figure><svg viewBox="0 0 680 340" role="img" aria-label="从现象到概念的关系图"><rect class="frame" x="24" y="24" width="632" height="260" rx="12"/><line class="line" x1="88" y1="170" x2="590" y2="170"/><circle cx="132" cy="170" r="28" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><circle cx="340" cy="170" r="28" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><circle cx="548" cy="170" r="28" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><path class="accent" d="M174 170h116m92 0h116"/><path class="accent" d="M280 160l10 10-10 10m208-20l10 10-10 10"/><text class="th" x="132" y="92" text-anchor="middle">现象</text><text class="ts" x="132" y="230" text-anchor="middle">先观察</text><text class="th" x="340" y="92" text-anchor="middle">关键关系</text><text class="ts" x="340" y="230" text-anchor="middle">再追问</text><text class="th" x="548" y="92" text-anchor="middle">概念</text><text class="ts" x="548" y="230" text-anchor="middle">最后理解</text><text class="tn" x="40" y="318">从可见问题走向可解释的结构</text></svg><figcaption>这张图先保留一个入口：观察现象，找到关系，再让概念回答问题。</figcaption></figure></section><footer>带着这个问题进入课程，答案会在后续的例子和推理中逐步展开。</footer></main></body></html>'''
 
 
 def _message_payload(message: Any) -> tuple[str, str]:
@@ -446,14 +464,19 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
         _emit(runtime, "agent.started", agent="lecture_hook", skill="lesson-intro")
         intent = IntentContext.model_validate(state["intent"])
         draft = ArtifactDraft(artifacts, task_id, "lesson-intro")
+        # Seed a valid learner-facing page before the model starts. If the
+        # model is interrupted while composing a long HTML payload, the
+        # service can still promote this page instead of losing the artifact.
+        draft.write("lesson-intro.html", _lesson_intro_fallback(intent))
         prompt = (
-            "按 lesson-intro-html.v1 生成课程引入页面。先读取 skill 和直接相关资源，完成必要研究，"
-            "再通过 stage_artifact_file 写入 lesson-intro.html，回读检查后只返回 JSON 回执。\nTASK JSON:\n"
+            "按 lesson-intro-html.v1 直接生成课程引入页面，不联网检索。先读取 skill 和直接相关资源，"
+            "尽快通过 stage_artifact_file 写入 lesson-intro.html；内容较长时用 stage_artifact_chunk 分块写入，"
+            "回读检查后只返回 JSON 回执。\nTASK JSON:\n"
             + json.dumps({"task_id": state["task_id"], **intent.model_dump(mode="json")}, ensure_ascii=False)
         )
         agent = create_agent(
             _agent_model(model, "lecture_hook"),
-            tools=build_web_tools(settings) + staged_artifact_tools(draft),
+            tools=staged_artifact_tools(draft),
             skills=lecture_registry,
             system_prompt=LECTURE_PROMPT,
             pinned_constraints=skill_constraints(
@@ -467,17 +490,24 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             ),
             name="lesson-intro",
         )
+        published = False
         try:
-            response_text = _message_text(
-                await _invoke_agent(
-                    agent,
-                    HumanMessage(prompt),
-                    runtime,
-                    agent_name="lecture_hook",
-                    recursion_limit=30,
-                    tool_permissions=("artifact:write",),
+            try:
+                response_text = _message_text(
+                    await _invoke_agent(
+                        agent,
+                        HumanMessage(prompt),
+                        runtime,
+                        agent_name="lecture_hook",
+                        recursion_limit=20,
+                        tool_permissions=("artifact:write",),
+                    )
                 )
-            )
+            except (asyncio.TimeoutError, GraphRecursionError):
+                # Keep the durable draft; the seeded page is already valid and
+                # can be promoted even when the model never emits its receipt.
+                _emit(runtime, "agent.output", agent="lecture_hook", message="课程引入生成超时，已保留可用页面并继续发布。")
+                response_text = "{}"
             parsed = extract_json(response_text) or {}
             html = draft.snapshot().get("lesson-intro.html")
             if not html:
@@ -486,6 +516,7 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
             validation = await artifacts.validate_lesson_intro(state["task_id"])
             if not validation["ok"]:
                 raise ValueError(f"lesson-intro HTML validation failed: {validation}")
+            published = True
             value = {
                 "html": html,
                 "topic": str(parsed.get("topic") or intent.topic),
@@ -495,7 +526,10 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
                 "validation": validation,
             }
         finally:
-            draft.cleanup()
+            # Leave the private draft in place on cancellation/timeout so the
+            # outer task handler can promote it after the graph unwinds.
+            if published:
+                draft.cleanup()
         await persist_result("lecture_hook", value)
         intro_artifact = {"relative_path": f"{state['task_id']}/lesson-intro.html"}
         _emit(runtime, "agent.output", agent="lecture_hook", message="课程引入 HTML 已生成")

@@ -27,9 +27,10 @@ metadata:
 
 Act as the single synchronous personalized-teaching policy after the preparation phase. The
 Supervisor may call this Skill as a manager-as-tools capability, but this Skill owns the only
-learner-facing teaching response for the turn. Choose the smallest interaction that produces useful
-learning and useful evidence. Do not maximize Socratic turns, run a diagnostic interview, or hand off
-the learner to another teaching writer.
+learner-facing teaching response for the turn. Consume deterministic judge evidence directly when it
+is clear; consume `formative-assessor`'s structured signal only when evidence is ambiguous. Choose
+the smallest interaction that produces useful learning and useful evidence. Do not maximize Socratic
+turns, run a diagnostic interview, or hand off the learner to another teaching writer.
 
 ## Output language
 
@@ -51,8 +52,9 @@ only when a visual materially improves reasoning. Return cacheable material.
 ### `teach`
 
 Run after a learner message or answer. Return one immediate Chinese student-facing response and
-optional non-blocking side effects. If deterministic grading or an assessor result is supplied, use it
-as evidence; do not replace it with an unsupported psychological diagnosis.
+optional non-blocking side effects. If deterministic grading or a `formative-assessor` result is
+supplied, use it as evidence; do not replace it with an unsupported psychological diagnosis. A cached
+`retrieval-practice-builder` task is only a proposal: re-check it against the current event before use.
 
 ## Decision policy
 

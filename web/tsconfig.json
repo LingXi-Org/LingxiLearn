@@ -19,29 +19,20 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@sim/emcn": ["./components/ui-kit/index.ts"],
+      "@sim/emcn/*": ["./components/ui-kit/*"],
+      "@sim/workflow-renderer/note-colors": [
+        "./lib/sim-packages/workflow-renderer/note/note-colors.ts"
+      ],
+      "@sim/*": ["./lib/sim-packages/*"]
     }
   },
   "include": [
     "next-env.d.ts",
     ".next/types/**/*.ts",
-    "app/**/*.ts",
-    "app/**/*.tsx",
-    "components/**/*.ts",
-    "components/**/*.tsx",
-    "content/**/*.ts",
-    "content/**/*.tsx",
-    "lib/ashby/**/*.ts",
-    "lib/blog/**/*.ts",
-    "lib/colors/**/*.ts",
-    "lib/content/**/*.ts",
-    "lib/landing/**/*.ts",
-    "lib/landing/**/*.tsx",
-    "lib/lingxi/**/*.ts",
-    "lib/lingxi/**/*.tsx",
-    "lib/logger/**/*.ts",
-    "lib/ui/**/*.ts",
-    "lib/utils/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules", ".next", "out", "dist", "**/*.test.ts", "**/*.test.tsx"]
