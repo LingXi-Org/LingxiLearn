@@ -341,6 +341,11 @@ function SignupFormContent({
         }
       )
 
+      // The identity BFF owns the browser navigation in production. Waiting
+      // for a session here would race that navigation and can send the user
+      // back to the pre-auth route.
+      if (response?.redirectStarted) return
+
       if (!response || response.error) {
         setIsLoading(false)
         return
