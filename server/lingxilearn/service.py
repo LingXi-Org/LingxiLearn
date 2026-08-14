@@ -428,6 +428,15 @@ class Service:
             if sidecar["status"] == "running":
                 await self.repo.finish_agent_sidecar(sidecar["id"], status="queued")
             self._spawn(self._run_capability_sidecar(sidecar["id"]))
+        # Agent tasks are accepted before their graph starts.  Recover tasks
+        # left in that durable queue when the API process is restarted; the
+        # atomic claim in _run_agent_task makes this safe across replicas.
+        for task in await self.repo.queued_agent_tasks():
+            self._spawn(
+                self._drive_agent_task(
+                    task["id"], task["learner_id"], task["prompt"]
+                )
+            )
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
             len(self.packs),
@@ -1238,49 +1247,76 @@ class Service:
         latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
         if latest is None or latest.status == "cancelled":
             return
-        await self.repo.set_agent_task_status(task_id, "running")
+        claimed = await self.repo.claim_agent_task(task_id, learner_id)
+        if claimed is None:
+            # Another API process (or the request that originally created the
+            # task) already owns this run.
+            return
+        record = claimed
         execution_id = f"exec-{uuid.uuid4().hex}"
-        await self.repo.create_agent_execution(
-            execution_id=execution_id,
-            task_id=task_id,
-            learner_id=learner_id,
-            graph_version=record.graph_version,
-            trigger="resume"
-            if resume is not None
-            else ("schedule" if schedule_id else "agent-task"),
-            schedule_id=schedule_id,
-            scheduled_for=scheduled_for,
-        )
-        projector = SimRunProjector(
-            execution_id=execution_id,
-            task_id=task_id,
-            graph_version=record.graph_version,
-        )
-        start_runtime = {
-            "execution_id": execution_id,
-            "task_id": task_id,
-            "graph_version": record.graph_version,
-        }
-        start_events = [
-            {
-                "kind": "run.started",
-                "agent": "coordinator",
+        try:
+            await self.repo.create_agent_execution(
+                execution_id=execution_id,
+                task_id=task_id,
+                learner_id=learner_id,
+                graph_version=record.graph_version,
+                trigger="resume"
+                if resume is not None
+                else ("schedule" if schedule_id else "agent-task"),
+                schedule_id=schedule_id,
+                scheduled_for=scheduled_for,
+            )
+            projector = SimRunProjector(
+                execution_id=execution_id,
+                task_id=task_id,
+                graph_version=record.graph_version,
+            )
+            start_runtime = {
                 "execution_id": execution_id,
-                "runtime": start_runtime,
-                "payload": {"status": "running", "runtime": start_runtime},
+                "task_id": task_id,
+                "graph_version": record.graph_version,
             }
-        ]
-        if resume is not None:
-            start_events.append(
+            start_events = [
                 {
-                    "kind": "run.resumed",
+                    "kind": "run.started",
                     "agent": "coordinator",
                     "execution_id": execution_id,
                     "runtime": start_runtime,
                     "payload": {"status": "running", "runtime": start_runtime},
                 }
+            ]
+            if resume is not None:
+                start_events.append(
+                    {
+                        "kind": "run.resumed",
+                        "agent": "coordinator",
+                        "execution_id": execution_id,
+                        "runtime": start_runtime,
+                        "payload": {"status": "running", "runtime": start_runtime},
+                    }
+                )
+            await self.repo.append_agent_events(task_id, start_events)
+        except Exception as exc:  # noqa: BLE001 - startup failures are user-visible
+            logger.exception("agent task failed before graph start: %s", task_id)
+            detail = _safe_agent_error(exc, self.settings)
+            await self.repo.set_agent_task_status(
+                task_id, "failed", f"启动失败：{type(exc).__name__}: {detail}"
             )
-        await self.repo.append_agent_events(task_id, start_events)
+            await self.repo.append_agent_events(
+                task_id,
+                [
+                    {
+                        "kind": "task.failed",
+                        "agent": "coordinator",
+                        "payload": {
+                            "error_type": type(exc).__name__,
+                            "message": f"启动失败：{type(exc).__name__}: {detail}",
+                        },
+                    }
+                ],
+            )
+            self._notify_agent(task_id)
+            return
 
         async def persist_buffer(events: list[dict[str, Any]]) -> None:
             if not events:
@@ -1326,14 +1362,13 @@ class Service:
             projected["execution_id"] = execution_id
             buffer.append(projected)
 
-        session_state = await self.runtime_state.ensure_session_state(
-            learner_id=learner_id,
-            task_id=task_id,
-            budget=new_budget(),
-        )
-        prior_results, prior_artifacts = self._task_results(record)
-
         try:
+            session_state = await self.runtime_state.ensure_session_state(
+                learner_id=learner_id,
+                task_id=task_id,
+                budget=new_budget(),
+            )
+            prior_results, prior_artifacts = self._task_results(record)
             graph = self.loop_for(
                 learner_id=learner_id,
                 task_id=task_id,
@@ -1724,7 +1759,19 @@ class Service:
     def _spawn(self, coro: Any) -> None:
         task = asyncio.create_task(coro)
         self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+
+        def finished(completed: asyncio.Task[Any]) -> None:
+            self._tasks.discard(completed)
+            if completed.cancelled():
+                return
+            error = completed.exception()
+            if error is not None:
+                logger.error(
+                    "background task crashed",
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+
+        task.add_done_callback(finished)
 
     def waiter(self, session_id: str) -> asyncio.Event:
         return self._waiters[session_id]

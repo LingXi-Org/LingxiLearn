@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, event, func, inspect, select
+from sqlalchemy import delete, event, func, inspect, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -659,6 +659,47 @@ class Repository:
             row.error = error
             row.updated_at = utcnow()
             await s.commit()
+
+    async def claim_agent_task(self, task_id: str, learner_id: str) -> AgentTask | None:
+        """Atomically claim a queued or resumable task for one process.
+
+        Task execution is launched from an asyncio background task, so the
+        database is the only coordination point shared by API replicas and a
+        restarted process.  A conditional update prevents startup recovery,
+        retries, and the original request from running the same task twice.
+        """
+
+        async with self.db.session() as s:
+            result = await s.execute(
+                update(AgentTask)
+                .where(
+                    AgentTask.id == task_id,
+                    AgentTask.learner_id == learner_id,
+                    AgentTask.status.in_(("queued", "awaiting_user")),
+                )
+                .values(status="running", updated_at=utcnow())
+            )
+            if result.rowcount != 1:
+                return None
+            row = await s.get(AgentTask, task_id)
+            await s.commit()
+            return row
+
+    async def queued_agent_tasks(self) -> list[dict[str, str]]:
+        """Return tasks left queued by a process restart for startup recovery."""
+
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(AgentTask.id, AgentTask.learner_id, AgentTask.prompt)
+                    .where(AgentTask.status == "queued", AgentTask.deleted_at.is_(None))
+                    .order_by(AgentTask.created_at)
+                )
+            ).all()
+            return [
+                {"id": str(task_id), "learner_id": str(learner_id), "prompt": str(prompt)}
+                for task_id, learner_id, prompt in rows
+            ]
 
     async def update_agent_task_output(
         self, task_id: str, agent: str, value: dict[str, Any]

@@ -226,6 +226,34 @@ async def test_missing_deepseek_key_is_a_durable_failed_task(tmp_path: Path) -> 
         await service.db.dispose()
 
 
+@pytest.mark.asyncio
+async def test_agent_task_claim_is_atomic(tmp_path: Path) -> None:
+    suffix = uuid4().hex
+    settings = Settings(
+        _env_file="",
+        database_url=f"sqlite+aiosqlite:///./var/agent-claim-{suffix}.sqlite3",
+        agent_task_dir=tmp_path,
+    )
+    service = Service(settings)
+    await service.db.create_all()
+    try:
+        await service.repo.ensure_learner("claim-test")
+        await service.repo.create_agent_task(
+            id=f"claim-task-{suffix}",
+            learner_id="claim-test",
+            prompt="解释 TCP",
+            graph_version="test@1",
+            status="queued",
+        )
+        first = await service.repo.claim_agent_task(f"claim-task-{suffix}", "claim-test")
+        second = await service.repo.claim_agent_task(f"claim-task-{suffix}", "claim-test")
+        assert first is not None
+        assert first.status == "running"
+        assert second is None
+    finally:
+        await service.db.dispose()
+
+
 def test_visual_artifact_is_task_scoped_and_single_file_only(tmp_path: Path) -> None:
     settings = Settings(_env_file="", agent_task_dir=tmp_path)
     store = ArtifactStore(settings)
