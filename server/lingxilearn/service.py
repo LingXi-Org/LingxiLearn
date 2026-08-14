@@ -106,6 +106,19 @@ capability is added.
 """
 
 
+def _agent_task_status(values: dict[str, Any], *, interrupted: bool) -> str:
+    """Project the loop's runtime status onto the public task status."""
+
+    return {
+        str(RuntimeStatus.COMPLETED): "completed",
+        str(RuntimeStatus.FAILED): "failed",
+        str(RuntimeStatus.WAITING_FOR_USER): "awaiting_user",
+    }.get(
+        str(values.get("runtime_status") or ""),
+        "awaiting_user" if interrupted else "partial",
+    )
+
+
 def _normalize_attachment_refs(
     value: list[dict[str, Any]] | None, learner_id: str
 ) -> list[dict[str, Any]]:
@@ -1579,11 +1592,12 @@ class Service:
             return
         state = await graph.aget_state(config)
         values = dict(getattr(state, "values", None) or {})
-        status = str(
-            values.get("status")
-            or ("awaiting_user" if getattr(state, "interrupts", None) else "partial")
+        status = _agent_task_status(
+            values, interrupted=bool(getattr(state, "interrupts", None))
         )
         errors = [str(item) for item in values.get("errors") or []]
+        if status == "failed" and values.get("finished_reason"):
+            errors.append(str(values["finished_reason"]))
         await self.repo.set_agent_task_status(
             task_id, "handed_off" if status == "handed_off" else status, "; ".join(errors)
         )

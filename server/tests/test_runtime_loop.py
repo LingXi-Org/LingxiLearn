@@ -369,6 +369,12 @@ async def test_an_exhausted_budget_stops_the_loop_with_a_reason(
     if final["runtime_status"] == str(RuntimeStatus.FAILED):
         assert final["finished_reason"], "a failed run must say why in Chinese"
 
+    persisted = await runtime.get_session_state(task_id)
+    assert persisted is not None
+    assert persisted["runtime_status"] == final["runtime_status"]
+    assert persisted["plan"], "the four-table state must contain the plan the loop ran"
+    assert persisted["budget"] == final["budget"]
+
 
 # --- dispatch resolution ----------------------------------------------------
 

@@ -31,9 +31,21 @@ from lingxilearn.agents.skill_runtime import (
 )
 from lingxilearn.agents.web_tools import _assert_public_url
 from lingxilearn.config import Settings
-from lingxilearn.service import Service, _message_trace_events
+from lingxilearn.service import Service, _agent_task_status, _message_trace_events
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_agent_task_status_uses_the_runtime_loop_field() -> None:
+    completed = _agent_task_status({"runtime_status": "COMPLETED"}, interrupted=False)
+    assert completed == "completed"
+    assert _agent_task_status({"runtime_status": "FAILED"}, interrupted=False) == "failed"
+    assert (
+        _agent_task_status({"runtime_status": "WAITING_FOR_USER"}, interrupted=False)
+        == "awaiting_user"
+    )
+    assert _agent_task_status({}, interrupted=True) == "awaiting_user"
+    assert _agent_task_status({}, interrupted=False) == "partial"
 
 
 @pytest.mark.asyncio

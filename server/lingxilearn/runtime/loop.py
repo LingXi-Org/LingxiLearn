@@ -226,10 +226,16 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         if not utterance:
             current = stack.current()
             if current is None:
+                await deps.runtime_state.set_runtime_status(
+                    deps.task_id, RuntimeStatus.COMPLETED
+                )
                 return {
                     "runtime_status": str(RuntimeStatus.COMPLETED),
                     "finished_reason": "没有待处理的学习目标",
                 }
+            await deps.runtime_state.set_runtime_status(
+                deps.task_id, RuntimeStatus.PLANNING
+            )
             return {"goal": current.to_dict(), "runtime_status": str(RuntimeStatus.PLANNING)}
 
         goal = await goal_interpreter.interpret(
@@ -241,11 +247,16 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         )
         operation = goal_interpreter.apply_to_stack(stack, goal)
         await deps.runtime_state.apply_stack_operation(deps.task_id, operation)
+        await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)
         if deps.emit is not None:
             deps.emit(f"goal.{operation.op}ed", {"goal": goal.to_dict(), "op": operation.op})
         return {"goal": goal.to_dict(), "runtime_status": str(RuntimeStatus.PLANNING)}
 
     async def orchestrate(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
+        # A replan enters this node in REPLANNING. Persist the explicit
+        # REPLANNING -> PLANNING transition before choosing the next action so
+        # the table follows the same closed state machine as the checkpoint.
+        await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)
         goal = Goal.from_dict(state.get("goal") or {})
         budget = Budget.from_dict(state.get("budget"))
         skills = await deps.runtime_state.list_skills(
@@ -256,6 +267,10 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         if state.get("replanning"):
             blocked = check_replan(budget)
             if blocked is not None:
+                await deps.runtime_state.save_budget(deps.task_id, budget.to_dict())
+                await deps.runtime_state.set_runtime_status(
+                    deps.task_id, RuntimeStatus.FAILED
+                )
                 return {
                     "runtime_status": str(RuntimeStatus.FAILED),
                     "finished_reason": blocked.detail,
@@ -298,6 +313,16 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
 
         if verdict.fatal:
             message = degrade_message(verdict.findings)
+            persisted_plan = {
+                **produced.to_dict(),
+                "allowed": [task.id for task in verdict.allowed_tasks],
+            }
+            await deps.runtime_state.save_plan(
+                deps.task_id, persisted_plan, budget=budget.to_dict()
+            )
+            await deps.runtime_state.set_runtime_status(
+                deps.task_id, RuntimeStatus.FAILED
+            )
             return {
                 "runtime_status": str(RuntimeStatus.FAILED),
                 "finished_reason": message,
@@ -324,12 +349,18 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         if not verdict.allowed_tasks and verdict.findings and not awaiting:
             messages.append(degrade_message(verdict.findings))
 
+        persisted_plan = {
+            **produced.to_dict(),
+            "allowed": [task.id for task in verdict.allowed_tasks],
+        }
+        await deps.runtime_state.save_plan(
+            deps.task_id, persisted_plan, budget=budget.to_dict()
+        )
+        await deps.runtime_state.set_runtime_status(deps.task_id, status)
+
         return {
             "runtime_status": str(status),
-            "plan": {
-                **produced.to_dict(),
-                "allowed": [task.id for task in verdict.allowed_tasks],
-            },
+            "plan": persisted_plan,
             "budget": budget.to_dict(),
             "last_decision_id": str(stored["id"]),
             "step": step,
@@ -365,6 +396,11 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             if outcome.learner_message:
                 messages.append(outcome.learner_message)
 
+        await deps.runtime_state.save_budget(deps.task_id, budget.to_dict())
+        await deps.runtime_state.set_runtime_status(
+            deps.task_id, RuntimeStatus.OBSERVING
+        )
+
         return {
             "runtime_status": str(RuntimeStatus.OBSERVING),
             "outcomes": [item.to_dict() for item in outcomes],
@@ -380,6 +416,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             str(RuntimeStatus.EXECUTING),
         }:
             return {}
+        await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.UPDATING)
         return {"runtime_status": str(RuntimeStatus.UPDATING)}
 
     async def update_state(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:
@@ -439,10 +476,16 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 deps.emit("goal.popped", {"goal_id": goal.id})
             remaining = stack.current()
             if remaining is None:
+                await deps.runtime_state.set_runtime_status(
+                    deps.task_id, RuntimeStatus.COMPLETED
+                )
                 return {
                     "runtime_status": str(RuntimeStatus.COMPLETED),
                     "finished_reason": "目标已达成",
                 }
+            await deps.runtime_state.set_runtime_status(
+                deps.task_id, RuntimeStatus.REPLANNING
+            )
             return {
                 "runtime_status": str(RuntimeStatus.REPLANNING),
                 "goal": remaining.to_dict(),
@@ -455,9 +498,12 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         logger.debug(
             "replanning: %d/%d tasks unsatisfied", len(unfinished), len(outcomes)
         )
+        await deps.runtime_state.set_runtime_status(
+            deps.task_id, RuntimeStatus.REPLANNING
+        )
         return {"runtime_status": str(RuntimeStatus.REPLANNING), "replanning": True}
 
-    def await_user(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:
+    async def await_user(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:
         if checkpointer is None:
             return {"runtime_status": str(RuntimeStatus.WAITING_FOR_USER)}
         payload = interrupt(
@@ -470,6 +516,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         )
         value = payload if isinstance(payload, dict) else {"message": str(payload)}
         dispatcher.retarget(user_message=value)
+        # interrupt() resumes here from a persisted WAITING_FOR_USER state.
+        await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)
         return {
             "user_message": value,
             "utterance": str(value.get("message") or ""),
