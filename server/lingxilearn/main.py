@@ -14,16 +14,62 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 from .api.account_routes import router as account_router
 from .api.routes import router
 from .api.workspace_routes import router as workspace_router
 from .auth import build_authenticator
-from .config import get_settings
+from .config import Settings, get_settings
 from .service import Service
 
 logger = logging.getLogger(__name__)
+
+
+def _dev_identity_response(settings: Settings, request: Request, upstream_path: str) -> Response:
+    """Serve the small identity surface used by the local web shell.
+
+    The development API intentionally uses a fixed local principal for resource
+    ownership.  It must also answer the frontend's session/CSRF probes locally:
+    a browser opened on localhost cannot send an HttpOnly cookie scoped to the
+    production identity host, and forwarding that cookie to the remote BFF only
+    creates a noisy, misleading 401 loop.
+    """
+
+    if request.method == "GET" and upstream_path == "/api/v1/me":
+        subject = settings.dev_subject
+        return JSONResponse(
+            {
+                "principal": {
+                    "subject": subject,
+                    "tenant_id": "lingxilearn-dev",
+                    "roles": ["user"],
+                    "permissions": ["workspace:read", "workspace:write"],
+                    "issuer": "lingxilearn-dev",
+                    "audience": ["lingxilearn-dev"],
+                },
+                "user": {
+                    "id": subject,
+                    "username": "local-dev",
+                    "primaryEmail": "dev@lingxilearn.local",
+                    "email": "dev@lingxilearn.local",
+                    "name": "本地开发用户",
+                    "emailVerified": True,
+                    "hasPassword": True,
+                },
+            }
+        )
+    if request.method == "GET" and upstream_path == "/auth/csrf":
+        return JSONResponse({"csrfToken": "lingxilearn-dev-csrf"})
+    if request.method == "POST" and upstream_path == "/auth/refresh":
+        return JSONResponse({"ok": True, "expiresAt": None})
+    if request.method == "POST" and upstream_path == "/auth/logout":
+        return Response(status_code=204)
+    return JSONResponse(
+        {"code": "identity.dev_endpoint_not_supported"},
+        status_code=404,
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ANN201
@@ -73,6 +119,9 @@ def create_app() -> FastAPI:
     app.include_router(workspace_router)
 
     async def proxy_identity(request: Request, upstream_path: str) -> Response:
+        if settings.insecure_dev_auth:
+            return _dev_identity_response(settings, request, upstream_path)
+
         upstream = f"{settings.identity_bff_url.rstrip('/')}{upstream_path}"
         if request.url.query:
             upstream = f"{upstream}?{request.url.query}"

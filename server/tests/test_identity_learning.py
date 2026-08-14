@@ -16,7 +16,7 @@ from lingxi_identity import OidcDiscovery, OidcVerifier, Principal
 from sqlalchemy import func, select
 
 from lingxilearn.auth import Authenticator, build_authenticator
-from lingxilearn.config import Settings
+from lingxilearn.config import Settings, get_settings
 from lingxilearn.learner import LearnerService
 from lingxilearn.main import create_app
 from lingxilearn.service import Service
@@ -195,6 +195,29 @@ async def test_authenticator_resolves_the_browser_cookie_through_bff() -> None:
     await client.aclose()
 
 
+@pytest.mark.asyncio
+async def test_dev_identity_proxy_does_not_forward_to_remote_bff(monkeypatch) -> None:
+    monkeypatch.setenv("LINGXILEARN_INSECURE_DEV_AUTH", "true")
+    monkeypatch.setenv("LINGXILEARN_DEV_SUBJECT", "local-test-user")
+    get_settings.cache_clear()
+    try:
+        app = create_app()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            session = await client.get("/api/v1/me", headers={"Cookie": "stale=production"})
+            csrf = await client.get("/auth/csrf")
+            unsupported = await client.get("/auth/login")
+
+        assert session.status_code == 200
+        assert session.json()["principal"]["subject"] == "local-test-user"
+        assert csrf.json() == {"csrfToken": "lingxilearn-dev-csrf"}
+        assert unsupported.status_code == 404
+    finally:
+        get_settings.cache_clear()
+
+
 def test_oidc_verifier_accepts_valid_jwt_and_rejects_claim_and_key_failures(monkeypatch) -> None:
     issuer = "https://identity.example"
     audience = "lingxilearn"
@@ -291,6 +314,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
 
     app = create_app()
     app.state.service = service
+
     def bff(request: httpx.Request) -> httpx.Response:
         cookie = request.headers.get("cookie", "")
         subject = "subject-a" if "session-a" in cookie else "subject-b"
@@ -404,8 +428,8 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     path.unlink(missing_ok=True)
 
 
-'''legacy graph test retained only as historical inert text'''
-'''
+"""legacy graph test retained only as historical inert text"""
+"""
     path = Path("var") / f"test-graph-learning-{uuid4().hex}.sqlite3"
     checkpoint = Path("var") / f"test-graph-checkpoint-{uuid4().hex}.sqlite3"
     settings = Settings(
@@ -533,4 +557,4 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     finally:
         await service.shutdown()
         path.unlink(missing_ok=True)
-        checkpoint.unlink(missing_ok=True)'''
+        checkpoint.unlink(missing_ok=True)"""
