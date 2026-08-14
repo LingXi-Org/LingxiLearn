@@ -42,6 +42,7 @@ from .models import (
     ReportRecord,
     RunEvent,
     Session,
+    Workspace,
     utcnow,
 )
 
@@ -107,6 +108,33 @@ class Repository:
             if existing is None:
                 s.add(Learner(id=learner_id, display_name=display_name or learner_id))
                 await s.commit()
+
+    async def ensure_workspace(self, learner_id: str) -> None:
+        """Create the learner workspace once, tolerating concurrent first runs."""
+
+        async with self.db.session() as s:
+            existing = await s.scalar(
+                select(Workspace).where(Workspace.learner_id == learner_id)
+            )
+            if existing is not None:
+                return
+            s.add(
+                Workspace(
+                    id=f"ws_{uuid4().hex}",
+                    learner_id=learner_id,
+                    name="灵犀智学",
+                    appearance={},
+                )
+            )
+            try:
+                await s.commit()
+            except IntegrityError:
+                await s.rollback()
+                winner = await s.scalar(
+                    select(Workspace).where(Workspace.learner_id == learner_id)
+                )
+                if winner is None:
+                    raise
 
     async def mastery_for(self, learner_id: str) -> dict[str, float]:
         async with self.db.session() as s:
@@ -586,6 +614,8 @@ class Repository:
         """Create the only submission for a task, with retry-safe semantics."""
 
         async with self.db.session() as s:
+            task = await s.get(AgentTask, task_id)
+            learner_id = task.learner_id if task is not None else ""
             existing = await s.scalar(
                 select(QuizSubmission).where(QuizSubmission.task_id == task_id)
             )
@@ -617,7 +647,16 @@ class Repository:
                     raise ValueError("already_submitted") from None
                 raise
             await s.refresh(row)
-            return _quiz_submission_dict(row)
+            snapshot = _quiz_submission_dict(row)
+        if learner_id:
+            await self.project_runtime_event(
+                learner_id=learner_id,
+                record_key=f"assessment:{task_id}:{submission_id}",
+                task_id=task_id,
+                kind="assessment.submitted",
+                payload=snapshot,
+            )
+        return snapshot
 
     async def update_agent_task_metadata(
         self,
@@ -711,10 +750,12 @@ class Repository:
                     )
                 ).scalar()
                 return int(highest or 0)
+        task_record = await self.get_agent_task(task_id)
+        if task_record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        await self.ensure_workspace(task_record.learner_id)
         async with self.db.session() as s:
             task = await s.get(AgentTask, task_id)
-            if task is None:
-                raise KeyError(f"unknown agent task: {task_id}")
             highest = (
                 await s.execute(
                     select(func.max(AgentTaskEvent.sequence)).where(
@@ -756,6 +797,9 @@ class Repository:
                 s,
                 learner_id=task.learner_id,
                 records=runtime_records,
+                workspace=await s.scalar(
+                    select(Workspace).where(Workspace.learner_id == task.learner_id)
+                ),
             )
             await s.commit()
             return highest + len(events)
@@ -1228,10 +1272,12 @@ class Repository:
         """Append projections with a monotonic per-session sequence."""
         if not events:
             return await self.next_sequence(session_id)
+        session_record = await self.get_session(session_id)
+        if session_record is None:
+            raise KeyError(f"unknown session: {session_id}")
+        await self.ensure_workspace(session_record.learner_id)
         async with self.db.session() as s:
             session = await s.get(Session, session_id)
-            if session is None:
-                raise KeyError(f"unknown session: {session_id}")
             highest = (
                 await s.execute(
                     select(func.max(RunEvent.sequence)).where(RunEvent.session_id == session_id)
@@ -1264,6 +1310,9 @@ class Repository:
                 s,
                 learner_id=session.learner_id,
                 records=runtime_records,
+                workspace=await s.scalar(
+                    select(Workspace).where(Workspace.learner_id == session.learner_id)
+                ),
             )
             await s.commit()
             return highest + len(events)
@@ -1284,7 +1333,11 @@ class Repository:
     ) -> dict[str, Any]:
         """Project an externally replayed event using the same runtime path."""
 
+        await self.ensure_workspace(learner_id)
         async with self.db.session() as s:
+            workspace = await s.scalar(
+                select(Workspace).where(Workspace.learner_id == learner_id)
+            )
             result = await project_runtime_events(
                 s,
                 learner_id=learner_id,
@@ -1301,6 +1354,7 @@ class Repository:
                         "execution_id": execution_id,
                     }
                 ],
+                workspace=workspace,
             )
             await s.commit()
             return result[0]

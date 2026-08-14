@@ -57,6 +57,14 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
                 },
             ],
         )
+        await repository.create_quiz_submission(
+            task_id=task_id,
+            submission_id="submission-1",
+            answers={"q01": "A"},
+            per_question=[{"id": "q01", "correct": True}],
+            total_score=1,
+            total_points=1,
+        )
         await repository.create_session(
             id=session_id,
             learner_id=learner_id,
@@ -83,7 +91,12 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
                     )
                 )
             ).scalars().all()
-            assert {table.name for table in tables} == {"节点执行", "工具调用", "学习证据"}
+            assert {table.name for table in tables} == {
+                "节点执行",
+                "工具调用",
+                "学习证据",
+                "学习测评",
+            }
             rows = (
                 await session.execute(
                     select(WorkspaceTableRow).where(
@@ -95,6 +108,7 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
                 f"task:{task_id}:1",
                 f"task:{task_id}:2",
                 f"session:{session_id}:1",
+                f"assessment:{task_id}:submission-1",
             }
             assert all(row.values["learner_id"] == learner_id for row in rows)
 

@@ -23,6 +23,7 @@ RUNTIME_TABLE_VERSION = "lingxi-runtime.v1"
 RUNTIME_TABLES: dict[str, dict[str, str]] = {
     "evidence": {"name": "学习证据", "description": "LingxiGraph 学习证据运行记录"},
     "mastery": {"name": "掌握度变化", "description": "Learner State 掌握度变化记录"},
+    "assessment": {"name": "学习测评", "description": "题目、作答与评分运行记录"},
     "tool": {"name": "工具调用", "description": "LingxiGraph 工具调用运行记录"},
     "interaction": {"name": "学习交互", "description": "学习者与教学系统的交互记录"},
     "node": {"name": "节点执行", "description": "图节点、Agent 和 Sidecar 执行记录"},
@@ -57,6 +58,8 @@ def runtime_category(kind: str) -> str:
         "state.updated",
     }:
         return "mastery"
+    if normalized.startswith("assessment.") or normalized.startswith("quiz."):
+        return "assessment"
     if normalized.startswith("tool."):
         return "tool"
     if normalized in {
