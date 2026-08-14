@@ -1,3 +1,5 @@
+import { StandaloneSettingsShell } from '@/components/settings/standalone-settings-shell'
+
 export default function AccountSettingsLayout({ children }: { children: React.ReactNode }) {
-  return children
+  return <StandaloneSettingsShell plane='account'>{children}</StandaloneSettingsShell>
 }

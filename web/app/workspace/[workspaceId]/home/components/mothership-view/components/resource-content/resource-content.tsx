@@ -33,6 +33,8 @@ import { KnowledgeBase } from '@/app/workspace/[workspaceId]/knowledge/[id]/base
 import { LogDetailsContent } from '@/app/workspace/[workspaceId]/logs/components'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { Table } from '@/app/workspace/[workspaceId]/tables/[tableId]/table'
+import type { WorkflowsEditorRuntime } from '@/app/(landing)/workflows/components/workflows-editor-loop'
+import { WorkflowsEditorLoop } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 import { useFolders } from '@/hooks/queries/folders'
 import { useLogDetail } from '@/hooks/queries/logs'
 import { exportTable } from '@/hooks/queries/tables'
@@ -54,6 +56,7 @@ interface ResourceContentProps {
   previewSession?: FilePreviewSession | null
   isAgentResponding?: boolean
   genericResourceData?: GenericResourceData
+  lingxiRuntime?: WorkflowsEditorRuntime
   previewContextKey?: string
   /** Resolved server-side by the home page — the embedded table can't read
    *  AppConfig itself, so the flag is threaded down rather than looked up. */
@@ -129,6 +132,7 @@ export const ResourceContent = memo(function ResourceContent({
   previewSession,
   isAgentResponding,
   genericResourceData,
+  lingxiRuntime,
   previewContextKey,
   tableViewsEnabled,
   onNotFound,
@@ -205,6 +209,8 @@ export const ResourceContent = memo(function ResourceContent({
   }
 
   switch (resource.type) {
+    case 'workflow':
+      return lingxiRuntime ? <WorkflowsEditorLoop live runtime={lingxiRuntime} /> : null
     case 'table':
       return (
         <Table

@@ -1061,6 +1061,46 @@ async def list_tables(request: Request, workspaceId: str = "lingxi", includeArch
     return {"success": True, "data": {"tables": result, "totalCount": len(result)}, "tables": result, "totalCount": len(result)}
 
 
+@router.post("/lingxi/learning-records")
+async def record_learning_event(body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
+    """Project runtime primitives into purpose-specific native Sim tables."""
+    task_id = str(body.get("taskId") or "").strip()
+    event = body.get("event") or {}
+    sequence = int(event.get("sequence") or 0)
+    if not task_id or sequence <= 0:
+        raise HTTPException(status_code=422, detail="taskId_and_event_sequence_required")
+    kind = str(event.get("kind") or "")
+    payload = event.get("payload") or {}
+    if kind in {"evidence.added"}:
+        table_name, category = "学习证据", "evidence"
+    elif kind in {"mastery.updated"}:
+        table_name, category = "掌握度变化", "mastery"
+    elif kind.startswith("tool."):
+        table_name, category = "工具调用", "tool"
+    elif kind in {"learner.action", "learner.answer", "assistant.delta", "message"}:
+        table_name, category = "学习交互", "interaction"
+    elif kind.startswith("node.") or kind.startswith("agent."):
+        table_name, category = "节点执行", "node"
+    else:
+        table_name, category = "学习运行", "run"
+    record_key = f"{task_id}:{sequence}"
+    values = {"record_key": record_key, "task_id": task_id, "sequence": sequence, "event_kind": kind, "agent": str(event.get("agent") or ""), "payload": payload, "recorded_at": utcnow().isoformat()}
+    workspace = await _workspace(request, context)
+    async with service_of(request).db.session() as session:
+        table = await session.scalar(select(WorkspaceTable).where(WorkspaceTable.workspace_id == workspace.id, WorkspaceTable.name == table_name))
+        if table is None:
+            table = WorkspaceTable(id=f"table_{uuid.uuid4().hex}", workspace_id=workspace.id, name=table_name, description=f"LingxiGraph {category} runtime records", metadata_payload={"source": "lingxi-runtime", "category": category})
+            session.add(table)
+            for position, key in enumerate(("record_key", "task_id", "sequence", "event_kind", "agent", "payload", "recorded_at")):
+                session.add(WorkspaceTableColumn(id=f"col_{uuid.uuid4().hex}", table_id=table.id, key=key, name=key, type="json" if key == "payload" else ("number" if key == "sequence" else "string"), position=position, options={}))
+            await session.flush()
+        existing = await session.scalar(select(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id, WorkspaceTableRow.values["record_key"].as_string() == record_key))
+        if existing is None:
+            session.add(WorkspaceTableRow(id=f"row_{uuid.uuid4().hex}", table_id=table.id, values=values, position=sequence))
+            await session.commit()
+    return {"success": True, "data": {"taskId": task_id, "sequence": sequence, "table": table_name}}
+
+
 @router.post("/table")
 async def create_table(body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, str(body.get("workspaceId", "lingxi")), context)

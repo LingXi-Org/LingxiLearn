@@ -1,5 +1,5 @@
-import { LingxiBillingPage } from '@/app/workspace/[workspaceId]/components/lingxi-settings-pages'
+import { AccountSettingsRenderer } from '@/components/settings/account-settings-renderer'
 
 export default function AccountBillingPage() {
-  return <LingxiBillingPage backHref='/account/settings' />
+  return <AccountSettingsRenderer section='billing' />
 }

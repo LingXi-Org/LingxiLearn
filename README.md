@@ -168,15 +168,14 @@ docker compose -f docker-compose.dev.yml up --build
 ```bash
 cp .env.example .env
 # 设置数据库、身份 BFF 和端口配置
-# 默认拉取 latest；固定版本时将下面两个命令中的 latest 替换为 0.1.0，
-# 并同步把 .env 中的 LINGXILEARN_IMAGE_TAG 改为 0.1.0
+# 生产 Compose 始终拉取 main 最新构建的 latest 标签
 docker pull accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-api:latest
 docker pull accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-web:latest
 docker compose pull
 docker compose up -d
 ```
 
-默认生产入口为 `http://localhost:8080`。生产 Compose 统一通过 `.env` 中的 `LINGXILEARN_IMAGE_REGISTRY` 加速拉取 API 和 Web 镜像，默认值为 `accel.way2api.fun/ghcr.io/lingxi-org`。CI 会为两个镜像同时发布版本标签（当前为 `0.1.0`）和默认分支的 `latest` 标签；将 `.env` 中的 `LINGXILEARN_IMAGE_TAG` 改为具体版本即可固定部署版本。
+默认生产入口为 `http://localhost:8080`。生产 Compose 直接使用 `accel.way2api.fun/ghcr.io/lingxi-org/*:latest`，不会被 `.env` 中的版本变量覆盖。每次 `main` 推送都会为 API 和 Web 生成当前提交的版本标签，并刷新 `latest` 标签。
 
 <details>
   <summary>运行模式</summary>

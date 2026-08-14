@@ -1,5 +1,5 @@
-import { LingxiUsagePage } from '@/app/workspace/[workspaceId]/components/lingxi-settings-pages'
+import { AccountSettingsRenderer } from '@/components/settings/account-settings-renderer'
 
 export default function AccountCreditUsagePage() {
-  return <LingxiUsagePage />
+  return <AccountSettingsRenderer section='billing' />
 }

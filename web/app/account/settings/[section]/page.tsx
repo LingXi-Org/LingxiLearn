@@ -1,4 +1,5 @@
-import { LingxiUnavailableSettingsPage } from '@/app/workspace/[workspaceId]/components/lingxi-settings-pages'
+import type { AccountSettingsSection } from '@/components/settings/navigation'
+import { AccountSettingsRenderer } from '@/components/settings/account-settings-renderer'
 import { AccountSettings } from '../account-settings'
 
 export function generateStaticParams() {
@@ -13,9 +14,13 @@ export function generateStaticParams() {
 
 export default async function Page({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params
-  // The account component keeps the identity verification flows together. The
-  // section URL is accepted for native Sim links while the visible tab remains
-  // a single LingxiIdentity-backed account center.
+  // Profile, billing and API keys use the complete native settings surfaces.
+  // Identity-specific security/session flows remain on the LingxiIdentity
+  // surface because they require its verification and session APIs.
+  if (section === 'billing' || section === 'api-keys' || section === 'admin' || section === 'mothership') {
+    const nativeSection = section === 'api-keys' ? 'api-keys' : section
+    return <AccountSettingsRenderer section={nativeSection as AccountSettingsSection} />
+  }
   if (
     section === 'profile' ||
     section === 'general' ||
@@ -24,5 +29,5 @@ export default async function Page({ params }: { params: Promise<{ section: stri
   ) {
     return <AccountSettings initialSection={section === 'general' ? 'profile' : section} />
   }
-  return <LingxiUnavailableSettingsPage title={section} />
+  return <AccountSettingsRenderer section='general' />
 }

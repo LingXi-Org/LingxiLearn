@@ -1,5 +1,5 @@
-import { LingxiUserManagementPage } from '@/app/workspace/[workspaceId]/components/lingxi-settings-pages'
+import { AccountSettingsRenderer } from '@/components/settings/account-settings-renderer'
 
 export default function AccountUsersPage() {
-  return <LingxiUserManagementPage />
+  return <AccountSettingsRenderer section='general' />
 }

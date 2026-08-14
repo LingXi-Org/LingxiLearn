@@ -17,6 +17,7 @@ import type {
   GenericResourceData,
   MothershipResource,
 } from '@/app/workspace/[workspaceId]/home/types'
+import type { WorkflowsEditorRuntime } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { useWorkspaceFiles } from '@/hooks/queries/workspace-files'
 import { ResourceActions, ResourceContent, ResourceTabs } from './components'
@@ -70,6 +71,7 @@ interface MothershipViewProps {
   previewSession?: FilePreviewSession | null
   isAgentResponding?: boolean
   genericResourceData?: GenericResourceData
+  lingxiRuntime?: WorkflowsEditorRuntime
   /** Resolved server-side by the home page; forwarded to the embedded table. */
   tableViewsEnabled?: boolean
   /** Claims the current resource selection after direct panel interaction. */
@@ -90,6 +92,7 @@ export const MothershipView = memo(
       previewSession,
       isAgentResponding,
       genericResourceData,
+      lingxiRuntime,
       tableViewsEnabled,
       onUserInteraction,
     }: MothershipViewProps,
@@ -243,6 +246,7 @@ export const MothershipView = memo(
                 previewSession={previewForActive}
                 isAgentResponding={isAgentResponding}
                 genericResourceData={active.type === 'generic' ? genericResourceData : undefined}
+                lingxiRuntime={lingxiRuntime}
                 previewContextKey={chatId}
                 tableViewsEnabled={tableViewsEnabled}
                 onNotFound={(resourceId) => removeResource('log', resourceId)}

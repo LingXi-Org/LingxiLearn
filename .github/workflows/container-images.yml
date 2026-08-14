@@ -72,7 +72,9 @@ jobs:
             type=ref,event=tag
             type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
             type=sha,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
+            # Every main push (and a manual run on main) refreshes the
+            # production tag. Pull requests never publish mutable tags.
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
 
       - name: Build and publish image
         uses: docker/build-push-action@v6

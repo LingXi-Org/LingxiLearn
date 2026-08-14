@@ -236,6 +236,7 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
     dispatchingHeadId,
     previewSession,
     genericResourceData,
+    lingxiRuntime,
     getCurrentRequestId,
   } = useChat(workspaceId, chatId, chatOptions)
 
@@ -648,6 +649,7 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
             previewSession={previewSession}
             isAgentResponding={isSending}
             genericResourceData={genericResourceData ?? undefined}
+            lingxiRuntime={lingxiRuntime}
             tableViewsEnabled={tableViewsEnabled}
             onUserInteraction={handleResourceInteraction}
             className={skipResourceTransition ? '!transition-none' : undefined}

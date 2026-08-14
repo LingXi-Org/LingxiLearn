@@ -13,6 +13,7 @@ import { createLogger } from '@sim/logger'
 import { isTerminalToolName } from '@sim/terminal-protocol'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { sleep } from '@sim/utils/helpers'
+import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import { generateId, generateShortId } from '@sim/utils/id'
 import { isRecordLike } from '@sim/utils/object'
 import { backoffWithJitter } from '@sim/utils/retry'
@@ -222,6 +223,7 @@ export interface UseChatReturn {
   dispatchingHeadId: string | null
   previewSession: FilePreviewSession | null
   genericResourceData: GenericResourceData | null
+  lingxiRuntime?: { task: AgentTaskSnapshot | null; events: AgentTaskEvent[] }
   getCurrentRequestId: () => string | undefined
 }
 

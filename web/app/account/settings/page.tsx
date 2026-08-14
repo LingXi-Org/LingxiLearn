@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import { AccountSettings } from './account-settings'
+import { AccountSettingsRenderer } from '@/components/settings/account-settings-renderer'
 
 export const metadata: Metadata = { title: '账户设置' }
 
 export default function AccountSettingsPage() {
-  return <AccountSettings />
+  return <AccountSettingsRenderer section='general' />
 }

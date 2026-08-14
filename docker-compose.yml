@@ -9,7 +9,7 @@
 name: lingxilearn
 
 x-api: &api
-  image: ${LINGXILEARN_API_IMAGE:-${LINGXILEARN_IMAGE_REGISTRY:-accel.way2api.fun/ghcr.io/lingxi-org}/lingxilearn-api:${LINGXILEARN_IMAGE_TAG:-latest}}
+  image: accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-api:latest
   pull_policy: always
   env_file: [.env]
   environment:
@@ -55,7 +55,7 @@ services:
   # Native Sim standalone server. API/auth requests are proxied by Next so the
   # browser keeps one same-origin session and never needs a second public port.
   web:
-    image: ${LINGXILEARN_WEB_IMAGE:-${LINGXILEARN_IMAGE_REGISTRY:-accel.way2api.fun/ghcr.io/lingxi-org}/lingxilearn-web:${LINGXILEARN_IMAGE_TAG:-latest}}
+    image: accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-web:latest
     pull_policy: always
     environment:
       LINGXILEARN_API_ORIGIN: http://api:8000

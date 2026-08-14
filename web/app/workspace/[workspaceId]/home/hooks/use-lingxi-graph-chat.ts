@@ -202,6 +202,11 @@ export function useLingxiGraphChat(
         if (current.some((candidate) => candidate.sequence === event.sequence)) return current
         return [...current, event].sort((a, b) => a.sequence - b.sequence)
       })
+      void fetch('/api/lingxi/learning-records', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ taskId, event }),
+      }).catch(() => {})
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
         if (artifact)
@@ -378,6 +383,7 @@ export function useLingxiGraphChat(
     dispatchingHeadId: null,
     previewSession: null as FilePreviewSession | null,
     genericResourceData: null as GenericResourceData | null,
+    lingxiRuntime: { task, events },
     getCurrentRequestId: () => requestIdRef.current,
   }
 }
