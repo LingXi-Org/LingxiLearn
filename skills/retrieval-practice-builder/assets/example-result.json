@@ -1,0 +1,67 @@
+{
+  "schema_version": "retrieval-practice-builder-result.v1",
+  "task_id": "prefetch_tcp_019",
+  "status": "ready",
+  "concept": "tcp.fast_retransmit",
+  "candidates": [
+    {
+      "id": "rp_recall_01",
+      "target_type": "retrieval",
+      "prompt": "不考虑其他异常时，收到三个重复 ACK 后，发送方更可能触发哪一种重传？说明触发依据。",
+      "response_format": "short_text",
+      "difficulty": "easy",
+      "evidence_refs": ["ev_0182"],
+      "misconception_targets": ["timeout_only_retransmission"],
+      "grading_key": {"answer": "快速重传；依据是三个重复 ACK。", "rubric": "指出快速重传并说出三个重复 ACK 触发条件。", "keywords": ["快速重传", "三个重复 ACK"]}
+    },
+    {
+      "id": "rp_boundary_01",
+      "target_type": "boundary_case",
+      "prompt": "如果只收到两个重复 ACK，且重传计时器尚未到期，依据本节规则能否判定已经触发快速重传？为什么？",
+      "response_format": "short_text",
+      "difficulty": "medium",
+      "evidence_refs": ["ev_0182", "ev_0183"],
+      "misconception_targets": ["counting_two_duplicate_acks_as_fast_retransmit"],
+      "grading_key": {"answer": "不能；材料给出的触发条件是三个重复 ACK，计时器也尚未到期。", "rubric": "同时指出重复 ACK 数量不足且没有超时证据。", "keywords": ["两个", "三个", "尚未到期"]}
+    },
+    {
+      "id": "rp_discriminator_01",
+      "target_type": "misconception_discriminator",
+      "prompt": "下面哪一项最能区分快速重传和超时重传：A. 三个重复 ACK；B. RTT 变大；C. 数据包更长？请选择并说明。",
+      "response_format": "single_choice",
+      "options": ["A", "B", "C"],
+      "difficulty": "medium",
+      "evidence_refs": ["ev_0182", "ev_0183"],
+      "misconception_targets": ["timeout_only_retransmission"],
+      "grading_key": {"answer": "A", "rubric": "选择 A，并将其与快速重传触发条件联系起来。", "keywords": ["三个重复 ACK"]}
+    }
+  ],
+  "selection": {"candidate_id": "rp_boundary_01", "reason": "它在不泄露完整答案的前提下直接检验当前误区的边界条件。"},
+  "public_task": {
+    "candidate_id": "rp_boundary_01",
+    "target_type": "boundary_case",
+    "prompt": "如果只收到两个重复 ACK，且重传计时器尚未到期，依据本节规则能否判定已经触发快速重传？为什么？",
+    "response_format": "short_text"
+  },
+  "grading_key": {
+    "answer": "不能；材料给出的触发条件是三个重复 ACK，计时器也尚未到期。",
+    "rubric": "同时指出重复 ACK 数量不足且没有超时证据。",
+    "keywords": ["两个", "三个", "尚未到期"]
+  },
+  "validation": {
+    "answerable": true,
+    "evidence_grounded": true,
+    "misconception_checked": true,
+    "difficulty_checked": true,
+    "public_internal_separated": true,
+    "rejected_candidate_ids": []
+  },
+  "prefetch": {
+    "blocking": false,
+    "discard_if": ["学习者切换主题", "新的判分证据改变教学策略"],
+    "cache_key": "tcp.fast_retransmit:boundary_case:ev_0183",
+    "expires_after_events": 1
+  },
+  "evidence_refs": ["ev_0182", "ev_0183"],
+  "warnings": []
+}

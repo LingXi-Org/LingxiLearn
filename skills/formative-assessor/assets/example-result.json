@@ -1,0 +1,16 @@
+{
+  "schema_version": "formative-assessor-result.v1",
+  "task_id": "ev_turn_0183",
+  "concept": "tcp.fast_retransmit",
+  "evidence_state": "misconception_evidence",
+  "independent": true,
+  "error_pattern": "timeout_only_retransmission",
+  "confidence": "high",
+  "confidence_basis": "learner_reported",
+  "next_probe_needed": false,
+  "probe_reason": null,
+  "recommended_policy_signal": "conceptual_conflict",
+  "evidence_refs": ["ev_0182", "ev_0183"],
+  "rationale": "独立作答中持续把重复 ACK 触发的快速重传解释为超时重传，且学习者明确报告了高信心；这支持一个稳定的规则性误区。",
+  "limitations": ["该结果只描述本次证据，不代表永久掌握或正式诊断。"]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "形成性评估解释器"
+  short_description: "将确定性判分证据转为可追溯教学信号"
+  default_prompt: "使用 $formative-assessor 将确定性判分证据转换为结构化教学信号。"

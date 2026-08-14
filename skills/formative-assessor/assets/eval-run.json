@@ -1,0 +1,124 @@
+{
+  "schema_version": "skill-eval-run.v1",
+  "suite_id": "formative-assessor-v1-smoke",
+  "skill": "formative-assessor",
+  "skill_path": "skills/formative-assessor",
+  "cases": [
+    {
+      "case_id": "stable-misconception",
+      "task": {
+        "schema_version": "formative-assessor-task.v1",
+        "task_id": "ev_turn_0183",
+        "concept": "tcp.fast_retransmit",
+        "grader_evidence": {
+          "correctness": "incorrect",
+          "independent": true,
+          "error_pattern": "timeout_only_retransmission",
+          "stable_incorrect_rule": true,
+          "confidence": "high",
+          "confidence_source": "learner_reported",
+          "evidence_refs": ["ev_0182", "ev_0183"]
+        }
+      },
+      "validator": "formative-assessor-result.v1",
+      "expectations": {
+        "required_output_keys": ["evidence_state", "recommended_policy_signal"],
+        "evidence_ids": ["ev_0182", "ev_0183"],
+        "require_evidence": true,
+        "forbidden_output_keys": ["student_response", "tutoring_message", "question_to_learner"],
+        "max_blocking_hops": 1,
+        "max_latency_ms": 1800,
+        "max_tokens": 1000,
+        "traceability_required": true,
+        "required_layers": ["component", "trajectory", "pedagogy"]
+      },
+      "output": {
+        "schema_version": "formative-assessor-result.v1",
+        "task_id": "ev_turn_0183",
+        "concept": "tcp.fast_retransmit",
+        "evidence_state": "misconception_evidence",
+        "independent": true,
+        "error_pattern": "timeout_only_retransmission",
+        "confidence": "high",
+        "confidence_basis": "learner_reported",
+        "next_probe_needed": false,
+        "recommended_policy_signal": "conceptual_conflict",
+        "evidence_refs": ["ev_0182", "ev_0183"],
+        "rationale": "独立证据支持稳定的规则性误区。",
+        "limitations": ["不代表永久掌握或正式诊断。"]
+      },
+      "trajectory": {
+        "learner_facing_writer_count": 0,
+        "blocking_hops": 1,
+        "latency_ms": 700,
+        "prompt_tokens": 350,
+        "completion_tokens": 180,
+        "response_blocked_by_sidecar": false,
+        "turns": [
+          {"event": "deterministic-grader", "blocking": true},
+          {"event": "formative-assessor", "writer": "formative-assessor", "audience": "host", "blocking": true}
+        ]
+      },
+      "outcome": {
+        "evidence_refs": ["ev_0182", "ev_0183"]
+      }
+    },
+    {
+      "case_id": "ambiguous-evidence-needs-probe",
+      "task": {
+        "schema_version": "formative-assessor-task.v1",
+        "task_id": "ev_turn_0201",
+        "concept": "tcp.fast_retransmit",
+        "grader_evidence": {
+          "correctness": "ambiguous",
+          "independent": false,
+          "confidence": null,
+          "confidence_source": "not_provided",
+          "evidence_refs": ["ev_0201"]
+        }
+      },
+      "validator": "formative-assessor-result.v1",
+      "expectations": {
+        "required_output_keys": ["evidence_state", "next_probe_needed", "probe_reason"],
+        "evidence_ids": ["ev_0201"],
+        "require_evidence": true,
+        "forbidden_output_keys": ["student_response", "tutoring_message", "question_to_learner"],
+        "max_blocking_hops": 1,
+        "max_latency_ms": 1800,
+        "max_tokens": 1000,
+        "traceability_required": true,
+        "required_layers": ["component", "trajectory", "pedagogy"]
+      },
+      "output": {
+        "schema_version": "formative-assessor-result.v1",
+        "task_id": "ev_turn_0201",
+        "concept": "tcp.fast_retransmit",
+        "evidence_state": "needs_recheck",
+        "independent": false,
+        "confidence": null,
+        "confidence_basis": "not_provided",
+        "next_probe_needed": true,
+        "probe_reason": "当前记录无法区分独立作答是否符合快速重传触发条件。",
+        "recommended_policy_signal": "retrieve_or_predict",
+        "evidence_refs": ["ev_0201"],
+        "rationale": "证据标记为 ambiguous，不能据此确认学习状态。",
+        "limitations": ["需要一次可独立判分的后续观察。"]
+      },
+      "trajectory": {
+        "learner_facing_writer_count": 0,
+        "blocking_hops": 1,
+        "latency_ms": 650,
+        "prompt_tokens": 300,
+        "completion_tokens": 150,
+        "response_blocked_by_sidecar": false,
+        "turns": [
+          {"event": "deterministic-grader", "blocking": true},
+          {"event": "formative-assessor", "writer": "formative-assessor", "audience": "host", "blocking": true}
+        ]
+      },
+      "outcome": {
+        "evidence_refs": ["ev_0201"]
+      }
+    }
+  ]
+}

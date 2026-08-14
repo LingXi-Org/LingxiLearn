@@ -1,0 +1,21 @@
+{
+  "schema_version": "formative-assessor-task.v1",
+  "task_id": "ev_turn_0183",
+  "concept": "tcp.fast_retransmit",
+  "learning_objective": "区分快速重传与超时重传的触发条件。",
+  "grader_evidence": {
+    "correctness": "incorrect",
+    "score": 0.25,
+    "independent": true,
+    "error_pattern": "timeout_only_retransmission",
+    "stable_incorrect_rule": true,
+    "confidence": "high",
+    "confidence_source": "learner_reported",
+    "hint_level": 0,
+    "solution_shown": false,
+    "rubric_signals": ["把三个重复 ACK 的触发条件归因于超时"],
+    "tool_observations": ["grader_rule=tcp-retransmission-v1"],
+    "evidence_refs": ["ev_0182", "ev_0183"],
+    "grader_id": "tcp-retransmission-v1"
+  }
+}

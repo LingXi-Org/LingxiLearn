@@ -1,0 +1,148 @@
+{
+  "schema_version": "skill-eval-run.v1",
+  "suite_id": "retrieval-practice-builder-v1-smoke",
+  "skill": "retrieval-practice-builder",
+  "skill_path": "skills/retrieval-practice-builder",
+  "cases": [
+    {
+      "case_id": "boundary-prefetch",
+      "task": {
+        "schema_version": "retrieval-practice-builder-task.v1",
+        "task_id": "prefetch_tcp_019",
+        "concept": "tcp.fast_retransmit",
+        "learning_objective": "区分快速重传与超时重传的触发条件。",
+        "target_type": ["retrieval", "boundary_case", "misconception_discriminator"],
+        "learner_evidence": {
+          "evidence_refs": ["ev_0182", "ev_0183"],
+          "evidence_state": "misconception_evidence",
+          "error_pattern": "timeout_only_retransmission",
+          "verification_debt": false
+        },
+        "difficulty": {"level": "medium"},
+        "constraints": {"max_candidates": 3, "language": "zh-CN", "no_external_facts": true}
+      },
+      "validator": "retrieval-practice-builder-result.v1",
+      "expectations": {
+        "required_output_keys": ["selection.candidate_id", "public_task.prompt"],
+        "evidence_ids": ["ev_0182", "ev_0183"],
+        "require_evidence": true,
+        "learner_facing_paths": ["public_task"],
+        "answer_tokens": ["不能；材料给出的触发条件是三个重复 ACK"],
+        "max_blocking_hops": 0,
+        "max_latency_ms": 2500,
+        "max_tokens": 2200,
+        "non_blocking": true,
+        "traceability_required": true,
+        "required_layers": ["component", "trajectory", "pedagogy"]
+      },
+      "output": {
+        "schema_version": "retrieval-practice-builder-result.v1",
+        "task_id": "prefetch_tcp_019",
+        "status": "ready",
+        "concept": "tcp.fast_retransmit",
+        "candidates": [
+          {
+            "id": "rp_boundary_01",
+            "target_type": "boundary_case",
+            "prompt": "如果只收到两个重复 ACK，且重传计时器尚未到期，依据本节规则能否判定已经触发快速重传？为什么？",
+            "response_format": "short_text",
+            "difficulty": "medium",
+            "evidence_refs": ["ev_0182", "ev_0183"],
+            "misconception_targets": ["timeout_only_retransmission"],
+            "grading_key": {"answer": "不能；材料给出的触发条件是三个重复 ACK，计时器也尚未到期。", "rubric": "指出重复 ACK 数量不足且没有超时证据。"}
+          }
+        ],
+        "selection": {"candidate_id": "rp_boundary_01", "reason": "直接检验当前误区的边界条件。"},
+        "public_task": {
+          "candidate_id": "rp_boundary_01",
+          "target_type": "boundary_case",
+          "prompt": "如果只收到两个重复 ACK，且重传计时器尚未到期，依据本节规则能否判定已经触发快速重传？为什么？",
+          "response_format": "short_text"
+        },
+        "grading_key": {"answer": "不能；材料给出的触发条件是三个重复 ACK，计时器也尚未到期。", "rubric": "指出重复 ACK 数量不足且没有超时证据。"},
+        "validation": {"answerable": true, "evidence_grounded": true, "misconception_checked": true, "difficulty_checked": true, "public_internal_separated": true},
+        "prefetch": {"blocking": false, "discard_if": ["学习者切换主题", "新的判分证据改变教学策略"], "cache_key": "tcp.fast_retransmit:boundary_case:ev_0183"},
+        "evidence_refs": ["ev_0182", "ev_0183"],
+        "warnings": []
+      },
+      "trajectory": {
+        "learner_facing_writer_count": 0,
+        "blocking_hops": 0,
+        "latency_ms": 900,
+        "prompt_tokens": 700,
+        "completion_tokens": 480,
+        "response_blocked_by_sidecar": false,
+        "turns": [
+          {"event": "retrieval-practice-builder", "writer": "retrieval-practice-builder", "audience": "host", "sidecar": true, "blocking": false, "blocked_response": false}
+        ]
+      },
+      "outcome": {"evidence_refs": ["ev_0182", "ev_0183"]}
+    },
+    {
+      "case_id": "insufficient-evidence-discardable",
+      "task": {
+        "schema_version": "retrieval-practice-builder-task.v1",
+        "task_id": "prefetch_tcp_020",
+        "concept": "tcp.fast_retransmit",
+        "learning_objective": "在证据足够时区分快速重传与超时重传。",
+        "target_type": ["retrieval", "near_transfer"],
+        "learner_evidence": {
+          "evidence_refs": ["ev_0201"],
+          "evidence_state": "not_observed",
+          "verification_debt": true
+        },
+        "difficulty": "easy",
+        "constraints": {"max_candidates": 2, "language": "zh-CN", "no_external_facts": true}
+      },
+      "validator": "retrieval-practice-builder-result.v1",
+      "expectations": {
+        "required_output_keys": ["status", "public_task", "prefetch.blocking"],
+        "evidence_ids": ["ev_0201"],
+        "require_evidence": true,
+        "learner_facing_paths": ["public_task"],
+        "max_blocking_hops": 0,
+        "max_latency_ms": 2500,
+        "max_tokens": 1600,
+        "non_blocking": true,
+        "traceability_required": true,
+        "required_layers": ["component", "trajectory", "pedagogy"]
+      },
+      "output": {
+        "schema_version": "retrieval-practice-builder-result.v1",
+        "task_id": "prefetch_tcp_020",
+        "status": "insufficient_evidence",
+        "concept": "tcp.fast_retransmit",
+        "candidates": [],
+        "selection": null,
+        "public_task": null,
+        "grading_key": null,
+        "validation": {
+          "answerable": false,
+          "evidence_grounded": false,
+          "misconception_checked": false,
+          "difficulty_checked": false,
+          "public_internal_separated": true
+        },
+        "prefetch": {
+          "blocking": false,
+          "discard_if": ["学习者切换主题", "出现新的确定性判分证据"],
+          "cache_key": "tcp.fast_retransmit:insufficient:ev_0201"
+        },
+        "evidence_refs": ["ev_0201"],
+        "warnings": ["当前证据不足，暂不生成可交付练习。"]
+      },
+      "trajectory": {
+        "learner_facing_writer_count": 0,
+        "blocking_hops": 0,
+        "latency_ms": 500,
+        "prompt_tokens": 420,
+        "completion_tokens": 120,
+        "response_blocked_by_sidecar": false,
+        "turns": [
+          {"event": "retrieval-practice-builder", "writer": "retrieval-practice-builder", "audience": "host", "sidecar": true, "blocking": false, "blocked_response": false}
+        ]
+      },
+      "outcome": {"evidence_refs": ["ev_0201"]}
+    }
+  ]
+}

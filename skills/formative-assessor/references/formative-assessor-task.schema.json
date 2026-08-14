@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lingxi:formative-assessor-task.v1",
+  "title": "Formative assessor task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "concept", "grader_evidence"],
+  "properties": {
+    "schema_version": {"const": "formative-assessor-task.v1"},
+    "task_id": {"type": "string", "minLength": 1},
+    "concept": {"type": "string", "minLength": 1},
+    "learning_objective": {"type": "string"},
+    "grader_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correctness", "independent", "evidence_refs", "confidence_source"],
+      "properties": {
+        "correctness": {"enum": ["correct", "incorrect", "partial", "ambiguous", "ungraded"]},
+        "score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "independent": {"type": "boolean"},
+        "error_pattern": {"type": ["string", "null"]},
+        "stable_incorrect_rule": {"type": "boolean"},
+        "confidence": {"enum": ["high", "medium", "low", null]},
+        "confidence_source": {"enum": ["learner_reported", "ui_captured", "not_provided"]},
+        "hint_level": {"type": "integer", "minimum": 0, "maximum": 3},
+        "solution_shown": {"type": "boolean"},
+        "rubric_signals": {"type": "array", "items": {"type": "string"}},
+        "tool_observations": {"type": "array", "items": {"type": "string"}},
+        "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "grader_id": {"type": "string"}
+      }
+    },
+    "prior_assessment": {"type": ["object", "null"]},
+    "constraints": {"type": "object"}
+  }
+}

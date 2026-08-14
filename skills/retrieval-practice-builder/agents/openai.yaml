@@ -1,0 +1,4 @@
+interface:
+  display_name: "检索练习构建器"
+  short_description: "预取基于证据的检索与迁移任务"
+  default_prompt: "使用 $retrieval-practice-builder 预取一个基于学习证据的检索或迁移任务。"

@@ -1,0 +1,26 @@
+{
+  "schema_version": "retrieval-practice-builder-task.v1",
+  "task_id": "prefetch_tcp_019",
+  "concept": "tcp.fast_retransmit",
+  "learning_objective": "区分快速重传与超时重传的触发条件，并能判断边界情形。",
+  "taught_content": {
+    "summary": "三个重复 ACK 可以触发快速重传；超时重传依赖重传计时器到期。"
+  },
+  "target_type": ["retrieval", "boundary_case", "misconception_discriminator"],
+  "learner_evidence": {
+    "evidence_refs": ["ev_0182", "ev_0183"],
+    "evidence_state": "misconception_evidence",
+    "error_pattern": "timeout_only_retransmission",
+    "verification_debt": false,
+    "last_task_type": "conceptual_conflict",
+    "assisted": false
+  },
+  "difficulty": {"level": "medium"},
+  "constraints": {
+    "max_candidates": 3,
+    "language": "zh-CN",
+    "no_external_facts": true,
+    "independent": true,
+    "max_prompt_chars": 180
+  }
+}

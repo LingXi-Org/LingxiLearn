@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lingxi:retrieval-practice-builder-result.v1",
+  "title": "Retrieval practice builder result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "task_id", "status", "concept", "candidates", "selection", "public_task",
+    "grading_key", "validation", "prefetch", "evidence_refs", "warnings"
+  ],
+  "properties": {
+    "schema_version": {"const": "retrieval-practice-builder-result.v1"},
+    "task_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["ready", "insufficient_evidence", "discarded"]},
+    "concept": {"type": "string", "minLength": 1},
+    "candidates": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/candidate"}},
+    "selection": {
+      "type": ["object", "null"],
+      "properties": {"candidate_id": {"type": "string"}, "reason": {"type": "string"}},
+      "required": ["candidate_id", "reason"],
+      "additionalProperties": false
+    },
+    "public_task": {"oneOf": [{"$ref": "#/$defs/public_task"}, {"type": "null"}]},
+    "grading_key": {"oneOf": [{"$ref": "#/$defs/grading_key"}, {"type": "null"}]},
+    "validation": {
+      "type": "object",
+      "required": ["answerable", "evidence_grounded", "misconception_checked", "difficulty_checked", "public_internal_separated"],
+      "properties": {
+        "answerable": {"type": "boolean"},
+        "evidence_grounded": {"type": "boolean"},
+        "misconception_checked": {"type": "boolean"},
+        "difficulty_checked": {"type": "boolean"},
+        "public_internal_separated": {"type": "boolean"},
+        "rejected_candidate_ids": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
+    "prefetch": {
+      "type": "object",
+      "required": ["blocking", "discard_if", "cache_key"],
+      "properties": {
+        "blocking": {"const": false},
+        "discard_if": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "cache_key": {"type": "string", "minLength": 1},
+        "expires_after_events": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": true
+    },
+    "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "extensions": {"type": "object"}
+  },
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "required": ["id", "target_type", "prompt", "response_format", "difficulty", "evidence_refs", "misconception_targets", "grading_key"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^rp[0-9A-Za-z_-]+$"},
+        "target_type": {"enum": ["retrieval", "near_transfer", "far_transfer", "boundary_case", "misconception_discriminator"]},
+        "prompt": {"type": "string", "minLength": 1},
+        "response_format": {"enum": ["short_text", "single_choice", "multi_choice", "numeric", "classification", "prediction"]},
+        "options": {"type": "array", "items": {"type": "string"}},
+        "difficulty": {"enum": ["easy", "medium", "hard"]},
+        "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "misconception_targets": {"type": "array", "items": {"type": "string"}},
+        "grading_key": {"$ref": "#/$defs/grading_key"}
+      },
+      "additionalProperties": false
+    },
+    "public_task": {
+      "type": "object",
+      "required": ["candidate_id", "target_type", "prompt", "response_format"],
+      "properties": {
+        "candidate_id": {"type": "string"},
+        "target_type": {"enum": ["retrieval", "near_transfer", "far_transfer", "boundary_case", "misconception_discriminator"]},
+        "prompt": {"type": "string", "minLength": 1},
+        "response_format": {"enum": ["short_text", "single_choice", "multi_choice", "numeric", "classification", "prediction"]},
+        "options": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "grading_key": {
+      "type": "object",
+      "required": ["answer", "rubric"],
+      "properties": {
+        "answer": {},
+        "rubric": {"type": "string", "minLength": 1},
+        "keywords": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }
+  }
+}

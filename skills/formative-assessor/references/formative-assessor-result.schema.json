@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lingxi:formative-assessor-result.v1",
+  "title": "Formative assessor result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "task_id", "concept", "evidence_state", "independent", "confidence", "confidence_basis",
+    "next_probe_needed", "recommended_policy_signal", "evidence_refs", "rationale", "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": "formative-assessor-result.v1"},
+    "task_id": {"type": "string", "minLength": 1},
+    "concept": {"type": "string", "minLength": 1},
+    "evidence_state": {"enum": ["not_observed", "emerging", "demonstrated", "misconception_evidence", "needs_recheck"]},
+    "independent": {"type": "boolean"},
+    "error_pattern": {"type": ["string", "null"]},
+    "confidence": {"enum": ["high", "medium", "low", null]},
+    "confidence_basis": {"enum": ["learner_reported", "ui_captured", "not_provided"]},
+    "next_probe_needed": {"type": "boolean"},
+    "probe_reason": {"type": ["string", "null"]},
+    "recommended_policy_signal": {
+      "enum": [
+        "advance", "retrieve_or_predict", "minimal_cue", "progressive_hint", "conceptual_conflict",
+        "worked_example_fade", "targeted_explanation", "teach_back", "transfer_check"
+      ]
+    },
+    "evidence_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "rationale": {"type": "string", "minLength": 1},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "extensions": {"type": "object"}
+  }
+}

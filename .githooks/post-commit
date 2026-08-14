@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+changed=$(git diff-tree --no-commit-id --name-only -r HEAD -- skills/)
+if [ -z "$changed" ]; then
+  exit 0
+fi
+
+pwsh -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/sync-skills.ps1" \
+  -CommitMessage "sync skills from LingxiLearn commit $(git rev-parse --short HEAD)"
