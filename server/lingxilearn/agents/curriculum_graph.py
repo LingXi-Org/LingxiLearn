@@ -10,7 +10,9 @@ from lingxigraph import FilesystemSkillSource, HumanMessage, SkillRegistry, crea
 from ..config import REPO_ROOT
 from ..store.knowledge_graph import validate_result
 from .contracts import extract_json
-from .graph import _agent_model, _invoke_agent, _message_text
+from .model_runtime import agent_model as _agent_model
+from .model_runtime import invoke_agent as _invoke_agent
+from .model_runtime import message_text as _message_text
 from .skill_runtime import progressive_skill_prompt, skill_constraints
 
 GRAPH_PROMPT = progressive_skill_prompt(
@@ -104,7 +106,7 @@ async def build_curriculum_graph_proposal(
         (FilesystemSkillSource(REPO_ROOT / "skills" / "curriculum-graph-builder"),)
     )
     agent = create_agent(
-        _agent_model(model, "curriculum_graph_builder"),
+        _agent_model(model, "curriculum_graph"),
         skills=registry,
         system_prompt=GRAPH_PROMPT,
         pinned_constraints=skill_constraints(

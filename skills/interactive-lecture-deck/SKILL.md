@@ -18,6 +18,9 @@ metadata:
   parallel-safe: true
   latency-class: interactive
   default-blocking-hop-budget: "0"
+  capabilities: content.deck
+  provider: lecture_deck
+  ownership: dedicated
   eval-suite: interactive-lecture-deck-v1
 ---
 

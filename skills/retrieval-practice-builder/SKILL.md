@@ -20,6 +20,9 @@ metadata:
   state-write-mode: none
   parallel-safe: true
   latency-class: background
+  capabilities: assess.generate
+  provider: retrieval_practice
+  ownership: dedicated
   eval-suite: retrieval-practice-builder-v1
 ---
 

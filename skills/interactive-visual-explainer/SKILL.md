@@ -17,6 +17,9 @@ metadata:
   state-write-mode: none
   parallel-safe: true
   latency-class: background
+  capabilities: content.visual
+  provider: visual_explainer
+  ownership: dedicated
   eval-suite: interactive-visual-explainer-v1
 ---
 
