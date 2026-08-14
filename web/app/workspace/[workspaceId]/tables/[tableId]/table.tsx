@@ -57,6 +57,7 @@ import {
 import { useInlineRename } from '@/hooks/use-inline-rename'
 import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 import { useLogDetailsUIStore } from '@/stores/logs/store'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type { DeletedRowSnapshot } from '@/stores/table/types'
 import {
   type ColumnConfig,
@@ -89,6 +90,7 @@ import {
 } from './search-params'
 import type { QueryOptions } from './types'
 import { generateColumnName } from './utils'
+import { LingxiReadOnlyTable } from './lingxi-readonly-table'
 
 const logger = createLogger('Table')
 
@@ -211,7 +213,7 @@ function isSameViewConfig(a: TableViewConfig, b: TableViewConfig): boolean {
  *
  * Embedded mode skips the page header but otherwise renders the same surface.
  */
-export function Table({
+function SimTable({
   embedded,
   workspaceId: propWorkspaceId,
   tableId: propTableId,
@@ -1743,4 +1745,14 @@ export function Table({
       )}
     </Resource>
   )
+}
+
+export function Table(props: TableProps = {}) {
+  const params = useParams()
+  const workspaceId = props.workspaceId || (params.workspaceId as string)
+  const tableId = props.tableId || (params.tableId as string)
+  if (workspaceId === LINGXI_WORKSPACE_ID) {
+    return <LingxiReadOnlyTable workspaceId={workspaceId} tableId={tableId} />
+  }
+  return <SimTable {...props} />
 }

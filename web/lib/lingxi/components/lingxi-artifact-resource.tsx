@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui-kit'
 import { api } from '@/lib/lingxi/api'
 import { useAgentTask } from '@/lib/lingxi/hooks/use-agent-task'
@@ -10,7 +11,7 @@ interface LingxiArtifactResourceProps {
   resourceId: string
 }
 
-type ArtifactKind = 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual' | 'knowledge-graph'
+type ArtifactKind = 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual'
 type WorkspaceResourceKind = 'workspace-tables' | 'workspace-files' | 'runtime-logs'
 type ParsedTaskResource = { taskId: string; kind: ArtifactKind }
 type ParsedResource = { workspaceKind: WorkspaceResourceKind } | ParsedTaskResource | null
@@ -40,7 +41,7 @@ function parseResourceId(resourceId: string): ParsedResource {
   if (resourceId === 'lingxi-workspace:logs') return { workspaceKind: 'runtime-logs' as const }
   const [, taskId, kind] = resourceId.split(':')
   if (!taskId || !kind) return null
-  if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual', 'knowledge-graph'].includes(kind))
+  if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual'].includes(kind))
     return null
   return { taskId, kind: kind as ArtifactKind }
 }
@@ -103,7 +104,7 @@ function WorkspaceResource({ kind }: { kind: WorkspaceResourceKind }) {
                 ? `/workspace/lingxi/files/${id}`
                 : `/workspace/lingxi/logs`
           return (
-            <a
+            <Link
               key={id}
               href={href}
               className='block rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 hover:bg-[var(--surface-hover)]'
@@ -116,7 +117,7 @@ function WorkspaceResource({ kind }: { kind: WorkspaceResourceKind }) {
                     ? `${String(row.mimeType ?? row.type ?? '文件')} · ${String(row.size ?? 0)} 字节`
                     : `${localizedStatus(row.status ?? '运行记录')} · ${String(row.startedAt ?? row.createdAt ?? '')}`}
               </p>
-            </a>
+            </Link>
           )
         })}
       </div>
@@ -250,7 +251,7 @@ function LingxiTaskArtifactResource({ parsed }: { parsed: ParsedTaskResource | n
   const [artifactUrl, setArtifactUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!parsed || parsed.kind === 'quiz' || parsed.kind === 'knowledge-graph') return
+    if (!parsed || parsed.kind === 'quiz') return
     let disposed = false
     let objectUrl: string | null = null
     void api
@@ -295,19 +296,6 @@ function LingxiTaskArtifactResource({ parsed }: { parsed: ParsedTaskResource | n
   )
 
   if (!parsed) return <div className='p-6 text-[var(--text-secondary)] text-sm'>产物地址无效。</div>
-
-  if (parsed.kind === 'knowledge-graph') {
-    return (
-      <div className='flex h-full flex-col items-center justify-center gap-2 p-6 text-center'>
-        <p className='font-medium text-[var(--text-primary)] text-sm'>
-          知识图谱已接入工作区编排面板
-        </p>
-        <p className='text-[var(--text-muted)] text-xs'>
-          节点的消息、思考和 Skill 会随着 LingxiGraph 事件在右侧资源面板中实时更新。
-        </p>
-      </div>
-    )
-  }
 
   if (parsed.kind !== 'quiz') {
     if (!artifactUrl)

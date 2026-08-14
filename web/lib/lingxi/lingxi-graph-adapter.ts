@@ -411,7 +411,7 @@ function reduceReasoningSteps(
           timestamp
         )
       )
-    } else if (event.kind === 'task.completed') {
+    } else if (event.kind === 'task.completed' || event.kind === 'run.completed' || event.kind === 'run.ended') {
       upsert(
         reasoningStep(
           'task',
@@ -659,8 +659,18 @@ export function projectLingxiGraphEvents(
         assistantText = summary
         blocks.push({ type: 'text', content: summary, timestamp: event.sequence })
       }
-    } else if (event.kind === 'task.failed' && !assistantText) {
-      assistantText = task.error || '学习任务未能完成。'
+    } else if (
+      ['task.failed', 'task.cancelled', 'run.failed', 'run.cancelled', 'run.timed_out', 'run.budget_exceeded'].includes(event.kind) &&
+      !assistantText
+    ) {
+      assistantText =
+        event.kind === 'task.cancelled' || event.kind === 'run.cancelled'
+          ? '学习任务已取消。'
+          : event.kind === 'run.timed_out'
+            ? '学习任务运行超时。'
+            : event.kind === 'run.budget_exceeded'
+              ? '学习任务超出了资源预算。'
+              : task.error || '学习任务未能完成。'
       blocks.push({ type: 'text', content: assistantText, timestamp: event.sequence })
     }
   }
@@ -676,7 +686,19 @@ export function projectLingxiGraphEvents(
     assistantText,
     isTerminal:
       isTerminal(task) ||
-      events.some((event) => event.kind === 'task.completed' || event.kind === 'task.failed'),
+      events.some((event) =>
+        [
+          'task.completed',
+          'task.failed',
+          'task.cancelled',
+          'run.completed',
+          'run.ended',
+          'run.failed',
+          'run.cancelled',
+          'run.timed_out',
+          'run.budget_exceeded',
+        ].includes(event.kind)
+      ),
   }
 }
 

@@ -9,6 +9,7 @@ import { isApiClientError } from '@/lib/api/client/errors'
 import type { FilePreviewSession } from '@/lib/copilot/request/session'
 import { tryCanonicalWorkspaceFilePath } from '@/lib/copilot/vfs/path-utils'
 import { LingxiArtifactResource } from '@/lib/lingxi/components/lingxi-artifact-resource'
+import { LingxiRuntimeGraph } from '@/lib/lingxi/components/lingxi-runtime-graph'
 import { triggerFileDownload } from '@/lib/uploads/client/download'
 import { getFileExtension, getMimeTypeFromExtension } from '@/lib/uploads/utils/file-utils'
 import {
@@ -188,6 +189,15 @@ export const ResourceContent = memo(function ResourceContent({
 
   if (resource.id.startsWith('lingxi-artifact:')) {
     return <LingxiArtifactResource resourceId={resource.id} />
+  }
+
+  if (resource.id.startsWith('runtime-graph:')) {
+    return (
+      <LingxiRuntimeGraph
+        taskId={resource.id.split(':')[1] ?? ''}
+        workflowState={lingxiRuntime?.workflowState}
+      />
+    )
   }
 
   if (resource.id === 'streaming-file') {

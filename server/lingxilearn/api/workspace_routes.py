@@ -57,6 +57,7 @@ from ..store.models import (
     WorkspaceUploadSession,
     utcnow,
 )
+from ..store.runtime_tables import ensure_runtime_tables
 from .routes import current_learner_context, not_found, service_of
 
 router = APIRouter(prefix="/api")
@@ -1340,6 +1341,9 @@ async def list_tables(
 ) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspaceId, context)
     async with service_of(request).db.session() as session:
+        if workspaceId == "lingxi":
+            await ensure_runtime_tables(session, workspace.id)
+            await session.commit()
         query = select(WorkspaceTable).where(WorkspaceTable.workspace_id == workspace.id)
         if scope not in {"active", "archived", "all"}:
             raise HTTPException(status_code=400, detail="invalid_scope")
@@ -1538,6 +1542,27 @@ async def query_rows(table_id: str, request: Request, q: str = "", offset: int =
     selected = rows[max(0, offset) : max(0, offset) + min(max(1, limit), 1000)]
     public = [_table_row_public(row) for row in selected]
     return {"success": True, "data": {"rows": public, "rowCount": len(public), "totalCount": len(rows), "nextCursor": None}}
+
+
+@router.get("/table/{table_id}/rows/find")
+async def find_rows(table_id: str, request: Request, q: str = "", context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
+    """Compatibility projection for the grid's cell-navigation search.
+
+    Lingxi tables are backed by the same row store as the query endpoint; this
+    route returns only the cell matches expected by the grid and deliberately
+    has no workflow-run semantics.
+    """
+    _workspace_row, table = await _table_for_id(request, table_id, context)
+    needle = q.casefold().strip()
+    async with service_of(request).db.session() as session:
+        rows = (await session.execute(select(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id).order_by(WorkspaceTableRow.position))).scalars().all()
+    matches: list[dict[str, Any]] = []
+    if needle:
+        for ordinal, row in enumerate(rows):
+            for column, value in (row.values or {}).items():
+                if needle in json.dumps(value, ensure_ascii=False).casefold():
+                    matches.append({"ordinal": ordinal, "rowId": row.id, "column": str(column)})
+    return {"success": True, "data": {"matches": matches, "truncated": False}}
 
 
 @router.get("/table/{table_id}/export")

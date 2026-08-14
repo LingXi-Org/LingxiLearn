@@ -2,7 +2,6 @@ import type {
   AgentTaskEvent,
   AgentTaskListItem,
   AgentTaskSnapshot,
-  KnowledgeGraphData,
   NativeSkill,
   Pack,
   QuizSubmissionSnapshot,
@@ -11,6 +10,7 @@ import type {
   SessionSnapshot,
   SimExecutionSnapshot,
 } from './types'
+import { AGENT_EVENT_KINDS } from './agent-events'
 
 /**
  * When the app is served by FastAPI (the single-process deployment) the API is
@@ -522,6 +522,16 @@ export const api = {
     }),
 
   agentTask: (id: string) => request<AgentTaskSnapshot>(`/agent-tasks/${id}`),
+  runtimeGraph: (taskId: string) =>
+    request<{
+      id: string
+      type: 'runtime-graph'
+      taskId: string
+      latestExecutionId: string | null
+      status: string
+      updatedAt: string | null
+      workflowState: Record<string, unknown>
+    }>(`/agent-tasks/${taskId}/runtime-graph`),
 
   executionSnapshot: (executionId: string) =>
     request<SimExecutionSnapshot>(`/logs/execution/${encodeURIComponent(executionId)}`),
@@ -543,8 +553,6 @@ export const api = {
       }
     ),
 
-  agentKnowledgeGraph: (id: string) =>
-    request<KnowledgeGraphData>(`/agent-tasks/${id}/knowledge-graph`),
 
   agentMessage: (
     taskId: string,
@@ -834,26 +842,4 @@ export const KNOWN_EVENT_KINDS = [
   'report.ready',
 ]
 
-export const KNOWN_AGENT_EVENT_KINDS = [
-  'task.started',
-  'intent.started',
-  'intent.completed',
-  'agent.started',
-  'agent.completed',
-  'agent.failed',
-  'reasoning.delta',
-  'assistant.delta',
-  'tool.call.delta',
-  'tool.result',
-  'model.started',
-  'model.completed',
-  'model.usage',
-  'node.started',
-  'node.completed',
-  'node.retrying',
-  'interrupt.raised',
-  'artifact.ready',
-  'artifact.recovered',
-  'task.completed',
-  'task.failed',
-]
+export const KNOWN_AGENT_EVENT_KINDS = AGENT_EVENT_KINDS

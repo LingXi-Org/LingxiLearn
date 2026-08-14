@@ -87,7 +87,6 @@ PRIMITIVE_CATALOG: dict[str, Primitive] = {
     "interactive_visual_explainer": Primitive("agent", "agent"),
     "quiz_submit": Primitive("agent", "agent"),
     "handoff": Primitive("agent", "agent"),
-    "curriculum_graph_builder": Primitive("agent", "agent"),
     "learner_state_reflector": Primitive("agent", "agent"),
     "knowledge.search": Primitive("knowledge", "knowledge", True),
     "kb.search": Primitive("knowledge", "knowledge", True),
@@ -151,6 +150,9 @@ class SimRunProjector:
     _active_spans: dict[str, dict[str, Any]] = field(default_factory=dict, init=False)
     _node_counts: dict[str, int] = field(default_factory=dict, init=False)
     _block_keys: dict[tuple[str, int, str], str] = field(default_factory=dict, init=False)
+    _planned_blocks: dict[str, str] = field(default_factory=dict, init=False)
+    _planned_by_shape: dict[tuple[str, int], list[str]] = field(default_factory=dict, init=False)
+    _pending_dependencies: dict[str, list[str]] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         self.workflow_state = {
@@ -164,6 +166,7 @@ class SimRunProjector:
             "variables": {},
             "metadata": {"executionId": self.execution_id, "taskId": self.task_id},
         }
+        self.workflow_state["metadata"]["layoutVersion"] = "layered.v1"
 
     @property
     def blocks(self) -> dict[str, Any]:
@@ -184,6 +187,11 @@ class SimRunProjector:
         existing = self._block_keys.get(key)
         if existing is not None:
             return existing, self.blocks[existing]
+        planned = self._promote_planned_block(node, step)
+        if planned is not None:
+            block_id, block = planned
+            self._block_keys[key] = block_id
+            return block_id, block
         block_id = self._block_id(node, step, task_id)
         self._block_keys[key] = block_id
         primitive = self.catalog.resolve(node)
@@ -204,23 +212,82 @@ class SimRunProjector:
                 "namespace": _json_safe(getattr(event, "namespace", None)),
             },
             "status": "running",
+            "executionState": "running",
         }
         self.blocks[block_id] = block
         return block_id, block
 
-    def _connect(self, source: str, target: str, *, kind: str = "transition") -> None:
+    def _ensure_planned_block(self, payload: dict[str, Any]) -> str:
+        plan_task_id = str(payload.get("task_id") or payload.get("node_id") or "")
+        step = int(payload.get("step") or 0)
+        primitive_name = str(payload.get("capability") or payload.get("node") or "coordinator")
+        primitive = self.catalog.resolve(primitive_name)
+        existing = self._planned_blocks.get(plan_task_id)
+        if existing is not None:
+            return existing
+        block_id = f"plan:{step}:{plan_task_id}".replace("/", "_")
+        self.blocks[block_id] = {
+            "id": block_id,
+            "type": primitive.sim_type,
+            "name": primitive_name,
+            "position": {"x": 0, "y": 0},
+            "subBlocks": {},
+            "outputs": {},
+            "enabled": bool(payload.get("allowed", True)),
+            "data": {
+                "primitive": primitive_name,
+                "category": primitive.category,
+                "executionId": self.execution_id,
+                "step": step,
+                "planTaskId": plan_task_id,
+                "knowledgePointId": payload.get("knowledge_point_id"),
+                "rationale": payload.get("rationale"),
+                "doneWhen": payload.get("done_when"),
+            },
+            "status": "queued",
+            "executionState": "queued",
+        }
+        self._planned_blocks[plan_task_id] = block_id
+        self._planned_by_shape.setdefault((primitive_name, step), []).append(block_id)
+        for dependency in payload.get("depends_on") or []:
+            source = self._planned_blocks.get(str(dependency))
+            if source:
+                self._connect(source, block_id, kind="dependency", status="queued")
+            else:
+                self._pending_dependencies.setdefault(str(dependency), []).append(block_id)
+        for target in self._pending_dependencies.pop(plan_task_id, []):
+            self._connect(block_id, target, kind="dependency", status="queued")
+        return block_id
+
+    def _promote_planned_block(self, node: str, step: int) -> tuple[str, dict[str, Any]] | None:
+        for block_id in self._planned_by_shape.get((node, step), []):
+            block = self.blocks[block_id]
+            if block.get("status") in {"queued", "pending"}:
+                return block_id, block
+        return None
+
+    def _connect(
+        self,
+        source: str,
+        target: str,
+        *,
+        kind: str = "transition",
+        status: str | None = None,
+    ) -> None:
         if not source or not target or source == target:
             return
         edge_id = f"{source}->{target}"
         if any(edge["id"] == edge_id for edge in self.workflow_state["edges"]):
             return
+        edge_status = status or "not-executed"
         self.workflow_state["edges"].append(
             {
                 "id": edge_id,
                 "source": source,
                 "target": target,
                 "type": "workflow",
-                "data": {"kind": kind},
+                "status": edge_status,
+                "data": {"kind": kind, "status": edge_status},
             }
         )
 
@@ -240,7 +307,9 @@ class SimRunProjector:
             "span_id": getattr(event, "span_id", None),
         }
         data = _json_safe(getattr(event, "data", None) or {})
-        runtime_kind = f"run.{getattr(kind, 'name', str(kind)).lower()}"
+        raw_kind = getattr(kind, "name", str(kind)).lower()
+        raw_kind = raw_kind.removeprefix("run_")
+        runtime_kind = f"run.{raw_kind}"
         legacy_kind = runtime_kind
         payload: dict[str, Any] = {"runtime": metadata, "data": data}
 
@@ -256,6 +325,7 @@ class SimRunProjector:
             if kind is EventKind.NODE_STARTED:
                 legacy_kind = "node.started"
                 block["status"] = "running"
+                block["executionState"] = "running"
                 active = self._active_spans.get(block_id)
                 if active is None or active.get("status") != "running":
                     attempts = sum(
@@ -279,6 +349,7 @@ class SimRunProjector:
             elif kind is EventKind.NODE_COMPLETED:
                 legacy_kind = "node.completed"
                 block["status"] = "completed"
+                block["executionState"] = "completed"
                 block["outputs"] = data.get("update") if isinstance(data, dict) else {}
                 span = self._active_spans.get(block_id)
                 if span:
@@ -293,6 +364,7 @@ class SimRunProjector:
             elif kind is EventKind.NODE_RETRYING:
                 legacy_kind = "node.retrying"
                 block["status"] = "retrying"
+                block["executionState"] = "retrying"
                 span = self._active_spans.get(block_id)
                 if span and span.get("status") == "running":
                     span.update(
@@ -305,6 +377,7 @@ class SimRunProjector:
             elif kind is EventKind.NODE_FAILED:
                 legacy_kind = "node.failed"
                 block["status"] = "failed"
+                block["executionState"] = "failed"
                 span = self._active_spans.get(block_id)
                 if span:
                     span.update(
@@ -318,11 +391,12 @@ class SimRunProjector:
             else:
                 legacy_kind = "node.cached"
                 block["status"] = "cached"
+                block["executionState"] = "cached"
             if kind is EventKind.NODE_STARTED:
                 step = metadata["step"]
                 prior = self._last_blocks_by_step.get(step - 1, [])
                 for source in prior:
-                    self._connect(source, block_id)
+                    self._connect(source, block_id, status="success")
                 self._last_blocks_by_step.setdefault(step, []).append(block_id)
                 if len(self._last_blocks_by_step[step]) > 1:
                     parallel_id = f"parallel:{step}"
@@ -338,9 +412,12 @@ class SimRunProjector:
             legacy_kind = "interrupt.raised"
             payload["runtime"]["control"] = "human_in_the_loop"
             self.workflow_state["metadata"]["paused"] = True
+        elif runtime_kind == "run.resumed":
+            legacy_kind = "run.resumed"
+            self.workflow_state["metadata"].update({"paused": False, "status": "running"})
         elif kind is EventKind.RUN_PAUSED:
             legacy_kind = "run.paused"
-            self.workflow_state["metadata"]["paused"] = True
+            self.workflow_state["metadata"].update({"paused": True, "status": "paused"})
         elif kind in {
             EventKind.RUN_COMPLETED,
             EventKind.RUN_FAILED,
@@ -366,6 +443,9 @@ class SimRunProjector:
             value = data.get("value") if isinstance(data, dict) else None
             if isinstance(value, dict) and value.get("type"):
                 legacy_kind = str(value["type"])
+                if legacy_kind == "node.appeared":
+                    payload_data = {str(k): _json_safe(v) for k, v in value.items()}
+                    payload["blockId"] = self._ensure_planned_block(payload_data)
                 payload.update(
                     {k: _json_safe(v) for k, v in value.items() if k not in {"type", "agent"}}
                 )
@@ -378,7 +458,31 @@ class SimRunProjector:
             **metadata,
         }
 
+    def consume_runtime_event(
+        self, kind: str, payload: dict[str, Any], *, agent: str = "orchestrator"
+    ) -> dict[str, Any]:
+        """Project Lingxi decision-trace events that are not native graph events."""
+        safe_payload = _json_safe(payload)
+        result: dict[str, Any] = {
+            "kind": kind,
+            "agent": agent,
+            "payload": safe_payload,
+            "runtime": {
+                "execution_id": self.execution_id,
+                "task_id": self.task_id,
+                "step": safe_payload.get("step") if isinstance(safe_payload, dict) else None,
+            },
+        }
+        if kind == "node.appeared" and isinstance(safe_payload, dict):
+            result["payload"] = {**safe_payload, "blockId": self._ensure_planned_block(safe_payload)}
+        return result
+
     def snapshot(self) -> dict[str, Any]:
+        metadata = self.workflow_state.setdefault("metadata", {})
+        self.workflow_state["layoutVersion"] = metadata.get("layoutVersion", "layered.v1")
+        self.workflow_state["terminal"] = bool(metadata.get("terminal", False))
+        self.workflow_state["status"] = metadata.get("status", "running")
+        self.workflow_state["paused"] = bool(metadata.get("paused", False))
         return {
             "workflowState": _json_safe(self.workflow_state),
             "traceSpans": _json_safe(self.trace_spans),

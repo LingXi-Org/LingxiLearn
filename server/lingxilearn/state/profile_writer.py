@@ -21,7 +21,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..store.knowledge_graph import LEARNING_STATES
+LEARNING_STATES = {
+    "unknown",
+    "not_observed",
+    "emerging",
+    "demonstrated",
+    "misconception_evidence",
+    "needs_recheck",
+}
 from ..store.models import LearningProfile
 from .scheduling import confidence as compute_confidence
 

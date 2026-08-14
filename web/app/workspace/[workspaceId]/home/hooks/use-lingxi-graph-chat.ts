@@ -19,7 +19,15 @@ import type {
 } from '../types'
 import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './use-chat'
 
-const TERMINAL_TASK_STATUSES = new Set(['handed_off', 'completed', 'partial', 'failed'])
+const TERMINAL_TASK_STATUSES = new Set([
+  'handed_off',
+  'completed',
+  'partial',
+  'failed',
+  'timed_out',
+  'budget_exceeded',
+  'cancelled',
+])
 
 function taskIsTerminal(task: AgentTaskSnapshot | null): boolean {
   return task !== null && TERMINAL_TASK_STATUSES.has(task.status)
@@ -116,7 +124,12 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
       path: task.artifacts.visual?.url,
     },
   ]
-  return entries
+  const graphResource: MothershipResource = {
+    type: 'generic',
+    id: `runtime-graph:${task.id}`,
+    title: '实时运行图',
+  }
+  const artifactResources = entries
     .filter(({ key }) => Boolean(task.artifacts[key]?.available))
     .map(({ key, title, path }) => ({
       type: 'file' as const,
@@ -124,6 +137,7 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
       title,
       path,
     }))
+  return [graphResource, ...artifactResources]
 }
 
 export function useLingxiGraphChat(
@@ -144,6 +158,7 @@ export function useLingxiGraphChat(
 
   const [resolvedChatId, setResolvedChatId] = useState<string | undefined>(initialChatId)
   const [task, setTask] = useState<AgentTaskSnapshot | null>(null)
+  const [workflowState, setWorkflowState] = useState<Record<string, unknown> | null>(null)
   const [events, setEvents] = useState<AgentTaskEvent[]>([])
   const [localUsers, setLocalUsers] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
@@ -177,6 +192,7 @@ export function useLingxiGraphChat(
   useEffect(() => {
     setResolvedChatId(initialChatId)
     setTask(null)
+    setWorkflowState(null)
     setEvents([])
     setLocalUsers([])
     setError(null)
@@ -203,6 +219,9 @@ export function useLingxiGraphChat(
         return [...current, event].sort((a, b) => a.sequence - b.sequence)
       })
       void api.recordLearningEvent(taskId, event).catch(() => {})
+      const eventWorkflowState =
+        event.workflowState ?? (event.payload.workflowState as Record<string, unknown> | undefined)
+      if (eventWorkflowState) setWorkflowState(eventWorkflowState)
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
         if (artifact) onResourceEventRef.current?.(`lingxi-artifact:${taskId}:${artifact}`)
@@ -220,6 +239,18 @@ export function useLingxiGraphChat(
         const loaded = await currentAdapter.loadTask(taskId)
         if (cancelled) return
         setTask(loaded)
+        void api
+          .runtimeGraph(taskId)
+          .then((graph) => {
+            if (!cancelled) setWorkflowState(graph.workflowState)
+          })
+          .catch(() => {
+            if (loaded.latest_execution_id) {
+              void api.executionSnapshot(loaded.latest_execution_id)
+                .then((snapshot) => setWorkflowState(snapshot.workflowState))
+                .catch(() => {})
+            }
+          })
         setLocalUsers((current) =>
           current.length > 0 ? current : [userMessage(`lingxi-user:${loaded.id}`, loaded.prompt)]
         )
@@ -232,6 +263,10 @@ export function useLingxiGraphChat(
               const refreshed = await currentAdapter.loadTask(taskId)
               if (!cancelled) {
                 setTask(refreshed)
+                void api
+                  .runtimeGraph(taskId)
+                  .then((graph) => setWorkflowState(graph.workflowState))
+                  .catch(() => {})
                 onStreamEndRef.current?.(taskId, messagesRef.current)
               }
             } finally {
@@ -314,6 +349,7 @@ export function useLingxiGraphChat(
           setResolvedChatId(taskId)
           router.replace(`/workspace/${workspaceId}/chat/${taskId}`)
           onRequestStartedRef.current?.({ requestId: taskId, userMessageId: userId })
+          onResourceEventRef.current?.(`runtime-graph:${taskId}`)
         } else {
           requestIdRef.current = taskId
           await currentAdapter.sendMessage(taskId, requestMessage, attachments, context)
@@ -378,7 +414,7 @@ export function useLingxiGraphChat(
     dispatchingHeadId: null,
     previewSession: null as FilePreviewSession | null,
     genericResourceData: null as GenericResourceData | null,
-    lingxiRuntime: { task, events },
+    lingxiRuntime: { task, events, workflowState },
     getCurrentRequestId: () => requestIdRef.current,
   }
 }

@@ -7,14 +7,21 @@ import type { LingxiChatMessage } from '@/lib/lingxi/chat-types'
 import { projectLingxiGraphEvents } from '@/lib/lingxi/lingxi-graph-adapter'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 
-const TERMINAL_STATUSES = new Set(['handed_off', 'completed', 'partial', 'failed'])
+const TERMINAL_STATUSES = new Set([
+  'handed_off',
+  'completed',
+  'partial',
+  'failed',
+  'timed_out',
+  'budget_exceeded',
+  'cancelled',
+])
 
 export type LingxiArtifactKind =
   | 'lesson-intro'
   | 'lecture-deck'
   | 'quiz'
   | 'visual'
-  | 'knowledge-graph'
 
 export type LingxiWorkspaceResourceKind = 'workspace-tables' | 'workspace-files' | 'runtime-logs'
 
@@ -57,11 +64,6 @@ function artifactResources(task: AgentTaskSnapshot | null): LingxiArtifactResour
       kind: 'visual',
       title: '可视化讲解',
       available: Boolean(task.artifacts.visual?.available),
-    },
-    {
-      kind: 'knowledge-graph',
-      title: '知识图谱',
-      available: Boolean(task.artifacts.knowledge_graph?.available),
     },
   ]
   const artifactDescriptors = resources

@@ -25,7 +25,8 @@ export function applySimRuntimeEvent(
   const runtime = event.runtime ?? (event.payload.runtime as Record<string, unknown> | undefined)
   const executionId =
     event.execution_id ?? (runtime?.execution_id as string | undefined) ?? state.executionId
-  const workflowPatch = event.payload.workflowState as Record<string, unknown> | undefined
+  const workflowPatch =
+    event.workflowState ?? (event.payload.workflowState as Record<string, unknown> | undefined)
   const traceSpans = event.payload.traceSpans as Array<Record<string, unknown>> | undefined
   return {
     executionId: executionId ?? null,
@@ -33,7 +34,9 @@ export function applySimRuntimeEvent(
       ? { ...(state.workflowState ?? {}), ...workflowPatch }
       : state.workflowState,
     traceSpans: traceSpans ?? state.traceSpans,
-    events: [...state.events, event],
+    events: state.events.some((item) => item.sequence === event.sequence)
+      ? state.events
+      : [...state.events, event].sort((a, b) => a.sequence - b.sequence),
   }
 }
 

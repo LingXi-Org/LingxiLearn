@@ -42,7 +42,15 @@ from ..store.models import (
 router = APIRouter(prefix="/api")
 
 TERMINAL = {"done", "failed", "cancelled"}
-AGENT_TERMINAL = {"handed_off", "completed", "partial", "failed", "cancelled"}
+AGENT_TERMINAL = {
+    "handed_off",
+    "completed",
+    "partial",
+    "failed",
+    "timed_out",
+    "budget_exceeded",
+    "cancelled",
+}
 
 
 def service_of(request: Request) -> Service:
@@ -592,19 +600,6 @@ async def post_agent_message(
     return {"status": "accepted"}
 
 
-@router.get("/agent-tasks/{task_id}/knowledge-graph")
-async def get_agent_knowledge_graph(
-    task_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    try:
-        graph = await service_of(request).agent_knowledge_graph(task_id, context.learner_id)
-    except KeyError as exc:
-        raise not_found() from exc
-    return graph
-
-
 @router.patch("/agent-tasks/{task_id}")
 async def patch_agent_task(
     task_id: str,
@@ -988,70 +983,28 @@ async def agent_task_runtime_graph(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    """This run's execution graph, built from what actually happened.
-
-    Not a diagram of the architecture: nodes exist because a decision created
-    them, each carries the reason it was chosen, and each links back to the
-    decision and evidence it came from.
-    """
+    """Return the durable Sim-compatible runtime graph for this task."""
 
     svc = service_of(request)
-    if await svc.repo.get_agent_task_for_learner(task_id, context.learner_id) is None:
+    task = await svc.repo.get_agent_task_for_learner(task_id, context.learner_id)
+    if task is None:
         raise not_found()
-
-    decisions = await svc.runtime_state.decisions_for_task(task_id)
-    nodes: list[dict[str, Any]] = []
-    edges: list[dict[str, Any]] = []
-    previous: str | None = None
-
-    for decision in decisions:
-        decision_node = f"decision:{decision['step']}"
-        nodes.append(
-            {
-                "id": decision_node,
-                "type": "decision",
-                "step": decision["step"],
-                "label": f"第 {decision['step']} 轮决策",
-                "why": decision["rationale"],
-                "candidates": decision["candidates"],
-                "replan_of": decision["replan_of"],
-                "created_at": decision["created_at"],
-            }
-        )
-        if previous:
-            edges.append({"from": previous, "to": decision_node, "kind": "then"})
-        if decision["replan_of"]:
-            edges.append(
-                {"from": decision["replan_of"], "to": decision_node, "kind": "replan"}
-            )
-
-        outcomes = {
-            str(item.get("task_id")): item
-            for item in (decision.get("outcome") or {}).get("tasks") or []
-        }
-        for task in (decision.get("selected") or {}).get("tasks") or []:
-            node_id = f"{decision['step']}:{task['id']}"
-            outcome = outcomes.get(str(task["id"]), {})
-            nodes.append(
-                {
-                    "id": node_id,
-                    "type": "action",
-                    "step": decision["step"],
-                    "label": task.get("capability"),
-                    "knowledge_point_id": task.get("knowledge_point_id"),
-                    "why": task.get("rationale"),
-                    "done_when": task.get("done_when"),
-                    "status": outcome.get("status", "planned"),
-                    "satisfied": outcome.get("satisfied", False),
-                    "detail": outcome.get("detail", ""),
-                    "evidence_ids": outcome.get("evidence_ids") or [],
-                    "decision_id": decision["id"],
-                }
-            )
-            edges.append({"from": decision_node, "to": node_id, "kind": "runs"})
-        previous = decision_node
-
-    return {"task_id": task_id, "nodes": nodes, "edges": edges}
+    execution_id = task.latest_execution_id or task.current_execution_id
+    execution = (
+        await svc.repo.get_agent_execution(execution_id, context.learner_id)
+        if execution_id
+        else None
+    )
+    state = dict(execution.workflow_state or {}) if execution is not None else {}
+    return {
+        "id": f"runtime-graph:{task_id}",
+        "type": "runtime-graph",
+        "taskId": task_id,
+        "latestExecutionId": execution.id if execution is not None else None,
+        "status": execution.status if execution is not None else task.status,
+        "updatedAt": execution.updated_at.isoformat() if execution and execution.updated_at else None,
+        "workflowState": state,
+    }
 
 
 @router.get("/agent-tasks/{task_id}/evidence")

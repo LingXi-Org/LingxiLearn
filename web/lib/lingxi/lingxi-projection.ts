@@ -108,7 +108,15 @@ export interface SimAgentRun {
   isDelegating?: boolean
 }
 
-const TERMINAL_STATUSES = new Set(['handed_off', 'completed', 'partial', 'failed'])
+const TERMINAL_STATUSES = new Set([
+  'handed_off',
+  'completed',
+  'partial',
+  'failed',
+  'timed_out',
+  'budget_exceeded',
+  'cancelled',
+])
 
 function statusForSnapshot(
   snapshot: AgentTaskSnapshot['agents'][keyof AgentTaskSnapshot['agents']]
@@ -132,9 +140,9 @@ function eventStatus(
   for (const event of relevant) {
     if (['node.started', 'intent.started', 'agent.started', 'model.started'].includes(event.kind))
       status = 'running'
-    if (['node.completed', 'intent.completed', 'agent.completed'].includes(event.kind))
+    if (['node.completed', 'node.cached', 'intent.completed', 'agent.completed'].includes(event.kind))
       status = 'complete'
-    if (['agent.failed', 'task.failed'].includes(event.kind)) status = 'error'
+    if (['node.failed', 'agent.failed', 'task.failed', 'run.failed'].includes(event.kind)) status = 'error'
   }
   return status
 }
@@ -160,18 +168,7 @@ export function agentTaskToCanvasGraph(
     { id: 'input', label: 'User input', kind: 'input', status: 'complete', detail: task.prompt },
   ]
   for (const agent of agentIds) {
-    const snapshot =
-      agent === 'intent'
-        ? task.agents.intent
-        : agent === 'lecture_hook'
-          ? task.agents.lecture_hook
-          : agent === 'interactive_lecture_deck'
-            ? task.agents.interactive_lecture_deck
-            : agent === 'quiz_generator'
-              ? task.agents.quiz_generator
-              : agent === 'interactive_visual_explainer'
-                ? task.agents.interactive_visual_explainer
-                : { status: 'pending' as const }
+    const snapshot = task.agents[agent] ?? { status: 'pending' as const }
     const relevant = orderedEvents.filter((event) => event.agent === agent)
     const latest = relevant.at(-1)
     nodes.push({
@@ -184,7 +181,11 @@ export function agentTaskToCanvasGraph(
   }
   const terminal =
     TERMINAL_STATUSES.has(task.status) ||
-    orderedEvents.some((event) => event.kind === 'task.completed' || event.kind === 'task.failed')
+    orderedEvents.some((event) =>
+      ['task.completed', 'task.failed', 'task.cancelled', 'run.ended', 'run.failed'].includes(
+        event.kind
+      )
+    )
   if (terminal)
     nodes.push({
       id: 'merge',
@@ -195,38 +196,23 @@ export function agentTaskToCanvasGraph(
     })
 
   const edges: AgentCanvasEdge[] = []
-  const intent = agentIds.includes('intent') ? 'intent' : agentIds[0]
-  if (intent) edges.push({ from: 'input', to: intent, label: '识别' })
-  const specialists = agentIds.filter((agent) => agent !== intent)
-  const initialAgents = specialists.filter(
-    (agent) => agent === 'lecture_hook' || agent === 'interactive_lecture_deck'
-  )
-  for (const agent of initialAgents)
-    edges.push({ from: intent || 'input', to: agent, label: '并行讲解' })
-
-  if (agentIds.includes('quiz_generator')) {
-    for (const agent of initialAgents)
-      edges.push({ from: agent, to: 'quiz_generator', label: '拼接产物' })
-  } else {
-    for (const agent of specialists.filter(
-      (agent) => !initialAgents.some((initial) => initial === agent)
-    )) {
-      edges.push({ from: intent || 'input', to: agent, label: '分发' })
+  const appeared = orderedEvents.filter((event) => event.kind === 'node.appeared')
+  for (const event of appeared) {
+    const nodeId = String(event.payload.node_id || event.agent)
+    const dependencies = Array.isArray(event.payload.depends_on) ? event.payload.depends_on : []
+    for (const dependency of dependencies) {
+      edges.push({ from: String(dependency), to: nodeId, label: '依赖' })
     }
   }
-
-  const postQuizAgents = specialists.filter((agent) =>
-    ['answer_user', 'interactive_visual_explainer', 'quiz_submit', 'handoff'].includes(agent)
-  )
-  for (const agent of postQuizAgents) {
-    edges.push({
-      from: agentIds.includes('quiz_generator') ? 'quiz_generator' : intent || 'input',
-      to: agent,
-      label: '按需路由',
-    })
+  const firstAgent = agentIds[0]
+  if (firstAgent && edges.length === 0) edges.push({ from: 'input', to: firstAgent, label: '启动' })
+  const orderedAgents = agentIds.filter((agent) => agent !== firstAgent)
+  for (const agent of orderedAgents) {
+    const previous = agentIds[agentIds.indexOf(agent) - 1] || firstAgent || 'input'
+    edges.push({ from: previous, to: agent, label: '运行' })
   }
   if (terminal) {
-    const outputAgents = specialists.length ? specialists : intent ? [intent] : []
+    const outputAgents = agentIds.length ? agentIds : []
     for (const agent of outputAgents) edges.push({ from: agent, to: 'merge', label: '产物' })
   }
   return { nodes, edges }
@@ -603,6 +589,14 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
       ? '任务部分完成，可查看当前已生成产物。'
       : '所有 Agent 已完成。'
   if (event.kind === 'task.failed') return message || task.error || '任务执行失败。'
+  if (event.kind === 'task.cancelled' || event.kind === 'run.cancelled') return '任务已取消。'
+  if (event.kind === 'run.paused') return '运行已暂停，等待继续。'
+  if (event.kind === 'run.resumed') return '运行已恢复。'
+  if (event.kind === 'run.ended' || event.kind === 'run.completed') return '运行已结束。'
+  if (event.kind === 'run.timed_out') return '运行超时，已停止。'
+  if (event.kind === 'run.budget_exceeded') return '运行预算已耗尽，已停止。'
+  if (event.kind === 'plan.created') return '已生成新的执行计划。'
+  if (event.kind === 'plan.replanned') return '已根据当前结果重新规划执行路径。'
   if (event.kind === 'reasoning.delta') return '正在整理当前阶段。'
   if (event.kind === 'assistant.delta')
     return `输出 · ${String(event.payload.delta || '')}${event.payload.debug ? `\n${JSON.stringify(event.payload.debug, null, 2)}` : ''}`
@@ -618,11 +612,14 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
     event.kind === 'node.started' ||
     event.kind === 'node.completed' ||
     event.kind === 'node.retrying' ||
+    event.kind === 'node.appeared' ||
+    event.kind === 'node.failed' ||
+    event.kind === 'node.cached' ||
     event.kind === 'interrupt.raised'
   ) {
     return `${agentLabel(event.agent)} · ${event.kind}\n${JSON.stringify(event.payload, null, 2)}`
   }
-  return ''
+  return `${event.kind}${message ? ` · ${message}` : ''}`
 }
 
 function toolCallName(payload: Record<string, unknown>): string {

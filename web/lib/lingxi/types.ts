@@ -84,6 +84,7 @@ export interface AgentTaskEvent {
   namespace?: unknown
   checkpoint_id?: string | null
   span_id?: string | null
+  workflowState?: Record<string, unknown> | null
   runtime?: {
     execution_id?: string | null
     run_id?: string | null
@@ -113,6 +114,8 @@ export type AgentTaskStatus =
   | 'completed'
   | 'partial'
   | 'failed'
+  | 'timed_out'
+  | 'budget_exceeded'
   | 'cancelled'
 
 export interface AgentTaskListItem {
@@ -178,48 +181,6 @@ export interface AgentAgentSnapshot {
   error?: string
 }
 
-export type KnowledgeLearningState =
-  | 'unknown'
-  | 'not_observed'
-  | 'emerging'
-  | 'demonstrated'
-  | 'misconception_evidence'
-  | 'needs_recheck'
-
-export interface KnowledgeGraphNode {
-  id: string
-  label: string
-  type: string
-  importance: number
-  is_current: boolean
-  learning_state: KnowledgeLearningState
-  level?: number
-  position?: { x: number; y: number }
-  aliases?: string[]
-  description?: string
-  source_refs?: string[]
-}
-
-export interface KnowledgeGraphEdge {
-  id: string
-  source: string
-  target: string
-  relation: string
-  relation_label: string
-  directed: boolean
-  importance?: number
-}
-
-export interface KnowledgeGraphData {
-  graph_id: string
-  revision: number
-  title: string
-  domain: string
-  nodes: KnowledgeGraphNode[]
-  edges: KnowledgeGraphEdge[]
-  root_node_ids: string[]
-}
-
 export interface PublicQuizQuestion {
   id: string
   type: 'single_choice' | 'multi_choice' | 'short_text'
@@ -265,7 +226,6 @@ export interface AgentTaskSnapshot {
     lecture_deck: ArtifactSnapshot
     quiz: { available: boolean; data?: PublicQuiz | null }
     visual: ArtifactSnapshot
-    knowledge_graph?: KnowledgeGraphArtifactSnapshot
   }
   quiz_submission: QuizSubmissionSnapshot | null
   error: string
@@ -273,6 +233,14 @@ export interface AgentTaskSnapshot {
   updated_at: string | null
   current_execution_id?: string | null
   latest_execution_id?: string | null
+  runtime_graph?: {
+    id: string
+    type: 'runtime-graph'
+    taskId: string
+    latestExecutionId: string | null
+    status: string
+    updatedAt: string | null
+  }
   executions?: Array<{
     id: string
     status: string
@@ -308,13 +276,4 @@ export interface ArtifactSnapshot {
   available: boolean
   url: string
   metadata?: Record<string, unknown>
-}
-
-export interface KnowledgeGraphArtifactSnapshot {
-  available: boolean
-  graph_id?: string | null
-  revision?: number | null
-  url: string
-  status?: string
-  error?: string
 }

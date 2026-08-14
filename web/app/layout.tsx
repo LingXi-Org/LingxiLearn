@@ -4,6 +4,7 @@ import '@/app/_styles/globals.css'
 import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import { LingxiIdentityProvider } from '@/lib/lingxi/lingxi-identity-provider'
 import { QueryProvider } from '@/app/_shell/providers/query-provider'
+import { ThemeProvider } from '@/app/_shell/providers/theme-provider'
 import { season } from '@/app/_styles/fonts/season/season'
 
 export const viewport: Viewport = {
@@ -49,9 +50,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${season.variable} font-body`} suppressHydrationWarning>
         <NuqsAdapter>
-          <QueryProvider>
-            <LingxiIdentityProvider>{children}</LingxiIdentityProvider>
-          </QueryProvider>
+          <ThemeProvider>
+            <QueryProvider>
+              <LingxiIdentityProvider>{children}</LingxiIdentityProvider>
+            </QueryProvider>
+          </ThemeProvider>
         </NuqsAdapter>
       </body>
     </html>

@@ -61,12 +61,6 @@ from .state.skill_catalog import discover as discover_skill_manifests
 from .store.db import Database, Repository
 from .store.learner import LearnerRepository
 from .store.models import (
-    KnowledgeBase,
-    KnowledgeChunk,
-    KnowledgeDocument,
-    KnowledgeGraph,
-    KnowledgeGraphEdge,
-    KnowledgeGraphNode,
     Workspace,
     WorkspaceFile,
 )
@@ -91,6 +85,16 @@ _AGENT_FORCE_FLUSH = frozenset(
         "tool.call.delta",
         "tool.result",
         "artifact.ready",
+        "task.cancelled",
+        "run.paused",
+        "run.resumed",
+        "run.ended",
+        "run.failed",
+        "run.timed_out",
+        "run.budget_exceeded",
+        "node.appeared",
+        "plan.created",
+        "plan.replanned",
     }
 )
 
@@ -731,6 +735,9 @@ class Service:
         current_goal = stack.current()
         decisions = await self.runtime_state.decisions_for_task(record.id)
         sidecars = await self.repo.list_agent_sidecars(record.id, record.learner_id)
+        artifacts = await self._artifact_snapshot(record)
+        intent_topic = str(record.title or record.prompt or "").strip()
+        latest_execution = executions[0] if executions else None
         return {
             "id": record.id,
             "status": record.status,
@@ -743,6 +750,18 @@ class Service:
             "graph_version": record.graph_version,
             "current_execution_id": record.current_execution_id,
             "latest_execution_id": record.latest_execution_id,
+            "runtime_graph": {
+                "id": f"runtime-graph:{record.id}",
+                "type": "runtime-graph",
+                "taskId": record.id,
+                "latestExecutionId": record.latest_execution_id,
+                "status": latest_execution.status if latest_execution else record.status,
+                "updatedAt": (
+                    latest_execution.updated_at.isoformat()
+                    if latest_execution and latest_execution.updated_at
+                    else None
+                ),
+            },
             "executions": [
                 {
                     "id": item.id,
@@ -761,9 +780,14 @@ class Service:
             "budget": dict(session_state.get("budget") or {}),
             # Which agents ran is a fact about this run, read from the decision
             # trace and the registry. There is no fixed roster to enumerate.
+            "intent": {
+                "topic": intent_topic,
+                "learning_objective": intent_topic,
+                "language": "zh-CN",
+            },
             "agents": _agents_from_trace(decisions, sidecars),
             "decisions": decisions,
-            "artifacts": self._artifact_snapshot(record),
+            "artifacts": artifacts,
             "quiz_submission": await _submission_snapshot(self.repo, record.id),
             "error": record.error,
             "created_at": record.created_at.isoformat() if record.created_at else None,
@@ -941,126 +965,6 @@ class Service:
                             )
                         )
                         projected += 1
-                # Knowledge graphs are durable LingxiGraph sidecars, not
-                # editable workflow canvases. Mirror each revision as a
-                # searchable JSON document in a private read-only base.
-                graphs = (
-                    (
-                        await session.execute(
-                            select(KnowledgeGraph).where(KnowledgeGraph.learner_id == learner_id)
-                        )
-                    )
-                    .scalars()
-                    .all()
-                )
-                if graphs:
-                    graph_base = await session.scalar(
-                        select(KnowledgeBase).where(
-                            KnowledgeBase.learner_id == learner_id,
-                            KnowledgeBase.name == "LingxiGraph 知识图谱",
-                        )
-                    )
-                    if graph_base is None:
-                        graph_base = KnowledgeBase(
-                            id=f"kb_{uuid.uuid4().hex}",
-                            learner_id=learner_id,
-                            name="LingxiGraph 知识图谱",
-                            description="由学习任务生成的只读知识图谱快照。",
-                            metadata_payload={"source": "lingxigraph", "readOnly": True},
-                        )
-                        session.add(graph_base)
-                        await session.flush()
-                    existing_documents = (
-                        (
-                            await session.execute(
-                                select(KnowledgeDocument).where(
-                                    KnowledgeDocument.base_id == graph_base.id
-                                )
-                            )
-                        )
-                        .scalars()
-                        .all()
-                    )
-                    existing_graph_revisions = {
-                        str((document.metadata_payload or {}).get("graphId"))
-                        + ":"
-                        + str((document.metadata_payload or {}).get("revision")): document
-                        for document in existing_documents
-                    }
-                    for graph in graphs:
-                        graph_key = f"{graph.graph_id}:{graph.revision}"
-                        if graph_key in existing_graph_revisions:
-                            continue
-                        nodes = (
-                            (
-                                await session.execute(
-                                    select(KnowledgeGraphNode).where(
-                                        KnowledgeGraphNode.graph_id == graph.graph_id
-                                    )
-                                )
-                            )
-                            .scalars()
-                            .all()
-                        )
-                        edges = (
-                            (
-                                await session.execute(
-                                    select(KnowledgeGraphEdge).where(
-                                        KnowledgeGraphEdge.graph_id == graph.graph_id
-                                    )
-                                )
-                            )
-                            .scalars()
-                            .all()
-                        )
-                        content = json.dumps(
-                            {
-                                "graphId": graph.graph_id,
-                                "revision": graph.revision,
-                                "title": graph.title,
-                                "domain": graph.domain,
-                                "nodes": [
-                                    {"id": node.node_id, "label": node.label, "type": node.type}
-                                    for node in nodes
-                                ],
-                                "edges": [
-                                    {
-                                        "id": edge.edge_id,
-                                        "source": edge.source_node_id,
-                                        "target": edge.target_node_id,
-                                        "relation": edge.relation,
-                                    }
-                                    for edge in edges
-                                ],
-                            },
-                            ensure_ascii=False,
-                            indent=2,
-                        )
-                        document = KnowledgeDocument(
-                            id=f"doc_{uuid.uuid4().hex}",
-                            base_id=graph_base.id,
-                            name=f"{graph.title} · Revision {graph.revision}",
-                            mime_type="application/json",
-                            content=content,
-                            metadata_payload={
-                                "source": "lingxigraph",
-                                "readOnly": True,
-                                "graphId": graph.graph_id,
-                                "revision": graph.revision,
-                            },
-                        )
-                        session.add(document)
-                        for ordinal, start in enumerate(range(0, len(content), 1200)):
-                            session.add(
-                                KnowledgeChunk(
-                                    id=f"chunk_{uuid.uuid4().hex}",
-                                    document_id=document.id,
-                                    ordinal=ordinal,
-                                    text=content[start : start + 1200],
-                                    metadata_payload={"source": "lingxigraph"},
-                                )
-                            )
-                        projected += 1
                 if projected or workspace not in session.new:
                     await session.commit()
                 return projected
@@ -1072,8 +976,27 @@ class Service:
         if record.status in {"completed", "partial", "handed_off", "failed", "cancelled"}:
             return {"id": task_id, "status": record.status}
         await self.repo.set_agent_task_status(task_id, "cancelled")
+        if record.current_execution_id:
+            execution = await self.repo.get_agent_execution(record.current_execution_id, learner_id)
+            if execution is not None:
+                state = dict(execution.workflow_state or {})
+                metadata = dict(state.get("metadata") or {})
+                metadata.update({"terminal": True, "status": "cancelled", "paused": False})
+                state["metadata"] = metadata
+                await self.repo.update_agent_execution(
+                    execution.id,
+                    status="cancelled",
+                    workflow_state=state,
+                    ended=True,
+                )
         await self.repo.append_agent_events(
-            task_id, [{"kind": "task.cancelled", "agent": "coordinator", "payload": {}}]
+            task_id,
+            [{
+                "kind": "task.cancelled",
+                "agent": "coordinator",
+                "execution_id": record.current_execution_id,
+                "payload": {"status": "cancelled"},
+            }],
         )
         self._notify_agent(task_id)
         return {"id": task_id, "status": "cancelled"}
@@ -1158,22 +1081,7 @@ class Service:
                 raise KeyError(str(exc)) from exc
         raise KeyError(f"unknown artifact kind: {kind}")
 
-    async def agent_knowledge_graph(self, task_id: str, learner_id: str) -> dict[str, Any] | None:
-        """Return the graph target recorded by this task, owned by the learner."""
-
-        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
-        if record is None:
-            raise KeyError(f"unknown agent task: {task_id}")
-        sidecars = await self.repo.list_agent_sidecars(task_id, learner_id)
-        for sidecar in reversed(sidecars):
-            if sidecar["kind"] != "knowledge_graph":
-                continue
-            graph_id = (sidecar.get("output") or {}).get("graph_id")
-            if graph_id:
-                return await self.repo.get_knowledge_graph(graph_id, learner_id)
-        return None
-
-    def _artifact_snapshot(self, record: Any) -> list[dict[str, Any]]:
+    async def _artifact_snapshot(self, record: Any) -> dict[str, Any]:
         """The artifacts this task actually produced, read from disk.
 
         Derived rather than declared: an artifact kind that a provider stops
@@ -1181,38 +1089,26 @@ class Service:
         that is permanently ``available: false``.
         """
 
-        found: list[dict[str, Any]] = []
+        found: dict[str, Any] = {
+            "lesson_intro": {"available": False, "url": ""},
+            "lecture_deck": {"available": False, "url": ""},
+            "quiz": {"available": False, "data": None},
+            "visual": {"available": False, "url": ""},
+        }
         for kind, exists in (
             ("lesson-intro", self.agent_artifacts.lesson_intro_path(record.id).exists()),
             ("lecture-deck", self.agent_artifacts.deck_path(record.id).exists()),
             ("visual", self.agent_artifacts.html_path(record.id).exists()),
         ):
             if exists:
-                found.append(
-                    {
-                        "kind": kind,
-                        "url": f"/api/agent-tasks/{record.id}/artifacts/{kind}",
-                    }
-                )
+                key = kind.replace("-", "_")
+                found[key] = {
+                    "available": True,
+                    "url": f"/api/agent-tasks/{record.id}/artifacts/{kind}",
+                }
         if record.quiz_result:
-            found.append({"kind": "quiz", "data": quiz_public(record.quiz_result)})
+            found["quiz"] = {"available": True, "data": quiz_public(record.quiz_result)}
         return found
-
-    async def _knowledge_graph_artifact_snapshot(self, record: Any) -> dict[str, Any]:
-        sidecars = await self.repo.list_agent_sidecars(record.id, record.learner_id)
-        sidecar = next(
-            (item for item in reversed(sidecars) if item["kind"] == "knowledge_graph"),
-            None,
-        )
-        output = (sidecar or {}).get("output") or {}
-        return {
-            "available": bool(output.get("graph_id")),
-            "graph_id": output.get("graph_id"),
-            "revision": output.get("revision"),
-            "url": f"/api/agent-tasks/{record.id}/knowledge-graph",
-            "status": (sidecar or {}).get("status", "pending"),
-            **({"error": sidecar["error"]} if sidecar and sidecar.get("error") else {}),
-        }
 
     async def agent_message(
         self,
@@ -1389,13 +1285,19 @@ class Service:
         async def persist_buffer(events: list[dict[str, Any]]) -> None:
             if not events:
                 return
+            current_workflow_state = projector.snapshot()["workflowState"]
             for item in events:
                 item.setdefault("execution_id", execution_id)
                 item.setdefault("runtime", (item.get("payload") or {}).get("runtime") or {})
+                item.setdefault("workflowState", current_workflow_state)
+                item["payload"] = {
+                    **(item.get("payload") or {}),
+                    "workflowState": current_workflow_state,
+                }
             await self.repo.append_agent_events(task_id, events)
             await self.repo.update_agent_execution(
                 execution_id,
-                workflow_state=projector.snapshot()["workflowState"],
+                workflow_state=current_workflow_state,
                 trace_spans=projector.snapshot()["traceSpans"],
                 event_count=await self.repo.agent_event_count_for_execution(execution_id),
             )
@@ -1419,14 +1321,10 @@ class Service:
         graph: Any | None = None
 
         def emit_runtime_event(kind: str, payload: dict[str, Any]) -> None:
-            buffer.append(
-                {
-                    "kind": kind,
-                    "agent": str(payload.pop("agent", "orchestrator")),
-                    "payload": _json_safe(payload),
-                    "execution_id": execution_id,
-                }
-            )
+            agent = str(payload.pop("agent", "orchestrator"))
+            projected = projector.consume_runtime_event(kind, payload, agent=agent)
+            projected["execution_id"] = execution_id
+            buffer.append(projected)
 
         session_state = await self.runtime_state.ensure_session_state(
             learner_id=learner_id,
@@ -1559,11 +1457,24 @@ class Service:
                         },
                     }
                 )
+            failure_status = (
+                "timed_out"
+                if isinstance(exc, GraphTimeoutError)
+                else "budget_exceeded"
+                if isinstance(exc, BudgetExceededError)
+                else "failed"
+            )
+            failure_kind = {
+                "timed_out": "run.timed_out",
+                "budget_exceeded": "run.budget_exceeded",
+                "failed": "run.failed",
+            }[failure_status]
             buffer.append(
                 {
-                    "kind": "task.failed",
+                    "kind": failure_kind,
                     "agent": "coordinator",
                     "payload": {
+                        "status": failure_status,
                         "error_type": type(exc).__name__,
                         "message": f"运行失败：{type(exc).__name__}: {detail}",
                     },
@@ -1572,14 +1483,18 @@ class Service:
             await persist_buffer(buffer)
             buffer.clear()
             await self.repo.set_agent_task_status(
-                task_id, "failed", f"运行失败：{type(exc).__name__}: {detail}"
+                task_id, failure_status, f"运行失败：{type(exc).__name__}: {detail}"
             )
             snapshot = projector.snapshot()
+            workflow_state = dict(snapshot["workflowState"])
+            metadata = dict(workflow_state.get("metadata") or {})
+            metadata.update({"terminal": True, "status": failure_status, "paused": False})
+            workflow_state["metadata"] = metadata
             await self.repo.update_agent_execution(
                 execution_id,
-                status="failed",
+                status=failure_status,
                 error=f"运行失败：{type(exc).__name__}: {detail}",
-                workflow_state=snapshot["workflowState"],
+                workflow_state=workflow_state,
                 trace_spans=snapshot["traceSpans"],
                 ended=True,
             )
@@ -2017,7 +1932,7 @@ def _json_safe(value: Any) -> Any:
 
 def _agents_from_trace(
     decisions: list[dict[str, Any]], sidecars: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+) -> dict[str, dict[str, Any]]:
     """Which agents ran this task, derived rather than enumerated.
 
     The old snapshot hard-coded one key per specialist, which meant every new
@@ -2054,7 +1969,7 @@ def _agents_from_trace(
         )
         entry["status"] = str(sidecar.get("status") or entry["status"])
         entry["background"] = True
-    return sorted(seen.values(), key=lambda item: str(item["agent"]))
+    return {name: value for name, value in sorted(seen.items())}
 
 
 def _lesson_intro_metadata(result: dict[str, Any]) -> dict[str, Any]:

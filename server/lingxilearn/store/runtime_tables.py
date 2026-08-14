@@ -158,6 +158,11 @@ async def _runtime_table(
     return table
 
 
+async def ensure_runtime_tables(session: AsyncSession, workspace_id: str) -> list[WorkspaceTable]:
+    """Materialize the complete runtime table catalog for the Tables surface."""
+    return [await _runtime_table(session, workspace_id, category) for category in RUNTIME_TABLES]
+
+
 async def project_runtime_events(
     session: AsyncSession,
     *,

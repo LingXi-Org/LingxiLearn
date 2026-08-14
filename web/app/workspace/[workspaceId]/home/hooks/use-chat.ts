@@ -223,7 +223,11 @@ export interface UseChatReturn {
   dispatchingHeadId: string | null
   previewSession: FilePreviewSession | null
   genericResourceData: GenericResourceData | null
-  lingxiRuntime?: { task: AgentTaskSnapshot | null; events: AgentTaskEvent[] }
+  lingxiRuntime?: {
+    task: AgentTaskSnapshot | null
+    events: AgentTaskEvent[]
+    workflowState?: Record<string, unknown> | null
+  }
   getCurrentRequestId: () => string | undefined
 }
 

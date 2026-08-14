@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation'
 import { Chip, ChipLink } from '@/components/ui-kit'
 import { identityApi } from '@/lib/auth/identity-api'
+import { isMockAuthEnabled } from '@/lib/core/config/env-flags'
 import { AuthHeader, AuthLegalFooter } from './auth-shell'
 
 type AuthKind = 'login' | 'register' | 'forgot-password'
@@ -42,7 +43,10 @@ export function AuthEntry({ kind }: { kind: AuthKind }) {
   const searchParams = useSearchParams()
   const content = copy[kind]
   const nextPath = safeCallback(searchParams.get('callbackUrl') ?? searchParams.get('callbackURL'))
-  const target = identityApi.authUrl(kind, nextPath)
+  // The local Compose deployment has no browser-visible Identity cookie and
+  // uses the fixed development principal. Keep this entry point aligned with
+  // the other auth adapters instead of sending local users to the remote BFF.
+  const target = isMockAuthEnabled ? nextPath : identityApi.authUrl(kind, nextPath)
 
   return (
     <div className='space-y-6'>

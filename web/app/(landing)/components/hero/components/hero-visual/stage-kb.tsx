@@ -1,14 +1,7 @@
 import type { CSSProperties, RefObject } from 'react'
 import { cn } from '@/components/ui-kit'
 import { Upload, X } from '@/components/ui-kit/icons'
-import { KnowledgeGraphMiniSvg } from '@/lib/lingxi/components/knowledge-graph-canvas'
-import {
-  GRAPH_EDGES,
-  GRAPH_NODES,
-  GRAPH_VIEWBOX,
-  KB_FILES,
-  KB_NAME,
-} from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
+import { KB_FILES, KB_NAME } from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
 
 /** Which beat of the knowledge-base flow the modal is showing. */
 export type KbStage = 'empty' | 'files' | 'embeddings'
@@ -97,11 +90,7 @@ export function KnowledgeBasePanel({
 
             {creating && (
               <div className='absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-lg border border-[var(--border-1)] bg-[var(--surface-5)] px-3'>
-                <KnowledgeGraphMiniSvg
-                  viewBox={GRAPH_VIEWBOX}
-                  nodes={GRAPH_NODES}
-                  edges={GRAPH_EDGES}
-                />
+                <div className='size-8 animate-pulse rounded-full border-2 border-[var(--text-muted)] border-t-transparent' aria-hidden />
                 <span className='text-[var(--text-muted)] text-caption'>正在生成向量…</span>
               </div>
             )}

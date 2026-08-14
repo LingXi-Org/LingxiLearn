@@ -233,41 +233,6 @@ def _review_reason(overdue_days: float, row: dict[str, Any], system: dict[str, A
     return "，".join(parts)
 
 
-@register("curriculum_graph")
-async def curriculum_graph(context: ProviderContext) -> ProviderResult:
-    """Propose a knowledge-graph patch (``graph.build``).
-
-    Irreversible: it writes learner-owned graph structure, so guardrails require
-    confirmation before this ever runs.
-    """
-
-    from ..curriculum_graph import build_curriculum_graph_proposal
-
-    if context.model is None:
-        raise ProviderError("curriculum-graph-builder requires a model")
-
-    task_payload = {
-        "id": context.task_id,
-        "prompt": context.goal.raw_utterance,
-        "intent": {"topic": context.goal.topic},
-        "user_messages": [context.user_message] if context.user_message else [],
-        "lecture_result": dict(context.result_of("lecture_hook")),
-        "deck_result": dict(context.result_of("interactive_lecture_deck")),
-        "quiz_result": dict(context.result_of("quiz_generator")),
-    }
-    proposal = await build_curriculum_graph_proposal(
-        model=context.model,
-        task=task_payload,
-        existing_graphs=list(context.task.inputs.get("existing_graphs") or []),
-        runtime=context.runtime,
-    )
-    return ProviderResult(
-        data=proposal,
-        persist_as="knowledge_graph",
-        detail=f"图谱提案：{proposal.get('decision', {}).get('action', 'unknown')}",
-    )
-
-
 @register("learner_reflector")
 async def learner_reflector(context: ProviderContext) -> ProviderResult:
     """Compress recent events into a cautious state proposal (``model.reflect``).
@@ -332,7 +297,6 @@ async def learner_reflector(context: ProviderContext) -> ProviderResult:
 
 
 __all__ = [
-    "curriculum_graph",
     "learner_reflector",
     "prerequisite_analyzer",
     "review_scheduler",
