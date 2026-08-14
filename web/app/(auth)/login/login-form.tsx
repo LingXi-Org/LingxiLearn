@@ -242,6 +242,11 @@ export default function LoginPage({
         }
       )
 
+      // The production identity flow has already started a full-page
+      // navigation. Do not let the success fallback below overwrite it with
+      // an immediate client-side route change.
+      if (result?.redirectStarted) return
+
       if (!result || result.error) {
         // Show error if not already handled by onError callback
         if (!errorHandled) {

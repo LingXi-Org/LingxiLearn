@@ -56,6 +56,17 @@ export function useSession(): SessionHookResult {
 
 type AuthRedirectOptions = { callbackURL?: string; callbackUrl?: string }
 
+/**
+ * The identity BFF starts authentication with a browser navigation rather
+ * than returning a session from JavaScript. Callers must not treat that
+ * navigation as an already completed login and start a second navigation.
+ */
+type AuthRedirectResult = {
+  data: SimSession | null
+  error: null
+  redirectStarted: true
+}
+
 function callbackPath(options?: AuthRedirectOptions): string {
   return options?.callbackURL ?? options?.callbackUrl ?? '/workspace/lingxi/home/'
 }
@@ -74,28 +85,28 @@ export const client = {
     email: async (_credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
       if (isMockAuthEnabled) {
         window.location.assign(callbackPath(options))
-        return { data: toSimSession(MOCK_IDENTITY_ME), error: null }
+        return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
       }
       window.location.assign(identityApi.authUrl('login', callbackPath(options)))
-      return { data: null, error: null }
+      return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
     },
     social: async (_provider: string, options?: AuthRedirectOptions) => {
       if (isMockAuthEnabled) {
         window.location.assign(callbackPath(options))
-        return { data: toSimSession(MOCK_IDENTITY_ME), error: null }
+        return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
       }
       window.location.assign(identityApi.authUrl('login', callbackPath(options)))
-      return { data: null, error: null }
+      return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
     },
   },
   signUp: {
     email: async (_credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
       if (isMockAuthEnabled) {
         window.location.assign(callbackPath(options))
-        return { data: toSimSession(MOCK_IDENTITY_ME), error: null }
+        return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
       }
       window.location.assign(identityApi.authUrl('register', callbackPath(options)))
-      return { data: null, error: null }
+      return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
     },
   },
   // These namespaces keep the direct Sim query modules type-compatible while
