@@ -81,23 +81,52 @@ cookie with requests and does not store a bearer token in localStorage.
 
 The FastAPI service owns the LingxiLearn learning domain and exposes:
 
-- workspace, file/folder, table, knowledge, log, settings, and Agent Task REST
-  endpoints;
+- OIDC-protected Agent Task REST endpoints;
 - replayable Agent Task SSE events;
-- skill catalogue and artifact/quiz resource endpoints;
+- the capability registry and artifact/quiz resource endpoints;
+- the learning profile, the decision trace and this run's execution graph;
 - course packs, learner context, evidence and persistence;
 - static frontend fallback in production.
 
 LingxiGraph is used inside the backend task service. The browser receives safe
-stage summaries, tool metadata, and artifact references rather than raw private
+stage summaries, tool metadata and artifact references rather than raw private
 reasoning or credentials.
 
-## Database boundary
+## The runtime
 
-The host development database is `var/lingxilearn.sqlite3`; Compose development
-and production use PostgreSQL. Both paths use the same SQLAlchemy models and
-Alembic chain, whose current head is `0011_table_view_metadata`. The API starts
-only after the selected database has reached that head.
+There is one graph, and nothing in it names an agent or a subject:
+
+```text
+START → interpret_goal → orchestrate → dispatch → observe
+      → update_state → evaluate_goal
+evaluate_goal ──(runtime_status only)──> orchestrate | await_user | END
+```
+
+What runs inside `dispatch` is recomputed every round from the learner's state,
+resolved `capability tag → skill → provider` through `skill_registry`. Adding a
+capability, a skill or a subject changes data; it does not change the graph.
+
+Four tables are the only channel between agents. No agent hands another agent
+prose.
+
+| Table | Who writes it | What it holds |
+| --- | --- | --- |
+| `learning_profile` | `state/profile_writer.py`, and nothing else | one row per learner × knowledge point |
+| `learning_evidence` | any provider, append-only | structured observations, never prose |
+| `session_state` | the loop | goal stack, run phase, guardrail budget |
+| `skill_registry` | startup, from `skills/*/SKILL.md` | capability tags, contracts, preconditions, cost |
+
+`decision_trace` records each round's candidate set, choice, reason, evidence
+and profile before/after, and links a replan to what it is redoing.
+
+Guardrails live in `runtime/guardrails.py` and run in code, not in a prompt:
+step and replan ceilings, token and time budgets, a capability allow-list, a
+heavy-artifact cap, confirmation for irreversible actions, a mandatory
+rationale, and a required negotiation sentence before deviating from what the
+learner literally asked for.
+
+`server/tests/test_no_fixed_routing.py` fails the build if intent-to-workflow
+branching reappears.
 
 ## Verification
 
