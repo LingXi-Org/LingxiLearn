@@ -3,6 +3,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import '@/app/_styles/globals.css'
 import { LingxiIdentityProvider } from '@/lib/lingxi/lingxi-identity-provider'
 import { season } from '@/app/_styles/fonts/season/season'
+import { QueryProvider } from '@/app/_shell/providers/query-provider'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -32,7 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${season.variable} font-body`} suppressHydrationWarning>
         <NuqsAdapter>
-          <LingxiIdentityProvider>{children}</LingxiIdentityProvider>
+          <QueryProvider>
+            <LingxiIdentityProvider>{children}</LingxiIdentityProvider>
+          </QueryProvider>
         </NuqsAdapter>
       </body>
     </html>
