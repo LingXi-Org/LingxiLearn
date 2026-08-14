@@ -18,7 +18,6 @@ metadata:
   state-write-mode: none
   parallel-safe: true
   latency-class: interactive
-  provider: goal_interpreter
   ownership: shared
 ---
 
