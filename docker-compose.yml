@@ -57,7 +57,13 @@ services:
   web:
     image: accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-web:latest
     pull_policy: always
+    env_file: [.env]
     environment:
+      # The web image initializes Drizzle/Better Auth on the server side and
+      # therefore needs a PostgreSQL URL of its own. The API's
+      # LINGXILEARN_DATABASE_URL is not read by the web process.
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
       LINGXILEARN_API_ORIGIN: http://api:8000
       # Local container runs use the UI-only mock session by default. Set to
       # false in a real deployment so auth is handled by LingxiIdentity.
