@@ -21,7 +21,8 @@ export default function Contact() {
             联系我们
           </h1>
           <p className='max-w-[46ch] text-pretty text-[var(--text-body)] text-lg leading-[1.6] max-sm:text-base'>
-            LingXi 面向学生提供 AI 学习支持。欢迎联系技术与产品团队，交流产品体验、合作想法或使用反馈。
+            LingXi 面向学生提供 AI
+            学习支持。欢迎联系技术与产品团队，交流产品体验、合作想法或使用反馈。
           </p>
         </div>
 
@@ -31,6 +32,8 @@ export default function Contact() {
             title='技术负责人'
             handle='chengyang.li'
             status='LingXi Engineering'
+            avatarUrl='/landing/contact/portrait-li-chengyang.png'
+            iconUrl='/landing/contact/code-icon.svg'
             contactHref='mailto:team@lingxilearn.cn'
           />
           <ProfileCard
@@ -38,6 +41,8 @@ export default function Contact() {
             title='产品负责人'
             handle='yuanyang.li'
             status='LingXi Product'
+            avatarUrl='/landing/contact/portrait-li-yuanyang.png'
+            iconUrl='/landing/contact/product-icon.svg'
             contactHref='mailto:team@lingxilearn.cn'
           />
         </div>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 260" fill="none">
+  <title>Code icon pattern</title>
+  <g stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(22 20) scale(.406)">
+      <path d="m34 32-28 28 28 28" />
+      <path d="m86 32 28 28-28 28" />
+      <path d="m75 16-30 88" />
+    </g>
+    <g transform="translate(183 139) scale(.406)">
+      <path d="m34 32-28 28 28 28" />
+      <path d="m86 32 28 28-28 28" />
+      <path d="m75 16-30 88" />
+    </g>
+  </g>
+</svg>

@@ -92,6 +92,8 @@ export function ProfileCard({
         '--pointer-from-center': `${clamp(Math.hypot(percentY - 50, percentX - 50) / 50, 0, 1)}`,
         '--pointer-from-top': `${percentY / 100}`,
         '--pointer-from-left': `${percentX / 100}`,
+        '--parallax-x': `${round(centerX / 8)}px`,
+        '--parallax-y': `${round(centerY / 8)}px`,
         '--rotate-x': `${round(-(centerX / 5))}deg`,
         '--rotate-y': `${round(centerY / 4)}deg`,
       }
@@ -110,7 +112,7 @@ export function ProfileCard({
       currentY += (targetY - currentY) * progress
       setVarsFromXY(currentX, currentY)
 
-      if (Math.abs(targetX - currentX) > 0.05 || Math.abs(targetY - currentY) > 0.05 || document.hasFocus()) {
+      if (Math.abs(targetX - currentX) > 0.05 || Math.abs(targetY - currentY) > 0.05) {
         rafId = requestAnimationFrame(step)
       } else {
         running = false
@@ -135,6 +137,9 @@ export function ProfileCard({
       toCenter() {
         const shell = shellRef.current
         if (shell) this.setTarget(shell.clientWidth / 2, shell.clientHeight / 2)
+      },
+      getCurrent() {
+        return { currentX, currentY, targetX, targetY }
       },
       beginInitial(duration: number) {
         initialUntil = performance.now() + duration
@@ -187,11 +192,13 @@ export function ProfileCard({
 
     const checkSettle = () => {
       if (!shellRef.current) return
-      if (leaveRafRef.current === null) return
+      const { currentX, currentY, targetX, targetY } = tiltEngine.getCurrent()
+      if (Math.hypot(targetX - currentX, targetY - currentY) < 0.6) {
+        shell.classList.remove('active')
+        leaveRafRef.current = null
+        return
+      }
       leaveRafRef.current = requestAnimationFrame(checkSettle)
-      shell.classList.remove('active')
-      cancelAnimationFrame(leaveRafRef.current)
-      leaveRafRef.current = null
     }
 
     if (leaveRafRef.current !== null) cancelAnimationFrame(leaveRafRef.current)
