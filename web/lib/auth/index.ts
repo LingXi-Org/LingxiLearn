@@ -8,8 +8,4 @@ export type {
 } from './identity-api'
 export { IdentityApiError, identityApi } from './identity-api'
 export { SessionProvider, useSession as useIdentitySession } from './session-provider'
-
-/** Legacy Sim server callers are intentionally inert in the Lingxi build. */
-export async function getSession(): Promise<{ user: { id: string } } | null> {
-  return null
-}
+export { getSession } from './session-server'

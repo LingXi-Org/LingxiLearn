@@ -250,15 +250,16 @@ export async function proxy(request: NextRequest) {
   }
 
   const sessionCookie = getSessionCookie(request)
-  const hasActiveSession = isAuthDisabled || isMockAuthEnabled || !!sessionCookie
+  const hasBffSession = Boolean(request.cookies.get('lingxi_session')?.value)
+  const hasActiveSession = isAuthDisabled || isMockAuthEnabled || hasBffSession || !!sessionCookie
 
   const redirect = handleRootPathRedirects(request, hasActiveSession)
   if (redirect) return track(request, redirect)
 
   if (url.pathname === '/login' || url.pathname === '/signup') {
-    if (hasActiveSession && !isMockAuthEnabled) {
-      return track(request, NextResponse.redirect(new URL('/workspace', request.url)))
-    }
+    // These are public entry points. Do not infer authentication from a stale
+    // cookie: the BFF may correctly return 401 and the page must still render.
+    // Protected routes below perform the login redirect instead.
     const response = NextResponse.next()
     response.headers.set('Content-Security-Policy', generateRuntimeCSP())
     response.headers.set('X-Content-Type-Options', 'nosniff')

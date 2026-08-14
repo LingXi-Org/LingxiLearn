@@ -83,7 +83,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            DOCKER_REGISTRY=docker.m.daocloud.io
+            DOCKER_REGISTRY=accel.way2api.fun/docker.io
             APT_MIRROR=mirrors.aliyun.com
             PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
             NPM_REGISTRY=https://registry.npmmirror.com

@@ -1,4 +1,4 @@
-ARG DOCKER_REGISTRY=docker.m.daocloud.io
+ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 FROM ${DOCKER_REGISTRY}/oven/bun:1.3.14
 
 WORKDIR /app

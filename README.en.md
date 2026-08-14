@@ -176,7 +176,7 @@ docker compose pull
 docker compose up -d
 ```
 
-The default production entry point is `http://localhost:8080`. Production Compose pulls API and Web images through `accel.way2api.fun/ghcr.io/lingxi-org` by default. CI publishes both a release tag (currently `0.1.0`) and `latest` for both images; set `LINGXILEARN_IMAGE_TAG` in `.env` to pin a release.
+The default production entry point is `http://localhost:8080`. Production Compose uses the single `LINGXILEARN_IMAGE_REGISTRY` setting from `.env` for both API and Web images; it defaults to `accel.way2api.fun/ghcr.io/lingxi-org`. CI publishes both a release tag (currently `0.1.0`) and `latest` for both images; set `LINGXILEARN_IMAGE_TAG` in `.env` to pin a release.
 
 <details>
   <summary>Runtime modes</summary>

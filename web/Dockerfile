@@ -1,4 +1,4 @@
-ARG DOCKER_REGISTRY=docker.m.daocloud.io
+ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 FROM ${DOCKER_REGISTRY}/oven/bun:1.3.14 AS builder
 
 WORKDIR /app
@@ -21,7 +21,7 @@ COPY . .
 
 RUN rm -rf out .next && bun run build && test -f .next/standalone/server.js
 
-ARG DOCKER_REGISTRY=docker.m.daocloud.io
+ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 FROM ${DOCKER_REGISTRY}/oven/bun:1.3.14 AS runtime
 ARG LINGXILEARN_VERSION=0.1.0
 LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}"

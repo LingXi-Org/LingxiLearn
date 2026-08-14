@@ -1,7 +1,7 @@
 # LingxiLearn API. Two stages so no build toolchain reaches the runtime layer.
-# Defaults are domestic mirrors; override them with Compose build args when needed.
+# Defaults use the shared accelerator prefix; override them with Compose build args when needed.
 
-ARG DOCKER_REGISTRY=docker.m.daocloud.io
+ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 FROM ${DOCKER_REGISTRY}/library/python:3.13-slim AS builder
 
 ARG PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
@@ -13,7 +13,7 @@ RUN python -m pip install --no-cache-dir --index-url ${PYPI_INDEX_URL} uv \
  && uv venv \
  && uv pip install --no-cache --index-url ${PYPI_INDEX_URL} .
 
-ARG DOCKER_REGISTRY=docker.m.daocloud.io
+ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 FROM ${DOCKER_REGISTRY}/library/python:3.13-slim AS runtime
 ARG LINGXILEARN_VERSION=0.1.0
 LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}"

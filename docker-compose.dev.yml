@@ -11,7 +11,7 @@ x-api-dev: &api-dev
     context: ./server
     dockerfile: Dockerfile
     args:
-      DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
+      DOCKER_REGISTRY: ${DOCKER_REGISTRY:-accel.way2api.fun/docker.io}
       APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
       PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
   env_file: [.env]
@@ -41,7 +41,7 @@ x-api-dev: &api-dev
 
 services:
   postgres:
-    image: ${DOCKER_REGISTRY:-docker.m.daocloud.io}/library/postgres:16-alpine
+    image: ${DOCKER_REGISTRY:-accel.way2api.fun/docker.io}/library/postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
@@ -101,7 +101,7 @@ services:
       context: ./web
       dockerfile: docker/dev.Dockerfile
       args:
-        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-accel.way2api.fun/docker.io}
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     working_dir: /app
     command:
