@@ -14,6 +14,7 @@ import {
 } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import { revertToDeploymentVersionContract } from '@/lib/api/contracts/deployments'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import {
   createWorkflowContract,
   deleteWorkflowContract,
@@ -125,7 +126,8 @@ export function useWorkflows(
   return useQuery({
     queryKey: workflowKeys.list(workspaceId, scope),
     queryFn: workspaceId ? getWorkflowListQueryOptions(workspaceId, scope).queryFn : skipToken,
-    enabled: options?.enabled ?? true,
+    enabled:
+      (options?.enabled ?? true) && workspaceId !== LINGXI_WORKSPACE_ID,
     placeholderData: keepPreviousData,
     staleTime: WORKFLOW_LIST_STALE_TIME,
   })
@@ -145,6 +147,7 @@ export function useWorkflowMap(workspaceId?: string, options?: { scope?: Workflo
   return useQuery({
     queryKey: workflowKeys.list(workspaceId, scope),
     queryFn: workspaceId ? getWorkflowListQueryOptions(workspaceId, scope).queryFn : skipToken,
+    enabled: workspaceId !== LINGXI_WORKSPACE_ID,
     placeholderData: keepPreviousData,
     staleTime: WORKFLOW_LIST_STALE_TIME,
     select: selectWorkflowMap,

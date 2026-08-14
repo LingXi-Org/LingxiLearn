@@ -11,10 +11,11 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+import logging
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, event, func, select
+from sqlalchemy import delete, event, func, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -45,6 +46,86 @@ from .models import (
     Workspace,
     utcnow,
 )
+
+logger = logging.getLogger(__name__)
+
+
+# SQLite is the supported zero-setup development database.  Older local
+# checkouts were created with ``Base.metadata.create_all`` before the latest
+# migrations were added, so ``create_all`` alone cannot repair them.  Keep the
+# compatibility DDL explicit and small: production PostgreSQL still uses the
+# normal Alembic chain, while a local SQLite restart upgrades the existing
+# file in place without discarding learner data.
+_SQLITE_SCHEMA_HEAD = "0011_table_view_metadata"
+_SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
+    "agent_tasks": {
+        "title": "TEXT NOT NULL DEFAULT ''",
+        "is_pinned": "BOOLEAN NOT NULL DEFAULT 0",
+        "is_unread": "BOOLEAN NOT NULL DEFAULT 0",
+        "deleted_at": "DATETIME",
+        "resources": "JSON NOT NULL DEFAULT '[]'",
+        "graph_version": "VARCHAR(32) NOT NULL DEFAULT 'difficult_knowledge.v2'",
+        "deck_result": "JSON NOT NULL DEFAULT '{}'",
+        "quiz_result": "JSON NOT NULL DEFAULT '{}'",
+        "adaptive_result": "JSON NOT NULL DEFAULT '{}'",
+        "handoff_result": "JSON NOT NULL DEFAULT '{}'",
+        "user_messages": "JSON NOT NULL DEFAULT '[]'",
+        "current_execution_id": "VARCHAR(128)",
+        "latest_execution_id": "VARCHAR(128)",
+    },
+    "agent_task_events": {
+        "execution_id": "VARCHAR(128)",
+        "runtime": "JSON NOT NULL DEFAULT '{}'",
+    },
+    "workspace_knowledge_tags": {
+        "tag_slot": "VARCHAR(32) NOT NULL DEFAULT ''",
+    },
+    "workspace_table_views": {
+        "is_default": "BOOLEAN NOT NULL DEFAULT 0",
+        "created_by": "VARCHAR(64)",
+    },
+}
+
+
+def _repair_sqlite_schema(connection: Any) -> None:
+    inspector = inspect(connection)
+    existing_tables = set(inspector.get_table_names())
+    repaired: list[str] = []
+
+    for table_name, columns in _SQLITE_COMPAT_COLUMNS.items():
+        if table_name not in existing_tables:
+            continue
+        existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        for column_name, ddl in columns.items():
+            if column_name in existing_columns:
+                continue
+            connection.exec_driver_sql(
+                f'ALTER TABLE "{table_name}" ADD COLUMN "{column_name}" {ddl}'
+            )
+            repaired.append(f"{table_name}.{column_name}")
+
+    # ``create_all`` does not create indexes for columns added above.  Let
+    # SQLAlchemy create every declared index after the column repair; existing
+    # indexes are left untouched.
+    for table in Base.metadata.sorted_tables:
+        for index in table.indexes:
+            index.create(connection, checkfirst=True)
+
+    # A create_all-created SQLite file has no migration marker.  Once the
+    # current model schema has been materialised, mark it at the same head as
+    # Alembic so a later explicit ``alembic upgrade head`` is a no-op rather
+    # than replaying migrations over already-existing tables.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS alembic_version "
+        "(version_num VARCHAR(32) NOT NULL)"
+    )
+    connection.exec_driver_sql("DELETE FROM alembic_version")
+    connection.exec_driver_sql(
+        "INSERT INTO alembic_version (version_num) VALUES (?)",
+        (_SQLITE_SCHEMA_HEAD,),
+    )
+    if repaired:
+        logger.info("Repaired SQLite schema columns: %s", ", ".join(repaired))
 
 
 class Database:
@@ -84,6 +165,14 @@ class Database:
         """Only for tests and the SQLite quick-start; production runs Alembic."""
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+    async def ensure_sqlite_schema(self) -> None:
+        """Create or repair the local SQLite schema without dropping data."""
+        if not self.engine.url.drivername.startswith("sqlite"):
+            return
+        await self.create_all()
+        async with self.engine.begin() as conn:
+            await conn.run_sync(_repair_sqlite_schema)
 
     async def ping(self) -> bool:
         async with self.engine.connect() as conn:

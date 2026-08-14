@@ -120,7 +120,7 @@ def test_agent_skills_are_discoverable_and_have_resources() -> None:
         assert (skill_dir / "SKILL.md").read_text(encoding="utf-8").startswith("---")
         if name == "interactive-lecture-deck":
             spec = source.load(name)
-            assert spec.extra_metadata.get("version") == "1.3.0"
+            assert spec.extra_metadata.get("version") == "1.4.0"
             assert "dist/lecture.html" in spec.content
 
 

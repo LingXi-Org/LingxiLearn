@@ -275,11 +275,32 @@ html[data-sim-desktop-title-bar="inset"]:has(.workspace-content-shell[data-sideb
 @media (max-width: 860px) {
   .workspace-content-shell {
     padding: 0;
+    width: 100%;
   }
 
   .workspace-content-window {
     border-radius: 0;
     border-width: 0;
+  }
+
+  /* Sim's compact web shell keeps the icon rail in flow. Once expanded, the
+     rail becomes an overlay so the resource surface remains viewport-wide
+     instead of shrinking to an unusable sliver. */
+  .workspace-sidebar-shell:not([data-collapsed]) {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--sidebar-expanded-width) !important;
+    max-width: 85vw;
+    box-shadow: var(--shadow-overlay);
+  }
+
+  .workspace-sidebar-shell[data-collapsed] {
+    position: relative;
+    width: var(--sidebar-collapsed-width) !important;
+  }
+
+  .workspace-content-shell {
+    flex: 1 1 100%;
   }
 
   .workspace-resource-panel:not([data-collapsed]) {

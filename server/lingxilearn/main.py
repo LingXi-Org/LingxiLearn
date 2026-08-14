@@ -38,10 +38,11 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     # Build the verifier before opening graph/database resources so a strict
     # production configuration fails fast and cleanly.
     identity = await asyncio.to_thread(build_authenticator, settings)
-    # Convenience for the zero-setup SQLite path; Postgres deployments run
+    # Convenience for the zero-setup SQLite path; this also repairs files
+    # created by older local versions in place. Postgres deployments run
     # `alembic upgrade head` in a one-shot migrate step before the app starts.
     if settings.database_url.startswith("sqlite"):
-        await service.db.create_all()
+        await service.db.ensure_sqlite_schema()
     await service.startup()
     app.state.identity = identity
     app.state.service = service

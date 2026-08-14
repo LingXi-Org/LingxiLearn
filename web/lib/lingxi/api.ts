@@ -9,9 +9,7 @@ import type {
   RunEvent,
   SessionListItem,
   SessionSnapshot,
-  SimAction,
   SimExecutionSnapshot,
-  SimState,
 } from './types'
 
 /**
@@ -19,12 +17,10 @@ import type {
  * same-origin and this is empty. Point NEXT_PUBLIC_API_BASE at the backend when
  * running `next dev` against a separately hosted server.
  */
-// Separate local development runs Next.js on :3000 and FastAPI on :8000.
-// Keep production/static deployment same-origin, but make `npm run dev`
-// work without requiring every terminal to export an environment variable.
+// Local development uses Next's same-origin rewrite to FastAPI. A non-empty
+// value is still supported for an explicitly separate API origin.
 const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE?.trim()
-export const API_BASE =
-  configuredApiBase || (process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : '')
+export const API_BASE = configuredApiBase || ''
 
 export class ApiError extends Error {
   constructor(
@@ -52,12 +48,20 @@ export interface WorkspaceFileItem {
   id: string
   workspaceId?: string
   name: string
+  key?: string
   path?: string
   url?: string
   size: number
   type?: string
   mimeType?: string
+  width?: number | null
+  height?: number | null
   folderId?: string | null
+  folderPath?: string | null
+  uploadedBy?: string
+  uploadedAt?: string | null
+  deletedAt?: string | null
+  storageContext?: 'workspace' | 'mothership'
   archived?: boolean
   readOnly?: boolean
   metadata?: Record<string, unknown>
@@ -70,6 +74,11 @@ export interface WorkspaceFolderItem {
   name: string
   parentId?: string | null
   path?: string
+  userId?: string
+  sortOrder?: number
+  createdAt?: string | null
+  updatedAt?: string | null
+  deletedAt?: string | null
   archived?: boolean
 }
 
@@ -146,6 +155,11 @@ function apiUrl(path: string): string {
   return `${API_BASE}/api${path}`
 }
 
+function normalizeWorkspaceFile(file: WorkspaceFileItem): WorkspaceFileItem {
+  if (!file.url || !file.url.startsWith('/api/')) return file
+  return { ...file, url: `${API_BASE}${file.url}` }
+}
+
 async function authorizedFetch(url: string, init?: RequestInit): Promise<Response> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const headers = new Headers(init?.headers)
@@ -153,7 +167,12 @@ async function authorizedFetch(url: string, init?: RequestInit): Promise<Respons
       const token = await accessTokenProvider()
       if (token) headers.set('Authorization', `Bearer ${token}`)
     }
-    const response = await fetch(url, { ...init, headers, credentials: 'include' })
+    let response: Response
+    try {
+      response = await fetch(url, { ...init, headers, credentials: 'include' })
+    } catch (error) {
+      throw error
+    }
     if (response.status !== 401 || attempt > 0 || !sessionRefreshHandler) return response
     try {
       await sessionRefreshHandler()
@@ -242,19 +261,21 @@ export const api = {
       body: JSON.stringify({ fileIds, folderIds, targetFolderId: targetFolderId ?? null }),
     }),
 
-  workspaceFiles: (scope: 'active' | 'archived' = 'active', folderId?: string | null) =>
-    request<{ files: WorkspaceFileItem[] }>(
+  workspaceFiles: async (scope: 'active' | 'archived' = 'active', folderId?: string | null) => {
+    const result = await request<{ files: WorkspaceFileItem[] }>(
       `/workspaces/lingxi/files?scope=${scope}${folderId ? `&folderId=${encodeURIComponent(folderId)}` : ''}`
-    ),
+    )
+    return { ...result, files: result.files.map(normalizeWorkspaceFile) }
+  },
 
-  createWorkspaceFile: (
+  createWorkspaceFile: async (
     name: string,
     content: string,
     type?: string,
     encoding?: 'utf-8' | 'base64',
     folderId?: string | null
-  ) =>
-    request<{ file: WorkspaceFileItem }>('/workspaces/lingxi/files', {
+  ) => {
+    const result = await request<{ file: WorkspaceFileItem }>('/workspaces/lingxi/files', {
       method: 'POST',
       body: JSON.stringify({
         name,
@@ -264,15 +285,23 @@ export const api = {
         encoding: encoding || 'utf-8',
         folderId: folderId ?? null,
       }),
-    }),
+    })
+    return { ...result, file: normalizeWorkspaceFile(result.file) }
+  },
 
-  workspaceFile: (fileId: string) =>
-    request<{ file: WorkspaceFileItem }>(`/workspaces/lingxi/files/${encodeURIComponent(fileId)}`),
+  workspaceFile: async (fileId: string) => {
+    const result = await request<{ file: WorkspaceFileItem }>(
+      `/workspaces/lingxi/files/${encodeURIComponent(fileId)}`
+    )
+    return { ...result, file: normalizeWorkspaceFile(result.file) }
+  },
 
-  workspaceFileContent: (fileId: string) =>
-    request<{ content: string; encoding: string; file: WorkspaceFileItem }>(
+  workspaceFileContent: async (fileId: string) => {
+    const result = await request<{ content: string; encoding: string; file: WorkspaceFileItem }>(
       `/workspaces/lingxi/files/${encodeURIComponent(fileId)}/content`
-    ),
+    )
+    return { ...result, file: normalizeWorkspaceFile(result.file) }
+  },
 
   updateWorkspaceFileContent: (fileId: string, content: string) =>
     request<{ file: WorkspaceFileItem }>(
@@ -362,6 +391,12 @@ export const api = {
     ),
 
   logs: () => request<{ data: Array<Record<string, any>> }>('/logs?workspaceId=lingxi'),
+
+  recordLearningEvent: (taskId: string, event: AgentTaskEvent) =>
+    request<{ success: boolean; data: Record<string, unknown> }>('/lingxi/learning-records', {
+      method: 'POST',
+      body: JSON.stringify({ taskId, event }),
+    }),
 
   billing: () =>
     request<{ success: boolean; context: string; data: Record<string, any> }>(
@@ -617,18 +652,6 @@ export const api = {
 
   artifactUrl: (sessionId: string, artifactId: string) =>
     `${API_BASE}/api/sessions/${sessionId}/artifact/${artifactId}`,
-
-  simInit: (scenario: string, seed: number) =>
-    request<SimState>('/sim/init', {
-      method: 'POST',
-      body: JSON.stringify({ scenario, seed }),
-    }),
-
-  simStep: (state: SimState, action: SimAction) =>
-    request<SimState>('/sim/step', {
-      method: 'POST',
-      body: JSON.stringify({ state, action }),
-    }),
 
   fetchArtifact: async (url: string): Promise<Blob> => {
     // Artifact URL builders already include the `/api` prefix. Passing an

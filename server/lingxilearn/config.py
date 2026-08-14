@@ -27,7 +27,11 @@ BrainKind = Literal["scripted", "openai", "coze"]
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="LINGXILEARN_",
-        env_file=".env",
+        # Resolve the checkout's root environment file regardless of whether
+        # uvicorn is started from the repository root, ``server/``, or a
+        # container working directory.  Compose still injects its explicit
+        # environment values, so this is only a local quick-start fallback.
+        env_file=str(REPO_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -86,12 +90,11 @@ class Settings(BaseSettings):
     # model cannot exhaust the child graph at the old hard-coded limit.
     agent_deck_recursion_limit: int = 80
     agent_visual_timeout: float = 240.0
-    agent_concurrency: int = 1
-    agent_web_timeout: float = 20.0
     # A small production VM should queue expensive graph executions instead
     # of allowing every request and sidecar to retain a full model context.
     agent_concurrency: int = 1
     agent_sidecar_concurrency: int = 1
+    agent_web_timeout: float = 20.0
     # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable
     # prompt/tool prefix intact so DeepSeek can use its native prompt cache.
     agent_cache_enabled: bool = True
@@ -109,7 +112,9 @@ class Settings(BaseSettings):
     coze_timeout: float = 45.0
 
     # --- web ---------------------------------------------------------------
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
+    )
     sse_heartbeat_seconds: float = 15.0
     max_artifact_bytes: int = 10 * 1024 * 1024
 

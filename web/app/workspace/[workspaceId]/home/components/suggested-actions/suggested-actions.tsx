@@ -263,7 +263,7 @@ export function SuggestedActions({ onSelectPrompt }: SuggestedActionsProps) {
     workspaceId,
     enabled: Boolean(workspaceId),
   })
-  const { data: services = EMPTY_SERVICES } = useOAuthConnections()
+  const { data: services = EMPTY_SERVICES } = useOAuthConnections(workspaceId)
   const { data: tables = [] } = useTablesList(workspaceId)
   const { data: knowledgeBases = [] } = useKnowledgeBasesQuery(workspaceId, {
     enabled: Boolean(workspaceId),

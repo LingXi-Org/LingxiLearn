@@ -277,7 +277,7 @@ export function KnowledgeGraphCanvas({ graph }: { graph: KnowledgeGraphData }) {
         <div>
           <h2 className='font-medium text-[var(--text-primary)] text-sm'>{graph.title}</h2>
           <p className='text-[var(--text-muted)] text-xs'>
-            {graph.domain || '知识图谱'} · revision {graph.revision}
+            {graph.domain || '知识图谱'} · 第 {graph.revision} 版
           </p>
         </div>
         <div className='flex gap-1'>

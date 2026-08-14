@@ -1,6 +1,4 @@
 import { randomBytes } from 'crypto'
-import { db } from '@sim/db'
-import { settings, user } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
 import { sha256Hex } from '@sim/security/hash'
 import { eq } from 'drizzle-orm'
@@ -8,6 +6,20 @@ import { env } from '@/lib/core/config/env'
 import type { EmailType } from '@/lib/messaging/email/mailer'
 
 const logger = createLogger('Unsubscribe')
+
+/**
+ * Email capability checks are imported by public auth pages. Keep the legacy
+ * Sim database out of module evaluation so Lingxi's mock-auth development
+ * server can render those pages without a second database runtime. Real email
+ * preference operations still load the shared Sim schema on demand.
+ */
+async function loadPreferenceStore() {
+  const [{ db }, { settings, user }] = await Promise.all([
+    import('@sim/db'),
+    import('@sim/db/schema'),
+  ])
+  return { db, settings, user }
+}
 
 export interface EmailPreferences {
   unsubscribeAll?: boolean
@@ -68,6 +80,7 @@ export function isTransactionalEmail(emailType: EmailType): boolean {
  */
 export async function getEmailPreferences(email: string): Promise<EmailPreferences | null> {
   try {
+    const { db, settings, user } = await loadPreferenceStore()
     const result = await db
       .select({
         emailPreferences: settings.emailPreferences,
@@ -94,6 +107,7 @@ export async function updateEmailPreferences(
   preferences: EmailPreferences
 ): Promise<boolean> {
   try {
+    const { db, settings, user } = await loadPreferenceStore()
     const userResult = await db
       .select({ id: user.id })
       .from(user)

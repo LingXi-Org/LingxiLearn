@@ -1,5 +1,6 @@
 import { requestJson } from '@/lib/api/client/request'
 import { listWorkspaceCredentialsContract, type WorkspaceCredential } from '@/lib/api/contracts'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 
 export const WORKSPACE_CREDENTIAL_LIST_STALE_TIME = 60 * 1000
 
@@ -14,6 +15,7 @@ export async function fetchWorkspaceCredentialList(
   workspaceId: string,
   signal?: AbortSignal
 ): Promise<WorkspaceCredential[]> {
+  if (workspaceId === LINGXI_WORKSPACE_ID) return []
   const data = await requestJson(listWorkspaceCredentialsContract, {
     query: { workspaceId },
     signal,

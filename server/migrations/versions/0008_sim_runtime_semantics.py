@@ -1,4 +1,9 @@
-"""Persist Sim runtime projections, executions and agent-approved schedules."""
+"""Persist LingxiGraph runtime projections, executions and approved schedules.
+
+The historical revision id is immutable because existing databases already
+record it in ``alembic_version``; the schema is part of the single LingxiLearn
+runtime and is not a second Sim backend.
+"""
 
 from alembic import op
 import sqlalchemy as sa

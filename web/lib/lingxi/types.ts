@@ -318,39 +318,3 @@ export interface KnowledgeGraphArtifactSnapshot {
   status?: string
   error?: string
 }
-
-export interface SimState {
-  scenario: string
-  seed: number
-  tick: number
-  total_segments: number
-  window_size: number
-  base: number
-  next_seq: number
-  attempts: number[]
-  inflight: Array<{
-    seq: number
-    sent_at: number
-    arrives_at: number
-    dropped: boolean
-    attempt: number
-    kind: 'data' | 'ack'
-  }>
-  receiver_expected: number
-  receiver_buffer: number[]
-  delivered: number
-  timer: { running: boolean; seq: number | null; expires_at: number | null }
-  dup_ack_count: number
-  timeout_pending: boolean
-  events: Array<{ tick: number; kind: string; [key: string]: unknown }>
-  actions: Array<{ tick: number; op: string; seq?: number }>
-  done: boolean
-  brief: string
-  title: string
-}
-
-export type SimAction =
-  | { op: 'send' }
-  | { op: 'wait' }
-  | { op: 'retransmit'; seq: number }
-  | { op: 'retransmit_all' }

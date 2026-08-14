@@ -1193,7 +1193,7 @@ function ensureWorkflowInRegistry(resourceId: string, title: string, workspaceId
 }
 
 export interface UseChatOptions {
-  /** Optional transport/projection adapter. Omitted means the native Sim stream. */
+  /** Optional transport/projection adapter. Omitted means the native Lingxi stream. */
   adapter?: LingxiGraphChatAdapter
   onResourceEvent?: (resourceId: string) => void
   apiPath?: string
@@ -1230,7 +1230,7 @@ interface StopGenerationOptions {
   mode?: StopGenerationMode
 }
 
-export function getMothershipUseChatOptions(
+function getMothershipUseChatOptions(
   options: Pick<
     UseChatOptions,
     | 'onResourceEvent'
@@ -1247,7 +1247,7 @@ export function getMothershipUseChatOptions(
   }
 }
 
-export function getWorkflowCopilotUseChatOptions(
+function getWorkflowCopilotUseChatOptions(
   options: Pick<
     UseChatOptions,
     'workflowId' | 'onToolResult' | 'onTitleUpdate' | 'onStreamEnd' | 'onRequestStarted'
@@ -1273,7 +1273,7 @@ export function getLingxiGraphUseChatOptions(
   return { ...options }
 }
 
-export function useSimChat(
+function useSimChat(
   workspaceId: string,
   initialChatId?: string,
   options?: UseChatOptions
@@ -5073,17 +5073,18 @@ export function useSimChat(
 }
 
 /**
- * Shared chat surface entry point. Both hooks are invoked on every render so
- * React's hook order stays stable; the selected adapter owns the returned
- * transport and transcript projection.
+ * Shared chat surface entry point.
+ *
+ * The workspace route is now Lingxi-only.  Keep the Sim chat controls and
+ * transcript components as the reusable presentation layer, but give them a
+ * single transport: LingxiGraph.  The previous dual-hook invocation mounted
+ * the legacy Sim transport even when it was not selected, which is what caused
+ * background requests to removed `/api/*` routes during startup.
  */
 export function useChat(
   workspaceId: string,
   initialChatId?: string,
   options?: UseChatOptions
 ): UseChatReturn {
-  const isLingxiGraph = options?.adapter?.kind === 'lingxigraph'
-  const lingxi = useLingxiGraphChat(workspaceId, isLingxiGraph ? initialChatId : undefined, options)
-  const sim = useSimChat(workspaceId, isLingxiGraph ? undefined : initialChatId, options)
-  return isLingxiGraph ? lingxi : sim
+  return useLingxiGraphChat(workspaceId, initialChatId, options)
 }

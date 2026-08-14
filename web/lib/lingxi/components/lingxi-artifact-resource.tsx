@@ -12,9 +12,30 @@ interface LingxiArtifactResourceProps {
 
 type ArtifactKind = 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual' | 'knowledge-graph'
 type WorkspaceResourceKind = 'workspace-tables' | 'workspace-files' | 'runtime-logs'
+type ParsedTaskResource = { taskId: string; kind: ArtifactKind }
+type ParsedResource = { workspaceKind: WorkspaceResourceKind } | ParsedTaskResource | null
 
-function parseResourceId(resourceId: string) {
-  if (resourceId === 'lingxi-workspace:tables') return { workspaceKind: 'workspace-tables' as const }
+function localizedStatus(value: unknown): string {
+  const labels: Record<string, string> = {
+    pending: '等待中',
+    queued: '排队中',
+    running: '运行中',
+    executing: '执行中',
+    completed: '已完成',
+    success: '成功',
+    failed: '失败',
+    error: '错误',
+    cancelled: '已取消',
+    paused: '已暂停',
+    partial: '部分完成',
+  }
+  const text = String(value ?? '')
+  return labels[text] ?? text
+}
+
+function parseResourceId(resourceId: string): ParsedResource {
+  if (resourceId === 'lingxi-workspace:tables')
+    return { workspaceKind: 'workspace-tables' as const }
   if (resourceId === 'lingxi-workspace:files') return { workspaceKind: 'workspace-files' as const }
   if (resourceId === 'lingxi-workspace:logs') return { workspaceKind: 'runtime-logs' as const }
   const [, taskId, kind] = resourceId.split(':')
@@ -43,8 +64,13 @@ function WorkspaceResource({ kind }: { kind: WorkspaceResourceKind }) {
               : ((await api.logs()).data ?? [])
         if (!disposed) setState({ loading: false, error: null, data })
       } catch (cause) {
-        if (!disposed)
-          setState({ loading: false, error: cause instanceof Error ? cause.message : String(cause), data: [] })
+        if (!disposed) {
+          setState({
+            loading: false,
+            error: cause instanceof Error ? cause.message : String(cause),
+            data: [],
+          })
+        }
       }
     }
     void load()
@@ -53,10 +79,15 @@ function WorkspaceResource({ kind }: { kind: WorkspaceResourceKind }) {
     }
   }, [kind])
 
-  if (state.loading) return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载运行资源…</div>
+  if (state.loading)
+    return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载运行资源…</div>
   if (state.error) return <div className='p-6 text-[var(--text-error)] text-sm'>{state.error}</div>
   if (state.data.length === 0)
-    return <div className='p-6 text-[var(--text-secondary)] text-sm'>运行过程中暂时没有可展示的数据。</div>
+    return (
+      <div className='p-6 text-[var(--text-secondary)] text-sm'>
+        运行过程中暂时没有可展示的数据。
+      </div>
+    )
 
   return (
     <div className='h-full overflow-y-auto p-4'>
@@ -82,8 +113,8 @@ function WorkspaceResource({ kind }: { kind: WorkspaceResourceKind }) {
                 {kind === 'workspace-tables'
                   ? `${String(row.totalRows ?? row.rowCount ?? 0)} 行`
                   : kind === 'workspace-files'
-                    ? `${String(row.mimeType ?? row.type ?? '文件')} · ${String(row.size ?? 0)} bytes`
-                    : `${String(row.status ?? '运行记录')} · ${String(row.startedAt ?? row.createdAt ?? '')}`}
+                    ? `${String(row.mimeType ?? row.type ?? '文件')} · ${String(row.size ?? 0)} 字节`
+                    : `${localizedStatus(row.status ?? '运行记录')} · ${String(row.startedAt ?? row.createdAt ?? '')}`}
               </p>
             </a>
           )
@@ -208,6 +239,10 @@ function QuizQuestionList({
 export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourceProps) {
   const parsed = useMemo(() => parseResourceId(resourceId), [resourceId])
   if (parsed && 'workspaceKind' in parsed) return <WorkspaceResource kind={parsed.workspaceKind} />
+  return <LingxiTaskArtifactResource parsed={parsed} />
+}
+
+function LingxiTaskArtifactResource({ parsed }: { parsed: ParsedTaskResource | null }) {
   const { task, loading, error, refresh } = useAgentTask(parsed?.taskId ?? '')
   const [submittedAnswers, setSubmittedAnswers] = useState<string[] | null>(null)
   const [submitting, setSubmitting] = useState(false)

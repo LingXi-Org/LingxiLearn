@@ -23,6 +23,7 @@ import {
   setOAuthChatAttemptStatus,
 } from '@/lib/credentials/oauth-chat-attempt'
 import { getDesktopBridge } from '@/lib/desktop'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import { oauthConnectionsKeys } from '@/hooks/queries/oauth/oauth-connections'
 import { workspaceCredentialKeys } from '@/hooks/queries/utils/credential-keys'
 
@@ -138,6 +139,12 @@ export function useOAuthReturnRouter() {
   const chatAttemptHandledRef = useRef(false)
 
   useEffect(() => {
+    // Lingxi does not own the connector/OAuth resource graph.  In particular,
+    // do not replay stale OAuth callback state from the copied Sim shell on the
+    // singleton workspace, where it would probe the unavailable credentials
+    // contract during every development refresh.
+    if (workspaceId === LINGXI_WORKSPACE_ID) return
+
     let isChatAttemptReturn = false
     if (!chatAttemptHandledRef.current) {
       const attemptId = new URL(window.location.href).searchParams.get(OAUTH_CHAT_ATTEMPT_PARAM)

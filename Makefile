@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
-.PHONY: help setup dev prod prod-pull check clean
+.PHONY: help setup dev prod prod-pull test check clean
 
 help: ## Show the supported repository commands
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -19,6 +19,9 @@ prod: ## Start the only production deployment with a static web export
 
 prod-pull: ## Pull accelerated API and Web images using the configured tag
 	docker compose -f docker-compose.yml pull postgres api web scheduler migrate api-var-init
+
+test: ## Run the backend test suite against the current checkout
+	cd server && uv run pytest tests
 
 check: ## Run frontend type and style checks
 	cd web && bun run type-check

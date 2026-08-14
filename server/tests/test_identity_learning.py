@@ -158,6 +158,8 @@ async def test_authenticator_requires_bff_or_explicit_fixed_dev_subject() -> Non
     authenticator = build_authenticator(development)
     principal = await authenticator.authenticate(None)
     assert principal.subject == "fixed-dev-user"
+    stale_cookie_principal = await authenticator.authenticate("old-production-session=stale")
+    assert stale_cookie_principal.subject == "fixed-dev-user"
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200)))
     with pytest.raises(HTTPException) as missing:
@@ -168,7 +170,7 @@ async def test_authenticator_requires_bff_or_explicit_fixed_dev_subject() -> Non
 
 @pytest.mark.asyncio
 async def test_authenticator_resolves_the_browser_cookie_through_bff() -> None:
-    settings = Settings(identity_bff_url="http://identity-bff")
+    settings = Settings(identity_bff_url="http://identity-bff", insecure_dev_auth=False)
 
     def bff(request: httpx.Request) -> httpx.Response:
         assert request.headers["cookie"] == "lingxi_session=session-1"

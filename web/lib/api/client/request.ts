@@ -1,11 +1,4 @@
-import type {
-  AnyApiRouteContract,
-  ContractBodyInput,
-  ContractHeadersInput,
-  ContractJsonResponse,
-  ContractParamsInput,
-  ContractQueryInput,
-} from '@/lib/api/contracts'
+import type { AnyApiRouteContract, ContractJsonResponse } from '@/lib/api/contracts'
 import { API_BASE } from '@/lib/lingxi/api'
 
 type MaybeField<Key extends string, Value> = [Value] extends [undefined]
@@ -13,9 +6,9 @@ type MaybeField<Key extends string, Value> = [Value] extends [undefined]
   : { [K in Key]: Value }
 
 /**
- * Native Sim contracts remain the source of runtime schemas, but Lingxi's
- * adapter intentionally accepts the superset of request shapes used by the
- * copied hooks (some legacy contracts encode an unused params/query slot).
+ * Shared resource contracts remain the source of runtime schemas. The client
+ * accepts the superset of request shapes used by reused hooks (some contracts
+ * encode an optional params/query slot).
  */
 export type ApiClientRequest<_C extends AnyApiRouteContract> = Record<string, any> & {
   signal?: AbortSignal
@@ -27,19 +20,19 @@ export interface ApiRawRequestOptions {
 }
 
 function routePath(contract: AnyApiRouteContract, input: object): string {
-  const params = 'params' in input && input.params && typeof input.params === 'object'
-    ? (input.params as Record<string, unknown>)
-    : {}
+  const params =
+    'params' in input && input.params && typeof input.params === 'object'
+      ? (input.params as Record<string, unknown>)
+      : {}
   return contract.path.replace(/\[\[?(?:\.\.\.)?([^\][]+)\]\]?/g, (_match, key: string) =>
     encodeURIComponent(String(params[key] ?? key))
   )
 }
 
 /**
- * The imported browser components keep their strongly typed Sim contracts.
- * LingxiGraph has a deliberately smaller API, so every Sim-owned contract is
- * rejected locally before fetch. The complete upstream transport remains in
- * sim-backend-unwired/api-client/request.sim.ts for source parity.
+ * Reused browser components keep their strongly typed resource contracts.
+ * Unsupported contract calls are disabled at the Lingxi hook boundary; this
+ * client remains a single transport to the canonical FastAPI service.
  */
 export async function requestJson<C extends AnyApiRouteContract>(
   contract: C,
@@ -55,12 +48,14 @@ export async function requestRaw<C extends AnyApiRouteContract>(
   input: ApiClientRequest<C> = {},
   options: ApiRawRequestOptions = {}
 ): Promise<Response> {
-  const params = 'params' in input && input.params && typeof input.params === 'object'
-    ? (input.params as Record<string, unknown>)
-    : {}
-  const query = 'query' in input && input.query && typeof input.query === 'object'
-    ? (input.query as Record<string, unknown>)
-    : {}
+  const params =
+    'params' in input && input.params && typeof input.params === 'object'
+      ? (input.params as Record<string, unknown>)
+      : {}
+  const query =
+    'query' in input && input.query && typeof input.query === 'object'
+      ? (input.query as Record<string, unknown>)
+      : {}
   const path = routePath(contract, input)
   const search = new URLSearchParams()
   for (const [key, value] of Object.entries(query)) {
@@ -82,7 +77,11 @@ export async function requestRaw<C extends AnyApiRouteContract>(
   }
   let body: BodyInit | undefined
   if ('body' in input && input.body !== undefined) {
-    if (input.body instanceof FormData || input.body instanceof Blob || typeof input.body === 'string') {
+    if (
+      input.body instanceof FormData ||
+      input.body instanceof Blob ||
+      typeof input.body === 'string'
+    ) {
       body = input.body as BodyInit
     } else {
       headers.set('Content-Type', 'application/json')
@@ -100,8 +99,13 @@ export async function requestRaw<C extends AnyApiRouteContract>(
   if (!response.ok) {
     let detail = response.statusText || `Request failed (${response.status})`
     try {
-      const data = (await response.clone().json()) as { error?: string; detail?: unknown; message?: string }
-      detail = data.error || data.message || (typeof data.detail === 'string' ? data.detail : detail)
+      const data = (await response.clone().json()) as {
+        error?: string
+        detail?: unknown
+        message?: string
+      }
+      detail =
+        data.error || data.message || (typeof data.detail === 'string' ? data.detail : detail)
     } catch {
       // Preserve status text for non-JSON errors.
     }

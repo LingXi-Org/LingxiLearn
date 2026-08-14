@@ -72,7 +72,7 @@ export function ConnectedCredentialDetail({
     enabled: Boolean(workspaceId),
   })
 
-  const { data: oauthConnections = [] } = useOAuthConnections()
+  const { data: oauthConnections = [] } = useOAuthConnections(workspaceId)
   const connectOAuthService = useConnectOAuthService()
   const disconnectOAuthService = useDisconnectOAuthService()
   const createDraft = useCreateCredentialDraft()

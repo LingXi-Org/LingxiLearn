@@ -11,6 +11,7 @@ import { isDev, isHosted, isReactGrabEnabled } from '../config/env-flags'
 
 const DEFAULT_SOCKET_URL = 'http://localhost:3002'
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
+const DEFAULT_LINGXILEARN_API_URL = 'http://127.0.0.1:8000'
 
 function toWebSocketUrl(httpUrl: string): string {
   return httpUrl.replace('http://', 'ws://').replace('https://', 'wss://')
@@ -182,6 +183,11 @@ export const buildTimeCSPDirectives: CSPDirectives = {
 
   'connect-src': [
     ...STATIC_CONNECT_SRC,
+    ...(env.NEXT_PUBLIC_API_BASE
+      ? [env.NEXT_PUBLIC_API_BASE]
+      : isDev
+        ? [DEFAULT_LINGXILEARN_API_URL]
+        : []),
     env.NEXT_PUBLIC_APP_URL || '',
     ...(env.OLLAMA_URL ? [env.OLLAMA_URL] : isDev ? [DEFAULT_OLLAMA_URL] : []),
     ...(env.NEXT_PUBLIC_SOCKET_URL
@@ -224,6 +230,7 @@ export function buildCSPString(directives: CSPDirectives): string {
  */
 export function generateRuntimeCSP(): string {
   const appUrl = getEnv('NEXT_PUBLIC_APP_URL') || ''
+  const apiUrl = getEnv('NEXT_PUBLIC_API_BASE') || (isDev ? DEFAULT_LINGXILEARN_API_URL : '')
 
   // Must permit whatever getSocketUrl() actually connects to, or the browser
   // blocks the handshake and Socket.IO retries forever. That helper falls back
@@ -248,6 +255,7 @@ export function generateRuntimeCSP(): string {
 
     'connect-src': [
       ...STATIC_CONNECT_SRC,
+      apiUrl,
       appUrl,
       ollamaUrl,
       socketUrl,

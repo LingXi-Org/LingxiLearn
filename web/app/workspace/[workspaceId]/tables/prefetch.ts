@@ -20,6 +20,8 @@ import { TABLE_LIST_STALE_TIME, tableKeys } from '@/hooks/queries/utils/table-ke
  * hook applies so the hydrated entry matches a client fetch exactly.
  */
 export async function prefetchTables(queryClient: QueryClient, workspaceId: string): Promise<void> {
+  if (workspaceId === 'lingxi') return
+
   await Promise.all([
     queryClient.prefetchQuery({
       queryKey: tableKeys.list(workspaceId, 'active'),

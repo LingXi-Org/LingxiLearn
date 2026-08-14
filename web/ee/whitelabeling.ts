@@ -20,8 +20,8 @@ export interface BrandConfig {
 
 const LINGXI_BRAND: BrandConfig = {
   name: 'Lingxi',
-  logoUrl: '/logo_icon_black.svg',
-  wordmarkUrl: '/logo_icon_black.svg',
+  logoUrl: '/brand/lingxi/icon-on-light.svg',
+  wordmarkUrl: '/brand/lingxi/wordmark-on-light.svg',
   faviconUrl: '/favicon.ico',
   termsUrl: '/terms',
   privacyUrl: '/privacy',

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { FilePreviewSession } from '@/lib/copilot/request/session/file-preview-session-contract'
 import type { MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
-import type { LingxiAttachmentRef } from '@/lib/lingxi/api'
+import { api, type LingxiAttachmentRef } from '@/lib/lingxi/api'
 import {
   type LingxiGraphChatAdapter,
   projectLingxiGraphEvents,
@@ -52,7 +52,7 @@ function attachmentRefs(attachments?: FileAttachmentForApi[]): LingxiAttachmentR
 }
 
 /**
- * Translate native Sim chips into the small, learner-scoped reference contract
+ * Translate shared chat chips into the small, learner-scoped reference contract
  * understood by the LingxiGraph API. Unsupported legacy editor chips are
  * intentionally ignored; this surface never sends an editable workflow
  * reference to the learning graph.
@@ -202,15 +202,10 @@ export function useLingxiGraphChat(
         if (current.some((candidate) => candidate.sequence === event.sequence)) return current
         return [...current, event].sort((a, b) => a.sequence - b.sequence)
       })
-      void fetch('/api/lingxi/learning-records', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ taskId, event }),
-      }).catch(() => {})
+      void api.recordLearningEvent(taskId, event).catch(() => {})
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
-        if (artifact)
-          onResourceEventRef.current?.(`lingxi-artifact:${taskId}:${artifact}`)
+        if (artifact) onResourceEventRef.current?.(`lingxi-artifact:${taskId}:${artifact}`)
         void currentAdapter
           .loadTask(taskId)
           .then((refreshed) => {

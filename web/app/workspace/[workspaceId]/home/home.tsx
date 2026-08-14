@@ -48,7 +48,6 @@ import {
 import {
   createLingxiGraphAdapter,
   getLingxiGraphUseChatOptions,
-  getMothershipUseChatOptions,
   useChat,
   useMothershipResize,
 } from './hooks'
@@ -184,33 +183,19 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
     if (activeResourceId !== resourceId) setActiveResourceUrl(resourceId)
   }
 
-  const chatOptions =
-    workspaceId === 'lingxi'
-      ? getLingxiGraphUseChatOptions({
-          adapter: createLingxiGraphAdapter(),
-          onResourceEvent: handleResourceEvent,
-          activeResourceState,
-          onRequestStarted: ({ requestId, userMessageId }) => {
-            captureEvent(posthogRef.current, 'task_request_started', {
-              workspace_id: workspaceId,
-              view: 'mothership',
-              request_id: requestId,
-              user_message_id: userMessageId,
-            })
-          },
-        })
-      : getMothershipUseChatOptions({
-          onResourceEvent: handleResourceEvent,
-          activeResourceState,
-          onRequestStarted: ({ requestId, userMessageId }) => {
-            captureEvent(posthogRef.current, 'task_request_started', {
-              workspace_id: workspaceId,
-              view: 'mothership',
-              request_id: requestId,
-              user_message_id: userMessageId,
-            })
-          },
-        })
+  const chatOptions = getLingxiGraphUseChatOptions({
+    adapter: createLingxiGraphAdapter(),
+    onResourceEvent: handleResourceEvent,
+    activeResourceState,
+    onRequestStarted: ({ requestId, userMessageId }) => {
+      captureEvent(posthogRef.current, 'task_request_started', {
+        workspace_id: workspaceId,
+        view: 'mothership',
+        request_id: requestId,
+        user_message_id: userMessageId,
+      })
+    },
+  })
 
   const {
     messages,

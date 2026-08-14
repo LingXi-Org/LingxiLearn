@@ -6,6 +6,13 @@ import { usePostHog } from 'posthog-js/react'
 import { useSession } from '@/lib/auth/auth-client'
 import { captureEvent } from '@/lib/posthog/client'
 import { useWorkspaceHostContext } from '@/app/workspace/[workspaceId]/providers/workspace-host-provider'
+import {
+  LingxiResourcePage,
+} from '@/app/workspace/[workspaceId]/components/lingxi-resource-page'
+import {
+  LingxiUnavailableSettingsPage,
+  LingxiUserManagementPage,
+} from '@/app/workspace/[workspaceId]/components/lingxi-settings-pages'
 import { General } from '@/app/workspace/[workspaceId]/settings/components/general/general'
 import { SettingsSectionProvider } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
 import {
@@ -134,6 +141,25 @@ export function SettingsPage({ section }: SettingsPageProps) {
       section: effectiveSection,
     })
   }, [effectiveSection, sessionLoading, posthog])
+
+  // Lingxi deliberately reuses Sim's resource chrome and controls, but it has
+  // a different settings contract: learning preferences and the private
+  // workspace are native resources, while canvas/workflow settings are not.
+  // Keep that boundary explicit so the old Sim settings tree cannot issue
+  // unrelated requests or render misleading controls in this workspace.
+  if (hostContext.workspace.id === 'lingxi') {
+    if (effectiveSection === 'general') return <LingxiResourcePage kind='settings' />
+    if (effectiveSection === 'teammates') return <LingxiUserManagementPage />
+    const labels: Record<string, string> = {
+      billing: '计费与用量',
+      integrations: '外部集成',
+      api: 'API 设置',
+      apikeys: 'API Keys',
+      mcp: 'MCP',
+      'recently-deleted': '最近删除',
+    }
+    return <LingxiUnavailableSettingsPage title={labels[String(effectiveSection)] ?? '设置'} />
+  }
 
   return (
     <SettingsSectionProvider section={effectiveSection} meta={meta ?? undefined}>

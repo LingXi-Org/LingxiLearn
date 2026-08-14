@@ -2,6 +2,7 @@
 
 import { createLogger } from '@sim/logger'
 import { useParams } from 'next/navigation'
+import { API_BASE } from '@/lib/lingxi/api'
 import { DesktopTitleBarLane } from '@/app/_shell/desktop-title-bar'
 import { useWorkspaceFileRecord } from '@/hooks/queries/workspace-files'
 
@@ -18,7 +19,7 @@ export function FileViewer() {
     return null
   }
 
-  const serveUrl = `/api/files/serve/${encodeURIComponent(file.key)}?context=workspace&t=${file.size}`
+  const serveUrl = `${API_BASE}/api/files/serve/${encodeURIComponent(file.key)}?context=workspace&t=${file.size}`
 
   return (
     <div className='desktop-title-bar-page fixed inset-0 z-50 bg-[var(--bg)]'>

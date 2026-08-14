@@ -1,10 +1,6 @@
 'use client'
 
-/**
- * LingxiGraph has no Sim organization permission API. The copied Sim chrome
- * still expects a provider boundary, so the static workspace supplies an
- * intentionally empty context boundary and keeps unsupported writes disabled.
- */
-export function LingxiWorkspacePermissionsProvider({ children }: { children: React.ReactNode }) {
-  return children
-}
+// Keep one native read-only permission boundary. The implementation lives next
+// to the shared context hooks so consumers cannot accidentally mount a second
+// provider with a different default value.
+export { LingxiWorkspacePermissionsProvider } from './workspace-permissions-provider'

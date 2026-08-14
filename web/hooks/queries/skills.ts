@@ -66,6 +66,8 @@ export function useSkills(workspaceId: string) {
   return useQuery<SkillDefinition[]>({
     queryKey: skillsKeys.list(workspaceId),
     queryFn: ({ signal }) => fetchSkills(workspaceId, signal),
+    // Lingxi is read through the canonical FastAPI skill catalogue above;
+    // other workspaces retain the shared Sim contract.
     enabled: !!workspaceId,
     staleTime: SKILL_LIST_STALE_TIME,
     placeholderData: keepPreviousData,

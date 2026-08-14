@@ -368,7 +368,7 @@ function LogsPage() {
         <div className='mb-4 flex justify-end'>
           <a
             className='rounded-[7px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] text-[var(--text-primary)]'
-            href='/api/logs/export?format=csv'
+            href={`${API_BASE}/api/logs/export?format=csv`}
           >
             导出 CSV
           </a>

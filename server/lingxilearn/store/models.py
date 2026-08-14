@@ -525,6 +525,33 @@ class Workspace(Base):
     )
 
 
+class WorkspacePinnedItem(Base):
+    """Learner-owned pins shared by the reused Sim resource lists."""
+
+    __tablename__ = "workspace_pinned_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "learner_id",
+            "workspace_id",
+            "resource_type",
+            "resource_id",
+            name="uq_workspace_pinned_item",
+        ),
+        Index(
+            "ix_workspace_pinned_items_workspace_type",
+            "workspace_id",
+            "resource_type",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    workspace_id: Mapped[str] = mapped_column(String(64), ForeignKey("workspaces.id"), index=True)
+    resource_type: Mapped[str] = mapped_column(String(32))
+    resource_id: Mapped[str] = mapped_column(String(255))
+    pinned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class WorkspaceFolder(Base):
     __tablename__ = "workspace_folders"
     __table_args__ = (
@@ -651,6 +678,8 @@ class WorkspaceTableView(Base):
     table_id: Mapped[str] = mapped_column(String(96), ForeignKey("workspace_tables.id"), index=True)
     name: Mapped[str] = mapped_column(String(160))
     config: Mapped[dict] = mapped_column(JSON, default=dict)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -712,6 +741,7 @@ class KnowledgeTag(Base):
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
     base_id: Mapped[str] = mapped_column(String(96), ForeignKey("workspace_knowledge_bases.id"), index=True)
     name: Mapped[str] = mapped_column(String(128))
+    tag_slot: Mapped[str] = mapped_column(String(32), default="")
     field_type: Mapped[str] = mapped_column(String(32), default="string")
 
 

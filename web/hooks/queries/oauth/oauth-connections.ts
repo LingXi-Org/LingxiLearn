@@ -11,6 +11,7 @@ import {
 } from '@/lib/api/contracts/oauth-connections'
 import { client } from '@/lib/auth/auth-client'
 import { getDesktopBridge } from '@/lib/desktop'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import { OAUTH_PROVIDERS, type OAuthServiceConfig } from '@/lib/oauth'
 
 const logger = createLogger('OAuthConnectionsQuery')
@@ -56,7 +57,11 @@ function defineServices(): ServiceInfo[] {
   return servicesList
 }
 
-async function fetchOAuthConnections(signal?: AbortSignal): Promise<ServiceInfo[]> {
+async function fetchOAuthConnections(
+  workspaceId?: string,
+  signal?: AbortSignal
+): Promise<ServiceInfo[]> {
+  if (workspaceId === LINGXI_WORKSPACE_ID) return []
   try {
     const serviceDefinitions = defineServices()
 
@@ -116,10 +121,10 @@ async function fetchOAuthConnections(signal?: AbortSignal): Promise<ServiceInfo[
  * Fetches all OAuth service connections with their status.
  * Returns service definitions merged with connection data.
  */
-export function useOAuthConnections() {
+export function useOAuthConnections(workspaceId?: string) {
   return useQuery({
-    queryKey: oauthConnectionsKeys.connections(),
-    queryFn: ({ signal }) => fetchOAuthConnections(signal),
+    queryKey: [...oauthConnectionsKeys.connections(), workspaceId ?? 'all'],
+    queryFn: ({ signal }) => fetchOAuthConnections(workspaceId, signal),
     staleTime: OAUTH_CONNECTIONS_STALE_TIME,
     retry: false,
   })

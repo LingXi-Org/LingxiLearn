@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import { listOAuthCredentialsContract } from '@/lib/api/contracts'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type { Credential } from '@/lib/oauth'
 import { useWorkspaceCredential } from '@/hooks/queries/credentials'
 
@@ -33,7 +34,7 @@ export async function fetchOAuthCredentials(
   signal?: AbortSignal
 ): Promise<Credential[]> {
   const { providerId, workspaceId, workflowId } = params
-  if (!providerId) return []
+  if (!providerId || workspaceId === LINGXI_WORKSPACE_ID) return []
   const data = await requestJson(listOAuthCredentialsContract, {
     signal,
     query: {
@@ -102,7 +103,7 @@ export function useOAuthCredentials(
         },
         signal
       ),
-    enabled: Boolean(providerId) && enabled,
+    enabled: Boolean(providerId) && enabled && workspaceId !== LINGXI_WORKSPACE_ID,
     staleTime: OAUTH_CREDENTIAL_LIST_STALE_TIME,
   })
 }

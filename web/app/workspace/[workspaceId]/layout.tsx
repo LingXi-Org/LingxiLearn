@@ -1,4 +1,5 @@
 import { ToastProvider } from '@sim/emcn'
+import { cookies } from 'next/headers'
 import type { LingxiWorkspaceHostContext } from '@/lib/lingxi/types'
 import { WorkspaceChrome } from './components/workspace-chrome'
 import { GlobalCommandsProvider } from './providers/global-commands-provider'
@@ -41,6 +42,7 @@ export default async function WorkspaceLayout({
   params: Promise<{ workspaceId: string }>
 }) {
   const { workspaceId } = await params
+  const initialSidebarCollapsed = (await cookies()).get('sidebar_collapsed')?.value === '1'
   const hostContext: LingxiWorkspaceHostContext = {
     ...LINGXI_HOST_CONTEXT,
     workspace: { ...LINGXI_HOST_CONTEXT.workspace, id: workspaceId },
@@ -54,9 +56,11 @@ export default async function WorkspaceLayout({
     >
       <ToastProvider>
         <GlobalCommandsProvider>
-          <div className='flex h-screen w-full flex-col overflow-hidden bg-[var(--surface-1)]'>
+          <div className='flex h-screen min-h-0 w-full max-w-none flex-col overflow-hidden bg-[var(--surface-1)]'>
             <LingxiWorkspacePermissionsProvider>
-              <WorkspaceChrome initialSidebarCollapsed={false}>{children}</WorkspaceChrome>
+              <WorkspaceChrome initialSidebarCollapsed={initialSidebarCollapsed}>
+                {children}
+              </WorkspaceChrome>
             </LingxiWorkspacePermissionsProvider>
           </div>
         </GlobalCommandsProvider>

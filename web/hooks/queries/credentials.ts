@@ -19,6 +19,7 @@ import {
   type WorkspaceCredentialRole,
   type WorkspaceCredentialType,
 } from '@/lib/api/contracts'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import { environmentKeys } from '@/hooks/queries/environment'
 import { workspaceCredentialKeys } from '@/hooks/queries/utils/credential-keys'
 import {
@@ -61,11 +62,13 @@ export function useWorkspaceCredentials(params: {
   enabled?: boolean
 }) {
   const { workspaceId, type, providerId, enabled = true } = params
+  const nativeLingxiWorkspace = workspaceId === LINGXI_WORKSPACE_ID
 
   return useQuery<WorkspaceCredential[]>({
     queryKey: workspaceCredentialKeys.list(workspaceId, type, providerId),
     queryFn: async ({ signal }) => {
       if (!workspaceId) return []
+      if (nativeLingxiWorkspace) return []
       const data = await requestJson(listWorkspaceCredentialsContract, {
         query: {
           workspaceId,
@@ -76,7 +79,7 @@ export function useWorkspaceCredentials(params: {
       })
       return data.credentials ?? []
     },
-    enabled: Boolean(workspaceId) && enabled,
+    enabled: Boolean(workspaceId) && enabled && !nativeLingxiWorkspace,
     staleTime: WORKSPACE_CREDENTIAL_LIST_STALE_TIME,
   })
 }

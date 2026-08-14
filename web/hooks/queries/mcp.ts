@@ -27,6 +27,7 @@ import {
   testMcpServerConnectionContract,
   updateMcpServerContract,
 } from '@/lib/api/contracts/mcp'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import { sanitizeForHttp, sanitizeHeaders } from '@/lib/mcp/shared'
 import type {
   McpAuthType,
@@ -100,7 +101,7 @@ export function useMcpServers(workspaceId: string) {
   return useQuery({
     queryKey: mcpKeys.serversList(workspaceId),
     queryFn: ({ signal }) => fetchMcpServers(workspaceId, signal),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && workspaceId !== LINGXI_WORKSPACE_ID,
     retry: false,
     staleTime: MCP_SERVER_LIST_STALE_TIME,
     placeholderData: keepPreviousData,
@@ -534,15 +535,20 @@ const SSE_KEY = '__mcp_sse_connections' as const
 
 type SseEntry = { source: EventSource; refs: number }
 
-const sseConnections: Map<string, SseEntry> =
-  ((globalThis as Record<string, unknown>)[SSE_KEY] as Map<string, SseEntry>) ??
-  ((globalThis as Record<string, unknown>)[SSE_KEY] = new Map<string, SseEntry>())
+const mcpGlobal = globalThis as Record<string, unknown>
+let sseConnections = mcpGlobal[SSE_KEY] as Map<string, SseEntry> | undefined
+if (!sseConnections) {
+  sseConnections = new Map<string, SseEntry>()
+  mcpGlobal[SSE_KEY] = sseConnections
+}
 
 /** Per-workspace flag: has this session ever held a live SSE subscription for it? */
 const SSE_SUBSCRIBED_KEY = '__mcp_sse_subscribed' as const
-const sseEverSubscribed: Set<string> =
-  ((globalThis as Record<string, unknown>)[SSE_SUBSCRIBED_KEY] as Set<string>) ??
-  ((globalThis as Record<string, unknown>)[SSE_SUBSCRIBED_KEY] = new Set<string>())
+let sseEverSubscribed = mcpGlobal[SSE_SUBSCRIBED_KEY] as Set<string> | undefined
+if (!sseEverSubscribed) {
+  sseEverSubscribed = new Set<string>()
+  mcpGlobal[SSE_SUBSCRIBED_KEY] = sseEverSubscribed
+}
 
 /** Subscribes to `tools_changed` SSE events and invalidates the affected query keys. */
 export function useMcpToolsEvents(workspaceId: string) {

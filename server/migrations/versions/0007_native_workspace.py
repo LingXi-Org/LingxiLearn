@@ -1,4 +1,4 @@
-"""Native Sim non-workflow workspace resources.
+"""Native Lingxi non-workflow workspace resources.
 
 Revision ID: 0007_native_workspace
 Revises: 0006_agent_task_management

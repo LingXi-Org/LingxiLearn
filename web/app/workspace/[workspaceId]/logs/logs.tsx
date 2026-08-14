@@ -35,6 +35,7 @@ import type {
 } from '@/lib/api/contracts/logs'
 import { dollarsToCredits } from '@/lib/billing/credits/conversion'
 import { formatDateShort } from '@/lib/core/utils/date-display'
+import { API_BASE } from '@/lib/lingxi/api'
 import {
   getEndDateFromTimeRange,
   getStartDateFromTimeRange,
@@ -677,7 +678,7 @@ export default function Logs() {
       const extra = queryToApiParams(parsed)
       Object.entries(extra).forEach(([k, v]) => params.set(k, v))
 
-      const url = `/api/logs/export?${params.toString()}`
+      const url = `${API_BASE}/api/logs/export?${params.toString()}`
       const a = document.createElement('a')
       a.href = url
       a.download = 'logs_export.csv'

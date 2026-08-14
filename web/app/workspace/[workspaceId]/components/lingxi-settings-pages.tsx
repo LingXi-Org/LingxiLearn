@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { api } from '@/lib/lingxi/api'
+import { API_BASE, api } from '@/lib/lingxi/api'
 
 function SettingsShell({
   title,
@@ -55,7 +55,7 @@ export function LingxiBillingPage({
   return (
     <SettingsShell
       title='计费'
-      description='计费与用量沿用原生 Sim 设置契约；灵犀个人工作区当前仅使用内部学习额度。'
+      description='计费与用量沿用共享设置契约；灵犀个人工作区当前仅使用内部学习额度。'
     >
       <div className='mb-4'>
         <Link href={backHref} className='text-[12px] text-[var(--text-secondary)] hover:underline'>
@@ -101,7 +101,7 @@ export function LingxiBillingPage({
               查看任务日志
             </Link>
             <a
-              href='/api/users/me/usage-logs/export?period=30d'
+              href={`${API_BASE}/api/users/me/usage-logs/export?period=30d`}
               className='rounded-[7px] border border-[var(--border)] px-3 py-1.5 text-[12px] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]'
             >
               导出 CSV
@@ -135,7 +135,7 @@ export function LingxiUsagePage({
           ← 返回计费
         </Link>
         <a
-          href='/api/users/me/usage-logs/export?period=30d'
+          href={`${API_BASE}/api/users/me/usage-logs/export?period=30d`}
           className='rounded-[7px] border border-[var(--border)] px-3 py-1.5 text-[12px] text-[var(--text-primary)]'
         >
           导出 CSV
@@ -224,7 +224,7 @@ export function LingxiUnavailableSettingsPage({ title }: { title: string }) {
   return (
     <SettingsShell
       title={title}
-      description='该原生 Sim 设置面板已保留源码闭包，但当前 LingXiLearn 不启用此能力。'
+      description='该设置能力当前未接入 LingxiLearn，因此不会发起对应的外部资源请求。'
     >
       <PlaceholderCard
         title={title}

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { LingxiSkills } from './lingxi-skills'
+import { Skills } from './skills'
 
 export const metadata: Metadata = {
   title: 'Skills · 灵犀智学',
@@ -10,5 +10,5 @@ export function generateStaticParams() {
 }
 
 export default function SkillsPage() {
-  return <LingxiSkills />
+  return <Skills />
 }

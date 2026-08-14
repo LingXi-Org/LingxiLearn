@@ -63,7 +63,7 @@ let csrfPromise: Promise<string> | null = null
 let refreshPromise: Promise<{ ok: boolean; expiresAt?: string | null }> | null = null
 
 const configuredBase = process.env.NEXT_PUBLIC_API_BASE?.trim().replace(/\/$/, '')
-const defaultBase = process.env.NODE_ENV === 'development' ? 'http://localhost:8000' : ''
+const defaultBase = ''
 
 function identityUrl(path: string): string {
   const base = configuredBase || defaultBase

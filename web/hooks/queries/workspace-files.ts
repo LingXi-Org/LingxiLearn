@@ -18,6 +18,8 @@ import {
   updateWorkspaceFileContentContract,
   updateWorkspaceFileDimensionsContract,
 } from '@/lib/api/contracts/workspace-files'
+import { API_BASE, api, type WorkspaceFileItem } from '@/lib/lingxi/api'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import { uploadWorkspaceFileSession } from '@/lib/uploads/client/session-upload'
 import type { UploadProgressEvent } from '@/lib/uploads/client/types'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
@@ -63,6 +65,30 @@ export const WORKSPACE_STORAGE_INFO_STALE_TIME = 60 * 1000
 /** Cloud storage (S3/Blob) is env-driven and does not change at runtime. */
 export const CLOUD_STORAGE_CONFIGURED_STALE_TIME = Number.POSITIVE_INFINITY
 
+function mapLingxiFile(file: WorkspaceFileItem): WorkspaceFileRecord {
+  const uploadedAt = new Date(file.uploadedAt ?? file.createdAt ?? 0)
+  const updatedAt = new Date(file.updatedAt ?? file.createdAt ?? file.uploadedAt ?? 0)
+  return {
+    id: file.id,
+    workspaceId: file.workspaceId ?? LINGXI_WORKSPACE_ID,
+    name: file.name,
+    key: file.key ?? file.path ?? file.id,
+    path: file.path ?? file.name,
+    url: file.url,
+    size: file.size,
+    type: file.type ?? file.mimeType ?? 'application/octet-stream',
+    width: file.width,
+    height: file.height,
+    uploadedBy: file.uploadedBy ?? 'learner',
+    folderId: file.folderId ?? null,
+    folderPath: file.folderPath ?? null,
+    deletedAt: file.deletedAt ? new Date(file.deletedAt) : null,
+    uploadedAt,
+    updatedAt,
+    storageContext: file.storageContext ?? 'workspace',
+  }
+}
+
 /**
  * Storage info type
  */
@@ -98,6 +124,10 @@ async function fetchWorkspaceFiles(
   scope: WorkspaceFileQueryScope = 'active',
   signal?: AbortSignal
 ): Promise<WorkspaceFileRecord[]> {
+  if (workspaceId === LINGXI_WORKSPACE_ID) {
+    const { files } = await api.workspaceFiles(scope)
+    return files.map(mapLingxiFile)
+  }
   const data = await requestJson(listWorkspaceFilesContract, {
     params: { id: workspaceId },
     query: { scope },
@@ -435,7 +465,7 @@ async function uploadWorkspaceFile(
       name: uploaded.name,
       size: uploaded.size,
       type: uploaded.type,
-      url: `/api/files/serve/${encodeURIComponent(uploaded.key)}?context=workspace`,
+      url: `${API_BASE}/api/files/serve/${encodeURIComponent(uploaded.key)}?context=workspace`,
       key: uploaded.key,
       context: 'workspace',
     },

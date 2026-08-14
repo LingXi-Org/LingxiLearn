@@ -24,6 +24,8 @@ export async function prefetchKnowledgeBases(
   queryClient: QueryClient,
   workspaceId: string
 ): Promise<void> {
+  if (workspaceId === 'lingxi') return
+
   await Promise.all([
     queryClient.prefetchQuery({
       queryKey: knowledgeKeys.list(workspaceId, 'active'),

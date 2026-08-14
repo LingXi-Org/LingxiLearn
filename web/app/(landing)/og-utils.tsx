@@ -88,7 +88,11 @@ export async function createLandingOgImage({
   pills = [],
   domainLabel = 'lingxilearn.cn',
 }: LandingOgImageProps) {
-  if (process.env.NEXT_STATIC_EXPORT === '1') {
+  // `next/og` relies on libvips on Windows, where the integration catalog
+  // build can fail before any Lingxi workspace code is evaluated. The static
+  // SVG is already the production export fallback, so use it for local
+  // Windows builds as well.
+  if (process.env.NEXT_STATIC_EXPORT === '1' || process.platform === 'win32') {
     return createStaticOgImage({
       eyebrow,
       title,

@@ -71,6 +71,7 @@ export async function prefetchWorkspaceSidebar(
   hostContext: WorkspaceHostContext,
   activeOrganizationId: string | null
 ): Promise<void> {
+  if (workspaceId === 'lingxi') return
   if (hostContext.workspace.id !== workspaceId) return
   await Promise.all([
     queryClient.prefetchQuery({

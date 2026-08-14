@@ -6,6 +6,7 @@ import { createLogger } from '@sim/logger'
 import { backoffWithJitter } from '@sim/utils/retry'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ActiveDispatch } from '@/lib/api/contracts/tables'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type {
   RowData,
   RowExecutionMetadata,
@@ -160,7 +161,15 @@ export function useTableEventStream({
   onUsageLimitReachedRef.current = onUsageLimitReached
 
   useEffect(() => {
-    if (!enabled || !tableId || !workspaceId) return
+    if (
+      !enabled ||
+      !tableId ||
+      !workspaceId ||
+      // The shared Sim table surface remains useful for the native grid, but
+      // Lingxi has no dispatcher/SSE resource. Keep this adapter inert at the
+      // boundary instead of reconnecting forever against a 404 endpoint.
+      workspaceId === LINGXI_WORKSPACE_ID
+    ) return
 
     let cancelled = false
     let eventSource: EventSource | null = null

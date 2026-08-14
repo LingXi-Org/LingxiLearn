@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext } from 'react'
+import { API_BASE } from '@/lib/lingxi/api'
 import {
   type EmbeddedFileRef,
   extractEmbeddedFileRef,
@@ -68,7 +69,7 @@ export interface FileContentSource {
 }
 
 function buildServeUrl(key: string, opts?: FileContentUrlOptions): string {
-  const base = `/api/files/serve/${encodeURIComponent(key)}?context=workspace`
+  const base = `${API_BASE}/api/files/serve/${encodeURIComponent(key)}?context=workspace`
   const params: string[] = []
   if (opts?.version != null) params.push(`v=${encodeURIComponent(String(opts.version))}`)
   else if (opts?.bust) params.push(`t=${Date.now()}`)
@@ -102,7 +103,7 @@ export function createWorkspaceFileContentSource(
   imageDimensions?: ImageDimensionsSource
 ): FileContentSource {
   return {
-    ...inlineImageSource(buildServeUrl, `/api/workspaces/${workspaceId}/files/inline`),
+    ...inlineImageSource(buildServeUrl, `${API_BASE}/api/workspaces/${workspaceId}/files/inline`),
     ...imageDimensions,
   }
 }

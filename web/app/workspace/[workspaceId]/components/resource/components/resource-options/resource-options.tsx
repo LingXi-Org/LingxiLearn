@@ -138,12 +138,22 @@ export const ResourceOptions = memo(function ResourceOptions({
   if (!hasContent) return null
 
   return (
-    <div className={cn('border-[var(--border)] border-b py-2.5', search ? 'px-6' : 'px-4')}>
-      <div className='flex items-center'>
+    <div
+      className={cn(
+        'w-full min-w-0 max-w-none border-[var(--border)] border-b py-2.5',
+        search ? 'px-6' : 'px-4'
+      )}
+    >
+      <div className='flex min-w-0 flex-wrap items-center gap-y-2'>
         {search && <SearchSection search={search} />}
         {/* `ml-auto` moves to `trailing` when present so the menu cluster stays put
             and only the trailing action is pushed to the far edge. */}
-        <div className={cn('flex shrink-0 items-center gap-1.5', search && !trailing && 'ml-auto')}>
+        <div
+          className={cn(
+            'flex max-w-full shrink-0 flex-wrap items-center gap-1.5',
+            search && !trailing && 'ml-auto'
+          )}
+        >
           {aside}
           <div className='flex items-center gap-1'>
             {filterTags?.map((tag) => (
@@ -212,7 +222,7 @@ export const ResourceOptions = memo(function ResourceOptions({
 
 const SearchSection = memo(function SearchSection({ search }: { search: SearchConfig }) {
   return (
-    <div className='relative flex flex-1 items-center gap-1.5'>
+    <div className='relative flex min-w-0 flex-[1_1_12rem] items-center gap-1.5'>
       {SEARCH_ICON}
       <div className='flex flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'>
         {search.tags?.map((tag, i) => (

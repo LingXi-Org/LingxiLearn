@@ -556,7 +556,7 @@ export function TableGrid({
     filter: effectiveFilter,
   } = useTable({ workspaceId, tableId, queryOptions })
 
-  const { data: tableRunState } = useTableRunState(tableId)
+  const { data: tableRunState } = useTableRunState(tableId, workspaceId)
   const activeDispatches = tableRunState?.dispatches
   const runningByRowId = tableRunState?.runningByRowId ?? EMPTY_RUNNING_BY_ROW
   // In-flight cell count = sum of the server-derived per-row map (refetched on

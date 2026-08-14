@@ -16,7 +16,9 @@ const nextConfig: NextConfig = {
     useTypeScriptCli: true,
   },
   async rewrites() {
-    const origin = process.env.LINGXILEARN_API_ORIGIN
+    const origin =
+      process.env.LINGXILEARN_API_ORIGIN ||
+      (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:8000' : undefined)
     if (!origin) return []
     const base = origin.replace(/\/$/, '')
     return [

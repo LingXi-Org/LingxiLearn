@@ -78,10 +78,10 @@ export function Skills() {
   )
 
   return (
-    <div className='flex h-full flex-col bg-[var(--bg)]'>
+    <div className='flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-[var(--bg)]'>
       <IntegrationTabsHeader active='skills' workspaceId={workspaceId} rightSlot={addButton} />
-      <div className='min-h-0 flex-1 overflow-y-auto px-6 [scrollbar-gutter:stable_both-edges]'>
-        <div className='mx-auto flex max-w-[48rem] flex-col gap-7 pb-3'>
+      <div className='min-h-0 w-full min-w-0 flex-1 overflow-y-auto px-4 sm:px-6 [scrollbar-gutter:stable_both-edges]'>
+        <div className='mx-auto flex w-full max-w-[48rem] min-w-0 flex-col gap-7 pb-3'>
           <ShowcaseWithExplore prompt='Explain the skills in Sim and which ones I should add to my agents.' />
           <div className='flex items-center gap-2'>
             <ChipInput

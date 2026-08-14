@@ -33,7 +33,9 @@ export function IntegrationTabsHeader({
       <ChipLink href={`/workspace/${workspaceId}/skills`} active={active === 'skills'}>
         Skills
       </ChipLink>
-      {rightSlot && <div className={cn('ml-auto', HEADER_ACTION_CLUSTER)}>{rightSlot}</div>}
+      {rightSlot && (
+        <div className={cn('ml-auto max-w-full shrink-0', HEADER_ACTION_CLUSTER)}>{rightSlot}</div>
+      )}
     </div>
   )
 }

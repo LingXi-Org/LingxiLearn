@@ -4,6 +4,7 @@ import { Button } from '@sim/emcn'
 import { Download } from '@sim/emcn/icons'
 import { createLogger } from '@sim/logger'
 import { useRouter } from 'next/navigation'
+import { API_BASE } from '@/lib/lingxi/api'
 import { extractWorkspaceIdFromExecutionKey, getViewerUrl } from '@/lib/uploads/utils/file-utils'
 
 const logger = createLogger('FileCards')
@@ -66,7 +67,7 @@ function FileCard({ file, isExecutionFile = false, workspaceId }: FileCardProps)
       }
 
       if (isExecutionFile) {
-        const serveUrl = `/api/files/serve/${encodeURIComponent(file.key)}?context=execution`
+        const serveUrl = `${API_BASE}/api/files/serve/${encodeURIComponent(file.key)}?context=execution`
         window.open(serveUrl, '_blank')
         logger.info(`Opened execution file serve URL: ${serveUrl}`)
       } else {
@@ -79,7 +80,7 @@ function FileCard({ file, isExecutionFile = false, workspaceId }: FileCardProps)
           logger.warn(
             `Could not construct viewer URL for file: ${file.name}, falling back to serve URL`
           )
-          const serveUrl = `/api/files/serve/${encodeURIComponent(file.key)}?context=workspace`
+          const serveUrl = `${API_BASE}/api/files/serve/${encodeURIComponent(file.key)}?context=workspace`
           window.open(serveUrl, '_blank')
         }
       }

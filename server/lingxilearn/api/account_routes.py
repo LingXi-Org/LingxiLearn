@@ -1,8 +1,8 @@
-"""Account, billing, and settings compatibility surfaces for Lingxi.
+"""Account, billing, and settings surfaces for Lingxi.
 
 LingxiIdentity remains authoritative for authentication, profile verification,
-passwords, email changes, and device sessions.  This module owns the small
-learner-local settings document and exposes the native Sim billing contracts as
+passwords, email changes, and device sessions. This module owns the small
+learner-local settings document and exposes the shared billing contracts as
 read-only/no-op responses: the private Lingxi workspace has no Stripe customer,
 team seats, invitations, or paid plan.
 """
@@ -36,6 +36,16 @@ _BILLING_SOURCES = {
     "voice-input",
     "enrichment",
     "voice-output",
+}
+
+_TELEMETRY_CATEGORIES = {
+    "page_view",
+    "feature_usage",
+    "performance",
+    "error",
+    "workflow",
+    "consent",
+    "batch",
 }
 
 
@@ -151,6 +161,52 @@ def _settings_public(context: LearnerContext) -> dict[str, Any]:
         "timezone": values.get("timezone"),
         "lastActiveWorkspaceId": values.get("lastActiveWorkspaceId"),
     }
+
+
+@router.get("/settings/allowed-integrations")
+async def allowed_integrations(
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """Keep the shared Sim capability query on the native API boundary."""
+
+    return {"allowedIntegrations": None, "integrationAvailability": []}
+
+
+@router.post("/telemetry")
+async def record_telemetry(
+    body: dict[str, Any],
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, bool]:
+    """Accept the shared telemetry contract without creating a second sink.
+
+    The local LingxiLearn deployment has no analytics database or forwarding
+    service. Acknowledging the validated envelope keeps reused settings UI
+    deterministic while ``forwarded=false`` makes the local behavior explicit.
+    """
+
+    category = body.get("category")
+    action = body.get("action")
+    if category not in _TELEMETRY_CATEGORIES or not isinstance(action, str) or not action.strip():
+        raise HTTPException(status_code=422, detail="invalid_telemetry_event")
+    return {"success": True, "forwarded": False}
+
+
+@router.get("/settings/allowed-providers")
+async def allowed_providers(
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, list[str]]:
+    """Expose the empty local provider blacklist expected by shared Sim hooks."""
+
+    return {"blacklistedProviders": []}
+
+
+@router.get("/settings/voice")
+async def voice_settings(
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, bool]:
+    # LingxiLearn has no server-side STT provider configured in the local
+    # runtime, so the reused input control can hide its microphone affordance.
+    return {"sttAvailable": False}
 
 
 @router.get("/users/me/profile")

@@ -88,6 +88,7 @@ import {
 } from '@/lib/api/contracts/tables'
 import type { V2TableImportSource, V2TableImportTarget } from '@/lib/api/contracts/v2/tables'
 import { buildUpgradeHref } from '@/lib/billing/upgrade-reasons'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type {
   CsvHeaderMapping,
   EnrichmentRunDetail,
@@ -408,11 +409,17 @@ async function bumpRunState(
  * SSE `kind: 'cell'` and `kind: 'dispatch'` events incrementally update the
  * same cache.
  */
-export function useTableRunState(tableId: string | undefined) {
+export function useTableRunState(
+  tableId: string | undefined,
+  workspaceId?: string
+) {
   return useQuery({
     queryKey: tableKeys.activeDispatches(tableId ?? ''),
     queryFn: ({ signal }) => fetchTableRunState(tableId as string, signal),
-    enabled: Boolean(tableId),
+    // Lingxi tables are native workspace data. They do not have Sim's
+    // dispatcher/dispatches resource, so the reused grid keeps its empty live
+    // state instead of polling a route that is intentionally not exposed.
+    enabled: Boolean(tableId) && workspaceId !== LINGXI_WORKSPACE_ID,
     staleTime: TABLE_RUN_STATE_STALE_TIME,
   })
 }
@@ -1973,7 +1980,9 @@ export function useWorkspaceExportJobs(workspaceId?: string) {
   return useQuery({
     queryKey: tableKeys.exportJobs(workspaceId),
     queryFn: ({ signal }) => fetchWorkspaceExportJobs(workspaceId as string, signal),
-    enabled: Boolean(workspaceId),
+    // Lingxi exports complete synchronously through its native table route;
+    // the Sim background-job tray is not part of the Lingxi contract.
+    enabled: Boolean(workspaceId) && workspaceId !== LINGXI_WORKSPACE_ID,
     staleTime: TABLE_EXPORT_JOBS_STALE_TIME,
     refetchInterval: (query) =>
       query.state.data?.some((j) => j.status === 'running') ? 2000 : false,

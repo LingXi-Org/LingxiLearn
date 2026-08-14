@@ -2113,7 +2113,7 @@ export function Files() {
 
   return (
     <div
-      className='relative flex h-full flex-col overflow-hidden'
+      className='relative flex h-full min-h-0 w-full min-w-0 max-w-none flex-1 flex-col overflow-hidden'
       onDragEnter={canEdit ? handleDragEnter : undefined}
       onDragLeave={canEdit ? handleDragLeave : undefined}
       onDragOver={canEdit ? handleDragOver : undefined}

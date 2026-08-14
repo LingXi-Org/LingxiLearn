@@ -142,11 +142,11 @@ export const ResourceHeader = memo(function ResourceHeader({
     <div
       ref={headerRef}
       className={cn(
-        'flex min-h-[48px] items-center border-[var(--border)] border-b px-4 pb-[8.5px]',
+        'flex min-h-[48px] w-full min-w-0 max-w-none flex-wrap items-center gap-x-3 gap-y-1 overflow-hidden border-[var(--border)] border-b px-4 pb-[8.5px]',
         TITLE_BAR_LANE_PT
       )}
     >
-      <div className='flex min-w-0 flex-1 items-center justify-between gap-3'>
+      <div className='flex w-full min-w-0 max-w-none flex-1 flex-wrap items-center justify-between gap-2'>
         <div className='flex min-w-0 flex-1 items-center gap-2 overflow-hidden'>
           {hasBreadcrumbs ? (
             breadcrumbs.map((crumb, i) => {
@@ -212,7 +212,7 @@ export const ResourceHeader = memo(function ResourceHeader({
           )}
         </div>
         {(aside || (actions && actions.length > 0)) && (
-          <div className={cn(HEADER_ACTION_CLUSTER, 'shrink-0')}>
+          <div className={cn(HEADER_ACTION_CLUSTER, 'max-w-full shrink-0 flex-wrap justify-end')}>
             {aside}
             {orderHeaderActions(actions).map(({ action }) => (
               <Chip

@@ -7,10 +7,10 @@ import type { AgentTaskListItem, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import type { ChatMessage, MothershipResource } from '@/app/workspace/[workspaceId]/home/types'
 
 /**
- * Sim's chat query namespace is kept as a compatibility seam for the copied
- * workspace chrome. Its implementation is deliberately Lingxi-only: there is
- * no fallback to /api/mothership, database contracts, or persisted Sim chat
- * records in the browser bundle.
+ * The shared chat query namespace is kept as a compatibility seam for the
+ * reused workspace chrome. Its implementation is deliberately Lingxi-only:
+ * there is no fallback to /api/mothership, database contracts, or a second
+ * persisted chat store in the browser bundle.
  */
 export type MothershipChatScope = 'active' | 'archived'
 
@@ -27,7 +27,7 @@ export interface MothershipChatMetadata {
 export interface MothershipChatHistory {
   id: string
   title: string | null
-  /** The native Sim stream keeps a persisted wire shape; Lingxi adapts it at
+  /** The shared chat surface keeps a persisted wire shape; Lingxi adapts it at
    * render time and may resume with either representation. */
   messages: any[]
   activeStreamId: string | null
@@ -66,7 +66,7 @@ function mapTask(task: AgentTaskListItem): MothershipChatMetadata {
   }
 }
 
-/** Retained for copied Sim modules; it only maps the Lingxi list shape. */
+/** Retained for reused workspace modules; it only maps the Lingxi list shape. */
 export function mapChat(task: AgentTaskListItem): MothershipChatMetadata {
   return mapTask(task)
 }
@@ -89,7 +89,7 @@ export function useMothershipChats(
   const scope = options?.scope ?? 'active'
   return useQuery({
     queryKey: mothershipChatKeys.list(workspaceId, scope),
-    queryFn: workspaceId ? () => fetchMothershipChats(workspaceId, scope) : undefined,
+    queryFn: () => fetchMothershipChats(workspaceId ?? '', scope),
     enabled: Boolean(workspaceId) && (options?.enabled ?? true),
     staleTime: MOTHERSHIP_CHAT_LIST_STALE_TIME,
   })
@@ -125,7 +125,7 @@ export async function fetchMothershipChatHistory(
 export function useMothershipChatHistory(chatId: string | undefined) {
   return useQuery({
     queryKey: mothershipChatKeys.detail(chatId),
-    queryFn: chatId ? () => fetchMothershipChatHistory(chatId) : undefined,
+    queryFn: () => fetchMothershipChatHistory(chatId ?? ''),
     enabled: Boolean(chatId),
     staleTime: MOTHERSHIP_CHAT_HISTORY_STALE_TIME,
   })
@@ -134,12 +134,12 @@ export function useMothershipChatHistory(chatId: string | undefined) {
 function unsupportedMutation<TVariables = unknown, TResult = never>() {
   return useMutation<TResult, Error, TVariables>({
     mutationFn: async () => {
-      throw new Error('该 Sim 功能未接入 LingxiGraph')
+      throw new Error('该共享功能未接入 LingxiGraph')
     },
   })
 }
 
-/** Chat mutations remain visible to copied Sim controls but never issue calls. */
+/** Chat mutations remain visible to reused controls but never issue calls. */
 export function useMarkMothershipChatRead(_workspaceId?: string) {
   return useMutation<void, Error, string>({ mutationFn: async () => undefined })
 }

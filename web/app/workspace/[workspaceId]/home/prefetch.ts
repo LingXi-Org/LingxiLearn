@@ -25,6 +25,12 @@ export async function prefetchHomeLists(
   queryClient: QueryClient,
   workspaceId: string
 ): Promise<void> {
+  // The singleton workspace is hydrated by its Lingxi client adapter.  The
+  // The generic server prefetcher targets routes that are not part of the
+  // singleton Lingxi workspace; its native data is hydrated by the Lingxi
+  // client adapter instead.
+  if (workspaceId === 'lingxi') return
+
   await Promise.all([
     queryClient.prefetchQuery({
       queryKey: folderKeys.list(workspaceId, 'active', 'workflow'),

@@ -20,8 +20,9 @@ RFC 文档版权归 IETF Trust 所有，此处为教学用途的**摘录与转�
 
 ## 学习记录
 
-- 持久化用户数据必须通过 LingxiIdentity OIDC Bearer JWT；服务端以验证后的
-  `Principal.subject` 和 issuer 建立唯一 Identity User 映射，客户端不能传入 learner ID。
+- 持久化用户数据必须通过 LingxiIdentity BFF 的 HttpOnly `lingxi_session` Cookie；服务端
+  以 BFF 验证后的 `Principal.subject` 和 issuer 建立唯一 Identity User 映射，客户端不能
+  传入 learner ID，也不在浏览器业务数据中保存 OIDC Bearer Token。
 - 本地只有显式 `LINGXILEARN_INSECURE_DEV_AUTH=true` 时才使用固定开发 subject；不接受
   客户端自报 subject、header 或 learner ID。
 - 存储内容：学习者画像、会话状态、作答证据、掌握度、误区聚合、偏好、追加式学习事件、报告和 SSE 投影日志。

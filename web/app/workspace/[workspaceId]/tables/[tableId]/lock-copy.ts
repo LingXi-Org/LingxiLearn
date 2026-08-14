@@ -5,7 +5,7 @@
  * from a client component pulls `next/headers` into the browser bundle).
  */
 
-import type { TableLockKind, TableLocks } from '@/lib/table/types'
+import { UNLOCKED_TABLE_LOCKS, type TableLockKind, type TableLocks } from '@/lib/table/types'
 
 export interface LockField {
   /** The `TableLocks` flag this row toggles. */
@@ -43,17 +43,25 @@ export const LOCK_FIELDS: LockField[] = [
   },
 ]
 
+function normalizeLocks(locks: Partial<TableLocks> | null | undefined): TableLocks {
+  return { ...UNLOCKED_TABLE_LOCKS, ...(locks ?? {}) }
+}
+
 /** The locked verbs' nouns, in display order. Empty when nothing is locked. */
-export function lockedNouns(locks: TableLocks): string[] {
-  return LOCK_FIELDS.filter((f) => locks[f.key]).map((f) => f.noun)
+export function lockedNouns(locks: Partial<TableLocks> | null | undefined): string[] {
+  const resolved = normalizeLocks(locks)
+  return LOCK_FIELDS.filter((f) => resolved[f.key]).map((f) => f.noun)
 }
 
 /**
  * Plain-language summary of a lock set — the named mode when the combination
  * matches one, otherwise a list of what is locked.
  */
-export function describeLocks(locks: TableLocks): { name: string; detail: string } {
-  const locked = lockedNouns(locks)
+export function describeLocks(
+  locks: Partial<TableLocks> | null | undefined
+): { name: string; detail: string } {
+  const resolved = normalizeLocks(locks)
+  const locked = lockedNouns(resolved)
   if (locked.length === 0) {
     return { name: 'Unlocked', detail: 'anyone with edit access can change this table.' }
   }
@@ -63,10 +71,10 @@ export function describeLocks(locks: TableLocks): { name: string; detail: string
   // Append-only describes the row semantics — adding is the only thing left.
   // A schema lock on top doesn't change that, so it keeps the name and is
   // called out in the detail rather than demoted to the generic case.
-  if (!locks.insertLocked && locks.updateLocked && locks.deleteLocked) {
+  if (!resolved.insertLocked && resolved.updateLocked && resolved.deleteLocked) {
     return {
       name: 'Append-only',
-      detail: locks.schemaLocked
+      detail: resolved.schemaLocked
         ? 'rows can be added, but not edited or deleted, and columns are locked.'
         : 'rows can be added, but not edited or deleted.',
     }
@@ -88,11 +96,12 @@ export type BlockedTableAction = 'add-row' | 'add-column' | 'delete-column' | 'e
  */
 export function describeBlockedAction(
   action: BlockedTableAction,
-  locks: TableLocks
+  locks: Partial<TableLocks> | null | undefined
 ): { title: string; text: string } {
+  const resolved = normalizeLocks(locks)
   switch (action) {
     case 'add-row':
-      if (locks.insertLocked) {
+      if (resolved.insertLocked) {
         return {
           title: 'Adding rows is locked',
           text: 'No new rows can be added until an admin unlocks this table.',
@@ -110,7 +119,7 @@ export function describeBlockedAction(
     case 'delete-column':
       // Reachable with the schema lock off but the delete lock on — removing a
       // column clears its value from every row, so it needs both.
-      return locks.schemaLocked
+      return resolved.schemaLocked
         ? {
             title: 'Changing columns is locked',
             text: 'Columns can’t be added, renamed, retyped, or removed until an admin unlocks this table.',

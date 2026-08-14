@@ -1068,7 +1068,7 @@ export function Table({
       id: 'table-new-column',
       handler: () => {
         if (!userPermissions.canEdit) return
-        if (tableDataRef.current?.locks.schemaLocked) {
+        if (tableDataRef.current?.locks?.schemaLocked) {
           showBlockedToast('add-column')
           return
         }
@@ -1085,7 +1085,7 @@ export function Table({
     {
       id: 'table-import-csv',
       handler: () => {
-        if (!userPermissions.canEdit || tableDataRef.current?.locks.insertLocked) return
+        if (!userPermissions.canEdit || tableDataRef.current?.locks?.insertLocked) return
         onRequestImportCsv()
       },
     },
@@ -1165,7 +1165,7 @@ export function Table({
                     label: 'Delete',
                     icon: Trash,
                     onClick: onRequestDeleteTable,
-                    disabled: userPermissions.canEdit !== true || tableData.locks.deleteLocked,
+                    disabled: userPermissions.canEdit !== true || tableData.locks?.deleteLocked === true,
                   },
                 ],
               }
@@ -1272,7 +1272,7 @@ export function Table({
         onClick: onRequestImportCsv,
         // An import always inserts, so the insert lock disables it outright
         // rather than letting the dialog run to a server-side 423.
-        disabled: userPermissions.canEdit !== true || tableData.locks.insertLocked,
+        disabled: userPermissions.canEdit !== true || tableData.locks?.insertLocked === true,
       },
       {
         label: 'Export CSV',
@@ -1285,7 +1285,7 @@ export function Table({
 
   // Adding a column is a schema change. The trigger stays visible when the
   // table is schema-locked and explains itself instead of disappearing.
-  const canMutateSchema = userPermissions.canEdit && !tableData?.locks.schemaLocked
+  const canMutateSchema = userPermissions.canEdit && tableData?.locks?.schemaLocked !== true
   const createTrigger = userPermissions.canEdit ? (
     <NewColumnDropdown
       trigger='header'

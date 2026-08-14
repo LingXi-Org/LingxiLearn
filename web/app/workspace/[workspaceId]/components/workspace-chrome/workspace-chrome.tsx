@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { cn } from '@sim/emcn'
-import { PanelLeft } from '@sim/emcn/icons'
 import { usePathname } from 'next/navigation'
-import { Sidebar, SidebarTooltip } from './lingxi-sidebar'
+import { useSidebarStore } from '@/stores/sidebar/store'
+import { SimSidebar } from './sim-sidebar'
 
 interface WorkspaceChromeProps {
   children: React.ReactNode
@@ -23,52 +23,49 @@ export function WorkspaceChrome({
   initialSidebarCollapsed = false,
 }: WorkspaceChromeProps) {
   const pathname = usePathname()
-  const [isCollapsed, setIsCollapsed] = useState(initialSidebarCollapsed)
-  const [isCompactViewport, setIsCompactViewport] = useState(false)
+  const isCollapsed = useSidebarStore((state) => state.isCollapsed)
+  const syncWidth = useSidebarStore((state) => state.syncWidth)
+  // The persisted store is intentionally hydrated after mount. Until then,
+  // render from the server-readable cookie so the server and the first client
+  // render use the same sidebar geometry and logo variant.
+  const [storeReady, setStoreReady] = useState(false)
   const isFullscreen = pathname?.endsWith('/upgrade') ?? false
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('lingxi-workspace-sidebar-collapsed')
-    if (saved !== null) setIsCollapsed(saved === 'true')
-  }, [])
+    // Sim keeps the collapsed state in a server-readable cookie and the width in
+    // its persisted sidebar store. Reapply both after hydration and soft resize.
+    useSidebarStore.setState({ isCollapsed: initialSidebarCollapsed })
+    void useSidebarStore.persist.rehydrate()
+    setStoreReady(true)
+    syncWidth()
+    const onResize = () => syncWidth()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [initialSidebarCollapsed, syncWidth])
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 860px)')
-    const updateViewportMode = () => setIsCompactViewport(mediaQuery.matches)
-    updateViewportMode()
-    mediaQuery.addEventListener('change', updateViewportMode)
-    return () => mediaQuery.removeEventListener('change', updateViewportMode)
-  }, [])
-
-  const toggleSidebar = () => {
-    setIsCollapsed((collapsed) => {
-      const next = !collapsed
-      window.localStorage.setItem('lingxi-workspace-sidebar-collapsed', String(next))
-      return next
-    })
-  }
-
-  const sidebarCollapsed = isCollapsed || isCompactViewport
+  const sidebarCollapsed = storeReady ? isCollapsed : initialSidebarCollapsed
 
   return (
-    <div className='workspace-chrome relative flex min-h-0 min-w-0 flex-1'>
+    <div className='workspace-chrome relative flex min-h-0 w-full min-w-0 max-w-none flex-1'>
       {!isFullscreen && (
         <div
           className={cn(
-            'workspace-sidebar-shell relative z-20 shrink-0 overflow-hidden transition-[width] duration-175 motion-reduce:transition-none',
+            'sidebar-shell-outer workspace-sidebar-shell relative z-20 shrink-0 overflow-hidden transition-[width] duration-175 motion-reduce:transition-none',
             sidebarCollapsed
               ? 'w-[var(--sidebar-collapsed-width)]'
               : 'w-[var(--sidebar-expanded-width)]'
           )}
           data-collapsed={sidebarCollapsed || undefined}
         >
-          <Sidebar isCollapsed={sidebarCollapsed} />
+          <div className='sidebar-shell-inner relative h-full min-h-0'>
+            <SimSidebar isCollapsed={sidebarCollapsed} />
+          </div>
         </div>
       )}
 
       <div
         className={cn(
-          'workspace-content-shell flex min-w-0 flex-1 flex-col p-2',
+          'workspace-content-shell flex min-h-0 w-full min-w-0 max-w-none flex-1 flex-col p-2',
           sidebarCollapsed && 'data-sidebar-collapsed'
         )}
         data-sidebar-collapsed={sidebarCollapsed || undefined}
@@ -76,7 +73,7 @@ export function WorkspaceChrome({
       >
         <div
           className={cn(
-            'workspace-content-window flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)]',
+            'workspace-content-window flex min-h-0 w-full min-w-0 max-w-none flex-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)]',
             sidebarCollapsed &&
               '[[data-sim-desktop-title-bar=inset]_[data-sidebar-collapsed]_&]:rounded-none [[data-sim-desktop-title-bar=inset]_[data-sidebar-collapsed]_&]:border-0'
           )}
@@ -84,30 +81,6 @@ export function WorkspaceChrome({
           {children}
         </div>
       </div>
-
-      {!isFullscreen && (
-        <div className='absolute top-2 left-2 z-30'>
-          <SidebarTooltip
-            label={isCollapsed ? '展开侧栏' : '收起侧栏'}
-            enabled={isCollapsed}
-            side='right'
-          >
-            <button
-              type='button'
-              onClick={toggleSidebar}
-              className={cn(
-                'flex size-8 items-center justify-center rounded-lg text-[var(--text-icon)] transition-colors',
-                'hover-hover:bg-[var(--surface-active)]',
-                !sidebarCollapsed && 'opacity-0 hover-hover:opacity-100 focus-visible:opacity-100',
-                isCompactViewport && 'hidden'
-              )}
-              aria-label={sidebarCollapsed ? '展开侧栏' : '收起侧栏'}
-            >
-              <PanelLeft className='size-4' />
-            </button>
-          </SidebarTooltip>
-        </div>
-      )}
     </div>
   )
 }

@@ -23,10 +23,12 @@ x-api-dev: &api-dev
     LINGXILEARN_VAR_DIR: /app/var
     LINGXILEARN_AGENT_TASK_DIR: /app/var/agent_tasks
     LINGXILEARN_WEB_DIST: /app/web-dist-disabled
-    LINGXILEARN_CORS_ORIGINS: '["http://localhost:3000"]'
+    LINGXILEARN_CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
     LINGXILEARN_IDENTITY_BFF_URL: ${LINGXILEARN_IDENTITY_BFF_URL:-http://host.docker.internal:8081}
     LINGXILEARN_IDENTITY_BFF_TIMEOUT: ${LINGXILEARN_IDENTITY_BFF_TIMEOUT:-10}
-    LINGXILEARN_INSECURE_DEV_AUTH: ${LINGXILEARN_INSECURE_DEV_AUTH:-false}
+    # Development intentionally uses the local learner identity. Keep this
+    # explicit so a stale production-style .env cannot reintroduce 401s.
+    LINGXILEARN_INSECURE_DEV_AUTH: "true"
   volumes:
     - ./server/lingxilearn:/app/lingxilearn
     - ./server/migrations:/app/migrations:ro
@@ -104,9 +106,8 @@ services:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY:-accel.way2api.fun/docker.io}
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     working_dir: /app
-    # The web app owns Better Auth and the Drizzle client in development, so
-    # it needs the same database connection as the API container. Keep the
-    # shared secrets from the root .env available as well.
+    # Keep shared runtime variables available to the frontend shell. Domain
+    # reads and writes still go through the canonical FastAPI service.
     env_file: [.env]
     command:
       [
@@ -124,6 +125,12 @@ services:
         postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
       NEXT_STATIC_EXPORT: "0"
       NEXT_PUBLIC_API_BASE: http://localhost:${LINGXILEARN_PORT:-8080}
+      # The API container uses the same local development identity. Keep the
+      # Next workspace shell in the same mode or it will probe Better Auth and
+      # produce a stream of 401s before the Lingxi adapter is mounted.
+      DISABLE_AUTH: "true"
+      NEXT_PUBLIC_DISABLE_AUTH: "true"
+      NEXT_PUBLIC_MOCK_AUTH: "true"
       NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     depends_on:
       api:
