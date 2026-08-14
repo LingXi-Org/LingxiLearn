@@ -21,6 +21,7 @@ export interface WorkflowNodeActivity {
   thoughts: string[]
   skills: string[]
   lastSequence?: number
+  executionId?: string
 }
 
 export interface WorkflowsEditorRuntime {
@@ -146,13 +147,67 @@ const WORKFLOWS_EDITOR_CONTENT: EditorLoopContent = {
 
 const WORKSPACE_AGENT_DEFS = [
   {
-    id: 'intent',
-    name: '理解学习目标',
-    skill: '意图识别',
-    icon: AgentIcon,
+    id: 'global_router',
+    name: '全局路由',
+    skill: 'global-router',
+    icon: ConditionalIcon,
     bgColor: 'var(--text-primary)',
     x: 555,
     y: 190,
+  },
+  {
+    id: 'knowledge_deep_dive',
+    name: 'Knowledge Deep Dive',
+    skill: 'knowledge_deep_dive',
+    icon: AgentIcon,
+    bgColor: 'var(--brand-accent)',
+    x: 555,
+    y: 400,
+  },
+  {
+    id: 'practice',
+    name: 'Adaptive Practice',
+    skill: 'assessment-builder',
+    icon: AgentIcon,
+    bgColor: 'var(--text-secondary)',
+    x: 100,
+    y: 400,
+  },
+  {
+    id: 'review',
+    name: 'Retrieval Review',
+    skill: 'retrieval',
+    icon: AgentIcon,
+    bgColor: 'var(--text-secondary)',
+    x: 330,
+    y: 400,
+  },
+  {
+    id: 'learning_plan',
+    name: 'Learning Path',
+    skill: 'curriculum graph',
+    icon: AgentIcon,
+    bgColor: 'var(--text-secondary)',
+    x: 780,
+    y: 400,
+  },
+  {
+    id: 'knowledge_map',
+    name: 'Knowledge Map',
+    skill: 'curriculum graph',
+    icon: AgentIcon,
+    bgColor: 'var(--text-secondary)',
+    x: 1010,
+    y: 400,
+  },
+  {
+    id: 'direct_tutor',
+    name: 'Direct Tutor',
+    skill: 'adaptive-pedagogy',
+    icon: AgentIcon,
+    bgColor: 'var(--text-secondary)',
+    x: 1010,
+    y: 610,
   },
   {
     id: 'lecture_hook',
@@ -161,7 +216,7 @@ const WORKSPACE_AGENT_DEFS = [
     icon: AgentIcon,
     bgColor: 'var(--brand-accent)',
     x: 100,
-    y: 440,
+    y: 610,
   },
   {
     id: 'interactive_lecture_deck',
@@ -170,7 +225,7 @@ const WORKSPACE_AGENT_DEFS = [
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 330,
-    y: 440,
+    y: 610,
   },
   {
     id: 'quiz_generator',
@@ -179,7 +234,7 @@ const WORKSPACE_AGENT_DEFS = [
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 780,
-    y: 440,
+    y: 610,
   },
   {
     id: 'interactive_visual_explainer',
@@ -188,7 +243,8 @@ const WORKSPACE_AGENT_DEFS = [
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 1010,
-    y: 440,
+    x: 1230,
+    y: 610,
   },
   {
     id: 'adaptive_pedagogy',
@@ -196,41 +252,74 @@ const WORKSPACE_AGENT_DEFS = [
     skill: 'adaptive-pedagogy',
     icon: AgentIcon,
     bgColor: 'var(--text-primary)',
-    x: 330,
-    y: 710,
+    x: 555,
+    y: 850,
   },
   {
-    id: 'answer_user',
-    name: '回答学习者',
-    skill: 'answer-user',
+    id: 'task_hub',
+    name: '任务 Hub',
+    skill: 'handoff',
     icon: AgentIcon,
     bgColor: 'var(--text-primary)',
-    x: 780,
-    y: 710,
+    x: 555,
+    y: 1080,
+  },
+  {
+    id: 'session_end',
+    name: 'Session Reflection',
+    skill: 'metacognitive-reflection',
+    icon: AgentIcon,
+    bgColor: 'var(--text-primary)',
+    x: 555,
+    y: 1280,
   },
 ] as const
 
 const WORKSPACE_EDGES: ReadonlyArray<readonly [string, string]> = [
-  ['start', 'intent'],
-  ['intent', 'lecture_hook'],
-  ['intent', 'interactive_lecture_deck'],
-  ['intent', 'quiz_generator'],
-  ['intent', 'interactive_visual_explainer'],
+  ['start', 'global_router'],
+  ['global_router', 'knowledge_deep_dive'],
+  ['global_router', 'practice'],
+  ['global_router', 'review'],
+  ['global_router', 'learning_plan'],
+  ['global_router', 'knowledge_map'],
+  ['global_router', 'direct_tutor'],
+  ['knowledge_deep_dive', 'lecture_hook'],
+  ['knowledge_deep_dive', 'interactive_lecture_deck'],
+  ['knowledge_deep_dive', 'quiz_generator'],
+  ['knowledge_deep_dive', 'interactive_visual_explainer'],
   ['lecture_hook', 'adaptive_pedagogy'],
   ['interactive_lecture_deck', 'adaptive_pedagogy'],
   ['quiz_generator', 'adaptive_pedagogy'],
   ['interactive_visual_explainer', 'adaptive_pedagogy'],
-  ['adaptive_pedagogy', 'answer_user'],
+  ['adaptive_pedagogy', 'task_hub'],
+  ['practice', 'task_hub'],
+  ['review', 'task_hub'],
+  ['learning_plan', 'task_hub'],
+  ['knowledge_map', 'task_hub'],
+  ['direct_tutor', 'task_hub'],
+  ['task_hub', 'session_end'],
 ]
 
 const AGENT_LABELS: Record<string, string> = {
-  intent: '理解学习目标',
+  intent: '全局路由',
+  coordinator: '全局路由',
+  global_router: '全局路由',
+  knowledge_deep_dive: 'Knowledge Deep Dive',
   lecture_hook: '课程引入',
   interactive_lecture_deck: '交互式讲义',
   quiz_generator: '知识检测',
   interactive_visual_explainer: '可视化讲解',
   adaptive_pedagogy: '学习结果整合',
-  answer_user: '回答学习者',
+  answer_user: 'Direct Tutor',
+  task_hub: '任务 Hub',
+  session_end: 'Session Reflection',
+}
+
+const AGENT_NODE_ALIASES: Record<string, string> = {
+  intent: 'global_router',
+  coordinator: 'global_router',
+  handoff: 'task_hub',
+  answer_user: 'direct_tutor',
 }
 
 function humanizeAgent(agent: string): string {
@@ -281,11 +370,14 @@ export function projectWorkflowNodeActivities(
   }
 
   for (const event of [...events].sort((a, b) => a.sequence - b.sequence)) {
-    const agent = textValue(event.agent)
-    if (!agent || agent === 'coordinator') continue
+    const rawAgent = textValue(event.agent)
+    if (!rawAgent) continue
+    const agent = AGENT_NODE_ALIASES[rawAgent] ?? rawAgent
     const activity = ensure(agent)
     const payload = recordValue(event.payload)
     activity.lastSequence = event.sequence
+    activity.executionId =
+      event.execution_id || textValue(event.runtime?.execution_id) || activity.executionId
 
     if (event.kind === 'agent.started') {
       activity.status = 'running'
@@ -362,6 +454,10 @@ function activityRows(activity: WorkflowNodeActivity, skill: string) {
     { title: '消息', value: compactText(latestMessage, 54) },
     { title: '思考', value: compactText(latestThought, 54) },
     { title: 'Skill', value: compactText(skills, 54) },
+    {
+      title: 'Trace',
+      value: activity.executionId ? compactText(activity.executionId, 54) : '等待运行',
+    },
   ]
 }
 
@@ -377,7 +473,7 @@ function createWorkspaceContent(runtime: WorkflowsEditorRuntime): EditorLoopCont
       icon: AgentIcon,
       bgColor: 'var(--text-secondary)',
       x: 100 + (index % 4) * 300,
-      y: 960 + Math.floor(index / 4) * 250,
+      y: 1480 + Math.floor(index / 4) * 250,
     }))
   const agentDefs = [...WORKSPACE_AGENT_DEFS, ...additionalAgentDefs]
   const blocks = [
@@ -400,7 +496,7 @@ function createWorkspaceContent(runtime: WorkflowsEditorRuntime): EditorLoopCont
     })),
   ]
   const additionalEdges: ReadonlyArray<readonly [string, string]> = additionalAgentDefs.map(
-    (definition) => ['intent', definition.id] as const
+    (definition) => ['global_router', definition.id] as const
   )
   const active = Object.entries(activities)
     .filter(([, activity]) => activity.status === 'running')
@@ -411,7 +507,7 @@ function createWorkspaceContent(runtime: WorkflowsEditorRuntime): EditorLoopCont
     sidebarWorkflows: ['多智能体学习编排', '课程引入', '知识检测', '可视化讲解', '学习结果'],
     blocks,
     edges: [...WORKSPACE_EDGES, ...additionalEdges],
-    canvas: { width: 1360, height: 910 + Math.ceil(additionalAgentDefs.length / 4) * 250 },
+    canvas: { width: 1480, height: 1450 + Math.ceil(additionalAgentDefs.length / 4) * 250 },
     selectedBlockId: active || 'start',
   }
 }

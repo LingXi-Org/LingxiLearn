@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from ..config import Settings
 from .knowledge_graph import GraphRevisionConflict, graph_snapshot_dict, validate_result
+from .runtime_tables import project_runtime_events
 
 __all__ = ["Database", "Repository", "GraphRevisionConflict"]
 from .models import (
@@ -711,6 +712,9 @@ class Repository:
                 ).scalar()
                 return int(highest or 0)
         async with self.db.session() as s:
+            task = await s.get(AgentTask, task_id)
+            if task is None:
+                raise KeyError(f"unknown agent task: {task_id}")
             highest = (
                 await s.execute(
                     select(func.max(AgentTaskEvent.sequence)).where(
@@ -718,11 +722,13 @@ class Repository:
                     )
                 )
             ).scalar() or 0
+            runtime_records: list[dict[str, Any]] = []
             for offset, event in enumerate(events, start=1):
+                sequence = highest + offset
                 s.add(
                     AgentTaskEvent(
                         task_id=task_id,
-                        sequence=highest + offset,
+                        sequence=sequence,
                         kind=str(event.get("kind", "")),
                         agent=str(event.get("agent", "")),
                         payload=event.get("payload") or {},
@@ -732,6 +738,25 @@ class Repository:
                         or {},
                     )
                 )
+                runtime_records.append(
+                    {
+                        "record_key": f"task:{task_id}:{sequence}",
+                        "task_id": task_id,
+                        "sequence": sequence,
+                        "kind": str(event.get("kind", "")),
+                        "agent": str(event.get("agent", "")),
+                        "payload": event.get("payload") or {},
+                        "execution_id": event.get("execution_id"),
+                        "runtime": event.get("runtime")
+                        or (event.get("payload") or {}).get("runtime")
+                        or {},
+                    }
+                )
+            await project_runtime_events(
+                s,
+                learner_id=task.learner_id,
+                records=runtime_records,
+            )
             await s.commit()
             return highest + len(events)
 
@@ -1204,23 +1229,81 @@ class Repository:
         if not events:
             return await self.next_sequence(session_id)
         async with self.db.session() as s:
+            session = await s.get(Session, session_id)
+            if session is None:
+                raise KeyError(f"unknown session: {session_id}")
             highest = (
                 await s.execute(
                     select(func.max(RunEvent.sequence)).where(RunEvent.session_id == session_id)
                 )
             ).scalar() or 0
+            runtime_records: list[dict[str, Any]] = []
             for offset, event in enumerate(events, start=1):
+                sequence = highest + offset
                 s.add(
                     RunEvent(
                         session_id=session_id,
-                        sequence=highest + offset,
+                        sequence=sequence,
                         kind=str(event.get("kind", "")),
                         node=str(event.get("node") or ""),
                         payload=event.get("payload") or {},
                     )
                 )
+                runtime_records.append(
+                    {
+                        "record_key": f"session:{session_id}:{sequence}",
+                        "session_id": session_id,
+                        "sequence": sequence,
+                        "kind": str(event.get("kind", "")),
+                        "agent": str(event.get("node") or event.get("agent") or ""),
+                        "payload": event.get("payload") or {},
+                        "runtime": (event.get("payload") or {}).get("runtime") or {},
+                    }
+                )
+            await project_runtime_events(
+                s,
+                learner_id=session.learner_id,
+                records=runtime_records,
+            )
             await s.commit()
             return highest + len(events)
+
+    async def project_runtime_event(
+        self,
+        *,
+        learner_id: str,
+        record_key: str,
+        kind: str,
+        task_id: str = "",
+        session_id: str = "",
+        sequence: int = 0,
+        agent: str = "",
+        payload: dict[str, Any] | None = None,
+        runtime: dict[str, Any] | None = None,
+        execution_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Project an externally replayed event using the same runtime path."""
+
+        async with self.db.session() as s:
+            result = await project_runtime_events(
+                s,
+                learner_id=learner_id,
+                records=[
+                    {
+                        "record_key": record_key,
+                        "task_id": task_id,
+                        "session_id": session_id,
+                        "sequence": sequence,
+                        "kind": kind,
+                        "agent": agent,
+                        "payload": payload or {},
+                        "runtime": runtime or {},
+                        "execution_id": execution_id,
+                    }
+                ],
+            )
+            await s.commit()
+            return result[0]
 
     async def events_after(
         self, session_id: str, after: int = 0, limit: int = 500
