@@ -36,6 +36,11 @@ x-api: &api
   depends_on:
     postgres:
       condition: service_healthy
+  # Linux Docker does not provide host.docker.internal automatically. The
+  # Identity BFF runs in the second Compose project and is published on the
+  # host, so let this stack reach it through the host gateway.
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
   security_opt: [no-new-privileges:true]
 
 services:
