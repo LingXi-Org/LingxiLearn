@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import inspect
-import json
 import logging
 import mimetypes
 import secrets
@@ -807,6 +806,41 @@ class Service:
         self, learner_id: str, *, scope: str = "active"
     ) -> list[dict[str, Any]]:
         return await self.repo.list_agent_tasks(learner_id, scope=scope)
+
+    def _task_results(self, record: Any) -> tuple[dict[str, Any], tuple[str, ...]]:
+        """Restore provider outputs and artifacts when a task is resumed.
+
+        AgentTask keeps each provider result in a dedicated JSON column for
+        backwards-compatible reads.  The runtime dispatcher, however, uses a
+        single result map keyed by ``persist_as`` and a set of artifact names.
+        Keep that translation in one place so a restarted task can continue
+        from durable state instead of starting with an empty context.
+        """
+
+        result_columns = (
+            ("intent", "intent"),
+            ("lecture_hook", "lecture_result"),
+            ("interactive_lecture_deck", "deck_result"),
+            ("quiz_generator", "quiz_result"),
+            ("adaptive_pedagogy", "adaptive_result"),
+            ("handoff", "handoff_result"),
+            ("visual_explainer", "visual_result"),
+        )
+        results = {
+            key: dict(value)
+            for key, column in result_columns
+            if isinstance(value := getattr(record, column, None), dict) and value
+        }
+
+        artifact_paths = (
+            ("lesson-intro", self.agent_artifacts.lesson_intro_path(record.id)),
+            ("lecture-deck", self.agent_artifacts.deck_path(record.id)),
+            ("visual", self.agent_artifacts.html_path(record.id)),
+        )
+        artifacts = [name for name, path in artifact_paths if path.exists()]
+        if isinstance(record.quiz_result, dict) and record.quiz_result:
+            artifacts.append("quiz")
+        return results, tuple(dict.fromkeys(artifacts))
 
     async def agent_execution_snapshot(self, execution_id: str, learner_id: str) -> dict[str, Any]:
         row = await self.repo.get_agent_execution(execution_id, learner_id)
