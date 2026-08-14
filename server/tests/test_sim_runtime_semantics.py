@@ -5,7 +5,7 @@ import pytest
 from lingxigraph import EventKind
 
 from lingxilearn.runtime.schedules import SchedulerWorker, next_schedule_time, validate_schedule
-from lingxilearn.runtime.sim_semantics import SimRunProjector, SimRuntimeError
+from lingxilearn.runtime.sim_semantics import SimRunProjector, SimRuntimeError, visible_execution
 
 
 def event(kind, *, node="lecture_hook", step=1, task_id="task-1", data=None):
@@ -37,7 +37,7 @@ def test_projection_uses_actual_nodes_and_preserves_runtime_metadata():
     assert snapshot["traceSpans"][0]["status"] == "completed"
 
 
-def test_parallel_and_loop_instances_are_projected_from_events():
+def test_parallel_semantic_nodes_are_projected_but_runtime_mechanics_are_hidden():
     projector = SimRunProjector("exec-2", "task-1", "v1")
     for node in ("lecture_hook", "interactive_lecture_deck"):
         projector.consume(event(EventKind.NODE_STARTED, node=node, step=1), agent=node)
@@ -45,13 +45,63 @@ def test_parallel_and_loop_instances_are_projected_from_events():
     projector.consume(event(EventKind.NODE_STARTED, node="await_user", step=3), agent="await_user")
     state = projector.snapshot()["workflowState"]
     assert state["parallels"]["parallel:1"]["blockIds"]
-    assert state["loops"]["loop:await_user"]["iterations"]
+    assert not state["loops"]
+    assert {block["name"] for block in state["blocks"].values()} == {
+        "Lesson Intro",
+        "Lecture Deck",
+    }
 
 
-def test_unknown_primitive_fails_closed():
+def test_unknown_runtime_node_is_hidden_and_catalog_still_fails_closed():
     projector = SimRunProjector("exec-3", "task-1", "v1")
+    projected = projector.consume(event(EventKind.NODE_STARTED, node="unregistered_node"))
+    assert projected["payload"]["hiddenBy"] == "lingxi-runtime"
+    assert not projector.snapshot()["workflowState"]["blocks"]
     with pytest.raises(SimRuntimeError):
-        projector.consume(event(EventKind.NODE_STARTED, node="unregistered_node"))
+        projector.catalog.resolve("unregistered_node")
+
+
+def test_planned_capabilities_become_semantic_nodes_and_hidden_tasks_collapse_to_edges():
+    projector = SimRunProjector("exec-semantic", "task-1", "v1")
+    projector.consume_runtime_event(
+        "node.appeared",
+        {"task_id": "intro", "step": 1, "capability": "content.lesson_intro"},
+    )
+    projector.consume_runtime_event(
+        "node.appeared",
+        {
+            "task_id": "runtime-check",
+            "step": 1,
+            "capability": "meta.evaluate",
+            "depends_on": ["intro"],
+        },
+    )
+    projector.consume_runtime_event(
+        "node.appeared",
+        {
+            "task_id": "probe",
+            "step": 1,
+            "capability": "assess.generate",
+            "depends_on": ["runtime-check"],
+        },
+    )
+    projector.consume_runtime_event(
+        "node.started",
+        {
+            "task_id": "probe",
+            "capability": "assess.generate",
+            "provider": "pack_probe",
+        },
+    )
+    state = projector.snapshot()["workflowState"]
+    assert {block["name"] for block in state["blocks"].values()} == {
+        "Lesson Intro",
+        "Knowledge Probe",
+    }
+    probe = next(block for block in state["blocks"].values() if block["name"] == "Knowledge Probe")
+    assert probe["executionState"] == "running"
+    assert probe["data"]["nodeKind"] == "deterministic"
+    assert state["edges"][0]["data"]["label"] == "Lingxi Runtime"
 
 
 def test_runtime_loop_nodes_are_registered():
@@ -69,6 +119,57 @@ def test_runtime_loop_nodes_are_registered():
             "await_user",
         }
     )
+
+
+@pytest.mark.parametrize(
+    ("alias", "label"),
+    [
+        ("answer_user", "Tutor"),
+        ("adaptive_pedagogy", "Adaptive Tutor"),
+        ("lesson_intro", "Lesson Intro"),
+        ("lecture_deck", "Lecture Deck"),
+        ("visual_explainer", "Visual Explainer"),
+        ("quiz_generator", "Quiz Generator"),
+        ("formative_assessor", "Formative Assessor"),
+        ("retrieval_practice", "Retrieval Practice"),
+        ("prerequisite_analyzer", "Curriculum Mapper"),
+        ("learner_reflector", "Learner Reflector"),
+        ("pack_investigate", "Investigator"),
+        ("pack_report", "Learning Reporter"),
+        ("skill_forge", "Skill Forge"),
+        ("pack_probe", "Knowledge Probe"),
+        ("deterministic_grader", "Deterministic Grader"),
+    ],
+)
+def test_visible_execution_vocabulary(alias, label):
+    assert visible_execution(alias).label == label
+
+
+@pytest.mark.parametrize(
+    "mechanic",
+    [
+        "interpret_goal",
+        "orchestrate",
+        "dispatch",
+        "observe",
+        "update_state",
+        "evaluate_goal",
+        "await_user",
+        "ProfileWriter",
+        "Skill Registry",
+        "Skill Resolver",
+        "Guardrails",
+        "Completion Evaluator",
+        "Artifact Validator",
+        "Evidence Emitter",
+        "Structured Output",
+        "Graceful Degradation",
+        "Decision Trace",
+        "Budget Manager",
+    ],
+)
+def test_runtime_mechanics_never_become_visible_nodes(mechanic):
+    assert visible_execution(mechanic) is None
 
 
 def test_retry_translation_is_opt_in_and_only_idempotent():

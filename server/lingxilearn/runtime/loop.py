@@ -393,6 +393,19 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 break
             outcome = await dispatcher.run(task, profile=profile_rows, budget=budget)
             outcomes.append(outcome)
+            if deps.emit is not None:
+                deps.emit(
+                    "node.completed" if outcome.status in {"completed", "incomplete"} else "node.failed",
+                    {
+                        "task_id": task.id,
+                        "capability": task.capability,
+                        "provider": outcome.provider,
+                        "status": outcome.status,
+                        "satisfied": outcome.satisfied,
+                        "detail": outcome.detail,
+                        "step": int(state.get("step") or 0),
+                    },
+                )
             if outcome.learner_message:
                 messages.append(outcome.learner_message)
 

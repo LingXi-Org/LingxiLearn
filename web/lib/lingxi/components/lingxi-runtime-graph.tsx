@@ -1,20 +1,22 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
+  EdgeLabelRenderer,
   Handle,
   ReactFlowProvider,
   type EdgeProps,
   type Node,
   type NodeProps,
   Position,
+  type ReactFlowInstance,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { AgentIcon, CodeIcon, SlackIcon, StartIcon, TableIcon } from '@/components/icons'
 import { StageBlockCard } from '@/app/(landing)/components/hero/components/hero-platform-loop/stage-block-card'
 import type { BlockDef } from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
-import { WorkflowEdgeView } from '@sim/workflow-renderer'
 import type { EdgeRunStatus } from '@sim/workflow-renderer'
+import { verticalSmoothStep } from '@/app/(landing)/components/hero/components/hero-platform-loop/stage-data'
 import { layoutRuntimeGraph } from '../runtime-graph-layout'
 
 interface RuntimeGraphProps {
@@ -35,6 +37,19 @@ function runtimeIcon(type: string) {
 }
 
 function runtimeRows(block: Record<string, unknown>) {
+  const metadata = (block.metadata ?? block.data) as Record<string, unknown> | undefined
+  if (metadata) {
+    const rows: Array<{ title: string; value: string }> = []
+    rows.push({
+      title: 'Role',
+      value: metadata.nodeKind === 'deterministic' ? 'Deterministic execution' : 'Agent / Provider',
+    })
+    if (metadata.capability) rows.push({ title: 'Capability', value: String(metadata.capability) })
+    if (metadata.provider) rows.push({ title: 'Provider', value: String(metadata.provider) })
+    if (metadata.knowledgePointId) rows.push({ title: 'Learning target', value: String(metadata.knowledgePointId) })
+    if (metadata.doneWhen) rows.push({ title: 'Done when', value: String(metadata.doneWhen) })
+    if (rows.length > 1) return rows.slice(0, 4)
+  }
   const rows = block.rows
   if (Array.isArray(rows)) {
     return rows.slice(0, 4).map((row) => {
@@ -42,7 +57,6 @@ function runtimeRows(block: Record<string, unknown>) {
       return { title: String(item.title ?? item.label ?? '详情'), value: String(item.value ?? '-') }
     })
   }
-  const metadata = (block.metadata ?? block.data) as Record<string, unknown> | undefined
   return Object.entries(metadata ?? {})
     .filter(([key]) => !['step', 'planTaskId', 'namespace', 'primitive'].includes(key))
     .slice(0, 3)
@@ -77,28 +91,190 @@ function RuntimeNode({ id, data }: NodeProps) {
 }
 
 function RuntimeEdge(props: EdgeProps) {
-  const data = (props.data ?? {}) as { runStatus?: EdgeRunStatus; isTargetActive?: boolean }
+  const data = (props.data ?? {}) as { runStatus?: EdgeRunStatus; isTargetActive?: boolean; label?: string }
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setVisible(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
+  const runStatus = data.runStatus
+  const stroke = runStatus === 'error'
+    ? 'var(--text-error)'
+    : runStatus === 'success'
+      ? 'var(--border-success)'
+      : 'var(--workflow-edge)'
+  const edgePath = verticalSmoothStep(props.sourceX, props.sourceY, props.targetX, props.targetY)
+  const labelX = (props.sourceX + props.targetX) / 2
+  const labelY = (props.sourceY + props.targetY) / 2
   return (
-    <WorkflowEdgeView
-      {...props}
-      diffStatus={null}
-      runStatus={data.runStatus}
-      isPreviewRun={false}
-      isWorkflowRunning={Boolean(data.isWorkflowRunning)}
-      isTargetActive={Boolean(data.isTargetActive)}
-      isConnectedToSelection={false}
-    />
+    <>
+      <path
+        d={edgePath}
+        pathLength={1}
+        fill='none'
+        stroke={stroke}
+        strokeWidth={2}
+        strokeLinecap='round'
+        className='transition-[stroke-dashoffset,stroke] duration-500 [stroke-dasharray:1] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]'
+        style={{
+          strokeDashoffset: visible ? 0 : 1,
+          opacity: data.isTargetActive ? 1 : 0.9,
+        }}
+      />
+      {data.label && (
+        <EdgeLabelRenderer>
+          <div
+            className='pointer-events-none absolute rounded-full border border-[var(--border-1)] bg-[var(--surface-2)] px-2 py-0.5 text-[11px] text-[var(--text-muted)] shadow-sm'
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)` }}
+          >
+            {data.label}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
   )
+}
+
+interface CapabilityPresentation {
+  label: string
+  type: 'agent' | 'function'
+  nodeKind: 'agent' | 'deterministic'
+}
+
+const CAPABILITY_PRESENTATIONS = new Map<string, CapabilityPresentation>()
+const registerCapability = (
+  presentation: CapabilityPresentation,
+  aliases: string[]
+) => aliases.forEach((alias) => CAPABILITY_PRESENTATIONS.set(alias.toLowerCase(), presentation))
+
+registerCapability({ label: 'Tutor', type: 'agent', nodeKind: 'agent' }, [
+  'Tutor', 'tutor', 'answer_user', 'dialog.answer', 'teach.explain', 'dialog.negotiate', 'negotiator',
+])
+registerCapability({ label: 'Adaptive Tutor', type: 'agent', nodeKind: 'agent' }, [
+  'Adaptive Tutor', 'adaptive_tutor', 'adaptive_pedagogy', 'teach.strategy',
+])
+registerCapability({ label: 'Lesson Intro', type: 'agent', nodeKind: 'agent' }, [
+  'Lesson Intro', 'lesson_intro', 'content.lesson_intro', 'lecture_hook',
+])
+registerCapability({ label: 'Lecture Deck', type: 'agent', nodeKind: 'agent' }, [
+  'Lecture Deck', 'lecture_deck', 'content.deck', 'interactive_lecture_deck',
+])
+registerCapability({ label: 'Visual Explainer', type: 'agent', nodeKind: 'agent' }, [
+  'Visual Explainer', 'visual_explainer', 'content.visual', 'interactive_visual_explainer',
+])
+registerCapability({ label: 'Quiz Generator', type: 'agent', nodeKind: 'agent' }, [
+  'Quiz Generator', 'quiz_generator', 'assess.generate',
+])
+registerCapability({ label: 'Formative Assessor', type: 'agent', nodeKind: 'agent' }, [
+  'Formative Assessor', 'formative_assessor', 'assess.interpret',
+])
+registerCapability({ label: 'Retrieval Practice', type: 'agent', nodeKind: 'agent' }, [
+  'Retrieval Practice', 'retrieval_practice', 'review_scheduler', 'review.schedule',
+])
+registerCapability({ label: 'Curriculum Mapper', type: 'agent', nodeKind: 'agent' }, [
+  'Curriculum Mapper', 'curriculum_mapper', 'prerequisite_analyzer', 'graph.build', 'graph.prerequisite',
+])
+registerCapability({ label: 'Learner Reflector', type: 'agent', nodeKind: 'agent' }, [
+  'Learner Reflector', 'learner_reflector', 'learner_state_reflector', 'model.reflect',
+])
+registerCapability({ label: 'Investigator', type: 'agent', nodeKind: 'agent' }, [
+  'Investigator', 'investigator', 'pack_investigate', 'tool.investigate', 'web_search', 'web_fetch',
+])
+registerCapability({ label: 'Learning Reporter', type: 'agent', nodeKind: 'agent' }, [
+  'Learning Reporter', 'learning_reporter', 'pack_report', 'meta.report',
+])
+registerCapability({ label: 'Skill Forge', type: 'agent', nodeKind: 'agent' }, [
+  'Skill Forge', 'skill_forge', 'meta.author_skill',
+])
+registerCapability({ label: 'Knowledge Probe', type: 'function', nodeKind: 'deterministic' }, [
+  'Knowledge Probe', 'knowledge_probe', 'pack_probe', 'knowledge.search', 'kb.search',
+])
+registerCapability({ label: 'Deterministic Grader', type: 'function', nodeKind: 'deterministic' }, [
+  'Deterministic Grader', 'deterministic_grader', 'assess.grade', 'quiz_submit',
+])
+
+function capabilityPresentation(block: Record<string, unknown>): CapabilityPresentation | null {
+  const data = (block.data ?? {}) as Record<string, unknown>
+  const candidates = [data.provider, data.primitive, data.capability, block.name]
+  for (const candidate of candidates) {
+    const presentation = CAPABILITY_PRESENTATIONS.get(String(candidate ?? '').toLowerCase())
+    if (presentation) return presentation
+  }
+  return null
+}
+
+function semanticGraph(
+  rawBlocks: Record<string, Record<string, unknown>>,
+  rawEdges: Array<Record<string, unknown>>
+) {
+  const blocks = Object.fromEntries(
+    Object.entries(rawBlocks).flatMap(([id, block]) => {
+      const presentation = capabilityPresentation(block)
+      if (!presentation) return []
+      const data = (block.data ?? {}) as Record<string, unknown>
+      return [[id, {
+        ...block,
+        name: presentation.label,
+        type: presentation.type,
+        rows: runtimeRows(block),
+        data: { ...data, nodeKind: presentation.nodeKind },
+      }]]
+    })
+  ) as Record<string, Record<string, unknown>>
+  const visible = new Set(Object.keys(blocks))
+  const parsed = rawEdges
+    .map((edge) => ({
+      id: String(edge.id ?? ''),
+      source: String(edge.source ?? ''),
+      target: String(edge.target ?? ''),
+      data: (edge.data ?? {}) as Record<string, unknown>,
+      label: String(edge.label ?? (edge.data as Record<string, unknown> | undefined)?.label ?? ''),
+    }))
+    .filter((edge) => edge.source && edge.target)
+  const outgoing = new Map<string, typeof parsed>()
+  parsed.forEach((edge) => outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]))
+  const edges: typeof parsed = []
+  const seen = new Set<string>()
+
+  for (const source of visible) {
+    const queue = (outgoing.get(source) ?? []).map((edge) => ({ edge, collapsed: false }))
+    const visitedHidden = new Set<string>()
+    while (queue.length > 0) {
+      const { edge, collapsed } = queue.shift()!
+      if (visible.has(edge.target)) {
+        if (edge.target === source) continue
+        const key = `${source}->${edge.target}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        edges.push({
+          ...edge,
+          id: collapsed ? `runtime-collapse-${source}-${edge.target}` : edge.id,
+          source,
+          label: collapsed ? 'Lingxi Runtime' : edge.label || 'Capability dependency',
+          data: {
+            ...edge.data,
+            label: collapsed ? 'Lingxi Runtime' : edge.label || 'Capability dependency',
+          },
+        })
+        continue
+      }
+      if (visitedHidden.has(edge.target)) continue
+      visitedHidden.add(edge.target)
+      for (const next of outgoing.get(edge.target) ?? []) queue.push({ edge: next, collapsed: true })
+    }
+  }
+  return { blocks, edges }
 }
 
 export function LingxiRuntimeGraph({ taskId, workflowState }: RuntimeGraphProps) {
   const previousPositions = useRef<Record<string, { x: number; y: number }>>({})
+  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null)
   const graph = workflowState ?? {}
-  const blocks = (graph.blocks ?? {}) as Record<string, Record<string, unknown>>
+  const rawBlocks = (graph.blocks ?? {}) as Record<string, Record<string, unknown>>
   const rawEdges = (graph.edges ?? []) as Array<Record<string, unknown>>
-  const explicitEdges = rawEdges
-    .map((edge) => ({ id: String(edge.id), source: String(edge.source), target: String(edge.target), data: edge.data as Record<string, unknown> | undefined }))
-    .filter((edge) => edge.id && edge.source && edge.target)
+  const semantic = useMemo(() => semanticGraph(rawBlocks, rawEdges), [rawBlocks, rawEdges])
+  const blocks = semantic.blocks
+  const explicitEdges = semantic.edges
   const edges = useMemo(() => {
     const next = [...explicitEdges]
     const known = new Set(next.map((edge) => `${edge.source}->${edge.target}`))
@@ -155,12 +331,31 @@ export function LingxiRuntimeGraph({ taskId, workflowState }: RuntimeGraphProps)
         type: 'lingxiRuntimeEdge',
         sourceHandle: 'source',
         targetHandle: 'target',
-        data: { runStatus, isTargetActive: targetStatus === 'running' || targetStatus === 'retrying', isWorkflowRunning: running },
+        data: {
+          runStatus,
+          label: String(edge.data?.label ?? edge.label ?? 'Capability dependency'),
+          isTargetActive: targetStatus === 'running' || targetStatus === 'retrying',
+          isWorkflowRunning: running,
+        },
         selectable: false,
       }
     }),
     [blocks, edges, running]
   )
+  const topologySignature = useMemo(
+    () => [
+      ...Object.keys(blocks).sort(),
+      ...edges.map((edge) => `${edge.source}->${edge.target}`).sort(),
+    ].join('|'),
+    [blocks, edges]
+  )
+  useEffect(() => {
+    if (!flowInstance || nodes.length === 0) return
+    const frame = requestAnimationFrame(() => {
+      void flowInstance.fitView({ padding: 0.12, minZoom: 0.1, maxZoom: 1.2, duration: 420 })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [flowInstance, nodes.length, topologySignature])
 
   if (!taskId) return <div className='p-6 text-sm text-[var(--text-muted)]'>暂无运行任务。</div>
   if (nodes.length === 0) return <div className='flex h-full items-center justify-center text-sm text-[var(--text-muted)]'>等待运行图节点…</div>
@@ -172,9 +367,12 @@ export function LingxiRuntimeGraph({ taskId, workflowState }: RuntimeGraphProps)
           edges={flowEdges}
           nodeTypes={{ lingxiRuntimeNode: RuntimeNode }}
           edgeTypes={{ lingxiRuntimeEdge: RuntimeEdge }}
+          onInit={setFlowInstance}
           fitView
-          fitViewOptions={{ padding: 0.08, maxZoom: 0.71 }}
+          fitViewOptions={{ padding: 0.12, minZoom: 0.1, maxZoom: 1.2 }}
           defaultViewport={{ x: 0, y: 0, zoom: 0.71 }}
+          minZoom={0.1}
+          maxZoom={1.2}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}

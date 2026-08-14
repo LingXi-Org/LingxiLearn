@@ -166,6 +166,17 @@ class Dispatcher:
                 detail=str(exc),
             )
 
+        if self._deps.emit is not None:
+            self._deps.emit(
+                "node.started",
+                {
+                    "task_id": task.id,
+                    "capability": task.capability,
+                    "provider": resolution.provider,
+                    "skill_id": resolution.skill_id,
+                },
+            )
+
         provider = get_provider(resolution.provider)
         if provider is None:
             return TaskOutcome(

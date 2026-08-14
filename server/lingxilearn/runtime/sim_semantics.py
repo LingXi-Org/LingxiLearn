@@ -29,6 +29,77 @@ class Primitive:
     idempotent: bool = False
 
 
+@dataclass(frozen=True)
+class VisibleExecution:
+    """One learner-meaningful capability allowed onto the runtime graph."""
+
+    key: str
+    label: str
+    sim_type: str = "agent"
+    node_kind: str = "agent"
+
+
+_VISIBLE_EXECUTIONS: tuple[tuple[VisibleExecution, tuple[str, ...]], ...] = (
+    (VisibleExecution("tutor", "Tutor"), (
+        "answer_user", "dialog.answer", "teach.explain", "dialog.negotiate", "negotiator",
+    )),
+    (VisibleExecution("adaptive_tutor", "Adaptive Tutor"), (
+        "adaptive_pedagogy", "teach.strategy",
+    )),
+    (VisibleExecution("lesson_intro", "Lesson Intro"), (
+        "lesson_intro", "content.lesson_intro", "lecture_hook",
+    )),
+    (VisibleExecution("lecture_deck", "Lecture Deck"), (
+        "lecture_deck", "content.deck", "interactive_lecture_deck",
+    )),
+    (VisibleExecution("visual_explainer", "Visual Explainer"), (
+        "visual_explainer", "content.visual", "interactive_visual_explainer",
+    )),
+    (VisibleExecution("quiz_generator", "Quiz Generator"), (
+        "quiz_generator", "assess.generate",
+    )),
+    (VisibleExecution("formative_assessor", "Formative Assessor"), (
+        "formative_assessor", "assess.interpret",
+    )),
+    (VisibleExecution("retrieval_practice", "Retrieval Practice"), (
+        "retrieval_practice", "review_scheduler", "review.schedule",
+    )),
+    (VisibleExecution("curriculum_mapper", "Curriculum Mapper"), (
+        "curriculum_mapper", "prerequisite_analyzer", "graph.build", "graph.prerequisite",
+    )),
+    (VisibleExecution("learner_reflector", "Learner Reflector"), (
+        "learner_reflector", "learner_state_reflector", "model.reflect",
+    )),
+    (VisibleExecution("investigator", "Investigator"), (
+        "investigator", "pack_investigate", "tool.investigate", "web_search", "web_fetch",
+    )),
+    (VisibleExecution("learning_reporter", "Learning Reporter"), (
+        "learning_reporter", "pack_report", "meta.report",
+    )),
+    (VisibleExecution("skill_forge", "Skill Forge"), (
+        "skill_forge", "meta.author_skill",
+    )),
+    (VisibleExecution("knowledge_probe", "Knowledge Probe", "function", "deterministic"), (
+        "knowledge_probe", "pack_probe", "knowledge.search", "kb.search",
+    )),
+    (VisibleExecution("deterministic_grader", "Deterministic Grader", "function", "deterministic"), (
+        "deterministic_grader", "assess.grade", "quiz_submit",
+    )),
+)
+
+VISIBLE_EXECUTION_BY_ALIAS: dict[str, VisibleExecution] = {
+    alias.casefold(): execution
+    for execution, aliases in _VISIBLE_EXECUTIONS
+    for alias in aliases
+}
+
+
+def visible_execution(name: str | None) -> VisibleExecution | None:
+    """Resolve a capability/provider name, hiding every runtime mechanic by default."""
+
+    return VISIBLE_EXECUTION_BY_ALIAS.get(str(name or "").strip().casefold())
+
+
 class PrimitiveCatalog:
     """Closed mapping of LingxiLearn primitives to Sim block semantics."""
 
@@ -162,8 +233,8 @@ class SimRunProjector:
     _node_counts: dict[str, int] = field(default_factory=dict, init=False)
     _block_keys: dict[tuple[str, int, str], str] = field(default_factory=dict, init=False)
     _planned_blocks: dict[str, str] = field(default_factory=dict, init=False)
+    _plan_dependencies: dict[str, list[str]] = field(default_factory=dict, init=False)
     _planned_by_shape: dict[tuple[str, int], list[str]] = field(default_factory=dict, init=False)
-    _pending_dependencies: dict[str, list[str]] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         self.workflow_state = {
@@ -177,7 +248,7 @@ class SimRunProjector:
             "variables": {},
             "metadata": {"executionId": self.execution_id, "taskId": self.task_id},
         }
-        self.workflow_state["metadata"]["layoutVersion"] = "layered.v1"
+        self.workflow_state["metadata"]["layoutVersion"] = "semantic-radial.v1"
 
     @property
     def blocks(self) -> dict[str, Any]:
@@ -191,32 +262,35 @@ class SimRunProjector:
 
     def _ensure_block(self, event: Any, agent: str | None = None) -> tuple[str, dict[str, Any]]:
         node = str(getattr(event, "node", "") or agent or "coordinator")
-        self.catalog.resolve(node)
+        execution = visible_execution(node)
+        if execution is None:
+            raise SimRuntimeError(f"runtime mechanic cannot be projected as a block: {node!r}")
         step = int(getattr(event, "step", 0) or 0)
         task_id = getattr(event, "task_id", None)
         key = (node, step, str(task_id or ""))
         existing = self._block_keys.get(key)
         if existing is not None:
             return existing, self.blocks[existing]
-        planned = self._promote_planned_block(node, step)
+        planned = self._promote_planned_block(execution.key, step)
         if planned is not None:
             block_id, block = planned
             self._block_keys[key] = block_id
             return block_id, block
         block_id = self._block_id(node, step, task_id)
         self._block_keys[key] = block_id
-        primitive = self.catalog.resolve(node)
         block = {
             "id": block_id,
-            "type": primitive.sim_type,
-            "name": node,
+            "type": execution.sim_type,
+            "name": execution.label,
             "position": {"x": (len(self.blocks) % 4) * 300, "y": (len(self.blocks) // 4) * 160},
             "subBlocks": {},
             "outputs": {},
             "enabled": True,
             "data": {
-                "primitive": node,
-                "category": primitive.category,
+                "primitive": execution.key,
+                "provider": node,
+                "category": execution.node_kind,
+                "nodeKind": execution.node_kind,
                 "executionId": self.execution_id,
                 "step": step,
                 "taskId": task_id,
@@ -228,26 +302,34 @@ class SimRunProjector:
         self.blocks[block_id] = block
         return block_id, block
 
-    def _ensure_planned_block(self, payload: dict[str, Any]) -> str:
+    def _ensure_planned_block(self, payload: dict[str, Any]) -> str | None:
         plan_task_id = str(payload.get("task_id") or payload.get("node_id") or "")
         step = int(payload.get("step") or 0)
         primitive_name = str(payload.get("capability") or payload.get("node") or "coordinator")
-        primitive = self.catalog.resolve(primitive_name)
+        execution = visible_execution(primitive_name)
+        self._plan_dependencies[plan_task_id] = [
+            str(item) for item in payload.get("depends_on") or []
+        ]
+        if execution is None:
+            self._rebuild_planned_edges()
+            return None
         existing = self._planned_blocks.get(plan_task_id)
         if existing is not None:
             return existing
         block_id = f"plan:{step}:{plan_task_id}".replace("/", "_")
         self.blocks[block_id] = {
             "id": block_id,
-            "type": primitive.sim_type,
-            "name": primitive_name,
+            "type": execution.sim_type,
+            "name": execution.label,
             "position": {"x": 0, "y": 0},
             "subBlocks": {},
             "outputs": {},
             "enabled": bool(payload.get("allowed", True)),
             "data": {
-                "primitive": primitive_name,
-                "category": primitive.category,
+                "primitive": execution.key,
+                "capability": primitive_name,
+                "category": execution.node_kind,
+                "nodeKind": execution.node_kind,
                 "executionId": self.execution_id,
                 "step": step,
                 "planTaskId": plan_task_id,
@@ -259,15 +341,83 @@ class SimRunProjector:
             "executionState": "queued",
         }
         self._planned_blocks[plan_task_id] = block_id
-        self._planned_by_shape.setdefault((primitive_name, step), []).append(block_id)
-        for dependency in payload.get("depends_on") or []:
-            source = self._planned_blocks.get(str(dependency))
-            if source:
-                self._connect(source, block_id, kind="dependency", status="queued")
-            else:
-                self._pending_dependencies.setdefault(str(dependency), []).append(block_id)
-        for target in self._pending_dependencies.pop(plan_task_id, []):
-            self._connect(block_id, target, kind="dependency", status="queued")
+        self._planned_by_shape.setdefault((execution.key, step), []).append(block_id)
+        self._rebuild_planned_edges()
+        return block_id
+
+    def _visible_plan_ancestors(self, task_id: str, visiting: set[str] | None = None) -> set[str]:
+        visiting = set(visiting or ())
+        if task_id in visiting:
+            return set()
+        visiting.add(task_id)
+        visible = self._planned_blocks.get(task_id)
+        if visible:
+            return {visible}
+        result: set[str] = set()
+        for dependency in self._plan_dependencies.get(task_id, []):
+            result.update(self._visible_plan_ancestors(dependency, visiting))
+        return result
+
+    def _rebuild_planned_edges(self) -> None:
+        self.workflow_state["edges"] = [
+            edge for edge in self.workflow_state["edges"]
+            if (edge.get("data") or {}).get("kind") != "dependency"
+        ]
+        for task_id, target in self._planned_blocks.items():
+            for dependency in self._plan_dependencies.get(task_id, []):
+                for source in self._visible_plan_ancestors(dependency):
+                    self._connect(
+                        source,
+                        target,
+                        kind="dependency",
+                        status="queued",
+                        label=(
+                            "Capability dependency"
+                            if dependency in self._planned_blocks
+                            else "Lingxi Runtime"
+                        ),
+                    )
+
+    def _update_planned_execution(
+        self, payload: dict[str, Any], *, status: str
+    ) -> str | None:
+        task_id = str(payload.get("task_id") or payload.get("node_id") or "")
+        block_id = self._planned_blocks.get(task_id)
+        if block_id is None:
+            execution = visible_execution(
+                str(payload.get("provider") or payload.get("agent") or payload.get("capability") or "")
+            )
+            if execution is not None:
+                candidates = [
+                    item for item in self.blocks.values()
+                    if (item.get("data") or {}).get("primitive") == execution.key
+                    and item.get("executionState") in {"queued", "pending", "running"}
+                ]
+                if candidates:
+                    block_id = str(candidates[0]["id"])
+        if block_id is None:
+            return None
+        block = self.blocks[block_id]
+        actual = visible_execution(
+            str(payload.get("provider") or payload.get("agent") or payload.get("capability") or "")
+        )
+        if actual is not None:
+            block["name"] = actual.label
+            block["type"] = actual.sim_type
+            block["data"]["primitive"] = actual.key
+            block["data"]["category"] = actual.node_kind
+            block["data"]["nodeKind"] = actual.node_kind
+        block["status"] = status
+        block["executionState"] = status
+        block["data"]["provider"] = payload.get("provider") or payload.get("agent")
+        for source, target in (
+            ("status", "outcomeStatus"),
+            ("satisfied", "satisfied"),
+            ("detail", "detail"),
+            ("skill_id", "skillId"),
+        ):
+            if source in payload:
+                block["data"][target] = _json_safe(payload[source])
         return block_id
 
     def _promote_planned_block(self, node: str, step: int) -> tuple[str, dict[str, Any]] | None:
@@ -284,6 +434,7 @@ class SimRunProjector:
         *,
         kind: str = "transition",
         status: str | None = None,
+        label: str | None = None,
     ) -> None:
         if not source or not target or source == target:
             return
@@ -298,7 +449,12 @@ class SimRunProjector:
                 "target": target,
                 "type": "workflow",
                 "status": edge_status,
-                "data": {"kind": kind, "status": edge_status},
+                "label": label or ("Lingxi Runtime" if kind == "transition" else kind),
+                "data": {
+                    "kind": kind,
+                    "status": edge_status,
+                    "label": label or ("Lingxi Runtime" if kind == "transition" else kind),
+                },
             }
         )
 
@@ -324,13 +480,14 @@ class SimRunProjector:
         legacy_kind = runtime_kind
         payload: dict[str, Any] = {"runtime": metadata, "data": data}
 
-        if kind in {
+        node_event_kinds = {
             EventKind.NODE_STARTED,
             EventKind.NODE_COMPLETED,
             EventKind.NODE_FAILED,
             EventKind.NODE_RETRYING,
             EventKind.NODE_CACHED,
-        }:
+        }
+        if kind in node_event_kinds and visible_execution(node) is not None:
             block_id, block = self._ensure_block(event, agent)
             payload["blockId"] = block_id
             if kind is EventKind.NODE_STARTED:
@@ -346,7 +503,7 @@ class SimRunProjector:
                         "id": metadata["span_id"]
                         or (block_id if attempts == 0 else f"{block_id}:attempt:{attempts + 1}"),
                         "name": node,
-                        "type": self.catalog.resolve(node).sim_type,
+                        "type": visible_execution(node).sim_type,
                         "blockId": block_id,
                         "node": node,
                         "status": "running",
@@ -419,6 +576,16 @@ class SimRunProjector:
                     self.workflow_state["loops"].setdefault(
                         loop_id, {"id": loop_id, "node": node, "iterations": []}
                     )["iterations"].append(block_id)
+        elif kind in node_event_kinds:
+            legacy_kind = {
+                EventKind.NODE_STARTED: "node.started",
+                EventKind.NODE_COMPLETED: "node.completed",
+                EventKind.NODE_FAILED: "node.failed",
+                EventKind.NODE_RETRYING: "node.retrying",
+                EventKind.NODE_CACHED: "node.cached",
+            }[kind]
+            payload["hiddenBy"] = "lingxi-runtime"
+            payload["runtimeMechanic"] = node
         elif kind is EventKind.INTERRUPT_RAISED:
             legacy_kind = "interrupt.raised"
             payload["runtime"]["control"] = "human_in_the_loop"
@@ -456,7 +623,9 @@ class SimRunProjector:
                 legacy_kind = str(value["type"])
                 if legacy_kind == "node.appeared":
                     payload_data = {str(k): _json_safe(v) for k, v in value.items()}
-                    payload["blockId"] = self._ensure_planned_block(payload_data)
+                    block_id = self._ensure_planned_block(payload_data)
+                    if block_id is not None:
+                        payload["blockId"] = block_id
                 payload.update(
                     {k: _json_safe(v) for k, v in value.items() if k not in {"type", "agent"}}
                 )
@@ -485,12 +654,29 @@ class SimRunProjector:
             },
         }
         if kind == "node.appeared" and isinstance(safe_payload, dict):
-            result["payload"] = {**safe_payload, "blockId": self._ensure_planned_block(safe_payload)}
+            block_id = self._ensure_planned_block(safe_payload)
+            result["payload"] = dict(safe_payload)
+            if block_id is not None:
+                result["payload"]["blockId"] = block_id
+            else:
+                result["payload"]["hiddenBy"] = "lingxi-runtime"
+        elif kind in {"node.started", "node.completed", "node.failed", "node.retrying"}:
+            status = {
+                "node.started": "running",
+                "node.completed": "completed",
+                "node.failed": "failed",
+                "node.retrying": "retrying",
+            }[kind]
+            block_id = self._update_planned_execution(safe_payload, status=status)
+            if block_id is not None:
+                result["payload"] = {**safe_payload, "blockId": block_id}
         return result
 
     def snapshot(self) -> dict[str, Any]:
         metadata = self.workflow_state.setdefault("metadata", {})
-        self.workflow_state["layoutVersion"] = metadata.get("layoutVersion", "layered.v1")
+        self.workflow_state["layoutVersion"] = metadata.get(
+            "layoutVersion", "semantic-radial.v1"
+        )
         self.workflow_state["terminal"] = bool(metadata.get("terminal", False))
         self.workflow_state["status"] = metadata.get("status", "running")
         self.workflow_state["paused"] = bool(metadata.get("paused", False))
