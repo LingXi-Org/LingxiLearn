@@ -11,9 +11,8 @@ name: lingxilearn
 x-api: &api
   build:
     context: ./server
-    # Compose is the deployment entrypoint. Disable stale BuildKit layers so
-    # every `docker compose up -d --build` packages the current workspace.
-    no_cache: true
+    # Keep BuildKit cache enabled in production. `no_cache` causes every
+    # rollout to rebuild the dependency layer and needlessly spikes RAM.
     args:
       DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
       APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
@@ -30,6 +29,10 @@ x-api: &api
     LINGXILEARN_IDENTITY_BFF_URL: ${LINGXILEARN_IDENTITY_BFF_URL:?set LINGXILEARN_IDENTITY_BFF_URL}
     LINGXILEARN_IDENTITY_BFF_TIMEOUT: ${LINGXILEARN_IDENTITY_BFF_TIMEOUT:-10}
     LINGXILEARN_INSECURE_DEV_AUTH: ${LINGXILEARN_INSECURE_DEV_AUTH:-false}
+    LINGXILEARN_AGENT_CONCURRENCY: ${LINGXILEARN_AGENT_CONCURRENCY:-1}
+    LINGXILEARN_AGENT_SIDECAR_CONCURRENCY: ${LINGXILEARN_AGENT_SIDECAR_CONCURRENCY:-1}
+    LINGXILEARN_DB_POOL_SIZE: ${LINGXILEARN_DB_POOL_SIZE:-3}
+    LINGXILEARN_DB_MAX_OVERFLOW: ${LINGXILEARN_DB_MAX_OVERFLOW:-1}
   volumes:
     - ./packs:/app/packs:ro
     - ./skills:/app/skills:ro
@@ -60,9 +63,6 @@ services:
   web:
     build:
       context: ./web
-      # The standalone image must always contain the current native Sim source
-      # closure, for both local runs and production rollouts.
-      no_cache: true
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}

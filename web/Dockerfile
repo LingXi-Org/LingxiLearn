@@ -7,11 +7,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG NEXT_PUBLIC_API_BASE=
 ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
+ARG NODE_OPTIONS=--max-old-space-size=768
 
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE \
     DATABASE_URL=$DATABASE_URL \
     LINGXILEARN_API_ORIGIN=http://api:8000 \
-    NEXT_STATIC_EXPORT=1
+    NEXT_STATIC_EXPORT=1 \
+    NODE_OPTIONS=$NODE_OPTIONS
 
 COPY package.json bun.lock bunfig.toml ./
 RUN bun install --ignore-scripts --registry ${NPM_REGISTRY}

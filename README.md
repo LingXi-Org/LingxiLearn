@@ -27,8 +27,30 @@ docker compose -f docker-compose.dev.yml up --build
 
 ```bash
 cp .env.example .env       # 改一下数据库密码
-docker compose up --build  # http://localhost:8080
+# 低内存机器请串行构建，避免 web/ api 两个大构建同时占用内存
+docker compose build --parallel 1
+docker compose up -d  # http://localhost:8080
 ```
+
+生产部署的默认配置已针对小内存主机收敛：API 使用单进程，PostgreSQL
+连接池为 3（最多额外 1 个连接），主 Agent 和后台 sidecar 各限制为 1
+个并发。任务会排队，不会因同时保留多个完整模型上下文而把主机打满。
+
+不要在生产环境每次使用 `docker compose up --build`：它会把构建和启动
+混在一起，且不便于控制构建并发。`make prod` 已经执行串行构建后再启动。
+前端构建还设置了 768 MiB 的 Node 堆上限；如果主机总内存低于 2 GiB，
+建议在 CI/另一台构建机生成镜像，再在生产机执行 `docker compose up -d`。
+
+GitHub Actions 工作流 [`container-images.yml`](.github/workflows/container-images.yml)
+会在每次 push 和 Pull Request 自动构建 `api`、`web` 两张镜像；push 到仓库
+时会同时发布到 GHCR：
+
+- `ghcr.io/lingxi-org/lingxilearn-api`
+- `ghcr.io/lingxi-org/lingxilearn-web`
+
+也可以在 Actions 页面手动运行 `Container images`，通过 `Push images to GHCR`
+选择是否发布镜像。工作流使用 GitHub Actions BuildKit 缓存，前端构建沿用低内存
+Node 堆限制。
 
 ### Docker 国内源与 `.env` 配置
 

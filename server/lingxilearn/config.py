@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     agent_deck_recursion_limit: int = 80
     agent_visual_timeout: float = 240.0
     agent_web_timeout: float = 20.0
+    # A small production VM should queue expensive graph executions instead
+    # of allowing every request and sidecar to retain a full model context.
+    agent_concurrency: int = 1
+    agent_sidecar_concurrency: int = 1
     # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable
     # prompt/tool prefix intact so DeepSeek can use its native prompt cache.
     agent_cache_enabled: bool = True
@@ -103,6 +107,11 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     sse_heartbeat_seconds: float = 15.0
     max_artifact_bytes: int = 10 * 1024 * 1024
+
+    # Keep the database pool below the memory budget.  The API never holds a
+    # connection for the duration of an LLM/graph run.
+    db_pool_size: int = 3
+    db_max_overflow: int = 1
 
     log_level: str = "INFO"
 

@@ -44,7 +44,10 @@ class Database:
         url = settings.resolved_database_url
         kwargs: dict[str, Any] = {"pool_pre_ping": True}
         if url.startswith("postgresql"):
-            kwargs.update(pool_size=10, max_overflow=20)
+            kwargs.update(
+                pool_size=max(1, settings.db_pool_size),
+                max_overflow=max(0, settings.db_max_overflow),
+            )
         else:
             kwargs["connect_args"] = {"timeout": 30}
         self.engine = create_async_engine(url, **kwargs)

@@ -14,7 +14,8 @@ dev: ## Start the only local development deployment with bind mounts
 	docker compose -f docker-compose.dev.yml up --build
 
 prod: ## Start the only production deployment with a static web export
-	docker compose -f docker-compose.yml up --build -d
+	docker compose -f docker-compose.yml build --parallel 1
+	docker compose -f docker-compose.yml up -d
 
 check: ## Run frontend type and style checks
 	cd web && bun run type-check

@@ -304,6 +304,8 @@ class Service:
         self._agent_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._tasks: set[asyncio.Task[Any]] = set()
         self._workspace_projection_lock = asyncio.Lock()
+        self._agent_slots = asyncio.Semaphore(max(1, self.settings.agent_concurrency))
+        self._sidecar_slots = asyncio.Semaphore(max(1, self.settings.agent_sidecar_concurrency))
 
     # -- lifecycle -------------------------------------------------------
 
@@ -986,6 +988,12 @@ class Service:
         return {"status": "accepted", "submission": await _submission_snapshot(self.repo, task_id)}
 
     async def _drive_agent_task(self, task_id: str, learner_id: str, prompt: str, *, resume: dict[str, Any] | None = None) -> None:
+        # Keep the public task launcher cheap: queued tasks wait here instead
+        # of all retaining graph state and provider response buffers at once.
+        async with self._agent_slots:
+            await self._run_agent_task(task_id, learner_id, prompt, resume=resume)
+
+    async def _run_agent_task(self, task_id: str, learner_id: str, prompt: str, *, resume: dict[str, Any] | None = None) -> None:
         if self.agent_model is None:
             await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
             self._notify_agent(task_id)
@@ -1226,6 +1234,10 @@ class Service:
             self._spawn(self._run_agent_sidecar(sidecar["id"]))
 
     async def _run_agent_sidecar(self, sidecar_id: str) -> None:
+        async with self._sidecar_slots:
+            await self._run_agent_sidecar_inner(sidecar_id)
+
+    async def _run_agent_sidecar_inner(self, sidecar_id: str) -> None:
         sidecar = await self.repo.claim_agent_sidecar(sidecar_id)
         if sidecar is None:
             return
