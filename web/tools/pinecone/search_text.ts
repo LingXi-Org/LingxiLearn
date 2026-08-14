@@ -1,0 +1,218 @@
+import type {
+  PineconeResponse,
+  PineconeSearchHit,
+  PineconeSearchTextParams,
+} from '@/tools/pinecone/types'
+import type { ToolConfig } from '@/tools/types'
+
+function parseRerank(
+  value: PineconeSearchTextParams['rerank']
+): Record<string, unknown> | undefined {
+  if (value === undefined) return undefined
+  const parsed = typeof value === 'string' ? JSON.parse(value) : value
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Pinecone rerank must be an object')
+  }
+  return parsed as Record<string, unknown>
+}
+
+function selectRerankModelInput(
+  value: PineconeSearchTextParams['rerank']
+): Record<string, unknown> | undefined {
+  const rerank = parseRerank(value)
+  if (!rerank) return undefined
+  const query = rerank.query
+  if (
+    query === null ||
+    typeof query !== 'object' ||
+    Array.isArray(query) ||
+    typeof (query as Record<string, unknown>).text !== 'string'
+  ) {
+    return undefined
+  }
+  return { query: { text: (query as Record<string, unknown>).text } }
+}
+
+function rebuildRerank(original: PineconeSearchTextParams['rerank'], projected: unknown): unknown {
+  if (original === undefined) {
+    if (projected !== undefined) throw new Error('Unexpected projected Pinecone rerank input')
+    return undefined
+  }
+  if (projected === null || typeof projected !== 'object' || Array.isArray(projected)) {
+    throw new Error('Projected Pinecone rerank input is invalid')
+  }
+
+  const rerank = parseRerank(original)!
+  const projectedQuery = (projected as Record<string, unknown>).query
+  const rebuilt =
+    projectedQuery === undefined
+      ? rerank
+      : {
+          ...rerank,
+          query: projectedQuery,
+        }
+  return typeof original === 'string' ? JSON.stringify(rebuilt) : rebuilt
+}
+
+export const searchTextTool: ToolConfig<PineconeSearchTextParams, PineconeResponse> = {
+  id: 'pinecone_search_text',
+  name: 'Pinecone Search Text',
+  description: 'Search for similar text in a Pinecone index',
+  version: '1.0',
+
+  params: {
+    indexHost: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description: 'Full Pinecone index host URL (e.g., "https://my-index-abc123.svc.pinecone.io")',
+    },
+    namespace: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Namespace to search in (e.g., "documents", "embeddings")',
+    },
+    searchQuery: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description: 'Text to search for',
+    },
+    topK: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description: 'Number of results to return (e.g., "10", "25")',
+    },
+    fields: {
+      type: 'array',
+      required: false,
+      visibility: 'user-only',
+      description: 'Fields to return in the results',
+    },
+    filter: {
+      type: 'object',
+      required: false,
+      visibility: 'user-or-llm',
+      description:
+        'Filter to apply to the search (e.g., {"category": "tech", "year": {"$gte": 2020}})',
+    },
+    rerank: {
+      type: 'object',
+      required: false,
+      visibility: 'user-only',
+      description: 'Reranking parameters',
+    },
+    apiKey: {
+      type: 'string',
+      required: true,
+      visibility: 'user-only',
+      description: 'Pinecone API key',
+    },
+  },
+
+  request: {
+    modelInput: {
+      mode: 'project',
+      select: (params) => {
+        const rerank = selectRerankModelInput(params.rerank)
+        return rerank === undefined
+          ? { searchQuery: params.searchQuery }
+          : { searchQuery: params.searchQuery, rerank }
+      },
+      applyProjected: (selectedParams, projectedSelection) => {
+        const patch: Record<string, unknown> = {
+          searchQuery: projectedSelection.searchQuery,
+        }
+        if (Object.hasOwn(selectedParams, 'rerank')) {
+          patch.rerank = rebuildRerank(selectedParams.rerank, projectedSelection.rerank)
+        }
+        return patch
+      },
+    },
+    method: 'POST',
+    url: (params) => `${params.indexHost}/records/namespaces/${params.namespace}/search`,
+    headers: (params) => ({
+      'Api-Key': params.apiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Pinecone-API-Version': '2025-01',
+    }),
+    body: (params) => {
+      // Format the query object
+      const query = {
+        inputs: { text: params.searchQuery },
+        top_k: params.topK ? Number(params.topK) : 10,
+      }
+
+      // Build the request body
+      const body: any = {
+        query,
+      }
+
+      // Add optional parameters if provided
+      if (params.fields) {
+        body.fields = typeof params.fields === 'string' ? JSON.parse(params.fields) : params.fields
+      }
+
+      if (params.filter) {
+        body.query.filter =
+          typeof params.filter === 'string' ? JSON.parse(params.filter) : params.filter
+      }
+
+      if (params.rerank) {
+        body.rerank = typeof params.rerank === 'string' ? JSON.parse(params.rerank) : params.rerank
+        // If rerank query is not specified, use the search query
+        if (!body.rerank.query) {
+          body.rerank.query = { text: params.searchQuery }
+        }
+      }
+
+      return body
+    },
+  },
+
+  transformResponse: async (response) => {
+    const data = await response.json()
+    return {
+      success: true,
+      output: {
+        matches: data.result.hits.map((hit: PineconeSearchHit) => ({
+          id: hit._id,
+          score: hit._score,
+          metadata: hit.fields,
+        })),
+        usage: {
+          total_tokens: data.usage.embed_total_tokens || 0,
+          read_units: data.usage.read_units,
+          rerank_units: data.usage.rerank_units,
+        },
+      },
+    }
+  },
+
+  outputs: {
+    matches: {
+      type: 'array',
+      description: 'Search results with ID, score, and metadata',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Vector ID' },
+          score: { type: 'number', description: 'Similarity score' },
+          metadata: { type: 'object', description: 'Associated metadata' },
+        },
+      },
+    },
+    usage: {
+      type: 'object',
+      description: 'Usage statistics including tokens, read units, and rerank units',
+      properties: {
+        total_tokens: { type: 'number', description: 'Total tokens used for embedding' },
+        read_units: { type: 'number', description: 'Read units consumed' },
+        rerank_units: { type: 'number', description: 'Rerank units used' },
+      },
+    },
+  },
+}

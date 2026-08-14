@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "zoom-lecture-manifest/v2",
+  "taskId": "quadratic-vertex",
+  "generatedAt": "2026-08-12T00:00:00Z",
+  "deck": {
+    "title": "二次函数在闭区间上的最值",
+    "canvas": {
+      "width": 1280,
+      "height": 720
+    },
+    "style": "anthropic-academic",
+    "slideCount": 3,
+    "contentSlideCount": 1,
+    "stepCount": 6
+  },
+  "artifacts": {
+    "lecture": "lecture.json",
+    "slides": [
+      "slides/s01.html",
+      "slides/s02.html",
+      "slides/s03.html"
+    ],
+    "runtime": "runtime/index.html",
+    "standalone": "dist/lecture.html"
+  },
+  "validation": {
+    "tool": "scripts/validate_deck.py --strict",
+    "status": "pass",
+    "errors": [],
+    "warnings": []
+  },
+  "coverage": [
+    {
+      "objective": "能把参数最值转化为关键位置与闭区间的位置比较",
+      "slides": [
+        "s02",
+        "s03"
+      ]
+    }
+  ],
+  "assumptions": [],
+  "deviations": []
+}

@@ -1,0 +1,100 @@
+/**
+ * Admin API Response Helpers
+ *
+ * Consistent response formatting for all Admin API endpoints.
+ */
+
+import { NextResponse } from 'next/server'
+import type { z } from 'zod'
+import { getValidationErrorMessage, serializeZodIssues } from '@/lib/api/server'
+import type {
+  AdminErrorResponse,
+  AdminListResponse,
+  AdminSingleResponse,
+  PaginationMeta,
+} from '@/app/api/v1/admin/types'
+
+/**
+ * Create a successful list response with pagination
+ */
+export function listResponse<T>(
+  data: T[],
+  pagination: PaginationMeta
+): NextResponse<AdminListResponse<T>> {
+  return NextResponse.json({ data, pagination })
+}
+
+/**
+ * Create a successful single resource response
+ */
+export function singleResponse<T>(data: T): NextResponse<AdminSingleResponse<T>> {
+  return NextResponse.json({ data })
+}
+
+/**
+ * Create an error response
+ */
+export function errorResponse(
+  code: string,
+  message: string,
+  status: number,
+  details?: unknown
+): NextResponse<AdminErrorResponse> {
+  const body: AdminErrorResponse = {
+    error: { code, message },
+  }
+
+  if (details !== undefined) {
+    body.error.details = details
+  }
+
+  return NextResponse.json(body, { status })
+}
+
+// =============================================================================
+// Common Error Responses
+// =============================================================================
+
+export function unauthorizedResponse(message = 'Authentication required'): NextResponse {
+  return errorResponse('UNAUTHORIZED', message, 401)
+}
+
+export function forbiddenResponse(message = 'Access denied'): NextResponse {
+  return errorResponse('FORBIDDEN', message, 403)
+}
+
+export function notFoundResponse(resource: string): NextResponse {
+  return errorResponse('NOT_FOUND', `${resource} not found`, 404)
+}
+
+export function badRequestResponse(message: string, details?: unknown): NextResponse {
+  return errorResponse('BAD_REQUEST', message, 400, details)
+}
+
+/** The request is well-formed but conflicts with the resource's current state. */
+export function conflictResponse(message: string, details?: unknown): NextResponse {
+  return errorResponse('CONFLICT', message, 409, details)
+}
+
+export function adminValidationErrorResponse(error: z.ZodError): NextResponse {
+  return badRequestResponse(
+    getValidationErrorMessage(error, 'Invalid request body'),
+    serializeZodIssues(error)
+  )
+}
+
+export function adminInvalidJsonResponse(): NextResponse {
+  return badRequestResponse('Request body must be valid JSON')
+}
+
+export function internalErrorResponse(message = 'Internal server error'): NextResponse {
+  return errorResponse('INTERNAL_ERROR', message, 500)
+}
+
+export function notConfiguredResponse(): NextResponse {
+  return errorResponse(
+    'NOT_CONFIGURED',
+    'Admin API is not configured. Set ADMIN_API_KEY environment variable.',
+    503
+  )
+}

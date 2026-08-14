@@ -1,0 +1,11 @@
+{
+  "extends": "@sim/tsconfig/library.json",
+  "compilerOptions": {
+    "paths": {
+      "@sim/db": ["./index.ts"],
+      "@sim/db/*": ["./*"]
+    }
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "scripts"]
+}

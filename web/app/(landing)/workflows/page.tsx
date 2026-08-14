@@ -1,7 +1,7 @@
-import { CapabilityPage } from '@/lib/lingxi/components/capability-page'
+import { notFound } from 'next/navigation'
 
-export const metadata = { title: '工作流 · 未接入' }
+export const metadata = { title: 'Not Found' }
 
 export default function Page() {
-  return <CapabilityPage title='工作流 · 未接入' />
+  notFound()
 }

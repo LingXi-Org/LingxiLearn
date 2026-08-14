@@ -1,0 +1,71 @@
+import type { Content, ToolConfig } from '@google/genai'
+import type { FunctionCallResponse, ModelPricing, TimeSegment } from '@/providers/types'
+
+/**
+ * Usage metadata from Gemini responses.
+ *
+ * `cachedContentTokenCount` is a SUBSET of `promptTokenCount`, not a sibling of
+ * it — Gemini counts implicitly cached prompt tokens inside the prompt total and
+ * only discounts their rate. Anything pricing this usage must subtract it out
+ * before charging the base input rate.
+ */
+export interface GeminiUsage {
+  promptTokenCount: number
+  candidatesTokenCount: number
+  cachedContentTokenCount: number
+  totalTokenCount: number
+}
+
+/**
+ * Parsed function call from Gemini response
+ */
+interface ParsedFunctionCall {
+  name: string
+  args: Record<string, unknown>
+}
+
+/**
+ * Accumulated state during tool execution loop
+ */
+export interface ExecutionState {
+  contents: Content[]
+  /** `input` excludes `cacheRead`; `total` counts both, plus output. */
+  tokens: { input: number; output: number; cacheRead: number; total: number }
+  cost: { input: number; output: number; total: number; pricing: ModelPricing }
+  toolCalls: FunctionCallResponse[]
+  toolResults: Record<string, unknown>[]
+  iterationCount: number
+  modelTime: number
+  toolsTime: number
+  timeSegments: TimeSegment[]
+  usedForcedTools: string[]
+  currentToolConfig: ToolConfig | undefined
+}
+
+/**
+ * Result from forced tool usage check
+ */
+interface ForcedToolResult {
+  hasUsedForcedTool: boolean
+  usedForcedTools: string[]
+  nextToolConfig: ToolConfig | undefined
+}
+
+/**
+ * Configuration for creating a Gemini client
+ */
+interface GeminiClientConfig {
+  /** For Google Gemini API */
+  apiKey?: string
+  /** For Vertex AI */
+  vertexai?: boolean
+  project?: string
+  location?: string
+  /** OAuth access token for Vertex AI */
+  accessToken?: string
+}
+
+/**
+ * Provider type for logging and model lookup
+ */
+export type GeminiProviderType = 'google' | 'vertex'

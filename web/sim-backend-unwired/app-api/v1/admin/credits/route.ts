@@ -1,0 +1,249 @@
+/**
+ * POST /api/v1/admin/credits
+ *
+ * Issue credits to a user by user ID or email.
+ *
+ * Body:
+ *   - userId?: string - The user ID to issue credits to
+ *   - email?: string - The user email to issue credits to (alternative to userId)
+ *   - amount: number - The amount of credits to issue (in dollars)
+ *   - reason?: string - Reason for issuing credits (for audit logging)
+ *
+ * Response: AdminSingleResponse<{
+ *   success: true,
+ *   entityType: 'user' | 'organization',
+ *   entityId: string,
+ *   amount: number,
+ *   newCreditBalance: number,
+ *   newUsageLimit: number,
+ * }>
+ *
+ * For Pro users: credits are added to user_stats.credit_balance
+ * For Team users: credits are added to organization.credit_balance
+ * Usage limits are updated accordingly to allow spending the credits.
+ */
+
+import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
+import { db } from '@sim/db'
+import { organization, subscription, user, userStats } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { generateShortId } from '@sim/utils/id'
+import { normalizeEmail } from '@sim/utils/string'
+import { and, eq, inArray } from 'drizzle-orm'
+import { adminV1IssueCreditsContract } from '@/lib/api/contracts/v1/admin'
+import { parseRequest } from '@/lib/api/server'
+import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
+import { addCredits } from '@/lib/billing/credits/balance'
+import { setUsageLimitForCredits } from '@/lib/billing/credits/purchase'
+import { isPaid } from '@/lib/billing/plan-helpers'
+import {
+  ENTITLED_SUBSCRIPTION_STATUSES,
+  getEffectiveSeats,
+  isOrgScopedSubscription,
+} from '@/lib/billing/subscriptions/utils'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { withAdminAuth } from '@/app/api/v1/admin/middleware'
+import {
+  adminInvalidJsonResponse,
+  adminValidationErrorResponse,
+  badRequestResponse,
+  internalErrorResponse,
+  notFoundResponse,
+  singleResponse,
+} from '@/app/api/v1/admin/responses'
+
+const logger = createLogger('AdminCreditsAPI')
+
+export const POST = withRouteHandler(
+  withAdminAuth(async (request) => {
+    const parsed = await parseRequest(
+      adminV1IssueCreditsContract,
+      request,
+      {},
+      {
+        validationErrorResponse: adminValidationErrorResponse,
+        invalidJsonResponse: adminInvalidJsonResponse,
+      }
+    )
+    if (!parsed.success) return parsed.response
+
+    try {
+      const { userId, email, amount, reason } = parsed.data.body
+
+      let resolvedUserId: string
+      let userEmail: string | null = null
+
+      if (userId) {
+        const [userData] = await db
+          .select({ id: user.id, email: user.email })
+          .from(user)
+          .where(eq(user.id, userId))
+          .limit(1)
+
+        if (!userData) {
+          return notFoundResponse('User')
+        }
+        resolvedUserId = userData.id
+        userEmail = userData.email
+      } else {
+        if (!email) {
+          return badRequestResponse('Either userId or email is required')
+        }
+
+        const normalizedEmail = normalizeEmail(email)
+        const [userData] = await db
+          .select({ id: user.id, email: user.email })
+          .from(user)
+          .where(eq(user.email, normalizedEmail))
+          .limit(1)
+
+        if (!userData) {
+          return notFoundResponse('User with email')
+        }
+        resolvedUserId = userData.id
+        userEmail = userData.email
+      }
+
+      const userSubscription = await getHighestPrioritySubscription(resolvedUserId)
+
+      if (!userSubscription || !isPaid(userSubscription.plan)) {
+        return badRequestResponse(
+          'User must have an active Pro, Team, or Enterprise subscription to receive credits'
+        )
+      }
+
+      let entityType: 'user' | 'organization'
+      let entityId: string
+      const plan = userSubscription.plan
+      let seats: number | null = null
+
+      // Route admin credits to the subscription's entity (org if org-scoped).
+      if (isOrgScopedSubscription(userSubscription, resolvedUserId)) {
+        entityType = 'organization'
+        entityId = userSubscription.referenceId
+
+        const [orgExists] = await db
+          .select({ id: organization.id })
+          .from(organization)
+          .where(eq(organization.id, entityId))
+          .limit(1)
+
+        if (!orgExists) {
+          return notFoundResponse('Organization')
+        }
+
+        const [subData] = await db
+          .select()
+          .from(subscription)
+          .where(
+            and(
+              eq(subscription.referenceId, entityId),
+              inArray(subscription.status, ENTITLED_SUBSCRIPTION_STATUSES)
+            )
+          )
+          .limit(1)
+
+        seats = getEffectiveSeats(subData)
+      } else {
+        entityType = 'user'
+        entityId = resolvedUserId
+
+        const [existingStats] = await db
+          .select({ id: userStats.id })
+          .from(userStats)
+          .where(eq(userStats.userId, entityId))
+          .limit(1)
+
+        if (!existingStats) {
+          await db.insert(userStats).values({
+            id: generateShortId(),
+            userId: entityId,
+          })
+        }
+      }
+
+      await addCredits(entityType, entityId, amount)
+
+      let newCreditBalance: number
+      if (entityType === 'organization') {
+        const [orgData] = await db
+          .select({ creditBalance: organization.creditBalance })
+          .from(organization)
+          .where(eq(organization.id, entityId))
+          .limit(1)
+        newCreditBalance = Number.parseFloat(orgData?.creditBalance || '0')
+      } else {
+        const [stats] = await db
+          .select({ creditBalance: userStats.creditBalance })
+          .from(userStats)
+          .where(eq(userStats.userId, entityId))
+          .limit(1)
+        newCreditBalance = Number.parseFloat(stats?.creditBalance || '0')
+      }
+
+      await setUsageLimitForCredits(entityType, entityId, plan, seats, newCreditBalance)
+
+      let newUsageLimit: number
+      if (entityType === 'organization') {
+        const [orgData] = await db
+          .select({ orgUsageLimit: organization.orgUsageLimit })
+          .from(organization)
+          .where(eq(organization.id, entityId))
+          .limit(1)
+        newUsageLimit = Number.parseFloat(orgData?.orgUsageLimit || '0')
+      } else {
+        const [stats] = await db
+          .select({ currentUsageLimit: userStats.currentUsageLimit })
+          .from(userStats)
+          .where(eq(userStats.userId, entityId))
+          .limit(1)
+        newUsageLimit = Number.parseFloat(stats?.currentUsageLimit || '0')
+      }
+
+      logger.info('Admin API: Issued credits', {
+        resolvedUserId,
+        userEmail,
+        entityType,
+        entityId,
+        amount,
+        newCreditBalance,
+        newUsageLimit,
+        reason: reason || 'No reason provided',
+      })
+
+      recordAudit({
+        actorId: 'admin-api',
+        action: AuditAction.CREDIT_ISSUED,
+        resourceType: AuditResourceType.BILLING,
+        resourceId: entityId,
+        description: `Admin API issued $${Number(amount).toFixed(2)} credits to ${entityType} ${entityId}`,
+        metadata: {
+          targetUserId: resolvedUserId,
+          ...(entityType === 'organization'
+            ? { targetOrgId: entityId, organizationId: entityId }
+            : {}),
+          entityType,
+          amount,
+          currency: 'usd',
+          reason: reason || null,
+          newCreditBalance,
+        },
+        request,
+      })
+
+      return singleResponse({
+        success: true,
+        userId: resolvedUserId,
+        userEmail,
+        entityType,
+        entityId,
+        amount,
+        newCreditBalance,
+        newUsageLimit,
+      })
+    } catch (error) {
+      logger.error('Admin API: Failed to issue credits', { error })
+      return internalErrorResponse('Failed to issue credits')
+    }
+  })
+)

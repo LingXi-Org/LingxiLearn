@@ -1,0 +1,416 @@
+import { CursorIcon } from '@/components/icons'
+import type { BlockConfig, BlockMeta } from '@/blocks/types'
+import { AuthMode, IntegrationType } from '@/blocks/types'
+import { createVersionedToolSelector } from '@/blocks/utils'
+import type { CursorResponse } from '@/tools/cursor/types'
+
+export const CursorBlock: BlockConfig<CursorResponse> = {
+  type: 'cursor',
+  name: 'Cursor (Legacy)',
+  description: 'Launch and manage Cursor cloud agents to work on GitHub repositories',
+  longDescription:
+    'Interact with Cursor Cloud Agents API to launch AI agents that can work on your GitHub repositories. Supports launching agents, adding follow-up instructions, checking status, viewing conversations, and managing agent lifecycle.',
+  docsLink: 'https://docs.sim.ai/integrations/cursor',
+  category: 'tools',
+  integrationType: IntegrationType.DevOps,
+  bgColor: '#1E1E1E',
+  icon: CursorIcon,
+  canvasPresentation: {
+    defaultTitle: 'Cursor',
+    sentences: {
+      byOperation: {
+        cursor_launch_agent: [
+          { text: 'Launch an agent on', field: 'repository', core: true },
+          { text: 'to', field: 'promptText' },
+        ],
+        cursor_add_followup: [
+          { text: 'Send follow-up', field: 'followupPromptText', core: true },
+          { text: 'to agent', field: 'agentId', core: true },
+        ],
+        cursor_get_agent: [{ text: 'Check the status of agent', field: 'agentId', core: true }],
+        cursor_get_conversation: [
+          { text: 'Read the conversation history of agent', field: 'agentId', core: true },
+        ],
+        cursor_list_agents: [
+          'List agents',
+          { text: ', for pull request', field: 'prUrl' },
+          { text: ', up to', field: 'limit', after: 'results' },
+        ],
+        cursor_stop_agent: [{ text: 'Stop agent', field: 'agentId', core: true }],
+        cursor_delete_agent: [{ text: 'Permanently delete agent', field: 'agentId', core: true }],
+        cursor_list_artifacts: [
+          { text: 'List artifacts produced by agent', field: 'agentId', core: true },
+        ],
+        cursor_download_artifact: [
+          { text: 'Download artifact', field: 'path', core: true },
+          { text: 'from agent', field: 'agentId', core: true },
+        ],
+        cursor_list_models: ['List models available for launching agents'],
+        cursor_list_repositories: ['List accessible GitHub repositories'],
+        cursor_get_api_key_info: ['Read details of the API key in use'],
+      },
+    },
+  },
+  authMode: AuthMode.ApiKey,
+  hideFromToolbar: true,
+  sunset: { status: 'legacy', replacedBy: 'cursor_v2' },
+  subBlocks: [
+    {
+      id: 'operation',
+      title: 'Operation',
+      type: 'dropdown',
+      options: [
+        { label: 'Launch Agent', id: 'cursor_launch_agent' },
+        { label: 'Add Follow-up', id: 'cursor_add_followup' },
+        { label: 'Get Agent Status', id: 'cursor_get_agent' },
+        { label: 'Get Conversation', id: 'cursor_get_conversation' },
+        { label: 'List Agents', id: 'cursor_list_agents' },
+        { label: 'Stop Agent', id: 'cursor_stop_agent' },
+        { label: 'Delete Agent', id: 'cursor_delete_agent' },
+        { label: 'List Artifacts', id: 'cursor_list_artifacts' },
+        { label: 'Download Artifact', id: 'cursor_download_artifact' },
+        { label: 'List Models', id: 'cursor_list_models' },
+        { label: 'List Repositories', id: 'cursor_list_repositories' },
+        { label: 'Get API Key Info', id: 'cursor_get_api_key_info' },
+      ],
+      value: () => 'cursor_launch_agent',
+    },
+    {
+      id: 'repository',
+      title: 'Repository URL',
+      type: 'short-input',
+      placeholder: 'https://github.com/your-org/your-repo',
+      condition: { field: 'operation', value: 'cursor_launch_agent' },
+      required: true,
+    },
+    {
+      id: 'ref',
+      title: 'Branch/Ref',
+      type: 'short-input',
+      placeholder: 'main (optional)',
+      condition: { field: 'operation', value: 'cursor_launch_agent' },
+      mode: 'advanced',
+    },
+    {
+      id: 'promptText',
+      title: 'Prompt',
+      type: 'long-input',
+      placeholder: 'Describe the task for the agent...',
+      condition: { field: 'operation', value: 'cursor_launch_agent' },
+      required: true,
+    },
+    {
+      id: 'promptImages',
+      title: 'Prompt Images',
+      type: 'long-input',
+      placeholder: '[{"data": "base64...", "dimension": {"width": 1024, "height": 768}}]',
+      condition: { field: 'operation', value: ['cursor_launch_agent', 'cursor_add_followup'] },
+      mode: 'advanced',
+    },
+    {
+      id: 'model',
+      title: 'Model',
+      type: 'short-input',
+      placeholder: 'Auto-selection by default',
+      condition: { field: 'operation', value: 'cursor_launch_agent' },
+      mode: 'advanced',
+    },
+    {
+      id: 'branchName',
+      title: 'Branch Name',
+      type: 'short-input',
+      placeholder: 'Custom branch name (optional)',
+      condition: { field: 'operation', value: 'cursor_launch_agent' },
+      mode: 'advanced',
+    },
+    {
+      id: 'autoCreatePr',
+      title: 'Auto Create PR',
+      type: 'switch',
+      condition: { field: 'operation', value: 'cursor_launch_agent' },
+    },
+    {
+      id: 'openAsCursorGithubApp',
+      title: 'Open as Cursor GitHub App',
+      type: 'switch',
+      condition: { field: 'operation', value: 'cursor_launch_agent' },
+      mode: 'advanced',
+    },
+    {
+      id: 'skipReviewerRequest',
+      title: 'Skip Reviewer Request',
+      type: 'switch',
+      condition: { field: 'operation', value: 'cursor_launch_agent' },
+      mode: 'advanced',
+    },
+    {
+      id: 'agentId',
+      title: 'Agent ID',
+      type: 'short-input',
+      placeholder: 'e.g., bc_abc123',
+      condition: {
+        field: 'operation',
+        value: [
+          'cursor_get_agent',
+          'cursor_get_conversation',
+          'cursor_add_followup',
+          'cursor_stop_agent',
+          'cursor_delete_agent',
+          'cursor_list_artifacts',
+          'cursor_download_artifact',
+        ],
+      },
+      required: true,
+    },
+    {
+      id: 'path',
+      title: 'Artifact Path',
+      type: 'short-input',
+      placeholder: '/opt/cursor/artifacts/screenshot.png',
+      condition: { field: 'operation', value: 'cursor_download_artifact' },
+      required: true,
+    },
+    {
+      id: 'followupPromptText',
+      title: 'Follow-up Prompt',
+      type: 'long-input',
+      placeholder: 'Additional instructions for the agent...',
+      condition: { field: 'operation', value: 'cursor_add_followup' },
+      required: true,
+    },
+    {
+      id: 'prUrl',
+      title: 'PR URL Filter',
+      type: 'short-input',
+      placeholder: 'Filter by pull request URL (optional)',
+      condition: { field: 'operation', value: 'cursor_list_agents' },
+      mode: 'advanced',
+    },
+    {
+      id: 'limit',
+      title: 'Limit',
+      type: 'short-input',
+      placeholder: '20 (default, max 100)',
+      condition: { field: 'operation', value: 'cursor_list_agents' },
+      mode: 'advanced',
+    },
+    {
+      id: 'cursor',
+      title: 'Pagination Cursor',
+      type: 'short-input',
+      placeholder: 'Cursor from previous response',
+      condition: { field: 'operation', value: 'cursor_list_agents' },
+      mode: 'advanced',
+    },
+    {
+      id: 'apiKey',
+      title: 'API Key',
+      type: 'short-input',
+      placeholder: 'Enter Cursor API Key',
+      password: true,
+      required: true,
+    },
+  ],
+  tools: {
+    access: [
+      'cursor_list_agents',
+      'cursor_get_agent',
+      'cursor_get_conversation',
+      'cursor_launch_agent',
+      'cursor_add_followup',
+      'cursor_stop_agent',
+      'cursor_delete_agent',
+      'cursor_list_artifacts',
+      'cursor_download_artifact',
+      'cursor_list_models',
+      'cursor_list_repositories',
+      'cursor_get_api_key_info',
+    ],
+    config: {
+      tool: (params) => params.operation || 'cursor_launch_agent',
+    },
+  },
+  inputs: {
+    operation: { type: 'string', description: 'Operation to perform' },
+    repository: { type: 'string', description: 'GitHub repository URL' },
+    ref: { type: 'string', description: 'Branch, tag, or commit reference' },
+    promptText: { type: 'string', description: 'Instruction text for the agent' },
+    followupPromptText: { type: 'string', description: 'Follow-up instruction text for the agent' },
+    promptImages: {
+      type: 'string',
+      description: 'JSON array of image objects with base64 data and dimensions',
+    },
+    model: { type: 'string', description: 'Model to use (empty for auto-selection)' },
+    branchName: { type: 'string', description: 'Custom branch name' },
+    autoCreatePr: { type: 'boolean', description: 'Auto-create PR when done' },
+    openAsCursorGithubApp: { type: 'boolean', description: 'Open PR as Cursor GitHub App' },
+    skipReviewerRequest: { type: 'boolean', description: 'Skip reviewer request' },
+    agentId: { type: 'string', description: 'Agent identifier' },
+    prUrl: { type: 'string', description: 'Filter agents by pull request URL' },
+    limit: { type: 'number', description: 'Number of results to return' },
+    cursor: { type: 'string', description: 'Pagination cursor' },
+    path: { type: 'string', description: 'Absolute path of the artifact to download' },
+    apiKey: { type: 'string', description: 'Cursor API key' },
+  },
+  outputs: {
+    content: { type: 'string', description: 'Human-readable response content' },
+    metadata: { type: 'json', description: 'Response metadata' },
+  },
+}
+
+export const CursorV2Block: BlockConfig<CursorResponse> = {
+  ...CursorBlock,
+  sunset: undefined,
+  type: 'cursor_v2',
+  name: 'Cursor',
+  description: 'Launch and manage Cursor cloud agents to work on GitHub repositories',
+  longDescription:
+    'Interact with Cursor Cloud Agents API to launch AI agents that can work on your GitHub repositories. Supports launching agents, adding follow-up instructions, checking status, viewing conversations, and managing agent lifecycle.',
+  hideFromToolbar: false,
+  tools: {
+    ...CursorBlock.tools,
+    access: [
+      'cursor_list_agents_v2',
+      'cursor_get_agent_v2',
+      'cursor_get_conversation_v2',
+      'cursor_launch_agent_v2',
+      'cursor_add_followup_v2',
+      'cursor_stop_agent_v2',
+      'cursor_delete_agent_v2',
+      'cursor_list_artifacts_v2',
+      'cursor_download_artifact_v2',
+      'cursor_list_models_v2',
+      'cursor_list_repositories_v2',
+      'cursor_get_api_key_info_v2',
+    ],
+    config: {
+      tool: createVersionedToolSelector({
+        baseToolSelector: (params) => params.operation || 'cursor_launch_agent',
+        suffix: '_v2',
+        fallbackToolId: 'cursor_launch_agent_v2',
+      }),
+    },
+  },
+  outputs: {
+    id: { type: 'string', description: 'Agent identifier' },
+    url: { type: 'string', description: 'Agent URL (launch operation)' },
+    name: { type: 'string', description: 'Agent name' },
+    status: { type: 'string', description: 'Agent status' },
+    source: { type: 'json', description: 'Agent source repository info' },
+    target: { type: 'json', description: 'Agent target branch/PR info' },
+    summary: { type: 'string', description: 'Agent summary' },
+    createdAt: { type: 'string', description: 'Creation timestamp (agent or API key)' },
+    agents: { type: 'json', description: 'Array of agent objects (list operation)' },
+    nextCursor: { type: 'string', description: 'Pagination cursor (list operation)' },
+    messages: { type: 'json', description: 'Conversation messages (get conversation operation)' },
+    artifacts: { type: 'json', description: 'List of artifact files (list artifacts operation)' },
+    file: { type: 'file', description: 'Downloaded artifact file (download artifact operation)' },
+    models: { type: 'json', description: 'Available model names (list models operation)' },
+    repositories: {
+      type: 'json',
+      description:
+        'Accessible repositories [{owner, name, repository}] (list repositories operation)',
+    },
+    apiKeyName: { type: 'string', description: 'API key name (api key info operation)' },
+    userEmail: { type: 'string', description: 'Key owner email (api key info operation)' },
+  },
+}
+
+export const CursorBlockMeta = {
+  tags: ['agentic', 'automation'],
+  url: 'https://cursor.com',
+  templates: [
+    {
+      icon: CursorIcon,
+      title: 'Cursor cloud agent launcher',
+      prompt:
+        'Build a workflow that takes a feature description and a GitHub repository, launches a Cursor cloud agent with structured instructions, polls until the agent finishes, captures the generated pull request link, and posts a summary to Slack so the team can review.',
+      modules: ['agent', 'workflows'],
+      category: 'engineering',
+      tags: ['engineering', 'agentic', 'automation'],
+      alsoIntegrations: ['slack'],
+    },
+    {
+      icon: CursorIcon,
+      title: 'Cursor issue-to-PR pipeline',
+      prompt:
+        'Create a workflow that fires when a GitHub issue is labeled "auto-fix", crafts a precise prompt from the issue description, launches a Cursor cloud agent on the repository, monitors progress, and comments on the issue with the resulting pull request and conversation summary.',
+      modules: ['agent', 'workflows'],
+      category: 'engineering',
+      tags: ['engineering', 'agentic', 'automation'],
+      alsoIntegrations: ['github'],
+    },
+    {
+      icon: CursorIcon,
+      title: 'Cursor agent fleet monitor',
+      prompt:
+        'Build a scheduled workflow that runs every fifteen minutes, lists all active Cursor cloud agents, logs status, runtime, and repository to a tracking table, and posts a daily Slack summary of completed, failing, and long-running agents.',
+      modules: ['scheduled', 'tables', 'agent', 'workflows'],
+      category: 'engineering',
+      tags: ['engineering', 'monitoring', 'agentic'],
+      alsoIntegrations: ['slack'],
+    },
+    {
+      icon: CursorIcon,
+      title: 'Cursor test-fix delegator',
+      prompt:
+        'Build a workflow triggered by a failing GitHub Actions test run that extracts the failing test name and error, launches a targeted Cursor cloud agent to fix only that test, downloads the artifact diff when ready, and replies on the failed run with the proposed patch.',
+      modules: ['agent', 'workflows'],
+      category: 'engineering',
+      tags: ['engineering', 'agentic', 'automation'],
+      alsoIntegrations: ['github'],
+    },
+    {
+      icon: CursorIcon,
+      title: 'Cursor refactor follow-up loop',
+      prompt:
+        'Create a workflow that picks up review comments on a Cursor-authored pull request, formulates each comment as a follow-up instruction, sends them to the originating Cursor cloud agent, and waits for the updated diff before re-requesting review.',
+      modules: ['agent', 'workflows'],
+      category: 'engineering',
+      tags: ['engineering', 'agentic', 'automation'],
+      alsoIntegrations: ['github'],
+    },
+    {
+      icon: CursorIcon,
+      title: 'Cursor agent conversation archiver',
+      prompt:
+        'Build a scheduled daily workflow that lists completed Cursor cloud agents, fetches each conversation history, stores the transcripts and produced artifacts as files, and updates a tracking table with prompts, durations, and outcomes for retrospective analysis.',
+      modules: ['scheduled', 'files', 'tables', 'agent', 'workflows'],
+      category: 'engineering',
+      tags: ['engineering', 'agentic', 'analysis'],
+    },
+    {
+      icon: CursorIcon,
+      title: 'Cursor stuck-agent cleaner',
+      prompt:
+        'Create a scheduled workflow that runs hourly, lists Cursor cloud agents, detects agents stuck in the same state longer than a configurable threshold, stops or deletes them based on rules, and posts a Slack report of the cleanup actions taken.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'engineering',
+      tags: ['engineering', 'devops', 'monitoring'],
+      alsoIntegrations: ['slack'],
+    },
+  ],
+  skills: [
+    {
+      name: 'launch-coding-agent',
+      description:
+        'Launch a Cursor cloud agent on a GitHub repository with a clear task prompt and report the agent id and starting status.',
+      content:
+        '# Launch a Cursor Coding Agent\n\nKick off an autonomous Cursor agent to work on a repo.\n\n## Steps\n1. Confirm the target repository and the task to perform.\n2. Write a precise prompt: what to change, constraints, and acceptance criteria.\n3. Launch the agent with the chosen model and repository.\n4. Capture the agent id and initial status.\n\n## Output\nA confirmation with the agent id, repository, and the task prompt it was given.',
+    },
+    {
+      name: 'track-agent-progress',
+      description:
+        'Poll a Cursor agent for status and conversation updates and summarize what it has done so far.',
+      content:
+        '# Track Cursor Agent Progress\n\nMonitor a running Cursor agent.\n\n## Steps\n1. Get the agent status for the given agent id.\n2. Pull the conversation to see the latest actions and reasoning.\n3. If the agent is finished, list its artifacts; if blocked, identify why.\n\n## Output\nA status summary describing progress, current state, and any blockers or produced artifacts.',
+    },
+    {
+      name: 'send-agent-followup',
+      description:
+        'Send a follow-up instruction to an in-progress Cursor agent to refine or redirect its work.',
+      content:
+        '# Send a Cursor Agent Follow-up\n\nGuide an active agent with additional instructions.\n\n## Steps\n1. Confirm the agent id and review its recent conversation.\n2. Compose a clear follow-up message addressing what to change or add.\n3. Add the follow-up to the agent.\n4. Note that the agent has resumed work.\n\n## Output\nA confirmation that the follow-up was delivered, with the instruction sent.',
+    },
+  ],
+} as const satisfies BlockMeta

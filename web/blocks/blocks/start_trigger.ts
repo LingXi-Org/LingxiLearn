@@ -1,0 +1,47 @@
+import { StartIcon } from '@/components/icons'
+import type { BlockConfig } from '@/blocks/types'
+
+export const StartTriggerBlock: BlockConfig = {
+  type: 'start_trigger',
+  triggerAllowed: true,
+  name: 'Start',
+  description: 'Unified workflow entry point for chat, manual and API runs',
+  longDescription:
+    'Collect structured inputs and power manual runs, API executions, and deployed chat experiences from a single start block.',
+  bestPractices: `
+  - The Start block always exposes "input", "conversationId", and "files" fields for chat compatibility.
+  - Add custom input format fields to collect additional structured data.
+  - Test manual runs by pre-filling default values inside the input format fields.
+  `,
+  category: 'triggers',
+  bgColor: '#34B5FF',
+  docsLink: 'https://docs.sim.ai/workflows/triggers/start',
+  icon: StartIcon,
+  hideFromToolbar: false,
+  subBlocks: [
+    {
+      id: 'inputFormat',
+      title: 'Inputs',
+      type: 'input-format',
+      description: 'Add custom fields beyond the built-in input, conversationId, and files fields.',
+    },
+    {
+      id: 'runMetadata',
+      title: 'Add run metadata',
+      type: 'switch',
+      mode: 'advanced',
+      defaultValue: false,
+      description:
+        'Expose trusted, server-injected run metadata under <start.metadata>: userEmail, workspaceId, workflowId, executionId, executionType, executionMode, startTime. Fields describe the invoking run — inside a custom block they identify the calling user and workflow.',
+    },
+  ],
+  tools: {
+    access: [],
+  },
+  inputs: {},
+  outputs: {},
+  triggers: {
+    enabled: true,
+    available: ['chat', 'manual', 'api'],
+  },
+}

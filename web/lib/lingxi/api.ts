@@ -42,8 +42,88 @@ export interface LingxiAttachmentRef {
   size: number
 }
 
+export interface LingxiTaskContextOptions {
+  resourceRefs?: Array<Record<string, unknown>>
+  skillIds?: string[]
+}
+
+export interface WorkspaceFileItem {
+  id: string
+  workspaceId?: string
+  name: string
+  path?: string
+  url?: string
+  size: number
+  type?: string
+  mimeType?: string
+  folderId?: string | null
+  archived?: boolean
+  readOnly?: boolean
+  metadata?: Record<string, unknown>
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface WorkspaceFolderItem {
+  id: string
+  name: string
+  parentId?: string | null
+  path?: string
+  archived?: boolean
+}
+
+export interface WorkspaceTableItem {
+  id: string
+  name: string
+  description?: string
+  schema?: { columns: Array<Record<string, any>> }
+  columns?: Array<Record<string, any>>
+  rowCount?: number
+  totalRows?: number
+  archived?: boolean
+}
+
+export interface KnowledgeBaseItem {
+  id: string
+  name: string
+  description?: string
+  documentCount?: number
+  archived?: boolean
+}
+
+export interface KnowledgeDocumentItem {
+  id: string
+  knowledgeBaseId: string
+  name: string
+  mimeType?: string
+  content?: string
+  archived?: boolean
+  readOnly?: boolean
+  metadata?: Record<string, unknown>
+}
+
 let authenticationFailureHandler: (() => void) | null = null
 let sessionRefreshHandler: (() => void | Promise<void>) | null = null
+export type AccessTokenProvider = () =>
+  | string
+  | null
+  | undefined
+  | Promise<string | null | undefined>
+let accessTokenProvider: AccessTokenProvider | null = null
+
+export function setAccessTokenProvider(provider: AccessTokenProvider | null): () => void {
+  const previous = accessTokenProvider
+  accessTokenProvider = provider
+  return () => {
+    accessTokenProvider = previous
+  }
+}
+
+export function setAccessTokenRefreshHandler(
+  handler: (() => void | Promise<void>) | null
+): () => void {
+  return setSessionRefreshHandler(handler)
+}
 
 export function setAuthenticationFailureHandler(handler: (() => void) | null): () => void {
   const previous = authenticationFailureHandler
@@ -53,9 +133,7 @@ export function setAuthenticationFailureHandler(handler: (() => void) | null): (
   }
 }
 
-export function setSessionRefreshHandler(
-  handler: (() => void | Promise<void>) | null
-): () => void {
+export function setSessionRefreshHandler(handler: (() => void | Promise<void>) | null): () => void {
   const previous = sessionRefreshHandler
   sessionRefreshHandler = handler
   return () => {
@@ -70,6 +148,10 @@ function apiUrl(path: string): string {
 async function authorizedFetch(url: string, init?: RequestInit): Promise<Response> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const headers = new Headers(init?.headers)
+    if (accessTokenProvider && !headers.has('Authorization')) {
+      const token = await accessTokenProvider()
+      if (token) headers.set('Authorization', `Bearer ${token}`)
+    }
     const response = await fetch(url, { ...init, headers, credentials: 'include' })
     if (response.status !== 401 || attempt > 0 || !sessionRefreshHandler) return response
     try {
@@ -114,6 +196,264 @@ export const api = {
 
   skills: () => request<{ skills: NativeSkill[] }>('/skills'),
 
+  workspace: () =>
+    request<{ workspace: Record<string, any>; data: Record<string, any> }>('/workspaces/lingxi'),
+
+  updateWorkspace: (patch: { name?: string; appearance?: Record<string, any> }) =>
+    request<{ workspace: Record<string, any>; data: Record<string, any> }>('/workspaces/lingxi', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  workspaceFolders: (scope: 'active' | 'archived' = 'active') =>
+    request<{ folders: WorkspaceFolderItem[] }>(`/workspaces/lingxi/files/folders?scope=${scope}`),
+
+  createWorkspaceFolder: (name: string, parentId?: string | null) =>
+    request<{ folder: WorkspaceFolderItem }>('/workspaces/lingxi/files/folders', {
+      method: 'POST',
+      body: JSON.stringify({ name, parentId: parentId ?? null }),
+    }),
+
+  updateWorkspaceFolder: (folderId: string, body: { name?: string; parentId?: string | null }) =>
+    request<{ folder: WorkspaceFolderItem }>(
+      `/workspaces/lingxi/files/folders/${encodeURIComponent(folderId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }
+    ),
+
+  archiveWorkspaceFolder: (folderId: string) =>
+    request<{ success: boolean }>(
+      `/workspaces/lingxi/files/folders/${encodeURIComponent(folderId)}`,
+      { method: 'DELETE' }
+    ),
+
+  restoreWorkspaceFolder: (folderId: string) =>
+    request<{ folder: WorkspaceFolderItem }>(
+      `/workspaces/lingxi/files/folders/${encodeURIComponent(folderId)}/restore`,
+      { method: 'POST' }
+    ),
+
+  moveWorkspaceItems: (fileIds: string[], folderIds: string[], targetFolderId?: string | null) =>
+    request<{ movedItems: { files: number; folders: number } }>('/workspaces/lingxi/files/move', {
+      method: 'POST',
+      body: JSON.stringify({ fileIds, folderIds, targetFolderId: targetFolderId ?? null }),
+    }),
+
+  workspaceFiles: (scope: 'active' | 'archived' = 'active', folderId?: string | null) =>
+    request<{ files: WorkspaceFileItem[] }>(
+      `/workspaces/lingxi/files?scope=${scope}${folderId ? `&folderId=${encodeURIComponent(folderId)}` : ''}`
+    ),
+
+  createWorkspaceFile: (
+    name: string,
+    content: string,
+    type?: string,
+    encoding?: 'utf-8' | 'base64',
+    folderId?: string | null
+  ) =>
+    request<{ file: WorkspaceFileItem }>('/workspaces/lingxi/files', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        content,
+        type: type || 'text/plain',
+        contentType: type || 'text/plain',
+        encoding: encoding || 'utf-8',
+        folderId: folderId ?? null,
+      }),
+    }),
+
+  workspaceFile: (fileId: string) =>
+    request<{ file: WorkspaceFileItem }>(`/workspaces/lingxi/files/${encodeURIComponent(fileId)}`),
+
+  workspaceFileContent: (fileId: string) =>
+    request<{ content: string; encoding: string; file: WorkspaceFileItem }>(
+      `/workspaces/lingxi/files/${encodeURIComponent(fileId)}/content`
+    ),
+
+  updateWorkspaceFileContent: (fileId: string, content: string) =>
+    request<{ file: WorkspaceFileItem }>(
+      `/workspaces/lingxi/files/${encodeURIComponent(fileId)}/content`,
+      { method: 'PUT', body: JSON.stringify({ content }) }
+    ),
+
+  archiveWorkspaceFile: (fileId: string) =>
+    request<{ success: boolean }>(`/workspaces/lingxi/files/${encodeURIComponent(fileId)}`, {
+      method: 'DELETE',
+    }),
+
+  workspaceTables: () =>
+    request<{ tables: WorkspaceTableItem[]; data: any }>('/table?workspaceId=lingxi'),
+
+  createWorkspaceTable: (name: string, columns = [{ name: '内容', type: 'string' }]) =>
+    request<{ data: { table: WorkspaceTableItem } }>('/table', {
+      method: 'POST',
+      body: JSON.stringify({ workspaceId: 'lingxi', name, schema: { columns } }),
+    }),
+
+  workspaceTable: (tableId: string) =>
+    request<{ data: { table: WorkspaceTableItem } }>(
+      `/table/${encodeURIComponent(tableId)}?workspaceId=lingxi`
+    ),
+
+  workspaceTableRows: (tableId: string) =>
+    request<{ data: { rows: Array<Record<string, any>>; totalCount: number } }>(
+      `/table/${encodeURIComponent(tableId)}/rows`
+    ),
+
+  createWorkspaceRows: (tableId: string, rows: Array<Record<string, any>>) =>
+    request<{ data: { rows: Array<Record<string, any>> } }>(
+      `/table/${encodeURIComponent(tableId)}/rows`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ rows }),
+      }
+    ),
+
+  updateWorkspaceRow: (tableId: string, rowId: string, data: Record<string, any>) =>
+    request<{ data: { row: Record<string, any> } }>(
+      `/table/${encodeURIComponent(tableId)}/rows/${encodeURIComponent(rowId)}`,
+      { method: 'PATCH', body: JSON.stringify({ data }) }
+    ),
+
+  workspaceKnowledge: async () => {
+    const result = await request<{
+      knowledgeBases?: KnowledgeBaseItem[]
+      data?: KnowledgeBaseItem[]
+    }>('/knowledge')
+    const knowledgeBases = result.knowledgeBases ?? result.data ?? []
+    return { knowledgeBases, data: knowledgeBases }
+  },
+
+  createKnowledgeBase: (name: string, description = '') =>
+    request<{ data: KnowledgeBaseItem; knowledgeBase: KnowledgeBaseItem }>('/knowledge', {
+      method: 'POST',
+      body: JSON.stringify({ name, description }),
+    }),
+
+  knowledgeDocuments: async (baseId: string) => {
+    const result = await request<{
+      documents?: KnowledgeDocumentItem[]
+      data?: KnowledgeDocumentItem[] | { documents?: KnowledgeDocumentItem[] }
+    }>(`/knowledge/${encodeURIComponent(baseId)}/documents`)
+    const documents =
+      result.documents ?? (Array.isArray(result.data) ? result.data : result.data?.documents) ?? []
+    return { documents, data: documents }
+  },
+
+  createKnowledgeDocument: (
+    baseId: string,
+    name: string,
+    content: string,
+    mimeType = 'text/plain'
+  ) =>
+    request<{ data: KnowledgeDocumentItem; document: KnowledgeDocumentItem }>(
+      `/knowledge/${encodeURIComponent(baseId)}/documents`,
+      { method: 'POST', body: JSON.stringify({ name, content, mimeType }) }
+    ),
+
+  updateKnowledgeDocument: (baseId: string, documentId: string, content: string) =>
+    request<{ data: KnowledgeDocumentItem; document: KnowledgeDocumentItem }>(
+      `/knowledge/${encodeURIComponent(baseId)}/documents/${encodeURIComponent(documentId)}`,
+      { method: 'PATCH', body: JSON.stringify({ content }) }
+    ),
+
+  logs: () => request<{ data: Array<Record<string, any>> }>('/logs?workspaceId=lingxi'),
+
+  billing: () =>
+    request<{ success: boolean; context: string; data: Record<string, any> }>(
+      '/billing?context=user&includeOrg=false'
+    ),
+
+  billingInvoices: (context: 'user' | 'organization' = 'user') =>
+    request<{
+      success: boolean
+      invoices: Array<Record<string, any>>
+      hasMore: boolean
+    }>(`/billing/invoices?context=${context}`),
+
+  billingPortal: (returnUrl = '/workspace/lingxi/settings/billing') =>
+    request<{ url: string }>('/billing/portal', {
+      method: 'POST',
+      body: JSON.stringify({ context: 'user', returnUrl }),
+    }),
+
+  purchaseCredits: (amount: number) =>
+    request<{ success: boolean; message?: string }>('/billing/credits', {
+      method: 'POST',
+      body: JSON.stringify({ amount, requestId: crypto.randomUUID() }),
+    }),
+
+  switchBillingPlan: (targetPlanName: string, interval: 'month' | 'year' = 'month') =>
+    request<{ success: boolean; plan?: string; interval?: string; message?: string }>(
+      '/billing/switch-plan',
+      { method: 'POST', body: JSON.stringify({ targetPlanName, interval }) }
+    ),
+
+  billingUsageLimits: () =>
+    request<{
+      success: boolean
+      rateLimit: Record<string, any>
+      usage: Record<string, any>
+      storage: Record<string, any>
+    }>('/users/me/usage-limits'),
+
+  v2BillingStatus: (workspaceId = 'lingxi') =>
+    request<{ data: Record<string, any> }>(
+      `/v2/billing/status?workspaceId=${encodeURIComponent(workspaceId)}`
+    ),
+
+  v2BillingLogs: (
+    params: {
+      period?: '1d' | '7d' | '30d' | 'all' | 'custom'
+      startDate?: string
+      endDate?: string
+      source?: string
+      cursor?: string
+      limit?: number
+    } = {}
+  ) => {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries({ workspaceId: 'lingxi', ...params })) {
+      if (value !== undefined && value !== '') query.set(key, String(value))
+    }
+    return request<{ data: Array<Record<string, any>>; nextCursor: string | null }>(
+      `/v2/billing/logs?${query.toString()}`
+    )
+  },
+
+  usageLogs: (period = '30d') =>
+    request<{
+      success: boolean
+      logs: Array<Record<string, any>>
+      summary: { totalCredits: number; bySourceCredits: Record<string, number> }
+      pagination: { nextCursor?: string | null; hasMore: boolean }
+    }>(`/users/me/usage-logs?period=${encodeURIComponent(period)}`),
+
+  userProfile: () => request<{ user: Record<string, any> }>('/users/me/profile'),
+
+  userSettings: () => request<{ data: Record<string, any> }>('/users/me/settings'),
+
+  updateUserSettings: (patch: Record<string, unknown>) =>
+    request<{ success: boolean; data?: Record<string, any> }>('/users/me/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  createSkill: (body: { name: string; description?: string; content?: string; version?: string }) =>
+    request<{ skill: NativeSkill }>('/skills', { method: 'POST', body: JSON.stringify(body) }),
+
+  updateSkill: (skillId: string, body: Record<string, string>) =>
+    request<{ skill: NativeSkill }>(`/skills/${encodeURIComponent(skillId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteSkill: (skillId: string) =>
+    request<{ success: boolean }>(`/skills/${encodeURIComponent(skillId)}`, { method: 'DELETE' }),
+
   createSession: (missionId: string, packId = '') =>
     request<{ id: string; mission_id: string; pack_id: string; status: string }>('/sessions', {
       method: 'POST',
@@ -130,10 +470,19 @@ export const api = {
 
   report: (id: string) => request<Record<string, any>>(`/sessions/${id}/report`),
 
-  createAgentTask: (prompt: string, attachments: LingxiAttachmentRef[] = []) =>
+  createAgentTask: (
+    prompt: string,
+    attachments: LingxiAttachmentRef[] = [],
+    context: LingxiTaskContextOptions = {}
+  ) =>
     request<{ id: string; status: string }>('/agent-tasks', {
       method: 'POST',
-      body: JSON.stringify({ prompt, attachments }),
+      body: JSON.stringify({
+        prompt,
+        attachments,
+        resource_refs: context.resourceRefs ?? [],
+        skill_ids: context.skillIds ?? [],
+      }),
     }),
 
   agentTask: (id: string) => request<AgentTaskSnapshot>(`/agent-tasks/${id}`),
@@ -141,10 +490,20 @@ export const api = {
   agentKnowledgeGraph: (id: string) =>
     request<KnowledgeGraphData>(`/agent-tasks/${id}/knowledge-graph`),
 
-  agentMessage: (taskId: string, message: string, attachments: LingxiAttachmentRef[] = []) =>
+  agentMessage: (
+    taskId: string,
+    message: string,
+    attachments: LingxiAttachmentRef[] = [],
+    context: LingxiTaskContextOptions = {}
+  ) =>
     request<{ status: string }>(`/agent-tasks/${taskId}/messages`, {
       method: 'POST',
-      body: JSON.stringify({ message, attachments }),
+      body: JSON.stringify({
+        message,
+        attachments,
+        resource_refs: context.resourceRefs ?? [],
+        skill_ids: context.skillIds ?? [],
+      }),
     }),
 
   agentTasks: (scope: 'active' | 'archived' = 'active') =>
@@ -159,13 +518,18 @@ export const api = {
       resources?: Array<Record<string, unknown>>
     }
   ) =>
-    request<{ id: string; title: string; is_pinned: boolean; is_unread: boolean; resources: Array<Record<string, unknown>> }>(
-      `/agent-tasks/${taskId}`,
-      { method: 'PATCH', body: JSON.stringify(patch) }
-    ),
+    request<{
+      id: string
+      title: string
+      is_pinned: boolean
+      is_unread: boolean
+      resources: Array<Record<string, unknown>>
+    }>(`/agent-tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   deleteAgentTask: (taskId: string) =>
-    request<{ id: string; deleted_at: string | null }>(`/agent-tasks/${taskId}`, { method: 'DELETE' }),
+    request<{ id: string; deleted_at: string | null }>(`/agent-tasks/${taskId}`, {
+      method: 'DELETE',
+    }),
 
   restoreAgentTask: (taskId: string) =>
     request<{ id: string; deleted_at: null }>(`/agent-tasks/${taskId}/restore`, { method: 'POST' }),
@@ -182,18 +546,21 @@ export const api = {
     for (let index = 0; index < bytes.length; index += 0x8000) {
       binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
     }
-    return request<{ key: string; path: string; filename: string; media_type: string; size: number }>(
-      '/attachments',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          filename: file.name,
-          media_type: file.type || 'application/octet-stream',
-          size: file.size,
-          data: btoa(binary),
-        }),
-      }
-    )
+    return request<{
+      key: string
+      path: string
+      filename: string
+      media_type: string
+      size: number
+    }>('/attachments', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: file.name,
+        media_type: file.type || 'application/octet-stream',
+        size: file.size,
+        data: btoa(binary),
+      }),
+    })
   },
 
   submitAgentQuiz: (taskId: string, submissionId: string, answers: Record<string, unknown>) =>

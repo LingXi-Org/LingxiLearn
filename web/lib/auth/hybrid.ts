@@ -1,0 +1,244 @@
+import { createLogger } from '@sim/logger'
+import type { NextRequest } from 'next/server'
+import { authenticateApiKeyFromHeader, updateApiKeyLastUsed } from '@/lib/api-key/service'
+import { getSession } from '@/lib/auth'
+import { type InternalSandboxProfile, verifyInternalToken } from '@/lib/auth/internal'
+
+const logger = createLogger('HybridAuth')
+
+export const AuthType = {
+  SESSION: 'session',
+  API_KEY: 'api_key',
+  INTERNAL_JWT: 'internal_jwt',
+} as const
+
+export type AuthTypeValue = (typeof AuthType)[keyof typeof AuthType]
+
+const API_KEY_HEADER = 'x-api-key'
+const BEARER_PREFIX = 'Bearer '
+
+/**
+ * Lightweight header-only check for whether a request carries external API credentials.
+ * Does NOT validate the credentials — only inspects headers to classify the request
+ * as programmatic API traffic vs interactive session traffic.
+ */
+export function hasExternalApiCredentials(headers: Headers): boolean {
+  if (headers.has(API_KEY_HEADER)) return true
+  const auth = headers.get('authorization')
+  return auth?.startsWith(BEARER_PREFIX) ?? false
+}
+
+export interface AuthResult {
+  success: boolean
+  userId?: string
+  workspaceId?: string
+  userName?: string | null
+  userEmail?: string | null
+  authType?: AuthTypeValue
+  apiKeyType?: 'personal' | 'workspace'
+  sandboxProfile?: InternalSandboxProfile
+  error?: string
+}
+
+/**
+ * Resolves userId from a verified internal JWT token.
+ * Only trusts the userId embedded in the JWT payload — never from user-controlled sources.
+ */
+function resolveUserFromJwt(
+  verification: { userId?: string; sandboxProfile?: InternalSandboxProfile },
+  options: { requireWorkflowId?: boolean }
+): AuthResult {
+  if (verification.userId) {
+    return {
+      success: true,
+      userId: verification.userId,
+      authType: AuthType.INTERNAL_JWT,
+      ...(verification.sandboxProfile ? { sandboxProfile: verification.sandboxProfile } : {}),
+    }
+  }
+
+  if (options.requireWorkflowId !== false) {
+    return { success: false, error: 'userId required but not present in JWT' }
+  }
+
+  return {
+    success: true,
+    authType: AuthType.INTERNAL_JWT,
+    ...(verification.sandboxProfile ? { sandboxProfile: verification.sandboxProfile } : {}),
+  }
+}
+
+/**
+ * Check for internal JWT authentication only.
+ * Use this for routes that should ONLY be accessible by the executor (server-to-server).
+ * Rejects session and API key authentication.
+ *
+ * @param request - The incoming request
+ * @param options - Optional configuration
+ * @param options.requireWorkflowId - Whether workflowId/userId is required (default: true)
+ */
+export async function checkInternalAuth(
+  request: NextRequest,
+  options: { requireWorkflowId?: boolean } = {}
+): Promise<AuthResult> {
+  try {
+    const authHeader = request.headers.get('authorization')
+
+    const apiKeyHeader = request.headers.get('x-api-key')
+    if (apiKeyHeader) {
+      return {
+        success: false,
+        error: 'API key access not allowed for this endpoint. Use workflow execution instead.',
+      }
+    }
+
+    if (!authHeader?.startsWith('Bearer ')) {
+      return {
+        success: false,
+        error: 'Internal authentication required',
+      }
+    }
+
+    const token = authHeader.split(' ')[1]
+    const verification = await verifyInternalToken(token)
+
+    if (!verification.valid) {
+      return { success: false, error: 'Invalid internal token' }
+    }
+
+    return resolveUserFromJwt(verification, options)
+  } catch (error) {
+    logger.error('Error in internal authentication:', error)
+    return {
+      success: false,
+      error: 'Authentication error',
+    }
+  }
+}
+
+/**
+ * Check for session or internal JWT authentication.
+ * Use this for routes that should be accessible by the UI and executor,
+ * but NOT by external API keys.
+ *
+ * @param request - The incoming request
+ * @param options - Optional configuration
+ * @param options.requireWorkflowId - Whether workflowId/userId is required for JWT (default: true)
+ */
+export async function checkSessionOrInternalAuth(
+  request: NextRequest,
+  options: { requireWorkflowId?: boolean } = {}
+): Promise<AuthResult> {
+  try {
+    // 1. Reject API keys first
+    const apiKeyHeader = request.headers.get('x-api-key')
+    if (apiKeyHeader) {
+      return {
+        success: false,
+        error: 'API key access not allowed for this endpoint',
+      }
+    }
+
+    // 2. Check for internal JWT token
+    const authHeader = request.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1]
+      const verification = await verifyInternalToken(token)
+
+      if (verification.valid) {
+        return resolveUserFromJwt(verification, options)
+      }
+    }
+
+    // 3. Try session auth (for web UI)
+    const session = await getSession()
+    if (session?.user?.id) {
+      return {
+        success: true,
+        userId: session.user.id,
+        userName: session.user.name,
+        userEmail: session.user.email,
+        authType: AuthType.SESSION,
+      }
+    }
+
+    return {
+      success: false,
+      error: 'Unauthorized',
+    }
+  } catch (error) {
+    logger.error('Error in session/internal authentication:', error)
+    return {
+      success: false,
+      error: 'Authentication error',
+    }
+  }
+}
+
+/**
+ * Check for authentication using any of the 3 supported methods:
+ * 1. Internal JWT authentication (Authorization: Bearer header)
+ * 2. Explicit API key authentication (X-API-Key header)
+ * 3. Session authentication (cookies)
+ *
+ * For internal JWT calls, requires workflowId to determine user context
+ */
+export async function checkHybridAuth(
+  request: NextRequest,
+  options: { requireWorkflowId?: boolean } = {}
+): Promise<AuthResult> {
+  try {
+    const authHeader = request.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1]
+      const verification = await verifyInternalToken(token)
+
+      if (verification.valid) {
+        return resolveUserFromJwt(verification, options)
+      }
+    }
+
+    if (request.headers.has(API_KEY_HEADER)) {
+      const apiKeyHeader = request.headers.get(API_KEY_HEADER) ?? ''
+      const result = await authenticateApiKeyFromHeader(apiKeyHeader)
+      if (result.success) {
+        await updateApiKeyLastUsed(result.keyId!)
+        return {
+          success: true,
+          userId: result.userId!,
+          workspaceId: result.workspaceId,
+          authType: AuthType.API_KEY,
+          apiKeyType: result.keyType,
+        }
+      }
+
+      return {
+        success: false,
+        error: 'Invalid API key',
+      }
+    }
+
+    const session = await getSession()
+    if (session?.user?.id) {
+      return {
+        success: true,
+        userId: session.user.id,
+        userName: session.user.name,
+        userEmail: session.user.email,
+        authType: AuthType.SESSION,
+      }
+    }
+
+    // No authentication found
+    return {
+      success: false,
+      error: 'Unauthorized',
+    }
+  } catch (error) {
+    logger.error('Error in hybrid authentication:', error)
+    return {
+      success: false,
+      error: 'Authentication error',
+    }
+  }
+}

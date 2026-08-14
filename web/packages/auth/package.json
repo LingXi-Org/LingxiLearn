@@ -1,0 +1,38 @@
+{
+  "name": "@sim/auth",
+  "version": "0.1.0",
+  "private": true,
+  "sideEffects": false,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "bun": ">=1.2.13",
+    "node": ">=20.0.0"
+  },
+  "exports": {
+    "./principal": {
+      "types": "./src/principal.ts",
+      "default": "./src/principal.ts"
+    },
+    "./verify": {
+      "types": "./src/verify.ts",
+      "default": "./src/verify.ts"
+    }
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "lint": "biome check --write --unsafe .",
+    "lint:check": "biome check .",
+    "format": "biome format --write .",
+    "format:check": "biome format ."
+  },
+  "dependencies": {
+    "@sim/db": "workspace:*",
+    "better-auth": "1.6.23"
+  },
+  "devDependencies": {
+    "@sim/tsconfig": "workspace:*",
+    "@types/node": "24.2.1",
+    "typescript": "^7.0.2"
+  }
+}

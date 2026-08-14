@@ -1,7 +1,7 @@
-import { CapabilityPage } from '@/lib/lingxi/components/capability-page'
+import { notFound } from 'next/navigation'
 export function generateStaticParams() {
   return [{ slug: 'lingxi' }]
 }
 export default function Page() {
-  return <CapabilityPage title='集成详情 · 未接入' />
+  notFound()
 }

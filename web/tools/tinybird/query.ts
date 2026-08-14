@@ -1,0 +1,159 @@
+import { createLogger } from '@sim/logger'
+import { getErrorMessage, toError } from '@sim/utils/errors'
+import type { TinybirdQueryParams, TinybirdQueryResponse } from '@/tools/tinybird/types'
+import type { ToolConfig } from '@/tools/types'
+
+const logger = createLogger('tinybird-query')
+
+/**
+ * Tinybird Query Tool
+ *
+ * Executes SQL queries against Tinybird and returns results in the format specified in the query.
+ * - FORMAT JSON: Returns structured data with rows/statistics metadata
+ * - FORMAT CSV/TSV/etc: Returns raw text string
+ *
+ * The tool automatically detects the response format based on Content-Type headers.
+ */
+export const queryTool: ToolConfig<TinybirdQueryParams, TinybirdQueryResponse> = {
+  id: 'tinybird_query',
+  name: 'Tinybird Query',
+  description: 'Execute SQL queries against Tinybird Pipes and Data Sources using the Query API.',
+  version: '1.0.0',
+  errorExtractor: 'nested-error-object',
+
+  params: {
+    base_url: {
+      type: 'string',
+      required: true,
+      visibility: 'user-only',
+      description: 'Tinybird API base URL (e.g., https://api.tinybird.co)',
+    },
+    query: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description:
+        'SQL query to execute. Specify your desired output format (e.g., FORMAT JSON, FORMAT CSV, FORMAT TSV). JSON format provides structured data, while other formats return raw text. Example: "SELECT * FROM my_datasource LIMIT 100 FORMAT JSON"',
+    },
+    pipeline: {
+      type: 'string',
+      required: false,
+      visibility: 'user-or-llm',
+      description:
+        'Optional pipe name. When provided, enables SELECT * FROM _ syntax. Example: "my_pipe", "analytics_pipe"',
+    },
+    token: {
+      type: 'string',
+      required: true,
+      visibility: 'user-only',
+      description: 'Tinybird API Token with PIPES:READ scope',
+    },
+  },
+
+  request: {
+    url: (params) => {
+      const baseUrl = params.base_url.trim().replace(/\/+$/, '')
+      return `${baseUrl}/v0/sql`
+    },
+    method: 'POST',
+    headers: (params) => ({
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: `Bearer ${params.token.trim()}`,
+    }),
+    body: (params) => {
+      const searchParams = new URLSearchParams()
+      searchParams.set('q', params.query)
+      if (params.pipeline) {
+        searchParams.set('pipeline', params.pipeline.trim())
+      }
+      return searchParams.toString()
+    },
+  },
+
+  transformResponse: async (response: Response) => {
+    const responseText = await response.text()
+    const contentType = response.headers.get('content-type') || ''
+
+    // Check if response is JSON based on content-type or try parsing
+    const isJson = contentType.includes('application/json') || contentType.includes('text/json')
+
+    if (isJson) {
+      try {
+        const data = JSON.parse(responseText)
+        logger.info('Successfully executed Tinybird query (JSON)', {
+          rows: data.rows,
+          elapsed: data.statistics?.elapsed,
+        })
+
+        return {
+          success: true,
+          output: {
+            data: data.data ?? [],
+            meta: data.meta ?? undefined,
+            rows: data.rows ?? 0,
+            rows_before_limit_at_least: data.rows_before_limit_at_least ?? undefined,
+            statistics: data.statistics
+              ? {
+                  elapsed: data.statistics.elapsed,
+                  rows_read: data.statistics.rows_read,
+                  bytes_read: data.statistics.bytes_read,
+                }
+              : undefined,
+          },
+        }
+      } catch (parseError) {
+        logger.error('Failed to parse JSON response', {
+          contentType,
+          parseError: toError(parseError).message,
+        })
+        throw new Error(`Invalid JSON response: ${getErrorMessage(parseError, 'Parse error')}`)
+      }
+    }
+
+    // For non-JSON formats (CSV, TSV, etc.), return as raw text
+    logger.info('Successfully executed Tinybird query (non-JSON)', { contentType })
+    return {
+      success: true,
+      output: {
+        data: responseText,
+        rows: undefined,
+        statistics: undefined,
+      },
+    }
+  },
+
+  outputs: {
+    data: {
+      type: 'json',
+      description:
+        'Query result data. For FORMAT JSON: array of objects. For other formats (CSV, TSV, etc.): raw text string.',
+    },
+    meta: {
+      type: 'array',
+      description: 'Column metadata for the result set (only available with FORMAT JSON)',
+      optional: true,
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Column name' },
+          type: { type: 'string', description: 'Column data type' },
+        },
+      },
+    },
+    rows: {
+      type: 'number',
+      description: 'Number of rows returned (only available with FORMAT JSON)',
+    },
+    rows_before_limit_at_least: {
+      type: 'number',
+      description:
+        'Minimum number of rows there would be without a LIMIT clause (only available with FORMAT JSON)',
+      optional: true,
+    },
+    statistics: {
+      type: 'json',
+      description:
+        'Query execution statistics - elapsed time, rows read, bytes read (only available with FORMAT JSON)',
+    },
+  },
+}

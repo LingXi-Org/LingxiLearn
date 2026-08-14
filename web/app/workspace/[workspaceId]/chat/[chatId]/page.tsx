@@ -1,19 +1,21 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
-import { LingxiChat } from '@/components/lingxi/lingxi-chat'
+import { Home } from '../../home/home'
+import { HomeFallback } from '../../home/home-fallback'
 
 export const metadata: Metadata = {
   title: '学习对话',
 }
 
-export function generateStaticParams() {
-  return [{ workspaceId: 'lingxi', chatId: 'lingxi' }]
-}
-
-export default async function LingxiChatPage({
+export default async function ChatPage({
   params,
 }: {
   params: Promise<{ workspaceId: string; chatId: string }>
 }) {
   const { workspaceId, chatId } = await params
-  return <LingxiChat workspaceId={workspaceId} taskId={chatId === 'lingxi' ? undefined : chatId} />
+  return (
+    <Suspense fallback={<HomeFallback />}>
+      <Home chatId={chatId === 'lingxi' ? undefined : chatId} tableViewsEnabled={false} />
+    </Suspense>
+  )
 }

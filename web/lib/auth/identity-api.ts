@@ -157,7 +157,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const identityApi = {
-  authUrl(kind: 'login' | 'register' | 'forgot-password', nextPath = '/workspace/lingxi/home/') {
+  authUrl(
+    kind: 'login' | 'register' | 'forgot-password' | 'sso',
+    nextPath = '/workspace/lingxi/home/'
+  ) {
     const params = new URLSearchParams({ next_path: safeNextPath(nextPath) })
     return `${identityUrl(`/auth/${kind}`)}?${params}`
   },
@@ -230,6 +233,18 @@ export const identityApi = {
     request<void>('/api/v1/me/password', {
       method: 'POST',
       body: JSON.stringify({ password, verificationId }),
+    }),
+
+  requestPasswordReset: (email: string, redirectTo: string) =>
+    request<void>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, redirectTo }),
+    }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    request<void>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
     }),
 
   sessions: (verificationId?: string) =>

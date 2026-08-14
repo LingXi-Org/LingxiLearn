@@ -1,8 +1,10 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { isMockAuthEnabled } from '@/lib/core/config/env-flags'
 import { setAuthenticationFailureHandler, setSessionRefreshHandler } from '@/lib/lingxi/api'
 import { type IdentityMe, identityApi } from './identity-api'
+import { MOCK_IDENTITY_ME } from './mock-session'
 
 export interface SessionContextValue {
   data: IdentityMe | null
@@ -26,6 +28,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     const request = (async () => {
       try {
+        if (isMockAuthEnabled) {
+          setData(MOCK_IDENTITY_ME)
+          setError(null)
+          setReady(true)
+          return MOCK_IDENTITY_ME
+        }
         const next = await identityApi.me()
         setData(next)
         setError(null)
@@ -59,7 +67,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
-    await identityApi.logout()
+    if (!isMockAuthEnabled) await identityApi.logout()
     setData(null)
     window.location.assign('/')
   }, [])

@@ -1,0 +1,3 @@
+import { LingxiKnowledgeDetail } from '@/app/workspace/[workspaceId]/components/lingxi-resource-page'
+export function generateStaticParams() { return [{ workspaceId: 'lingxi', id: 'not-integrated' }] }
+export default async function Page({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; return <LingxiKnowledgeDetail baseId={id} /> }

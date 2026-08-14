@@ -2,6 +2,34 @@
 
 export type SceneKind = 'probe' | 'packet_lab' | 'attribution' | 'verify' | 'report'
 
+export interface LingxiWorkspaceHostContext {
+  workspace: {
+    id: string
+    name: string
+    workspaceMode: 'personal'
+    billedAccountUserId: string
+  }
+  hostOrganizationId: string | null
+  ownerBilling: {
+    plan: string
+    status: string | null
+    isPaid: boolean
+    isPro: boolean
+    isTeam: boolean
+    isEnterprise: boolean
+    isOrgScoped: boolean
+    organizationId: string | null
+    billingInterval: 'month' | 'year'
+    billingBlocked: boolean
+    billingBlockedReason: 'dispute' | 'payment_failed' | null
+  }
+  viewer: {
+    permission: 'read' | 'write' | 'admin'
+    isHostOrganizationMember: boolean
+    isHostOrganizationAdmin: boolean
+  }
+}
+
 export interface Choice {
   value: string
   label: string
@@ -29,12 +57,17 @@ export interface Pack {
 
 export interface NativeSkill {
   id: string
+  name?: string
   display_name: string
   description: string
   version: string
   license: string
   compatibility: string
   content: string
+  source?: 'system' | 'personal' | string
+  is_system?: boolean
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 export interface AgentTaskEvent {

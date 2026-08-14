@@ -1,0 +1,32 @@
+import type { BlockState } from '@/stores/workflows/workflow/types'
+
+/**
+ * Value type for subblock values.
+ * Uses unknown to support various value types that subblocks can store,
+ * including strings, numbers, arrays, objects, and other complex structures.
+ */
+export type SubBlockValue = unknown
+
+interface SubBlockStoreState {
+  workflowValues: Record<string, Record<string, Record<string, SubBlockValue>>> // Store values per workflow ID
+}
+
+export interface SubBlockStore extends SubBlockStoreState {
+  setValue: (blockId: string, subBlockId: string, value: SubBlockValue) => void
+  /**
+   * Point read for display purposes. Collapses "no value recorded" and
+   * "explicitly cleared" into `null` (`?? null` on the raw map) — fine for
+   * rendering, where both states look empty. Consumers that need the
+   * tri-state distinction (present-null means cleared, absent means unknown;
+   * see the merge semantics in `@sim/workflow-persistence/subblocks`) must
+   * read `workflowValues` directly and use key presence, as
+   * `mergeSubblockStateWithValues` does.
+   */
+  getValue: (blockId: string, subBlockId: string) => SubBlockValue | undefined
+  clear: () => void
+  initializeFromWorkflow: (workflowId: string, blocks: Record<string, BlockState>) => void
+  setWorkflowValues: (
+    workflowId: string,
+    values: Record<string, Record<string, SubBlockValue>>
+  ) => void
+}

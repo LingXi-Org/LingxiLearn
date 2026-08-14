@@ -1,0 +1,27 @@
+import { createLogger } from '@sim/logger'
+import { type NextRequest, NextResponse } from 'next/server'
+import { verifyCronAuth } from '@/lib/auth/internal'
+import { dispatchCleanupJobs } from '@/lib/billing/cleanup-dispatcher'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { cleanupExpiredUploadSessions } from '@/lib/uploads/upload-session/service'
+
+export const dynamic = 'force-dynamic'
+
+const logger = createLogger('TaskCleanupAPI')
+
+export const GET = withRouteHandler(async (request: NextRequest) => {
+  try {
+    const authError = verifyCronAuth(request, 'task cleanup')
+    if (authError) return authError
+
+    const uploadSessions = await cleanupExpiredUploadSessions()
+    const result = await dispatchCleanupJobs('cleanup-tasks')
+
+    logger.info('Task cleanup jobs dispatched', { ...result, uploadSessions })
+
+    return NextResponse.json({ triggered: true, ...result, uploadSessions })
+  } catch (error) {
+    logger.error('Failed to dispatch task cleanup jobs:', { error })
+    return NextResponse.json({ error: 'Failed to dispatch task cleanup' }, { status: 500 })
+  }
+})

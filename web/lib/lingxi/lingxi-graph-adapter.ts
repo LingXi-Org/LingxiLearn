@@ -15,6 +15,11 @@ export interface LingxiGraphProjection {
   isTerminal: boolean
 }
 
+export interface LingxiTaskContextOptions {
+  resourceRefs?: Array<Record<string, unknown>>
+  skillIds?: string[]
+}
+
 export interface LingxiGraphSubscriptionOptions {
   from?: number
   onEvent: (event: AgentTaskEvent) => void
@@ -26,13 +31,15 @@ export interface LingxiGraphChatAdapter {
   readonly kind: typeof LINGXI_GRAPH_ADAPTER_KIND
   createTask(
     prompt: string,
-    attachments?: LingxiAttachmentRef[]
+    attachments?: LingxiAttachmentRef[],
+    options?: LingxiTaskContextOptions
   ): Promise<{ id: string; status: string }>
   loadTask(taskId: string): Promise<AgentTaskSnapshot>
   sendMessage(
     taskId: string,
     message: string,
-    attachments?: LingxiAttachmentRef[]
+    attachments?: LingxiAttachmentRef[],
+    options?: LingxiTaskContextOptions
   ): Promise<{ status: string }>
   cancelTask(taskId: string): Promise<{ id: string; status: string }>
   updateTaskMetadata(

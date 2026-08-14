@@ -56,6 +56,10 @@ EVENT_CHANNEL = "agent_task"
 class AgentState(TypedDict, total=False):
     task_id: str
     prompt: str
+    # Native workspace references resolved by the API before graph start.
+    # They are metadata-only here; tool access remains learner-scoped in the
+    # service layer and never becomes an editable workflow definition.
+    resources: list[dict[str, Any]]
     intent: dict[str, Any]
     user_message: dict[str, Any]
     lecture_result: dict[str, Any]

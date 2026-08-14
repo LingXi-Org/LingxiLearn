@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": false,
+    "noImplicitAny": false,
+    "noCheck": true
+  },
+  "include": [
+    ".next/types/**/*.ts",
+    "app/**/page.tsx",
+    "app/**/layout.tsx",
+    "app/**/loading.tsx",
+    "app/**/not-found.tsx",
+    "app/layout.tsx",
+    "types/**/*.d.ts",
+    "lib/lingxi/**/*.ts",
+    "lib/lingxi/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "sim-backend-unwired/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

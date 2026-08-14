@@ -1,6 +1,7 @@
-import { Suspense } from 'react'
-import { AuthEntry } from '../components/auth-entry'
+import type { Metadata } from 'next'
+import ResetPasswordPage from '@/app/(auth)/reset-password/reset-password-content'
 
-export default function ResetPasswordPage() {
-  return <Suspense><AuthEntry kind='forgot-password' /></Suspense>
-}
+export const metadata: Metadata = { title: '重置密码' }
+export const dynamic = 'force-dynamic'
+
+export default ResetPasswordPage

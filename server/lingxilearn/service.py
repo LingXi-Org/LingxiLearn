@@ -17,6 +17,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import mimetypes
+import secrets
 import uuid
 import base64
 from collections import defaultdict
@@ -30,6 +32,7 @@ from lingxigraph.errors import (
     GraphRecursionError,
     GraphTimeoutError,
 )
+from sqlalchemy import select
 
 from .agents.artifact_store import ArtifactError, ArtifactStore
 from .agents.contracts import quiz_public
@@ -49,6 +52,16 @@ from .packs.loader import discover_packs, validate_pack
 from .packs.models import Pack
 from .store.db import Database, GraphRevisionConflict, Repository
 from .store.learner import LearnerRepository
+from .store.models import (
+    KnowledgeBase,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    KnowledgeGraph,
+    KnowledgeGraphEdge,
+    KnowledgeGraphNode,
+    Workspace,
+    WorkspaceFile,
+)
 from .stream.projector import EventProjector
 from .tools import knowledge
 from .tools.registry import ToolRegistry, load_builtin_tools
@@ -290,6 +303,7 @@ class Service:
         self._waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._agent_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._tasks: set[asyncio.Task[Any]] = set()
+        self._workspace_projection_lock = asyncio.Lock()
 
     # -- lifecycle -------------------------------------------------------
 
@@ -445,6 +459,7 @@ class Service:
         learner_id: str,
         prompt: str,
         attachments: list[dict[str, Any]] | None = None,
+        resources: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         normalized = " ".join(prompt.strip().split())
         if not normalized:
@@ -459,6 +474,7 @@ class Service:
             prompt=normalized,
             graph_version="knowledge_deep_dive.v1",
             status="queued",
+            resources=resources or [],
             intent={},
             lecture_result={},
             deck_result={},
@@ -609,9 +625,193 @@ class Service:
         if source is None:
             raise KeyError(f"unknown agent task: {task_id}")
         new_id = f"t-{uuid.uuid4().hex[:20]}"
-        result = await self.create_agent_task(task_id=new_id, learner_id=learner_id, prompt=source.prompt)
-        await self.repo.update_agent_task_metadata(new_id, learner_id, title=source.title, resources=list(source.resources or []))
+        result = await self.create_agent_task(
+            task_id=new_id,
+            learner_id=learner_id,
+            prompt=source.prompt,
+            resources=list(source.resources or []),
+        )
+        await self.repo.update_agent_task_metadata(new_id, learner_id, title=source.title)
         return result
+
+    async def project_agent_artifacts(
+        self, learner_id: str, task_id: str | None = None
+    ) -> int:
+        """Project completed LingxiGraph artifacts into read-only Workspace Files.
+
+        The graph keeps its original audit files under ``agent_task_dir``. A
+        second immutable copy in the learner workspace gives native Files a
+        stable resource identity without making the graph output editable or
+        coupling file deletion to task-audit retention.
+        """
+
+        async with self._workspace_projection_lock:
+            async with self.db.session() as session:
+                workspace = await session.scalar(
+                    select(Workspace).where(Workspace.learner_id == learner_id)
+                )
+                if workspace is None:
+                    workspace = Workspace(
+                        id=f"ws_{secrets.token_urlsafe(18)}",
+                        learner_id=learner_id,
+                        name="灵犀智学",
+                        appearance={},
+                    )
+                    session.add(workspace)
+                    await session.flush()
+
+                tasks = []
+                for scope in ("active", "archived"):
+                    for item in await self.repo.list_agent_tasks(learner_id, scope=scope):
+                        if task_id is None or item["id"] == task_id:
+                            tasks.append(item)
+                projected = 0
+                for task in tasks:
+                    task_key = str(task["id"])
+                    title = str(task.get("title") or task.get("intent", {}).get("topic") or task_key)
+                    candidates = (
+                        (self.agent_artifacts.lesson_intro_path(task_key), "lesson-intro.html"),
+                        (self.agent_artifacts.deck_path(task_key), "lecture.html"),
+                        (self.agent_artifacts.html_path(task_key), "visual-explainer.html"),
+                    )
+                    for source, filename in candidates:
+                        if not source.is_file():
+                            continue
+                        path = f"学习产物/{task_key}/{filename}"
+                        existing = await session.scalar(
+                            select(WorkspaceFile).where(
+                                WorkspaceFile.workspace_id == workspace.id,
+                                WorkspaceFile.path == path,
+                            )
+                        )
+                        if existing is not None:
+                            continue
+                        raw = source.read_bytes()
+                        storage_key = f"{learner_id}/{secrets.token_urlsafe(24)}"
+                        target_root = self.settings.var_dir / "workspaces" / learner_id
+                        target_root.mkdir(parents=True, exist_ok=True)
+                        target = target_root / storage_key.split("/", 1)[1]
+                        target.write_bytes(raw)
+                        session.add(
+                            WorkspaceFile(
+                                id=f"file_{uuid.uuid4().hex}",
+                                workspace_id=workspace.id,
+                                name=filename,
+                                mime_type=mimetypes.guess_type(filename)[0] or "application/octet-stream",
+                                size=len(raw),
+                                storage_key=storage_key,
+                                path=path,
+                                metadata_payload={
+                                    "source": "lingxigraph",
+                                    "taskId": task_key,
+                                    "taskTitle": title,
+                                    "readOnly": True,
+                                },
+                            )
+                        )
+                        projected += 1
+                # Knowledge graphs are durable LingxiGraph sidecars, not
+                # editable workflow canvases. Mirror each revision as a
+                # searchable JSON document in a private read-only base.
+                graphs = (
+                    await session.execute(
+                        select(KnowledgeGraph).where(KnowledgeGraph.learner_id == learner_id)
+                    )
+                ).scalars().all()
+                if graphs:
+                    graph_base = await session.scalar(
+                        select(KnowledgeBase).where(
+                            KnowledgeBase.learner_id == learner_id,
+                            KnowledgeBase.name == "LingxiGraph 知识图谱",
+                        )
+                    )
+                    if graph_base is None:
+                        graph_base = KnowledgeBase(
+                            id=f"kb_{uuid.uuid4().hex}",
+                            learner_id=learner_id,
+                            name="LingxiGraph 知识图谱",
+                            description="由学习任务生成的只读知识图谱快照。",
+                            metadata_payload={"source": "lingxigraph", "readOnly": True},
+                        )
+                        session.add(graph_base)
+                        await session.flush()
+                    existing_documents = (
+                        await session.execute(
+                            select(KnowledgeDocument).where(
+                                KnowledgeDocument.base_id == graph_base.id
+                            )
+                        )
+                    ).scalars().all()
+                    existing_graph_revisions = {
+                        str((document.metadata_payload or {}).get("graphId"))
+                        + ":"
+                        + str((document.metadata_payload or {}).get("revision")): document
+                        for document in existing_documents
+                    }
+                    for graph in graphs:
+                        graph_key = f"{graph.graph_id}:{graph.revision}"
+                        if graph_key in existing_graph_revisions:
+                            continue
+                        nodes = (
+                            await session.execute(
+                                select(KnowledgeGraphNode).where(
+                                    KnowledgeGraphNode.graph_id == graph.graph_id
+                                )
+                            )
+                        ).scalars().all()
+                        edges = (
+                            await session.execute(
+                                select(KnowledgeGraphEdge).where(
+                                    KnowledgeGraphEdge.graph_id == graph.graph_id
+                                )
+                            )
+                        ).scalars().all()
+                        content = json.dumps(
+                            {
+                                "graphId": graph.graph_id,
+                                "revision": graph.revision,
+                                "title": graph.title,
+                                "domain": graph.domain,
+                                "nodes": [
+                                    {"id": node.node_id, "label": node.label, "type": node.type}
+                                    for node in nodes
+                                ],
+                                "edges": [
+                                    {"id": edge.edge_id, "source": edge.source_node_id, "target": edge.target_node_id, "relation": edge.relation}
+                                    for edge in edges
+                                ],
+                            },
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                        document = KnowledgeDocument(
+                            id=f"doc_{uuid.uuid4().hex}",
+                            base_id=graph_base.id,
+                            name=f"{graph.title} · Revision {graph.revision}",
+                            mime_type="application/json",
+                            content=content,
+                            metadata_payload={
+                                "source": "lingxigraph",
+                                "readOnly": True,
+                                "graphId": graph.graph_id,
+                                "revision": graph.revision,
+                            },
+                        )
+                        session.add(document)
+                        for ordinal, start in enumerate(range(0, len(content), 1200)):
+                            session.add(
+                                KnowledgeChunk(
+                                    id=f"chunk_{uuid.uuid4().hex}",
+                                    document_id=document.id,
+                                    ordinal=ordinal,
+                                    text=content[start : start + 1200],
+                                    metadata_payload={"source": "lingxigraph"},
+                                )
+                            )
+                        projected += 1
+                if projected or workspace not in session.new:
+                    await session.commit()
+                return projected
 
     async def cancel_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
         record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
@@ -838,12 +1038,22 @@ class Service:
         buffer: list[dict[str, Any]] = []
         current_agent = "coordinator"
         try:
-            graph_input: Any = Command(resume=resume) if resume is not None else {"task_id": task_id, "prompt": prompt, "errors": [], "status": "running"}
+            graph_input: Any = Command(resume=resume) if resume is not None else {
+                "task_id": task_id,
+                "prompt": prompt,
+                "resources": list(record.resources or []),
+                "errors": [],
+                "status": "running",
+            }
             async for streamed in graph.astream(
                 graph_input,
                 config,
                 stream_mode=("events", "messages"),
-                context={"learner_id": learner_id, "locale": "zh-CN"},
+                context={
+                    "learner_id": learner_id,
+                    "locale": "zh-CN",
+                    "resource_refs": list(record.resources or []),
+                },
             ):
                 current_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
                 if current_record is None or current_record.status == "cancelled":
@@ -962,6 +1172,12 @@ class Service:
         await self.repo.set_agent_task_status(
             task_id, "handed_off" if status == "handed_off" else status, "; ".join(errors)
         )
+        # Publish generated HTML artifacts as native read-only workspace files
+        # while retaining the original task-audit files and URLs.
+        try:
+            await self.project_agent_artifacts(learner_id, task_id)
+        except Exception:  # noqa: BLE001 - projection must not fail the task
+            logger.exception("failed to project task artifacts: %s", task_id)
         self._notify_agent(task_id)
         if record.graph_version == "knowledge_deep_dive.v1" and status in {"awaiting_user", "partial"}:
             latest_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)

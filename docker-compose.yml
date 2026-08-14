@@ -11,6 +11,9 @@ name: lingxilearn
 x-api: &api
   build:
     context: ./server
+    # Compose is the deployment entrypoint. Disable stale BuildKit layers so
+    # every `docker compose up -d --build` packages the current workspace.
+    no_cache: true
     args:
       DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
       APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
@@ -22,7 +25,6 @@ x-api: &api
     LINGXILEARN_PACKS_DIR: /app/packs
     LINGXILEARN_VAR_DIR: /app/var
     LINGXILEARN_AGENT_TASK_DIR: /app/var/agent_tasks
-    LINGXILEARN_WEB_DIST: /app/web
     # The API validates the HttpOnly session by calling LingxiIdentity BFF.
     # Keep this internal when both services share the deployment network.
     LINGXILEARN_IDENTITY_BFF_URL: ${LINGXILEARN_IDENTITY_BFF_URL:?set LINGXILEARN_IDENTITY_BFF_URL}
@@ -31,7 +33,6 @@ x-api: &api
   volumes:
     - ./packs:/app/packs:ro
     - ./skills:/app/skills:ro
-    - web-dist:/app/web:ro
     - api-var:/app/var
   depends_on:
     postgres:
@@ -54,19 +55,31 @@ services:
       retries: 30
     restart: unless-stopped
 
-  # Builds the static frontend into a shared volume, then exits.
-  web-build:
+  # Native Sim standalone server. API/auth requests are proxied by Next so the
+  # browser keeps one same-origin session and never needs a second public port.
+  web:
     build:
       context: ./web
-      target: dist
+      # The standalone image must always contain the current native Sim source
+      # closure, for both local runs and production rollouts.
+      no_cache: true
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
         DATABASE_URL: postgresql://build:build@localhost:5432/build
-    volumes:
-      - web-dist:/web
-    restart: "no"
+    environment:
+      LINGXILEARN_API_ORIGIN: http://api:8000
+      # Local container runs use the UI-only mock session by default. Set to
+      # false in a real deployment so auth is handled by LingxiIdentity.
+      NEXT_PUBLIC_MOCK_AUTH: ${NEXT_PUBLIC_MOCK_AUTH:-true}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:8080}
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "${LINGXILEARN_WEB_PORT:-8080}:3000"
+    restart: unless-stopped
 
   # Schema migrations run to completion before the API is allowed to start.
   api-var-init:
@@ -105,10 +118,8 @@ services:
         condition: service_completed_successfully
       api-var-init:
         condition: service_completed_successfully
-      web-build:
-        condition: service_completed_successfully
-    ports:
-      - "${LINGXILEARN_PORT:-8080}:8000"
+    expose:
+      - "8000"
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: true
@@ -117,5 +128,4 @@ services:
 
 volumes:
   postgres-data:
-  web-dist:
   api-var:

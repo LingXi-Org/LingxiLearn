@@ -1,0 +1,903 @@
+import { ZendeskIcon } from '@/components/icons'
+import type { BlockConfig, BlockMeta } from '@/blocks/types'
+import { AuthMode, IntegrationType } from '@/blocks/types'
+import { getTrigger } from '@/triggers'
+
+export const ZendeskBlock: BlockConfig = {
+  type: 'zendesk',
+  name: 'Zendesk',
+  description: 'Manage support tickets, users, and organizations in Zendesk',
+  triggerAllowed: true,
+  longDescription:
+    'Integrate Zendesk into the workflow. Can get tickets, get ticket, create ticket, create tickets bulk, update ticket, update tickets bulk, delete ticket, merge tickets, get users, get user, get current user, search users, create user, create users bulk, update user, update users bulk, delete user, get organizations, get organization, autocomplete organizations, create organization, create organizations bulk, update organization, delete organization, search, search count.',
+  docsLink: 'https://docs.sim.ai/integrations/zendesk',
+  authMode: AuthMode.ApiKey,
+  category: 'tools',
+  integrationType: IntegrationType.Support,
+  bgColor: '#03363D',
+  icon: ZendeskIcon,
+  canvasPresentation: {
+    defaultTitle: 'Zendesk',
+    triggerSentences: {
+      byTrigger: {
+        zendesk_webhook: ['Run on any ticket event'],
+      },
+    },
+    sentences: {
+      byOperation: {
+        get_tickets: [
+          'List tickets',
+          { text: ', with status', field: 'status' },
+          { text: ', at priority', field: 'priority' },
+          { text: ', assigned to', field: 'assigneeId' },
+        ],
+        get_ticket: [{ text: 'Fetch ticket', field: 'ticketId', core: true }],
+        create_ticket: [
+          { text: 'Create ticket', field: 'subject', core: true },
+          { text: ', at priority', field: 'priority' },
+          { text: ', assigned to', field: 'assigneeId' },
+        ],
+        create_tickets_bulk: ['Create tickets in bulk'],
+        update_ticket: [
+          { text: 'Update ticket', field: 'ticketId', core: true },
+          { text: ', setting status to', field: 'status' },
+          { text: ', assigning to', field: 'assigneeId' },
+        ],
+        update_tickets_bulk: ['Update tickets in bulk'],
+        delete_ticket: [{ text: 'Delete ticket', field: 'ticketId', core: true }],
+        merge_tickets: [
+          { text: 'Merge tickets', field: 'sourceTicketIds', core: true },
+          { text: 'into', field: 'targetTicketId', core: true },
+        ],
+        get_users: ['List users', { text: ', up to', field: 'perPage', after: 'per page' }],
+        get_user: [{ text: 'Fetch user', field: 'userId', core: true }],
+        get_current_user: ['Fetch the authenticated user'],
+        search_users: [{ text: 'Search users matching', field: 'query', core: true }],
+        create_user: [
+          { text: 'Create user', field: 'name', core: true },
+          { text: 'with email', field: 'userEmail' },
+          { text: ', in organization', field: 'organizationId' },
+        ],
+        create_users_bulk: ['Create users in bulk'],
+        update_user: [
+          { text: 'Update user', field: 'userId', core: true },
+          { text: ', renaming to', field: 'name' },
+          { text: ', with email', field: 'userEmail' },
+        ],
+        update_users_bulk: ['Update users in bulk'],
+        delete_user: [{ text: 'Delete user', field: 'userId', core: true }],
+        get_organizations: [
+          'List organizations',
+          { text: ', up to', field: 'perPage', after: 'per page' },
+        ],
+        get_organization: [{ text: 'Fetch organization', field: 'organizationId', core: true }],
+        autocomplete_organizations: [
+          {
+            text: 'Find organizations starting with',
+            field: 'organizationName',
+            core: true,
+          },
+        ],
+        create_organization: [
+          {
+            text: 'Create organization',
+            field: 'organizationName',
+            core: true,
+          },
+        ],
+        create_organizations_bulk: ['Create organizations in bulk'],
+        update_organization: [
+          { text: 'Update organization', field: 'organizationId', core: true },
+          { text: ', renaming to', field: 'organizationName' },
+        ],
+        delete_organization: [{ text: 'Delete organization', field: 'organizationId', core: true }],
+        search: [
+          { text: 'Search', field: 'filterType', core: true },
+          { text: 'records matching', field: 'query', core: true },
+        ],
+        search_count: [{ text: 'Count records matching', field: 'query', core: true }],
+      },
+    },
+  },
+  subBlocks: [
+    {
+      id: 'operation',
+      title: 'Operation',
+      type: 'dropdown',
+      options: [
+        { label: 'Get Tickets', id: 'get_tickets' },
+        { label: 'Get Ticket', id: 'get_ticket' },
+        { label: 'Create Ticket', id: 'create_ticket' },
+        { label: 'Create Tickets Bulk', id: 'create_tickets_bulk' },
+        { label: 'Update Ticket', id: 'update_ticket' },
+        { label: 'Update Tickets Bulk', id: 'update_tickets_bulk' },
+        { label: 'Delete Ticket', id: 'delete_ticket' },
+        { label: 'Merge Tickets', id: 'merge_tickets' },
+        { label: 'Get Users', id: 'get_users' },
+        { label: 'Get User', id: 'get_user' },
+        { label: 'Get Current User', id: 'get_current_user' },
+        { label: 'Search Users', id: 'search_users' },
+        { label: 'Create User', id: 'create_user' },
+        { label: 'Create Users Bulk', id: 'create_users_bulk' },
+        { label: 'Update User', id: 'update_user' },
+        { label: 'Update Users Bulk', id: 'update_users_bulk' },
+        { label: 'Delete User', id: 'delete_user' },
+        { label: 'Get Organizations', id: 'get_organizations' },
+        { label: 'Get Organization', id: 'get_organization' },
+        { label: 'Autocomplete Organizations', id: 'autocomplete_organizations' },
+        { label: 'Create Organization', id: 'create_organization' },
+        { label: 'Create Organizations Bulk', id: 'create_organizations_bulk' },
+        { label: 'Update Organization', id: 'update_organization' },
+        { label: 'Delete Organization', id: 'delete_organization' },
+        { label: 'Search', id: 'search' },
+        { label: 'Search Count', id: 'search_count' },
+      ],
+      value: () => 'get_tickets',
+    },
+    {
+      id: 'email',
+      title: 'Email',
+      type: 'short-input',
+      placeholder: 'Your Zendesk email address',
+      required: true,
+      description: 'The email address associated with your Zendesk account',
+    },
+    {
+      id: 'apiToken',
+      title: 'API Token',
+      type: 'short-input',
+      password: true,
+      placeholder: 'Enter your Zendesk API token',
+      required: true,
+    },
+    {
+      id: 'subdomain',
+      title: 'Subdomain',
+      type: 'short-input',
+      placeholder: 'Your Zendesk subdomain (e.g., "mycompany")',
+      required: true,
+      description: 'The subdomain from your Zendesk URL (mycompany.zendesk.com)',
+    },
+    // Ticket fields
+    {
+      id: 'ticketId',
+      title: 'Ticket ID',
+      type: 'short-input',
+      placeholder: 'Ticket ID',
+      required: true,
+      condition: {
+        field: 'operation',
+        value: ['get_ticket', 'update_ticket', 'delete_ticket'],
+      },
+    },
+    {
+      id: 'subject',
+      title: 'Subject',
+      type: 'short-input',
+      placeholder: 'Ticket subject',
+      condition: {
+        field: 'operation',
+        value: ['create_ticket', 'update_ticket'],
+      },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a clear, concise support ticket subject line based on the user's description.
+Keep it brief but informative (under 100 characters).
+Examples:
+- "customer can't log in" -> Unable to access account - Login authentication issue
+- "billing question about renewal" -> Billing inquiry: Subscription renewal question
+- "feature request for dark mode" -> Feature Request: Dark mode support
+
+Return ONLY the subject line - no explanations.`,
+        placeholder: 'Describe the ticket issue briefly...',
+      },
+    },
+    {
+      id: 'description',
+      title: 'Description',
+      type: 'long-input',
+      placeholder: 'Ticket description',
+      required: {
+        field: 'operation',
+        value: ['create_ticket'],
+      },
+      condition: {
+        field: 'operation',
+        value: ['create_ticket', 'update_ticket'],
+      },
+      wandConfig: {
+        enabled: true,
+        prompt: `Write a detailed support ticket description based on the user's input.
+Include relevant details that would help support agents understand the issue.
+Structure the description clearly with:
+- Issue summary
+- Steps to reproduce (if applicable)
+- Expected vs actual behavior
+- Any relevant context
+
+Examples:
+- "user forgot password and email not working" -> Detailed description of password reset issue with email delivery problems
+- "subscription not renewing automatically" -> Clear explanation of billing/subscription issue
+
+Return ONLY the description text - no explanations.`,
+        placeholder: 'Describe the issue in detail...',
+      },
+    },
+    {
+      id: 'status',
+      title: 'Status',
+      type: 'short-input',
+      placeholder: 'Status (new, open, pending, hold, solved, closed)',
+      condition: {
+        field: 'operation',
+        value: ['get_tickets', 'create_ticket', 'update_ticket'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'priority',
+      title: 'Priority',
+      type: 'short-input',
+      placeholder: 'Priority (low, normal, high, urgent)',
+      condition: {
+        field: 'operation',
+        value: ['get_tickets', 'create_ticket', 'update_ticket'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'type',
+      title: 'Type',
+      type: 'short-input',
+      placeholder: 'Type (problem, incident, question, task)',
+      condition: {
+        field: 'operation',
+        value: ['get_tickets', 'create_ticket', 'update_ticket'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'tags',
+      title: 'Tags',
+      type: 'short-input',
+      placeholder: 'Comma-separated tags',
+      condition: {
+        field: 'operation',
+        value: ['create_ticket', 'update_ticket'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'assigneeId',
+      title: 'Assignee ID',
+      type: 'short-input',
+      placeholder: 'User ID to assign ticket to',
+      condition: {
+        field: 'operation',
+        value: ['get_tickets', 'create_ticket', 'update_ticket'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'groupId',
+      title: 'Group ID',
+      type: 'short-input',
+      placeholder: 'Group ID',
+      condition: {
+        field: 'operation',
+        value: ['create_ticket', 'update_ticket'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'customFields',
+      title: 'Custom Fields',
+      type: 'long-input',
+      placeholder: 'JSON object with custom fields',
+      condition: {
+        field: 'operation',
+        value: ['create_ticket', 'update_ticket'],
+      },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a JSON object for Zendesk custom fields based on the user's description.
+Custom fields use numeric IDs and can have various value types.
+Format: {"id": field_id, "value": "field_value"}
+
+Examples:
+- "set product to Enterprise and region to EMEA" ->
+  [{"id": 123456, "value": "enterprise"}, {"id": 789012, "value": "emea"}]
+- "mark as VIP customer with priority support" ->
+  [{"id": 111111, "value": true}, {"id": 222222, "value": "priority"}]
+
+Return ONLY the JSON array - no explanations.`,
+        placeholder: 'Describe the custom field values to set...',
+        generationType: 'json-object',
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'tickets',
+      title: 'Tickets',
+      type: 'long-input',
+      placeholder: 'JSON array of ticket objects',
+      required: true,
+      condition: {
+        field: 'operation',
+        value: ['create_tickets_bulk', 'update_tickets_bulk'],
+      },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a JSON array of Zendesk ticket objects based on the user's description.
+Each ticket object should include: subject, description (comment.body), and optionally priority, status, tags.
+
+Example structure:
+[
+  {
+    "subject": "Issue title",
+    "comment": {"body": "Issue description"},
+    "priority": "normal",
+    "tags": ["tag1", "tag2"]
+  }
+]
+
+Return ONLY the JSON array - no explanations.`,
+        placeholder: 'Describe the tickets to create or update...',
+        generationType: 'json-object',
+      },
+    },
+    {
+      id: 'targetTicketId',
+      title: 'Target Ticket ID',
+      type: 'short-input',
+      placeholder: 'Ticket ID to merge into',
+      required: true,
+      condition: {
+        field: 'operation',
+        value: ['merge_tickets'],
+      },
+    },
+    {
+      id: 'sourceTicketIds',
+      title: 'Source Ticket IDs',
+      type: 'short-input',
+      placeholder: 'Comma-separated ticket IDs to merge',
+      required: true,
+      condition: {
+        field: 'operation',
+        value: ['merge_tickets'],
+      },
+    },
+    // User fields
+    {
+      id: 'userId',
+      title: 'User ID',
+      type: 'short-input',
+      placeholder: 'User ID',
+      required: true,
+      condition: {
+        field: 'operation',
+        value: ['get_user', 'update_user', 'delete_user'],
+      },
+    },
+    {
+      id: 'name',
+      title: 'Name',
+      type: 'short-input',
+      placeholder: 'User name',
+      required: {
+        field: 'operation',
+        value: ['create_user'],
+      },
+      condition: {
+        field: 'operation',
+        value: ['create_user', 'update_user'],
+      },
+    },
+    {
+      id: 'userEmail',
+      title: 'Email',
+      type: 'short-input',
+      placeholder: 'User email',
+      condition: {
+        field: 'operation',
+        value: ['create_user', 'update_user'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'users',
+      title: 'Users',
+      type: 'long-input',
+      placeholder: 'JSON array of user objects',
+      required: true,
+      condition: {
+        field: 'operation',
+        value: ['create_users_bulk', 'update_users_bulk'],
+      },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a JSON array of Zendesk user objects based on the user's description.
+Each user object should include: name, email, and optionally role, phone, organization_id, tags.
+
+Example structure:
+[
+  {
+    "name": "John Doe",
+    "email": "john@example.com",
+    "role": "end-user",
+    "phone": "+1234567890"
+  }
+]
+
+Return ONLY the JSON array - no explanations.`,
+        placeholder: 'Describe the users to create or update...',
+        generationType: 'json-object',
+      },
+    },
+    // Organization fields
+    {
+      id: 'organizationId',
+      title: 'Organization ID',
+      type: 'short-input',
+      placeholder: 'Organization ID',
+      required: {
+        field: 'operation',
+        value: ['get_organization', 'delete_organization'],
+      },
+      condition: {
+        field: 'operation',
+        value: [
+          'get_tickets',
+          'create_ticket',
+          'get_organization',
+          'delete_organization',
+          'update_organization',
+          'create_user',
+          'update_user',
+        ],
+      },
+    },
+    {
+      id: 'organizationName',
+      title: 'Organization Name',
+      type: 'short-input',
+      placeholder: 'Organization name',
+      required: {
+        field: 'operation',
+        value: ['autocomplete_organizations'],
+      },
+      condition: {
+        field: 'operation',
+        value: ['autocomplete_organizations', 'create_organization', 'update_organization'],
+      },
+    },
+    {
+      id: 'organizations',
+      title: 'Organizations',
+      type: 'long-input',
+      placeholder: 'JSON array of organization objects',
+      required: true,
+      condition: {
+        field: 'operation',
+        value: ['create_organizations_bulk'],
+      },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a JSON array of Zendesk organization objects based on the user's description.
+Each organization object should include: name, and optionally domain_names, tags, notes.
+
+Example structure:
+[
+  {
+    "name": "Acme Corp",
+    "domain_names": ["acme.com", "acme.io"],
+    "tags": ["enterprise", "priority"],
+    "notes": "Key customer since 2020"
+  }
+]
+
+Return ONLY the JSON array - no explanations.`,
+        placeholder: 'Describe the organizations to create...',
+        generationType: 'json-object',
+      },
+    },
+    // Search fields
+    {
+      id: 'query',
+      title: 'Query',
+      type: 'short-input',
+      placeholder: 'Search query',
+      required: {
+        field: 'operation',
+        value: ['search', 'search_count'],
+      },
+      condition: {
+        field: 'operation',
+        value: ['search_users', 'search', 'search_count'],
+      },
+      wandConfig: {
+        enabled: true,
+        prompt: `Generate a Zendesk search query based on the user's description.
+Use Zendesk search syntax for precise results:
+- type:ticket, type:user, type:organization - filter by type
+- status:open, status:pending, status:solved - ticket status
+- priority:urgent, priority:high - ticket priority
+- assignee:name - assigned to specific agent
+- created>2024-01-01 - date filters
+- tags:billing - filter by tags
+- "exact phrase" - exact match
+
+Examples:
+- "urgent tickets from last week" -> type:ticket priority:urgent created>1week
+- "open tickets about billing" -> type:ticket status:open tags:billing
+- "customers named John" -> type:user name:John*
+
+Return ONLY the search query - no explanations.`,
+        placeholder: 'Describe what you want to search for...',
+      },
+    },
+    {
+      id: 'filterType',
+      title: 'Resource Type',
+      type: 'dropdown',
+      options: [
+        { label: 'Ticket', id: 'ticket' },
+        { label: 'User', id: 'user' },
+        { label: 'Organization', id: 'organization' },
+        { label: 'Group', id: 'group' },
+      ],
+      required: true,
+      condition: {
+        field: 'operation',
+        value: ['search'],
+      },
+    },
+    {
+      id: 'sort',
+      title: 'Sort',
+      type: 'dropdown',
+      options: [
+        { label: 'Updated At (Asc)', id: 'updated_at' },
+        { label: 'Updated At (Desc)', id: '-updated_at' },
+        { label: 'ID (Asc)', id: 'id' },
+        { label: 'ID (Desc)', id: '-id' },
+        { label: 'Status (Asc)', id: 'status' },
+        { label: 'Status (Desc)', id: '-status' },
+      ],
+      condition: {
+        field: 'operation',
+        value: ['get_tickets'],
+      },
+      mode: 'advanced',
+    },
+    // Pagination fields
+    {
+      id: 'perPage',
+      title: 'Per Page',
+      type: 'short-input',
+      placeholder: 'Results per page (default: 100, max: 100)',
+      condition: {
+        field: 'operation',
+        value: [
+          'get_tickets',
+          'get_users',
+          'get_organizations',
+          'search_users',
+          'autocomplete_organizations',
+          'search',
+        ],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'pageAfter',
+      title: 'Page After (Cursor)',
+      type: 'short-input',
+      placeholder: 'Cursor from previous response (after_cursor)',
+      description: 'Cursor value from a previous response to fetch the next page of results',
+      condition: {
+        field: 'operation',
+        value: ['get_tickets', 'get_users', 'get_organizations', 'search'],
+      },
+      mode: 'advanced',
+    },
+    {
+      id: 'page',
+      title: 'Page Number',
+      type: 'short-input',
+      placeholder: 'Page number (default: 1)',
+      description: 'Page number for offset-based pagination',
+      condition: {
+        field: 'operation',
+        value: ['search_users', 'autocomplete_organizations'],
+      },
+      mode: 'advanced',
+    },
+    ...getTrigger('zendesk_ticket_created').subBlocks,
+    ...getTrigger('zendesk_ticket_status_changed').subBlocks,
+    ...getTrigger('zendesk_ticket_comment_added').subBlocks,
+    ...getTrigger('zendesk_ticket_priority_changed').subBlocks,
+    ...getTrigger('zendesk_webhook').subBlocks,
+  ],
+  tools: {
+    access: [
+      'zendesk_get_tickets',
+      'zendesk_get_ticket',
+      'zendesk_create_ticket',
+      'zendesk_create_tickets_bulk',
+      'zendesk_update_ticket',
+      'zendesk_update_tickets_bulk',
+      'zendesk_delete_ticket',
+      'zendesk_merge_tickets',
+      'zendesk_get_users',
+      'zendesk_get_user',
+      'zendesk_get_current_user',
+      'zendesk_search_users',
+      'zendesk_create_user',
+      'zendesk_create_users_bulk',
+      'zendesk_update_user',
+      'zendesk_update_users_bulk',
+      'zendesk_delete_user',
+      'zendesk_get_organizations',
+      'zendesk_get_organization',
+      'zendesk_autocomplete_organizations',
+      'zendesk_create_organization',
+      'zendesk_create_organizations_bulk',
+      'zendesk_update_organization',
+      'zendesk_delete_organization',
+      'zendesk_search',
+      'zendesk_search_count',
+    ],
+    config: {
+      tool: (params) => {
+        switch (params.operation) {
+          case 'get_tickets':
+            return 'zendesk_get_tickets'
+          case 'get_ticket':
+            return 'zendesk_get_ticket'
+          case 'create_ticket':
+            return 'zendesk_create_ticket'
+          case 'create_tickets_bulk':
+            return 'zendesk_create_tickets_bulk'
+          case 'update_ticket':
+            return 'zendesk_update_ticket'
+          case 'update_tickets_bulk':
+            return 'zendesk_update_tickets_bulk'
+          case 'delete_ticket':
+            return 'zendesk_delete_ticket'
+          case 'merge_tickets':
+            return 'zendesk_merge_tickets'
+          case 'get_users':
+            return 'zendesk_get_users'
+          case 'get_user':
+            return 'zendesk_get_user'
+          case 'get_current_user':
+            return 'zendesk_get_current_user'
+          case 'search_users':
+            return 'zendesk_search_users'
+          case 'create_user':
+            return 'zendesk_create_user'
+          case 'create_users_bulk':
+            return 'zendesk_create_users_bulk'
+          case 'update_user':
+            return 'zendesk_update_user'
+          case 'update_users_bulk':
+            return 'zendesk_update_users_bulk'
+          case 'delete_user':
+            return 'zendesk_delete_user'
+          case 'get_organizations':
+            return 'zendesk_get_organizations'
+          case 'get_organization':
+            return 'zendesk_get_organization'
+          case 'autocomplete_organizations':
+            return 'zendesk_autocomplete_organizations'
+          case 'create_organization':
+            return 'zendesk_create_organization'
+          case 'create_organizations_bulk':
+            return 'zendesk_create_organizations_bulk'
+          case 'update_organization':
+            return 'zendesk_update_organization'
+          case 'delete_organization':
+            return 'zendesk_delete_organization'
+          case 'search':
+            return 'zendesk_search'
+          case 'search_count':
+            return 'zendesk_search_count'
+          default:
+            throw new Error(`Unknown operation: ${params.operation}`)
+        }
+      },
+      params: (params) => {
+        const { apiToken, operation, ...rest } = params
+        const cleanParams: Record<string, any> = { apiToken }
+
+        // Special mapping for autocomplete_organizations
+        if (operation === 'autocomplete_organizations' && params.organizationName) {
+          cleanParams.name = params.organizationName
+        }
+
+        Object.entries(rest).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            // Skip organizationName for autocomplete_organizations as it's mapped to 'name'
+            if (operation === 'autocomplete_organizations' && key === 'organizationName') {
+              return
+            }
+            cleanParams[key] = value
+          }
+        })
+        return cleanParams
+      },
+    },
+  },
+  inputs: {
+    operation: { type: 'string', description: 'Operation to perform' },
+    email: { type: 'string', description: 'Zendesk email address' },
+    apiToken: { type: 'string', description: 'Zendesk API token' },
+    subdomain: { type: 'string', description: 'Zendesk subdomain' },
+    sort: { type: 'string', description: 'Sort field for ticket listing' },
+  },
+  outputs: {
+    // Ticket operations - list
+    tickets: { type: 'json', description: 'Array of ticket objects (get_tickets)' },
+    // Ticket operations - single
+    ticket: {
+      type: 'json',
+      description: 'Single ticket object (get_ticket, create_ticket, update_ticket)',
+    },
+    // User operations - list
+    users: { type: 'json', description: 'Array of user objects (get_users, search_users)' },
+    // User operations - single
+    user: {
+      type: 'json',
+      description: 'Single user object (get_user, get_current_user, create_user, update_user)',
+    },
+    // Organization operations - list
+    organizations: {
+      type: 'json',
+      description: 'Array of organization objects (get_organizations, autocomplete_organizations)',
+    },
+    // Organization operations - single
+    organization: {
+      type: 'json',
+      description:
+        'Single organization object (get_organization, create_organization, update_organization)',
+    },
+    // Search operations
+    results: { type: 'json', description: 'Array of search result objects (search)' },
+    count: { type: 'number', description: 'Number of matching results (search_count)' },
+    // Bulk/async operations
+    jobStatus: {
+      type: 'json',
+      description:
+        'Job status for async operations (create_tickets_bulk, update_tickets_bulk, merge_tickets, create_users_bulk, update_users_bulk, create_organizations_bulk)',
+    },
+    // Delete operations
+    deleted: {
+      type: 'boolean',
+      description: 'Deletion confirmation (delete_ticket, delete_user, delete_organization)',
+    },
+    // Cursor-based pagination (shared across list operations)
+    paging: {
+      type: 'json',
+      description: 'Cursor-based pagination information (after_cursor, has_more)',
+    },
+    // Metadata (shared across all operations)
+    metadata: { type: 'json', description: 'Operation metadata including operation type' },
+  },
+
+  triggers: {
+    enabled: true,
+    available: [
+      'zendesk_ticket_created',
+      'zendesk_ticket_status_changed',
+      'zendesk_ticket_comment_added',
+      'zendesk_ticket_priority_changed',
+      'zendesk_webhook',
+    ],
+  },
+}
+
+export const ZendeskBlockMeta = {
+  tags: ['customer-support', 'ticketing'],
+  url: 'https://www.zendesk.com',
+  templates: [
+    {
+      icon: ZendeskIcon,
+      title: 'Zendesk ticket knowledge search',
+      prompt:
+        'Create a knowledge base connected to my Zendesk account so all past tickets, resolutions, and agent notes are automatically synced and searchable. Then build an agent my support team can ask things like "how do we usually resolve the SSO login issue?" or "has anyone reported this billing bug before?" to find past solutions instantly.',
+      modules: ['knowledge-base', 'agent'],
+      category: 'support',
+      tags: ['support', 'research', 'team'],
+    },
+    {
+      icon: ZendeskIcon,
+      title: 'Zendesk auto-classifier',
+      prompt:
+        'Build a scheduled workflow that polls Zendesk for new tickets, classifies each one by product area, severity, and intent, applies the matching tags, sets priority, and assigns it to the right group so triage happens automatically.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'automation'],
+    },
+    {
+      icon: ZendeskIcon,
+      title: 'Zendesk SLA breach alert',
+      prompt:
+        'Create a scheduled workflow that searches Zendesk every 15 minutes for tickets at risk of breaching first-response or resolution SLA, summarizes each one, and posts a Slack alert to the responsible group with deep links to the tickets.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'monitoring', 'reporting'],
+      alsoIntegrations: ['slack'],
+    },
+    {
+      icon: ZendeskIcon,
+      title: 'Zendesk ticket deflector',
+      prompt:
+        'Create a knowledge base from help center articles and past ticket resolutions, then build a scheduled workflow that polls for new Zendesk tickets, drafts a public reply using the knowledge base with citations, and posts it as an internal note for agents to send with one click.',
+      modules: ['scheduled', 'knowledge-base', 'agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'automation', 'communication'],
+    },
+    {
+      icon: ZendeskIcon,
+      title: 'Zendesk to Jira engineering bridge',
+      prompt:
+        'Build a scheduled workflow that searches Zendesk for tickets newly tagged as a bug, creates a linked Jira issue with the ticket details and customer impact, and posts the Jira link back as an internal note on the Zendesk ticket.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'engineering', 'automation'],
+      alsoIntegrations: ['jira'],
+    },
+    {
+      icon: ZendeskIcon,
+      title: 'Zendesk weekly CX pulse',
+      prompt:
+        'Create a scheduled weekly workflow that pulls Zendesk ticket volume, CSAT, top tags, and recurring issues, generates a narrative CX pulse with week-over-week deltas, and posts it to Slack with links to the standout tickets.',
+      modules: ['scheduled', 'agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'reporting', 'analysis'],
+      alsoIntegrations: ['slack'],
+    },
+    {
+      icon: ZendeskIcon,
+      title: 'Zendesk customer record sync',
+      prompt:
+        'Build a workflow that watches my CRM for new or updated accounts, searches Zendesk for the matching user and organization, and creates or updates them in bulk so support agents always see the latest company, plan, and contact details on every ticket.',
+      modules: ['agent', 'workflows'],
+      category: 'support',
+      tags: ['support', 'crm', 'sync'],
+      alsoIntegrations: ['salesforce'],
+    },
+  ],
+  skills: [
+    {
+      name: 'triage-new-ticket',
+      description:
+        'Read a Zendesk ticket, classify it, and update priority, tags, and assignee accordingly.',
+      content:
+        '# Triage a Zendesk Ticket\n\nClassify an incoming ticket and route it correctly.\n\n## Steps\n1. Get the ticket by ID to read the subject, description, and requester.\n2. Classify the issue type, urgency, and the team or queue it belongs to.\n3. Update the ticket with the right priority, tags, and assignee or group.\n4. Optionally add an internal note explaining the triage decision.\n\n## Output\nReport the ticket ID, the classification, and the priority, tags, and assignee set. Note anything that needs human review.',
+    },
+    {
+      name: 'create-support-ticket',
+      description:
+        'Create a Zendesk ticket from an inbound request, linking it to the right requester.',
+      content:
+        '# Create a Zendesk Ticket\n\nLog an inbound issue as a support ticket.\n\n## Steps\n1. Gather the subject, description, and requester details.\n2. Look up the requester with search-users, creating the user if they do not exist.\n3. Call create-ticket with the subject, body, requester, priority, and any tags.\n4. Capture the new ticket ID.\n\n## Output\nReturn the created ticket ID, its priority, and the requester it is linked to. Confirm whether a new user was created.',
+    },
+    {
+      name: 'search-tickets',
+      description:
+        'Run a Zendesk search to find tickets matching status, requester, or keyword criteria.',
+      content:
+        '# Search Zendesk Tickets\n\nFind tickets that match a set of conditions.\n\n## Steps\n1. Express the criteria as a Zendesk search query, for example status, tags, requester, or keyword.\n2. Call the search operation, choosing the right sort order.\n3. Read the results and pull the fields needed for the task.\n\n## Output\nReturn the matching tickets with ID, subject, status, priority, and assignee. State the query used and the total count via search-count if a volume figure is needed.',
+    },
+    {
+      name: 'sync-organization',
+      description:
+        'Create or update a Zendesk organization and its associated users for account hygiene.',
+      content:
+        '# Sync a Zendesk Organization\n\nKeep an organization record and its users accurate.\n\n## Steps\n1. Look up the organization with get-organizations or autocomplete-organizations to check if it exists.\n2. Create the organization, or update it with the latest name, domains, and details.\n3. Reconcile the associated users, creating or updating them so they map to the organization.\n\n## Output\nReport the organization ID and whether it was created or updated, plus a count of users created or updated. List any conflicts found.',
+    },
+  ],
+} as const satisfies BlockMeta

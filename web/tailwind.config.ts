@@ -33,7 +33,10 @@ export default {
       fontFamily: {
         season: ['var(--font-season)'],
         body: [
-          'ui-sans-serif',
+          '"PingFang SC"',
+          '"PingFang TC"',
+          '"Hiragino Sans GB"',
+          '"Microsoft YaHei"',
           '-apple-system',
           'system-ui',
           'Segoe UI',

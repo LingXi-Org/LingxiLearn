@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name='color-scheme' content='light dark' />
         <meta name='format-detection' content='telephone=no' />
       </head>
-      <body className={`${season.variable} font-season`} suppressHydrationWarning>
+      <body className={`${season.variable} font-body`} suppressHydrationWarning>
         <NuqsAdapter>
           <LingxiIdentityProvider>{children}</LingxiIdentityProvider>
         </NuqsAdapter>

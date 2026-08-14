@@ -1,0 +1,442 @@
+import type { MothershipResource } from '@/lib/copilot/resources/types'
+import type { HostedKeyRateLimitConfig } from '@/lib/core/rate-limiter'
+import type { PrivateSecretProvenanceSelection } from '@/lib/execution/model-input-provenance'
+import type { OAuthService } from '@/lib/oauth'
+import type { ResolvedSecretInputPath } from '@/executor/utils/resolved-secret-trace-registry'
+
+export type BYOKProviderId =
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'mistral'
+  | 'zai'
+  | 'kimi'
+  | 'xai'
+  | 'fireworks'
+  | 'together'
+  | 'baseten'
+  | 'ollama-cloud'
+  | 'falai'
+  | 'firecrawl'
+  | 'exa'
+  | 'context_dev'
+  | 'serper'
+  | 'jina'
+  | 'perplexity'
+  | 'google_cloud'
+  | 'linkup'
+  | 'brandfetch'
+  | 'parallel_ai'
+  | 'cohere'
+  | 'hunter'
+  | 'peopledatalabs'
+  | 'findymail'
+  | 'prospeo'
+  | 'wiza'
+  | 'zerobounce'
+  | 'neverbounce'
+  | 'millionverifier'
+  | 'datagma'
+  | 'dropcontact'
+  | 'leadmagic'
+  | 'icypeas'
+  | 'enrow'
+
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD'
+
+/**
+ * Minimal execution context injected into tool params at runtime.
+ * This is a subset of the full ExecutionContext from executor/types.ts.
+ */
+export type WorkflowToolExecutionContext = {
+  workspaceId?: string
+  workflowId?: string
+  executionId?: string
+  userId?: string
+}
+
+export type OutputType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'json'
+  | 'file'
+  | 'file[]'
+  | 'array'
+  | 'object'
+
+export interface OutputProperty {
+  type: OutputType
+  description?: string
+  optional?: boolean
+  nullable?: boolean
+  properties?: Record<string, OutputProperty>
+  items?: {
+    type: OutputType
+    description?: string
+    properties?: Record<string, OutputProperty>
+  }
+}
+
+export interface ToolOutputProperty extends OutputProperty {
+  fileConfig?: {
+    mimeType?: string
+    extension?: string
+  }
+}
+
+export type ParameterVisibility =
+  | 'user-or-llm' // User can provide OR LLM must generate
+  | 'user-only' // Only user can provide (required/optional determined by required field)
+  | 'llm-only' // Only LLM provides (computed values)
+  | 'hidden' // Not shown to user or LLM
+
+export interface ToolResponse {
+  success: boolean // Whether the tool execution was successful
+  output: Record<string, any> // The structured output from the tool
+  error?: string // Error message if success is false
+  /**
+   * HTTP status owned by SIM itself (e.g. hosted-key rate limiting or
+   * exhaustion), carried so it survives the throw → `ToolResponse` flattening
+   * and can reach the API caller. Deliberately NOT the upstream provider's
+   * status — a provider's 404 must never become the workflow API's status.
+   */
+  statusCode?: number
+  resources?: MothershipResource[] // Resources to auto-open/show in UI
+  largeValueKeys?: string[]
+  fileKeys?: string[]
+  timing?: {
+    startTime: string // ISO timestamp when the tool execution started
+    endTime: string // ISO timestamp when the tool execution ended
+    duration: number // Duration in milliseconds
+  }
+}
+
+export interface OAuthConfig {
+  required: boolean // Whether this tool requires OAuth authentication
+  provider: OAuthService // The service that needs to be authorized
+  requiredScopes?: string[] // Specific scopes this tool needs (for granular scope validation)
+}
+
+export interface ToolRetryConfig {
+  enabled: boolean
+  maxRetries?: number
+  initialDelayMs?: number
+  maxDelayMs?: number
+  retryIdempotentOnly?: boolean
+}
+
+/** JSON Schema subset supported for array item definitions in tool parameters. */
+export interface ToolParameterItemSchema {
+  readonly type?: string
+  readonly description?: string
+  readonly const?: string | number | boolean
+  readonly minimum?: number
+  readonly maximum?: number
+  readonly minLength?: number
+  readonly maxLength?: number
+  readonly pattern?: string
+  readonly additionalProperties?: boolean
+  readonly required?: readonly string[]
+  readonly properties?: Readonly<Record<string, ToolParameterItemSchema>>
+  readonly anyOf?: readonly ToolParameterItemSchema[]
+}
+
+export interface ToolConfig<P = any, R = any> {
+  // Basic tool identification
+  id: string
+  name: string
+  description: string
+  version: string
+
+  // Parameter schema - what this tool accepts
+  params: Record<
+    string,
+    {
+      type: string
+      required?: boolean
+      visibility?: ParameterVisibility
+      default?: any
+      description?: string
+      items?: ToolParameterItemSchema
+    }
+  >
+  // Output schema - what this tool produces
+  outputs?: Record<string, ToolOutputProperty>
+
+  // OAuth configuration for this tool (if it requires authentication)
+  oauth?: OAuthConfig
+
+  // Error extractor to use for this tool's error responses
+  // If specified, only this extractor will be used (deterministic)
+  // If not specified, will try all extractors in order (fallback)
+  errorExtractor?: string
+
+  // Request configuration
+  request: {
+    url: string | ((params: P) => string)
+    method: HttpMethod | ((params: P) => HttpMethod)
+    headers: (params: P) => Record<string, string>
+    body?: (params: P) => Record<string, any> | string | FormData | undefined
+    /** Selects the signed, workflow-scoped identity required by protected internal routes. */
+    internalAuth?: 'executor_delegation'
+    /** Defines the exact request fields that may become model-visible. */
+    modelInput?:
+      | {
+          /**
+           * Projects selected top-level params to canonical placeholders before formatting the
+           * request. The selector must return a plain partial params record.
+           */
+          mode: 'project'
+          select: (params: P) => Record<string, unknown>
+          /**
+           * Rebuilds selected top-level params when only nested leaves are model-visible. The
+           * first argument is a structured clone containing the original selected params. The
+           * returned patch must contain exactly the selected keys, and selecting from the patched
+           * params must reproduce the projected selection exactly.
+           */
+          applyProjected?: (
+            selectedParams: Partial<P>,
+            projectedSelection: Record<string, unknown>
+          ) => Record<string, unknown>
+          /**
+           * Selects inline model-bound values that must not be rewritten, such as file bytes or
+           * data URLs. Storage keys, paths, signed URLs, and remote URLs are locators rather than
+           * byte provenance. Metadata is delivered only to an authenticated internal route that
+           * owns the final allow/reject decision.
+           */
+          privateInputPaths?: (params: P) => readonly ResolvedSecretInputPath[]
+        }
+      | {
+          /**
+           * Sends encrypted provenance out-of-band to an authenticated internal route that owns
+           * the corresponding projection boundary.
+           */
+          mode: 'private-provenance'
+          inputPaths: (params: P) => readonly ResolvedSecretInputPath[]
+        }
+    /**
+     * Transports encrypted secret provenance across an authenticated internal
+     * tool boundary without rewriting the selected value.
+     */
+    secretProvenance?: {
+      /** Selects the exact value whose provenance is persisted by the route. */
+      request?: (params: P) => PrivateSecretProvenanceSelection[]
+      /** Imports provenance returned for the route's functional response. */
+      response?: {
+        /** Whether a valid incomplete report fails this call or taints later model egress. */
+        incomplete: 'reject' | 'propagate'
+      }
+    }
+    retry?: ToolRetryConfig
+    /**
+     * Drop the `Authorization` header when following a redirect. Set this on any
+     * tool whose endpoint redirects to a different origin carrying its own
+     * signed URL — GitHub's Actions log and artifact downloads are the canonical
+     * case — so the API credential is never sent to the storage host.
+     */
+    stripAuthOnRedirect?: boolean
+  }
+
+  // Post-processing (optional) - allows additional processing after the initial request
+  postProcess?: (
+    result: R extends ToolResponse ? R : ToolResponse,
+    params: P,
+    executeTool: (toolId: string, params: Record<string, any>) => Promise<ToolResponse>
+  ) => Promise<R extends ToolResponse ? R : ToolResponse>
+
+  // Response handling
+  transformResponse?: (response: Response, params?: P) => Promise<R>
+
+  /**
+   * Direct execution function for tools that don't need HTTP requests.
+   * If provided, this will be called instead of making an HTTP request.
+   * Receives the workflow execution's abort signal (when one is active) so
+   * long-running direct executions can propagate cancellation.
+   */
+  directExecution?: (params: P, signal?: AbortSignal) => Promise<ToolResponse>
+
+  /**
+   * Optional dynamic schema enrichment for specific params.
+   * Maps param IDs to their enrichment configuration.
+   */
+  schemaEnrichment?: Record<string, SchemaEnrichmentConfig>
+  /**
+   * Optional tool-level enrichment that modifies description and all parameters.
+   * Use when multiple params depend on a single runtime value.
+   */
+  toolEnrichment?: ToolEnrichmentConfig
+
+  /**
+   * Hosted API key configuration for this tool.
+   * When configured, the tool can use Sim's hosted API keys if user doesn't provide their own.
+   * Usage is billed according to the pricing config.
+   */
+  hosting?: ToolHostingConfig<P>
+}
+
+export interface TableRow {
+  id: string
+  cells: {
+    Key: string
+    Value: any
+  }
+}
+
+export interface OAuthTokenPayload {
+  credentialId?: string
+  credentialAccountUserId?: string
+  providerId?: string
+  workflowId?: string
+  impersonateEmail?: string
+  scopes?: string[]
+}
+
+/**
+ * File data that tools can return for file-typed outputs
+ */
+export interface ToolFileData {
+  name: string
+  mimeType: string
+  data?: Buffer | string // Buffer or base64 string
+  url?: string // URL to download file from
+  size?: number
+}
+
+/**
+ * Configuration for dynamically enriching a parameter's schema at runtime.
+ * Used when a parameter's schema depends on runtime values (e.g., KB tags, workflow inputs).
+ */
+interface SchemaEnrichmentConfig {
+  /** The param ID that this enrichment depends on (e.g., 'knowledgeBaseId', 'workflowId') */
+  dependsOn: string
+  /** Function to fetch and build dynamic schema based on the dependency value */
+  enrichSchema: (
+    dependencyValue: string,
+    context: WorkflowToolExecutionContext
+  ) => Promise<{
+    type: string
+    properties?: Record<string, { type: string; description?: string }>
+    description?: string
+    required?: string[]
+  } | null>
+}
+
+/**
+ * Configuration for enriching an entire tool (description + all parameters) at runtime.
+ * Used when multiple parameters and the description depend on a single runtime value (e.g., tableId).
+ */
+interface ToolEnrichmentConfig {
+  /** The param ID that this enrichment depends on (e.g., 'tableId') */
+  dependsOn: string
+  /** Function to enrich the tool's description and parameter schema */
+  enrichTool: (
+    dependencyValue: string,
+    originalSchema: {
+      type: 'object'
+      properties: Record<string, unknown>
+      required: string[]
+    },
+    originalDescription: string,
+    context: WorkflowToolExecutionContext
+  ) => Promise<{
+    description: string
+    parameters: {
+      type: 'object'
+      properties: Record<string, unknown>
+      required: string[]
+    }
+  } | null>
+}
+
+/**
+ * Pricing models for hosted API key usage
+ */
+/** Flat fee per API call (e.g., Serper search) */
+interface PerRequestPricing {
+  type: 'per_request'
+  /** Cost per request in dollars */
+  cost: number
+}
+
+/** Result from custom pricing calculation */
+interface CustomPricingResult {
+  /** Cost in dollars */
+  cost: number
+  /** Optional metadata about the cost calculation (e.g., breakdown from API) */
+  metadata?: Record<string, unknown>
+}
+
+/** Custom pricing calculated from params and response (e.g., Exa with different modes/result counts) */
+interface CustomPricing<P = Record<string, unknown>> {
+  type: 'custom'
+  /** Calculate cost based on request params and response output. Fields starting with _ are internal. */
+  getCost: (params: P, output: Record<string, unknown>) => number | CustomPricingResult
+}
+
+/** Union of all pricing models */
+export type ToolHostingPricing<P = Record<string, unknown>> = PerRequestPricing | CustomPricing<P>
+
+export type ToolHostingCondition =
+  | {
+      field: string
+      operator: 'equals'
+      value: string | number | boolean | null
+    }
+  | {
+      field: string
+      operator: 'one_of'
+      values: Array<string | number | boolean | null>
+    }
+
+export type ToolHostingPredicate<P> = ((params: P) => boolean) & {
+  /** Serializable equivalent of this predicate for VFS consumers. */
+  condition?: ToolHostingCondition
+}
+
+/**
+ * Configuration for hosted API key support.
+ * When configured, the tool can use Sim's hosted API keys if user doesn't provide their own.
+ *
+ * ### Hosted key env var convention
+ *
+ * Keys follow a numbered naming convention driven by a count env var:
+ *
+ * 1. Set `{envKeyPrefix}_COUNT` to the number of keys available.
+ * 2. Provide each key as `{envKeyPrefix}_1`, `{envKeyPrefix}_2`, ..., `{envKeyPrefix}_N`.
+ *
+ * **Example** — for `envKeyPrefix: 'EXA_API_KEY'` with 5 keys:
+ * ```
+ * EXA_API_KEY_COUNT=5
+ * EXA_API_KEY_1=sk-...
+ * EXA_API_KEY_2=sk-...
+ * EXA_API_KEY_3=sk-...
+ * EXA_API_KEY_4=sk-...
+ * EXA_API_KEY_5=sk-...
+ * ```
+ *
+ * For a single-key deployment, `{envKeyPrefix}` is also supported when no
+ * `{envKeyPrefix}_COUNT` is configured.
+ *
+ * Adding more keys only requires updating the count and adding the new env var —
+ * no code changes needed.
+ */
+export interface ToolHostingConfig<P = Record<string, unknown>> {
+  /** Optional predicate for tools where hosted keys only apply to some parameter combinations. */
+  enabled?: ToolHostingPredicate<P>
+  /**
+   * Env var name prefix for hosted keys.
+   * At runtime, `{envKeyPrefix}_COUNT` is read to determine how many keys exist,
+   * then `{envKeyPrefix}_1` through `{envKeyPrefix}_N` are resolved. If no count
+   * is configured, a singular `{envKeyPrefix}` is used when present.
+   */
+  envKeyPrefix: string
+  /** The parameter name that receives the API key */
+  apiKeyParam: string
+  /** BYOK provider ID for workspace key lookup */
+  byokProviderId?: BYOKProviderId
+  /** Pricing when using hosted key */
+  pricing: ToolHostingPricing<P>
+  /** Hosted key rate limit configuration (required for hosted key distribution) */
+  rateLimit: HostedKeyRateLimitConfig
+}

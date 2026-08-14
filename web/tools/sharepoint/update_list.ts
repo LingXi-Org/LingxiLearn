@@ -1,0 +1,123 @@
+import type {
+  SharepointToolParams,
+  SharepointUpdateListItemResponse,
+} from '@/tools/sharepoint/types'
+import { optionalTrim, sanitizeListItemFields } from '@/tools/sharepoint/utils'
+import type { ToolConfig } from '@/tools/types'
+
+export const updateListItemTool: ToolConfig<
+  SharepointToolParams,
+  SharepointUpdateListItemResponse
+> = {
+  id: 'sharepoint_update_list',
+  name: 'Update SharePoint List Item',
+  description: 'Update the properties (fields) on a SharePoint list item',
+  version: '1.0.0',
+
+  oauth: {
+    required: true,
+    provider: 'sharepoint',
+  },
+
+  params: {
+    accessToken: {
+      type: 'string',
+      required: true,
+      visibility: 'hidden',
+      description: 'The access token for the SharePoint API',
+    },
+    siteSelector: {
+      type: 'string',
+      required: false,
+      visibility: 'user-only',
+      description: 'Select the SharePoint site',
+    },
+    siteId: {
+      type: 'string',
+      required: false,
+      visibility: 'hidden',
+      description: 'The ID of the SharePoint site (internal use)',
+    },
+    listId: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description:
+        'The ID of the list containing the item. Example: b!abc123def456 or a GUID like 12345678-1234-1234-1234-123456789012',
+    },
+    itemId: {
+      type: 'string',
+      required: true,
+      visibility: 'user-or-llm',
+      description: 'The ID of the list item to update. Example: 1, 42, or 123',
+    },
+    listItemFields: {
+      type: 'json',
+      required: true,
+      visibility: 'user-only',
+      description: 'Field values to update on the list item',
+    },
+  },
+
+  request: {
+    url: (params) => {
+      const siteId = optionalTrim(params.siteId) || optionalTrim(params.siteSelector) || 'root'
+      const itemId = optionalTrim(params.itemId)
+      const listId = optionalTrim(params.listId)
+      if (!itemId) throw new Error('itemId is required')
+      if (!listId) {
+        throw new Error('listId must be provided')
+      }
+      const listSegment = encodeURIComponent(listId)
+      return `https://graph.microsoft.com/v1.0/sites/${encodeURIComponent(siteId)}/lists/${listSegment}/items/${encodeURIComponent(itemId)}/fields`
+    },
+    method: 'PATCH',
+    headers: (params) => ({
+      Authorization: `Bearer ${params.accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    }),
+    body: (params) => {
+      if (!params.listItemFields || Object.keys(params.listItemFields).length === 0) {
+        throw new Error('listItemFields must not be empty')
+      }
+
+      return sanitizeListItemFields(params.listItemFields, { action: 'update' })
+    },
+  },
+
+  transformResponse: async (response: Response, params) => {
+    let fields: Record<string, unknown> | undefined
+    if (response.status !== 204) {
+      try {
+        fields = await response.json()
+      } catch {
+        // Fall back to submitted fields if no body is returned
+        fields = params?.listItemFields
+      }
+    } else {
+      fields = params?.listItemFields
+    }
+
+    return {
+      success: true,
+      output: {
+        item: {
+          id: params?.itemId!,
+          fields,
+        },
+      },
+    }
+  },
+
+  outputs: {
+    item: {
+      type: 'object',
+      description: 'Updated SharePoint list item',
+      properties: {
+        id: { type: 'string', description: 'Item ID' },
+        fields: { type: 'object', description: 'Updated field values' },
+      },
+    },
+  },
+}

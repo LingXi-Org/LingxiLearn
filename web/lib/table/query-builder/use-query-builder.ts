@@ -1,0 +1,154 @@
+/**
+ * Hooks for query builder UI state management (filters and sorting).
+ */
+
+import { useCallback } from 'react'
+import { generateShortId } from '@sim/utils/id'
+import {
+  COMPARISON_OPERATORS,
+  type FilterRule,
+  LOGICAL_OPERATORS,
+  SORT_DIRECTION_OPTIONS,
+  type SortRule,
+} from '@/lib/table/query-builder/constants'
+import type { ColumnOption } from '@/lib/table/types'
+
+const comparisonOptions: ColumnOption[] = COMPARISON_OPERATORS.map((op) => ({
+  value: op.value,
+  label: op.label,
+}))
+
+const logicalOptions: ColumnOption[] = LOGICAL_OPERATORS.map((op) => ({
+  value: op.value,
+  label: op.label,
+}))
+
+const sortDirectionOptions: ColumnOption[] = SORT_DIRECTION_OPTIONS.map((d) => ({
+  value: d.value,
+  label: d.label,
+}))
+
+/** Manages filter rule state with add/remove/update operations. */
+export function useFilterBuilder({
+  columns,
+  rules,
+  setRules,
+  isReadOnly = false,
+}: UseFilterBuilderProps): UseFilterBuilderReturn {
+  const createDefaultRule = useCallback((): FilterRule => {
+    return {
+      id: generateShortId(),
+      logicalOperator: 'and',
+      column: columns[0]?.value || '',
+      operator: 'eq',
+      value: '',
+    }
+  }, [columns])
+
+  const addRule = useCallback(() => {
+    if (isReadOnly) return
+    setRules([...rules, createDefaultRule()])
+  }, [isReadOnly, rules, setRules, createDefaultRule])
+
+  const removeRule = useCallback(
+    (id: string) => {
+      if (isReadOnly) return
+      setRules(rules.filter((r) => r.id !== id))
+    },
+    [isReadOnly, rules, setRules]
+  )
+
+  const updateRule = useCallback(
+    (id: string, field: keyof FilterRule, value: string) => {
+      if (isReadOnly) return
+      setRules(rules.map((r) => (r.id === id ? { ...r, [field]: value } : r)))
+    },
+    [isReadOnly, rules, setRules]
+  )
+
+  return {
+    comparisonOptions,
+    logicalOptions,
+    sortDirectionOptions,
+    addRule,
+    removeRule,
+    updateRule,
+    createDefaultRule,
+  }
+}
+
+/** Manages sort rule state with add/remove/update operations. */
+export function useSortBuilder({
+  columns,
+  sortRule,
+  setSortRule,
+}: UseSortBuilderProps): UseSortBuilderReturn {
+  const addSort = useCallback(() => {
+    setSortRule({
+      id: generateShortId(),
+      column: columns[0]?.value || '',
+      direction: 'asc',
+    })
+  }, [columns, setSortRule])
+
+  const removeSort = useCallback(() => {
+    setSortRule(null)
+  }, [setSortRule])
+
+  const updateSortColumn = useCallback(
+    (column: string) => {
+      if (sortRule) {
+        setSortRule({ ...sortRule, column })
+      }
+    },
+    [sortRule, setSortRule]
+  )
+
+  const updateSortDirection = useCallback(
+    (direction: 'asc' | 'desc') => {
+      if (sortRule) {
+        setSortRule({ ...sortRule, direction })
+      }
+    },
+    [sortRule, setSortRule]
+  )
+
+  return {
+    sortDirectionOptions,
+    addSort,
+    removeSort,
+    updateSortColumn,
+    updateSortDirection,
+  }
+}
+
+export interface UseFilterBuilderProps {
+  columns: ColumnOption[]
+  rules: FilterRule[]
+  setRules: (rules: FilterRule[]) => void
+  isReadOnly?: boolean
+}
+
+export interface UseFilterBuilderReturn {
+  comparisonOptions: ColumnOption[]
+  logicalOptions: ColumnOption[]
+  sortDirectionOptions: ColumnOption[]
+  addRule: () => void
+  removeRule: (id: string) => void
+  updateRule: (id: string, field: keyof FilterRule, value: string) => void
+  createDefaultRule: () => FilterRule
+}
+
+interface UseSortBuilderProps {
+  columns: ColumnOption[]
+  sortRule: SortRule | null
+  setSortRule: (sort: SortRule | null) => void
+}
+
+interface UseSortBuilderReturn {
+  sortDirectionOptions: ColumnOption[]
+  addSort: () => void
+  removeSort: () => void
+  updateSortColumn: (column: string) => void
+  updateSortDirection: (direction: 'asc' | 'desc') => void
+}

@@ -1,0 +1,272 @@
+// All available file metadata fields from Google Drive API v3
+export const ALL_FILE_FIELDS = [
+  // Basic Info
+  'id',
+  'name',
+  'mimeType',
+  'kind',
+  'description',
+  'originalFilename',
+  'fullFileExtension',
+  'fileExtension',
+  // Ownership & Sharing
+  'owners',
+  'permissions',
+  'permissionIds',
+  'shared',
+  'ownedByMe',
+  'writersCanShare',
+  'viewersCanCopyContent',
+  'copyRequiresWriterPermission',
+  'sharingUser',
+  // Labels/Tags
+  'starred',
+  'trashed',
+  'explicitlyTrashed',
+  'properties',
+  'appProperties',
+  'folderColorRgb',
+  // Timestamps
+  'createdTime',
+  'modifiedTime',
+  'modifiedByMeTime',
+  'viewedByMeTime',
+  'sharedWithMeTime',
+  'trashedTime',
+  // User Info
+  'lastModifyingUser',
+  'trashingUser',
+  'viewedByMe',
+  'modifiedByMe',
+  // Links
+  'webViewLink',
+  'webContentLink',
+  'iconLink',
+  'thumbnailLink',
+  'exportLinks',
+  // Size & Storage
+  'size',
+  'quotaBytesUsed',
+  // Checksums
+  'md5Checksum',
+  'sha1Checksum',
+  'sha256Checksum',
+  // Hierarchy & Location
+  'parents',
+  'spaces',
+  'driveId',
+  'teamDriveId',
+  // Capabilities
+  'capabilities',
+  // Versions
+  'version',
+  'headRevisionId',
+  // Media Metadata
+  'hasThumbnail',
+  'thumbnailVersion',
+  'imageMediaMetadata',
+  'videoMediaMetadata',
+  'contentHints',
+  // Other
+  'isAppAuthorized',
+  'contentRestrictions',
+  'resourceKey',
+  'shortcutDetails',
+  'linkShareMetadata',
+  'labelInfo',
+  'hasAugmentedPermissions',
+  'inheritedPermissionsDisabled',
+  'downloadRestrictions',
+].join(',')
+
+// All revision fields from Google Drive API v3
+export const ALL_REVISION_FIELDS = [
+  'id',
+  'mimeType',
+  'modifiedTime',
+  'keepForever',
+  'published',
+  'publishAuto',
+  'publishedLink',
+  'publishedOutsideDomain',
+  'lastModifyingUser',
+  'originalFilename',
+  'md5Checksum',
+  'size',
+  'exportLinks',
+  'kind',
+].join(',')
+
+/** All reply fields requested from the Google Drive API v3. */
+const ALL_REPLY_FIELDS = [
+  'id',
+  'kind',
+  'createdTime',
+  'modifiedTime',
+  'author',
+  'htmlContent',
+  'content',
+  'deleted',
+  'action',
+].join(',')
+
+/** All comment fields requested from the Google Drive API v3. */
+export const ALL_COMMENT_FIELDS = [
+  'id',
+  'kind',
+  'createdTime',
+  'modifiedTime',
+  'author',
+  'htmlContent',
+  'content',
+  'deleted',
+  'resolved',
+  'anchor',
+  'quotedFileContent',
+  `replies(${ALL_REPLY_FIELDS})`,
+].join(',')
+
+/**
+ * Maximum bytes accepted when exporting a Google Workspace file.
+ * Mirrors Google's own 10 MB export ceiling and keeps memory bounded.
+ */
+export const MAX_EXPORT_BYTES = 10 * 1024 * 1024
+
+export const GOOGLE_WORKSPACE_MIME_TYPES = [
+  'application/vnd.google-apps.document', // Google Docs
+  'application/vnd.google-apps.spreadsheet', // Google Sheets
+  'application/vnd.google-apps.presentation', // Google Slides
+  'application/vnd.google-apps.drawing', // Google Drawings
+  'application/vnd.google-apps.form', // Google Forms
+  'application/vnd.google-apps.script', // Google Apps Scripts
+]
+
+export const DEFAULT_EXPORT_FORMATS: Record<string, string> = {
+  'application/vnd.google-apps.document': 'text/plain',
+  'application/vnd.google-apps.spreadsheet': 'text/csv',
+  'application/vnd.google-apps.presentation': 'text/plain',
+  'application/vnd.google-apps.drawing': 'image/png',
+  'application/vnd.google-apps.form': 'application/zip',
+  'application/vnd.google-apps.script': 'application/vnd.google-apps.script+json',
+}
+
+/**
+ * Valid export formats per Google Workspace file type.
+ * See: https://developers.google.com/drive/api/guides/ref-export-formats
+ */
+export const VALID_EXPORT_FORMATS: Record<string, string[]> = {
+  'application/vnd.google-apps.document': [
+    'text/plain',
+    'text/html',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.oasis.opendocument.text',
+    'application/rtf',
+    'application/epub+zip',
+    'text/markdown',
+  ],
+  'application/vnd.google-apps.spreadsheet': [
+    'text/csv',
+    'text/tab-separated-values',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/zip',
+  ],
+  'application/vnd.google-apps.presentation': [
+    'text/plain',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.presentation',
+    'image/jpeg',
+    'image/png',
+    'image/svg+xml',
+  ],
+  'application/vnd.google-apps.drawing': [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/svg+xml',
+  ],
+  'application/vnd.google-apps.form': ['application/zip'],
+  'application/vnd.google-apps.script': ['application/vnd.google-apps.script+json'],
+}
+
+export const SOURCE_MIME_TYPES: Record<string, string> = {
+  'application/vnd.google-apps.document': 'text/plain',
+  'application/vnd.google-apps.spreadsheet': 'text/csv',
+  'application/vnd.google-apps.presentation': 'application/vnd.ms-powerpoint',
+}
+
+export function handleSheetsFormat(input: unknown): {
+  csv?: string
+  rowCount: number
+  columnCount: number
+} {
+  let workingValue: unknown = input
+
+  if (typeof workingValue === 'string') {
+    try {
+      workingValue = JSON.parse(workingValue)
+    } catch (_error) {
+      const csvString = workingValue as string
+      return { csv: csvString, rowCount: 0, columnCount: 0 }
+    }
+  }
+
+  if (!Array.isArray(workingValue)) {
+    return { rowCount: 0, columnCount: 0 }
+  }
+
+  let table: unknown[] = workingValue
+
+  if (
+    table.length > 0 &&
+    typeof (table as any)[0] === 'object' &&
+    (table as any)[0] !== null &&
+    !Array.isArray((table as any)[0])
+  ) {
+    const allKeys = new Set<string>()
+    ;(table as any[]).forEach((obj) => {
+      if (obj && typeof obj === 'object') {
+        Object.keys(obj).forEach((key) => allKeys.add(key))
+      }
+    })
+    const headers = Array.from(allKeys)
+    const rows = (table as any[]).map((obj) => {
+      if (!obj || typeof obj !== 'object') {
+        return Array(headers.length).fill('')
+      }
+      return headers.map((key) => {
+        const value = (obj as Record<string, unknown>)[key]
+        if (value !== null && typeof value === 'object') {
+          return JSON.stringify(value)
+        }
+        return value === undefined ? '' : (value as any)
+      })
+    })
+    table = [headers, ...rows]
+  }
+
+  const escapeCell = (cell: unknown): string => {
+    if (cell === null || cell === undefined) return ''
+    const stringValue = String(cell)
+    const mustQuote = /[",\n\r]/.test(stringValue)
+    const doubledQuotes = stringValue.replace(/"/g, '""')
+    return mustQuote ? `"${doubledQuotes}"` : doubledQuotes
+  }
+
+  const rowsAsStrings = (table as unknown[]).map((row) => {
+    if (!Array.isArray(row)) {
+      return escapeCell(row)
+    }
+    return row.map((cell) => escapeCell(cell)).join(',')
+  })
+
+  const csv = rowsAsStrings.join('\r\n')
+  const rowCount = Array.isArray(table) ? (table as any[]).length : 0
+  const columnCount =
+    Array.isArray(table) && Array.isArray((table as any[])[0]) ? (table as any[])[0].length : 0
+
+  return { csv, rowCount, columnCount }
+}

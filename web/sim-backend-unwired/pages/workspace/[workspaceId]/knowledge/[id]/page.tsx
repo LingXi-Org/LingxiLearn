@@ -1,0 +1,28 @@
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { KnowledgeBase } from '@/app/workspace/[workspaceId]/knowledge/[id]/base'
+import KnowledgeBaseLoading from '@/app/workspace/[workspaceId]/knowledge/[id]/loading'
+
+interface PageProps {
+  params: Promise<{
+    id: string
+  }>
+  searchParams: Promise<{
+    kbName?: string
+  }>
+}
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const { kbName } = await searchParams
+  return { title: kbName || 'Knowledge Base' }
+}
+
+export default async function KnowledgeBasePage({ params, searchParams }: PageProps) {
+  const [{ id }, { kbName }] = await Promise.all([params, searchParams])
+
+  return (
+    <Suspense fallback={<KnowledgeBaseLoading />}>
+      <KnowledgeBase id={id} knowledgeBaseName={kbName || 'Knowledge Base'} />
+    </Suspense>
+  )
+}

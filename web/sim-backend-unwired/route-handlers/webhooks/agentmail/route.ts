@@ -1,0 +1,393 @@
+import {
+  db,
+  mothershipInboxAllowedSender,
+  mothershipInboxTask,
+  mothershipInboxWebhook,
+  permissions,
+  user,
+  workspace,
+} from '@sim/db'
+import { createLogger } from '@sim/logger'
+import { getErrorMessage } from '@sim/utils/errors'
+import { generateId } from '@sim/utils/id'
+import { tasks } from '@trigger.dev/sdk'
+import { and, eq, gt, ne, sql } from 'drizzle-orm'
+import { NextResponse } from 'next/server'
+import { Webhook } from 'svix'
+import {
+  agentMailEnvelopeSchema,
+  agentMailMessageSchema,
+  agentMailRoutingSchema,
+  webhookSvixHeadersSchema,
+} from '@/lib/api/contracts/webhooks'
+import { hasWorkspaceInboxAccess } from '@/lib/billing/core/subscription'
+import { admissionRejectedResponse, tryAdmit } from '@/lib/core/admission/gate'
+import { resolveTriggerRegion } from '@/lib/core/async-jobs/region'
+import { isTriggerDevEnabled } from '@/lib/core/config/env-flags'
+import {
+  assertContentLengthWithinLimit,
+  isPayloadSizeLimitError,
+  readStreamToBufferWithLimit,
+} from '@/lib/core/utils/stream-limits'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { executeInboxTask } from '@/lib/mothership/inbox/executor'
+import type { AgentMailWebhookPayload, RejectionReason } from '@/lib/mothership/inbox/types'
+import { WEBHOOK_MAX_BODY_BYTES } from '@/lib/webhooks/constants'
+
+const logger = createLogger('AgentMailWebhook')
+
+const AUTOMATED_SENDERS = ['mailer-daemon@', 'noreply@', 'no-reply@', 'postmaster@']
+const MAX_EMAILS_PER_HOUR = 20
+
+const AGENTMAIL_BODY_LABEL = 'AgentMail webhook body'
+
+/** Svix throws on a bad signature, stale timestamp, or malformed header. */
+function verifiesAgainst(
+  secret: string,
+  rawBody: string,
+  headers: Record<string, string>
+): boolean {
+  try {
+    new Webhook(secret).verify(rawBody, headers)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Bound the unauthenticated AgentMail webhook body before buffering it for Svix
+ * signature verification, so an oversized payload cannot exhaust pod memory.
+ */
+async function readAgentMailBody(req: Request): Promise<string> {
+  assertContentLengthWithinLimit(req.headers, WEBHOOK_MAX_BODY_BYTES, AGENTMAIL_BODY_LABEL)
+  const buffer = await readStreamToBufferWithLimit(req.body, {
+    maxBytes: WEBHOOK_MAX_BODY_BYTES,
+    label: AGENTMAIL_BODY_LABEL,
+  })
+  return new TextDecoder().decode(buffer)
+}
+
+export const POST = withRouteHandler(async (req: Request) => {
+  const ticket = tryAdmit()
+  if (!ticket) {
+    return admissionRejectedResponse()
+  }
+
+  try {
+    let rawBody: string
+    try {
+      rawBody = await readAgentMailBody(req)
+    } catch (bodyError) {
+      if (isPayloadSizeLimitError(bodyError)) {
+        logger.warn('Rejected oversized AgentMail webhook body', {
+          maxBytes: WEBHOOK_MAX_BODY_BYTES,
+          observedBytes: bodyError.observedBytes,
+        })
+        return NextResponse.json({ error: 'Request body too large' }, { status: 413 })
+      }
+      throw bodyError
+    }
+    const headersResult = webhookSvixHeadersSchema.safeParse({
+      'svix-id': req.headers.get('svix-id'),
+      'svix-timestamp': req.headers.get('svix-timestamp'),
+      'svix-signature': req.headers.get('svix-signature'),
+    })
+
+    if (!headersResult.success) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    let parsedBody: unknown
+    try {
+      parsedBody = JSON.parse(rawBody)
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    /**
+     * Route to one tenant before hashing: svix HMACs the whole body synchronously,
+     * so checking every workspace secret would let one unauthenticated request cost
+     * a hash per tenant. `inbox_id` is attacker-controlled but only selects which
+     * secret to check — verification still binds the payload's inbox to the workspace.
+     */
+    const routingResult = agentMailRoutingSchema.safeParse(parsedBody)
+    if (!routingResult.success) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const inboxId = routingResult.data.message.inbox_id
+
+    const [result] = await db
+      .select({
+        id: workspace.id,
+        inboxEnabled: workspace.inboxEnabled,
+        inboxAddress: workspace.inboxAddress,
+        webhookSecret: mothershipInboxWebhook.secret,
+      })
+      .from(workspace)
+      .innerJoin(mothershipInboxWebhook, eq(mothershipInboxWebhook.workspaceId, workspace.id))
+      .where(eq(workspace.inboxProviderId, inboxId))
+      .limit(1)
+
+    if (!result || !verifiesAgainst(result.webhookSecret, rawBody, headersResult.data)) {
+      logger.warn('Webhook signature verification failed', { payloadInboxId: inboxId })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const envelopeResult = agentMailEnvelopeSchema.safeParse(parsedBody)
+    if (!envelopeResult.success) {
+      logger.warn('Invalid AgentMail webhook payload', {
+        workspaceId: result.id,
+        issues: envelopeResult.error.issues,
+      })
+      return NextResponse.json(
+        { error: 'Invalid envelope payload', details: envelopeResult.error.issues },
+        { status: 400 }
+      )
+    }
+
+    if (envelopeResult.data.event_type !== 'message.received') {
+      return NextResponse.json({ ok: true })
+    }
+
+    const messageResult = agentMailMessageSchema.safeParse(envelopeResult.data.message)
+    if (!messageResult.success) {
+      logger.warn('Invalid AgentMail message payload', {
+        workspaceId: result.id,
+        issues: messageResult.error.issues,
+      })
+      return NextResponse.json(
+        { error: 'Invalid message payload', details: messageResult.error.issues },
+        { status: 400 }
+      )
+    }
+
+    const message: AgentMailWebhookPayload['message'] = messageResult.data
+
+    if (!result.inboxEnabled) {
+      logger.info('Inbox disabled, rejecting', { workspaceId: result.id })
+      return NextResponse.json({ ok: true })
+    }
+
+    const fromEmail = extractSenderEmail(message.from) || ''
+    logger.info('Webhook received', { fromEmail, from_raw: message.from, workspaceId: result.id })
+
+    if (result.inboxAddress && fromEmail === result.inboxAddress.toLowerCase()) {
+      logger.info('Skipping email from inbox itself', { workspaceId: result.id })
+      return NextResponse.json({ ok: true })
+    }
+
+    if (AUTOMATED_SENDERS.some((prefix) => fromEmail.startsWith(prefix))) {
+      await createRejectedTask(result.id, message, 'automated_sender')
+      return NextResponse.json({ ok: true })
+    }
+
+    const emailMessageId = message.message_id
+    const inReplyTo = message.in_reply_to || null
+
+    const [existingResult, isAllowed, recentCount, parentTaskResult, isEntitled] =
+      await Promise.all([
+        emailMessageId
+          ? db
+              .select({ id: mothershipInboxTask.id })
+              .from(mothershipInboxTask)
+              .where(eq(mothershipInboxTask.emailMessageId, emailMessageId))
+              .limit(1)
+          : Promise.resolve([]),
+        isSenderAllowed(fromEmail, result.id),
+        getRecentTaskCount(result.id),
+        inReplyTo
+          ? db
+              .select({ chatId: mothershipInboxTask.chatId })
+              .from(mothershipInboxTask)
+              .where(eq(mothershipInboxTask.responseMessageId, inReplyTo))
+              .limit(1)
+          : Promise.resolve([]),
+        hasWorkspaceInboxAccess(result.id),
+      ])
+
+    if (existingResult[0]) {
+      logger.info('Duplicate webhook, skipping', { emailMessageId })
+      return NextResponse.json({ ok: true })
+    }
+
+    if (!isEntitled) {
+      logger.info('Inbox no longer entitled, rejecting', { workspaceId: result.id })
+      await createRejectedTask(result.id, message, 'not_entitled')
+      return NextResponse.json({ ok: true })
+    }
+
+    if (!isAllowed) {
+      await createRejectedTask(result.id, message, 'sender_not_allowed')
+      return NextResponse.json({ ok: true })
+    }
+
+    if (recentCount >= MAX_EMAILS_PER_HOUR) {
+      await createRejectedTask(result.id, message, 'rate_limit_exceeded')
+      return NextResponse.json({ ok: true })
+    }
+
+    const chatId = parentTaskResult[0]?.chatId ?? null
+
+    const fromName = extractDisplayName(message.from)
+
+    const taskId = generateId()
+    const bodyText = message.text?.substring(0, 50_000) || null
+    const bodyHtml = message.html?.substring(0, 50_000) || null
+    const bodyPreview = (bodyText || '')?.substring(0, 200) || null
+
+    await db.insert(mothershipInboxTask).values({
+      id: taskId,
+      workspaceId: result.id,
+      fromEmail,
+      fromName,
+      subject: message.subject || '(no subject)',
+      bodyPreview,
+      bodyText,
+      bodyHtml,
+      emailMessageId,
+      inReplyTo,
+      agentmailMessageId: message.message_id,
+      status: 'received',
+      chatId,
+      hasAttachments: (message.attachments?.length ?? 0) > 0,
+      ccRecipients: message.cc?.length ? JSON.stringify(message.cc) : null,
+    })
+
+    if (isTriggerDevEnabled) {
+      try {
+        const handle = await tasks.trigger(
+          'mothership-inbox-execution',
+          { taskId },
+          {
+            tags: [`workspaceId:${result.id}`, `taskId:${taskId}`],
+            region: await resolveTriggerRegion(),
+          }
+        )
+        await db
+          .update(mothershipInboxTask)
+          .set({ triggerJobId: handle.id })
+          .where(eq(mothershipInboxTask.id, taskId))
+      } catch (triggerError) {
+        logger.warn('Trigger.dev dispatch failed, falling back to local execution', {
+          taskId,
+          triggerError,
+        })
+        executeInboxTask(taskId).catch((err) => {
+          logger.error('Local inbox task execution failed', {
+            taskId,
+            error: getErrorMessage(err, 'Unknown error'),
+          })
+        })
+      }
+    } else {
+      logger.info('Trigger.dev not available, executing inbox task locally', { taskId })
+      executeInboxTask(taskId).catch((err) => {
+        logger.error('Local inbox task execution failed', {
+          taskId,
+          error: getErrorMessage(err, 'Unknown error'),
+        })
+      })
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    logger.error('AgentMail webhook error', {
+      error: getErrorMessage(error, 'Unknown error'),
+    })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  } finally {
+    ticket.release()
+  }
+})
+
+async function isSenderAllowed(email: string, workspaceId: string): Promise<boolean> {
+  const [allowedSenderResult, memberResult] = await Promise.all([
+    db
+      .select({ id: mothershipInboxAllowedSender.id })
+      .from(mothershipInboxAllowedSender)
+      .where(
+        and(
+          eq(mothershipInboxAllowedSender.workspaceId, workspaceId),
+          eq(mothershipInboxAllowedSender.email, email)
+        )
+      )
+      .limit(1),
+    db
+      .select({ userId: permissions.userId })
+      .from(permissions)
+      .innerJoin(user, eq(permissions.userId, user.id))
+      .where(
+        and(
+          eq(permissions.entityType, 'workspace'),
+          eq(permissions.entityId, workspaceId),
+          sql`lower(${user.email}) = ${email}`
+        )
+      )
+      .limit(1),
+  ])
+
+  return !!(allowedSenderResult[0] || memberResult[0])
+}
+
+async function getRecentTaskCount(workspaceId: string): Promise<number> {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+  const [result] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(mothershipInboxTask)
+    .where(
+      and(
+        eq(mothershipInboxTask.workspaceId, workspaceId),
+        gt(mothershipInboxTask.createdAt, oneHourAgo),
+        ne(mothershipInboxTask.status, 'rejected')
+      )
+    )
+  return result?.count ?? 0
+}
+
+async function createRejectedTask(
+  workspaceId: string,
+  message: AgentMailWebhookPayload['message'],
+  reason: RejectionReason
+): Promise<void> {
+  await db.insert(mothershipInboxTask).values({
+    id: generateId(),
+    workspaceId,
+    fromEmail: extractSenderEmail(message.from) || 'unknown',
+    fromName: extractDisplayName(message.from),
+    subject: message.subject || '(no subject)',
+    bodyPreview: (message.text || '').substring(0, 200) || null,
+    emailMessageId: message.message_id,
+    agentmailMessageId: message.message_id,
+    status: 'rejected',
+    rejectionReason: reason,
+    hasAttachments: (message.attachments?.length ?? 0) > 0,
+  })
+}
+
+/**
+ * Extract the raw email address from AgentMail's from field.
+ * Format: "username@domain.com" or "Display Name <username@domain.com>"
+ */
+function extractSenderEmail(from: string): string {
+  const openBracket = from.indexOf('<')
+  const closeBracket = from.indexOf('>', openBracket + 1)
+  if (openBracket !== -1 && closeBracket !== -1) {
+    return from
+      .substring(openBracket + 1, closeBracket)
+      .toLowerCase()
+      .trim()
+  }
+  return from.toLowerCase().trim()
+}
+
+function extractDisplayName(from: string): string | null {
+  const openBracket = from.indexOf('<')
+  if (openBracket <= 0) return null
+  const name = from.substring(0, openBracket).trim()
+  if (!name) return null
+  if (name.startsWith('"') && name.endsWith('"')) {
+    return name.slice(1, -1) || null
+  }
+  return name
+}

@@ -1,7 +1,5 @@
-import { CapabilityPage } from '@/lib/lingxi/components/capability-page'
-
-export const metadata = { title: '集成 · 未接入' }
+import { redirect } from 'next/navigation'
 
 export default function Page() {
-  return <CapabilityPage title='集成 · 未接入' />
+  redirect('/workspace/lingxi/skills')
 }

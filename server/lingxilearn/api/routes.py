@@ -22,11 +22,21 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from lingxi_identity import Principal  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 
 from ..auth import get_principal
 from ..config import REPO_ROOT
 from ..learner import LearnerContext
 from ..service import Service
+from ..store.models import (
+    AgentTask,
+    KnowledgeBase,
+    KnowledgeDocument,
+    PersonalSkill,
+    Workspace,
+    WorkspaceFile,
+    WorkspaceTable,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -55,6 +65,119 @@ def not_found() -> HTTPException:
     """Use one response for missing and not-owned persistent resources."""
 
     return HTTPException(status_code=404, detail="resource_not_found")
+
+
+async def _validated_task_context(
+    request: Request,
+    context: LearnerContext,
+    resource_refs: list[dict[str, Any]],
+    skill_ids: list[str],
+) -> list[dict[str, Any]]:
+    """Validate native workspace references and persist personal-skill snapshots.
+
+    The Sim UI sends resource references as JSON rather than opaque backend IDs.
+    Resolve every reference against the current learner before a task starts so
+    a guessed id can never disclose another learner's files, tables, or KBs.
+    Skill snapshots are copied into the task resource list to make a later run
+    reproducible even if the editable personal skill changes.
+    """
+
+    svc = service_of(request)
+    normalized = [dict(ref) for ref in resource_refs if isinstance(ref, dict)]
+    async with svc.db.session() as session:
+        workspace = await session.scalar(select(Workspace).where(Workspace.learner_id == context.learner_id))
+        workspace_id = workspace.id if workspace is not None else None
+        for ref in normalized:
+            kind = str(ref.get("type") or ref.get("resourceType") or ref.get("kind") or "").lower()
+            resource_id = str(
+                ref.get("id")
+                or ref.get("resourceId")
+                or ref.get("fileId")
+                or ref.get("tableId")
+                or ref.get("knowledgeBaseId")
+                or ref.get("documentId")
+                or ""
+            )
+            if not resource_id:
+                raise HTTPException(status_code=422, detail="resource_id_required")
+            if kind in {"file", "files", "workspace_file"} or ref.get("fileId"):
+                row = await session.scalar(
+                    select(WorkspaceFile).where(
+                        WorkspaceFile.id == resource_id,
+                        WorkspaceFile.workspace_id == workspace_id,
+                    )
+                )
+            elif kind in {"table", "tables", "workspace_table"} or ref.get("tableId"):
+                row = await session.scalar(
+                    select(WorkspaceTable).where(
+                        WorkspaceTable.id == resource_id,
+                        WorkspaceTable.workspace_id == workspace_id,
+                    )
+                )
+            elif kind in {"knowledge", "knowledge_base", "kb", "document"} or ref.get("knowledgeBaseId") or ref.get("documentId"):
+                if ref.get("documentId"):
+                    row = await session.scalar(
+                        select(KnowledgeDocument)
+                        .join(KnowledgeBase, KnowledgeBase.id == KnowledgeDocument.base_id)
+                        .where(
+                            KnowledgeDocument.id == resource_id,
+                            KnowledgeBase.learner_id == context.learner_id,
+                        )
+                    )
+                else:
+                    row = await session.scalar(
+                        select(KnowledgeBase).where(
+                            KnowledgeBase.id == resource_id,
+                            KnowledgeBase.learner_id == context.learner_id,
+                        )
+                    )
+            elif kind in {"task", "agent_task", "artifact"}:
+                # Task and artifact references are learner-scoped as well. Do
+                # not accept an opaque id here: the caller must own the task
+                # that produced the reference.
+                task_id = str(ref.get("taskId") or resource_id)
+                row = await session.scalar(
+                    select(AgentTask).where(
+                        AgentTask.id == task_id,
+                        AgentTask.learner_id == context.learner_id,
+                    )
+                )
+            elif kind == "skill":
+                skill_id = str(ref.get("skillId") or resource_id)
+                row = await session.scalar(
+                    select(PersonalSkill).where(
+                        PersonalSkill.id == skill_id,
+                        PersonalSkill.learner_id == context.learner_id,
+                    )
+                )
+            else:
+                raise HTTPException(status_code=422, detail="unsupported_resource_type")
+            if row is None:
+                raise not_found()
+
+        if skill_ids:
+            rows = (
+                await session.execute(
+                    select(PersonalSkill).where(
+                        PersonalSkill.learner_id == context.learner_id,
+                        PersonalSkill.id.in_(skill_ids),
+                    )
+                )
+            ).scalars().all()
+            found = {row.id for row in rows}
+            if found != set(skill_ids):
+                raise not_found()
+            normalized.extend(
+                {
+                    "type": "skill",
+                    "skillId": row.id,
+                    "name": row.name,
+                    "version": row.version,
+                    "snapshot": row.content,
+                }
+                for row in rows
+            )
+    return normalized
 
 
 # --------------------------------------------------------------------------
@@ -122,7 +245,6 @@ async def list_skills(
 ) -> dict[str, Any]:
     """Expose the project's native LingxiSkills catalogue to the workspace."""
 
-    del context
     skills_root = REPO_ROOT / "skills"
     skills: list[dict[str, Any]] = []
     for directory in sorted((item for item in skills_root.iterdir() if item.is_dir()), key=lambda item: item.name):
@@ -173,13 +295,38 @@ async def list_skills(
             in_description = False
         skills.append({
             "id": metadata.get("name", directory.name),
+            "name": metadata.get("name", directory.name),
             "display_name": metadata.get("display_name", metadata.get("name", directory.name)),
             "description": metadata.get("display_description", " ".join(description_lines)).strip(),
             "version": metadata.get("version", ""),
             "license": metadata.get("license", ""),
             "compatibility": metadata.get("compatibility", ""),
             "content": raw,
+            "source": "system",
+            "is_system": True,
         })
+    svc = service_of(request)
+    async with svc.db.session() as session:
+        personal = (
+            await session.execute(
+                select(PersonalSkill).where(PersonalSkill.learner_id == context.learner_id)
+            )
+        ).scalars().all()
+    skills.extend(
+        {
+            "id": row.id,
+            "name": row.name,
+            "display_name": row.name,
+            "description": row.description,
+            "content": row.content,
+            "version": row.version,
+            "source": "personal",
+            "is_system": False,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+        for row in personal
+    )
     return {"skills": skills}
 
 
@@ -202,10 +349,12 @@ class AnswerBody(BaseModel):
 
 
 class CreateAgentTask(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     prompt: str = Field(min_length=1, max_length=4000)
     attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
+    resource_refs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    skill_ids: list[str] = Field(default_factory=list, max_length=50)
 
 
 class AgentTaskMetadataPatch(BaseModel):
@@ -227,10 +376,12 @@ class AgentAttachmentUpload(BaseModel):
 
 
 class AgentMessage(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     message: str = Field(min_length=1, max_length=4000)
     attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
+    resource_refs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    skill_ids: list[str] = Field(default_factory=list, max_length=50)
 
 
 class QuizSubmissionBody(BaseModel):
@@ -308,11 +459,15 @@ async def create_agent_task(
     svc = service_of(request)
     task_id = f"t-{uuid.uuid4().hex[:20]}"
     try:
+        task_resources = await _validated_task_context(
+            request, context, body.resource_refs, body.skill_ids
+        )
         created = await svc.create_agent_task(
             task_id=task_id,
             learner_id=context.learner_id,
             prompt=body.prompt,
             attachments=body.attachments,
+            resources=task_resources,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -352,6 +507,11 @@ async def post_agent_message(
 ) -> dict[str, Any]:
     svc = service_of(request)
     try:
+        task_resources = await _validated_task_context(
+            request, context, body.resource_refs, body.skill_ids
+        )
+        if task_resources:
+            await svc.update_agent_task(task_id, context.learner_id, resources=task_resources)
         await svc.agent_message(
             task_id,
             body.message,
@@ -375,6 +535,7 @@ async def get_agent_knowledge_graph(
         graph = await service_of(request).agent_knowledge_graph(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
+    return graph
 
 
 @router.patch("/agent-tasks/{task_id}")

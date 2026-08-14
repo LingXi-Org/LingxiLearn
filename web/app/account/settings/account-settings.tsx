@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Button, ChipInput, Label } from '@/components/ui-kit'
 import { type IdentitySession, identityApi } from '@/lib/auth/identity-api'
 import { useSession } from '@/lib/auth/session-provider'
@@ -56,10 +57,10 @@ function Status({ value, error = false }: { value: string; error?: boolean }) {
   )
 }
 
-export function AccountSettings() {
+export function AccountSettings({ initialSection = 'profile' }: { initialSection?: Section }) {
   const session = useSession()
   const user = session.data?.user
-  const [section, setSection] = useState<Section>('profile')
+  const [section, setSection] = useState<Section>(initialSection)
   const [name, setName] = useState('')
   const [username, setUsername] = useState('')
   const [avatar, setAvatar] = useState('')
@@ -78,6 +79,10 @@ export function AccountSettings() {
   const [deactivateText, setDeactivateText] = useState('')
   const [deactivateStatus, setDeactivateStatus] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setSection(initialSection)
+  }, [initialSection])
 
   useEffect(() => {
     if (user) {
@@ -251,6 +256,18 @@ export function AccountSettings() {
               {label}
             </button>
           ))}
+          <Link
+            href='/account/settings/billing'
+            className='rounded-lg px-3 py-2 text-left text-[var(--text-muted)] text-sm hover:bg-[var(--surface-2)]'
+          >
+            计费与用量
+          </Link>
+          <Link
+            href='/account/settings/users'
+            className='rounded-lg px-3 py-2 text-left text-[var(--text-muted)] text-sm hover:bg-[var(--surface-2)]'
+          >
+            用户管理
+          </Link>
         </nav>
 
         <div className='space-y-5'>

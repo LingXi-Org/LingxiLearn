@@ -193,7 +193,7 @@ export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourcePro
           知识图谱已接入工作区编排面板
         </p>
         <p className='text-[var(--text-muted)] text-xs'>
-          节点的消息、思考和 Skill 会随着 LingxiGraph 事件在右侧画布中实时更新。
+          节点的消息、思考和 Skill 会随着 LingxiGraph 事件在右侧资源面板中实时更新。
         </p>
       </div>
     )

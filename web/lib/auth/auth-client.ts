@@ -1,5 +1,7 @@
 import { useContext } from 'react'
+import { isMockAuthEnabled } from '@/lib/core/config/env-flags'
 import { identityApi } from './identity-api'
+import { MOCK_IDENTITY_ME } from './mock-session'
 import { SessionContext, type SessionContextValue } from './session-provider'
 
 type SimUser = {
@@ -60,6 +62,7 @@ function callbackPath(options?: AuthRedirectOptions): string {
 
 export const client = {
   getSession: async (_options?: unknown) => {
+    if (isMockAuthEnabled) return { data: toSimSession(MOCK_IDENTITY_ME), error: null }
     try {
       const value = await identityApi.me()
       return { data: toSimSession(value), error: null }
@@ -69,16 +72,28 @@ export const client = {
   },
   signIn: {
     email: async (_credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
+      if (isMockAuthEnabled) {
+        window.location.assign(callbackPath(options))
+        return { data: toSimSession(MOCK_IDENTITY_ME), error: null }
+      }
       window.location.assign(identityApi.authUrl('login', callbackPath(options)))
       return { data: null, error: null }
     },
     social: async (_provider: string, options?: AuthRedirectOptions) => {
+      if (isMockAuthEnabled) {
+        window.location.assign(callbackPath(options))
+        return { data: toSimSession(MOCK_IDENTITY_ME), error: null }
+      }
       window.location.assign(identityApi.authUrl('login', callbackPath(options)))
       return { data: null, error: null }
     },
   },
   signUp: {
     email: async (_credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
+      if (isMockAuthEnabled) {
+        window.location.assign(callbackPath(options))
+        return { data: toSimSession(MOCK_IDENTITY_ME), error: null }
+      }
       window.location.assign(identityApi.authUrl('register', callbackPath(options)))
       return { data: null, error: null }
     },
@@ -137,6 +152,6 @@ export const useSubscription = () => ({
 })
 
 export async function signOut(): Promise<void> {
-  await identityApi.logout()
+  if (!isMockAuthEnabled) await identityApi.logout()
   window.location.assign('/')
 }

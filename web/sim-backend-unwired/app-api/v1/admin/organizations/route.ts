@@ -1,0 +1,202 @@
+/**
+ * GET /api/v1/admin/organizations
+ *
+ * List all organizations with pagination.
+ *
+ * Query Parameters:
+ *   - limit: number (default: 50, max: 250)
+ *   - offset: number (default: 0)
+ *
+ * Response: AdminListResponse<AdminOrganization>
+ *
+ * POST /api/v1/admin/organizations
+ *
+ * Create a new organization.
+ *
+ * Body:
+ *   - name: string - Organization name (required)
+ *   - slug: string - Organization slug (optional, auto-generated from name if not provided)
+ *   - ownerId: string - User ID of the organization owner (required)
+ *
+ * Response: AdminSingleResponse<AdminOrganization & { memberId: string }>
+ */
+
+import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
+import { db, dbReplica } from '@sim/db'
+import { member, organization, user } from '@sim/db/schema'
+import { createLogger } from '@sim/logger'
+import { count, eq } from 'drizzle-orm'
+import {
+  adminV1CreateOrganizationContract,
+  adminV1ListOrganizationsContract,
+} from '@/lib/api/contracts/v1/admin'
+import { parseRequest } from '@/lib/api/server'
+import {
+  createOrganizationWithOwner,
+  OrganizationSlugInvalidError,
+  OrganizationSlugTakenError,
+} from '@/lib/billing/organizations/create-organization'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { withAdminAuth } from '@/app/api/v1/admin/middleware'
+import {
+  adminInvalidJsonResponse,
+  adminValidationErrorResponse,
+  badRequestResponse,
+  internalErrorResponse,
+  listResponse,
+  notFoundResponse,
+  singleResponse,
+} from '@/app/api/v1/admin/responses'
+import {
+  type AdminOrganization,
+  createPaginationMeta,
+  toAdminOrganization,
+} from '@/app/api/v1/admin/types'
+
+const logger = createLogger('AdminOrganizationsAPI')
+
+export const GET = withRouteHandler(
+  withAdminAuth(async (request) => {
+    const parsed = await parseRequest(
+      adminV1ListOrganizationsContract,
+      request,
+      {},
+      {
+        validationErrorResponse: adminValidationErrorResponse,
+      }
+    )
+    if (!parsed.success) return parsed.response
+
+    const { limit, offset } = parsed.data.query
+
+    try {
+      const [countResult, organizations] = await Promise.all([
+        dbReplica.select({ total: count() }).from(organization),
+        dbReplica
+          .select({
+            id: organization.id,
+            name: organization.name,
+            slug: organization.slug,
+            logo: organization.logo,
+            orgUsageLimit: organization.orgUsageLimit,
+            storageUsedBytes: organization.storageUsedBytes,
+            departedMemberUsage: organization.departedMemberUsage,
+            createdAt: organization.createdAt,
+            updatedAt: organization.updatedAt,
+          })
+          .from(organization)
+          .orderBy(organization.name)
+          .limit(limit)
+          .offset(offset),
+      ])
+
+      const total = countResult[0].total
+      const data: AdminOrganization[] = organizations.map(toAdminOrganization)
+      const pagination = createPaginationMeta(total, limit, offset)
+
+      logger.info(`Admin API: Listed ${data.length} organizations (total: ${total})`)
+
+      return listResponse(data, pagination)
+    } catch (error) {
+      logger.error('Admin API: Failed to list organizations', { error })
+      return internalErrorResponse('Failed to list organizations')
+    }
+  })
+)
+
+export const POST = withRouteHandler(
+  withAdminAuth(async (request) => {
+    const parsed = await parseRequest(
+      adminV1CreateOrganizationContract,
+      request,
+      {},
+      {
+        validationErrorResponse: adminValidationErrorResponse,
+        invalidJsonResponse: adminInvalidJsonResponse,
+      }
+    )
+    if (!parsed.success) return parsed.response
+
+    try {
+      const { name, ownerId, slug: requestedSlug } = parsed.data.body
+
+      const [ownerData] = await db
+        .select({ id: user.id, name: user.name })
+        .from(user)
+        .where(eq(user.id, ownerId))
+        .limit(1)
+
+      if (!ownerData) {
+        return notFoundResponse('Owner user')
+      }
+
+      const [existingMembership] = await db
+        .select({ organizationId: member.organizationId })
+        .from(member)
+        .where(eq(member.userId, ownerId))
+        .limit(1)
+
+      if (existingMembership) {
+        return badRequestResponse(
+          'User is already a member of another organization. Users can only belong to one organization at a time.'
+        )
+      }
+
+      const slug =
+        requestedSlug?.trim() ||
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '')
+
+      const { organizationId, memberId } = await createOrganizationWithOwner({
+        ownerUserId: ownerId,
+        name,
+        slug,
+      })
+
+      const [createdOrg] = await db
+        .select()
+        .from(organization)
+        .where(eq(organization.id, organizationId))
+        .limit(1)
+
+      logger.info(`Admin API: Created organization ${organizationId}`, {
+        name,
+        slug,
+        ownerId,
+        memberId,
+      })
+
+      recordAudit({
+        workspaceId: null,
+        actorId: 'admin-api',
+        action: AuditAction.ORGANIZATION_CREATED,
+        resourceType: AuditResourceType.ORGANIZATION,
+        resourceId: organizationId,
+        resourceName: name,
+        description: `Admin API created organization "${name}"`,
+        metadata: { slug, ownerId, memberId },
+        request,
+      })
+
+      return singleResponse({
+        ...toAdminOrganization(createdOrg),
+        memberId,
+      })
+    } catch (error) {
+      if (error instanceof OrganizationSlugInvalidError) {
+        return badRequestResponse(
+          'Organization slug can only contain lowercase letters, numbers, hyphens, and underscores.'
+        )
+      }
+
+      if (error instanceof OrganizationSlugTakenError) {
+        return badRequestResponse('This slug is already taken')
+      }
+
+      logger.error('Admin API: Failed to create organization', { error })
+      return internalErrorResponse('Failed to create organization')
+    }
+  })
+)
