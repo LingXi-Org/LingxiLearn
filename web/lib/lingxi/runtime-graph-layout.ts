@@ -17,10 +17,18 @@ export interface RuntimeGraphPosition {
   y: number
 }
 
-const NODE_WIDTH = 250
-const COLUMN_GAP = 80
-const ROW_GAP = 48
-const ROW_HEIGHT = 150
+/** These are the homepage workflow stage's design-space dimensions. */
+export const RUNTIME_GRAPH_CANVAS = { width: 560, height: 700 } as const
+export const RUNTIME_GRAPH_NODE_WIDTH = 250
+const LANE_X = [0, 155, 310]
+const VERTICAL_GAP = 80
+
+function blockHeight(block: RuntimeGraphBlock): number {
+  const rows = Array.isArray((block as Record<string, unknown>).rows)
+    ? ((block as Record<string, unknown>).rows as unknown[]).length
+    : 0
+  return 40 + (rows > 0 ? 16 + rows * 21 + (rows - 1) * 8 : 0)
+}
 
 /** Deterministic layered layout. Existing positions win so late nodes do not move the run. */
 export function layoutRuntimeGraph(
@@ -47,13 +55,13 @@ export function layoutRuntimeGraph(
   }
   ids.forEach(rankOf)
 
-  const columns = new Map<number, string[]>()
+  const layers = new Map<number, string[]>()
   for (const id of ids) {
     const rank = ranks.get(id) ?? 0
-    columns.set(rank, [...(columns.get(rank) ?? []), id])
+    layers.set(rank, [...(layers.get(rank) ?? []), id])
   }
-  for (const column of columns.values()) {
-    column.sort((a, b) => {
+  for (const layer of layers.values()) {
+    layer.sort((a, b) => {
       const aStep = Number(blocks[a].data?.step ?? blocks[a].step ?? 0)
       const bStep = Number(blocks[b].data?.step ?? blocks[b].step ?? 0)
       return aStep - bStep || a.localeCompare(b)
@@ -64,14 +72,32 @@ export function layoutRuntimeGraph(
   for (const id of ids) {
     if (previous[id]) result[id] = previous[id]
   }
-  for (const [rank, column] of columns) {
-    column.forEach((id, index) => {
+  for (const [rank, layer] of layers) {
+    const layerHasParallelNodes = layer.length > 1
+    layer.forEach((id, index) => {
       if (result[id]) return
       const hint = blocks[id].position
-      result[id] = {
-        x: rank * (NODE_WIDTH + COLUMN_GAP),
-        y: index * (ROW_HEIGHT + ROW_GAP),
-      }
+
+      // New nodes are placed below their latest dependency. This produces the
+      // homepage's vertical flow while preserving an already rendered node's
+      // position when a late SSE event adds another primitive.
+      const predecessors = incoming.get(id) ?? []
+      const dependencyBottom = predecessors.reduce(
+        (bottom, predecessor) => {
+          const position = result[predecessor] ?? previous[predecessor]
+          return position
+            ? Math.max(bottom, position.y + blockHeight(blocks[predecessor]))
+            : bottom
+        },
+        12 - VERTICAL_GAP
+      )
+      const x = layerHasParallelNodes
+        ? LANE_X[index % LANE_X.length] ?? index * (RUNTIME_GRAPH_NODE_WIDTH + 60)
+        : LANE_X[1]
+      result[id] = { x, y: Math.max(12, dependencyBottom + VERTICAL_GAP) }
+
+      // A backend position is only a first-load hint for a lone node. Once a
+      // graph has dependencies, the stable stage layout is the source of truth.
       if (hint && typeof hint.x === 'number' && typeof hint.y === 'number' && ids.length === 1) {
         result[id] = { x: hint.x, y: hint.y }
       }
