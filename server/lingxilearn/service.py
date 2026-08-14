@@ -37,7 +37,7 @@ from sqlalchemy import select
 
 from .agents.artifact_store import ArtifactError, ArtifactStore
 from .agents.contracts import quiz_public
-from .agents.model_runtime import EVENT_CHANNEL
+from .agents.model_runtime import EVENT_CHANNEL, model_roles
 from .agents.providers import load_all as load_providers
 from .agents.providers import missing_providers
 from .brains.base import TutorBrain
@@ -393,26 +393,17 @@ class Service:
             # Each specialist has a different immutable system prompt and tool
             # catalog. Keeping one model instance per role makes the cache
             # prefix stable across tasks and avoids cross-agent drift errors.
-            self.agent_model = {}
-            for role in (
-                "intent",
-                "lecture_hook",
-                "lecture_hook_structured",
-                "interactive_lecture_deck",
-                "quiz_generator",
-                "answer_user",
-                "adaptive_pedagogy",
-                "curriculum_graph_builder",
-                "learner_state_reflector",
-                "interactive_visual_explainer",
-            ):
-                # Every skill-capable Agent must use the same tool-aware
-                # adapter. The previous native Responses special case could
-                # search the web but silently dropped stage_artifact_file,
-                # making lesson-intro stop before producing its real artifact.
-                self.agent_model[role] = TracedOpenAICompatChatModel(
-                    self.settings.agent_model, **model_options
-                )
+            # Derive the roles from what actually asks for a model. The
+            # previous hand-written list drifted the moment a provider was
+            # added, leaving eleven roles resolving to None in production while
+            # every test passed a fake model directly.
+            self.agent_model = {
+                role: TracedOpenAICompatChatModel(self.settings.agent_model, **model_options)
+                # One instance per role: each has a different immutable system
+                # prompt and tool catalog, and sharing one would break the
+                # provider's prompt-cache prefix.
+                for role in model_roles()
+            }
         self.checkpointer = build_checkpointer(self.settings)
         # Sidecars are durable. A process restart must never strand a running
         # proposal; queue it again and let the normal worker claim it.

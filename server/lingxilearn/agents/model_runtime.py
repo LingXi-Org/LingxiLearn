@@ -19,10 +19,51 @@ from lingxigraph import AIMessage, EventKind, HumanMessage, Runtime, ToolMessage
 logger = logging.getLogger(__name__)
 EVENT_CHANNEL = "agent_task"
 
+RUNTIME_MODEL_ROLES = ("orchestrator", "goal_interpreter")
+"""Roles the loop itself needs, which are not capability providers."""
+
+
+def model_roles() -> tuple[str, ...]:
+    """Every agent role the host must build a model for.
+
+    Derived from the provider registry rather than listed by hand, because a
+    hand-written list is only correct until the next provider is added — and
+    the failure is silent: the orchestrator quietly degrades to deterministic
+    ranking and providers die inside ``create_agent(None, ...)``.
+    """
+
+    from .providers import load_all, names
+
+    load_all()
+    return tuple(sorted({*RUNTIME_MODEL_ROLES, *names()}))
+
+
+class UnregisteredModelRole(KeyError):
+    """A component asked for a per-role model the host never built."""
+
 
 def agent_model(model: Any, role: str) -> Any:
+    """Resolve the model instance for one agent role.
+
+    Each role gets its own instance so its immutable prompt/tool prefix stays
+    stable for the provider's prompt cache.
+
+    A dict that is missing ``role`` raises rather than returning ``None``. The
+    quiet version of this shipped eleven roles resolving to ``None``: the
+    orchestrator silently fell back to deterministic ranking, and providers
+    failed inside ``create_agent(None, ...)`` and replanned until the budget ran
+    out. Both look like behaviour, not breakage, which is exactly why this has
+    to be loud.
+    """
+
     if isinstance(model, dict):
-        return model.get(role) or model.get("default")
+        resolved = model.get(role) or model.get("default")
+        if resolved is None:
+            raise UnregisteredModelRole(
+                f"no model registered for agent role {role!r}; "
+                f"known roles: {sorted(model)}"
+            )
+        return resolved
     resolver = getattr(model, "for_agent", None)
     if callable(resolver):
         return resolver(role)
@@ -244,10 +285,13 @@ async def invoke_agent(
 
 __all__ = [
     "EVENT_CHANNEL",
+    "RUNTIME_MODEL_ROLES",
+    "UnregisteredModelRole",
     "agent_model",
     "emit",
     "emit_agent_failure",
     "invoke_agent",
     "message_payload",
     "message_text",
+    "model_roles",
 ]
