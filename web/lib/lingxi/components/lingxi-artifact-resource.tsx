@@ -11,13 +11,86 @@ interface LingxiArtifactResourceProps {
 }
 
 type ArtifactKind = 'lesson-intro' | 'lecture-deck' | 'quiz' | 'visual' | 'knowledge-graph'
+type WorkspaceResourceKind = 'workspace-tables' | 'workspace-files' | 'runtime-logs'
 
 function parseResourceId(resourceId: string) {
+  if (resourceId === 'lingxi-workspace:tables') return { workspaceKind: 'workspace-tables' as const }
+  if (resourceId === 'lingxi-workspace:files') return { workspaceKind: 'workspace-files' as const }
+  if (resourceId === 'lingxi-workspace:logs') return { workspaceKind: 'runtime-logs' as const }
   const [, taskId, kind] = resourceId.split(':')
   if (!taskId || !kind) return null
   if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual', 'knowledge-graph'].includes(kind))
     return null
   return { taskId, kind: kind as ArtifactKind }
+}
+
+function WorkspaceResource({ kind }: { kind: WorkspaceResourceKind }) {
+  const [state, setState] = useState<{ loading: boolean; error: string | null; data: unknown[] }>({
+    loading: true,
+    error: null,
+    data: [],
+  })
+
+  useEffect(() => {
+    let disposed = false
+    const load = async () => {
+      try {
+        const data =
+          kind === 'workspace-tables'
+            ? ((await api.workspaceTables()).tables ?? [])
+            : kind === 'workspace-files'
+              ? ((await api.workspaceFiles('active')).files ?? [])
+              : ((await api.logs()).data ?? [])
+        if (!disposed) setState({ loading: false, error: null, data })
+      } catch (cause) {
+        if (!disposed)
+          setState({ loading: false, error: cause instanceof Error ? cause.message : String(cause), data: [] })
+      }
+    }
+    void load()
+    return () => {
+      disposed = true
+    }
+  }, [kind])
+
+  if (state.loading) return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载运行资源…</div>
+  if (state.error) return <div className='p-6 text-[var(--text-error)] text-sm'>{state.error}</div>
+  if (state.data.length === 0)
+    return <div className='p-6 text-[var(--text-secondary)] text-sm'>运行过程中暂时没有可展示的数据。</div>
+
+  return (
+    <div className='h-full overflow-y-auto p-4'>
+      <div className='space-y-2'>
+        {state.data.map((item, index) => {
+          const row = item as Record<string, unknown>
+          const id = String(row.id ?? index)
+          const title = String(row.name ?? row.title ?? row.taskId ?? row.id ?? '运行记录')
+          const href =
+            kind === 'workspace-tables'
+              ? `/workspace/lingxi/tables/${id}`
+              : kind === 'workspace-files'
+                ? `/workspace/lingxi/files/${id}`
+                : `/workspace/lingxi/logs`
+          return (
+            <a
+              key={id}
+              href={href}
+              className='block rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 hover:bg-[var(--surface-hover)]'
+            >
+              <p className='truncate text-[var(--text-primary)] text-sm'>{title}</p>
+              <p className='mt-1 truncate text-[var(--text-muted)] text-[11px]'>
+                {kind === 'workspace-tables'
+                  ? `${String(row.totalRows ?? row.rowCount ?? 0)} 行`
+                  : kind === 'workspace-files'
+                    ? `${String(row.mimeType ?? row.type ?? '文件')} · ${String(row.size ?? 0)} bytes`
+                    : `${String(row.status ?? '运行记录')} · ${String(row.startedAt ?? row.createdAt ?? '')}`}
+              </p>
+            </a>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function normalizeAnswer(question: PublicQuizQuestion, answer: string): string | string[] {
@@ -134,6 +207,7 @@ function QuizQuestionList({
 
 export function LingxiArtifactResource({ resourceId }: LingxiArtifactResourceProps) {
   const parsed = useMemo(() => parseResourceId(resourceId), [resourceId])
+  if (parsed && 'workspaceKind' in parsed) return <WorkspaceResource kind={parsed.workspaceKind} />
   const { task, loading, error, refresh } = useAgentTask(parsed?.taskId ?? '')
   const [submittedAnswers, setSubmittedAnswers] = useState<string[] | null>(null)
   const [submitting, setSubmitting] = useState(false)

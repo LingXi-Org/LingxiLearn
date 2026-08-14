@@ -16,9 +16,13 @@ export type LingxiArtifactKind =
   | 'visual'
   | 'knowledge-graph'
 
+export type LingxiWorkspaceResourceKind = 'workspace-tables' | 'workspace-files' | 'runtime-logs'
+
+export type LingxiResourceKind = LingxiArtifactKind | LingxiWorkspaceResourceKind
+
 export interface LingxiArtifactResourceDescriptor {
   id: string
-  kind: LingxiArtifactKind
+  kind: LingxiResourceKind
   title: string
   available: boolean
 }
@@ -60,9 +64,15 @@ function artifactResources(task: AgentTaskSnapshot | null): LingxiArtifactResour
       available: Boolean(task.artifacts.knowledge_graph?.available),
     },
   ]
-  return resources
+  const artifactDescriptors = resources
     .filter((resource) => resource.available)
     .map((resource) => ({ ...resource, id: `lingxi-artifact:${task.id}:${resource.kind}` }))
+  return [
+    { id: 'lingxi-workspace:tables', kind: 'workspace-tables', title: '运行表格', available: true },
+    { id: 'lingxi-workspace:files', kind: 'workspace-files', title: '运行文件', available: true },
+    { id: 'lingxi-workspace:logs', kind: 'runtime-logs', title: '运行日志', available: true },
+    ...artifactDescriptors,
+  ]
 }
 
 export function useLingxiChat(workspaceId: string, initialTaskId?: string) {

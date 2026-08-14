@@ -14,7 +14,7 @@ import {
   useLingxiChat,
 } from '@/lib/lingxi/hooks/use-lingxi-chat'
 import { useLingxiIdentity } from '@/lib/lingxi/lingxi-identity-provider'
-import { ExecutionSnapshot } from '@/app/workspace/[workspaceId]/logs/components/log-details/components/execution-snapshot'
+import { WorkflowsEditorLoop } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 
 function statusLabel(status: ToolCallStatus): string {
   if (status === 'executing') return '执行中'
@@ -275,14 +275,8 @@ export function LingxiChat({ workspaceId, taskId }: { workspaceId: string; taskI
               </div>
             </div>
             <aside className='hidden min-h-0 min-w-0 border-[var(--border)] border-l bg-[var(--surface-1)] p-3 xl:flex xl:w-[min(52%,760px)]'>
-              {chat.task?.current_execution_id ? (
-                <ExecutionSnapshot
-                  executionId={chat.task.current_execution_id}
-                  className='min-h-0 flex-1'
-                  height='100%'
-                  width='100%'
-                  live
-                />
+              {chat.task ? (
+                <WorkflowsEditorLoop live runtime={{ task: chat.task, events: chat.events }} />
               ) : (
                 <div className='flex min-h-0 flex-1 items-center justify-center text-[var(--text-muted)] text-xs'>
                   LingxiGraph 运行图将在执行开始后显示
