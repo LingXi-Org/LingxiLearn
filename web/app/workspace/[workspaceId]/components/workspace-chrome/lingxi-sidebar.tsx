@@ -171,6 +171,18 @@ export function Sidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
         ) : (
           <>
             <img
+              src={LINGXI_BRAND_ASSETS.iconOnLight}
+              alt=''
+              aria-hidden='true'
+              className='size-[22px] shrink-0 object-contain dark:hidden'
+            />
+            <img
+              src={LINGXI_BRAND_ASSETS.iconOnDark}
+              alt=''
+              aria-hidden='true'
+              className='hidden size-[22px] shrink-0 object-contain dark:block'
+            />
+            <img
               src={LINGXI_BRAND_ASSETS.wordmarkOnLight}
               alt='灵犀智学'
               className='h-[22px] w-auto max-w-[148px] shrink-0 object-contain object-left dark:hidden'

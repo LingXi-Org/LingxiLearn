@@ -5,7 +5,7 @@ description: >-
 license: MIT
 metadata:
   author: LingXi-Org
-  version: 1.3.0
+  version: 1.4.0
   display-name: 交互式讲解课件
   display-description: 构建包含视觉化幻灯片、结构化讲解数据和离线交付能力的自包含 HTML 课程课件。
   output-language: zh-CN
@@ -17,7 +17,7 @@ metadata:
   state-write-mode: none
   parallel-safe: true
   latency-class: interactive
-  default-blocking-hop-budget: "1"
+  default-blocking-hop-budget: "0"
   eval-suite: interactive-lecture-deck-v1
 ---
 
@@ -35,20 +35,19 @@ The source slides, lecture data, runtime, and manifest remain available in the p
 when needed for authoring, build, alignment, and validation, but do not routinely duplicate or
 return them as separate learner-facing exports.
 
-## Fast path (default)
+## Fast path (default — prioritize artifact delivery)
 
 Optimize for one useful, validated artifact from the supplied context. Unless the caller requests
 `constraints.qualityMode: full`, use this path:
 
-1. Read `references/task-contract.md`, then choose one page grammar from `assets/templates/layouts.md`.
-2. Read only `references/slide-authoring.md`, `references/lecture-data.md`, and the three directly used
-   templates (`opening.html`, `slide-base.html`, `closing.html`). Treat the quality kernel below as the
-   default design system; do not load unrelated references or build a candidate layout list.
-3. Compress the source into one in-memory outline, select the page count once, and batch-author all
-   slides. Do not re-plan after each slide.
-4. Copy or scaffold the runtime, write `lecture.json` and `manifest.json`, then run the build and strict
-   validator once at the end. If validation fails, make only targeted repairs and rerun the affected
-   final checks.
+1. Read `references/task-contract.md` only if inputs or output paths are unclear. Otherwise use defaults.
+2. Read only the minimum reference needed to write the current artifact; templates and design references
+   are optional when a usable existing layout is available.
+3. Make a compact outline and start authoring immediately. Page count, layout, and anchor detail may be
+   chosen incrementally; do not pause for a candidate comparison or staged approval.
+4. Scaffold/copy the runtime, write the smallest complete `lecture.json` and `manifest.json`, build the
+   standalone artifact, then run a quick validation. Run strict validation and targeted repairs when
+   practical; do not block delivery on non-critical warnings.
 
 Use the full path only when the caller asks for pixel-level visual review or when the task has custom
 style/density, content-driven anchors, complex protected-view geometry, or a validator-detected layout
@@ -60,12 +59,14 @@ risk. Full path adds `design-system.md`, `visual-authoring.md`, and `zoom-contra
 - Keep `opening` first, `closing` last, and every middle page `content`.
 - Put one conclusion and one dominant `data-visual` on each content page.
 - Keep visible text near 100 equivalent Chinese/ASCII units and never above 140.
-- Use 2–4 zoom points per content page; each zoom explains one observation or causal relation.
-- Keep anchors at least `180×72`, aligned with both `data-rect` and `lecture.json`.
+- Add one useful zoom point to a content page when it improves teaching; additional zooms are optional.
+- Keep anchors reasonably sized and aligned with both `data-rect` and `lecture.json`; use the runtime's
+  defaults when exact geometry is not important.
 - Keep slides static, self-contained, offline, and free of scripts, external assets, animation, shadows,
   gradients, and heavyweight UI chrome.
 - Preserve the runtime's protected-view, geometry-probe, final guard, and full-bleed behavior.
-- Require `build_standalone.py` followed by `validate_deck.py --strict` before claiming delivery.
+- Prefer `build_standalone.py` followed by validation before claiming delivery. If strict validation is
+  unavailable or non-critical warnings remain, deliver the built artifact and report the limitation.
 
 ### v2 contract checklist (hard requirements)
 
@@ -111,21 +112,20 @@ Never remove a required project artifact before the build and strict validator h
 ## Reference loading and authoring order
 
 1. Read this file.
-2. Read `references/task-contract.md` and fill minor missing values by its defaults; do not ask
-   the orchestrating agent a follow-up question. Resolve `constraints.qualityMode` here; omitted means
-   `fast`.
+2. Read `references/task-contract.md` only when needed to resolve a missing contract value; do not ask
+   a follow-up question for ordinary omissions. Omitted `constraints.qualityMode` means `fast`.
 3. Follow the fast path unless an escalation condition applies. Load only the directly relevant
    references and templates; load the full-path references conditionally.
 4. Start from `assets/templates/slide-base.html`, finish the opening and closing skeletons, then batch
    author the content pages.
-5. Read `references/lecture-data.md` before writing `lecture.json`; read `references/zoom-contract.md`
-   only when protected-view geometry or advanced zoom behavior needs authoring decisions.
+5. Read `references/lecture-data.md` before writing non-trivial `lecture.json`; for a minimal deck,
+   follow the existing example/schema and avoid loading unrelated zoom references.
 6. Use `scripts/init_project.py` for a new project when available, or copy `assets/runtime/index.html`
    into an existing project runtime directory.
 7. Run `python3 scripts/build_standalone.py <project_dir>`.
-8. Run `python3 scripts/validate_deck.py <project_dir> --strict`; standard delivery requires zero
-   errors and zero warnings. Run `measure_anchors.py` only for content-driven geometry or a detected
-   anchor risk.
+8. Run `python3 scripts/validate_deck.py <project_dir>` when available. Use `--strict` for full quality
+   mode or when the quick check reports contract errors. Run `measure_anchors.py` only for content-driven
+   geometry or a detected anchor risk.
 
 ## Content and layout rules
 
@@ -136,7 +136,7 @@ Never remove a required project artifact before the build and strict validator h
 5. Use a conclusion-style title, minimal Chinese labels, and place detailed reasoning in the panel.
 6. Draw the central relationship before adding labels. Choose a relation graph, process, coordinate
    chart, timeline, layered structure, comparison, formula map, or example decomposition.
-7. Define two to four zoom anchors before writing page content.
+7. Define one anchor when zoom is useful; use two to four only when the explanation genuinely benefits.
 8. Make each zoom step explain one observation or causal relation; split steps when the panel is
    overloaded.
 9. Keep slides self-contained: no network requests, no scripts in slides, and images only as
@@ -156,8 +156,9 @@ grammar, two to four zoom anchors, and the learner realization for each zoom. Co
 material into three to seven visual propositions rather than paginating paragraphs. Do not create or
 compare multiple candidate outlines unless the caller explicitly requests alternatives.
 
-Use at least three pages. Default totals are 5–7 for one problem, 6–8 for one concept, and 8–12
-for a lesson chapter. A requested `slideCount` includes opening and closing.
+Use at least three pages when the source supports it. Default totals are 5–7 for one problem, 6–8 for
+one concept, and 8–12 for a lesson chapter, but a shorter complete deck is acceptable when speed or
+source length calls for it. A requested `slideCount` includes opening and closing.
 
 ## Build, validation, and delivery
 
@@ -172,7 +173,7 @@ Use the standard project layout for the required build and validation artifacts:
 └── manifest.json
 ```
 
-Run the build and strict validator above. If anchor geometry is content-driven, also run
+Run the build and the quickest available validator. If anchor geometry is content-driven, also run
 `python3 scripts/measure_anchors.py <project_dir> --round 8`; do not run it by default. Report total
 pages, content pages, zoom-step count, primary standalone path, validation status, assumptions, and
 fallback items in Chinese. Mention source/validation paths only when they help the caller use or

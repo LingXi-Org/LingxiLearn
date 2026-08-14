@@ -81,7 +81,7 @@ function QuizQuestionList({
                 placeholder='输入你的答案'
               />
             ) : (
-              <div className='mt-3 space-y-2'>
+              <div className='relative z-10 mt-3 space-y-2 pointer-events-auto'>
                 {question.options.map((option) => {
                   const checked = selected.includes(option.label)
                   return (
@@ -89,10 +89,11 @@ function QuizQuestionList({
                       key={option.id}
                       type='button'
                       disabled={disabled}
+                      aria-pressed={checked}
                       onClick={() =>
                         setAnswer(index, option.label, question.type === 'multi_choice')
                       }
-                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                      className={`pointer-events-auto flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
                         checked
                           ? 'border-[var(--text-primary)] bg-[var(--surface-4)] text-[var(--text-primary)]'
                           : 'border-[var(--border-1)] bg-[var(--surface-1)] text-[var(--text-body)] hover:bg-[var(--surface-4)]'

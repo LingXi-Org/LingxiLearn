@@ -65,16 +65,27 @@ export function LingxiSkills() {
           ) : (
             <div className='mt-4 grid gap-3 sm:grid-cols-2'>
               {visibleSkills.map((skill) => (
-                <article key={skill.id} className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-4'>
-                  <div className='flex items-start justify-between gap-3'>
+                <details key={skill.id} className='group rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-4'>
+                  <summary className='flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden'>
                     <div className='min-w-0'>
                       <h2 className='truncate text-[14px] font-medium text-[var(--text-primary)]'>/{skill.id}</h2>
                       <p className='mt-1 text-[13px] text-[var(--text-secondary)]'>{skill.display_name}</p>
                     </div>
-                    {skill.is_system ? <span className='rounded-full bg-[var(--surface-3)] px-2 py-1 text-[10px] text-[var(--text-muted)]'>系统只读</span> : <div className='flex gap-2'><button type='button' className='text-[11px] text-[var(--text-secondary)] hover:underline' onClick={() => openEditor(skill)}>编辑</button><button type='button' className='text-[11px] text-red-500 hover:underline' onClick={() => void api.deleteSkill(skill.id).then(reload)}>删除</button></div>}
+                    <span className='shrink-0 text-[11px] text-[var(--text-muted)] group-open:rotate-180'>⌄</span>
+                  </summary>
+                  <div className='mt-3 border-t border-[var(--border)] pt-3'>
+                    <p className='text-[12px] leading-5 text-[var(--text-secondary)]'>{skill.description || '暂无描述'}</p>
+                    <dl className='mt-3 grid grid-cols-2 gap-2 text-[11px]'>
+                      <div className='rounded-[7px] bg-[var(--surface-3)] p-2'><dt className='text-[var(--text-muted)]'>版本</dt><dd className='mt-1 text-[var(--text-primary)]'>{skill.version || '未提供'}</dd></div>
+                      <div className='rounded-[7px] bg-[var(--surface-3)] p-2'><dt className='text-[var(--text-muted)]'>来源</dt><dd className='mt-1 text-[var(--text-primary)]'>{skill.is_system ? '系统' : skill.source || '个人'}</dd></div>
+                    </dl>
+                    {skill.compatibility && <p className='mt-3 text-[11px] text-[var(--text-muted)]'>兼容性：{skill.compatibility}</p>}
+                    {skill.content && <pre className='mt-3 max-h-40 overflow-auto whitespace-pre-wrap rounded-[7px] bg-[var(--surface-1)] p-3 font-mono text-[11px] leading-5 text-[var(--text-secondary)]'>{skill.content}</pre>}
+                    <div className='mt-3 flex justify-end gap-3'>
+                      {skill.is_system ? <span className='text-[11px] text-[var(--text-muted)]'>系统只读</span> : <><button type='button' className='text-[11px] text-[var(--text-secondary)] hover:underline' onClick={() => openEditor(skill)}>编辑</button><button type='button' className='text-[11px] text-red-500 hover:underline' onClick={() => void api.deleteSkill(skill.id).then(reload)}>删除</button></>}
+                    </div>
                   </div>
-                  <p className='mt-3 line-clamp-3 text-[12px] leading-5 text-[var(--text-muted)]'>{skill.description}</p>
-                </article>
+                </details>
               ))}
             </div>
           )}

@@ -10,7 +10,7 @@ export const LINGXI_BRAND_ASSETS = {
   wordmarkOnDark: '/brand/lingxi/wordmark-on-dark.svg',
   iconOnLight: '/brand/lingxi/icon-on-light.svg',
   iconOnDark: '/brand/lingxi/icon-on-dark.svg',
-  faviconLight: '/brand/lingxi/favicon-light.ico',
-  faviconDark: '/brand/lingxi/favicon-dark.ico',
-  faviconDarkCircle: '/brand/lingxi/favicon-dark-circle.ico',
+  faviconLight: '/brand/lingxi/favicon.ico',
+  faviconDark: '/brand/lingxi/favicon.ico',
+  faviconDarkCircle: '/brand/lingxi/favicon.ico',
 } as const

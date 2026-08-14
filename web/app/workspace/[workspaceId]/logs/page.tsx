@@ -1,3 +1,4 @@
-import { LingxiResourcePage } from '@/app/workspace/[workspaceId]/components/lingxi-resource-page'
+import Logs from './logs'
+
 export function generateStaticParams() { return [{ workspaceId: 'lingxi' }] }
-export default function Page() { return <LingxiResourcePage kind='logs' /> }
+export default function Page() { return <Logs /> }

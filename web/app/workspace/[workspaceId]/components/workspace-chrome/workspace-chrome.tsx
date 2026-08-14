@@ -28,12 +28,25 @@ export function WorkspaceChrome({
   const isFullscreen = pathname?.endsWith('/upgrade') ?? false
 
   useEffect(() => {
+    const saved = window.localStorage.getItem('lingxi-workspace-sidebar-collapsed')
+    if (saved !== null) setIsCollapsed(saved === 'true')
+  }, [])
+
+  useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 860px)')
     const updateViewportMode = () => setIsCompactViewport(mediaQuery.matches)
     updateViewportMode()
     mediaQuery.addEventListener('change', updateViewportMode)
     return () => mediaQuery.removeEventListener('change', updateViewportMode)
   }, [])
+
+  const toggleSidebar = () => {
+    setIsCollapsed((collapsed) => {
+      const next = !collapsed
+      window.localStorage.setItem('lingxi-workspace-sidebar-collapsed', String(next))
+      return next
+    })
+  }
 
   const sidebarCollapsed = isCollapsed || isCompactViewport
 
@@ -81,7 +94,7 @@ export function WorkspaceChrome({
           >
             <button
               type='button'
-              onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+              onClick={toggleSidebar}
               className={cn(
                 'flex size-8 items-center justify-center rounded-lg text-[var(--text-icon)] transition-colors',
                 'hover-hover:bg-[var(--surface-active)]',
