@@ -10,7 +10,6 @@ import asyncio
 import json
 import logging
 import operator
-import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from html import escape
@@ -19,21 +18,24 @@ from typing import Annotated, Any, TypedDict
 from lingxigraph import (
     END,
     START,
-    AIMessage,
-    EventKind,
     FilesystemSkillSource,
     GraphRecursionError,
     HumanMessage,
     Runtime,
     SkillRegistry,
     StateGraph,
-    ToolMessage,
     create_agent,
     interrupt,
 )
 from lingxigraph.errors import GraphTimeoutError
 
 from ..config import REPO_ROOT, Settings
+from .model_runtime import EVENT_CHANNEL as EVENT_CHANNEL
+from .model_runtime import agent_model as _agent_model
+from .model_runtime import emit as _emit
+from .model_runtime import emit_agent_failure as _emit_agent_failure
+from .model_runtime import invoke_agent as _invoke_agent
+from .model_runtime import message_text as _message_text
 from ..runtime.sim_semantics import PrimitiveCatalog
 from .artifact_store import ArtifactStore
 from .contracts import (
@@ -51,7 +53,6 @@ from .skill_runtime import (
 )
 
 logger = logging.getLogger(__name__)
-EVENT_CHANNEL = "agent_task"
 
 
 class AgentState(TypedDict, total=False):
@@ -77,29 +78,6 @@ class AgentState(TypedDict, total=False):
 
 PersistResult = Callable[[str, dict[str, Any]], Awaitable[None]]
 AgentNode = Callable[[AgentState, Runtime[Any]], Awaitable[dict[str, Any]]]
-
-
-def _agent_model(model: Any, role: str) -> Any:
-    if isinstance(model, dict):
-        return model.get(role) or model.get("default")
-    resolver = getattr(model, "for_agent", None)
-    if callable(resolver):
-        return resolver(role)
-    return model
-
-
-def _emit_agent_failure(
-    runtime: Runtime[Any], agent_name: str, exc: BaseException
-) -> None:
-    """Emit one correctly attributed failure even when siblings run in parallel."""
-
-    _emit(
-        runtime,
-        "agent.failed",
-        agent=agent_name,
-        error_type=type(exc).__name__,
-        message=str(exc) or type(exc).__name__,
-    )
 
 
 def _trace_agent_node(agent_name: str, node: AgentNode) -> AgentNode:
@@ -200,24 +178,6 @@ palette 与 static check。最终只返回简短中文 delivery receipt，不要
 )
 
 
-def _emit(runtime: Runtime[Any] | None, event_type: str, **payload: Any) -> None:
-    if runtime is None:
-        return
-    try:
-        runtime.emit(EVENT_CHANNEL, {"type": event_type, **payload})
-    except Exception:  # telemetry must never break a run
-        logger.debug("agent telemetry failed: %s", event_type, exc_info=True)
-
-
-def _message_text(result: Any) -> str:
-    messages = result.get("messages", []) if isinstance(result, dict) else []
-    for message in reversed(messages):
-        content = message.content if isinstance(message, AIMessage) else getattr(message, "content", None)
-        if content:
-            return str(content)
-    return ""
-
-
 def _lesson_intro_fallback(intent: IntentContext) -> str:
     """Create a valid small page before generation so interruption is recoverable."""
 
@@ -231,178 +191,6 @@ def _lesson_intro_fallback(intent: IntentContext) -> str:
 *{{box-sizing:border-box}}body{{max-width:1100px;margin:0 auto;padding:40px 6vw 56px;background:var(--paper);color:var(--ink-1);font:400 18px/1.65 var(--font-sans)}}main{{max-width:980px;margin:auto}}.top{{padding-bottom:14px;border-bottom:.5px solid var(--rule);color:var(--ink-2);font:400 13px var(--font-mono)}}.hero{{display:grid;grid-template-columns:minmax(0,.8fr) minmax(360px,1.2fr);gap:48px;align-items:center;padding:56px 0 42px;border-bottom:.5px solid var(--rule)}}h1{{margin:0 0 22px;font:500 clamp(42px,6vw,66px)/1.08 var(--font-serif);letter-spacing:-.04em}}.lead{{color:var(--ink-2);font-size:20px}}.question{{margin:28px 0 0;padding-left:16px;border-left:2px solid var(--accent)}}figure{{margin:0}}svg{{display:block;width:100%;height:auto}}.frame{{fill:var(--surface);stroke:var(--rule);stroke-width:.6}}.line{{stroke:var(--ink-2);stroke-width:1.5;fill:none}}.accent{{stroke:var(--accent);stroke-width:3;fill:none;stroke-linecap:round}}.t{{font:400 14px var(--font-sans);fill:var(--ink-1)}}.ts{{font:400 12px var(--font-sans);fill:var(--ink-2)}}.th{{font:500 15px var(--font-sans);fill:var(--ink-1)}}.tn{{font:400 12px var(--font-mono);fill:var(--ink-2)}}figcaption{{margin-top:10px;padding-top:10px;border-top:.5px solid var(--rule);color:var(--ink-2);font-size:14px}}footer{{margin-top:30px;color:var(--ink-2);font-size:15px}}@media(max-width:760px){{.hero{{grid-template-columns:1fr;gap:32px}}}}@media print{{body{{padding:20px}}}}
 </style></head><body><main><div class="top">课程引入 · 先看见一个问题</div><section class="hero"><div><h1>{topic}，为什么值得先问一个问题？</h1><p class="lead">我们先不急着记定义。把熟悉的现象拆开，看看哪些变化真正决定了结果。</p><p class="question">本节目标：{objective}。接下来要追问的是：我们究竟需要观察哪一个关键关系？</p></div>
 <figure><svg viewBox="0 0 680 340" role="img" aria-label="从现象到概念的关系图"><rect class="frame" x="24" y="24" width="632" height="260" rx="12"/><line class="line" x1="88" y1="170" x2="590" y2="170"/><circle cx="132" cy="170" r="28" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><circle cx="340" cy="170" r="28" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><circle cx="548" cy="170" r="28" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><path class="accent" d="M174 170h116m92 0h116"/><path class="accent" d="M280 160l10 10-10 10m208-20l10 10-10 10"/><text class="th" x="132" y="92" text-anchor="middle">现象</text><text class="ts" x="132" y="230" text-anchor="middle">先观察</text><text class="th" x="340" y="92" text-anchor="middle">关键关系</text><text class="ts" x="340" y="230" text-anchor="middle">再追问</text><text class="th" x="548" y="92" text-anchor="middle">概念</text><text class="ts" x="548" y="230" text-anchor="middle">最后理解</text><text class="tn" x="40" y="318">从可见问题走向可解释的结构</text></svg><figcaption>这张图先保留一个入口：观察现象，找到关系，再让概念回答问题。</figcaption></figure></section><footer>带着这个问题进入课程，答案会在后续的例子和推理中逐步展开。</footer></main></body></html>'''
-
-
-def _message_payload(message: Any) -> tuple[str, str]:
-    """Return provider reasoning and visible content from a native message."""
-
-    additional = getattr(message, "additional_kwargs", {}) or {}
-    reasoning = ""
-    if isinstance(additional, dict):
-        for key in ("reasoning_content", "reasoning", "thinking"):
-            if additional.get(key):
-                reasoning = str(additional[key])
-                break
-    return reasoning, str(getattr(message, "content", "") or "")
-
-
-async def _invoke_agent(
-    agent: Any,
-    message: HumanMessage,
-    runtime: Runtime[Any],
-    *,
-    agent_name: str,
-    recursion_limit: int,
-    tool_permissions: tuple[str, ...] = (),
-) -> dict[str, Any]:
-    """Run a child Agent while forwarding its native runtime events.
-
-    Calling a compiled Agent with ``ainvoke`` inside an ordinary graph node does
-    not make it a native subgraph, so its model/tool events never reach the
-    parent's stream.  Streaming the child explicitly keeps progressive skill
-    disclosure observable without a second UI event implementation.
-    """
-
-    if runtime is None:
-        return await agent.ainvoke(
-            {"messages": [message]},
-            {"recursion_limit": recursion_limit, "tool_permissions": list(tool_permissions)},
-        )
-    stream = getattr(agent, "astream", None)
-    if not callable(stream):
-        return await agent.ainvoke(
-            {"messages": [message]},
-            {
-                "recursion_limit": recursion_limit,
-                "tool_permissions": list(tool_permissions),
-            },
-        )
-
-    config = {
-        "recursion_limit": recursion_limit,
-        "tool_permissions": list(tool_permissions),
-    }
-    latest: dict[str, Any] = {}
-    reasoning_parts: list[str] = []
-    content_parts: list[str] = []
-    tool_calls: dict[str, dict[str, Any]] = {}
-    model_started = 0.0
-    tool_batch_started = 0.0
-
-    def flush_text() -> None:
-        if reasoning_parts:
-            _emit(
-                runtime,
-                "reasoning.delta",
-                agent=agent_name,
-                delta="".join(reasoning_parts),
-            )
-            reasoning_parts.clear()
-        if content_parts:
-            _emit(
-                runtime,
-                "assistant.delta",
-                agent=agent_name,
-                delta="".join(content_parts),
-            )
-            content_parts.clear()
-
-    try:
-        async for mode, value in stream(
-            {"messages": [message]},
-            config,
-            stream_mode=("events", "values"),
-            context=getattr(runtime, "context", None),
-            cancellation=getattr(runtime, "cancellation", None),
-            subgraphs=True,
-        ):
-            if mode == "values":
-                if isinstance(value, dict):
-                    latest = value
-                continue
-            event = value
-            if event.kind is EventKind.MESSAGE:
-                envelope = event.data.get("value")
-                native_message = envelope[0] if isinstance(envelope, (tuple, list)) and envelope else None
-                if native_message is not None:
-                    reasoning, content = _message_payload(native_message)
-                    if reasoning and not (getattr(native_message, "additional_kwargs", {}) or {}).get("_reasoning_replay"):
-                        reasoning_parts.append(reasoning)
-                    if content:
-                        content_parts.append(content)
-                    if sum(map(len, reasoning_parts)) + sum(map(len, content_parts)) >= 256:
-                        flush_text()
-                continue
-            if event.kind is EventKind.NODE_STARTED and event.node == "agent":
-                model_started = time.monotonic()
-                _emit(runtime, "model.started", agent=agent_name)
-                continue
-            if event.kind is EventKind.NODE_STARTED and event.node == "tools":
-                tool_batch_started = time.monotonic()
-                continue
-            if event.kind is not EventKind.NODE_COMPLETED:
-                continue
-            update = event.data.get("update") or {}
-            messages = update.get("messages", ()) if isinstance(update, dict) else ()
-            if event.node == "agent":
-                flush_text()
-                response = messages[-1] if messages else None
-                if isinstance(response, AIMessage):
-                    for call in response.tool_calls:
-                        call_payload = {
-                            "id": call.id,
-                            "name": call.name,
-                            "args": dict(call.args),
-                        }
-                        tool_calls[call.id] = call_payload
-                        _emit(
-                            runtime,
-                            "tool.call.delta",
-                            agent=agent_name,
-                            calls=[call_payload],
-                        )
-                    usage = dict(response.usage or {})
-                    if usage:
-                        _emit(runtime, "model.usage", agent=agent_name, usage=usage)
-                    _emit(
-                        runtime,
-                        "model.completed",
-                        agent=agent_name,
-                        duration_ms=round((time.monotonic() - model_started) * 1000, 2)
-                        if model_started
-                        else None,
-                        response_metadata=getattr(response, "response_metadata", {}) or {},
-                        additional_kwargs=getattr(response, "additional_kwargs", {}) or {},
-                    )
-                continue
-            if event.node == "tools":
-                duration_ms = (
-                    round((time.monotonic() - tool_batch_started) * 1000, 2)
-                    if tool_batch_started
-                    else None
-                )
-                for result in messages:
-                    if not isinstance(result, ToolMessage):
-                        continue
-                    call = tool_calls.get(result.tool_call_id, {})
-                    _emit(
-                        runtime,
-                        "tool.result",
-                        agent=agent_name,
-                        tool_call_id=result.tool_call_id,
-                        name=result.name,
-                        arguments=call.get("args", {}),
-                        content=result.content,
-                        status=result.status,
-                        duration_ms=duration_ms,
-                        additional_kwargs=result.additional_kwargs,
-                        response_metadata=result.response_metadata,
-                    )
-        flush_text()
-        return latest
-    except Exception:
-        flush_text()
-        raise
 
 
 def _route_from_state(state: AgentState) -> str:
