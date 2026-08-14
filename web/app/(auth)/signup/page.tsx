@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import type { SearchParams } from 'nuqs/server'
 import {
@@ -9,6 +10,7 @@ import {
 import { validateCallbackUrl } from '@/lib/core/security/input-validation'
 import { resolveAuthRedirect } from '@/app/(auth)/auth-redirect'
 import { getOAuthProviderStatus } from '@/app/(auth)/components/oauth-provider-checker'
+import SignupLoading from '@/app/(auth)/signup/loading'
 import { RegistrationDisabled } from '@/app/(auth)/signup/registration-disabled'
 import { signupSearchParamsCache } from '@/app/(auth)/signup/search-params'
 import SignupForm from '@/app/(auth)/signup/signup-form'
@@ -43,13 +45,15 @@ export default async function SignupPage({
     : (await import('@/lib/messaging/email/verification')).isEmailVerificationEffectivelyEnabled()
 
   return (
-    <SignupForm
-      githubAvailable={githubAvailable}
-      googleAvailable={googleAvailable}
-      microsoftAvailable={microsoftAvailable}
-      isProduction={isProduction}
-      emailSignupEnabled={!isEmailSignupDisabled}
-      emailVerificationEnabled={isProd ? emailVerificationEnabled : false}
-    />
+    <Suspense fallback={<SignupLoading />}>
+      <SignupForm
+        githubAvailable={githubAvailable}
+        googleAvailable={googleAvailable}
+        microsoftAvailable={microsoftAvailable}
+        isProduction={isProduction}
+        emailSignupEnabled={!isEmailSignupDisabled}
+        emailVerificationEnabled={isProd ? emailVerificationEnabled : false}
+      />
+    </Suspense>
   )
 }
