@@ -331,6 +331,11 @@ export const executionSnapshotDataSchema = z.object({
   executionId: z.string(),
   workflowId: z.string().nullable(),
   workflowState: z.record(z.string(), z.unknown()).nullable(),
+  traceSpans: z.array(z.record(z.string(), z.unknown())).optional(),
+  status: z.string().optional(),
+  taskId: z.string().optional(),
+  graphVersion: z.string().optional(),
+  projectionVersion: z.string().optional(),
   childWorkflowSnapshots: z.record(z.string(), z.unknown()).optional(),
   executionMetadata: z.object({
     trigger: z.string().nullable(),

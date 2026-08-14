@@ -122,6 +122,8 @@ class AgentTask(Base):
     # refactor. New code never creates or renders this artifact.
     visual_result: Mapped[dict] = mapped_column(JSON, default=dict)
     error: Mapped[str] = mapped_column(Text, default="")
+    current_execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    latest_execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -155,6 +157,7 @@ class AgentTaskEvent(Base):
     __table_args__ = (
         UniqueConstraint("task_id", "sequence", name="uq_agent_task_events_sequence"),
         Index("ix_agent_task_events_task_sequence", "task_id", "sequence"),
+        Index("ix_agent_task_events_execution", "execution_id", "sequence"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -163,7 +166,84 @@ class AgentTaskEvent(Base):
     kind: Mapped[str] = mapped_column(String(64))
     agent: Mapped[str] = mapped_column(String(64), default="")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    runtime: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AgentExecution(Base):
+    """Immutable-at-terminal projection of one StateGraph invocation."""
+
+    __tablename__ = "agent_executions"
+    __table_args__ = (
+        Index("ix_agent_executions_task_created", "task_id", "created_at"),
+        Index("ix_agent_executions_learner_created", "learner_id", "created_at"),
+        UniqueConstraint("schedule_id", "scheduled_for", name="uq_agent_executions_schedule_slot"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    trigger: Mapped[str] = mapped_column(String(48), default="agent-task")
+    status: Mapped[str] = mapped_column(String(32), default="running", index=True)
+    graph_version: Mapped[str] = mapped_column(String(64), default="")
+    workflow_state: Mapped[dict] = mapped_column(JSON, default=dict)
+    trace_spans: Mapped[list] = mapped_column(JSON, default=list)
+    event_count: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    schedule_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class AgentSchedule(Base):
+    """Agent-proposed, learner-approved immutable schedule revision."""
+
+    __tablename__ = "agent_schedules"
+    __table_args__ = (Index("ix_agent_schedules_due", "status", "next_run_at"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    source_task_id: Mapped[str | None] = mapped_column(String(96), ForeignKey("agent_tasks.id"), nullable=True, index=True)
+    proposal_id: Mapped[str] = mapped_column(String(128), unique=True)
+    prompt: Mapped[str] = mapped_column(Text)
+    cron: Mapped[str] = mapped_column(String(128))
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    inputs_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    resources_snapshot: Mapped[list] = mapped_column(JSON, default=list)
+    graph_version: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(24), default="proposed", index=True)
+    approval_scope: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class AgentScheduleRun(Base):
+    """Deduplicated scheduler trigger record."""
+
+    __tablename__ = "agent_schedule_runs"
+    __table_args__ = (
+        UniqueConstraint("schedule_id", "scheduled_for", name="uq_agent_schedule_runs_slot"),
+        Index("ix_agent_schedule_runs_schedule", "schedule_id", "scheduled_for"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    schedule_id: Mapped[str] = mapped_column(String(128), ForeignKey("agent_schedules.id"), index=True)
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    execution_id: Mapped[str | None] = mapped_column(String(128), ForeignKey("agent_executions.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="claimed", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class AgentTaskSidecar(Base):

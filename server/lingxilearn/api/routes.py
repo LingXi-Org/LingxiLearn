@@ -67,6 +67,66 @@ def not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="resource_not_found")
 
 
+@router.post("/copilot/tool-permission")
+async def copilot_tool_permission(
+    body: dict[str, Any],
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """Use Sim's native permission card contract for agent schedule proposals."""
+
+    decisions = body.get("decisions") if isinstance(body, dict) else None
+    if not isinstance(decisions, list) or not decisions or any(
+        not isinstance(item, dict) for item in decisions
+    ):
+        raise HTTPException(status_code=422, detail="At least one decision is required")
+    results: list[dict[str, Any]] = []
+    svc = service_of(request)
+    for item in decisions[:50]:
+        if not isinstance(item, dict):
+            continue
+        tool_call_id = str(item.get("toolCallId") or "")
+        decision = str(item.get("decision") or "")
+        if not tool_call_id or decision not in {"allow", "allow_chat", "always_allow", "skip"}:
+            raise HTTPException(status_code=422, detail="invalid_tool_permission_decision")
+        applied_result = await svc.repo.decide_schedule_permission(
+            proposal_id=tool_call_id,
+            learner_id=context.learner_id,
+            decision=decision,
+        )
+        if (
+            applied_result
+            and applied_result.get("applied")
+            and applied_result.get("source_task_id")
+        ):
+            source_task_id = str(applied_result["source_task_id"])
+            await svc.repo.append_agent_events(
+                source_task_id,
+                [
+                    {
+                        "kind": "schedule.permission",
+                        "agent": "coordinator",
+                        "payload": {
+                            "toolCallId": tool_call_id,
+                            "decision": decision,
+                            "status": applied_result.get("status"),
+                        },
+                    }
+                ],
+            )
+            svc._notify_agent(source_task_id)
+        results.append(
+            {
+                "toolCallId": tool_call_id,
+                "decision": decision,
+                "applied": bool(applied_result and applied_result.get("applied")),
+                "status": applied_result.get("status") if applied_result else "unknown",
+                "scope": applied_result.get("scope") if applied_result else None,
+            }
+        )
+    return {"success": True, "results": results}
+
+
 async def _validated_task_context(
     request: Request,
     context: LearnerContext,
@@ -642,9 +702,6 @@ async def get_attachment(
     except KeyError as exc:
         raise not_found() from exc
     return FileResponse(path, media_type=media_type, filename=filename)
-    if graph is None:
-        raise not_found()
-    return graph
 
 
 @router.post("/agent-tasks/{task_id}/quiz-submissions", status_code=202)

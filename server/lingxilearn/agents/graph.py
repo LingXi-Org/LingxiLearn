@@ -34,6 +34,7 @@ from lingxigraph import (
 from lingxigraph.errors import GraphTimeoutError
 
 from ..config import REPO_ROOT, Settings
+from ..runtime.sim_semantics import PrimitiveCatalog
 from .artifact_store import ArtifactStore
 from .contracts import (
     DeckResult,
@@ -872,8 +873,24 @@ def build_agent_graph(*, model: Any, settings: Settings, task_id: str, artifacts
 
     graph_name = "lingxilearn-knowledge-deep-dive-subgraph" if knowledge_deep_dive else "lingxilearn-difficult-knowledge-subgraph"
     graph_version = "3.0.0" if knowledge_deep_dive else "2.0.0"
+    PrimitiveCatalog().validate(
+        [
+            "recognize_intent",
+            "lecture_hook",
+            "interactive_lecture_deck",
+            "adaptive_pedagogy" if knowledge_deep_dive else "quiz_generator",
+            "await_user",
+            *([] if knowledge_deep_dive else ["answer_user", "interactive_visual_explainer", "quiz_submit"]),
+            "handoff",
+        ]
+    )
     builder = StateGraph(AgentState, name=graph_name, version=graph_version)
-    builder.add_node("recognize_intent", _trace_agent_node("intent", recognize_intent), timeout=settings.agent_timeout)
+    intent_retry = PrimitiveCatalog().lingxi_retry_policy(
+        "recognize_intent",
+        max_tries=max(1, int(settings.agent_retry_max_tries)),
+        wait_seconds=max(0.0, float(settings.agent_retry_wait_seconds)),
+    )
+    builder.add_node("recognize_intent", _trace_agent_node("intent", recognize_intent), retry=intent_retry, timeout=settings.agent_timeout)
     builder.add_node("lecture_hook", _trace_agent_node("lecture_hook", lecture_hook), timeout=settings.agent_lecture_timeout)
     builder.add_node("interactive_lecture_deck", _trace_agent_node("interactive_lecture_deck", interactive_lecture_deck), timeout=settings.agent_deck_timeout)
     if not knowledge_deep_dive:
