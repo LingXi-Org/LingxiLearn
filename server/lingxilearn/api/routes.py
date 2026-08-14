@@ -28,6 +28,7 @@ from ..auth import get_principal
 from ..config import REPO_ROOT
 from ..learner import LearnerContext
 from ..service import Service
+from ..state.capabilities import CAPABILITY_INFO
 from ..store.models import (
     AgentTask,
     KnowledgeBase,
@@ -303,69 +304,39 @@ async def list_skills(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    """Expose the project's native LingxiSkills catalogue to the workspace."""
+    """Expose the project's native LingxiSkills catalogue to the workspace.
 
-    skills_root = REPO_ROOT / "skills"
-    skills: list[dict[str, Any]] = []
-    for directory in sorted((item for item in skills_root.iterdir() if item.is_dir()), key=lambda item: item.name):
-        skill_file = directory / "SKILL.md"
-        if not skill_file.is_file():
-            continue
-        raw = skill_file.read_text(encoding="utf-8")
-        _, _, body = raw.partition("---\n")
-        metadata: dict[str, str] = {}
-        description_lines: list[str] = []
-        in_description = False
-        for line in body.splitlines() if body else raw.splitlines():
-            if line.strip() == "---":
-                break
-            if line.startswith("name:"):
-                metadata["name"] = line.split(":", 1)[1].strip()
-                in_description = False
-                continue
-            if line.startswith("  display-name:"):
-                metadata["display_name"] = line.split(":", 1)[1].strip()
-                in_description = False
-                continue
-            if line.startswith("  display-description:"):
-                metadata["display_description"] = line.split(":", 1)[1].strip()
-                in_description = False
-                continue
-            if line.startswith("  version:"):
-                metadata["version"] = line.split(":", 1)[1].strip()
-                in_description = False
-                continue
-            if line.startswith("license:"):
-                metadata["license"] = line.split(":", 1)[1].strip()
-                in_description = False
-                continue
-            if line.startswith("compatibility:"):
-                metadata["compatibility"] = line.split(":", 1)[1].strip()
-                in_description = False
-                continue
-            if line.startswith("description:"):
-                in_description = True
-                value = line.split(":", 1)[1].strip()
-                if value and value != ">-":
-                    description_lines.append(value)
-                continue
-            if in_description and line.startswith("  "):
-                description_lines.append(line.strip())
-                continue
-            in_description = False
-        skills.append({
-            "id": metadata.get("name", directory.name),
-            "name": metadata.get("name", directory.name),
-            "display_name": metadata.get("display_name", metadata.get("name", directory.name)),
-            "description": metadata.get("display_description", " ".join(description_lines)).strip(),
-            "version": metadata.get("version", ""),
-            "license": metadata.get("license", ""),
-            "compatibility": metadata.get("compatibility", ""),
-            "content": raw,
-            "source": "system",
-            "is_system": True,
-        })
+    Served from ``skill_registry`` rather than re-parsed here, so the catalogue
+    the UI shows and the catalogue the orchestrator plans against are the same
+    table.  ``content`` is still read from disk because the registry stores the
+    manifest's meaning, not its prose.
+    """
+
     svc = service_of(request)
+    skills: list[dict[str, Any]] = []
+    for entry in await svc.runtime_state.list_skills(learner_id=context.learner_id):
+        manifest_path = REPO_ROOT / "skills" / entry["skill_id"] / "SKILL.md"
+        skills.append(
+            {
+                "id": entry["skill_id"],
+                "name": entry["skill_id"],
+                "display_name": entry["display_name"] or entry["skill_id"],
+                "description": entry["description"],
+                "version": entry["version"],
+                "license": "MIT",
+                "compatibility": "",
+                "content": manifest_path.read_text(encoding="utf-8")
+                if manifest_path.is_file()
+                else "",
+                "source": entry["source"],
+                "is_system": entry["source"] == "system",
+                "capabilities": entry["capabilities"],
+                "ownership": entry["ownership"],
+                "provider": entry["provider"],
+                "cost": entry["cost"],
+                "enabled": entry["enabled"],
+            }
+        )
     async with svc.db.session() as session:
         personal = (
             await session.execute(
@@ -388,6 +359,42 @@ async def list_skills(
         for row in personal
     )
     return {"skills": skills}
+
+
+@router.get("/skill-registry")
+async def skill_registry(
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """The capability registry the orchestrator plans against.
+
+    Distinct from ``/skills``, which is the human catalogue: this is the
+    machine view — capability tags, IO contracts, preconditions and cost — plus
+    the capability vocabulary itself so a client can render the whole space.
+    """
+
+    svc = service_of(request)
+    entries = await svc.runtime_state.list_skills(learner_id=context.learner_id)
+    by_capability: dict[str, list[str]] = {}
+    for entry in entries:
+        if not entry["enabled"]:
+            continue
+        for tag in entry["capabilities"]:
+            by_capability.setdefault(tag, []).append(entry["skill_id"])
+    return {
+        "skills": entries,
+        "capabilities": [
+            {
+                "capability": str(item.capability),
+                "label": item.label,
+                "learner_facing": item.learner_facing,
+                "heavy_artifact": item.heavy_artifact,
+                "irreversible": item.irreversible,
+                "providers": by_capability.get(str(item.capability), []),
+            }
+            for item in CAPABILITY_INFO.values()
+        ],
+    }
 
 
 # --------------------------------------------------------------------------

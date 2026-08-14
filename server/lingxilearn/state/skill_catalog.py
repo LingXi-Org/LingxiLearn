@@ -91,7 +91,9 @@ def split_frontmatter(raw: str) -> tuple[dict[str, Any], str]:
     return loaded, parts[2]
 
 
-def _capabilities(skill_id: str, metadata: dict[str, Any]) -> tuple[Capability, ...]:
+def _capabilities(
+    skill_id: str, metadata: dict[str, Any], *, shared: bool
+) -> tuple[Capability, ...]:
     declared = metadata.get("capabilities") or []
     if isinstance(declared, str):
         declared = [item.strip() for item in declared.split(",") if item.strip()]
@@ -101,7 +103,9 @@ def _capabilities(skill_id: str, metadata: dict[str, Any]) -> tuple[Capability, 
             resolved.append(parse(str(tag)))
         except UnknownCapability:
             logger.warning("skill %s declares unknown capability %r; ignoring", skill_id, tag)
-    if not resolved:
+    if not resolved and not shared:
+        # Shared skills are composed into providers rather than planned for, so
+        # having no capability is correct for them and a mistake for the rest.
         logger.warning(
             "skill %s declares no capabilities; it will never be selected by the orchestrator",
             skill_id,
@@ -152,7 +156,10 @@ def parse_manifest(
     metadata = frontmatter.get("metadata")
     metadata = dict(metadata) if isinstance(metadata, dict) else {}
     name = str(frontmatter.get("name") or skill_id)
-    capabilities = _capabilities(name, metadata)
+    ownership = str(
+        metadata.get("ownership") or ("shared" if _is_shared(metadata) else "dedicated")
+    )
+    capabilities = _capabilities(name, metadata, shared=ownership == "shared")
     description = str(
         metadata.get("display-description") or frontmatter.get("description") or ""
     ).strip()
@@ -167,9 +174,7 @@ def parse_manifest(
         output_schema={"contract": str(metadata.get("output-contract") or "")},
         preconditions=_preconditions(metadata),
         cost=_cost(metadata, capabilities),
-        ownership=str(
-            metadata.get("ownership") or ("shared" if _is_shared(metadata) else "dedicated")
-        ),
+        ownership=ownership,
         provider=provider or str(metadata.get("provider") or ""),
         version=str(metadata.get("version") or ""),
         enabled=source != "forged",

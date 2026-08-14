@@ -18,6 +18,9 @@ metadata:
   state-write-mode: proposal-only
   parallel-safe: true
   latency-class: background
+  capabilities: model.reflect
+  provider: learner_reflector
+  ownership: dedicated
   eval-suite: learner-state-reflector-v1
 ---
 

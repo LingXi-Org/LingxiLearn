@@ -20,6 +20,9 @@ metadata:
   state-write-mode: none
   parallel-safe: true
   latency-class: offline
+  capabilities: meta.evaluate
+  provider: skill_eval
+  ownership: dedicated
   eval-suite: skill-eval-harness-v1
 ---
 

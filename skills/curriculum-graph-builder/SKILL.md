@@ -17,6 +17,9 @@ metadata:
   state-write-mode: proposal-only
   parallel-safe: true
   latency-class: offline
+  capabilities: graph.build
+  provider: curriculum_graph
+  ownership: dedicated
   eval-suite: curriculum-graph-builder-v1
 ---
 

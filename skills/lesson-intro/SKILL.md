@@ -19,6 +19,9 @@ metadata:
   state-write-mode: none
   parallel-safe: true
   latency-class: interactive
+  capabilities: content.lesson_intro
+  provider: lesson_intro
+  ownership: dedicated
   eval-suite: lesson-intro-v1
 ---
 

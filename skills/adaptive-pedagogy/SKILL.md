@@ -18,6 +18,9 @@ metadata:
   state-write-mode: proposal-only
   parallel-safe: false
   latency-class: interactive
+  capabilities: teach.strategy, teach.explain
+  provider: adaptive_pedagogy
+  ownership: dedicated
   eval-suite: adaptive-pedagogy-v1
 ---
 

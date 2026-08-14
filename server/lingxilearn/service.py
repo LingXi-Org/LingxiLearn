@@ -46,7 +46,7 @@ from .agents.sidecars import (
     build_visual_sidecar,
 )
 from .brains.base import TutorBrain
-from .config import Settings, get_settings
+from .config import REPO_ROOT, Settings, get_settings
 from .kernel.graph import build_graph
 from .kernel.state import initial_state
 from .learner import LearnerService
@@ -54,6 +54,7 @@ from .packs.loader import discover_packs, validate_pack
 from .packs.models import Pack
 from .runtime.schedules import next_schedule_time, validate_schedule
 from .runtime.sim_semantics import PrimitiveCatalog, SimRunProjector
+from .state.skill_catalog import discover as discover_skill_manifests
 from .store.db import Database, GraphRevisionConflict, Repository
 from .store.learner import LearnerRepository
 from .store.models import (
@@ -66,6 +67,7 @@ from .store.models import (
     Workspace,
     WorkspaceFile,
 )
+from .store.runtime_state import RuntimeStateRepository
 from .stream.projector import EventProjector
 from .tools import knowledge
 from .tools.registry import ToolRegistry, load_builtin_tools
@@ -317,6 +319,7 @@ class Service:
         self.db = Database(self.settings)
         self.repo = Repository(self.db)
         self.learner_repository = LearnerRepository(self.db)
+        self.runtime_state = RuntimeStateRepository(self.db)
         self.learner_service = LearnerService(self.learner_repository, self.settings)
         self.learners = self.learner_service
         self.brain: TutorBrain | None = None
@@ -351,6 +354,11 @@ class Service:
         # Keep the primitive projection closed: adding a callable LingxiLearn
         # tool without a Sim mapping is a startup error, never a generic node.
         PrimitiveCatalog().validate(self.registry.names())
+        # Seed the capability registry from the SKILL.md manifests on disk, so
+        # the orchestrator plans against declared capabilities rather than a
+        # hard-coded agent list.
+        manifests = discover_skill_manifests(REPO_ROOT / "skills")
+        await self.runtime_state.sync_skill_manifests(manifests)
         chunks = knowledge.configure(
             [p.root / "knowledge" for p in self.packs.values() if (p.root / "knowledge").exists()]
         )

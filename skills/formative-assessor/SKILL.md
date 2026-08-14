@@ -20,6 +20,9 @@ metadata:
   state-write-mode: none
   parallel-safe: false
   latency-class: interactive
+  capabilities: assess.interpret
+  provider: formative_assessor
+  ownership: dedicated
   eval-suite: formative-assessor-v1
 ---
 
