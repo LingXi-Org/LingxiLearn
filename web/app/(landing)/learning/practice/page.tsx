@@ -4,11 +4,11 @@ import { LEARNING_PAGE_CONFIGS, LearningProductPage } from '@/app/(landing)/lear
 export const revalidate = 3600
 
 export const metadata = buildLandingMetadata({
-  title: '自适应练习 · Lingxi',
+  title: '自适应练习 · LingXi',
   description: LEARNING_PAGE_CONFIGS['adaptive-practice'].seoDescription ?? '',
   path: '/learning/practice',
-  imageAlt: 'Lingxi 自适应练习',
-  twitterImageAlt: 'Lingxi 自适应练习',
+  imageAlt: 'LingXi 自适应练习',
+  twitterImageAlt: 'LingXi 自适应练习',
 })
 
 export default function Page() {

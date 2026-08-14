@@ -3,9 +3,9 @@ import Privacy from '@/app/(landing)/privacy/privacy'
 
 export const revalidate = 3600
 
-const TITLE = 'Privacy Policy | Sim, the AI Workspace'
+const TITLE = '隐私政策 | LingXi 灵犀智学'
 const DESCRIPTION =
-  'How Sim, the open-source AI workspace, collects, uses, and protects your data, including data obtained from Google APIs, and the controls you have over it.'
+  'LingXi（灵犀智学）如何处理账户、学习任务、知识资源和智能体运行相关信息，以及用户和监护人的数据权利。'
 
 export const metadata = buildLandingMetadata({
   title: TITLE,

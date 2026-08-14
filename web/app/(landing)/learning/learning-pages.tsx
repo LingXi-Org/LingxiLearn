@@ -67,7 +67,7 @@ function stagingPanel(
       headerTag={headerTag}
       changeTag={changeTag}
       changeTitle={changeTitle}
-      attribution='Lingxi · 刚刚'
+      attribution='LingXi · 刚刚'
       checks={checks}
       fromLabel={fromLabel}
       toLabel={toLabel}
@@ -121,11 +121,11 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
     language: 'zh-CN',
     showLogos: false,
     seoDescription:
-      'Lingxi 根据学习目标、知识基础、练习表现与可用时间动态调整学习路径，让每一步都服务于当前最需要掌握的内容。',
+      'LingXi 根据学习目标、知识基础、练习表现与可用时间动态调整学习路径，让每一步都服务于当前最需要掌握的内容。',
     hero: hero(
       '一条会随着你改变的学习路径',
-      'Lingxi 先理解你的目标、基础与时间，再规划阶段任务；每次练习和反馈都会更新下一步，而不是把所有人放进同一张课程表。',
-      'Lingxi 根据学习目标、知识基础、练习表现与可用时间动态调整学习路径，让每一步都服务于当前最需要掌握的内容。',
+      'LingXi 先理解你的目标、基础与时间，再规划阶段任务；每次练习和反馈都会更新下一步，而不是把所有人放进同一张课程表。',
+      'LingXi 根据学习目标、知识基础、练习表现与可用时间动态调整学习路径，让每一步都服务于当前最需要掌握的内容。',
       <HeroPlatformLoop />,
       '#plan'
     ),
@@ -170,7 +170,7 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
         id: 'adapt',
         title: '学习过程中持续调整',
         subtitle:
-          '计划不是一次生成后固定不变；Lingxi 根据新表现更新状态，再选择下一步最合适的动作。',
+          '计划不是一次生成后固定不变；LingXi 根据新表现更新状态，再选择下一步最合适的动作。',
         cta: { label: '查看动态调整', href: '#adapt' },
         cards: [
           {
@@ -195,7 +195,7 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
     ],
     footerCta: {
       heading: '让下一步，真正适合现在的你',
-      description: '从一个真实学习目标开始，让 Lingxi 生成并持续调整你的学习路径。',
+      description: '从一个真实学习目标开始，让 LingXi 生成并持续调整你的学习路径。',
       ...COMMON_FOOTER,
     },
   },
@@ -205,11 +205,11 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
     language: 'zh-CN',
     showLogos: false,
     seoDescription:
-      'Lingxi 将抽象知识拆成可追问、可验证的分步讲解，并通过知识依据、交互演示和理解检查帮助学生真正掌握概念。',
+      'LingXi 将抽象知识拆成可追问、可验证的分步讲解，并通过知识依据、交互演示和理解检查帮助学生真正掌握概念。',
     hero: hero(
       '把“看不懂”变成一步一步的理解',
-      'Lingxi 不急着给结论。它先识别你卡住的位置，再组织背景、概念、例子与可交互讲解，并在讲完后确认你是否真的理解。',
-      'Lingxi 将抽象知识拆成可追问、可验证的分步讲解，并通过知识依据、交互演示和理解检查帮助学生真正掌握概念。',
+      'LingXi 不急着给结论。它先识别你卡住的位置，再组织背景、概念、例子与可交互讲解，并在讲完后确认你是否真的理解。',
+      'LingXi 将抽象知识拆成可追问、可验证的分步讲解，并通过知识依据、交互演示和理解检查帮助学生真正掌握概念。',
       <KnowledgeHeroLoop />,
       '#explain'
     ),
@@ -282,7 +282,7 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
       },
     ],
     footerCta: {
-      heading: '把一个真正困住你的问题交给 Lingxi',
+      heading: '把一个真正困住你的问题交给 LingXi',
       description: '从“哪里不懂”开始，而不是从标准答案开始。',
       ...COMMON_FOOTER,
     },
@@ -293,11 +293,11 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
     language: 'zh-CN',
     showLogos: false,
     seoDescription:
-      'Lingxi 通过分步骤提示、错因分析、知识点回顾和同类题训练辅导作业，帮助学生自己完成推理，而不是直接生成标准答案。',
+      'LingXi 通过分步骤提示、错因分析、知识点回顾和同类题训练辅导作业，帮助学生自己完成推理，而不是直接生成标准答案。',
     hero: hero(
       '提示、分析，而不是代替你思考',
-      '面对作业问题，Lingxi 先判断你已经做到哪一步，再给恰到好处的提示、错因分析和知识回顾；目标是帮助你完成推理，而不是把答案直接交给你。',
-      'Lingxi 通过分步骤提示、错因分析、知识点回顾和同类题训练辅导作业，帮助学生自己完成推理，而不是直接生成标准答案。',
+      '面对作业问题，LingXi 先判断你已经做到哪一步，再给恰到好处的提示、错因分析和知识回顾；目标是帮助你完成推理，而不是把答案直接交给你。',
+      'LingXi 通过分步骤提示、错因分析、知识点回顾和同类题训练辅导作业，帮助学生自己完成推理，而不是直接生成标准答案。',
       <HeroPlatformLoop />,
       '#guide'
     ),
@@ -370,7 +370,7 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
       },
     ],
     footerCta: {
-      heading: '把卡住的那一步交给 Lingxi',
+      heading: '把卡住的那一步交给 LingXi',
       description: '得到下一步提示、错因分析和同类训练，同时保留真正属于你的思考过程。',
       ...COMMON_FOOTER,
     },
@@ -381,11 +381,11 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
     language: 'zh-CN',
     showLogos: false,
     seoDescription:
-      'Lingxi 根据知识掌握度、近期错误与学习目标动态生成训练，并在每次作答后更新下一轮题型、难度和反馈策略。',
+      'LingXi 根据知识掌握度、近期错误与学习目标动态生成训练，并在每次作答后更新下一轮题型、难度和反馈策略。',
     hero: hero(
       '练你真正需要练的，而不是再刷一套题',
-      'Lingxi 把掌握状态、近期错误和学习目标转成下一组练习；每次作答都会成为新的反馈，让题型、难度和提示随你变化。',
-      'Lingxi 根据知识掌握度、近期错误与学习目标动态生成训练，并在每次作答后更新下一轮题型、难度和反馈策略。',
+      'LingXi 把掌握状态、近期错误和学习目标转成下一组练习；每次作答都会成为新的反馈，让题型、难度和提示随你变化。',
+      'LingXi 根据知识掌握度、近期错误与学习目标动态生成训练，并在每次作答后更新下一轮题型、难度和反馈策略。',
       <HeroVisual />,
       '#target'
     ),
@@ -465,11 +465,11 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
     language: 'zh-CN',
     showLogos: false,
     seoDescription:
-      'Lingxi 将练习记录、测试结果与学习过程转成可解释的知识掌握诊断，识别薄弱点、关联关系和下一步改进建议。',
+      'LingXi 将练习记录、测试结果与学习过程转成可解释的知识掌握诊断，识别薄弱点、关联关系和下一步改进建议。',
     hero: hero(
       '看见薄弱点，也看见它为什么出现',
-      'Lingxi 不只给一个分数。它把练习、测试和学习过程组织成知识状态，识别薄弱点与关联，并把诊断转成下一步可执行的学习建议。',
-      'Lingxi 将练习记录、测试结果与学习过程转成可解释的知识掌握诊断，识别薄弱点、关联关系和下一步改进建议。',
+      'LingXi 不只给一个分数。它把练习、测试和学习过程组织成知识状态，识别薄弱点与关联，并把诊断转成下一步可执行的学习建议。',
+      'LingXi 将练习记录、测试结果与学习过程转成可解释的知识掌握诊断，识别薄弱点、关联关系和下一步改进建议。',
       <LogsHeroLoop />,
       '#diagnose'
     ),
@@ -548,11 +548,11 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
     language: 'zh-CN',
     showLogos: false,
     seoDescription:
-      'Lingxi 在持续对话中保留学习目标、阶段进度与关键学习状态，让每次回来都能从上一次的上下文继续，并推动下一步学习行动。',
+      'LingXi 在持续对话中保留学习目标、阶段进度与关键学习状态，让每次回来都能从上一次的上下文继续，并推动下一步学习行动。',
     hero: hero(
       '每次回来，都从你的学习进度继续',
-      'Lingxi 记住的不是闲聊，而是学习目标、阶段任务、关键困难和已经完成的进度。你不必每次重新解释，它会从当前状态继续推动下一步。',
-      'Lingxi 在持续对话中保留学习目标、阶段进度与关键学习状态，让每次回来都能从上一次的上下文继续，并推动下一步学习行动。',
+      'LingXi 记住的不是闲聊，而是学习目标、阶段任务、关键困难和已经完成的进度。你不必每次重新解释，它会从当前状态继续推动下一步。',
+      'LingXi 在持续对话中保留学习目标、阶段进度与关键学习状态，让每次回来都能从上一次的上下文继续，并推动下一步学习行动。',
       <HeroPlatformLoop />,
       '#continue'
     ),

@@ -3,9 +3,8 @@ import Terms from '@/app/(landing)/terms/terms'
 
 export const revalidate = 3600
 
-const TITLE = 'Terms of Service | Sim, the AI Workspace'
-const DESCRIPTION =
-  'The terms and conditions for using Sim, the open-source AI workspace: subscription plans, data ownership, acceptable use, and your rights.'
+const TITLE = '服务条款 | LingXi 灵犀智学'
+const DESCRIPTION = 'LingXi（灵犀智学）学习工作台、智能体任务、知识库和相关服务的使用条款。'
 
 export const metadata = buildLandingMetadata({
   title: TITLE,

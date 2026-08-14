@@ -365,7 +365,7 @@ export const GRAPH_EDGES: Array<[number, number]> = [
 export const LANDING_KNOWLEDGE_GRAPH = {
   graph_id: 'landing-knowledge-graph',
   revision: 1,
-  title: 'Lingxi 学习知识图谱',
+  title: 'LingXi 学习知识图谱',
   domain: '跨学科学习',
   nodes: [
     {

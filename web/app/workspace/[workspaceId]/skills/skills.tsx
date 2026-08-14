@@ -72,12 +72,7 @@ export function Skills() {
   const showNoResults = searchTerm.trim() && filteredSkills.length === 0
 
   const addButton = (
-    <Chip
-      variant='primary'
-      disabled
-      title='未接入：LingxiGraph Skills 当前为只读'
-      leftIcon={Plus}
-    >
+    <Chip variant='primary' disabled title='未接入：LingxiGraph Skills 当前为只读' leftIcon={Plus}>
       未接入
     </Chip>
   )

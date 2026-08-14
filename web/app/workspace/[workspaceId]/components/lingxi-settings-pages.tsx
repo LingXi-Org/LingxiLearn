@@ -205,7 +205,7 @@ export function LingxiUserManagementPage() {
         </section>
         <PlaceholderCard
           title='成员、邀请与组织'
-          description='本版本不实现团队成员、邀请、组织切换、角色管理或成员协作。每位用户只有一个私有 Lingxi 工作区。'
+          description='本版本不实现团队成员、邀请、组织切换、角色管理或成员协作。每位用户只有一个私有 LingXi 工作区。'
         />
         <PlaceholderCard
           title='管理员控制台'
@@ -213,7 +213,7 @@ export function LingxiUserManagementPage() {
         />
         <PlaceholderCard
           title='SSO、API Keys 与凭据'
-          description='SSO、凭据、环境变量、API Keys 和外部连接器不属于 Lingxi 工作区能力。'
+          description='SSO、凭据、环境变量、API Keys 和外部连接器不属于 LingXi 工作区能力。'
         />
       </div>
     </SettingsShell>
@@ -224,7 +224,7 @@ export function LingxiUnavailableSettingsPage({ title }: { title: string }) {
   return (
     <SettingsShell
       title={title}
-      description='该原生 Sim 设置面板已保留源码闭包，但当前 LingxiLearn 不启用此能力。'
+      description='该原生 Sim 设置面板已保留源码闭包，但当前 LingXiLearn 不启用此能力。'
     >
       <PlaceholderCard
         title={title}

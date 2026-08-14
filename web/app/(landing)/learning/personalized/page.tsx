@@ -4,11 +4,11 @@ import { LEARNING_PAGE_CONFIGS, LearningProductPage } from '@/app/(landing)/lear
 export const revalidate = 3600
 
 export const metadata = buildLandingMetadata({
-  title: `${LEARNING_PAGE_CONFIGS['personalized-learning'].module} · Lingxi`,
+  title: `${LEARNING_PAGE_CONFIGS['personalized-learning'].module} · LingXi`,
   description: LEARNING_PAGE_CONFIGS['personalized-learning'].seoDescription ?? '',
   path: '/learning/personalized',
-  imageAlt: 'Lingxi 个性化学习',
-  twitterImageAlt: 'Lingxi 个性化学习',
+  imageAlt: 'LingXi 个性化学习',
+  twitterImageAlt: 'LingXi 个性化学习',
 })
 
 export default function Page() {

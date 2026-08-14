@@ -2,10 +2,8 @@ import { ProsePage } from '@/app/(landing)/components/prose-page'
 import { PRIVACY_CONFIG } from '@/app/(landing)/privacy/privacy-content'
 
 /**
- * Privacy Policy page - a thin consumer of the shared {@link ProsePage}
- * primitive. The whole document is one typed config ({@link PRIVACY_CONFIG})
- * rendered inside the shared route-group layout chrome; it shares its layout,
- * rhythm, and chrome with Terms and cannot drift.
+ * 隐私政策页面只消费共享的 {@link ProsePage} 原语。完整文案集中在
+ * {@link PRIVACY_CONFIG} 中，由路由组统一渲染，确保与服务条款保持一致的布局。
  */
 export default function Privacy() {
   return <ProsePage config={PRIVACY_CONFIG} />

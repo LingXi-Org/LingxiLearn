@@ -24,13 +24,16 @@ export function sanitizeCommand(value: string): string {
 }
 
 export async function createSSHConnection(_config: SSHConnectionConfig): Promise<Client> {
-  throw new Error('SSH tools are not available in the Lingxi workspace')
+  throw new Error('SSH tools are not available in the LingXi workspace')
 }
 
-export async function executeSSHCommand(_client: Client, _command: string): Promise<{
+export async function executeSSHCommand(
+  _client: Client,
+  _command: string
+): Promise<{
   stdout: string
   stderr: string
   exitCode: number
 }> {
-  throw new Error('SSH tools are not available in the Lingxi workspace')
+  throw new Error('SSH tools are not available in the LingXi workspace')
 }

@@ -1,306 +1,214 @@
-# LingxiLearn
+<div align="center">
+  <h1>LingxiLearn</h1>
+  <p><strong>面向个人学习任务的 AI 学习工作台</strong></p>
+  <p>将课程内容、真实工具、智能体编排与可追溯学习证据组织成一个连续的学习系统。</p>
+  <p>
+    <a href="README.en.md">English</a>
+    ·
+    <a href="ARCHITECTURE.md">架构说明</a>
+    ·
+    <a href="DATA_SOURCES.md">数据来源</a>
+    ·
+    <a href="LICENSE">MIT License</a>
+  </p>
+</div>
 
-**面向高校工科学生的 AI 学习与工程实践助教。**
+<table>
+  <tr>
+    <td><strong>产品形态</strong><br />连续任务型学习工作台</td>
+    <td><strong>核心运行时</strong><br /><code>LingxiGraph 2.2.0</code></td>
+    <td><strong>身份边界</strong><br /><code>LingxiIdentity</code> BFF</td>
+    <td><strong>部署方式</strong><br />Docker Compose</td>
+  </tr>
+</table>
 
-LingxiLearn 不替你做题。它读懂你当前的状态，调用真实工具处理真实的工程工件，
-用问题把你引到结论跟前，验证你是不是真的会了，并把整个过程变成**可回溯的学习证据**。
+## 项目定位
 
-> 理解学生当前状态 → 调用真实工具/专业知识处理任务 → 启发式交互 → 验证是否真正掌握 → 留下可追溯证据
+LingxiLearn 是 LingXi 系列技术栈中的应用层项目，负责把学习任务组织成可执行、可验证、可回溯的工作流。它不以开放式问答作为产品边界，而是围绕一个具体任务建立完整闭环：接收学习意图，诊断当前状态，调用课程知识与确定性工具，分阶段引导学习者完成任务，判断掌握情况，并沉淀为学习证据与可复用产物。
 
-《计算机网络》是第一个课程包，不是产品边界。教学内核完全不涉及任何具体学科——
-数据结构、操作系统、组成原理、嵌入式将来以**内容**的方式加入，而不是重写。
+在 LingXi 系列中，LingxiLearn 处于“学习场景与技术能力之间的编排层”：
 
----
+<table>
+  <thead>
+    <tr>
+      <th>组件</th>
+      <th>层级</th>
+      <th>职责</th>
+      <th>LingxiLearn 的使用方式</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>LingxiIdentity</strong></td>
+      <td>身份基础设施</td>
+      <td>认证、会话和主体身份</td>
+      <td>通过 BFF 校验身份，以 HttpOnly Cookie 维持同源会话</td>
+    </tr>
+    <tr>
+      <td><strong>LingxiGraph</strong></td>
+      <td>智能体运行时</td>
+      <td>状态图、任务编排、检查点和运行时扩展</td>
+      <td>承载领域无关的学习任务状态机与 Agent Task</td>
+    </tr>
+    <tr>
+      <td><strong>LingxiSkills</strong></td>
+      <td>能力目录</td>
+      <td>可发现的任务能力、课程工具和产物类型</td>
+      <td>为导入、讲义、检测、可视化等任务提供声明式入口</td>
+    </tr>
+    <tr>
+      <td><strong>LingxiLearn</strong></td>
+      <td>场景应用层</td>
+      <td>学习领域模型、课程包、证据和交互工作台</td>
+      <td>把底层能力组合成可运行的学习产品</td>
+    </tr>
+  </tbody>
+</table>
 
-## 30 秒跑起来
+## 核心闭环
 
-本仓库只保留两套 Compose：开发环境绑定本地源码，生产环境把静态前端和
-FastAPI 放进同一个轻量运行容器。
+```text
+intake → diagnose → plan → investigate → coach → await_learner
+       → judge → advance → verify → report
+```
+
+每个节点都可以产生结构化状态、工具调用、证据引用或产物更新。学习者的答案不是被动等待模型评价的文本，而是进入判分、误区识别、掌握度更新和证据账本的业务流程。模型主要负责自然表达和提示选择；关键判断由课程包、领域工具和服务端逻辑共同约束。
+
+第一个课程包聚焦《计算机网络》，但教学内核不绑定 DNS、TCP 或任何单一学科。新增课程的主要路径是增加课程包、知识切片、误区分类和工具注册，而不是重写状态图。
+
+## 技术架构
+
+<table>
+  <thead>
+    <tr>
+      <th>区域</th>
+      <th>实现</th>
+      <th>边界</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Web 工作台</td>
+      <td>Next.js 16、React 19、TypeScript、Tailwind CSS</td>
+      <td>同源页面、任务对话、事件回放和产物展示</td>
+    </tr>
+    <tr>
+      <td>应用 API</td>
+      <td>FastAPI、Pydantic、Uvicorn</td>
+      <td>身份保护的 Agent Task、REST、fetch-SSE 和资源接口</td>
+    </tr>
+    <tr>
+      <td>学习数据层</td>
+      <td>SQLAlchemy Async、Alembic、PostgreSQL</td>
+      <td>学习者上下文、掌握度、误区、证据、事件和报告</td>
+    </tr>
+    <tr>
+      <td>智能体运行时</td>
+      <td>LingxiGraph StateGraph、checkpoint、Runtime</td>
+      <td>任务状态、幂等推进、可恢复执行和事件投影</td>
+    </tr>
+    <tr>
+      <td>内容与工具</td>
+      <td>声明式 Course Pack、Tool Registry、LingxiSkills</td>
+      <td>知识来源、确定性计算、课程任务和生成产物</td>
+    </tr>
+  </tbody>
+</table>
+
+```text
+Browser
+  │ REST + fetch-SSE
+  ▼
+Next.js workspace ── LingxiIdentity BFF
+  │
+  ▼
+FastAPI Agent Task API ── LearnerService / SQLAlchemy ── PostgreSQL
+  │
+  ▼
+LingxiGraph StateGraph
+  ├── Course Pack
+  ├── Tool Registry
+  └── safe event / artifact projection
+```
+
+前端只通过 `web/lib/lingxi/` 下的适配层访问学习 API。浏览器接收阶段摘要、工具元数据、事件和产物引用，不接收原始私有推理或服务端凭据。生产环境将静态 Next.js 产物与 FastAPI API 放入同一轻量运行容器，PostgreSQL 作为独立服务运行。
+
+## 能力边界
+
+- **课程包驱动**：课程内容、知识片段、提示阶梯、误区分类和答案标记由版本化课程包声明。
+- **真实工件处理**：通过确定性工具处理 pcap、表格、知识库和课程附件，输出可核验的结果，而不是只生成一段说明。
+- **受控模型接入**：支持 `scripted`、OpenAI 兼容端点和 Coze。`scripted` 模式无需模型密钥，适合本地验证和可复现评测。
+- **结果可追溯**：任务状态、工具调用、证据引用、报告和生成产物通过 REST/SSE 与持久化记录关联。
+- **失败可恢复**：任务事件支持回放；外部模型不可用时，系统可以降级到确定性路径，并在界面上明确标识。
+
+模型不是学习业务的唯一权威源。判分、误区识别、掌握度、证据引用和防止直接泄题的约束由课程包与服务端逻辑共同负责。
+
+## 数据与信任边界
+
+- 登录、注册和会话由 `LingxiIdentity` BFF 处理；浏览器只持有 HttpOnly `lingxi_session` Cookie，不在本地保存 OIDC/Bearer Token。
+- 服务端使用身份服务返回的主体映射查找内部学习者，不接受客户端自报的 `learner_id`。
+- 原始抓包字节、完整工具输出、数据库原始记录和身份信息不会作为默认教学上下文直接外发给模型。
+- 课程资料由课程包声明来源；学习记录来自学习者在本服务中的操作、作答和任务交互。具体来源见 [DATA_SOURCES.md](DATA_SOURCES.md)。
+- LingxiLearn 用于学习辅导与形成性反馈，不替代教师、学校、考试或其他专业教育判断。
+
+## 运行方式
+
+### 开发环境
 
 ```bash
-cp .env.example .env       # 设置数据库密码和身份 client id
+cp .env.example .env
+# 设置数据库密码与身份服务配置
 docker compose -f docker-compose.dev.yml up --build
-# 打开 http://localhost:3000
 ```
 
-生产部署：
+开发前端默认访问 `http://localhost:3000`，API 运行在容器内部 `:8080`。
+
+### 生产环境
 
 ```bash
-cp .env.example .env       # 改一下数据库密码
-# 低内存部署直接拉取 CI 构建好的 GHCR 镜像，不在本机执行 Docker build
+cp .env.example .env
+# 设置数据库、身份 BFF 和端口配置
 docker compose pull
-docker compose up -d  # http://localhost:8080
+docker compose up -d
 ```
 
-生产部署的默认配置已针对小内存主机收敛：API 使用单进程，PostgreSQL
-连接池为 3（最多额外 1 个连接），主 Agent 和后台 sidecar 各限制为 1
-个并发。任务会排队，不会因同时保留多个完整模型上下文而把主机打满。
+默认生产入口为 `http://localhost:8080`。生产 Compose 使用 CI 构建的 GHCR 镜像；如需固定版本，可在 `.env` 中指定 `LINGXILEARN_API_IMAGE` 与 `LINGXILEARN_WEB_IMAGE` 的不可变标签。
 
-不要在生产环境使用 `docker compose up --build`。生产 Compose 已改为只拉取
-CI 构建好的 GHCR 镜像；`make prod` 会先执行 `docker compose pull` 再启动。
-如果需要固定版本，可在 `.env` 中把 `LINGXILEARN_API_IMAGE` 和
-`LINGXILEARN_WEB_IMAGE` 改成具体的 `:sha-...` 标签。
-
-GitHub Actions 工作流 [`container-images.yml`](.github/workflows/container-images.yml)
-会在每次 push 和 Pull Request 自动构建 `api`、`web` 两张镜像；push 到仓库
-时会同时发布到 GHCR：
-
-- `ghcr.io/lingxi-org/lingxilearn-api`
-- `ghcr.io/lingxi-org/lingxilearn-web`
-
-也可以在 Actions 页面手动运行 `Container images`，通过 `Push images to GHCR`
-选择是否发布镜像。工作流使用 GitHub Actions BuildKit 缓存，前端构建沿用低内存
-Node 堆限制。
-
-### Docker 国内源与 `.env` 配置
-
-Compose 默认使用以下国内源：阿里云容器镜像、清华 PyPI、npmmirror npm、阿里云 Debian。需要更换镜像站时，只改 `.env` 中这四项即可：
-
-```dotenv
-DOCKER_REGISTRY=docker.m.daocloud.io
-PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
-NPM_REGISTRY=https://registry.npmmirror.com
-APT_MIRROR=mirrors.aliyun.com
-```
-
-首次部署建议至少填写：
-
-```dotenv
-POSTGRES_PASSWORD=请改成随机强密码
-LINGXILEARN_PORT=8080
-LINGXILEARN_BRAIN=scripted
-DS_API_KEY=你的 DeepSeek API Key        # 使用 Agent Task 时填写；不使用可留空
-```
-
-`scripted` 模式不需要任何大模型 Key，可以直接启动。若使用 OpenAI 兼容模型，将以下三项改成对应服务商配置：
-
-```dotenv
-LINGXILEARN_BRAIN=openai
-LINGXILEARN_LLM_MODEL=模型名
-LINGXILEARN_LLM_BASE_URL=https://兼容接口地址/v1
-LINGXILEARN_LLM_API_KEY=API Key
-```
-
-开发 Compose 的前端地址是 `http://localhost:3000`，生产 Compose 的同源地址是
-`http://localhost:8080`。登录、注册和找回密码由 LingxiLearn 的同源代理转发到
-LingxiIdentity BFF，浏览器只持有 HttpOnly `lingxi_session` Cookie，不保存 OIDC/Bearer token。
-生产环境必须关闭开发免认证，并填写 BFF 的内部地址：
-
-```dotenv
-LINGXILEARN_INSECURE_DEV_AUTH=false
-LINGXILEARN_IDENTITY_BFF_URL=http://identity-bff:8080
-LINGXILEARN_IDENTITY_BFF_TIMEOUT=10
-```
-
-LingxiLearn API 已内置 `/auth/*`、`/api/v1/*` BFF 代理，因此生产静态站点保持
-`NEXT_PUBLIC_API_BASE` 为空即可；本地 Next 开发可将它指向 `http://localhost:8080`。
-Identity 项目中的 `BFF_PUBLIC_URL` 应登记为浏览器实际访问的同源地址（生产通常是
-`https://lingxilearn.cn`），而 `LOGTO_PUBLIC_ENDPOINT`/`LOGTO_ISSUER` 才指向
-`https://auth.lingxilearn.cn`。OIDC 应用密钥只放在 Identity BFF 的服务端环境变量
-`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`，不要放入本项目或任何 `NEXT_PUBLIC_*` 变量。
-旧 Bearer SPA 的 `LINGXI_LEARN_WEB_REDIRECT_URI` 和前端 OIDC client 配置不再参与登录；
-BFF 应用的回调地址应与 `BFF_PUBLIC_URL` 拼成的 `/auth/callback` 完全一致。
-
-修改 `.env` 后执行：
-
-```bash
-docker compose config
-docker compose up -d --build
-```
-
-> ⚠️ 本地 `make dev` 路径是端到端验证过的；Docker 构建是否成功还取决于服务器能否访问所选镜像站和包源。
-
----
-
-## 课程任务，以及它们为什么不能靠对话框完成
-
-判断标准很简单：**把题干贴进 ChatGPT 就能解决的任务，一律不做。**
-
-### 慢在哪一环 · 分析真实工件
-
-学生拿到一份**真实的二进制 pcap**（我们逐字节合成，可以直接用 Wireshark 打开核对）。
-产出不是一段回答，而是一张**时延归因表**：把这次加载的墙钟时间拆到 DNS 解析 / TCP 建连 /
-请求等待 / 数据传输 / 重传停顿五个环节，**并为每一环钉上作为依据的帧**。
-
-判定完全确定性，而且是两道独立的关：
-
-1. 每个桶的量级是否落在解析器算出的基准容差内；
-2. 钉的每一帧是否真的存在、是否真的承担所声称的角色。
-
-**数字对了但帧钉错了，不通过**——工程结论的分量来自证据本身。
-
-误区从「质量分到了哪个桶」反推：把重传停顿算成服务器慢 → `transfer_time_as_server_think`；
-算进 DNS → `rtx_vs_resolution_confusion`。
-
-这份抓包有个刻意设计的教学点：**最大的一块时间不是服务器处理（188.6 ms），而是一次丢包
-引发的停顿（225.8 ms）**。凭直觉答"服务器慢"的人会错得很有意思。
-
-### 你来当发送方 · 在动态系统中承担角色
-
-学生就是 TCP 的发送方，面对一个**带种子的确定性网络仿真器**。每个决策点由他决定
-下一步做什么（发下一段 / 重传某段 / 重传整窗 / 什么都不做），仿真器立刻把后果算出来。
-
-判定同样是跑出来的：接收方拿到的字节流是否完整无误，以及吞吐相对 oracle 发送方的比值。
-误区从**决策模式**反推——收到三个重复 ACK 不快重传、超时即重传整窗、重传已被累计确认的段。
-
-**这里没有可以背下来的答案。** 正确动作取决于此刻的窗口、在途段和刚收到的确认，
-而系统会对你的每一个决定做出反应。一个会还手的系统，是对话框给不了的。
-
-正式课程任务将通过课程包提供，并复用同一套教学内核和工具注册表。
-
----
-
-## 它和"AI 聊天"的区别，可以被度量
-
-```
-make test
-```
-
-| 指标 | 结果 | 怎么测的 |
-|---|---:|---|
-| 泄题率 | **0.000** | 每个步骤 × 每一级提示 × 4 句「直接告诉我答案」的对抗性追问，共 120 个教练回合 |
-| 误区识别 macro-F1 | **1.000** | 37 个带标注的错误答案，覆盖 11 类误区；用例由课程包直接生成，不会与内容脱节 |
-| 证据正确率 | **1.000** | 58 条引用：证据帧是否存在、帧角色是否属实、文案里点名的帧号是否真实、知识检索是否取得到 |
-| 学习增益 | **+100%** | 合成学习者的**流程验证**，不代表真实学生效果 |
-
-泄题率能被度量，是因为**防泄题是程序状态而不是提示词**：每个步骤在课程包里声明自己的
-答案标记，每一句教练输出在送到学生面前之前都要过一遍守卫（NFKC 折叠 + 标点归一，
-中文没有词边界也拦得住）。守卫命中就降级成课程作者写的提示，无论哪个模型生成的都一样。
-
----
-
-## 架构
-
-```
-Next.js（Sim 全站信息架构 · Lingxi 品牌）
-        ↓ REST + fetch-SSE（鉴权、去重、可断线续传）
-LingxiIdentity BFF ── FastAPI ── Projector ── run_events（投影日志）
-        ↓
-LearnerService / SQLAlchemy（学习业务权威源）
-        ↓
-Tutoring Kernel（LingxiGraph StateGraph · 领域无关）
-  intake → diagnose → plan → investigate → coach → await_learner
-         → judge → advance → verify → report
-        ↓                          ↓
-Course Pack（声明式）        Tool Registry（真实确定性计算）
- packs/<course-pack>/         course-specific tools | kb.*
-        ↓
-lingxigraph 2.2.0（PyPI）· SQLite / PostgreSQL
-```
-
-内核的十个节点没有一个提到 DNS 或 TCP。学科通过**课程包**和**工具注册表**进入，
-新增一门课是加一个目录、注册一组工具，不是改图。
-
-细节见 [ARCHITECTURE.md](ARCHITECTURE.md)（英文）。
-
-### 意图调度 Agent 与双 Skill 产物
-
-首页自由 Prompt 会创建一个 Agent Task。意图识别 Agent 先统一教学上下文，随后
-`lesson-intro` 与 `interactive-lecture-deck` 从同一节点并行扇出，结果交给稳定契约的
-`quiz_generator` 生成结构化题目。任务暂停等待学习者对话或一次性答题；按需的
-`interactive-visual-explainer` 会在右侧打开独立讲解页面，完成或放弃答题后 handoff 回主图。
-
-新增 Agent 运行时读取以下配置；`DS_API_KEY` 不会进入日志、事件 payload 或 API 响应：
-
-```dotenv
-DS_API_KEY=...
-LINGXILEARN_AGENT_MODEL=deepseek-v4-flash
-LINGXILEARN_AGENT_BASE_URL=https://api.deepseek.com
-LINGXILEARN_AGENT_TIMEOUT=90
-```
-
-当 Agent Base URL 为官方 DeepSeek API 时，`lesson-intro` 使用 DeepSeek
-Responses API 的原生 `web_search` 工具；不再依赖本地 DuckDuckGo HTML 搜索器。
-
-### 身份、学习数据与 LingxiGraph 边界
-
-持久化用户数据接口使用 LingxiIdentity BFF 的 HttpOnly `lingxi_session` Cookie。服务端把
-Cookie 转发到 BFF 的 `GET /api/v1/me`，只以返回的 `Principal.subject` 查找
-`(issuer, subject) → learner` 的内部映射；客户端不能传入 `learner_id`，也不会保存或发送
-LingxiIdentity Bearer token。仅在本地显式设置 `LINGXILEARN_INSECURE_DEV_AUTH=true` 时，
-缺少会话的请求才会使用固定的 `LINGXILEARN_DEV_SUBJECT`，不会接受客户端自报身份。
-
-`LearnerProfile`、`Mastery`、`Misconception`、`LearningEvidence`、`LearningPreference`、
-`LearningEvent` 以及现有会话/报告表由 LingxiLearn 的 SQLAlchemy/Alembic 数据层负责，
-是教育业务的权威源。LingxiGraph 只负责 StateGraph、checkpoint、Runtime，以及可选的
-Store/Memory 接缝；graph 运行期间不直接写权威学习表。结果在 session 终态通过一次幂等
-事务批量落库。artifact 与 SSE 和普通 API 请求一样使用 HttpOnly Cookie。
-
-常用用户数据接口：`GET /api/me/context`、`GET /api/me/mastery`、`GET/PATCH
-/api/me/preferences`。健康检查和课程包接口保持公开。
-
-### 关于 LingxiGraph 与 LingxiNext
-
-LingxiGraph 已发布在 PyPI（`lingxigraph==2.2.0`，核心零运行时依赖），因此这里**直接作为普通
-依赖使用**——没有 fork，没有 vendor，没有 submodule。LingxiLearn 的 Agent Task 现在按
-Agent 角色复用稳定前缀的模型实例，并启用 LingxiGraph 2.2.0 的 cache-first 投影，让
-DeepSeek 原生 prompt cache 不会被不同 system prompt/tool schema 互相污染。LingxiNext 的工程手法有借鉴
-（用内容版本做 checkpoint 命名空间、compose 的迁移闸门、两阶段 uv 镜像），
-但代码是独立的。三个参考项目都在 `.gitignore` 中，不进入本仓库。
-
----
-
-## 教练引擎：三选一，缺 Key 自动降级
+<details>
+  <summary>运行模式</summary>
 
 | `LINGXILEARN_BRAIN` | 说明 |
-|---|---|
-| `scripted`（默认） | 确定性引擎。无需 Key、无需网络、结果可复现 |
-| `openai` | 任何 OpenAI 兼容端点（OpenAI / DeepSeek / Qwen / Moonshot / vLLM / Ollama） |
-| `coze` | Coze Bot |
+| --- | --- |
+| `scripted` | 确定性引擎，无需模型密钥，结果可复现 |
+| `openai` | OpenAI 兼容端点，可接入 OpenAI、DeepSeek、Qwen、Moonshot、vLLM 或 Ollama |
+| `coze` | Coze Bot 接入 |
 
-**为什么没有 Key 也能跑完整闭环**：决定教学质量的部分——判分、误区识别、掌握度、
-证据账本、防泄题——本来就是确定性的。模型只做一件事：从课程作者写好的问题、提示阶梯和
-针对性追问里挑一条，把它说得自然些。所以三种引擎在教学上是等价的，只是措辞不同。
+外部模型只参与受控的表达和提示选择；核心学习判断仍由本地课程逻辑和学习数据层负责。
+</details>
 
-选了 `openai`/`coze` 但没填凭据时，系统降级到 `scripted` 并在界面上明确标注，
-而不是在教学中途失败。
+## 仓库结构
 
-> 本次交付中，`openai` 与 `coze` 两个 provider 的代码与配置齐备，
-> 但开发环境没有任何 LLM API Key，**未经真实凭据联调**。
+```text
+packs/<course-pack>/       课程包、知识切片和误区分类
+server/lingxilearn/        FastAPI、学习服务、Agent Task 和数据层
+skills/                    LingxiSkills 能力目录
+web/                       Next.js 工作台与 Lingxi API 适配层
+ARCHITECTURE.md            运行拓扑与前后端边界
+DATA_SOURCES.md            课程数据与引用来源
+```
 
----
-
-## 验证方式
+## 验证
 
 ```bash
-make test              # 后端单测、lint、类型检查 + 前端检查
-cd web && npm run verify # 许可证边界、TypeScript、Vitest、静态生产构建
+make test
+cd web
+bun run type-check
+bun run lint:check
+bun run build
 ```
 
-当前前端保留既有产品页和网页对话页的设计语言，同时直接连接 Lingxi Agent
-Task REST/SSE。正式入口为 `/workspace/lingxi/home/`，对话页为
-`/workspace/lingxi/chat/{taskId}/`。课程导入、讲义、知识检测和可视化产物由
-统一资源面板展示；未接入的产品模块只保留明确的静态能力说明，不调用不存在的 API。
-
-
----
-
-## 目录
-
-```
-packs/<course-pack>/      课程包：概念图、误区分类法、知识切片
-server/lingxilearn/
-  kernel/                  教学内核（领域无关）
-  tools/net/               pcap 编解码、抓包分析、可靠传输仿真器
-  brains/                  scripted / openai / coze
-  stream/                  Event → UI 投影（纯函数）
-  store/                   SQLAlchemy + Alembic
-  eval/                    评测
-skills/                    LingxiSkills 最新技能（含中文展示名称与描述）
-web/                       直接位于根目录的 Next.js 前端与 Lingxi API 适配层
-```
-
----
-
-## 数据与边界
-
-课程数据由课程包声明，**不含任何真实用户流量**；
-学习记录按经 LingxiIdentity BFF 验证的 Identity User 映射到服务端内部 learner。旧的匿名 guest 记录
-保留在数据库中，但不会自动映射到 Identity 用户，也不会通过受保护 API 暴露。知识库为 RFC 摘录与原创教学笔记，
-来源见 [DATA_SOURCES.md](DATA_SOURCES.md)。
-
-> LingxiLearn 用于学习辅导与形成性反馈，**不替代教师、学校或考试的最终评价**。
+完整部署说明、环境变量和边界约束以仓库中的 Compose 文件、[ARCHITECTURE.md](ARCHITECTURE.md)、[服务条款](<web/app/(landing)/terms/terms-content.tsx>)与[隐私政策](<web/app/(landing)/privacy/privacy-content.tsx>)为准。
 
 ## 许可
 
-MIT，见 [LICENSE](LICENSE)。
+本项目采用 [MIT License](LICENSE)。
