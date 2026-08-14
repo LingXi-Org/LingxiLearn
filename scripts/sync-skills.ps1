@@ -40,16 +40,35 @@ try {
     $targetSkills = Join-Path $TargetRoot 'skills'
     New-Item -ItemType Directory -Force -Path $targetSkills | Out-Null
 
-    $sourceSkills = Get-ChildItem -LiteralPath $SourceRoot -Directory
-    if ($sourceSkills.Count -eq 0) { throw "本地没有找到任何 skill：$SourceRoot" }
-
-    foreach ($skill in $sourceSkills) {
-        $destination = Join-Path $targetSkills $skill.Name
-        Write-Host "同步 $($skill.Name)"
+    $sourceFiles = @(Get-ChildItem -LiteralPath $SourceRoot -Recurse -File | Where-Object {
+        $_.FullName -notmatch '\\(__pycache__|\.pytest_cache)\\' -and $_.Extension -ne '.pyc'
+    })
+    if ($sourceFiles.Count -eq 0) { throw "本地没有找到任何 skill：$SourceRoot" }
+    $sourceRelative = @{}
+    foreach ($file in $sourceFiles) {
+        $relative = $file.FullName.Substring($SourceRoot.Length + 1)
+        $sourceRelative[$relative] = $true
+        Write-Host "同步 $relative"
         if (-not $DryRun) {
-            New-Item -ItemType Directory -Force -Path $destination | Out-Null
-            Copy-Item -Path (Join-Path $skill.FullName '*') -Destination $destination -Recurse -Force
+            $destination = Join-Path $targetSkills $relative
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+            Copy-Item -LiteralPath $file.FullName -Destination $destination -Force
         }
+    }
+
+    if (-not $DryRun) {
+        $targetFiles = @(Get-ChildItem -LiteralPath $targetSkills -Recurse -File)
+        foreach ($file in $targetFiles) {
+            $relative = $file.FullName.Substring($targetSkills.Length + 1)
+            if (-not $sourceRelative.ContainsKey($relative)) {
+                Write-Host "删除远端多余文件 $relative"
+                Remove-Item -LiteralPath $file.FullName -Force
+            }
+        }
+        Get-ChildItem -LiteralPath $targetSkills -Recurse -Directory |
+            Sort-Object FullName -Descending |
+            Where-Object { @(Get-ChildItem -LiteralPath $_.FullName -Force).Count -eq 0 } |
+            Remove-Item -Force
     }
 
     if ($DryRun) {
