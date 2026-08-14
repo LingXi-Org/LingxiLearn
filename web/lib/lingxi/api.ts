@@ -10,6 +10,7 @@ import type {
   SessionListItem,
   SessionSnapshot,
   SimAction,
+  SimExecutionSnapshot,
   SimState,
 } from './types'
 
@@ -486,6 +487,26 @@ export const api = {
     }),
 
   agentTask: (id: string) => request<AgentTaskSnapshot>(`/agent-tasks/${id}`),
+
+  executionSnapshot: (executionId: string) =>
+    request<SimExecutionSnapshot>(`/logs/execution/${encodeURIComponent(executionId)}`),
+
+  logByExecution: (executionId: string) =>
+    request<Record<string, unknown>>(`/logs/by-execution/${encodeURIComponent(executionId)}`),
+
+  copilotToolPermission: (
+    decisions: Array<{
+      toolCallId: string
+      decision: 'allow' | 'allow_chat' | 'always_allow' | 'skip'
+    }>
+  ) =>
+    request<{ success: boolean; results: Array<Record<string, unknown>> }>(
+      '/copilot/tool-permission',
+      {
+        method: 'POST',
+        body: JSON.stringify({ decisions }),
+      }
+    ),
 
   agentKnowledgeGraph: (id: string) =>
     request<KnowledgeGraphData>(`/agent-tasks/${id}/knowledge-graph`),

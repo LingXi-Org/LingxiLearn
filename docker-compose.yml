@@ -126,6 +126,22 @@ services:
     tmpfs:
       - /tmp:size=128m
 
+  scheduler:
+    <<: *api
+    command: ["python", "-m", "lingxilearn.scheduler_worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      api-var-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
+
 volumes:
   postgres-data:
   api-var:

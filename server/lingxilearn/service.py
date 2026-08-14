@@ -15,13 +15,15 @@ from ``Last-Event-ID``.  A reconnect resumes exactly where it left off.
 from __future__ import annotations
 
 import asyncio
+import base64
 import inspect
+import json
 import logging
 import mimetypes
 import secrets
 import uuid
-import base64
 from collections import defaultdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +52,8 @@ from .kernel.state import initial_state
 from .learner import LearnerService
 from .packs.loader import discover_packs, validate_pack
 from .packs.models import Pack
+from .runtime.schedules import next_schedule_time, validate_schedule
+from .runtime.sim_semantics import PrimitiveCatalog, SimRunProjector
 from .store.db import Database, GraphRevisionConflict, Repository
 from .store.learner import LearnerRepository
 from .store.models import (
@@ -140,7 +144,10 @@ def _prompt_with_attachments(prompt: str, attachments: list[dict[str, Any]]) -> 
     if not attachments:
         return prompt
     lines = ["\n\n[已上传附件]"]
-    lines.extend(f"- {item['filename']} ({item['media_type']}, {item['path'] or item['key']})" for item in attachments)
+    lines.extend(
+        f"- {item['filename']} ({item['media_type']}, {item['path'] or item['key']})"
+        for item in attachments
+    )
     return prompt + "\n".join(lines)
 
 
@@ -180,8 +187,12 @@ def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]
                     "name": getattr(message, "name", None),
                     "content": str(content or ""),
                     "status": getattr(message, "status", None),
-                    "additional_kwargs": _json_safe(getattr(message, "additional_kwargs", {}) or {}),
-                    "response_metadata": _json_safe(getattr(message, "response_metadata", {}) or {}),
+                    "additional_kwargs": _json_safe(
+                        getattr(message, "additional_kwargs", {}) or {}
+                    ),
+                    "response_metadata": _json_safe(
+                        getattr(message, "response_metadata", {}) or {}
+                    ),
                 },
             }
         )
@@ -195,15 +206,19 @@ def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]
                 reasoning = str(candidate)
                 break
     if reasoning and not additional.get("_reasoning_replay"):
-        events.append({
-            "kind": "reasoning.delta",
-            "agent": agent,
-            "payload": {
-                "delta": reasoning,
-                "debug": _json_safe(additional),
-                "response_metadata": _json_safe(getattr(message, "response_metadata", {}) or {}),
-            },
-        })
+        events.append(
+            {
+                "kind": "reasoning.delta",
+                "agent": agent,
+                "payload": {
+                    "delta": reasoning,
+                    "debug": _json_safe(additional),
+                    "response_metadata": _json_safe(
+                        getattr(message, "response_metadata", {}) or {}
+                    ),
+                },
+            }
+        )
     if content:
         events.append(
             {"kind": "assistant.delta", "agent": agent, "payload": {"delta": str(content)}}
@@ -225,7 +240,9 @@ def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]
                         for chunk in tool_chunks
                     ],
                     "debug": _json_safe(additional),
-                    "response_metadata": _json_safe(getattr(message, "response_metadata", {}) or {}),
+                    "response_metadata": _json_safe(
+                        getattr(message, "response_metadata", {}) or {}
+                    ),
                 },
             }
         )
@@ -233,6 +250,19 @@ def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]
     if usage:
         events.append({"kind": "model.usage", "agent": agent, "payload": {"usage": dict(usage)}})
     for event in events:
+        event["runtime"] = {
+            "run_id": _json_safe(metadata.get("run_id")) if isinstance(metadata, dict) else None,
+            "step": _json_safe(metadata.get("step")) if isinstance(metadata, dict) else None,
+            "node": _json_safe(metadata.get("node")) if isinstance(metadata, dict) else None,
+            "task_id": _json_safe(metadata.get("task_id")) if isinstance(metadata, dict) else None,
+            "namespace": _json_safe(metadata.get("namespace"))
+            if isinstance(metadata, dict)
+            else None,
+            "checkpoint_id": _json_safe(metadata.get("checkpoint_id"))
+            if isinstance(metadata, dict)
+            else None,
+            "span_id": _json_safe(metadata.get("span_id")) if isinstance(metadata, dict) else None,
+        }
         logger.debug(
             "agent trace task=%s agent=%s kind=%s payload=%s",
             metadata.get("task_id", ""),
@@ -304,6 +334,7 @@ class Service:
         self._agent_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._tasks: set[asyncio.Task[Any]] = set()
         self._workspace_projection_lock = asyncio.Lock()
+        self._agent_slots = asyncio.Semaphore(max(1, self.settings.agent_concurrency))
 
     # -- lifecycle -------------------------------------------------------
 
@@ -313,14 +344,19 @@ class Service:
             result = validate_pack(pack, self.registry)
             if not result.valid:
                 for issue in result.issues:
-                    logger.warning("pack %s: [%s] %s — %s", pack.id, issue.code, issue.path,
-                                   issue.message)
+                    logger.warning(
+                        "pack %s: [%s] %s — %s", pack.id, issue.code, issue.path, issue.message
+                    )
+        # Keep the primitive projection closed: adding a callable LingxiLearn
+        # tool without a Sim mapping is a startup error, never a generic node.
+        PrimitiveCatalog().validate(self.registry.names())
         chunks = knowledge.configure(
             [p.root / "knowledge" for p in self.packs.values() if (p.root / "knowledge").exists()]
         )
         self.brain = build_brain(self.settings)
         if self.settings.agents_configured:
             from .brains.traced_openai_compat import TracedOpenAICompatChatModel
+
             model_options = {
                 "base_url": self.settings.agent_base_url,
                 "api_key": self.settings.agent_api_key.get_secret_value(),
@@ -343,7 +379,18 @@ class Service:
             # catalog. Keeping one model instance per role makes the cache
             # prefix stable across tasks and avoids cross-agent drift errors.
             self.agent_model = {}
-            for role in ("intent", "lecture_hook", "lecture_hook_structured", "interactive_lecture_deck", "quiz_generator", "answer_user", "adaptive_pedagogy", "curriculum_graph_builder", "learner_state_reflector", "interactive_visual_explainer"):
+            for role in (
+                "intent",
+                "lecture_hook",
+                "lecture_hook_structured",
+                "interactive_lecture_deck",
+                "quiz_generator",
+                "answer_user",
+                "adaptive_pedagogy",
+                "curriculum_graph_builder",
+                "learner_state_reflector",
+                "interactive_visual_explainer",
+            ):
                 # Every skill-capable Agent must use the same tool-aware
                 # adapter. The previous native Responses special case could
                 # search the web but silently dropped stage_artifact_file,
@@ -460,6 +507,9 @@ class Service:
         prompt: str,
         attachments: list[dict[str, Any]] | None = None,
         resources: list[dict[str, Any]] | None = None,
+        schedule_id: str | None = None,
+        scheduled_for: datetime | None = None,
+        graph_version: str = "knowledge_deep_dive.v1",
     ) -> dict[str, Any]:
         normalized = " ".join(prompt.strip().split())
         if not normalized:
@@ -472,7 +522,7 @@ class Service:
             id=task_id,
             learner_id=learner_id,
             prompt=normalized,
-            graph_version="knowledge_deep_dive.v1",
+            graph_version=graph_version,
             status="queued",
             resources=resources or [],
             intent={},
@@ -501,9 +551,116 @@ class Service:
                 task_id,
                 learner_id,
                 _prompt_with_attachments(normalized, attachment_refs),
+                schedule_id=schedule_id,
+                scheduled_for=scheduled_for,
             )
         )
         return {"id": task_id, "status": "queued"}
+
+    async def propose_schedule(
+        self,
+        *,
+        learner_id: str,
+        prompt: str,
+        cron: str,
+        timezone: str = "UTC",
+        resources: list[dict[str, Any]] | None = None,
+        source_task_id: str | None = None,
+        graph_version: str = "knowledge_deep_dive.v1",
+    ) -> dict[str, Any]:
+        """Create a pending Agent proposal; only the native Sim card can approve it."""
+
+        expression, zone = validate_schedule(cron, timezone)
+        now = datetime.now(UTC)
+        proposal_id = f"schedule-proposal-{uuid.uuid4().hex}"
+        row = await self.repo.create_schedule_proposal(
+            id=f"schedule-{uuid.uuid4().hex}",
+            proposal_id=proposal_id,
+            learner_id=learner_id,
+            source_task_id=source_task_id,
+            prompt=" ".join(prompt.split()),
+            cron=expression,
+            timezone=zone,
+            inputs_snapshot={"prompt": prompt, "createdAt": now.isoformat()},
+            resources_snapshot=list(resources or []),
+            graph_version=graph_version,
+            status="proposed",
+            next_run_at=next_schedule_time(expression, zone, now),
+        )
+        if source_task_id:
+            await self.repo.append_agent_events(
+                source_task_id,
+                [
+                    {
+                        "kind": "schedule.proposed",
+                        "agent": "coordinator",
+                        "payload": {
+                            "proposalId": proposal_id,
+                            "toolCallId": proposal_id,
+                            "toolName": "schedule.propose",
+                            "cron": expression,
+                            "timezone": zone,
+                            "permissionDecision": "pending",
+                        },
+                    }
+                ],
+            )
+            self._notify_agent(source_task_id)
+        return {
+            "proposalId": row.proposal_id,
+            "scheduleId": row.id,
+            "status": row.status,
+            "cron": row.cron,
+            "timezone": row.timezone,
+            "nextRunAt": row.next_run_at.isoformat() if row.next_run_at else None,
+        }
+
+    async def propose_schedule_revocation(
+        self, *, learner_id: str, schedule_id: str
+    ) -> dict[str, Any]:
+        schedule = await self.repo.get_schedule(schedule_id=schedule_id, learner_id=learner_id)
+        if schedule is None:
+            raise KeyError(schedule_id)
+        proposal_id = f"schedule-revoke-proposal-{uuid.uuid4().hex}"
+        row = await self.repo.create_schedule_proposal(
+            id=f"schedule-{uuid.uuid4().hex}",
+            proposal_id=proposal_id,
+            learner_id=learner_id,
+            source_task_id=schedule.source_task_id,
+            prompt=f"撤销计划：{schedule.prompt}",
+            cron=schedule.cron,
+            timezone=schedule.timezone,
+            inputs_snapshot={"revokesScheduleId": schedule.id},
+            resources_snapshot=schedule.resources_snapshot or [],
+            graph_version=schedule.graph_version,
+            status="proposed",
+            next_run_at=schedule.next_run_at,
+            revision=int(schedule.revision or 1) + 1,
+        )
+        if schedule.source_task_id:
+            await self.repo.append_agent_events(
+                schedule.source_task_id,
+                [
+                    {
+                        "kind": "schedule.proposed",
+                        "agent": "coordinator",
+                        "payload": {
+                            "proposalId": proposal_id,
+                            "toolCallId": proposal_id,
+                            "toolName": "schedule.revoke",
+                            "revokesScheduleId": schedule.id,
+                            "permissionDecision": "pending",
+                        },
+                    }
+                ],
+            )
+            self._notify_agent(schedule.source_task_id)
+        return {
+            "proposalId": row.proposal_id,
+            "scheduleId": row.id,
+            "revokesScheduleId": schedule.id,
+            "status": row.status,
+        }
 
     async def agent_task_snapshot(
         self, task_id: str, learner_id: str | None = None
@@ -515,6 +672,7 @@ class Service:
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
+        executions = await self.repo.list_agent_executions(record.id, record.learner_id)
         return {
             "id": record.id,
             "status": record.status,
@@ -525,6 +683,19 @@ class Service:
             "deleted_at": record.deleted_at.isoformat() if record.deleted_at else None,
             "resources": record.resources or [],
             "graph_version": record.graph_version,
+            "current_execution_id": record.current_execution_id,
+            "latest_execution_id": record.latest_execution_id,
+            "executions": [
+                {
+                    "id": item.id,
+                    "status": item.status,
+                    "trigger": item.trigger,
+                    "graph_version": item.graph_version,
+                    "started_at": item.started_at.isoformat() if item.started_at else None,
+                    "ended_at": item.ended_at.isoformat() if item.ended_at else None,
+                }
+                for item in executions
+            ],
             "intent": record.intent or {},
             "agents": {
                 "intent": _agent_snapshot(record.intent),
@@ -536,7 +707,9 @@ class Service:
                     next(
                         (
                             item
-                            for item in await self.repo.list_agent_sidecars(record.id, record.learner_id)
+                            for item in await self.repo.list_agent_sidecars(
+                                record.id, record.learner_id
+                            )
                             if item["kind"] == "knowledge_graph"
                         ),
                         None,
@@ -546,7 +719,9 @@ class Service:
                     next(
                         (
                             item
-                            for item in await self.repo.list_agent_sidecars(record.id, record.learner_id)
+                            for item in await self.repo.list_agent_sidecars(
+                                record.id, record.learner_id
+                            )
                             if item["kind"] == "learner_reflection"
                         ),
                         None,
@@ -558,7 +733,11 @@ class Service:
                 "lesson_intro": {
                     "available": self.agent_artifacts.lesson_intro_path(record.id).exists(),
                     "url": f"/api/agent-tasks/{record.id}/artifacts/lesson-intro",
-                    **({"metadata": _lesson_intro_metadata(record.lecture_result)} if record.lecture_result else {}),
+                    **(
+                        {"metadata": _lesson_intro_metadata(record.lecture_result)}
+                        if record.lecture_result
+                        else {}
+                    ),
                 },
                 "lecture_deck": {
                     "available": self.agent_artifacts.deck_path(record.id).exists(),
@@ -582,8 +761,39 @@ class Service:
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
         }
 
-    async def list_agent_tasks(self, learner_id: str, *, scope: str = "active") -> list[dict[str, Any]]:
+    async def list_agent_tasks(
+        self, learner_id: str, *, scope: str = "active"
+    ) -> list[dict[str, Any]]:
         return await self.repo.list_agent_tasks(learner_id, scope=scope)
+
+    async def agent_execution_snapshot(self, execution_id: str, learner_id: str) -> dict[str, Any]:
+        row = await self.repo.get_agent_execution(execution_id, learner_id)
+        if row is None:
+            raise KeyError(f"unknown execution: {execution_id}")
+        started = row.started_at
+        ended = row.ended_at
+        duration = int((ended - started).total_seconds() * 1000) if ended and started else None
+        return {
+            "executionId": row.id,
+            "workflowId": "lingxi-agent",
+            "workflowName": "LingxiGraph · Sim runtime",
+            "status": row.status,
+            "taskId": row.task_id,
+            "graphVersion": row.graph_version,
+            "projectionVersion": (row.workflow_state or {}).get("version", "sim-runtime.v1"),
+            "workflowState": row.workflow_state or {},
+            "traceSpans": row.trace_spans or [],
+            "executionMetadata": {
+                "trigger": row.trigger,
+                "startedAt": started.isoformat() if started else None,
+                "endedAt": ended.isoformat() if ended else None,
+                "totalDurationMs": duration,
+                "cost": None,
+                "totalTokens": None,
+                "scheduleId": row.schedule_id,
+                "scheduledFor": row.scheduled_for.isoformat() if row.scheduled_for else None,
+            },
+        }
 
     async def update_agent_task(
         self,
@@ -602,11 +812,22 @@ class Service:
         if resources is not None and len(resources) > 100:
             raise ValueError("too many resources")
         row = await self.repo.update_agent_task_metadata(
-            task_id, learner_id, title=title, is_pinned=is_pinned, is_unread=is_unread, resources=resources
+            task_id,
+            learner_id,
+            title=title,
+            is_pinned=is_pinned,
+            is_unread=is_unread,
+            resources=resources,
         )
         if row is None:
             raise KeyError(f"unknown agent task: {task_id}")
-        return {"id": row.id, "title": row.title, "is_pinned": row.is_pinned, "is_unread": row.is_unread, "resources": row.resources or []}
+        return {
+            "id": row.id,
+            "title": row.title,
+            "is_pinned": row.is_pinned,
+            "is_unread": row.is_unread,
+            "resources": row.resources or [],
+        }
 
     async def delete_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
         row = await self.repo.set_agent_task_deleted(task_id, learner_id, True)
@@ -634,9 +855,7 @@ class Service:
         await self.repo.update_agent_task_metadata(new_id, learner_id, title=source.title)
         return result
 
-    async def project_agent_artifacts(
-        self, learner_id: str, task_id: str | None = None
-    ) -> int:
+    async def project_agent_artifacts(self, learner_id: str, task_id: str | None = None) -> int:
         """Project completed LingxiGraph artifacts into read-only Workspace Files.
 
         The graph keeps its original audit files under ``agent_task_dir``. A
@@ -668,7 +887,9 @@ class Service:
                 projected = 0
                 for task in tasks:
                     task_key = str(task["id"])
-                    title = str(task.get("title") or task.get("intent", {}).get("topic") or task_key)
+                    title = str(
+                        task.get("title") or task.get("intent", {}).get("topic") or task_key
+                    )
                     candidates = (
                         (self.agent_artifacts.lesson_intro_path(task_key), "lesson-intro.html"),
                         (self.agent_artifacts.deck_path(task_key), "lecture.html"),
@@ -697,7 +918,8 @@ class Service:
                                 id=f"file_{uuid.uuid4().hex}",
                                 workspace_id=workspace.id,
                                 name=filename,
-                                mime_type=mimetypes.guess_type(filename)[0] or "application/octet-stream",
+                                mime_type=mimetypes.guess_type(filename)[0]
+                                or "application/octet-stream",
                                 size=len(raw),
                                 storage_key=storage_key,
                                 path=path,
@@ -714,10 +936,14 @@ class Service:
                 # editable workflow canvases. Mirror each revision as a
                 # searchable JSON document in a private read-only base.
                 graphs = (
-                    await session.execute(
-                        select(KnowledgeGraph).where(KnowledgeGraph.learner_id == learner_id)
+                    (
+                        await session.execute(
+                            select(KnowledgeGraph).where(KnowledgeGraph.learner_id == learner_id)
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 if graphs:
                     graph_base = await session.scalar(
                         select(KnowledgeBase).where(
@@ -736,12 +962,16 @@ class Service:
                         session.add(graph_base)
                         await session.flush()
                     existing_documents = (
-                        await session.execute(
-                            select(KnowledgeDocument).where(
-                                KnowledgeDocument.base_id == graph_base.id
+                        (
+                            await session.execute(
+                                select(KnowledgeDocument).where(
+                                    KnowledgeDocument.base_id == graph_base.id
+                                )
                             )
                         )
-                    ).scalars().all()
+                        .scalars()
+                        .all()
+                    )
                     existing_graph_revisions = {
                         str((document.metadata_payload or {}).get("graphId"))
                         + ":"
@@ -753,19 +983,27 @@ class Service:
                         if graph_key in existing_graph_revisions:
                             continue
                         nodes = (
-                            await session.execute(
-                                select(KnowledgeGraphNode).where(
-                                    KnowledgeGraphNode.graph_id == graph.graph_id
+                            (
+                                await session.execute(
+                                    select(KnowledgeGraphNode).where(
+                                        KnowledgeGraphNode.graph_id == graph.graph_id
+                                    )
                                 )
                             )
-                        ).scalars().all()
+                            .scalars()
+                            .all()
+                        )
                         edges = (
-                            await session.execute(
-                                select(KnowledgeGraphEdge).where(
-                                    KnowledgeGraphEdge.graph_id == graph.graph_id
+                            (
+                                await session.execute(
+                                    select(KnowledgeGraphEdge).where(
+                                        KnowledgeGraphEdge.graph_id == graph.graph_id
+                                    )
                                 )
                             )
-                        ).scalars().all()
+                            .scalars()
+                            .all()
+                        )
                         content = json.dumps(
                             {
                                 "graphId": graph.graph_id,
@@ -777,7 +1015,12 @@ class Service:
                                     for node in nodes
                                 ],
                                 "edges": [
-                                    {"id": edge.edge_id, "source": edge.source_node_id, "target": edge.target_node_id, "relation": edge.relation}
+                                    {
+                                        "id": edge.edge_id,
+                                        "source": edge.source_node_id,
+                                        "target": edge.target_node_id,
+                                        "relation": edge.relation,
+                                    }
                                     for edge in edges
                                 ],
                             },
@@ -820,7 +1063,9 @@ class Service:
         if record.status in {"completed", "partial", "handed_off", "failed", "cancelled"}:
             return {"id": task_id, "status": record.status}
         await self.repo.set_agent_task_status(task_id, "cancelled")
-        await self.repo.append_agent_events(task_id, [{"kind": "task.cancelled", "agent": "coordinator", "payload": {}}])
+        await self.repo.append_agent_events(
+            task_id, [{"kind": "task.cancelled", "agent": "coordinator", "payload": {}}]
+        )
         self._notify_agent(task_id)
         return {"id": task_id, "status": "cancelled"}
 
@@ -904,9 +1149,7 @@ class Service:
                 raise KeyError(str(exc)) from exc
         raise KeyError(f"unknown artifact kind: {kind}")
 
-    async def agent_knowledge_graph(
-        self, task_id: str, learner_id: str
-    ) -> dict[str, Any] | None:
+    async def agent_knowledge_graph(self, task_id: str, learner_id: str) -> dict[str, Any] | None:
         """Return the graph target recorded by this task, owned by the learner."""
 
         record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
@@ -945,7 +1188,11 @@ class Service:
         attachments: list[dict[str, Any]] | None = None,
         learner_id: str | None = None,
     ) -> None:
-        record = await (self.repo.get_agent_task_for_learner(task_id, learner_id) if learner_id else self.repo.get_agent_task(task_id))
+        record = await (
+            self.repo.get_agent_task_for_learner(task_id, learner_id)
+            if learner_id
+            else self.repo.get_agent_task(task_id)
+        )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
         if record.status != "awaiting_user":
@@ -970,22 +1217,74 @@ class Service:
         answers: dict[str, Any],
         learner_id: str | None = None,
     ) -> dict[str, Any]:
-        record = await (self.repo.get_agent_task_for_learner(task_id, learner_id) if learner_id else self.repo.get_agent_task(task_id))
+        record = await (
+            self.repo.get_agent_task_for_learner(task_id, learner_id)
+            if learner_id
+            else self.repo.get_agent_task(task_id)
+        )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
         existing = await self.repo.get_quiz_submission(task_id)
         if existing is not None:
             if existing.submission_id == submission_id:
-                return {"status": "duplicate", "submission": await _submission_snapshot(self.repo, task_id)}
+                return {
+                    "status": "duplicate",
+                    "submission": await _submission_snapshot(self.repo, task_id),
+                }
             raise ValueError("already_submitted")
         if record.status != "awaiting_user":
             raise ValueError(f"task_not_waiting:{record.status}")
         result = _grade_agent_quiz(record.quiz_result or {}, answers)
-        await self.repo.create_quiz_submission(task_id=task_id, submission_id=submission_id, answers=answers, per_question=result["per_question"], total_score=result["total_score"], total_points=result["total_points"])
-        self._spawn(self._drive_agent_task(task_id, record.learner_id, "", resume={"message": "已提交答题", "kind": "quiz_submit", "answers": answers}))
+        await self.repo.create_quiz_submission(
+            task_id=task_id,
+            submission_id=submission_id,
+            answers=answers,
+            per_question=result["per_question"],
+            total_score=result["total_score"],
+            total_points=result["total_points"],
+        )
+        self._spawn(
+            self._drive_agent_task(
+                task_id,
+                record.learner_id,
+                "",
+                resume={"message": "已提交答题", "kind": "quiz_submit", "answers": answers},
+            )
+        )
         return {"status": "accepted", "submission": await _submission_snapshot(self.repo, task_id)}
 
-    async def _drive_agent_task(self, task_id: str, learner_id: str, prompt: str, *, resume: dict[str, Any] | None = None) -> None:
+    async def _drive_agent_task(
+        self,
+        task_id: str,
+        learner_id: str,
+        prompt: str,
+        *,
+        resume: dict[str, Any] | None = None,
+        schedule_id: str | None = None,
+        scheduled_for: datetime | None = None,
+    ) -> None:
+        # Keep the public task launcher cheap: queued tasks wait here instead
+        # of all retaining graph state and provider response buffers at once.
+        async with self._agent_slots:
+            await self._run_agent_task(
+                task_id,
+                learner_id,
+                prompt,
+                resume=resume,
+                schedule_id=schedule_id,
+                scheduled_for=scheduled_for,
+            )
+
+    async def _run_agent_task(
+        self,
+        task_id: str,
+        learner_id: str,
+        prompt: str,
+        *,
+        resume: dict[str, Any] | None = None,
+        schedule_id: str | None = None,
+        scheduled_for: datetime | None = None,
+    ) -> None:
         if self.agent_model is None:
             await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
             self._notify_agent(task_id)
@@ -1000,7 +1299,9 @@ class Service:
                 {
                     "message": str(resume.get("message")),
                     "kind": str(resume.get("kind") or "chat"),
-                    "answers": _json_safe(resume.get("answers")) if resume.get("answers") is not None else None,
+                    "answers": _json_safe(resume.get("answers"))
+                    if resume.get("answers") is not None
+                    else None,
                     "attachments": _json_safe(resume.get("attachments") or []),
                 },
             )
@@ -1008,6 +1309,64 @@ class Service:
         if latest is None or latest.status == "cancelled":
             return
         await self.repo.set_agent_task_status(task_id, "running")
+        execution_id = f"exec-{uuid.uuid4().hex}"
+        await self.repo.create_agent_execution(
+            execution_id=execution_id,
+            task_id=task_id,
+            learner_id=learner_id,
+            graph_version=record.graph_version,
+            trigger="resume"
+            if resume is not None
+            else ("schedule" if schedule_id else "agent-task"),
+            schedule_id=schedule_id,
+            scheduled_for=scheduled_for,
+        )
+        projector = SimRunProjector(
+            execution_id=execution_id,
+            task_id=task_id,
+            graph_version=record.graph_version,
+        )
+        start_runtime = {
+            "execution_id": execution_id,
+            "task_id": task_id,
+            "graph_version": record.graph_version,
+        }
+        start_events = [
+            {
+                "kind": "run.started",
+                "agent": "coordinator",
+                "execution_id": execution_id,
+                "runtime": start_runtime,
+                "payload": {"status": "running", "runtime": start_runtime},
+            }
+        ]
+        if resume is not None:
+            start_events.append(
+                {
+                    "kind": "run.resumed",
+                    "agent": "coordinator",
+                    "execution_id": execution_id,
+                    "runtime": start_runtime,
+                    "payload": {"status": "running", "runtime": start_runtime},
+                }
+            )
+        await self.repo.append_agent_events(task_id, start_events)
+
+        async def persist_buffer(events: list[dict[str, Any]]) -> None:
+            if not events:
+                return
+            for item in events:
+                item.setdefault("execution_id", execution_id)
+                item.setdefault("runtime", (item.get("payload") or {}).get("runtime") or {})
+            await self.repo.append_agent_events(task_id, events)
+            await self.repo.update_agent_execution(
+                execution_id,
+                workflow_state=projector.snapshot()["workflowState"],
+                trace_spans=projector.snapshot()["traceSpans"],
+                event_count=await self.repo.agent_event_count_for_execution(execution_id),
+            )
+            self._notify_agent(task_id)
+
         async def persist_result(agent: str, value: dict[str, Any]) -> None:
             await self.repo.update_agent_task_output(task_id, agent, value)
             self._notify_agent(task_id)
@@ -1016,15 +1375,6 @@ class Service:
             build_knowledge_deep_dive_graph
             if record.graph_version == "knowledge_deep_dive.v1"
             else build_agent_graph
-        )
-        graph = graph_builder(
-            model=self.agent_model,
-            settings=self.settings,
-            task_id=task_id,
-            artifacts=self.agent_artifacts,
-            persist_result=persist_result,
-            checkpointer=self.checkpointer,
-            store=self.graph_store,
         )
         config = {
             "configurable": {
@@ -1037,14 +1387,28 @@ class Service:
         }
         buffer: list[dict[str, Any]] = []
         current_agent = "coordinator"
+        graph: Any | None = None
         try:
-            graph_input: Any = Command(resume=resume) if resume is not None else {
-                "task_id": task_id,
-                "prompt": prompt,
-                "resources": list(record.resources or []),
-                "errors": [],
-                "status": "running",
-            }
+            graph = graph_builder(
+                model=self.agent_model,
+                settings=self.settings,
+                task_id=task_id,
+                artifacts=self.agent_artifacts,
+                persist_result=persist_result,
+                checkpointer=self.checkpointer,
+                store=self.graph_store,
+            )
+            graph_input: Any = (
+                Command(resume=resume)
+                if resume is not None
+                else {
+                    "task_id": task_id,
+                    "prompt": prompt,
+                    "resources": list(record.resources or []),
+                    "errors": [],
+                    "status": "running",
+                }
+            )
             async for streamed in graph.astream(
                 graph_input,
                 config,
@@ -1056,21 +1420,36 @@ class Service:
                 },
             ):
                 current_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
-                if current_record is None or current_record.status == "cancelled":
+                if current_record is None:
+                    return
+                if current_record.status == "cancelled":
+                    snapshot = projector.snapshot()
+                    await self.repo.update_agent_execution(
+                        execution_id,
+                        status="cancelled",
+                        workflow_state=snapshot["workflowState"],
+                        trace_spans=snapshot["traceSpans"],
+                        ended=True,
+                    )
+                    self._notify_agent(task_id)
                     return
                 mode, event = streamed
                 force_flush = False
                 if mode == "messages":
-                    buffer.extend(_message_trace_events(event, current_agent))
+                    message_events = _message_trace_events(event, current_agent)
+                    buffer.extend(message_events)
+                    for item in message_events:
+                        item["execution_id"] = execution_id
                     if len(buffer) >= AGENT_FLUSH_EVERY:
-                        await self.repo.append_agent_events(task_id, list(buffer))
+                        await persist_buffer(list(buffer))
                         buffer.clear()
-                        self._notify_agent(task_id)
                     continue
-                if event.kind is EventKind.NODE_STARTED and event.node in _AGENT_NODES:
-                    current_agent = str(event.node)
-                elif event.kind is EventKind.NODE_COMPLETED and event.node in _AGENT_NODES:
+                event_agent = _GRAPH_NODE_TO_AGENT.get(str(event.node or ""), str(event.node or ""))
+                if event.kind is EventKind.NODE_STARTED and event_agent in _AGENT_NODES:
+                    current_agent = event_agent
+                elif event.kind is EventKind.NODE_COMPLETED and event_agent in _AGENT_NODES:
                     current_agent = "coordinator"
+                projected = projector.consume(event, agent=current_agent)
                 if event.kind is EventKind.CUSTOM:
                     data = dict(event.data or {})
                     if data.get("channel") == EVENT_CHANNEL:
@@ -1086,36 +1465,22 @@ class Service:
                                         for k, v in value.items()
                                         if k not in {"type", "agent"}
                                     },
+                                    "execution_id": execution_id,
+                                    "runtime": projected.get("runtime") or {},
                                 }
                             )
                             force_flush = event_type in _AGENT_FORCE_FLUSH
-                elif event.kind in {
-                    EventKind.NODE_STARTED,
-                    EventKind.NODE_COMPLETED,
-                    EventKind.NODE_RETRYING,
-                    EventKind.INTERRUPT_RAISED,
-                }:
-                    kind = {
-                        EventKind.NODE_STARTED: "node.started",
-                        EventKind.NODE_COMPLETED: "node.completed",
-                        EventKind.NODE_RETRYING: "node.retrying",
-                        EventKind.INTERRUPT_RAISED: "interrupt.raised",
-                    }[event.kind]
-                    agent = _GRAPH_NODE_TO_AGENT.get(
-                        str(event.node or ""), str(event.node or current_agent)
-                    )
-                    data = dict(event.data or {})
-                    if event.kind is EventKind.NODE_COMPLETED:
-                        payload = {"state": _json_safe(data.get("update") or {})}
-                    elif event.kind is EventKind.NODE_RETRYING:
-                        payload = {"attempt": _json_safe(data.get("value"))}
                     else:
-                        payload = {key: _json_safe(value) for key, value in data.items()}
-                    buffer.append({"kind": kind, "agent": agent, "payload": payload})
+                        projected["agent"] = current_agent
+                        buffer.append(projected)
+                elif projected.get("kind"):
+                    projected["agent"] = _GRAPH_NODE_TO_AGENT.get(
+                        str(event.node or ""), projected.get("agent") or current_agent
+                    )
+                    buffer.append(projected)
                 if force_flush or len(buffer) >= AGENT_FLUSH_EVERY:
-                    await self.repo.append_agent_events(task_id, list(buffer))
+                    await persist_buffer(list(buffer))
                     buffer.clear()
-                    self._notify_agent(task_id)
         except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
             logger.exception("agent task failed: %s", task_id)
             detail = _safe_agent_error(exc, self.settings)
@@ -1156,21 +1521,46 @@ class Service:
                     },
                 }
             )
-            await self.repo.append_agent_events(task_id, buffer)
+            await persist_buffer(buffer)
+            buffer.clear()
             await self.repo.set_agent_task_status(
                 task_id, "failed", f"运行失败：{type(exc).__name__}: {detail}"
+            )
+            snapshot = projector.snapshot()
+            await self.repo.update_agent_execution(
+                execution_id,
+                status="failed",
+                error=f"运行失败：{type(exc).__name__}: {detail}",
+                workflow_state=snapshot["workflowState"],
+                trace_spans=snapshot["traceSpans"],
+                ended=True,
             )
             self._notify_agent(task_id)
             return
 
         if buffer:
-            await self.repo.append_agent_events(task_id, buffer)
+            await persist_buffer(buffer)
+        if graph is None:  # pragma: no cover - the try/except above returns on failure
+            return
         state = await graph.aget_state(config)
         values = dict(getattr(state, "values", None) or {})
-        status = str(values.get("status") or ("awaiting_user" if getattr(state, "interrupts", None) else "partial"))
+        status = str(
+            values.get("status")
+            or ("awaiting_user" if getattr(state, "interrupts", None) else "partial")
+        )
         errors = [str(item) for item in values.get("errors") or []]
         await self.repo.set_agent_task_status(
             task_id, "handed_off" if status == "handed_off" else status, "; ".join(errors)
+        )
+        await self.repo.update_agent_execution(
+            execution_id,
+            status="awaiting_user"
+            if status == "awaiting_user"
+            else ("completed" if status in {"completed", "handed_off"} else status),
+            workflow_state=projector.snapshot()["workflowState"],
+            trace_spans=projector.snapshot()["traceSpans"],
+            error="; ".join(errors),
+            ended=status not in {"awaiting_user", "partial"},
         )
         # Publish generated HTML artifacts as native read-only workspace files
         # while retaining the original task-audit files and URLs.
@@ -1179,7 +1569,10 @@ class Service:
         except Exception:  # noqa: BLE001 - projection must not fail the task
             logger.exception("failed to project task artifacts: %s", task_id)
         self._notify_agent(task_id)
-        if record.graph_version == "knowledge_deep_dive.v1" and status in {"awaiting_user", "partial"}:
+        if record.graph_version == "knowledge_deep_dive.v1" and status in {
+            "awaiting_user",
+            "partial",
+        }:
             latest_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
             await self.schedule_agent_sidecar(task_id, learner_id, "knowledge_graph")
             await self.schedule_agent_sidecar(task_id, learner_id, "quiz_prefetch")
@@ -1189,12 +1582,12 @@ class Service:
                 if latest_record is not None and latest_record.user_messages
                 else record.prompt
             )
-            if any(token in latest_message.casefold() for token in ("图解", "可视化", "动画", "visual")):
+            if any(
+                token in latest_message.casefold() for token in ("图解", "可视化", "动画", "visual")
+            ):
                 await self.schedule_agent_sidecar(task_id, learner_id, "visual_explainer")
 
-    async def schedule_agent_sidecar(
-        self, task_id: str, learner_id: str, kind: str
-    ) -> None:
+    async def schedule_agent_sidecar(self, task_id: str, learner_id: str, kind: str) -> None:
         record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
         if record is None:
             return
@@ -1233,7 +1626,13 @@ class Service:
         learner_id = sidecar["learner_id"]
         await self.repo.append_agent_events(
             task_id,
-            [{"kind": "sidecar.started", "agent": _sidecar_agent_name(sidecar["kind"]), "payload": {"sidecar_id": sidecar_id}}],
+            [
+                {
+                    "kind": "sidecar.started",
+                    "agent": _sidecar_agent_name(sidecar["kind"]),
+                    "payload": {"sidecar_id": sidecar_id},
+                }
+            ],
         )
         self._notify_agent(task_id)
         try:
@@ -1255,7 +1654,9 @@ class Service:
             kind = sidecar["kind"]
             if kind == "knowledge_graph":
                 query = str((record.intent or {}).get("topic") or record.prompt)
-                existing = await self.repo.list_knowledge_graph_candidates(learner_id, query, limit=3)
+                existing = await self.repo.list_knowledge_graph_candidates(
+                    learner_id, query, limit=3
+                )
                 proposal = await build_curriculum_graph_proposal(
                     model=self.agent_model,
                     task=task_payload,
@@ -1276,7 +1677,11 @@ class Service:
                 except GraphRevisionConflict:
                     # One deterministic retry against the latest owned snapshot;
                     # a second conflict is surfaced as a failed sidecar only.
-                    latest = await self.repo.get_knowledge_graph(selected_id, learner_id) if selected_id else None
+                    latest = (
+                        await self.repo.get_knowledge_graph(selected_id, learner_id)
+                        if selected_id
+                        else None
+                    )
                     if latest is None:
                         raise
                     proposal = await build_curriculum_graph_proposal(
@@ -1302,20 +1707,27 @@ class Service:
                 if output["graph_id"]:
                     await self.repo.append_agent_events(
                         task_id,
-                        [{
-                            "kind": "artifact.ready",
-                            "agent": "curriculum_graph_builder",
-                            "payload": {"artifact": "knowledge-graph", **output},
-                        }],
+                        [
+                            {
+                                "kind": "artifact.ready",
+                                "agent": "curriculum_graph_builder",
+                                "payload": {"artifact": "knowledge-graph", **output},
+                            }
+                        ],
                     )
                 else:
                     await self.repo.append_agent_events(
                         task_id,
-                        [{
-                            "kind": "sidecar.completed",
-                            "agent": "curriculum_graph_builder",
-                            "payload": {"sidecar_id": sidecar_id, "proposal_status": output["proposal_status"]},
-                        }],
+                        [
+                            {
+                                "kind": "sidecar.completed",
+                                "agent": "curriculum_graph_builder",
+                                "payload": {
+                                    "sidecar_id": sidecar_id,
+                                    "proposal_status": output["proposal_status"],
+                                },
+                            }
+                        ],
                     )
             elif kind == "quiz_prefetch":
                 value = await build_quiz_prefetch(
@@ -1332,11 +1744,16 @@ class Service:
                 )
                 await self.repo.append_agent_events(
                     task_id,
-                    [{
-                        "kind": "quiz.ready",
-                        "agent": "quiz_generator",
-                        "payload": {"question_count": len(value.get("questions", [])), "sidecar_id": sidecar_id},
-                    }],
+                    [
+                        {
+                            "kind": "quiz.ready",
+                            "agent": "quiz_generator",
+                            "payload": {
+                                "question_count": len(value.get("questions", [])),
+                                "sidecar_id": sidecar_id,
+                            },
+                        }
+                    ],
                 )
             elif kind == "visual_explainer":
                 value = await build_visual_sidecar(
@@ -1353,11 +1770,13 @@ class Service:
                 )
                 await self.repo.append_agent_events(
                     task_id,
-                    [{
-                        "kind": "artifact.ready",
-                        "agent": "interactive_visual_explainer",
-                        "payload": {"artifact": "visual", "sidecar_id": sidecar_id},
-                    }],
+                    [
+                        {
+                            "kind": "artifact.ready",
+                            "agent": "interactive_visual_explainer",
+                            "payload": {"artifact": "visual", "sidecar_id": sidecar_id},
+                        }
+                    ],
                 )
             elif kind == "learner_reflection":
                 events = await self.repo.agent_events_after_for_learner(task_id, learner_id, 0, 500)
@@ -1370,11 +1789,13 @@ class Service:
                 await self.repo.finish_agent_sidecar(sidecar_id, status="succeeded", output=value)
                 await self.repo.append_agent_events(
                     task_id,
-                    [{
-                        "kind": "sidecar.completed",
-                        "agent": "learner_state_reflector",
-                        "payload": {"sidecar_id": sidecar_id, "proposal": True},
-                    }],
+                    [
+                        {
+                            "kind": "sidecar.completed",
+                            "agent": "learner_state_reflector",
+                            "payload": {"sidecar_id": sidecar_id, "proposal": True},
+                        }
+                    ],
                 )
             else:
                 raise ValueError(f"unknown sidecar kind: {kind}")
@@ -1384,18 +1805,18 @@ class Service:
             await self.repo.finish_agent_sidecar(sidecar_id, status="failed", error=detail)
             await self.repo.append_agent_events(
                 task_id,
-                [{
-                    "kind": "sidecar.failed",
-                    "agent": _sidecar_agent_name(sidecar["kind"]),
-                    "payload": {"sidecar_id": sidecar_id, "error": detail},
-                }],
+                [
+                    {
+                        "kind": "sidecar.failed",
+                        "agent": _sidecar_agent_name(sidecar["kind"]),
+                        "payload": {"sidecar_id": sidecar_id, "error": detail},
+                    }
+                ],
             )
         finally:
             self._notify_agent(task_id)
 
-    async def answer(
-        self, session_id: str, payload: Any, learner_id: str | None = None
-    ) -> None:
+    async def answer(self, session_id: str, payload: Any, learner_id: str | None = None) -> None:
         record = (
             await self.repo.get_session_for_learner(session_id, learner_id)
             if learner_id is not None
@@ -1407,13 +1828,9 @@ class Service:
         if pack is None:
             raise KeyError(f"unknown pack: {record.pack_id}")
         await self.repo.set_status(session_id, "running")
-        self._spawn(
-            self._drive(session_id, pack, record.learner_id, Command(resume=payload))
-        )
+        self._spawn(self._drive(session_id, pack, record.learner_id, Command(resume=payload)))
 
-    async def snapshot(
-        self, session_id: str, learner_id: str | None = None
-    ) -> dict[str, Any]:
+    async def snapshot(self, session_id: str, learner_id: str | None = None) -> dict[str, Any]:
         record = (
             await self.repo.get_session_for_learner(session_id, learner_id)
             if learner_id is not None
@@ -1487,9 +1904,7 @@ class Service:
         event.set()
         event.clear()
 
-    async def _drive(
-        self, session_id: str, pack: Pack, learner_id: str, payload: Any
-    ) -> None:
+    async def _drive(self, session_id: str, pack: Pack, learner_id: str, payload: Any) -> None:
         """Run the graph to its next pause, persisting projections as it goes."""
         async with self._run_locks[session_id]:
             graph = await self.graph_for(pack.id)
@@ -1659,9 +2074,7 @@ def _sidecar_agent_name(kind: str) -> str:
 def _lesson_intro_metadata(result: dict[str, Any]) -> dict[str, Any]:
     """Expose lesson metadata without duplicating the learner-facing HTML in snapshots."""
     return {
-        key: result[key]
-        for key in ("topic", "status", "warnings", "validation")
-        if key in result
+        key: result[key] for key in ("topic", "status", "warnings", "validation") if key in result
     }
 
 
@@ -1691,9 +2104,7 @@ def _grade_agent_quiz(quiz: dict[str, Any], answers: dict[str, Any]) -> dict[str
         expected = question.get("answer")
         qtype = question.get("type")
         expected_options = (
-            expected.get("option_ids", [])
-            if isinstance(expected, dict)
-            else expected
+            expected.get("option_ids", []) if isinstance(expected, dict) else expected
         )
         if qtype == "multi_choice":
             correct = set(actual or []) == set(expected_options or [])
@@ -1703,7 +2114,8 @@ def _grade_agent_quiz(quiz: dict[str, Any], answers: dict[str, Any]) -> dict[str
             keywords = [
                 str(item).strip().casefold()
                 for item in (rubric_keywords or question.get("keywords", []))
-                if str(item).strip() and not str(item).startswith(("concept:", "bloom:", "difficulty:", "purpose:"))
+                if str(item).strip()
+                and not str(item).startswith(("concept:", "bloom:", "difficulty:", "purpose:"))
             ]
             correct = bool(keywords) and all(keyword in text for keyword in keywords)
         else:

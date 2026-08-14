@@ -49,6 +49,7 @@ interface ExecutionSnapshotProps {
   isModal?: boolean
   isOpen?: boolean
   onClose?: () => void
+  live?: boolean
 }
 
 export function ExecutionSnapshot({
@@ -60,8 +61,11 @@ export function ExecutionSnapshot({
   isModal = false,
   isOpen = false,
   onClose = () => {},
+  live = false,
 }: ExecutionSnapshotProps) {
-  const { data, isLoading, error } = useExecutionSnapshot(executionId)
+  const { data, isLoading, error } = useExecutionSnapshot(executionId, {
+    refetchInterval: live ? 1000 : false,
+  })
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 })
@@ -155,7 +159,7 @@ export function ExecutionSnapshot({
       <Preview
         key={executionId}
         workflowState={workflowState}
-        traceSpans={traceSpans}
+        traceSpans={traceSpans ?? (data?.traceSpans as TraceSpan[] | undefined)}
         childWorkflowSnapshots={childWorkflowSnapshots}
         className={className}
         height={height}

@@ -342,12 +342,16 @@ async function fetchExecutionSnapshot(
   return data
 }
 
-export function useExecutionSnapshot(executionId: string | undefined) {
+export function useExecutionSnapshot(
+  executionId: string | undefined,
+  options?: { refetchInterval?: number | false }
+) {
   return useQuery({
     queryKey: logKeys.executionSnapshot(executionId),
     queryFn: ({ signal }) => fetchExecutionSnapshot(executionId as string, signal),
     enabled: Boolean(executionId),
     staleTime: EXECUTION_SNAPSHOT_STALE_TIME,
+    refetchInterval: options?.refetchInterval ?? false,
   })
 }
 

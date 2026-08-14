@@ -1796,7 +1796,28 @@ async def list_logs(request: Request, workspaceId: str = "lingxi", limit: int = 
     await _workspace_for_id(request, workspaceId, context)
     async with service_of(request).db.session() as session:
         tasks = (await session.execute(select(AgentTask).where(AgentTask.learner_id == context.learner_id, AgentTask.deleted_at.is_(None)).order_by(desc(AgentTask.updated_at)).limit(min(100, max(1, limit))))).scalars().all()
-    logs = [{"id": task.id, "executionId": task.id, "workflowId": "lingxi-agent", "workflowName": "LingxiGraph", "status": "completed" if task.status in {"completed", "partial", "handed_off"} else task.status, "startedAt": task.created_at.isoformat() if task.created_at else None, "endedAt": task.updated_at.isoformat() if task.updated_at else None, "durationMs": 0, "level": "error" if task.status == "failed" else "info", "trigger": "agent-task", "error": task.error or None} for task in tasks]
+    logs = [
+        {
+            "id": task.id,
+            "executionId": task.latest_execution_id or task.id,
+            "workflowId": "lingxi-agent",
+            "workflowName": "LingxiGraph · Sim runtime",
+            "deploymentVersionId": None,
+            "deploymentVersion": None,
+            "deploymentVersionName": None,
+            "executionOrigin": None,
+            "status": "completed" if task.status in {"completed", "partial", "handed_off"} else task.status,
+            "duration": "0",
+            "trigger": "agent-task",
+            "createdAt": task.created_at.isoformat() if task.created_at else "",
+            "workflow": {"id": "lingxi-agent", "name": "LingxiGraph · Sim runtime"},
+            "jobTitle": task.title or None,
+            "cost": {"total": 0},
+            "pauseSummary": {"status": "awaiting_user" if task.status == "awaiting_user" else None, "total": 1 if task.status == "awaiting_user" else 0, "resumed": 0},
+            "hasPendingPause": task.status == "awaiting_user",
+        }
+        for task in tasks
+    ]
     return {"success": True, "data": logs, "nextCursor": None}
 
 
@@ -1846,6 +1867,77 @@ async def export_logs(
     return StreamingResponse(iter([json.dumps(records, ensure_ascii=False)]), media_type="application/json")
 
 
+@router.get("/logs/by-execution/{execution_id}")
+async def log_by_execution(
+    execution_id: str,
+    request: Request,
+    workspaceId: str = "lingxi",
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    await _workspace_for_id(request, workspaceId, context)
+    svc = service_of(request)
+    try:
+        snapshot = await svc.agent_execution_snapshot(execution_id, context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+    task_id = snapshot["taskId"]
+    async with svc.db.session() as session:
+        events = (
+            await session.execute(
+                select(AgentTaskEvent)
+                .where(AgentTaskEvent.task_id == task_id, AgentTaskEvent.execution_id == execution_id)
+                .order_by(AgentTaskEvent.sequence)
+            )
+        ).scalars().all()
+    metadata = snapshot["executionMetadata"]
+    detail = {
+        "id": execution_id,
+        "executionId": execution_id,
+        "workflowId": "lingxi-agent",
+        "workflowName": "LingxiGraph · Sim runtime",
+        "deploymentVersionId": None,
+        "deploymentVersion": None,
+        "deploymentVersionName": None,
+        "executionOrigin": None,
+        "level": "error" if snapshot["status"] == "failed" else "info",
+        "status": snapshot["status"],
+        "duration": str(metadata.get("totalDurationMs") or 0),
+        "trigger": metadata.get("trigger"),
+        "createdAt": metadata["startedAt"],
+        "workflow": {"id": "lingxi-agent", "name": "LingxiGraph · Sim runtime"},
+        "jobTitle": None,
+        "cost": {"total": 0},
+        "pauseSummary": {"status": "awaiting_user" if snapshot["status"] == "awaiting_user" else None, "total": 1 if snapshot["status"] == "awaiting_user" else 0, "resumed": 0},
+        "hasPendingPause": snapshot["status"] == "awaiting_user",
+        "executionData": {
+            "totalDuration": metadata.get("totalDurationMs"),
+            "enhanced": True,
+            "traceSpans": snapshot["traceSpans"],
+            "workflowInput": {"taskId": task_id},
+            "trigger": metadata.get("trigger"),
+        },
+        "files": None,
+        "events": [
+            {"id": event.sequence, "sequence": event.sequence, "type": event.kind, "kind": event.kind, "payload": event.payload, "runtime": event.runtime or {}, "createdAt": event.created_at.isoformat() if event.created_at else None}
+            for event in events
+        ],
+        "error": None,
+    }
+    return {"success": True, "data": detail}
+
+
+@router.get("/logs/execution/{execution_id}")
+async def execution_snapshot(
+    execution_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        return await service_of(request).agent_execution_snapshot(execution_id, context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+
+
 @router.get("/logs/{log_id}")
 async def log_detail(log_id: str, request: Request, workspaceId: str = "lingxi", context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _workspace_for_id(request, workspaceId, context)
@@ -1855,5 +1947,5 @@ async def log_detail(log_id: str, request: Request, workspaceId: str = "lingxi",
         if task is None:
             raise not_found()
         events = (await session.execute(select(AgentTaskEvent).where(AgentTaskEvent.task_id == task.id).order_by(AgentTaskEvent.sequence))).scalars().all()
-    detail = {"id": task.id, "executionId": task.id, "workflowId": "lingxi-agent", "workflowName": "LingxiGraph", "status": task.status, "startedAt": task.created_at.isoformat() if task.created_at else None, "endedAt": task.updated_at.isoformat() if task.updated_at else None, "events": [{"id": event.sequence, "sequence": event.sequence, "type": event.kind, "kind": event.kind, "payload": event.payload, "createdAt": event.created_at.isoformat() if event.created_at else None} for event in events], "error": task.error or None}
+    detail = {"id": task.id, "executionId": task.latest_execution_id or task.id, "workflowId": "lingxi-agent", "workflowName": "LingxiGraph · Sim runtime", "status": task.status, "startedAt": task.created_at.isoformat() if task.created_at else None, "endedAt": task.updated_at.isoformat() if task.updated_at else None, "events": [{"id": event.sequence, "sequence": event.sequence, "type": event.kind, "kind": event.kind, "payload": event.payload, "executionId": event.execution_id, "runtime": event.runtime or {}, "createdAt": event.created_at.isoformat() if event.created_at else None} for event in events], "error": task.error or None}
     return {"success": True, "data": detail}

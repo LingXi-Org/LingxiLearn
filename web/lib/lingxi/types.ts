@@ -76,6 +76,25 @@ export interface AgentTaskEvent {
   agent: string
   payload: Record<string, unknown>
   ts: string | null
+  execution_id?: string | null
+  run_id?: string | null
+  step?: number | null
+  node?: string | null
+  task_id?: string | null
+  namespace?: unknown
+  checkpoint_id?: string | null
+  span_id?: string | null
+  runtime?: {
+    execution_id?: string | null
+    run_id?: string | null
+    step?: number
+    node?: string | null
+    task_id?: string | null
+    namespace?: unknown
+    checkpoint_id?: string | null
+    span_id?: string | null
+    [key: string]: unknown
+  }
 }
 
 export interface RunEvent {
@@ -94,6 +113,7 @@ export type AgentTaskStatus =
   | 'completed'
   | 'partial'
   | 'failed'
+  | 'cancelled'
 
 export interface AgentTaskListItem {
   id: string
@@ -251,6 +271,37 @@ export interface AgentTaskSnapshot {
   error: string
   created_at: string | null
   updated_at: string | null
+  current_execution_id?: string | null
+  latest_execution_id?: string | null
+  executions?: Array<{
+    id: string
+    status: string
+    trigger: string
+    graph_version: string
+    started_at: string | null
+    ended_at: string | null
+  }>
+}
+
+export interface SimExecutionSnapshot {
+  executionId: string
+  workflowId: string | null
+  taskId?: string
+  graphVersion?: string
+  projectionVersion?: string
+  status?: string
+  workflowState: Record<string, unknown> | null
+  traceSpans?: Array<Record<string, unknown>>
+  executionMetadata: {
+    trigger: string | null
+    startedAt: string
+    endedAt?: string | null
+    totalDurationMs?: number | null
+    cost: unknown | null
+    totalTokens?: number | null
+    scheduleId?: string | null
+    scheduledFor?: string | null
+  }
 }
 
 export interface ArtifactSnapshot {

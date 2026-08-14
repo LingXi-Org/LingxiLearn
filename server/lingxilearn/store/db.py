@@ -10,9 +10,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import delete, event, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ..config import Settings
@@ -20,6 +23,9 @@ from .knowledge_graph import GraphRevisionConflict, graph_snapshot_dict, validat
 
 __all__ = ["Database", "Repository", "GraphRevisionConflict"]
 from .models import (
+    AgentExecution,
+    AgentSchedule,
+    AgentScheduleRun,
     AgentTask,
     AgentTaskEvent,
     AgentTaskSidecar,
@@ -162,9 +168,7 @@ class Repository:
         async with self.db.session() as s:
             return await s.get(Session, session_id)
 
-    async def get_session_for_learner(
-        self, session_id: str, learner_id: str
-    ) -> Session | None:
+    async def get_session_for_learner(self, session_id: str, learner_id: str) -> Session | None:
         async with self.db.session() as s:
             return await s.scalar(
                 select(Session).where(
@@ -211,13 +215,309 @@ class Repository:
             s.add(AgentTask(**fields))
             await s.commit()
 
+    async def create_agent_execution(
+        self,
+        *,
+        execution_id: str,
+        task_id: str,
+        learner_id: str,
+        graph_version: str,
+        trigger: str = "agent-task",
+        schedule_id: str | None = None,
+        scheduled_for: Any | None = None,
+    ) -> None:
+        async with self.db.session() as s:
+            s.add(
+                AgentExecution(
+                    id=execution_id,
+                    task_id=task_id,
+                    learner_id=learner_id,
+                    graph_version=graph_version,
+                    trigger=trigger,
+                    schedule_id=schedule_id,
+                    scheduled_for=scheduled_for,
+                    status="running",
+                    workflow_state={},
+                    trace_spans=[],
+                )
+            )
+            task = await s.get(AgentTask, task_id)
+            if task is not None:
+                task.current_execution_id = execution_id
+                task.latest_execution_id = execution_id
+                task.updated_at = utcnow()
+            await s.commit()
+
+    async def update_agent_execution(
+        self,
+        execution_id: str,
+        *,
+        status: str | None = None,
+        workflow_state: dict[str, Any] | None = None,
+        trace_spans: list[dict[str, Any]] | None = None,
+        event_count: int | None = None,
+        error: str | None = None,
+        ended: bool = False,
+    ) -> None:
+        async with self.db.session() as s:
+            row = await s.get(AgentExecution, execution_id)
+            if row is None:
+                return
+            if status is not None:
+                row.status = status
+            if workflow_state is not None:
+                row.workflow_state = workflow_state
+            if trace_spans is not None:
+                row.trace_spans = trace_spans
+            if event_count is not None:
+                row.event_count = event_count
+            if error is not None:
+                row.error = error
+            if ended:
+                row.ended_at = utcnow()
+            row.updated_at = utcnow()
+            await s.commit()
+
+    async def get_agent_execution(
+        self, execution_id: str, learner_id: str | None = None
+    ) -> AgentExecution | None:
+        async with self.db.session() as s:
+            stmt = select(AgentExecution).where(AgentExecution.id == execution_id)
+            if learner_id is not None:
+                stmt = stmt.where(AgentExecution.learner_id == learner_id)
+            return await s.scalar(stmt)
+
+    async def list_agent_executions(
+        self, task_id: str, learner_id: str, limit: int = 20
+    ) -> list[AgentExecution]:
+        async with self.db.session() as s:
+            return list(
+                (
+                    await s.execute(
+                        select(AgentExecution)
+                        .where(
+                            AgentExecution.task_id == task_id,
+                            AgentExecution.learner_id == learner_id,
+                        )
+                        .order_by(AgentExecution.created_at.desc())
+                        .limit(limit)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+    async def create_schedule_proposal(self, **fields: Any) -> AgentSchedule:
+        async with self.db.session() as s:
+            learner_id = fields.get("learner_id")
+            source_task_id = fields.get("source_task_id")
+            prior_scopes = (
+                await s.execute(
+                    select(AgentSchedule.approval_scope, AgentSchedule.source_task_id).where(
+                        AgentSchedule.learner_id == learner_id,
+                        AgentSchedule.status == "active",
+                        AgentSchedule.approval_scope.in_(("always_allow", "allow_chat")),
+                    )
+                )
+            ).all()
+            inherited_scope = next(
+                (
+                    scope
+                    for scope, task_id in prior_scopes
+                    if scope == "always_allow"
+                    or (scope == "allow_chat" and task_id == source_task_id)
+                ),
+                None,
+            )
+            if inherited_scope and not (fields.get("inputs_snapshot") or {}).get(
+                "revokesScheduleId"
+            ):
+                fields["status"] = "active"
+                fields["approval_scope"] = inherited_scope
+                fields["approved_at"] = utcnow()
+            row = AgentSchedule(**fields)
+            s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return row
+
+    async def decide_schedule_permission(
+        self, *, proposal_id: str, learner_id: str, decision: str
+    ) -> dict[str, Any] | None:
+        """Apply the first tool-permission decision exactly once."""
+
+        if decision not in {"allow", "allow_chat", "always_allow", "skip"}:
+            raise ValueError("invalid_schedule_permission_decision")
+
+        async with self.db.session() as s:
+            stmt = select(AgentSchedule).where(
+                AgentSchedule.proposal_id == proposal_id,
+                AgentSchedule.learner_id == learner_id,
+            )
+            if self.db.engine.url.get_backend_name() == "postgresql":
+                stmt = stmt.with_for_update()
+            row = await s.scalar(stmt)
+            if row is None:
+                return None
+            if row.status not in {"proposed", "pending"}:
+                return {
+                    "proposal_id": proposal_id,
+                    "status": row.status,
+                    "applied": False,
+                    "scope": row.approval_scope,
+                    "source_task_id": row.source_task_id,
+                }
+            row.approval_scope = decision
+            row.approved_at = utcnow()
+            if decision == "skip":
+                row.status = "rejected"
+            else:
+                row.status = "active"
+                revoked_id = (row.inputs_snapshot or {}).get("revokesScheduleId")
+                if revoked_id:
+                    row.status = "revoked"
+                    target = await s.get(AgentSchedule, revoked_id)
+                    if target is not None and target.learner_id == learner_id:
+                        target.status = "revoked"
+                        target.revoked_at = utcnow()
+                        target.updated_at = utcnow()
+            row.updated_at = utcnow()
+            await s.commit()
+            return {
+                "proposal_id": proposal_id,
+                "status": row.status,
+                "applied": True,
+                "scope": decision,
+                "source_task_id": row.source_task_id,
+            }
+
+    async def get_schedule(self, *, schedule_id: str, learner_id: str) -> AgentSchedule | None:
+        async with self.db.session() as s:
+            return await s.scalar(
+                select(AgentSchedule).where(
+                    AgentSchedule.id == schedule_id, AgentSchedule.learner_id == learner_id
+                )
+            )
+
+    async def revoke_schedule_proposal(self, *, proposal_id: str, learner_id: str) -> bool:
+        async with self.db.session() as s:
+            row = await s.scalar(
+                select(AgentSchedule).where(
+                    AgentSchedule.proposal_id == proposal_id, AgentSchedule.learner_id == learner_id
+                )
+            )
+            if row is None:
+                return False
+            row.status = "revoked"
+            row.revoked_at = utcnow()
+            row.updated_at = utcnow()
+            await s.commit()
+            return True
+
+    async def claim_due_schedule(
+        self, *, owner: str, now: datetime | None = None, lease_seconds: int = 60
+    ) -> dict[str, Any] | None:
+        """Claim one due schedule; PostgreSQL uses SKIP LOCKED."""
+
+        moment = now or datetime.now(UTC)
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        async with self.db.session() as s:
+            stmt = (
+                select(AgentSchedule)
+                .where(
+                    AgentSchedule.status == "active",
+                    AgentSchedule.next_run_at.is_not(None),
+                    AgentSchedule.next_run_at <= moment,
+                    (AgentSchedule.lease_until.is_(None) | (AgentSchedule.lease_until < moment)),
+                )
+                .order_by(AgentSchedule.next_run_at)
+                .limit(1)
+            )
+            if self.db.engine.url.get_backend_name() == "postgresql":
+                stmt = stmt.with_for_update(skip_locked=True)
+            row = await s.scalar(stmt)
+            if row is None:
+                return None
+            scheduled_for = row.next_run_at
+            row.lease_owner = owner
+            row.lease_until = moment + timedelta(seconds=lease_seconds)
+            run = await s.scalar(
+                select(AgentScheduleRun).where(
+                    AgentScheduleRun.schedule_id == row.id,
+                    AgentScheduleRun.scheduled_for == scheduled_for,
+                )
+            )
+            if run is not None:
+                # A process can die after claiming a slot. Reuse that one
+                # durable claim once its lease expires instead of creating a
+                # duplicate trigger. A started slot is already handed off;
+                # never launch it a second time.
+                if run.status == "started":
+                    row.lease_owner = None
+                    row.lease_until = None
+                    await s.commit()
+                    return None
+                run.status = "claimed"
+                run.updated_at = utcnow()
+            else:
+                run = AgentScheduleRun(
+                    id=f"schedule-run-{uuid4().hex}",
+                    schedule_id=row.id,
+                    scheduled_for=scheduled_for,
+                    status="claimed",
+                )
+                s.add(run)
+                try:
+                    await s.flush()
+                except IntegrityError:
+                    # A SQLite development worker has no SKIP LOCKED. If two
+                    # pollers race the same unique slot, the loser simply
+                    # yields this tick and the winner owns the lease.
+                    await s.rollback()
+                    return None
+            await s.commit()
+            return {
+                "schedule_id": row.id,
+                "run_id": run.id,
+                "scheduled_for": scheduled_for,
+                "prompt": row.prompt,
+                "learner_id": row.learner_id,
+                "resources": row.resources_snapshot or [],
+                "graph_version": row.graph_version,
+                "timezone": row.timezone,
+                "cron": row.cron,
+            }
+
+    async def finish_schedule_claim(
+        self,
+        *,
+        run_id: str,
+        schedule_id: str,
+        scheduled_for: datetime,
+        execution_id: str,
+        next_run_at: datetime | None,
+    ) -> None:
+        async with self.db.session() as s:
+            run = await s.get(AgentScheduleRun, run_id)
+            schedule = await s.get(AgentSchedule, schedule_id)
+            if run is not None:
+                run.execution_id = execution_id
+                run.status = "started"
+                run.updated_at = utcnow()
+            if schedule is not None:
+                schedule.last_run_at = scheduled_for
+                schedule.next_run_at = next_run_at
+                schedule.lease_owner = None
+                schedule.lease_until = None
+                schedule.updated_at = utcnow()
+            await s.commit()
+
     async def get_agent_task(self, task_id: str) -> AgentTask | None:
         async with self.db.session() as s:
             return await s.get(AgentTask, task_id)
 
-    async def get_agent_task_for_learner(
-        self, task_id: str, learner_id: str
-    ) -> AgentTask | None:
+    async def get_agent_task_for_learner(self, task_id: str, learner_id: str) -> AgentTask | None:
         async with self.db.session() as s:
             return await s.scalar(
                 select(AgentTask).where(
@@ -282,7 +582,9 @@ class Repository:
         """Create the only submission for a task, with retry-safe semantics."""
 
         async with self.db.session() as s:
-            existing = await s.scalar(select(QuizSubmission).where(QuizSubmission.task_id == task_id))
+            existing = await s.scalar(
+                select(QuizSubmission).where(QuizSubmission.task_id == task_id)
+            )
             if existing is not None:
                 if existing.submission_id == submission_id:
                     return _quiz_submission_dict(existing)
@@ -302,7 +604,9 @@ class Repository:
                 await s.commit()
             except Exception:
                 await s.rollback()
-                existing = await s.scalar(select(QuizSubmission).where(QuizSubmission.task_id == task_id))
+                existing = await s.scalar(
+                    select(QuizSubmission).where(QuizSubmission.task_id == task_id)
+                )
                 if existing is not None:
                     if existing.submission_id == submission_id:
                         return _quiz_submission_dict(existing)
@@ -340,7 +644,9 @@ class Repository:
             await s.refresh(row)
             return row
 
-    async def set_agent_task_deleted(self, task_id: str, learner_id: str, deleted: bool) -> AgentTask | None:
+    async def set_agent_task_deleted(
+        self, task_id: str, learner_id: str, deleted: bool
+    ) -> AgentTask | None:
         async with self.db.session() as s:
             row = await s.scalar(
                 select(AgentTask).where(AgentTask.id == task_id, AgentTask.learner_id == learner_id)
@@ -357,12 +663,20 @@ class Repository:
         self, learner_id: str, scope: str = "active"
     ) -> list[dict[str, Any]]:
         async with self.db.session() as s:
-            deleted_filter = AgentTask.deleted_at.is_not(None) if scope == "archived" else AgentTask.deleted_at.is_(None)
+            deleted_filter = (
+                AgentTask.deleted_at.is_not(None)
+                if scope == "archived"
+                else AgentTask.deleted_at.is_(None)
+            )
             rows = (
                 await s.execute(
                     select(AgentTask)
                     .where(AgentTask.learner_id == learner_id, deleted_filter)
-                    .order_by(AgentTask.is_pinned.desc(), AgentTask.updated_at.desc(), AgentTask.created_at.desc())
+                    .order_by(
+                        AgentTask.is_pinned.desc(),
+                        AgentTask.updated_at.desc(),
+                        AgentTask.created_at.desc(),
+                    )
                 )
             ).scalars()
             return [
@@ -409,6 +723,10 @@ class Repository:
                         kind=str(event.get("kind", "")),
                         agent=str(event.get("agent", "")),
                         payload=event.get("payload") or {},
+                        execution_id=event.get("execution_id"),
+                        runtime=event.get("runtime")
+                        or (event.get("payload") or {}).get("runtime")
+                        or {},
                     )
                 )
             await s.commit()
@@ -435,10 +753,28 @@ class Repository:
                     "kind": r.kind,
                     "agent": r.agent,
                     "payload": r.payload,
+                    "execution_id": r.execution_id or (r.runtime or {}).get("execution_id"),
+                    "run_id": (r.runtime or {}).get("run_id"),
+                    "step": (r.runtime or {}).get("step"),
+                    "node": (r.runtime or {}).get("node"),
+                    "task_id": (r.runtime or {}).get("task_id"),
+                    "namespace": (r.runtime or {}).get("namespace"),
+                    "checkpoint_id": (r.runtime or {}).get("checkpoint_id"),
+                    "span_id": (r.runtime or {}).get("span_id"),
+                    "runtime": r.runtime or {},
                     "ts": r.created_at.isoformat() if r.created_at else None,
                 }
                 for r in rows
             ]
+
+    async def agent_event_count_for_execution(self, execution_id: str) -> int:
+        async with self.db.session() as s:
+            count = await s.scalar(
+                select(func.count())
+                .select_from(AgentTaskEvent)
+                .where(AgentTaskEvent.execution_id == execution_id)
+            )
+            return int(count or 0)
 
     async def agent_events_after_for_learner(
         self, task_id: str, learner_id: str, after: int = 0, limit: int = 500
@@ -463,6 +799,15 @@ class Repository:
                     "kind": r.kind,
                     "agent": r.agent,
                     "payload": r.payload,
+                    "execution_id": r.execution_id or (r.runtime or {}).get("execution_id"),
+                    "run_id": (r.runtime or {}).get("run_id"),
+                    "step": (r.runtime or {}).get("step"),
+                    "node": (r.runtime or {}).get("node"),
+                    "task_id": (r.runtime or {}).get("task_id"),
+                    "namespace": (r.runtime or {}).get("namespace"),
+                    "checkpoint_id": (r.runtime or {}).get("checkpoint_id"),
+                    "span_id": (r.runtime or {}).get("span_id"),
+                    "runtime": r.runtime or {},
                     "ts": r.created_at.isoformat() if r.created_at else None,
                 }
                 for r in rows
@@ -561,9 +906,7 @@ class Repository:
 
     # -- knowledge graphs -----------------------------------------------
 
-    async def get_knowledge_graph(
-        self, graph_id: str, learner_id: str
-    ) -> dict[str, Any] | None:
+    async def get_knowledge_graph(self, graph_id: str, learner_id: str) -> dict[str, Any] | None:
         async with self.db.session() as s:
             graph = await s.scalar(
                 select(KnowledgeGraph).where(
@@ -574,27 +917,39 @@ class Repository:
             if graph is None:
                 return None
             nodes = (
-                await s.execute(
-                    select(KnowledgeGraphNode)
-                    .where(KnowledgeGraphNode.graph_id == graph_id)
-                    .order_by(KnowledgeGraphNode.level, KnowledgeGraphNode.node_id)
-                )
-            ).scalars().all()
-            edges = (
-                await s.execute(
-                    select(KnowledgeGraphEdge)
-                    .where(KnowledgeGraphEdge.graph_id == graph_id)
-                    .order_by(KnowledgeGraphEdge.edge_id)
-                )
-            ).scalars().all()
-            overlays = (
-                await s.execute(
-                    select(KnowledgeGraphLearnerOverlay).where(
-                        KnowledgeGraphLearnerOverlay.graph_id == graph_id,
-                        KnowledgeGraphLearnerOverlay.learner_id == learner_id,
+                (
+                    await s.execute(
+                        select(KnowledgeGraphNode)
+                        .where(KnowledgeGraphNode.graph_id == graph_id)
+                        .order_by(KnowledgeGraphNode.level, KnowledgeGraphNode.node_id)
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
+            edges = (
+                (
+                    await s.execute(
+                        select(KnowledgeGraphEdge)
+                        .where(KnowledgeGraphEdge.graph_id == graph_id)
+                        .order_by(KnowledgeGraphEdge.edge_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            overlays = (
+                (
+                    await s.execute(
+                        select(KnowledgeGraphLearnerOverlay).where(
+                            KnowledgeGraphLearnerOverlay.graph_id == graph_id,
+                            KnowledgeGraphLearnerOverlay.learner_id == learner_id,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
             return graph_snapshot_dict(graph, nodes, edges, overlays)
 
     async def list_knowledge_graph_candidates(
@@ -602,32 +957,53 @@ class Repository:
     ) -> list[dict[str, Any]]:
         async with self.db.session() as s:
             graphs = (
-                await s.execute(
-                    select(KnowledgeGraph)
-                    .where(KnowledgeGraph.learner_id == learner_id)
-                    .order_by(KnowledgeGraph.updated_at.desc())
+                (
+                    await s.execute(
+                        select(KnowledgeGraph)
+                        .where(KnowledgeGraph.learner_id == learner_id)
+                        .order_by(KnowledgeGraph.updated_at.desc())
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             normalized_query = "".join(query.split()).casefold()
             terms = {term.casefold() for term in query.split() if term.strip()}
             if normalized_query:
                 terms.add(normalized_query)
-                terms.update(normalized_query[index : index + 2] for index in range(max(0, len(normalized_query) - 1)))
+                terms.update(
+                    normalized_query[index : index + 2]
+                    for index in range(max(0, len(normalized_query) - 1))
+                )
             scored: list[tuple[int, KnowledgeGraph]] = []
             for graph in graphs:
                 nodes = (
-                    await s.execute(
-                        select(KnowledgeGraphNode).where(KnowledgeGraphNode.graph_id == graph.graph_id)
+                    (
+                        await s.execute(
+                            select(KnowledgeGraphNode).where(
+                                KnowledgeGraphNode.graph_id == graph.graph_id
+                            )
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 haystack = " ".join(
-                    [graph.title, graph.domain, *[node.label for node in nodes], *sum((node.aliases or [] for node in nodes), [])]
+                    [
+                        graph.title,
+                        graph.domain,
+                        *[node.label for node in nodes],
+                        *sum((node.aliases or [] for node in nodes), []),
+                    ]
                 ).casefold()
                 score = sum(1 for term in terms if term in haystack)
                 if score:
                     scored.append((score, graph))
             scored.sort(
-                key=lambda item: (-item[0], -(item[1].updated_at.timestamp() if item[1].updated_at else 0))
+                key=lambda item: (
+                    -item[0],
+                    -(item[1].updated_at.timestamp() if item[1].updated_at else 0),
+                )
             )
             snapshots: list[dict[str, Any]] = []
             for _, graph in scored[:limit]:
@@ -662,12 +1038,16 @@ class Repository:
         patch = result["graph_patch"]
         async with self.db.session() as s:
             selected_id = graph_id or target
-            graph = await s.scalar(
-                select(KnowledgeGraph).where(
-                    KnowledgeGraph.graph_id == selected_id,
-                    KnowledgeGraph.learner_id == learner_id,
+            graph = (
+                await s.scalar(
+                    select(KnowledgeGraph).where(
+                        KnowledgeGraph.graph_id == selected_id,
+                        KnowledgeGraph.learner_id == learner_id,
+                    )
                 )
-            ) if selected_id else None
+                if selected_id
+                else None
+            )
             if action == "create_graph":
                 if graph is not None:
                     prior_event = await s.scalar(
@@ -702,13 +1082,21 @@ class Repository:
             existing_nodes = {
                 row.node_id: row
                 for row in (
-                    await s.execute(select(KnowledgeGraphNode).where(KnowledgeGraphNode.graph_id == graph.graph_id))
+                    await s.execute(
+                        select(KnowledgeGraphNode).where(
+                            KnowledgeGraphNode.graph_id == graph.graph_id
+                        )
+                    )
                 ).scalars()
             }
             existing_edges = {
                 row.edge_id: row
                 for row in (
-                    await s.execute(select(KnowledgeGraphEdge).where(KnowledgeGraphEdge.graph_id == graph.graph_id))
+                    await s.execute(
+                        select(KnowledgeGraphEdge).where(
+                            KnowledgeGraphEdge.graph_id == graph.graph_id
+                        )
+                    )
                 ).scalars()
             }
             existing_overlay = {
@@ -796,6 +1184,7 @@ class Repository:
             )
             await s.commit()
         return await self.get_knowledge_graph(graph.graph_id, learner_id)
+
     # -- events ----------------------------------------------------------
 
     async def next_sequence(self, session_id: str) -> int:

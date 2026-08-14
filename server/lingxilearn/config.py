@@ -86,11 +86,16 @@ class Settings(BaseSettings):
     # model cannot exhaust the child graph at the old hard-coded limit.
     agent_deck_recursion_limit: int = 80
     agent_visual_timeout: float = 240.0
+    agent_concurrency: int = 1
     agent_web_timeout: float = 20.0
     # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable
     # prompt/tool prefix intact so DeepSeek can use its native prompt cache.
     agent_cache_enabled: bool = True
     agent_cache_verify_mode: Literal["strict", "warn", "off"] = "strict"
+    # Sim retry blocks are opt-in; the default preserves LingxiGraph's
+    # single-attempt behavior for every non-idempotent Agent primitive.
+    agent_retry_max_tries: int = 1
+    agent_retry_wait_seconds: float = 0.0
     agent_max_html_bytes: int = 512 * 1024
     agent_task_dir: Path = REPO_ROOT / "var" / "agent_tasks"
 
