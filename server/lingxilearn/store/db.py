@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 # compatibility DDL explicit and small: production PostgreSQL still uses the
 # normal Alembic chain, while a local SQLite restart upgrades the existing
 # file in place without discarding learner data.
-_SQLITE_SCHEMA_HEAD = "0011_table_view_metadata"
+_SQLITE_SCHEMA_HEAD = "0012_multi_agent_runtime"
 _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "agent_tasks": {
         "title": "TEXT NOT NULL DEFAULT ''",
@@ -83,6 +83,15 @@ _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "workspace_table_views": {
         "is_default": "BOOLEAN NOT NULL DEFAULT 0",
         "created_by": "VARCHAR(64)",
+    },
+    "learning_evidence": {
+        "task_id": "VARCHAR(96)",
+        "knowledge_point": "VARCHAR(160) NOT NULL DEFAULT ''",
+        "signal": "VARCHAR(48) NOT NULL DEFAULT ''",
+        "source_agent": "VARCHAR(96) NOT NULL DEFAULT ''",
+        "payload": "JSON NOT NULL DEFAULT '{}'",
+        "seq": "INTEGER NOT NULL DEFAULT 0",
+        "observed_at": "DATETIME",
     },
 }
 
