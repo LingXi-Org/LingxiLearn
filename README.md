@@ -27,8 +27,8 @@ docker compose -f docker-compose.dev.yml up --build
 
 ```bash
 cp .env.example .env       # 改一下数据库密码
-# 低内存机器请串行构建，避免 web/ api 两个大构建同时占用内存
-docker compose build --parallel 1
+# 低内存部署直接拉取 CI 构建好的 GHCR 镜像，不在本机执行 Docker build
+docker compose pull
 docker compose up -d  # http://localhost:8080
 ```
 
@@ -36,10 +36,10 @@ docker compose up -d  # http://localhost:8080
 连接池为 3（最多额外 1 个连接），主 Agent 和后台 sidecar 各限制为 1
 个并发。任务会排队，不会因同时保留多个完整模型上下文而把主机打满。
 
-不要在生产环境每次使用 `docker compose up --build`：它会把构建和启动
-混在一起，且不便于控制构建并发。`make prod` 已经执行串行构建后再启动。
-前端构建还设置了 768 MiB 的 Node 堆上限；如果主机总内存低于 2 GiB，
-建议在 CI/另一台构建机生成镜像，再在生产机执行 `docker compose up -d`。
+不要在生产环境使用 `docker compose up --build`。生产 Compose 已改为只拉取
+CI 构建好的 GHCR 镜像；`make prod` 会先执行 `docker compose pull` 再启动。
+如果需要固定版本，可在 `.env` 中把 `LINGXILEARN_API_IMAGE` 和
+`LINGXILEARN_WEB_IMAGE` 改成具体的 `:sha-...` 标签。
 
 GitHub Actions 工作流 [`container-images.yml`](.github/workflows/container-images.yml)
 会在每次 push 和 Pull Request 自动构建 `api`、`web` 两张镜像；push 到仓库

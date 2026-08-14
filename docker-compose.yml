@@ -9,14 +9,8 @@
 name: lingxilearn
 
 x-api: &api
-  build:
-    context: ./server
-    # Keep BuildKit cache enabled in production. `no_cache` causes every
-    # rollout to rebuild the dependency layer and needlessly spikes RAM.
-    args:
-      DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
-      APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
-      PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+  image: ${LINGXILEARN_API_IMAGE:-ghcr.io/lingxi-org/lingxilearn-api:latest}
+  pull_policy: always
   env_file: [.env]
   environment:
     LINGXILEARN_DATABASE_URL: >-
@@ -61,13 +55,8 @@ services:
   # Native Sim standalone server. API/auth requests are proxied by Next so the
   # browser keeps one same-origin session and never needs a second public port.
   web:
-    build:
-      context: ./web
-      args:
-        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.m.daocloud.io}
-        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
-        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
-        DATABASE_URL: postgresql://build:build@localhost:5432/build
+    image: ${LINGXILEARN_WEB_IMAGE:-ghcr.io/lingxi-org/lingxilearn-web:latest}
+    pull_policy: always
     environment:
       LINGXILEARN_API_ORIGIN: http://api:8000
       # Local container runs use the UI-only mock session by default. Set to
