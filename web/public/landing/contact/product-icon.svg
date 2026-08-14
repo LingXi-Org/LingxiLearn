@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 260" fill="none">
+  <title>Product icon pattern</title>
+  <g stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <g transform="translate(22 20) scale(.406)">
+      <path d="m60 10 48 25-48 25-48-25z" />
+      <path d="M12 35v52l48 27 48-27V35" />
+      <path d="M60 60v54" />
+      <path d="m91 5 4 12 12 4-12 4-4 12-4-12-12-4 12-4z" />
+    </g>
+    <g transform="translate(183 139) scale(.406)">
+      <path d="m60 10 48 25-48 25-48-25z" />
+      <path d="M12 35v52l48 27 48-27V35" />
+      <path d="M60 60v54" />
+      <path d="m91 5 4 12 12 4-12 4-4 12-4-12-12-4 12-4z" />
+    </g>
+  </g>
+</svg>
