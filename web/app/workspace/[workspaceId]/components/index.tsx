@@ -203,3 +203,7 @@ export function SkillTile(_props: any) {
 }
 
 export const EMPTY_CELL_PLACEHOLDER = '—'
+
+export { ownerCell } from './resource/components/owner-cell'
+export { timeCell } from './resource/components/time-cell'
+export { SortDropdown } from './resource/components/resource-options'
