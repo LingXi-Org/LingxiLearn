@@ -861,6 +861,213 @@ async def me_context(
     return context.public_dict()
 
 
+class ProfileOverride(BaseModel):
+    """A learner correcting their own record. Not an agent write."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    override: bool = True
+    mastery: float | None = Field(default=None, ge=0.0, le=1.0)
+    learning_state: str | None = Field(default=None, max_length=48)
+    progress: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+@router.get("/me/learning-profile")
+async def learning_profile(
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """The learner's study record: one row per knowledge point.
+
+    ``next_step`` on each row is an action the learner can take, not a
+    description — POST it back to act on it.
+    """
+
+    svc = service_of(request)
+    rows = await svc.runtime_state.profile_for(context.learner_id)
+    return {
+        "profile": rows,
+        "columns": {
+            "learner": [
+                "knowledge_point", "mastery", "learning_state", "progress",
+                "my_questions", "recent_performance", "last_studied_at",
+                "review_due_at", "next_step",
+            ],
+            "system": [
+                "confidence", "evidence_count", "misconceptions", "prerequisites",
+                "difficulty", "review_priority", "stability", "source_agent",
+                "revision", "override_flag",
+            ],
+        },
+    }
+
+
+@router.post("/me/learning-profile/{knowledge_point_id}/next-step", status_code=202)
+async def take_next_step(
+    knowledge_point_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """Act on a row's ``next_step`` by pushing it onto the goal stack.
+
+    The runtime still decides what to run: this states an intent, exactly like
+    typing it would, and the orchestrator ranks it against everything else.
+    """
+
+    svc = service_of(request)
+    row = await svc.runtime_state.profile_point(context.learner_id, knowledge_point_id)
+    if row is None:
+        raise not_found()
+    step = dict(row.get("next_step") or {})
+    if not step.get("capability"):
+        raise HTTPException(status_code=409, detail="no_next_step")
+
+    task_id = f"task-{uuid.uuid4().hex}"
+    label = step.get("label") or row.get("knowledge_point") or knowledge_point_id
+    return await svc.create_agent_task(
+        task_id=task_id,
+        learner_id=context.learner_id,
+        prompt=str(label),
+    )
+
+
+@router.patch("/me/learning-profile/{knowledge_point_id}")
+async def override_learning_profile(
+    knowledge_point_id: str,
+    body: ProfileOverride,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """Let a learner correct their own profile row.
+
+    Sets ``override_flag`` so the state updater stops overwriting the fields the
+    learner owns, while still counting new evidence against them.
+    """
+
+    svc = service_of(request)
+    fields = {
+        name: value
+        for name, value in (
+            ("mastery", body.mastery),
+            ("learning_state", body.learning_state),
+            ("progress", body.progress),
+        )
+        if value is not None
+    }
+    try:
+        change = await svc.runtime_state.override_profile(
+            learner_id=context.learner_id,
+            knowledge_point_id=knowledge_point_id,
+            enabled=body.override,
+            fields=fields,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if change is None:
+        raise not_found()
+    return change.to_dict()
+
+
+@router.get("/agent-tasks/{task_id}/decisions")
+async def agent_task_decisions(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """Every decision this task made: candidates, choice, reason, evidence, diff."""
+
+    svc = service_of(request)
+    if await svc.repo.get_agent_task_for_learner(task_id, context.learner_id) is None:
+        raise not_found()
+    return {"decisions": await svc.runtime_state.decisions_for_task(task_id)}
+
+
+@router.get("/agent-tasks/{task_id}/runtime-graph")
+async def agent_task_runtime_graph(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """This run's execution graph, built from what actually happened.
+
+    Not a diagram of the architecture: nodes exist because a decision created
+    them, each carries the reason it was chosen, and each links back to the
+    decision and evidence it came from.
+    """
+
+    svc = service_of(request)
+    if await svc.repo.get_agent_task_for_learner(task_id, context.learner_id) is None:
+        raise not_found()
+
+    decisions = await svc.runtime_state.decisions_for_task(task_id)
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    previous: str | None = None
+
+    for decision in decisions:
+        decision_node = f"decision:{decision['step']}"
+        nodes.append(
+            {
+                "id": decision_node,
+                "type": "decision",
+                "step": decision["step"],
+                "label": f"第 {decision['step']} 轮决策",
+                "why": decision["rationale"],
+                "candidates": decision["candidates"],
+                "replan_of": decision["replan_of"],
+                "created_at": decision["created_at"],
+            }
+        )
+        if previous:
+            edges.append({"from": previous, "to": decision_node, "kind": "then"})
+        if decision["replan_of"]:
+            edges.append(
+                {"from": decision["replan_of"], "to": decision_node, "kind": "replan"}
+            )
+
+        outcomes = {
+            str(item.get("task_id")): item
+            for item in (decision.get("outcome") or {}).get("tasks") or []
+        }
+        for task in (decision.get("selected") or {}).get("tasks") or []:
+            node_id = f"{decision['step']}:{task['id']}"
+            outcome = outcomes.get(str(task["id"]), {})
+            nodes.append(
+                {
+                    "id": node_id,
+                    "type": "action",
+                    "step": decision["step"],
+                    "label": task.get("capability"),
+                    "knowledge_point_id": task.get("knowledge_point_id"),
+                    "why": task.get("rationale"),
+                    "done_when": task.get("done_when"),
+                    "status": outcome.get("status", "planned"),
+                    "satisfied": outcome.get("satisfied", False),
+                    "detail": outcome.get("detail", ""),
+                    "evidence_ids": outcome.get("evidence_ids") or [],
+                    "decision_id": decision["id"],
+                }
+            )
+            edges.append({"from": decision_node, "to": node_id, "kind": "runs"})
+        previous = decision_node
+
+    return {"task_id": task_id, "nodes": nodes, "edges": edges}
+
+
+@router.get("/agent-tasks/{task_id}/evidence")
+async def agent_task_evidence(
+    task_id: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """The evidence this task produced, for drilling into a node."""
+
+    svc = service_of(request)
+    if await svc.repo.get_agent_task_for_learner(task_id, context.learner_id) is None:
+        raise not_found()
+    return {"evidence": await svc.runtime_state.evidence_for_task(task_id)}
+
+
 @router.get("/me/mastery")
 async def me_mastery(
     request: Request,
