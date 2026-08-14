@@ -16,8 +16,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from .api.routes import router
 from .api.account_routes import router as account_router
+from .api.routes import router
 from .api.workspace_routes import router as workspace_router
 from .auth import build_authenticator
 from .config import get_settings

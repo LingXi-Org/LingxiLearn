@@ -8,10 +8,10 @@ caps you at 10 concurrent learners for no reason.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-import logging
 from typing import Any
 from uuid import uuid4
 

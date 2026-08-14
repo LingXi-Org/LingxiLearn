@@ -14,8 +14,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
-    Boolean,
     JSON,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,

@@ -6,6 +6,8 @@ import asyncio
 import uuid
 
 from .config import get_settings
+from .runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
+from .runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from .runtime.schedules import SchedulerWorker
 from .service import Service
 
@@ -23,7 +25,8 @@ async def main() -> None:
             resources=claim.get("resources") or [],
             schedule_id=claim["schedule_id"],
             scheduled_for=claim["scheduled_for"],
-            graph_version=claim.get("graph_version") or "knowledge_deep_dive.v1",
+            graph_version=claim.get("graph_version")
+            or f"{LOOP_GRAPH_NAME}@{LOOP_GRAPH_VERSION}",
         )
         for _ in range(40):
             snapshot = await service.agent_task_snapshot(task_id, claim["learner_id"])

@@ -22,11 +22,16 @@ from lingxigraph import (
 
 from lingxilearn.agents.artifact_store import ArtifactError, ArtifactStore
 from lingxilearn.agents.contracts import IntentContext, LectureHookResult, extract_json
-from lingxilearn.agents.graph import _invoke_agent, _lesson_intro_fallback, build_agent_graph
-from lingxilearn.service import Service, _message_trace_events
+from lingxilearn.agents.model_runtime import invoke_agent as _invoke_agent
+from lingxilearn.agents.providers.content import _lesson_intro_fallback
+from lingxilearn.agents.skill_runtime import (
+    ArtifactDraft,
+    progressive_skill_prompt,
+    staged_artifact_tools,
+)
 from lingxilearn.agents.web_tools import _assert_public_url
-from lingxilearn.agents.skill_runtime import ArtifactDraft, progressive_skill_prompt, staged_artifact_tools
 from lingxilearn.config import Settings
+from lingxilearn.service import Service, _message_trace_events
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -184,251 +189,6 @@ def test_intent_and_lecture_contracts_reject_malformed_output() -> None:
         LectureHookResult.model_validate({"schema_version": "wrong"})
 
 
-def test_agent_graph_fans_out_specialists_before_merge(tmp_path: Path) -> None:
-    settings = Settings(_env_file="", agent_task_dir=tmp_path)
-    graph = build_agent_graph(
-        model=object(),
-        settings=settings,
-        task_id="topology-test",
-        artifacts=ArtifactStore(settings),
-        persist_result=lambda _agent, _value: None,
-    )
-    edges = {(edge.source, edge.target, edge.label) for edge in graph.get_graph().edges}
-    assert ("recognize_intent", "lecture_hook", None) in edges
-    assert ("recognize_intent", "interactive_lecture_deck", None) in edges
-    assert ("lecture_hook", "quiz_generator", "all") in edges
-    assert ("interactive_lecture_deck", "quiz_generator", "all") in edges
-
-
-@pytest.mark.asyncio
-async def test_specialists_start_in_parallel(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    timeline: list[str] = []
-    created: dict[str, dict[str, Any]] = {}
-    lecture = {
-        "schema_version": "lesson-intro-result.v1",
-        "status": "ok",
-        "topic": "TCP 拥塞控制",
-        "selected_hook": {
-            "title": "网络为什么会堵车",
-            "hook_type": "analogy",
-            "opening": "开场",
-            "story": "故事",
-            "question": "问题",
-            "transition": "过渡",
-            "estimated_duration_sec": 60,
-            "why_this_hook_works": "便于建立直觉",
-        },
-        "candidates": [
-            {
-                "title": "网络为什么会堵车",
-                "hook_type": "analogy",
-                "score": 80,
-                "lesson_alignment": 80,
-                "curiosity": 80,
-                "evidence_strength": 80,
-            }
-        ],
-        "research": {"search_angles": [], "claims": [], "sources": []},
-    }
-
-    class FakeAgent:
-        def __init__(self, name: str, tools: list[Any]) -> None:
-            self.name = name
-            self.tools = tools
-
-        async def ainvoke(self, _input: Any, _config: Any) -> dict[str, Any]:
-            created[self.name]["config"] = _config
-            timeline.append(f"{self.name}:start")
-            await asyncio.sleep(0.03)
-            timeline.append(f"{self.name}:end")
-            if self.name == "intent-recognizer":
-                content = '{"topic":"TCP 拥塞控制"}'
-            elif self.name in {"lecture-hook", "lesson-intro"}:
-                content = '{"topic":"TCP 拥塞控制","status":"ok"}'
-                stage = next(tool for tool in self.tools if tool.name == "stage_artifact_file")
-                stage.func(
-                    "lesson-intro.html",
-                    "<!doctype html><html lang='zh-CN'><head><title>TCP</title></head><body><h1>TCP 拥塞控制</h1><p>理解一个可观察的问题。</p></body></html>",
-                )
-            elif self.name == "quiz-generator":
-                content = '{"schema_version":"quiz-generation-result.v1","task_id":"parallel-test","title":"TCP","instructions":"完成测评。","questions":[{"id":"q01","type":"single_choice","prompt":"核心关系是什么？","options":[{"id":"A","label":"关系"},{"id":"B","label":"结论"}],"points":1,"answer":{"option_ids":["A"],"grading_mode":"exact"},"explanation":"关系。","keywords":["concept:TCP"]}],"total_points":1}'
-            elif self.name == "interactive-lecture-deck":
-                source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
-                stage = next(tool for tool in self.tools if tool.name == "stage_artifact_file")
-                stage.func("lecture.json", (source / "lecture.json").read_text(encoding="utf-8"))
-                stage.func("manifest.json", (source / "manifest.json").read_text(encoding="utf-8"))
-                stage.func("runtime/index.html", (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"))
-                for slide in (source / "slides").glob("s*.html"):
-                    stage.func(f"slides/{slide.name}", slide.read_text(encoding="utf-8"))
-                content = '{"title":"TCP 拥塞控制"}'
-            else:
-                content = (
-                    "<!doctype html><html lang='zh-CN'><head><title>TCP</title></head>"
-                    "<body><button>观察</button></body></html>"
-                )
-            return {"messages": [AIMessage(content=content)]}
-
-    def fake_create_agent(_model: Any, *_tools: Any, name: str, **kwargs: Any) -> FakeAgent:
-        created[name] = kwargs
-        return FakeAgent(name, kwargs.get("tools", []))
-
-    monkeypatch.setattr("lingxilearn.agents.graph.create_agent", fake_create_agent)
-    settings = Settings(_env_file="", agent_task_dir=tmp_path)
-    store = ArtifactStore(settings)
-
-    async def fake_validate(_task_id: str) -> dict[str, Any]:
-        return {"ok": True, "static": {"ok": True}, "palette": {}, "screenshot": "fixture"}
-
-    monkeypatch.setattr(store, "validate_html", fake_validate)
-    async def fake_validate_intro(_task_id: str) -> dict[str, Any]:
-        return {"ok": True, "contract": "lesson-intro-html.v1"}
-    monkeypatch.setattr(store, "validate_lesson_intro", fake_validate_intro)
-
-    async def persist(_agent: str, _value: dict[str, Any]) -> None:
-        return None
-
-    graph = build_agent_graph(
-        model=object(),
-        settings=settings,
-        task_id="parallel-test",
-        artifacts=store,
-        persist_result=persist,
-    )
-    result = await graph.ainvoke(
-        {"task_id": "parallel-test", "prompt": "解释 TCP 拥塞控制", "errors": []}
-    )
-    assert result["status"] == "awaiting_user"
-    first_end = min(
-        index
-        for index, item in enumerate(timeline)
-        if item in {"lesson-intro:end", "interactive-lecture-deck:end"}
-    )
-    assert timeline.index("lesson-intro:start") < first_end
-    assert timeline.index("interactive-lecture-deck:start") < first_end
-    assert created["lesson-intro"]["skills"].discover()[0].name == "lesson-intro"
-    assert {item.name for item in created["lesson-intro"]["tools"]} == {"stage_artifact_file", "stage_artifact_chunk", "read_staged_artifact", "list_staged_artifacts"}
-    assert created["lesson-intro"]["config"]["tool_permissions"] == ["artifact:write"]
-    deck_tools = {item.name for item in created["interactive-lecture-deck"]["tools"]}
-    assert {"stage_artifact_file", "stage_artifact_files", "read_staged_artifact", "list_staged_artifacts"} <= deck_tools
-    assert created["interactive-lecture-deck"]["skills"].discover()[0].name == "interactive-lecture-deck"
-    assert created["interactive-lecture-deck"]["config"]["tool_permissions"] == ["artifact:write"]
-    assert (
-        created["interactive-lecture-deck"]["config"]["recursion_limit"]
-        == settings.agent_deck_recursion_limit
-    )
-
-
-@pytest.mark.asyncio
-async def test_deck_recursion_exhaustion_keeps_staged_artifacts(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
-
-    class FakeAgent:
-        def __init__(self, name: str, tools: list[Any]) -> None:
-            self.name = name
-            self.tools = tools
-
-        async def ainvoke(self, _input: Any, _config: Any) -> dict[str, Any]:
-            if self.name == "interactive-lecture-deck":
-                stage = next(tool for tool in self.tools if tool.name == "stage_artifact_file")
-                stage.func(
-                    "lecture.json",
-                    (source / "lecture.json").read_text(encoding="utf-8"),
-                )
-                stage.func(
-                    "manifest.json",
-                    (source / "manifest.json").read_text(encoding="utf-8"),
-                )
-                stage.func(
-                    "runtime/index.html",
-                    (
-                        REPO_ROOT
-                        / "skills"
-                        / "interactive-lecture-deck"
-                        / "assets"
-                        / "runtime"
-                        / "index.html"
-                    ).read_text(encoding="utf-8"),
-                )
-                for slide in (source / "slides").glob("s*.html"):
-                    stage.func(
-                        f"slides/{slide.name}",
-                        slide.read_text(encoding="utf-8"),
-                    )
-                raise GraphRecursionError("child deck budget exhausted")
-            if self.name == "intent-recognizer":
-                return {
-                    "messages": [
-                        AIMessage(
-                            '{"topic":"二次函数顶点","learning_objective":"理解顶点"}'
-                        )
-                    ]
-                }
-            if self.name == "lesson-intro":
-                stage = next(tool for tool in self.tools if tool.name == "stage_artifact_file")
-                stage.func(
-                    "lesson-intro.html",
-                    "<!doctype html><html><body><h1>二次函数顶点</h1></body></html>",
-                )
-                return {
-                    "messages": [
-                        AIMessage('{"topic":"二次函数顶点","status":"ok"}')
-                    ]
-                }
-            if self.name == "quiz-generator":
-                return {
-                    "messages": [
-                        AIMessage(
-                            '{"schema_version":"quiz-generation-result.v1",'
-                            '"task_id":"deck-recursion-test","title":"顶点",'
-                            '"instructions":"完成测评。","questions":['
-                            '{"id":"q01","type":"single_choice","prompt":"顶点是什么？",'
-                            '"options":[{"id":"A","label":"顶点"},{"id":"B","label":"根"}],'
-                            '"points":1,"answer":{"option_ids":["A"],"grading_mode":"exact"},'
-                            '"explanation":"顶点。","keywords":["concept:vertex"]}],'
-                            '"total_points":1}'
-                        )
-                    ]
-                }
-            return {"messages": [AIMessage("{}")]}
-
-    def fake_create_agent(_model: Any, *_tools: Any, name: str, **kwargs: Any) -> FakeAgent:
-        return FakeAgent(name, kwargs.get("tools", []))
-
-    monkeypatch.setattr("lingxilearn.agents.graph.create_agent", fake_create_agent)
-    settings = Settings(_env_file="", agent_task_dir=tmp_path)
-    store = ArtifactStore(settings)
-
-    async def validate_intro(_task_id: str) -> dict[str, Any]:
-        return {"ok": True, "contract": "lesson-intro-html.v1"}
-
-    async def validate_deck(_task_id: str) -> dict[str, Any]:
-        return {"ok": True, "build": {"ok": True}, "validation": {"ok": True}}
-
-    async def persist(_agent: str, _value: dict[str, Any]) -> None:
-        return None
-
-    monkeypatch.setattr(store, "validate_lesson_intro", validate_intro)
-    monkeypatch.setattr(store, "build_and_validate_deck", validate_deck)
-    graph = build_agent_graph(
-        model=object(),
-        settings=settings,
-        task_id="deck-recursion-test",
-        artifacts=store,
-        persist_result=persist,
-    )
-
-    result = await graph.ainvoke(
-        {"task_id": "deck-recursion-test", "prompt": "解释二次函数顶点", "errors": []}
-    )
-
-    assert result["status"] == "awaiting_user"
-    assert result["deck_result"]["status"] == "ready"
-
-
 @pytest.mark.asyncio
 async def test_missing_deepseek_key_is_a_durable_failed_task(tmp_path: Path) -> None:
     suffix = uuid4().hex
@@ -513,7 +273,10 @@ async def test_lesson_intro_timeout_draft_is_recoverable(tmp_path: Path) -> None
     store = ArtifactStore(settings)
     intent = IntentContext(topic="TCP 协议", learning_objective="理解可靠传输")
     draft = ArtifactDraft(store, "timeout-task", "lesson-intro")
-    draft.write("lesson-intro.html", _lesson_intro_fallback(intent))
+    draft.write(
+        "lesson-intro.html",
+        _lesson_intro_fallback(intent.topic, intent.learning_objective),
+    )
     recovered = await store.recover_lesson_intro_draft("timeout-task")
     assert recovered is not None
     assert recovered["recovered"] is True

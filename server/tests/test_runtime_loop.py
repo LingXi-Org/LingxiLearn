@@ -119,9 +119,8 @@ REGISTRY = [
 
 
 async def _seed_registry(runtime) -> None:
-    from lingxilearn.state.skill_catalog import SkillManifest
-
     from lingxilearn.state.capabilities import parse
+    from lingxilearn.state.skill_catalog import SkillManifest
 
     await runtime.sync_skill_manifests(
         [
