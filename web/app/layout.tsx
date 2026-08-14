@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from 'next'
 import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import '@/app/_styles/globals.css'
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import { LingxiIdentityProvider } from '@/lib/lingxi/lingxi-identity-provider'
-import { season } from '@/app/_styles/fonts/season/season'
 import { QueryProvider } from '@/app/_shell/providers/query-provider'
+import { season } from '@/app/_styles/fonts/season/season'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -22,6 +23,21 @@ export const metadata: Metadata = {
   },
   description: '面向学习任务的 LingxiGraph 智能学习工作台。',
   applicationName: '灵犀智学',
+  icons: {
+    icon: [
+      {
+        url: LINGXI_BRAND_ASSETS.faviconLight,
+        media: '(prefers-color-scheme: light)',
+        type: 'image/x-icon',
+      },
+      {
+        url: LINGXI_BRAND_ASSETS.faviconDark,
+        media: '(prefers-color-scheme: dark)',
+        type: 'image/x-icon',
+      },
+    ],
+    apple: LINGXI_BRAND_ASSETS.faviconDarkCircle,
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

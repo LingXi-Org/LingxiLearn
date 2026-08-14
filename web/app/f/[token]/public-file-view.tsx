@@ -6,7 +6,7 @@ import { Download } from '@sim/emcn/icons'
 import Link from 'next/link'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
 import { DesktopTitleBarLane } from '@/app/_shell/desktop-title-bar'
-import { SimWordmark } from '@/app/(landing)/components/navbar/components'
+import { LingxiWordmark } from '@/app/(landing)/components/navbar/components'
 import { buildProvenance } from '@/app/f/[token]/utils'
 import { FileViewer } from '@/app/workspace/[workspaceId]/files/components/file-viewer'
 import { useBrandConfig } from '@/ee/whitelabeling'
@@ -73,13 +73,13 @@ export function PublicFileView({
           {!brand.logoUrl && (
             <>
               <Link
-                href='https://sim.ai'
+                href='/'
                 target='_blank'
                 rel='noopener noreferrer'
-                aria-label='Sim home'
+                aria-label='灵犀智学首页'
                 className='flex shrink-0 items-center'
               >
-                <SimWordmark />
+                <LingxiWordmark />
               </Link>
               <div className='h-5 w-px shrink-0 bg-[var(--border)]' />
             </>

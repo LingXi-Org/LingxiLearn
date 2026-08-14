@@ -1,15 +1,15 @@
 import { Body, Container, Font, Head, Html, Img, Preview, Section } from '@react-email/components'
 import { baseStyles } from '@/components/emails/_styles'
 import { EmailFooter } from '@/components/emails/components/email-footer'
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 import { getBrandConfig } from '@/ee/whitelabeling'
 
 /**
- * Wordmark display size — exactly 1/4 of `wordmark.png`'s intrinsic 272×164.
- * The asset is a 4x source and must stay that way, since email clients do no
- * responsive image selection; changing one dimension alone distorts the mark.
+ * Canonical wordmark display size for email clients. The source is an SVG, so
+ * both dimensions are supplied to keep the fallback layout stable.
  */
-const WORDMARK_SIZE = { height: '41', width: '68' } as const
+const WORDMARK_SIZE = { height: '29', width: '68' } as const
 
 /** Whitelabeled logos are arbitrary aspect ratios, so only height is pinned. */
 const CUSTOM_LOGO_SIZE = { height: '34' } as const
@@ -68,7 +68,7 @@ export function EmailLayout({
         <Container style={baseStyles.container}>
           <Section style={baseStyles.header}>
             <Img
-              src={brand.logoUrl || `${baseUrl}/brand/color/email/wordmark.png`}
+              src={brand.wordmarkUrl || `${baseUrl}${LINGXI_BRAND_ASSETS.wordmarkOnLight}`}
               alt={brand.name}
               {...(hasCustomLogo ? CUSTOM_LOGO_SIZE : WORDMARK_SIZE)}
               style={hasCustomLogo ? { display: 'block', width: 'auto' } : { display: 'block' }}

@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import { SITE_URL } from '@/lib/urls'
 
 /** Shared OpenGraph/Twitter card image for landing pages. */
-const OG_IMAGE_URL = '/logo/426-240/reverse/small.png'
-const OG_IMAGE_WIDTH = 2130
-const OG_IMAGE_HEIGHT = 1200
+const OG_IMAGE_URL = LINGXI_BRAND_ASSETS.wordmarkOnLight
+const OG_IMAGE_WIDTH = 5064
+const OG_IMAGE_HEIGHT = 2169
 
 interface LandingMetadataInput {
   /** Absolute `<title>`, rendered as-is (no site template applied). */

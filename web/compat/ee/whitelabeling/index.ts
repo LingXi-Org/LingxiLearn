@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import type { BrandConfig, ThemeColors } from '@/lib/branding/types'
 
 const LINGXI_BRAND: BrandConfig = {
   name: 'Lingxi',
-  logoUrl: '/logo_icon_black.svg',
-  wordmarkUrl: '/logo_icon_black.svg',
-  faviconUrl: '/favicon.ico',
+  logoUrl: LINGXI_BRAND_ASSETS.iconOnLight,
+  wordmarkUrl: LINGXI_BRAND_ASSETS.wordmarkOnLight,
+  faviconUrl: LINGXI_BRAND_ASSETS.faviconLight,
   supportEmail: undefined,
   documentationUrl: undefined,
   termsUrl: '/terms',

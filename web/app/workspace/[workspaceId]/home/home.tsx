@@ -19,10 +19,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { usePostHog } from 'posthog-js/react'
-import {
-  LandingPromptStorage,
-  MothershipHandoffStorage,
-} from '@/lib/core/utils/browser-storage'
+import { LandingPromptStorage, MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import {
   addMothershipContexts,
   MOTHERSHIP_SEND_MESSAGE_EVENT,
@@ -543,8 +540,10 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
   const showEmptyState = !hasMessages && !showChatSkeleton
 
   return (
-    <div className={cn('relative flex h-full bg-[var(--bg)]', RESOURCE_HEADER_CLASSES.layout)}>
-      <div className='relative flex h-full min-w-[240px] flex-1 flex-col'>
+    <div
+      className={cn('relative flex h-full min-w-0 bg-[var(--bg)]', RESOURCE_HEADER_CLASSES.layout)}
+    >
+      <div className='relative flex h-full min-w-0 flex-1 flex-col'>
         {showEmptyState && (
           <div
             className={cn(

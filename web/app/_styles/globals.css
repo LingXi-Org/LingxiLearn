@@ -10,7 +10,7 @@
  * @see stores/constants.ts for the source of truth
  */
 :root {
-  --sidebar-width: 0px; /* 0 outside workspace; blocking script always sets actual value on workspace pages */
+  --sidebar-width: 238px; /* Sim's expanded width; the workspace shell scopes its own collapsed width */
   --sidebar-collapsed-width: 51px; /* icon rail on web; desktop overrides to 0 before first paint */
   --sidebar-expanded-width: 238px; /* SIDEBAR_WIDTH.DEFAULT; the width to restore to, held even while collapsed */
   --desktop-title-bar-height: 0px; /* macOS traffic-light lane; desktop overrides before first paint */
@@ -267,6 +267,28 @@ html[data-sim-desktop-title-bar="inset"]:has(.workspace-content-shell[data-sideb
 
 .sidebar-container.is-resizing {
   transition: none;
+}
+
+/* The native workspace keeps the rail rigid and lets the content pane yield.
+   On a compact viewport the resource surface becomes an in-pane sheet instead
+   of forcing the conversation column below an unusable width. */
+@media (max-width: 860px) {
+  .workspace-content-shell {
+    padding: 0;
+  }
+
+  .workspace-content-window {
+    border-radius: 0;
+    border-width: 0;
+  }
+
+  .workspace-resource-panel:not([data-collapsed]) {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 100% !important;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 /* Suppress width/transform transitions on the chrome wrappers during a

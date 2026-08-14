@@ -10,7 +10,7 @@ import {
   type SettingsSection,
   type StandaloneSettingsPlane,
 } from '@/components/settings/navigation'
-import { SimWordmark } from '@/app/(landing)/components/navbar/components'
+import { LingxiWordmark } from '@/app/(landing)/components/navbar/components'
 import { useSettingsDirtyStore } from '@/stores/settings/dirty/store'
 
 /**
@@ -101,11 +101,11 @@ export function SettingsSidebar<Section extends SettingsSection>({
         {SETTINGS_PLANE_CHROME[plane].showWordmark ? (
           <button
             type='button'
-            aria-label='Sim home'
+            aria-label='灵犀智学首页'
             onClick={() => requestLeave(() => router.push(LANDING_HREF))}
             className='flex h-[30px] flex-shrink-0 items-center px-2 transition-opacity hover:opacity-70'
           >
-            <SimWordmark />
+            <LingxiWordmark />
           </button>
         ) : (
           <SidebarTooltip label='Back' enabled={showCollapsedTooltips}>

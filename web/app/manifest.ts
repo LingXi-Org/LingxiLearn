@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next'
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 
 export const dynamic = 'force-static'
 export const revalidate = 3600
@@ -16,7 +17,11 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait-primary',
     icons: [
       {
-        src: '/favicon.ico',
+        src: LINGXI_BRAND_ASSETS.faviconDarkCircle,
+        type: 'image/x-icon',
+      },
+      {
+        src: LINGXI_BRAND_ASSETS.faviconLight,
         type: 'image/x-icon',
       },
     ],

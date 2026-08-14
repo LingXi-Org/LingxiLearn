@@ -1,19 +1,14 @@
 'use client'
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Skeleton, Tooltip, toast } from '@sim/emcn'
-import {
-  Download,
-  FileX,
-  Folder as FolderIcon,
-  Library,
-  SquareArrowUpRight,
-} from '@sim/emcn/icons'
+import { Button, Skeleton, Tooltip } from '@sim/emcn'
+import { Download, FileX, Folder as FolderIcon, Library, SquareArrowUpRight } from '@sim/emcn/icons'
 import { createLogger } from '@sim/logger'
 import { useRouter } from 'next/navigation'
 import { isApiClientError } from '@/lib/api/client/errors'
 import type { FilePreviewSession } from '@/lib/copilot/request/session'
-import { canonicalWorkspaceFilePath } from '@/lib/copilot/vfs/path-utils'
+import { tryCanonicalWorkspaceFilePath } from '@/lib/copilot/vfs/path-utils'
+import { LingxiArtifactResource } from '@/lib/lingxi/components/lingxi-artifact-resource'
 import { triggerFileDownload } from '@/lib/uploads/client/download'
 import { getFileExtension, getMimeTypeFromExtension } from '@/lib/uploads/utils/file-utils'
 import {
@@ -25,7 +20,6 @@ import type { BrowserPanelOverlayController } from '@/app/workspace/[workspaceId
 import { BrowserSession } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/browser-session/browser-session'
 import { GenericResourceContent } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/generic-resource-content'
 import { TerminalSession } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/terminal-session/terminal-session'
-import { LingxiArtifactResource } from '@/lib/lingxi/components/lingxi-artifact-resource'
 import {
   RESOURCE_TAB_ICON_BUTTON_CLASS,
   RESOURCE_TAB_ICON_CLASS,
@@ -414,6 +408,15 @@ function EmbeddedTableActions({ workspaceId, tableId }: EmbeddedTableActionsProp
 
 const fileLogger = createLogger('EmbeddedFileActions')
 
+function matchesWorkspaceFilePath(
+  file: { folderPath?: string | null; name: string },
+  filePath: string
+): boolean {
+  return (
+    tryCanonicalWorkspaceFilePath({ folderPath: file.folderPath, name: file.name }) === filePath
+  )
+}
+
 interface EmbeddedFileActionsProps {
   workspaceId: string
   fileId: string
@@ -424,13 +427,7 @@ function EmbeddedFileActions({ workspaceId, fileId, filePath }: EmbeddedFileActi
   const router = useRouter()
   const { data: files = [] } = useWorkspaceFiles(workspaceId)
   const file = useMemo(
-    () =>
-      files.find(
-        (f) =>
-          f.id === fileId ||
-          (filePath &&
-            canonicalWorkspaceFilePath({ folderPath: f.folderPath, name: f.name }) === filePath)
-      ),
+    () => files.find((f) => f.id === fileId || (filePath && matchesWorkspaceFilePath(f, filePath))),
     [files, fileId, filePath]
   )
 
@@ -512,13 +509,7 @@ function EmbeddedFile({
   const { canEdit } = useUserPermissionsContext()
   const { data: files = [], isLoading, isFetching } = useWorkspaceFiles(workspaceId)
   const file = useMemo(
-    () =>
-      files.find(
-        (f) =>
-          f.id === fileId ||
-          (filePath &&
-            canonicalWorkspaceFilePath({ folderPath: f.folderPath, name: f.name }) === filePath)
-      ),
+    () => files.find((f) => f.id === fileId || (filePath && matchesWorkspaceFilePath(f, filePath))),
     [files, fileId, filePath]
   )
 
@@ -587,7 +578,9 @@ function EmbeddedFolder({ workspaceId, folderId }: EmbeddedFolderProps) {
   return (
     <div className='flex h-full flex-col overflow-y-auto p-6'>
       <h2 className='mb-4 text-[16px] text-[var(--text-primary)]'>{folder.name}</h2>
-      <p className='text-[13px] text-[var(--text-muted)]'>This folder contains no editable resources.</p>
+      <p className='text-[13px] text-[var(--text-muted)]'>
+        This folder contains no editable resources.
+      </p>
     </div>
   )
 }

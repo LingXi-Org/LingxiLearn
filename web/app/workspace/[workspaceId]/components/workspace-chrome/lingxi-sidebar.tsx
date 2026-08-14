@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { cn, Tooltip } from '@sim/emcn'
+import { Chip, ChipLink, cn, Tooltip } from '@sim/emcn'
 import {
   Database,
   Files,
@@ -15,6 +15,7 @@ import {
 } from '@sim/emcn/icons'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import { api } from '@/lib/lingxi/api'
 import type { AgentTaskListItem } from '@/lib/lingxi/types'
 
@@ -84,35 +85,31 @@ function SidebarRow({
   disabled?: boolean
   badge?: string
 }) {
-  const content = (
-    <span
-      className={cn(
-        'group flex h-[30px] w-full items-center gap-2 rounded-[6px] px-2 text-[12px] transition-colors',
-        collapsed && 'justify-center px-0',
-        active
-          ? 'bg-[var(--surface-active)] text-[var(--text-primary)]'
-          : 'text-[var(--text-secondary)] hover-hover:bg-[var(--surface-hover)] hover-hover:text-[var(--text-primary)]',
-        disabled &&
-          'cursor-not-allowed opacity-50 hover-hover:bg-transparent hover-hover:text-[var(--text-secondary)]'
-      )}
-      aria-disabled={disabled || undefined}
-      title={disabled ? '未接入' : undefined}
-    >
-      <Icon className='size-[16px] shrink-0' />
-      {!collapsed && <span className='min-w-0 flex-1 truncate'>{label}</span>}
-      {!collapsed && badge && (
-        <span className='shrink-0 text-[10px] text-[var(--text-muted)]'>{badge}</span>
-      )}
-    </span>
+  const rowClassName = cn(
+    'h-[30px] min-w-0 rounded-lg',
+    collapsed && 'justify-center px-0 [&>span]:hidden',
+    badge && !collapsed && 'pr-1'
   )
 
   const wrapped =
     href && !disabled ? (
-      <Link href={href}>{content}</Link>
+      <ChipLink href={href} leftIcon={Icon} active={active} fullWidth className={rowClassName}>
+        {!collapsed && <span className='min-w-0 truncate'>{label}</span>}
+        {!collapsed && badge && (
+          <span className='ml-auto shrink-0 text-[10px] text-[var(--text-muted)]'>{badge}</span>
+        )}
+      </ChipLink>
     ) : (
-      <button type='button' className='w-full' disabled={disabled}>
-        {content}
-      </button>
+      <Chip
+        leftIcon={Icon}
+        active={active}
+        fullWidth
+        disabled={disabled}
+        className={rowClassName}
+        title={disabled ? '未接入' : undefined}
+      >
+        {!collapsed && <span className='min-w-0 truncate'>{label}</span>}
+      </Chip>
     )
 
   return (
@@ -148,15 +145,45 @@ export function Sidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
   const taskRows = useMemo(() => tasks.slice(0, 30), [tasks])
 
   return (
-    <aside className='flex h-full min-h-0 w-[var(--sidebar-width)] flex-col border-r border-[var(--border)] bg-[var(--surface-1)] px-2 pb-2 pt-3'>
-      <div className={cn('mb-4 flex items-center gap-2 px-2', compact && 'justify-center px-0')}>
-        <div className='flex size-[24px] shrink-0 items-center justify-center rounded-[7px] bg-[var(--text-primary)] text-[11px] font-semibold text-[var(--text-inverse)]'>
-          灵
-        </div>
-        {!compact && (
-          <span className='truncate text-[13px] font-medium text-[var(--text-primary)]'>灵犀智学</span>
+    <aside className='sidebar-container flex h-full min-h-0 w-full min-w-0 flex-col border-r border-[var(--border)] bg-[var(--surface-1)] px-2 pb-2 pt-3'>
+      <Link
+        href={`/workspace/${workspaceId}/home`}
+        className={cn(
+          'mb-4 flex h-[30px] min-w-0 items-center gap-2 rounded-lg px-2 transition-colors hover-hover:bg-[var(--surface-hover)]',
+          compact && 'justify-center px-0'
         )}
-      </div>
+        aria-label='灵犀智学'
+      >
+        {compact ? (
+          <>
+            <img
+              src={LINGXI_BRAND_ASSETS.iconOnLight}
+              alt='灵犀智学'
+              className='size-[22px] shrink-0 object-contain dark:hidden'
+            />
+            <img
+              src={LINGXI_BRAND_ASSETS.iconOnDark}
+              alt=''
+              aria-hidden='true'
+              className='hidden size-[22px] shrink-0 object-contain dark:block'
+            />
+          </>
+        ) : (
+          <>
+            <img
+              src={LINGXI_BRAND_ASSETS.wordmarkOnLight}
+              alt='灵犀智学'
+              className='h-[22px] w-auto max-w-[148px] shrink-0 object-contain object-left dark:hidden'
+            />
+            <img
+              src={LINGXI_BRAND_ASSETS.wordmarkOnDark}
+              alt=''
+              aria-hidden='true'
+              className='hidden h-[22px] w-auto max-w-[148px] shrink-0 object-contain object-left dark:block'
+            />
+          </>
+        )}
+      </Link>
 
       <nav className='space-y-1' aria-label='主导航'>
         <SidebarRow

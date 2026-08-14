@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import {
   HOME_PAGE_DESCRIPTION,
   HOME_PAGE_TITLE,
@@ -32,11 +33,11 @@ export const metadata: Metadata = {
     locale: 'zh_CN',
     images: [
       {
-        url: '/logo/426-240/reverse/small.png',
-        width: 2130,
-        height: 1200,
+        url: LINGXI_BRAND_ASSETS.wordmarkOnLight,
+        width: 5064,
+        height: 2169,
         alt: '灵犀智学，面向学习任务的智能工作台',
-        type: 'image/png',
+        type: 'image/svg+xml',
       },
     ],
   },
@@ -47,8 +48,8 @@ export const metadata: Metadata = {
     title: HOME_PAGE_TITLE,
     description: HOME_PAGE_DESCRIPTION,
     images: {
-      url: '/logo/426-240/reverse/small.png',
-      alt: 'Sim，面向团队的 AI 工作空间',
+      url: LINGXI_BRAND_ASSETS.wordmarkOnLight,
+      alt: '灵犀智学，面向学习任务的智能工作台',
     },
   },
   alternates: {

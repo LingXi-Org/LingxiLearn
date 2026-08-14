@@ -11,6 +11,7 @@ import {
   canonicalWorkspaceFilePath,
   decodeVfsPathSegments,
   encodeVfsPathSegments,
+  tryCanonicalWorkspaceFilePath,
 } from '@/lib/copilot/vfs/path-utils'
 
 describe('VFS path utilities', () => {
@@ -39,6 +40,15 @@ describe('VFS path utilities', () => {
         name: 'report.pdf',
       })
     ).toBe('files/Finance%2FLegal/Quarterly/report.pdf')
+  })
+
+  it('ignores malformed legacy folder metadata instead of throwing', () => {
+    expect(
+      tryCanonicalWorkspaceFilePath({ folderPath: 'Reports/', name: 'report.pdf' })
+    ).toBeNull()
+    expect(tryCanonicalWorkspaceFilePath({ folderPath: 'Reports', name: 'report.pdf' })).toBe(
+      'files/Reports/report.pdf'
+    )
   })
 })
 

@@ -1,3 +1,4 @@
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import { SITE_URL } from '@/lib/urls'
 import { JsonLd } from '@/app/(landing)/components/json-ld'
 
@@ -7,9 +8,9 @@ const SITE_JSON_LD = {
     {
       '@type': 'Organization',
       '@id': `${SITE_URL}#organization`,
-      name: 'Sim',
-      alternateName: 'Sim Studio',
-      legalName: 'Sim, Inc',
+      name: '灵犀智学',
+      alternateName: 'LingXi',
+      legalName: '灵犀智学',
       description:
         'Sim 是一个开源 AI 工作空间，帮助团队构建、部署和管理 AI 智能体。连接 1,000+ 个集成和所有主流 LLM，创建能够自动处理真实工作的智能体。',
       url: SITE_URL,
@@ -25,14 +26,14 @@ const SITE_JSON_LD = {
       logo: {
         '@type': 'ImageObject',
         '@id': `${SITE_URL}#logo`,
-        url: `${SITE_URL}/logo/b%26w/text/b%26w.svg`,
-        contentUrl: `${SITE_URL}/logo/b%26w/text/b%26w.svg`,
-        width: 49.78314,
-        height: 24.276,
-        caption: 'Sim 标志',
+        url: `${SITE_URL}${LINGXI_BRAND_ASSETS.wordmarkOnLight}`,
+        contentUrl: `${SITE_URL}${LINGXI_BRAND_ASSETS.wordmarkOnLight}`,
+        width: 5064,
+        height: 2169,
+        caption: '灵犀智学标志',
       },
       image: { '@id': `${SITE_URL}#logo` },
-      brand: { '@type': 'Brand', name: 'Sim' },
+      brand: { '@type': 'Brand', name: '灵犀智学' },
       sameAs: [
         'https://x.com/simdotai',
         'https://github.com/simstudioai/sim',
@@ -58,9 +59,8 @@ const SITE_JSON_LD = {
       '@type': 'WebSite',
       '@id': `${SITE_URL}#website`,
       url: SITE_URL,
-      name: 'Sim，AI 工作空间｜构建、部署和管理 AI 智能体',
-      description:
-        'Sim 是一个开源 AI 工作空间，帮助团队构建、部署和管理 AI 智能体。连接 1,000+ 个集成和所有主流 LLM，加入超过 100,000 名构建者的行列。',
+      name: '灵犀智学｜面向学习任务的智能工作台',
+      description: '灵犀智学基于 LingxiGraph，为学习任务提供连续对话、课程资源和知识检测。',
       publisher: { '@id': `${SITE_URL}#organization` },
       inLanguage: 'zh-CN',
     },

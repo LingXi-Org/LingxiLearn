@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { GithubIcon } from '@/components/icons'
-import { SimWordmark } from '@/app/(landing)/components/navbar/components'
+import { LingxiWordmark } from '@/app/(landing)/components/navbar/components'
 import { useBrandConfig } from '@/ee/whitelabeling'
 
 interface ChatHeaderProps {
@@ -58,16 +58,16 @@ export function ChatHeader({ chatConfig, starCount }: ChatHeaderProps) {
             <GithubIcon className='size-[16px]' aria-hidden='true' />
             <span aria-live='polite'>{starCount}</span>
           </a>
-          {/* Only show Sim logo if no custom branding is set */}
+          {/* Only show the LingXi mark if no custom branding is set. */}
 
           <Link
-            href='https://sim.ai'
+            href='/'
             target='_blank'
             rel='noopener noreferrer'
-            aria-label='Sim home'
+            aria-label='灵犀智学首页'
             className='flex items-center'
           >
-            <SimWordmark />
+            <LingxiWordmark />
           </Link>
         </div>
       )}

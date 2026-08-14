@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { ChipLink } from '@/components/ui-kit'
+import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 
 export function AuthShell({
   children,
@@ -14,9 +15,9 @@ export function AuthShell({
       <header>
         <nav className='mx-auto flex w-full max-w-[1446px] items-center px-12 py-4 max-sm:px-5 max-lg:px-8'>
           <Link href='/' aria-label='灵犀智学首页' className='flex h-[30px] items-center gap-2'>
-            <Image src='/logo_icon_black.svg' alt='' width={22} height={22} priority />
+            <Image src={LINGXI_BRAND_ASSETS.iconOnLight} alt='' width={22} height={22} priority />
             <Image
-              src='/lingxi-wordmark-primary.svg'
+              src={LINGXI_BRAND_ASSETS.wordmarkOnLight}
               alt='灵犀智学'
               width={58}
               height={25}

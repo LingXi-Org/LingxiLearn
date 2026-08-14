@@ -50,6 +50,22 @@ export function canonicalWorkspaceFilePath(parts: {
 }
 
 /**
+ * Converts a possibly stale workspace-file record to its VFS path without
+ * allowing malformed legacy folder metadata to break an entire UI surface.
+ */
+export function tryCanonicalWorkspaceFilePath(parts: {
+  folderPath?: string | null
+  name: string
+  prefix?: 'files' | 'recently-deleted/files'
+}): string | null {
+  try {
+    return canonicalWorkspaceFilePath(parts)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Build a map from folderId to its canonical, per-segment-encoded VFS folder
  * path (e.g. `My%20Folder/Sub`), resolving nested folders via `parentId`.
  *
