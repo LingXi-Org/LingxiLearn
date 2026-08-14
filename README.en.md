@@ -168,11 +168,15 @@ The development frontend is available at `http://localhost:3000`; the API runs a
 ```bash
 cp .env.example .env
 # Set database, identity BFF, and port configuration.
+# Pull latest by default. To pin a release, replace latest in both commands
+# with 0.1.0 and set LINGXILEARN_IMAGE_TAG=0.1.0 in .env as well.
+docker pull accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-api:latest
+docker pull accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-web:latest
 docker compose pull
 docker compose up -d
 ```
 
-The default production entry point is `http://localhost:8080`. Production Compose uses CI-built GHCR images; immutable tags can be selected through `LINGXILEARN_API_IMAGE` and `LINGXILEARN_WEB_IMAGE` in `.env`.
+The default production entry point is `http://localhost:8080`. Production Compose pulls API and Web images through `accel.way2api.fun/ghcr.io/lingxi-org` by default. CI publishes both a release tag (currently `0.1.0`) and `latest` for both images; set `LINGXILEARN_IMAGE_TAG` in `.env` to pin a release.
 
 <details>
   <summary>Runtime modes</summary>

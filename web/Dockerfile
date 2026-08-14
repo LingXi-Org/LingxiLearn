@@ -23,6 +23,8 @@ RUN rm -rf out .next && bun run build && test -f .next/standalone/server.js
 
 ARG DOCKER_REGISTRY=docker.m.daocloud.io
 FROM ${DOCKER_REGISTRY}/oven/bun:1.3.14 AS runtime
+ARG LINGXILEARN_VERSION=0.1.0
+LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}"
 
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 NEXT_STATIC_EXPORT=1
