@@ -104,6 +104,10 @@ services:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY:-accel.way2api.fun/docker.io}
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     working_dir: /app
+    # The web app owns Better Auth and the Drizzle client in development, so
+    # it needs the same database connection as the API container. Keep the
+    # shared secrets from the root .env available as well.
+    env_file: [.env]
     command:
       [
         "sh",
@@ -116,6 +120,8 @@ services:
       - lingxilearn-dev-web-next:/app/.next
     environment:
       NODE_ENV: development
+      DATABASE_URL: >-
+        postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
       NEXT_STATIC_EXPORT: "0"
       NEXT_PUBLIC_API_BASE: http://localhost:${LINGXILEARN_PORT:-8080}
       NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
