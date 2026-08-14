@@ -54,6 +54,23 @@ def test_unknown_primitive_fails_closed():
         projector.consume(event(EventKind.NODE_STARTED, node="unregistered_node"))
 
 
+def test_runtime_loop_nodes_are_registered():
+    from lingxilearn.runtime.sim_semantics import PrimitiveCatalog
+
+    catalog = PrimitiveCatalog()
+    catalog.validate(
+        {
+            "interpret_goal",
+            "orchestrate",
+            "dispatch",
+            "observe",
+            "update_state",
+            "evaluate_goal",
+            "await_user",
+        }
+    )
+
+
 def test_retry_translation_is_opt_in_and_only_idempotent():
     from lingxilearn.runtime.sim_semantics import PrimitiveCatalog
 

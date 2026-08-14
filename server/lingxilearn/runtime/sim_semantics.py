@@ -76,6 +76,17 @@ class PrimitiveCatalog:
 # missing entry is an intentional startup/run failure rather than a generic
 # visual node that could conceal a new executable primitive.
 PRIMITIVE_CATALOG: dict[str, Primitive] = {
+    # Runtime loop nodes are executable graph primitives too.  They must be
+    # projected with the same closed-world policy as provider/tool nodes;
+    # otherwise the first native NODE_STARTED event fails before the UI can
+    # receive any trace data.
+    "interpret_goal": Primitive("router_v2", "control", True),
+    "orchestrate": Primitive("router_v2", "control", True),
+    "dispatch": Primitive("router_v2", "control", True),
+    "observe": Primitive("router_v2", "control", True),
+    "update_state": Primitive("router_v2", "control", True),
+    "evaluate_goal": Primitive("router_v2", "control", True),
+    "await_user": Primitive("human_in_the_loop", "interrupt"),
     "recognize_intent": Primitive("router_v2", "condition", True),
     "intent": Primitive("router_v2", "condition", True),
     "lecture_hook": Primitive("agent", "agent"),
