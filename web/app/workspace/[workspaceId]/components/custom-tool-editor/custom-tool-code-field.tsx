@@ -17,15 +17,28 @@ import {
   type SchemaParameter,
 } from '@/app/workspace/[workspaceId]/components/custom-tool-editor/custom-tool-schema'
 import type { useCodeGeneration } from '@/app/workspace/[workspaceId]/components/custom-tool-editor/use-custom-tool-generation'
-import {
-  checkEnvVarTrigger,
-  EnvVarDropdown,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/env-var-dropdown'
-import {
-  checkTagTrigger,
-  TagDropdown,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/tag-dropdown/tag-dropdown'
-import { CodeEditor } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/tool-input/components/code-editor/code-editor'
+
+const checkEnvVarTrigger = (text: string, cursorPosition: number) => {
+  const match = text.slice(0, cursorPosition).match(/\{\{([\w-]*)$/)
+  return { show: Boolean(match), searchTerm: match?.[1] ?? '' }
+}
+const checkTagTrigger = (text: string, cursorPosition: number) => {
+  const match = text.slice(0, cursorPosition).match(/<([\w-]*)$/)
+  return { show: Boolean(match), searchTerm: match?.[1] ?? '' }
+}
+const CodeEditor = ({ value, onChange, placeholder, minHeight, disabled, onKeyDown }: any) => (
+  <textarea
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    placeholder={placeholder}
+    disabled={disabled}
+    onKeyDown={onKeyDown}
+    className='min-h-[240px] w-full resize-y rounded-md border border-[var(--border)] bg-[var(--surface-1)] p-3 font-mono text-sm'
+    style={{ minHeight }}
+  />
+)
+const EnvVarDropdown = (_props: any) => null
+const TagDropdown = (_props: any) => null
 
 const logger = createLogger('CustomToolCodeField')
 

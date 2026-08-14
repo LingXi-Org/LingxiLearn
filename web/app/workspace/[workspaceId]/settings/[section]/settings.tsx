@@ -14,6 +14,12 @@ import {
   type SettingsSection,
 } from '@/app/workspace/[workspaceId]/settings/navigation'
 
+const NotIntegratedSection = ({ title }: { title: string }) => (
+  <main className='flex min-h-[240px] items-center justify-center p-8'>
+    <p className='text-sm text-[var(--text-secondary)]'>{title}暂未开放。</p>
+  </main>
+)
+
 const Admin = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/admin/admin').then((m) => m.Admin)
 )
@@ -25,7 +31,7 @@ const ApiKeys = dynamic(() =>
 const BYOK = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/byok/byok').then((m) => m.BYOK)
 )
-const Forks = dynamic(() => import('@/ee/workspace-forking/components/forks').then((m) => m.Forks))
+const Forks = (_props: any) => <NotIntegratedSection title='工作区分支' />
 const Secrets = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/secrets/secrets').then((m) => m.Secrets)
 )
@@ -78,29 +84,13 @@ const WorkflowMcpServers = dynamic(() =>
     '@/app/workspace/[workspaceId]/settings/components/workflow-mcp-servers/workflow-mcp-servers'
   ).then((m) => m.WorkflowMcpServers)
 )
-const AccessControl = dynamic(() =>
-  import('@/ee/access-control/components/access-control').then((m) => m.AccessControl)
-)
-const CustomBlocks = dynamic(() =>
-  import('@/ee/custom-blocks/components/custom-blocks').then((m) => m.CustomBlocks)
-)
-const AuditLogs = dynamic(() =>
-  import('@/ee/audit-logs/components/audit-logs').then((m) => m.AuditLogs)
-)
-const SSO = dynamic(() => import('@/ee/sso/components/sso-settings').then((m) => m.SSO))
-const SessionPolicySettings = dynamic(() =>
-  import('@/ee/session-policy/components/session-policy-settings').then(
-    (m) => m.SessionPolicySettings
-  )
-)
-const DataRetentionSettings = dynamic(() =>
-  import('@/ee/data-retention/components/data-retention-settings').then(
-    (m) => m.DataRetentionSettings
-  )
-)
-const DataDrainsSettings = dynamic(() =>
-  import('@/ee/data-drains/components/data-drains-settings').then((m) => m.DataDrainsSettings)
-)
+const AccessControl = (_props: any) => <NotIntegratedSection title='访问控制' />
+const CustomBlocks = (_props: any) => <NotIntegratedSection title='自定义模块' />
+const AuditLogs = (_props: any) => <NotIntegratedSection title='审计日志' />
+const SSO = (_props: any) => <NotIntegratedSection title='单点登录' />
+const SessionPolicySettings = (_props: any) => <NotIntegratedSection title='会话策略' />
+const DataRetentionSettings = (_props: any) => <NotIntegratedSection title='数据保留' />
+const DataDrainsSettings = (_props: any) => <NotIntegratedSection title='数据导出' />
 const Desktop = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/desktop/desktop').then((m) => m.Desktop)
 )
@@ -112,13 +102,7 @@ const Terminal = dynamic(() =>
     (m) => m.Terminal
   )
 )
-const WhitelabelingSettings = dynamic(
-  () =>
-    import('@/ee/whitelabeling/components/whitelabeling-settings').then(
-      (m) => m.WhitelabelingSettings
-    ),
-  { ssr: false }
-)
+const WhitelabelingSettings = (_props: any) => <NotIntegratedSection title='品牌设置' />
 
 interface SettingsPageProps {
   section: SettingsSection

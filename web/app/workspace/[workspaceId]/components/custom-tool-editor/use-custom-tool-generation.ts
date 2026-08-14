@@ -1,8 +1,21 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { SchemaParameter } from '@/app/workspace/[workspaceId]/components/custom-tool-editor/custom-tool-schema'
-import { useWand } from '@/app/workspace/[workspaceId]/w/[workflowId]/hooks/use-wand'
+
+function useWand({ currentValue, onStreamStart, onGeneratedContent }: any) {
+  const [isLoading, setIsLoading] = useState(false)
+  return {
+    isLoading,
+    isStreaming: false,
+    generate: async () => {
+      setIsLoading(true)
+      onStreamStart?.()
+      onGeneratedContent?.(currentValue)
+      setIsLoading(false)
+    },
+  }
+}
 
 const SCHEMA_PROMPT = `You are an expert programmer specializing in creating OpenAI function calling format JSON schemas for custom tools.
 Generate ONLY the JSON schema based on the user's request.

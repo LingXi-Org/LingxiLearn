@@ -57,10 +57,10 @@ import type {
 } from '@/app/workspace/[workspaceId]/components'
 import {
   EMPTY_CELL_PLACEHOLDER,
-  ownerCell,
   Resource,
-  timeCell,
 } from '@/app/workspace/[workspaceId]/components'
+import { ownerCell } from '@/app/workspace/[workspaceId]/components/resource/components/owner-cell'
+import { timeCell } from '@/app/workspace/[workspaceId]/components/resource/components/time-cell'
 import type {
   MoveOptionNode,
   SortableResource,

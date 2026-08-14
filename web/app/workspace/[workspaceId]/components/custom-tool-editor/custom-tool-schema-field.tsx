@@ -2,7 +2,18 @@
 
 import { SCHEMA_PLACEHOLDER } from '@/app/workspace/[workspaceId]/components/custom-tool-editor/custom-tool-schema'
 import type { useSchemaGeneration } from '@/app/workspace/[workspaceId]/components/custom-tool-editor/use-custom-tool-generation'
-import { CodeEditor } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/tool-input/components/code-editor/code-editor'
+
+const CodeEditor = ({ value, onChange, placeholder, minHeight, disabled, error }: any) => (
+  <textarea
+    value={value}
+    onChange={(event) => onChange(event.target.value)}
+    placeholder={placeholder}
+    disabled={disabled}
+    aria-invalid={error}
+    className='min-h-[240px] w-full resize-y rounded-md border border-[var(--border)] bg-[var(--surface-1)] p-3 font-mono text-sm'
+    style={{ minHeight }}
+  />
+)
 
 interface CustomToolSchemaFieldProps {
   value: string

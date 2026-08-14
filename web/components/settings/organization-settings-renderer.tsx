@@ -6,6 +6,12 @@ import { usePostHog } from 'posthog-js/react'
 import type { OrganizationSettingsSection } from '@/components/settings/navigation'
 import { captureEvent } from '@/lib/posthog/client'
 
+const NotIntegratedSection = ({ title }: { title: string }) => (
+  <main className='flex min-h-[240px] items-center justify-center p-8'>
+    <p className='text-sm text-[var(--text-secondary)]'>{title}暂未开放。</p>
+  </main>
+)
+
 const TeamManagement = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/team-management/team-management').then(
     (module) => module.TeamManagement
@@ -16,35 +22,13 @@ const Billing = dynamic(() =>
     (module) => module.Billing
   )
 )
-const AccessControl = dynamic(() =>
-  import('@/ee/access-control/components/access-control').then((module) => module.AccessControl)
-)
-const AuditLogs = dynamic(() =>
-  import('@/ee/audit-logs/components/audit-logs').then((module) => module.AuditLogs)
-)
-const SSO = dynamic(() => import('@/ee/sso/components/sso-settings').then((module) => module.SSO))
-const SessionPolicySettings = dynamic(() =>
-  import('@/ee/session-policy/components/session-policy-settings').then(
-    (module) => module.SessionPolicySettings
-  )
-)
-const DataRetentionSettings = dynamic(() =>
-  import('@/ee/data-retention/components/data-retention-settings').then(
-    (module) => module.DataRetentionSettings
-  )
-)
-const DataDrainsSettings = dynamic(() =>
-  import('@/ee/data-drains/components/data-drains-settings').then(
-    (module) => module.DataDrainsSettings
-  )
-)
-const WhitelabelingSettings = dynamic(
-  () =>
-    import('@/ee/whitelabeling/components/whitelabeling-settings').then(
-      (module) => module.WhitelabelingSettings
-    ),
-  { ssr: false }
-)
+const AccessControl = (_props: any) => <NotIntegratedSection title='访问控制' />
+const AuditLogs = (_props: any) => <NotIntegratedSection title='审计日志' />
+const SSO = (_props: any) => <NotIntegratedSection title='单点登录' />
+const SessionPolicySettings = (_props: any) => <NotIntegratedSection title='会话策略' />
+const DataRetentionSettings = (_props: any) => <NotIntegratedSection title='数据保留' />
+const DataDrainsSettings = (_props: any) => <NotIntegratedSection title='数据导出' />
+const WhitelabelingSettings = (_props: any) => <NotIntegratedSection title='品牌设置' />
 
 interface OrganizationSettingsRendererProps {
   organizationId: string
