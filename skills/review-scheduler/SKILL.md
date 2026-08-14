@@ -11,13 +11,13 @@ metadata:
   display-description: 决定哪些知识点该复习、下次复习安排在什么时候，用于和「学新内容」竞争排序。
   output-language: zh-CN
   output-contract: review-schedule-result.v1
-  execution-mode: non-blocking-structured-generation
+  execution-mode: synchronous-structured-generation
   phase: learner-model
   critical-path: false
   learner-facing: false
   state-write-mode: none
   parallel-safe: true
-  latency-class: background
+  latency-class: interactive
   capabilities: review.schedule
   provider: review_scheduler
   ownership: dedicated

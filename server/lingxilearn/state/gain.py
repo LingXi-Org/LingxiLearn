@@ -189,11 +189,21 @@ def estimate(
         case Capability.CONTENT_VISUAL:
             if view.has_visual and not requested:
                 return _clamp(capability, 0.08, "可视化已存在")
+            if blocked:
+                return _clamp(
+                    capability, 0.18 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，先补前置更划算",
+                )
             # Visuals pay off most on hard material the learner is stuck on.
             base = 0.20 + 0.35 * view.difficulty + 0.25 * (1.0 if view.is_weak else 0.0)
             return _clamp(capability, base + nudge, "内容偏抽象，图形化解释有助于建立直觉")
 
         case Capability.TEACH_EXPLAIN:
+            if blocked:
+                return _clamp(
+                    capability, 0.18 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，讲解会落空",
+                )
             if view.misconceptions:
                 return _clamp(
                     capability, 0.60 + 0.30 * headroom + nudge,
@@ -204,6 +214,11 @@ def estimate(
             return _clamp(capability, 0.20 + 0.30 * headroom + nudge, "可以补充针对性讲解")
 
         case Capability.TEACH_STRATEGY:
+            if blocked:
+                return _clamp(
+                    capability, 0.20 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，教学动作收益有限",
+                )
             # The default teaching move: always reasonable, never dominant.
             return _clamp(
                 capability, 0.30 + 0.30 * headroom + nudge, "根据当前证据选择下一步教学动作"
@@ -217,6 +232,13 @@ def estimate(
         case Capability.ASSESS_GENERATE:
             if view.has_open_quiz:
                 return _clamp(capability, 0.05 + nudge, "已有未作答的检测题")
+            if blocked:
+                # Testing on top of a broken prerequisite produces evidence you
+                # could already predict, which is the definition of low information.
+                return _clamp(
+                    capability, 0.15 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，此时出题信息量很低",
+                )
             if view.evidence_is_thin:
                 return _clamp(
                     capability, 0.55 + 0.25 * headroom + nudge, "证据太少，掌握度估计不可信"
