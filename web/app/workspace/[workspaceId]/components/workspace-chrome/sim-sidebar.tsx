@@ -117,7 +117,7 @@ const SidebarNavItem = memo(function SidebarNavItem({
     item.disabled && 'cursor-not-allowed opacity-50 hover-hover:bg-transparent'
   )
   const label = (
-    <span className='sidebar-collapse-hide min-w-0 truncate'>
+    <span className={cn('sidebar-collapse-hide min-w-0 truncate', collapsed && 'hidden')}>
       {item.label}
       {item.badge && (
         <span className='ml-auto shrink-0 text-[10px] text-[var(--text-muted)]'>{item.badge}</span>
@@ -179,7 +179,7 @@ function SidebarSection({
       <div className='flex h-[18px] shrink-0 items-center'>
         {collapsed ? (
           <div className='flex h-full min-w-0 flex-1 items-center gap-2 px-2'>
-            <span className='sidebar-collapse-hide min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]'>
+            <span className='sidebar-collapse-hide min-w-0 truncate text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]'>
               {title}
             </span>
           </div>
@@ -193,7 +193,7 @@ function SidebarSection({
             aria-expanded={expanded}
             className='group/toggle flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 px-2 text-left'
           >
-            <span className='min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]'>
+            <span className='min-w-0 truncate text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]'>
               {title}
             </span>
             <ChevronDown
@@ -412,7 +412,7 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
         </div>
       </SidebarSection>
 
-      <div className='scrollbar-hide min-h-0 flex-1 overflow-y-auto'>
+      <div className='scrollbar-hide mt-4 min-h-0 flex-1 overflow-y-auto'>
         <SidebarSection title='学习任务' collapsed={compact}>
           <div className='space-y-1'>
             {taskRows.map((task) => (
