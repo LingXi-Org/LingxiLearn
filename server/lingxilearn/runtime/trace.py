@@ -50,7 +50,6 @@ class DecisionRecord:
             "tasks": [
                 {
                     "id": task.id,
-                    "candidate_id": task.candidate_id,
                     "capability": task.capability,
                     "knowledge_point_id": task.knowledge_point_id,
                     "rationale": task.rationale,
@@ -68,10 +67,7 @@ class DecisionRecord:
     def rationale(self) -> str:
         """One learner-readable paragraph explaining this round."""
 
-        # The model's private reasoning is intentionally excluded from both
-        # durable traces and public projections.  Task rationales and the
-        # explicit negotiation text are safe, learner-facing summaries.
-        parts: list[str] = []
+        parts = [self.plan.reasoning.strip()] if self.plan.reasoning.strip() else []
         parts.extend(
             f"{task.capability}：{task.rationale}"
             for task in self.plan.tasks
@@ -131,7 +127,9 @@ class DecisionTracer:
     async def record(self, record: DecisionRecord) -> dict[str, Any]:
         """Write one decision and return the stored row."""
 
-        candidates = [item.to_dict() for item in list(record.candidates)[:MAX_TRACED_CANDIDATES]]
+        candidates = [
+            item.to_dict() for item in list(record.candidates)[:MAX_TRACED_CANDIDATES]
+        ]
         stored = await self._state.record_decision(
             learner_id=self._learner_id,
             task_id=self._task_id,
@@ -170,7 +168,8 @@ class DecisionTracer:
                     "knowledge_point_id": task.knowledge_point_id,
                     "rationale": task.rationale,
                     "done_when": task.done_when.describe(),
-                    "allowed": task.id in {item.id for item in record.guardrails.allowed_tasks},
+                    "allowed": task.id
+                    in {item.id for item in record.guardrails.allowed_tasks},
                 },
             )
         if record.replan_of:

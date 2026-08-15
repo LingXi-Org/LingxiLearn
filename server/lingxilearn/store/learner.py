@@ -146,7 +146,9 @@ class LearnerRepository:
 
         mastery_rows = (
             await s.execute(
-                select(Mastery).where(Mastery.learner_id == learner_id).order_by(Mastery.concept)
+                select(Mastery)
+                .where(Mastery.learner_id == learner_id)
+                .order_by(Mastery.concept)
             )
         ).scalars()
         misconception_rows = (
@@ -176,8 +178,12 @@ class LearnerRepository:
                 {
                     "tag": row.tag,
                     "occurrence_count": row.occurrence_count,
-                    "first_seen_at": row.first_seen_at.isoformat() if row.first_seen_at else None,
-                    "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
+                    "first_seen_at": row.first_seen_at.isoformat()
+                    if row.first_seen_at
+                    else None,
+                    "last_seen_at": row.last_seen_at.isoformat()
+                    if row.last_seen_at
+                    else None,
                 }
                 for row in misconception_rows
             ],
@@ -390,7 +396,11 @@ class LearnerRepository:
     async def _add_misconceptions(
         self, s: AsyncSession, learner_id: str, tags: Iterable[str]
     ) -> None:
-        normalized_tags = {str(tag).strip().lower() for tag in tags if str(tag).strip()}
+        normalized_tags = {
+            str(tag).strip().lower()
+            for tag in tags
+            if str(tag).strip()
+        }
         for tag in normalized_tags:
             row = await s.scalar(
                 select(Misconception).where(

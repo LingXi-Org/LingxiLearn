@@ -86,7 +86,9 @@ def mastery_gain(decisions: Sequence[Mapping[str, Any]]) -> dict[str, float]:
         for point in after:
             first.setdefault(point, _mastery_of(after, point))
             last[point] = _mastery_of(after, point)
-    return {point: round(last[point] - first.get(point, DEFAULT_MASTERY), 4) for point in last}
+    return {
+        point: round(last[point] - first.get(point, DEFAULT_MASTERY), 4) for point in last
+    }
 
 
 def prerequisite_closure(decisions: Sequence[Mapping[str, Any]]) -> float:
@@ -154,7 +156,9 @@ def evaluate_task(
     for decision in decisions:
         before = decision.get("profile_before") or {}
         after = decision.get("profile_after") or {}
-        moved = any(_mastery_of(before, point) != _mastery_of(after, point) for point in after)
+        moved = any(
+            _mastery_of(before, point) != _mastery_of(after, point) for point in after
+        )
         if moved and not (decision.get("evidence_ids") or []):
             unsourced += 1
 

@@ -139,7 +139,9 @@ class KnowledgeBase:
                 if not freq:
                     continue
                 idf = math.log(1 + (n - self._df[term] + 0.5) / (self._df[term] + 0.5))
-                norm = freq * (K1 + 1) / (freq + K1 * (1 - B + B * chunk.length / self._avg_len))
+                norm = freq * (K1 + 1) / (
+                    freq + K1 * (1 - B + B * chunk.length / self._avg_len)
+                )
                 score += idf * norm
             if score > 0:
                 scored.append((score, chunk))

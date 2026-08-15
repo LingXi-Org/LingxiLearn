@@ -3,7 +3,7 @@ from pathlib import Path
 from lingxilearn.runtime.candidates import WorldState
 from lingxilearn.runtime.contracts import CandidateAction
 from lingxilearn.runtime.orchestrator import _repair
-from lingxilearn.service import _ProviderEventRuntime
+from lingxilearn.service import _SidecarRuntime
 from lingxilearn.state.capabilities import Capability
 from lingxilearn.state.gain import ProfileView
 from lingxilearn.state.session_state import Goal
@@ -30,8 +30,8 @@ def test_every_discovered_skill_has_a_user_safe_status_line() -> None:
     assert all(manifest.status_line.strip() for manifest in discover(SKILLS))
 
 
-def test_provider_runtime_preserves_learner_facing_output() -> None:
-    runtime = _ProviderEventRuntime("dialog.converse")
+def test_sidecar_runtime_preserves_learner_facing_output() -> None:
+    runtime = _SidecarRuntime("dialog.converse")
 
     runtime.emit(
         "agent_task",
@@ -90,7 +90,9 @@ def test_interview_is_forced_until_its_result_is_persisted() -> None:
         critical_path=True,
     )
     goal = Goal(goal_type="learn", topic="TCP", knowledge_points=("kp-1",))
-    with_interview = WorldState(target=ProfileView.unseen("kp-1"), interview_completed=True)
+    with_interview = WorldState(
+        target=ProfileView.unseen("kp-1"), interview_completed=True
+    )
     plan = _repair(
         {"tasks": [], "awaits_user": True},
         goal=goal,

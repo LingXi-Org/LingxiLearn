@@ -18,19 +18,17 @@ capability, a skill, or a subject changes data; it never changes this file.
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
-import json
 import logging
+import asyncio
+from datetime import UTC, datetime
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
 from typing import Annotated, Any, TypedDict
 
 from lingxigraph import END, START, Runtime, StateGraph, interrupt
 
-from ..state.capabilities import info
 from ..state.gain import ProfileView
+from ..state.capabilities import info
 from ..state.session_state import (
     TERMINAL_STATUSES,
     Goal,
@@ -85,7 +83,6 @@ class LoopDeps:
         self,
         *,
         runtime_state: RuntimeStateRepository,
-        repository: Any = None,
         learner_id: str,
         task_id: str,
         model: Any = None,
@@ -102,7 +99,6 @@ class LoopDeps:
         board_lock: asyncio.Lock | None = None,
     ) -> None:
         self.runtime_state = runtime_state
-        self.repository = repository
         self.learner_id = learner_id
         self.task_id = task_id
         self.model = model
@@ -133,9 +129,7 @@ async def _world(
     """Read the learner's current state into the shape the scorer needs."""
 
     rows = await deps.runtime_state.profile_for(deps.learner_id)
-    by_id: dict[str, Mapping[str, Any]] = {
-        str(row["knowledge_point_id"]): row for row in rows
-    }
+    by_id = {str(row["knowledge_point_id"]): row for row in rows}
 
     point = goal.knowledge_points[0] if goal.knowledge_points else ""
     target_row = by_id.get(point)
@@ -144,13 +138,6 @@ async def _world(
         if target_row
         else ProfileView.unseen(point or goal.topic, goal.topic)
     )
-    target_views = tuple(
-        ProfileView.from_row(_as_view_row(by_id[knowledge_point]))
-        if knowledge_point in by_id
-        else ProfileView.unseen(knowledge_point, knowledge_point)
-        for knowledge_point in goal.knowledge_points
-        if knowledge_point
-    ) or (target,)
 
     # Prefer what the profile records; fall back to what a prerequisite
     # analysis produced this run but has not been folded into the profile yet.
@@ -159,17 +146,20 @@ async def _world(
         analysed = (deps.prior_results.get("prerequisites") or {}).get("prerequisites") or []
         prerequisite_ids = [str(item.get("id") or "") for item in analysed]
     prerequisites = tuple(
-        ProfileView.from_row(_as_view_row(by_id[pid])) if pid in by_id else ProfileView.unseen(pid)
+        ProfileView.from_row(_as_view_row(by_id[pid]))
+        if pid in by_id
+        else ProfileView.unseen(pid)
         for pid in prerequisite_ids
         if pid
     )
 
-    artifacts = frozenset(dispatcher.produced_artifacts if dispatcher else deps.prior_artifacts)
+    artifacts = frozenset(
+        dispatcher.produced_artifacts if dispatcher else deps.prior_artifacts
+    )
     results = dispatcher.results if dispatcher else deps.prior_results
     return (
         WorldState(
             target=target,
-            targets=target_views,
             prerequisites=prerequisites,
             due_for_review=tuple(
                 ProfileView.from_row(_as_view_row(row))
@@ -224,7 +214,6 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     dispatcher = Dispatcher(
         DispatchDeps(
             runtime_state=deps.runtime_state,
-            repository=deps.repository,
             learner_id=deps.learner_id,
             task_id=deps.task_id,
             goal=Goal(goal_type="learn", topic=""),
@@ -239,17 +228,14 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     )
     dispatcher.seed_results(deps.prior_results)
     dispatcher.seed_artifacts(deps.prior_artifacts)
-    # The service supplies one task-scoped lock shared with delivery
-    # acknowledgements. Unit callers may omit it and get a local
+    # The service supplies one task-scoped lock shared with sidecars and
+    # delivery acknowledgements. Unit callers may omit it and get a local
     # lock, preserving the loop's standalone contract.
     board_lock = deps.board_lock or asyncio.Lock()
 
     async def interpret_goal(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
         if deps.emit is not None:
-            deps.emit(
-                "agent.status",
-                {"text": "已收到你的学习目标，正在准备学习安排。", "phase": "interpret_goal"},
-            )
+            deps.emit("agent.status", {"text": "已收到你的学习目标，正在准备学习安排。", "phase": "interpret_goal"})
             # The first learner-facing acknowledgement must not wait for goal
             # interpretation or any artifact provider.  In particular, a
             # lesson/visual/deck provider may take minutes, while the learner
@@ -269,12 +255,16 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         if not utterance:
             current = stack.current()
             if current is None:
-                await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.COMPLETED)
+                await deps.runtime_state.set_runtime_status(
+                    deps.task_id, RuntimeStatus.COMPLETED
+                )
                 return {
                     "runtime_status": str(RuntimeStatus.COMPLETED),
                     "finished_reason": "没有待处理的学习目标",
                 }
-            await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)
+            await deps.runtime_state.set_runtime_status(
+                deps.task_id, RuntimeStatus.PLANNING
+            )
             return {"goal": current.to_dict(), "runtime_status": str(RuntimeStatus.PLANNING)}
 
         try:
@@ -286,24 +276,12 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 current_goal=stack.current(),
             )
         except goal_interpreter.GoalInterpretationUnavailable as exc:
-            # A missing control model may still use the constrained structural
-            # fallback: preserve the utterance as the topic, derive one stable
-            # knowledge-point id, and let candidate/guardrail validation limit
-            # execution to one safe action.  No capability is inferred here.
-            if deps.model is None and utterance.strip():
-                goal = goal_interpreter.build_goal(
-                    {"goal_type": "learn", "topic": utterance.strip()},
-                    utterance=utterance,
-                    profile_rows=rows,
-                    created_by="deterministic_fallback",
-                )
-            else:
-                await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
-                return {
-                    "runtime_status": str(RuntimeStatus.FAILED),
-                    "finished_reason": str(exc),
-                    "messages": ["目标识别失败，本轮没有执行任何学习技能。"],
-                }
+            await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+            return {
+                "runtime_status": str(RuntimeStatus.FAILED),
+                "finished_reason": str(exc),
+                "messages": ["目标识别失败，本轮没有执行任何学习技能。"],
+            }
         operation = goal_interpreter.apply_to_stack(stack, goal)
         await deps.runtime_state.apply_stack_operation(deps.task_id, operation)
         await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)
@@ -314,11 +292,6 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     async def orchestrate(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
         # The plan list is the user-facing representation of this phase.  Do
         # not expose a generic control-plane "replanning" banner.
-        # Terminal turns have no execution edge.  In particular, a failed
-        # interpretation must not re-enter planning through graph scheduling.
-        current_status = RuntimeStatus(str(state.get("runtime_status") or ""))
-        if current_status in TERMINAL_STATUSES:
-            return {"runtime_status": str(current_status)}
         # A replan enters this node in REPLANNING. Persist the explicit
         # REPLANNING -> PLANNING transition before choosing the next action so
         # the table follows the same closed state machine as the checkpoint.
@@ -329,14 +302,18 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         latest_message = interjections[-1] if interjections else {}
         if latest_message:
             dispatcher.retarget(user_message=latest_message)
-        skills = await deps.runtime_state.list_skills(learner_id=deps.learner_id, enabled_only=True)
+        skills = await deps.runtime_state.list_skills(
+            learner_id=deps.learner_id, enabled_only=True
+        )
         dispatcher.retarget(goal=goal, skills=skills)
 
         if state.get("replanning"):
             blocked = check_replan(budget)
             if blocked is not None:
                 await deps.runtime_state.save_budget(deps.task_id, budget.to_dict())
-                await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+                await deps.runtime_state.set_runtime_status(
+                    deps.task_id, RuntimeStatus.FAILED
+                )
                 return {
                     "runtime_status": str(RuntimeStatus.FAILED),
                     "finished_reason": blocked.detail,
@@ -356,22 +333,12 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         ]
         if latest_message:
             requested = set(world.requested_capabilities)
-            requested.update(
-                str(item) for item in latest_message.get("requested_capabilities") or []
-            )
-            if any(
-                word in str(latest_message.get("message") or "")
-                for word in ("课件", "幻灯片", "讲义")
-            ):
+            requested.update(str(item) for item in latest_message.get("requested_capabilities") or [])
+            if any(word in str(latest_message.get("message") or "") for word in ("课件", "幻灯片", "讲义")):
                 requested.add("content.deck")
-            if any(
-                word in str(latest_message.get("message") or "")
-                for word in ("解释", "回答", "为什么")
-            ):
+            if any(word in str(latest_message.get("message") or "") for word in ("解释", "回答", "为什么")):
                 requested.add("dialog.answer")
-            world = replace(
-                world, requested_capabilities=frozenset(requested), awaiting_user_reply=True
-            )
+            world = replace(world, requested_capabilities=frozenset(requested), awaiting_user_reply=True)
         produced = await orchestrator.plan(
             goal=goal,
             world=world,
@@ -388,14 +355,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             budget,
             goal_satisfied=bool(world.target.mastery >= 1.0),
         )
-        requested_order = [
-            str(item)
-            for item in produced.delivery_order
-            if str(item) in {"lesson-intro", "visual", "lecture-deck", "quiz"}
-        ]
-        board["order"] = requested_order + [
-            item for item in board.get("order", []) if item not in requested_order
-        ]
+        requested_order = [str(item) for item in produced.delivery_order if str(item) in {"lesson-intro", "visual", "lecture-deck", "quiz"}]
+        board["order"] = requested_order + [item for item in board.get("order", []) if item not in requested_order]
         revision_tasks: list[PlannedTask] = []
         for decision in produced.holds:
             if decision.action != "revise":
@@ -459,14 +420,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 if artifact not in board["order"]:
                     board["order"].append(artifact)
                 if not any(item.get("artifact") == artifact for item in board["delivery"]):
-                    entry = {
-                        "artifact": artifact,
-                        "task_key": decision.task_key,
-                        "title": held.get("detail") or artifact,
-                        "sequence": 0,
-                        "state": "queued",
-                        "closed_at": datetime.now(UTC).isoformat(),
-                    }
+                    entry = {"artifact": artifact, "task_key": decision.task_key, "title": held.get("detail") or artifact, "sequence": 0, "state": "queued", "closed_at": datetime.now(UTC).isoformat()}
                     target_position = board["order"].index(artifact)
                     position = next(
                         (
@@ -481,9 +435,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                     for index, item in enumerate(board["delivery"], start=1):
                         item["sequence"] = index
                     if deps.emit is not None:
-                        deps.emit(
-                            "delivery.queued", {"artifact": artifact, "task_key": decision.task_key}
-                        )
+                        deps.emit("delivery.queued", {"artifact": artifact, "task_key": decision.task_key})
         if produced.holds and not produced.tasks:
             produced.awaits_user = True
         cursor = int(board.get("cursor") or 0)
@@ -491,10 +443,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             was_unlocked = board["delivery"][cursor].get("state") == "unlocked"
             board["delivery"][cursor]["state"] = "unlocked"
             if deps.emit is not None and not was_unlocked:
-                deps.emit(
-                    "delivery.unlocked",
-                    {"artifact": board["delivery"][cursor].get("artifact"), "cursor": cursor},
-                )
+                deps.emit("delivery.unlocked", {"artifact": board["delivery"][cursor].get("artifact"), "cursor": cursor})
         await deps.runtime_state.save_board(deps.task_id, board)
         verdict = check_plan(
             produced,
@@ -507,111 +456,9 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         if verdict.findings:
             deps.tracer.guardrail_triggered(verdict)
             if deps.emit is not None:
-                deps.emit(
-                    "agent.status",
-                    {"text": degrade_message(verdict.findings), "phase": "guardrail"},
-                )
+                deps.emit("agent.status", {"text": degrade_message(verdict.findings), "phase": "guardrail"})
 
         step = await deps.tracer.next_step()
-        # When running under the service, mirror the validated plan into the
-        # durable ledger before any provider starts. Unit callers without a
-        # repository retain the standalone graph contract.
-        if deps.repository is not None and produced.tasks:
-            turn = await deps.repository.latest_turn(deps.task_id)
-            if turn is not None:
-                candidate_by_id = {
-                    item.candidate_id: item for item in produced.candidates_considered
-                }
-                work_rows: list[dict[str, Any]] = []
-                work_ids: dict[str, str] = {}
-                for task in produced.tasks:
-                    work_id = f"work:{turn['id']}:{step}:{task.id}"
-                    work_ids[task.id] = work_id
-                    candidate = candidate_by_id.get(task.candidate_id)
-                    work_status = (
-                        "waiting_confirmation"
-                        if task.estimated_cost.irreversible
-                        and task.capability not in deps.confirmed_actions
-                        else "queued"
-                    )
-                    work_rows.append(
-                        {
-                            "id": work_id,
-                            "work_key": f"{step}:{task.id}",
-                            "candidate_id": task.candidate_id,
-                            "capability": task.capability,
-                            "skill_id": candidate.skill_id if candidate else "",
-                            "skill_version": candidate.skill_version if candidate else "",
-                            "skill_checksum": candidate.skill_checksum if candidate else "",
-                            "provider": candidate.provider if candidate else "",
-                            "knowledge_point_id": task.knowledge_point_id,
-                            "input_payload": dict(task.inputs),
-                            "idempotency_key": f"{turn['id']}:{step}:{task.id}",
-                            "status": work_status,
-                            "confirmation_digest": (
-                                "sha256:"
-                                + hashlib.sha256(
-                                    json.dumps(
-                                        {
-                                            "capability": task.capability,
-                                            "knowledge_point_id": task.knowledge_point_id,
-                                            "inputs": task.inputs,
-                                        },
-                                        sort_keys=True,
-                                        ensure_ascii=False,
-                                        default=str,
-                                    ).encode("utf-8")
-                                ).hexdigest()
-                                if work_status == "waiting_confirmation"
-                                else None
-                            ),
-                            # Reservation is conservative and is released
-                            # against actual ProviderResult usage on finish.
-                            "reserved_tokens": 1_000,
-                            "reserved_heavy": 1 if task.estimated_cost.heavy_artifact else 0,
-                            "reserved_wall_ms": 120_000,
-                        }
-                    )
-                dependencies = [
-                    (work_ids[task.id], work_ids[dependency])
-                    for task in produced.tasks
-                    for dependency in task.depends_on
-                    if dependency in work_ids
-                ]
-                durable = await deps.repository.create_work_plan(
-                    task_id=deps.task_id,
-                    turn_id=turn["id"],
-                    expected_revision=int(turn.get("revision") or 0),
-                    items=work_rows,
-                    dependencies=dependencies,
-                    budget=budget.to_dict(),
-                )
-                if durable is not None and durable.get("budget_exceeded"):
-                    message = "本轮预计资源需求超过剩余预算，已停止启动新工作。"
-                    await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
-                    return {
-                        "runtime_status": str(RuntimeStatus.FAILED),
-                        "finished_reason": message,
-                        "messages": [message],
-                        "budget": budget.to_dict(),
-                        "step": step,
-                    }
-                if durable is not None:
-                    produced = produced.model_copy(
-                        update={
-                            "tasks": [
-                                task.model_copy(
-                                    update={
-                                        "inputs": {
-                                            **task.inputs,
-                                            "__work_item_id": work_ids[task.id],
-                                        }
-                                    }
-                                )
-                                for task in produced.tasks
-                            ]
-                        }
-                    )
         record = DecisionRecord(
             step=step,
             goal=goal,
@@ -649,7 +496,9 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             await deps.runtime_state.save_plan(
                 deps.task_id, persisted_plan, budget=budget.to_dict()
             )
-            await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+            await deps.runtime_state.set_runtime_status(
+                deps.task_id, RuntimeStatus.FAILED
+            )
             return {
                 "runtime_status": str(RuntimeStatus.FAILED),
                 "finished_reason": message,
@@ -667,7 +516,9 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             RuntimeStatus.WAITING_FOR_USER
             if awaiting
             else (
-                RuntimeStatus.EXECUTING if verdict.allowed_tasks else RuntimeStatus.WAITING_FOR_USER
+                RuntimeStatus.EXECUTING
+                if verdict.allowed_tasks
+                else RuntimeStatus.WAITING_FOR_USER
             )
         )
         messages = [produced.negotiation] if produced.negotiation else []
@@ -678,7 +529,9 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             **produced.to_dict(),
             "allowed": [task.id for task in verdict.allowed_tasks],
         }
-        await deps.runtime_state.save_plan(deps.task_id, persisted_plan, budget=budget.to_dict())
+        await deps.runtime_state.save_plan(
+            deps.task_id, persisted_plan, budget=budget.to_dict()
+        )
         await deps.runtime_state.set_runtime_status(deps.task_id, status)
 
         return {
@@ -735,13 +588,9 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             if task.id in queued_background_ids:
                 return
             inputs = dict(task.inputs)
-            revision: Mapping[str, Any] = (
-                inputs["revision"] if isinstance(inputs.get("revision"), Mapping) else {}
-            )
+            revision = inputs.get("revision") if isinstance(inputs.get("revision"), Mapping) else {}
             inputs["__runtime"] = {
-                "task_key": str(
-                    revision.get("of_task") or f"{int(state.get('step') or 0)}:{task.id}"
-                ),
+                "task_key": str(revision.get("of_task") or f"{int(state.get('step') or 0)}:{task.id}"),
                 "task_id": task.id,
                 "step": int(state.get("step") or 0),
                 "capability": task.capability,
@@ -758,13 +607,14 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 task.id in heavy_ids
                 and not any(dep in heavy_ids for dep in task.depends_on)
                 and deps.schedule_background is not None
-                and deps.repository is None
             ):
                 await queue_background(task)
 
         for tier in produced.tiers():
             ready = [
-                task for task in tier if task.id in allowed and task.id not in queued_background_ids
+                task
+                for task in tier
+                if task.id in allowed and task.id not in queued_background_ids
             ]
             if budget.exhausted() is not None:
                 break
@@ -777,46 +627,28 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 task
                 for task in ready
                 if not task.estimated_cost.critical_path
-                and (task.estimated_cost.heavy_artifact or not task.estimated_cost.blocking)
+                and (
+                    task.estimated_cost.heavy_artifact
+                    or not task.estimated_cost.blocking
+                )
                 and deps.schedule_background is not None
-                and deps.repository is None
             ]
             if background:
                 background_pending = True
             for task in background:
                 await queue_background(task)
             ready = [task for task in ready if task not in background]
-            safe = [
-                task
-                for task in ready
-                if task.estimated_cost.parallel_safe
-                and bool(getattr(deps.settings, "agent_parallel_dispatch", True))
-            ]
+            safe = [task for task in ready if task.estimated_cost.parallel_safe and bool(getattr(deps.settings, "agent_parallel_dispatch", True))]
             serial = [task for task in ready if task not in safe]
-            results: list[TaskOutcome] = []
+            results = []
             if safe:
-                gathered = await asyncio.gather(
-                    *(dispatcher.run(task, profile=profile_rows, budget=budget) for task in safe),
-                    return_exceptions=True,
-                )
-                results.extend(
-                    item
-                    if isinstance(item, TaskOutcome)
-                    else TaskOutcome(
-                        task_id=safe[index].id,
-                        capability=safe[index].capability,
-                        status="failed",
-                        detail=f"{type(item).__name__}: {item}",
-                    )
-                    for index, item in enumerate(gathered)
-                )
+                gathered = await asyncio.gather(*(dispatcher.run(task, profile=profile_rows, budget=budget) for task in safe), return_exceptions=True)
+                results.extend(item if isinstance(item, TaskOutcome) else TaskOutcome(task_id=safe[index].id, capability=safe[index].capability, status="failed", detail=f"{type(item).__name__}: {item}") for index, item in enumerate(gathered))
             for task in serial:
                 results.append(await dispatcher.run(task, profile=profile_rows, budget=budget))
             for outcome in results:
                 outcomes.append(outcome)
-                budget.spend_step(
-                    heavy=outcome.heavy, tokens=outcome.tokens_used, wall_ms=outcome.duration_ms
-                )
+                budget.spend_step(heavy=outcome.heavy, tokens=outcome.tokens_used, wall_ms=outcome.duration_ms)
                 if outcome.held:
                     async with board_lock:
                         board = await deps.runtime_state.get_board(deps.task_id)
@@ -825,8 +657,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                             (item for item in produced.tasks if item.id == outcome.task_id),
                             None,
                         )
-                        revision: Mapping[str, Any] = (
-                            planned.inputs["revision"]
+                        revision = (
+                            planned.inputs.get("revision")
                             if planned and isinstance(planned.inputs.get("revision"), Mapping)
                             else {}
                         )
@@ -850,9 +682,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                         await deps.runtime_state.save_board(deps.task_id, board)
                 if deps.emit is not None and not outcome.held:
                     deps.emit(
-                        "node.completed"
-                        if outcome.status in {"completed", "incomplete"}
-                        else "node.failed",
+                        "node.completed" if outcome.status in {"completed", "incomplete"} else "node.failed",
                         {
                             "task_id": outcome.task_id,
                             "capability": outcome.capability,
@@ -871,7 +701,9 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                     messages.append(outcome.learner_message)
 
         await deps.runtime_state.save_budget(deps.task_id, budget.to_dict())
-        await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.OBSERVING)
+        await deps.runtime_state.set_runtime_status(
+            deps.task_id, RuntimeStatus.OBSERVING
+        )
 
         return {
             "runtime_status": str(RuntimeStatus.OBSERVING),
@@ -894,9 +726,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
 
     async def update_state(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:
         if deps.emit is not None:
-            deps.emit(
-                "agent.status", {"text": "正在更新对你的掌握度判断…", "phase": "update_state"}
-            )
+            deps.emit("agent.status", {"text": "正在更新对你的掌握度判断…", "phase": "update_state"})
         if str(state.get("runtime_status")) != str(RuntimeStatus.UPDATING):
             return {}
         changes = await deps.updater.apply(learner_id=deps.learner_id)
@@ -929,7 +759,9 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             for row in await deps.runtime_state.profile_for(deps.learner_id)
         }
         probe = (
-            StoreArtifactProbe(deps.artifacts, deps.task_id) if deps.artifacts is not None else None
+            StoreArtifactProbe(deps.artifacts, deps.task_id)
+            if deps.artifacts is not None
+            else None
         )
         satisfied = False
         if condition:
@@ -951,20 +783,27 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 deps.emit("goal.popped", {"goal_id": goal.id})
             remaining = stack.current()
             if remaining is None:
-                await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.COMPLETED)
+                await deps.runtime_state.set_runtime_status(
+                    deps.task_id, RuntimeStatus.COMPLETED
+                )
                 return {
                     "runtime_status": str(RuntimeStatus.COMPLETED),
                     "finished_reason": "目标已达成",
                 }
-            await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.REPLANNING)
+            await deps.runtime_state.set_runtime_status(
+                deps.task_id, RuntimeStatus.REPLANNING
+            )
             return {
                 "runtime_status": str(RuntimeStatus.REPLANNING),
                 "goal": remaining.to_dict(),
                 "replanning": True,
             }
 
-        # A graph turn with detached work remains waiting only when the
-        # Work Ledger has explicitly recorded pending work.
+        # Background artifact sidecars are deliberately allowed to outlive
+        # this graph turn. Keep the task in the learner-facing waiting state
+        # until those sidecars settle; ``_sweep_holds`` resumes the graph with
+        # a board-driven holds decision instead of treating an empty
+        # foreground outcome as a failure.
         if bool(state.get("background_pending")):
             await deps.runtime_state.set_runtime_status(
                 deps.task_id, RuntimeStatus.WAITING_FOR_USER
@@ -977,9 +816,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         # A failed or empty round has no new evidence to justify another trip
         # through the graph.  Returning a terminal status here prevents a
         # provider outage from becoming an invisible re-planning loop.
-        if not outcomes or all(
-            item.status in {"failed", "skipped", "blocked"} for item in outcomes[-3:]
-        ):
+        if not outcomes or all(item.status in {"failed", "skipped", "blocked"} for item in outcomes[-3:]):
             message = "本轮没有产生新的学习结果，已暂停自动编排，请换一种说法或继续补充要求。"
             await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
             return {
@@ -991,8 +828,12 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         # Either a task did not reach its done_when, or the goal is not yet
         # met: both mean the next round is decided from a state this round
         # changed. That is the replan the acceptance criteria want visible.
-        logger.debug("replanning: %d/%d tasks unsatisfied", len(unfinished), len(outcomes))
-        await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.REPLANNING)
+        logger.debug(
+            "replanning: %d/%d tasks unsatisfied", len(unfinished), len(outcomes)
+        )
+        await deps.runtime_state.set_runtime_status(
+            deps.task_id, RuntimeStatus.REPLANNING
+        )
         return {"runtime_status": str(RuntimeStatus.REPLANNING), "replanning": True}
 
     async def await_user(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:

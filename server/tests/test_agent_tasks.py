@@ -9,8 +9,10 @@ from uuid import uuid4
 
 import pytest
 from lingxigraph import (
+    AIMessage,
     AIMessageChunk,
     FilesystemSkillSource,
+    GraphRecursionError,
     HumanMessage,
     ToolCallChunk,
     ToolMessage,
@@ -110,20 +112,13 @@ def test_agent_trace_preserves_reasoning_tool_calls_and_results() -> None:
     chunk = AIMessageChunk(
         "",
         additional_kwargs={"reasoning_content": "先阅读 skill，再生成产物"},
-        tool_call_chunks=(
-            ToolCallChunk(
-                name="read_skill", args='{"skill_name":"lesson-intro"}', id="call-1", index=0
-            ),
-        ),
+        tool_call_chunks=(ToolCallChunk(name="read_skill", args='{"skill_name":"lesson-intro"}', id="call-1", index=0),),
     )
     reasoning_and_tool = _message_trace_events((chunk, {"agent": "lecture_hook"}), "coordinator")
     assert {event["kind"] for event in reasoning_and_tool} == {"reasoning.delta", "tool.call.delta"}
 
     result = _message_trace_events(
-        (
-            ToolMessage(content="SKILL.md 内容", tool_call_id="call-1", name="read_skill"),
-            {"agent": "lecture_hook"},
-        ),
+        (ToolMessage(content="SKILL.md 内容", tool_call_id="call-1", name="read_skill"), {"agent": "lecture_hook"}),
         "coordinator",
     )
     assert result[0]["kind"] == "tool.result"
@@ -270,9 +265,9 @@ def test_visual_artifact_is_task_scoped_and_single_file_only(tmp_path: Path) -> 
     assert result["relative_path"] == "task-1/visual-explainer.html"
     assert store.read_html("task-1").decode() == html
 
-    template = (
-        REPO_ROOT / "skills" / "interactive-visual-explainer" / "assets" / "template.html"
-    ).read_text(encoding="utf-8")
+    template = (REPO_ROOT / "skills" / "interactive-visual-explainer" / "assets" / "template.html").read_text(
+        encoding="utf-8"
+    )
     store.write_html("template-check", template)
     validation = asyncio.run(store.validate_html("template-check"))
     assert validation["ok"] is True
@@ -288,27 +283,16 @@ def test_visual_artifact_is_task_scoped_and_single_file_only(tmp_path: Path) -> 
 def test_lesson_intro_artifact_and_skill_deck_are_publishable(tmp_path: Path) -> None:
     settings = Settings(_env_file="", agent_task_dir=tmp_path)
     store = ArtifactStore(settings)
-    html = (REPO_ROOT / "skills" / "lesson-intro" / "assets" / "example-page.html").read_text(
-        encoding="utf-8"
-    )
+    html = (REPO_ROOT / "skills" / "lesson-intro" / "assets" / "example-page.html").read_text(encoding="utf-8")
     intro = store.write_lesson_intro_file("intro-task", html)
     assert intro["artifact_id"] == "lesson-intro"
     assert "摩擦力" in store.lesson_intro_path("intro-task").read_text(encoding="utf-8")
 
-    source = (
-        REPO_ROOT
-        / "skills"
-        / "interactive-lecture-deck"
-        / "assets"
-        / "examples"
-        / "quadratic-vertex"
-    )
+    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
     files = {
         "lecture.json": (source / "lecture.json").read_text(encoding="utf-8"),
         "manifest.json": (source / "manifest.json").read_text(encoding="utf-8"),
-        "runtime/index.html": (
-            REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html"
-        ).read_text(encoding="utf-8"),
+        "runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"),
     }
     for slide in (source / "slides").glob("s*.html"):
         files[f"slides/{slide.name}"] = slide.read_text(encoding="utf-8")
@@ -344,14 +328,7 @@ async def test_lesson_intro_timeout_draft_is_recoverable(tmp_path: Path) -> None
 def test_deck_repairs_array_anchor_rect_before_strict_validation(tmp_path: Path) -> None:
     settings = Settings(_env_file="", agent_task_dir=tmp_path)
     store = ArtifactStore(settings)
-    source = (
-        REPO_ROOT
-        / "skills"
-        / "interactive-lecture-deck"
-        / "assets"
-        / "examples"
-        / "quadratic-vertex"
-    )
+    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
     lecture = json.loads((source / "lecture.json").read_text(encoding="utf-8"))
     first_anchor = next(slide["anchors"][0] for slide in lecture["slides"] if slide["anchors"])
     rect = first_anchor["rect"]
@@ -359,17 +336,13 @@ def test_deck_repairs_array_anchor_rect_before_strict_validation(tmp_path: Path)
     files = {
         "lecture.json": json.dumps(lecture, ensure_ascii=False),
         "manifest.json": (source / "manifest.json").read_text(encoding="utf-8"),
-        "runtime/index.html": (
-            REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html"
-        ).read_text(encoding="utf-8"),
+        "runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"),
     }
     for slide in (source / "slides").glob("s*.html"):
         files[f"slides/{slide.name}"] = slide.read_text(encoding="utf-8")
 
     store.write_deck("array-rect-task", files)
-    stored = json.loads(
-        store.deck_root("array-rect-task").joinpath("lecture.json").read_text(encoding="utf-8")
-    )
+    stored = json.loads(store.deck_root("array-rect-task").joinpath("lecture.json").read_text(encoding="utf-8"))
     assert stored["slides"][1]["anchors"][0]["rect"] == rect
     validation = asyncio.run(store.build_and_validate_deck("array-rect-task"))
     assert validation["ok"] is True
@@ -378,14 +351,7 @@ def test_deck_repairs_array_anchor_rect_before_strict_validation(tmp_path: Path)
 def test_deck_repairs_v2_required_fields_and_svg_text_classes(tmp_path: Path) -> None:
     settings = Settings(_env_file="", agent_task_dir=tmp_path)
     store = ArtifactStore(settings)
-    source = (
-        REPO_ROOT
-        / "skills"
-        / "interactive-lecture-deck"
-        / "assets"
-        / "examples"
-        / "quadratic-vertex"
-    )
+    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
     lecture = json.loads((source / "lecture.json").read_text(encoding="utf-8"))
     content_slide = next(slide for slide in lecture["slides"] if slide["role"] == "content")
     for anchor in content_slide["anchors"]:
@@ -403,9 +369,7 @@ def test_deck_repairs_v2_required_fields_and_svg_text_classes(tmp_path: Path) ->
     files = {
         "lecture.json": json.dumps(lecture, ensure_ascii=False),
         "manifest.json": (source / "manifest.json").read_text(encoding="utf-8"),
-        "runtime/index.html": (
-            REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html"
-        ).read_text(encoding="utf-8"),
+        "runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"),
     }
     for slide in (source / "slides").glob("s*.html"):
         html = slide.read_text(encoding="utf-8")
@@ -414,9 +378,7 @@ def test_deck_repairs_v2_required_fields_and_svg_text_classes(tmp_path: Path) ->
         files[f"slides/{slide.name}"] = html
 
     store.write_deck("v2-repair-task", files)
-    stored = json.loads(
-        store.deck_root("v2-repair-task").joinpath("lecture.json").read_text(encoding="utf-8")
-    )
+    stored = json.loads(store.deck_root("v2-repair-task").joinpath("lecture.json").read_text(encoding="utf-8"))
     repaired_slide = next(slide for slide in stored["slides"] if slide["role"] == "content")
     assert all(anchor["label"] for anchor in repaired_slide["anchors"])
     assert all(step["advance"] == "manual" for step in repaired_slide["steps"])
@@ -428,14 +390,7 @@ def test_deck_repairs_v2_required_fields_and_svg_text_classes(tmp_path: Path) ->
 def test_deck_migrates_legacy_envelope_before_validation(tmp_path: Path) -> None:
     settings = Settings(_env_file="", agent_task_dir=tmp_path)
     store = ArtifactStore(settings)
-    source = (
-        REPO_ROOT
-        / "skills"
-        / "interactive-lecture-deck"
-        / "assets"
-        / "examples"
-        / "quadratic-vertex"
-    )
+    source = REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "examples" / "quadratic-vertex"
     lecture = json.loads((source / "lecture.json").read_text(encoding="utf-8"))
     deck = lecture["deck"]
     deck["canvas"] = {"w": 1280, "h": 720}
@@ -449,17 +404,13 @@ def test_deck_migrates_legacy_envelope_before_validation(tmp_path: Path) -> None
     files = {
         "lecture.json": json.dumps(lecture, ensure_ascii=False),
         "manifest.json": (source / "manifest.json").read_text(encoding="utf-8"),
-        "runtime/index.html": (
-            REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html"
-        ).read_text(encoding="utf-8"),
+        "runtime/index.html": (REPO_ROOT / "skills" / "interactive-lecture-deck" / "assets" / "runtime" / "index.html").read_text(encoding="utf-8"),
     }
     for slide in (source / "slides").glob("s*.html"):
         files[f"slides/{slide.name}"] = slide.read_text(encoding="utf-8")
 
     store.write_deck("legacy-envelope-task", files)
-    stored = json.loads(
-        store.deck_root("legacy-envelope-task").joinpath("lecture.json").read_text(encoding="utf-8")
-    )
+    stored = json.loads(store.deck_root("legacy-envelope-task").joinpath("lecture.json").read_text(encoding="utf-8"))
     assert stored["deck"]["canvas"] == {"width": 1280, "height": 720, "format": "ppt169"}
     assert stored["deck"]["slideDir"] == "slides"
     assert stored["deck"]["createdAt"].endswith("Z")

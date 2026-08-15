@@ -150,7 +150,6 @@ def estimate(
 
     weakest_prereq = min(prerequisites, key=lambda p: p.mastery, default=None)
     blocked = weakest_prereq is not None and weakest_prereq.is_weak
-    prereq_name = weakest_prereq.knowledge_point if weakest_prereq is not None else ""
     headroom = _headroom(view)
     nudge = 0.15 if requested else 0.0
 
@@ -159,9 +158,8 @@ def estimate(
             # Worth most when the target is hard and we have not mapped what it
             # rests on; near worthless once prerequisites are known and met.
             if not view.prerequisites and view.mastery < STRONG_MASTERY:
-                return _clamp(
-                    capability, 0.55 + 0.25 * view.difficulty + nudge, "尚未分析该知识点的前置依赖"
-                )
+                return _clamp(capability, 0.55 + 0.25 * view.difficulty + nudge,
+                              "尚未分析该知识点的前置依赖")
             if blocked:
                 return _clamp(capability, 0.45 + nudge, "前置知识薄弱，需要确认依赖顺序")
             return _clamp(capability, 0.12 + nudge, "前置依赖已知且已满足")
@@ -171,9 +169,8 @@ def estimate(
                 return _clamp(capability, 0.05 + nudge, "课程引入已存在")
             if blocked:
                 return _clamp(
-                    capability,
-                    0.20 + nudge,
-                    f"前置知识「{prereq_name}」尚未掌握，直接引入收益有限",
+                    capability, 0.20 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，直接引入收益有限",
                 )
             return _clamp(
                 capability, 0.35 + 0.45 * headroom + nudge, "缺少课程引入，学习者还没有入口"
@@ -184,9 +181,8 @@ def estimate(
                 return _clamp(capability, 0.05 + nudge, "讲义课件已存在")
             if blocked:
                 return _clamp(
-                    capability,
-                    0.18 + nudge,
-                    f"前置知识「{prereq_name}」尚未掌握，先补前置更划算",
+                    capability, 0.18 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，先补前置更划算",
                 )
             return _clamp(capability, 0.30 + 0.50 * headroom + nudge, "缺少系统讲解材料")
 
@@ -195,9 +191,8 @@ def estimate(
                 return _clamp(capability, 0.08, "可视化已存在")
             if blocked:
                 return _clamp(
-                    capability,
-                    0.18 + nudge,
-                    f"前置知识「{prereq_name}」尚未掌握，先补前置更划算",
+                    capability, 0.18 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，先补前置更划算",
                 )
             # Visuals pay off most on hard material the learner is stuck on.
             base = 0.20 + 0.35 * view.difficulty + 0.25 * (1.0 if view.is_weak else 0.0)
@@ -206,14 +201,12 @@ def estimate(
         case Capability.TEACH_EXPLAIN:
             if blocked:
                 return _clamp(
-                    capability,
-                    0.18 + nudge,
-                    f"前置知识「{prereq_name}」尚未掌握，讲解会落空",
+                    capability, 0.18 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，讲解会落空",
                 )
             if view.misconceptions:
                 return _clamp(
-                    capability,
-                    0.60 + 0.30 * headroom + nudge,
+                    capability, 0.60 + 0.30 * headroom + nudge,
                     f"存在未消解的误区：{'、'.join(view.misconceptions[:2])}",
                 )
             if view.open_questions:
@@ -223,9 +216,8 @@ def estimate(
         case Capability.TEACH_STRATEGY:
             if blocked:
                 return _clamp(
-                    capability,
-                    0.20 + nudge,
-                    f"前置知识「{prereq_name}」尚未掌握，教学动作收益有限",
+                    capability, 0.20 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，教学动作收益有限",
                 )
             # The default teaching move: always reasonable, never dominant.
             return _clamp(
@@ -244,9 +236,8 @@ def estimate(
                 # Testing on top of a broken prerequisite produces evidence you
                 # could already predict, which is the definition of low information.
                 return _clamp(
-                    capability,
-                    0.15 + nudge,
-                    f"前置知识「{prereq_name}」尚未掌握，此时出题信息量很低",
+                    capability, 0.15 + nudge,
+                    f"前置知识「{weakest_prereq.knowledge_point}」尚未掌握，此时出题信息量很低",
                 )
             if view.evidence_is_thin:
                 return _clamp(
@@ -258,8 +249,7 @@ def estimate(
 
         case Capability.ASSESS_GRADE:
             return _clamp(
-                capability,
-                0.70 if view.has_open_quiz else 0.05,
+                capability, 0.70 if view.has_open_quiz else 0.05,
                 "有待判分的作答" if view.has_open_quiz else "没有待判分的作答",
             )
 
@@ -290,8 +280,7 @@ def estimate(
 
         case Capability.META_REPORT:
             return _clamp(
-                capability,
-                0.35 if view.is_strong else 0.10,
+                capability, 0.35 if view.is_strong else 0.10,
                 "学习目标基本达成，可以出报告"
                 if view.is_strong
                 else "学习尚未收敛，出报告为时过早",

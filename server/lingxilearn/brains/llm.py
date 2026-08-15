@@ -143,9 +143,9 @@ class LlmBrain:
 
 
 def _coach_prompt(ctx: CoachContext, baseline: TutorMove) -> str:
-    evidence_lines = [f"- [{e.id}] {e.source}：{e.summary}" for e in ctx.evidence[-8:]] or [
-        "- （本步骤暂无证据）"
-    ]
+    evidence_lines = [
+        f"- [{e.id}] {e.source}：{e.summary}" for e in ctx.evidence[-8:]
+    ] or ["- （本步骤暂无证据）"]
     judgement = ctx.last_judgement
     parts = [
         f"# 任务\n{ctx.mission_title}",
@@ -170,8 +170,12 @@ def _coach_prompt(ctx: CoachContext, baseline: TutorMove) -> str:
             f"# 上一次作答判定\n{'正确' if judgement.correct else '不正确'}"
             f"（得分 {judgement.score:.2f}）"
         )
-    parts.append("# 确定性引擎给出的保底回复（如果你想不出更好的表达，就用它）\n" + baseline.say)
-    parts.append("现在给出你的下一句话。记住：不要给答案，只问一个问题或给一级提示。")
+    parts.append(
+        "# 确定性引擎给出的保底回复（如果你想不出更好的表达，就用它）\n" + baseline.say
+    )
+    parts.append(
+        "现在给出你的下一句话。记住：不要给答案，只问一个问题或给一级提示。"
+    )
     return "\n\n".join(parts)
 
 

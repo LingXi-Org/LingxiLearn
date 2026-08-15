@@ -131,34 +131,26 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
             )
             assert workspace is not None
             tables = (
-                (
-                    await session.execute(
-                        select(WorkspaceTable).where(
-                            WorkspaceTable.workspace_id == workspace.id,
-                            WorkspaceTable.archived.is_(False),
-                        )
+                await session.execute(
+                    select(WorkspaceTable).where(
+                        WorkspaceTable.workspace_id == workspace.id,
+                        WorkspaceTable.archived.is_(False),
                     )
                 )
-                .scalars()
-                .all()
-            )
+            ).scalars().all()
             assert {table.name for table in tables} == {
                 "节点执行",
                 "工具调用",
                 "学习证据",
-                "练习测评",
+                "学习测评",
             }
             rows = (
-                (
-                    await session.execute(
-                        select(WorkspaceTableRow).where(
-                            WorkspaceTableRow.table_id.in_([table.id for table in tables])
-                        )
+                await session.execute(
+                    select(WorkspaceTableRow).where(
+                        WorkspaceTableRow.table_id.in_([table.id for table in tables])
                     )
                 )
-                .scalars()
-                .all()
-            )
+            ).scalars().all()
             assert {row.values["record_key"] for row in rows} == {
                 f"task:{task_id}:1",
                 f"task:{task_id}:2",
@@ -181,7 +173,8 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
         async with database.session() as session:
             count = await session.scalar(
                 select(WorkspaceTableRow).where(
-                    WorkspaceTableRow.values["record_key"].as_string() == f"task:{task_id}:1"
+                    WorkspaceTableRow.values["record_key"].as_string()
+                    == f"task:{task_id}:1"
                 )
             )
             assert count is not None

@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 class GoalInterpretationUnavailable(RuntimeError):
     """The control-plane model did not return a valid goal."""
 
-
 GOAL_TYPES = frozenset({"learn", "review", "assess", "ask", "practice", "report", "manage"})
 
 SYSTEM_PROMPT = """你是 LingxiLearn 的目标解析器。
@@ -112,7 +111,7 @@ def build_goal(
 
     urgency = parsed.get("urgency")
     try:
-        urgency = min(1.0, max(0.0, float(urgency if urgency is not None else 0.5)))
+        urgency = min(1.0, max(0.0, float(urgency)))
     except (TypeError, ValueError):
         urgency = 0.5
 
@@ -182,7 +181,9 @@ async def interpret(
     return goal
 
 
-def apply_to_stack(stack: GoalStack, goal: Goal, *, is_correction: bool = False) -> StackOperation:
+def apply_to_stack(
+    stack: GoalStack, goal: Goal, *, is_correction: bool = False
+) -> StackOperation:
     """Push, replace, or seed the stack, and return the undo record.
 
     An interruption stacks (the learner will come back to what they were doing);

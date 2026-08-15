@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from lingxi_identity import Principal  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field
@@ -85,10 +85,8 @@ async def copilot_tool_permission(
     """Use Sim's native permission card contract for agent schedule proposals."""
 
     decisions = body.get("decisions") if isinstance(body, dict) else None
-    if (
-        not isinstance(decisions, list)
-        or not decisions
-        or any(not isinstance(item, dict) for item in decisions)
+    if not isinstance(decisions, list) or not decisions or any(
+        not isinstance(item, dict) for item in decisions
     ):
         raise HTTPException(status_code=422, detail="At least one decision is required")
     results: list[dict[str, Any]] = []
@@ -156,9 +154,7 @@ async def _validated_task_context(
     svc = service_of(request)
     normalized = [dict(ref) for ref in resource_refs if isinstance(ref, dict)]
     async with svc.db.session() as session:
-        workspace = await session.scalar(
-            select(Workspace).where(Workspace.learner_id == context.learner_id)
-        )
+        workspace = await session.scalar(select(Workspace).where(Workspace.learner_id == context.learner_id))
         workspace_id = workspace.id if workspace is not None else None
         for ref in normalized:
             kind = str(ref.get("type") or ref.get("resourceType") or ref.get("kind") or "").lower()
@@ -187,11 +183,7 @@ async def _validated_task_context(
                         WorkspaceTable.workspace_id == workspace_id,
                     )
                 )
-            elif (
-                kind in {"knowledge", "knowledge_base", "kb", "document"}
-                or ref.get("knowledgeBaseId")
-                or ref.get("documentId")
-            ):
+            elif kind in {"knowledge", "knowledge_base", "kb", "document"} or ref.get("knowledgeBaseId") or ref.get("documentId"):
                 if ref.get("documentId"):
                     row = await session.scalar(
                         select(KnowledgeDocument)
@@ -234,17 +226,13 @@ async def _validated_task_context(
 
         if skill_ids:
             rows = (
-                (
-                    await session.execute(
-                        select(PersonalSkill).where(
-                            PersonalSkill.learner_id == context.learner_id,
-                            PersonalSkill.id.in_(skill_ids),
-                        )
+                await session.execute(
+                    select(PersonalSkill).where(
+                        PersonalSkill.learner_id == context.learner_id,
+                        PersonalSkill.id.in_(skill_ids),
                     )
                 )
-                .scalars()
-                .all()
-            )
+            ).scalars().all()
             found = {row.id for row in rows}
             if found != set(skill_ids):
                 raise not_found()
@@ -359,14 +347,10 @@ async def list_skills(
         )
     async with svc.db.session() as session:
         personal = (
-            (
-                await session.execute(
-                    select(PersonalSkill).where(PersonalSkill.learner_id == context.learner_id)
-                )
+            await session.execute(
+                select(PersonalSkill).where(PersonalSkill.learner_id == context.learner_id)
             )
-            .scalars()
-            .all()
-        )
+        ).scalars().all()
     skills.extend(
         {
             "id": row.id,
@@ -473,7 +457,6 @@ class AgentMessage(BaseModel):
     attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
     resource_refs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     skill_ids: list[str] = Field(default_factory=list, max_length=50)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
 
 
 class QuizSubmissionBody(BaseModel):
@@ -481,16 +464,6 @@ class QuizSubmissionBody(BaseModel):
 
     submission_id: str = Field(min_length=1, max_length=128)
     answers: dict[str, Any]
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
-
-
-class AgentConfirmation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    work_item_id: str = Field(min_length=1, max_length=128)
-    approve: bool
-    payload_digest: str = Field(min_length=1, max_length=128)
-    idempotency_key: str = Field(min_length=1, max_length=192)
 
 
 @router.post("/sessions", status_code=201)
@@ -619,7 +592,6 @@ async def post_agent_message(
             body.message,
             attachments=body.attachments,
             learner_id=context.learner_id,
-            idempotency_key=body.idempotency_key,
         )
     except KeyError as exc:
         raise not_found() from exc
@@ -726,7 +698,9 @@ async def get_attachment(
     if learner_id != context.learner_id:
         raise not_found()
     try:
-        path, media_type, filename = service_of(request).attachment_path(learner_id, attachment_id)
+        path, media_type, filename = service_of(request).attachment_path(
+            learner_id, attachment_id
+        )
     except KeyError as exc:
         raise not_found() from exc
     return FileResponse(path, media_type=media_type, filename=filename)
@@ -741,46 +715,12 @@ async def submit_agent_quiz(
 ) -> dict[str, Any]:
     svc = service_of(request)
     try:
-        return await svc.submit_agent_quiz(
-            task_id,
-            submission_id=body.submission_id,
-            answers=body.answers,
-            learner_id=context.learner_id,
-            idempotency_key=body.idempotency_key,
-        )
+        return await svc.submit_agent_quiz(task_id, submission_id=body.submission_id, answers=body.answers, learner_id=context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
     except ValueError as exc:
         detail = str(exc)
-        raise HTTPException(
-            status_code=409
-            if detail in {"already_submitted", "task_not_waiting:awaiting_user"}
-            or detail.startswith("task_not_waiting")
-            else 400,
-            detail=detail,
-        ) from exc
-
-
-@router.post("/agent-tasks/{task_id}/confirmations", status_code=202)
-async def confirm_agent_work(
-    task_id: str,
-    body: AgentConfirmation,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    try:
-        return await service_of(request).confirm_agent_work(
-            task_id,
-            work_item_id=body.work_item_id,
-            approve=body.approve,
-            payload_digest=body.payload_digest,
-            idempotency_key=body.idempotency_key,
-            learner_id=context.learner_id,
-        )
-    except KeyError as exc:
-        raise not_found() from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409 if detail in {"already_submitted", "task_not_waiting:awaiting_user"} or detail.startswith("task_not_waiting") else 400, detail=detail) from exc
 
 
 @router.post("/agent-tasks/{task_id}/delivery/{artifact}/ack")
@@ -789,12 +729,9 @@ async def ack_agent_delivery(
     artifact: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).ack_delivery(
-            task_id, artifact, learner_id=context.learner_id, idempotency_key=idempotency_key
-        )
+        return await service_of(request).ack_delivery(task_id, artifact, learner_id=context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
     except ValueError as exc:
@@ -831,7 +768,7 @@ async def stream_agent_events(
     task_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
-) -> Any:
+) -> StreamingResponse:
     svc = service_of(request)
     try:
         await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
@@ -841,7 +778,9 @@ async def stream_agent_events(
     # History hydration uses one atomic JSON snapshot so the client can render
     # the final graph state without replaying every old event as a new run.
     if request.query_params.get("format") == "json":
-        events = await svc.repo.agent_events_after_for_learner(task_id, context.learner_id, 0)
+        events = await svc.repo.agent_events_after_for_learner(
+            task_id, context.learner_id, 0
+        )
         return Response(
             content=json.dumps({"events": events}, ensure_ascii=False, separators=(",", ":")),
             media_type="application/json",
@@ -877,11 +816,9 @@ async def stream_agent_events(
                     cursor = event["sequence"]
                     payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
                     yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
-                yield (
-                    "event: stream.end\ndata: "
-                    + json.dumps({"status": current["status"]}, ensure_ascii=False)
-                    + "\n\n"
-                )
+                yield "event: stream.end\ndata: " + json.dumps(
+                    {"status": current["status"]}, ensure_ascii=False
+                ) + "\n\n"
                 return
             if not events:
                 yield ": heartbeat\n\n"
@@ -897,8 +834,6 @@ async def stream_agent_events(
             "Connection": "keep-alive",
         },
     )
-
-
 @router.get("/sessions/{session_id}/report")
 async def get_report(
     session_id: str,
@@ -940,8 +875,6 @@ async def download_artifact(
     return FileResponse(
         artifact.path, media_type="application/vnd.tcpdump.pcap", filename=Path(artifact.path).name
     )
-
-
 @router.get("/me/context")
 async def me_context(
     context: LearnerContext = Depends(current_learner_context),
@@ -977,27 +910,14 @@ async def learning_profile(
         "profile": rows,
         "columns": {
             "learner": [
-                "knowledge_point",
-                "mastery",
-                "learning_state",
-                "progress",
-                "my_questions",
-                "recent_performance",
-                "last_studied_at",
-                "review_due_at",
-                "next_step",
+                "knowledge_point", "mastery", "learning_state", "progress",
+                "my_questions", "recent_performance", "last_studied_at",
+                "review_due_at", "next_step",
             ],
             "system": [
-                "confidence",
-                "evidence_count",
-                "misconceptions",
-                "prerequisites",
-                "difficulty",
-                "review_priority",
-                "stability",
-                "source_agent",
-                "revision",
-                "override_flag",
+                "confidence", "evidence_count", "misconceptions", "prerequisites",
+                "difficulty", "review_priority", "stability", "source_agent",
+                "revision", "override_flag",
             ],
         },
     }
@@ -1108,9 +1028,7 @@ async def agent_task_runtime_graph(
         "taskId": task_id,
         "latestExecutionId": execution.id if execution is not None else None,
         "status": execution.status if execution is not None else task.status,
-        "updatedAt": execution.updated_at.isoformat()
-        if execution and execution.updated_at
-        else None,
+        "updatedAt": execution.updated_at.isoformat() if execution and execution.updated_at else None,
         "workflowState": state,
     }
 
@@ -1192,13 +1110,17 @@ async def stream_events(
         while True:
             if await request.is_disconnected():
                 return
-            events = await svc.repo.events_after_for_learner(session_id, context.learner_id, cursor)
+            events = await svc.repo.events_after_for_learner(
+                session_id, context.learner_id, cursor
+            )
             for event in events:
                 cursor = event["sequence"]
                 payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
                 yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
 
-            current = await svc.repo.get_session_for_learner(session_id, context.learner_id)
+            current = await svc.repo.get_session_for_learner(
+                session_id, context.learner_id
+            )
             status = current.status if current else "failed"
             # Only a terminal status closes the stream. `awaiting_learner` means
             # the session is alive and will emit again the moment the learner
@@ -1232,3 +1154,5 @@ async def stream_events(
             "Connection": "keep-alive",
         },
     )
+
+

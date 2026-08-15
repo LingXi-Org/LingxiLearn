@@ -100,7 +100,9 @@ def test_evidence_repository_has_no_update_or_delete_path() -> None:
     forbidden = {"update_evidence", "delete_evidence", "edit_evidence", "purge_evidence"}
     assert not forbidden & set(dir(runtime_state.RuntimeStateRepository))
 
-    source = runtime_state.__file__.replace(".pyc", ".py")
+    source = (
+        runtime_state.__file__.replace(".pyc", ".py")
+    )
     with open(source, encoding="utf-8") as handle:
         text = handle.read()
     assert "delete(LearningEvidence" not in text

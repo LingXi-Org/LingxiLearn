@@ -44,12 +44,17 @@ from .config import REPO_ROOT, Settings, get_settings
 from .learner import LearnerService
 from .packs.loader import discover_packs, validate_pack
 from .packs.models import Pack
+from .runtime.contracts import Cost, DoneCondition, PlannedTask
+from .runtime.dispatch import DispatchDeps, Dispatcher
+from .runtime.guardrails import Budget
 from .runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
 from .runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from .runtime.loop import LoopDeps, build_loop
 from .runtime.loop import initial_state as initial_loop_state
 from .runtime.schedules import next_schedule_time, validate_schedule
 from .runtime.sim_semantics import PrimitiveCatalog, SimRunProjector
+from .state.capabilities import UnknownCapability
+from .state.capabilities import info as capability_details
 from .state.session_state import Goal, GoalKind, RuntimeStatus, new_budget
 from .state.skill_catalog import discover as discover_skill_manifests
 from .store.db import Database, Repository
@@ -70,8 +75,15 @@ AGENT_FLUSH_EVERY = 4
 """Batch size for persisting projections mid-run — small enough to feel live."""
 
 
-class _ProviderEventRuntime:
-    """Small event bridge used by isolated provider contract tests."""
+class _SidecarRuntime:
+    """Small runtime bridge for provider output emitted outside the graph.
+
+    Background sidecars do not have a compiled graph ``Runtime`` to bind to,
+    but providers still use the common ``emit`` helper.  Capturing those
+    events here lets the service persist them through the normal agent-event
+    stream, so learner-facing conversation output is not lost merely because
+    it ran while the foreground loop was busy.
+    """
 
     context = None
     cancellation = None
@@ -87,7 +99,6 @@ class _ProviderEventRuntime:
         payload = _json_safe({key: value for key, value in event.items() if key != "type"})
         agent = str(payload.pop("agent", self.agent))
         self.events.append({"kind": kind, "agent": agent, "payload": payload})
-
 
 _AGENT_FORCE_FLUSH = frozenset(
     {
@@ -121,15 +132,8 @@ _AGENT_FORCE_FLUSH = frozenset(
 )
 
 _LOOP_NODES = frozenset(
-    {
-        "interpret_goal",
-        "orchestrate",
-        "dispatch",
-        "observe",
-        "update_state",
-        "evaluate_goal",
-        "await_user",
-    }
+    {"interpret_goal", "orchestrate", "dispatch", "observe", "update_state",
+     "evaluate_goal", "await_user"}
 )
 """The runtime loop's own nodes. Which *agent* ran is not derived from these.
 
@@ -384,13 +388,12 @@ class Service:
         self._tasks: set[asyncio.Task[Any]] = set()
         self._workspace_projection_lock = asyncio.Lock()
         self._agent_slots = asyncio.Semaphore(max(1, self.settings.agent_concurrency))
+        self._sidecar_slots = asyncio.Semaphore(max(1, self.settings.agent_sidecar_concurrency))
         self._board_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._hold_sweep_locks = self._board_locks
         self._hold_sweep_pending: set[str] = set()
         self._conversation_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self._conversation_queue: defaultdict[str, asyncio.Queue[dict[str, Any]]] = defaultdict(
-            asyncio.Queue
-        )
+        self._conversation_queue: defaultdict[str, asyncio.Queue[dict[str, Any]]] = defaultdict(asyncio.Queue)
 
     # -- lifecycle -------------------------------------------------------
 
@@ -457,13 +460,21 @@ class Service:
                 for role in model_roles()
             }
         self.checkpointer = build_checkpointer(self.settings)
-        # V2 work is recovered from the Work Ledger.
-        await self.repo.recover_expired_work()
+        # Sidecars are durable. A process restart must never strand a running
+        # proposal; queue it again and let the normal worker claim it.
+        for sidecar in await self.repo.queued_agent_sidecars():
+            if sidecar["status"] == "running":
+                await self.repo.finish_agent_sidecar(sidecar["id"], status="queued")
+            self._spawn(self._run_capability_sidecar(sidecar["id"]))
         # Agent tasks are accepted before their graph starts.  Recover tasks
         # left in that durable queue when the API process is restarted; the
         # atomic claim in _run_agent_task makes this safe across replicas.
         for task in await self.repo.queued_agent_tasks():
-            self._spawn(self._drive_agent_task(task["id"], task["learner_id"], task["prompt"]))
+            self._spawn(
+                self._drive_agent_task(
+                    task["id"], task["learner_id"], task["prompt"]
+                )
+            )
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
             len(self.packs),
@@ -513,7 +524,6 @@ class Service:
         return build_loop(
             LoopDeps(
                 runtime_state=self.runtime_state,
-                repository=self.repo,
                 learner_id=learner_id,
                 task_id=task_id,
                 model=self.agent_model,
@@ -526,10 +536,7 @@ class Service:
                 confirmed_actions=confirmed_actions,
                 prior_results=prior_results,
                 prior_artifacts=prior_artifacts,
-                # Provider work is always submitted by the graph to the
-                # repository-backed Work Ledger.  There is intentionally no
-                # capability-specific background queue here.
-                schedule_background=None,
+                schedule_background=(lambda capability, inputs: self.schedule_capability(task_id, learner_id, capability, inputs)),
                 board_lock=self._board_locks[task_id],
             ),
             checkpointer=self.checkpointer,
@@ -632,12 +639,6 @@ class Service:
             handoff_result={},
             user_messages=[],
             visual_result={},
-        )
-        await self.repo.append_command(
-            task_id=task_id,
-            kind="initial_prompt",
-            payload={"message": normalized, "attachments": attachment_refs},
-            idempotency_key=f"task:{task_id}:initial",
         )
         await self.repo.append_agent_events(
             task_id,
@@ -779,29 +780,11 @@ class Service:
             raise KeyError(f"unknown agent task: {task_id}")
         executions = await self.repo.list_agent_executions(record.id, record.learner_id)
         session_state = await self.runtime_state.get_session_state(record.id) or {}
-        latest_turn = await self.repo.latest_turn(record.id)
         stack = await self.runtime_state.goal_stack(record.id)
         current_goal = stack.current()
         decisions = await self.runtime_state.decisions_for_task(record.id)
+        sidecars = await self.repo.list_agent_sidecars(record.id, record.learner_id)
         artifacts = await self._artifact_snapshot(record)
-        durable_work = await self.repo.list_work(record.id)
-        runtime_status = str(session_state.get("runtime_status") or "")
-        current_plan = dict(session_state.get("plan") or {})
-        goal_status = str(current_goal.status) if current_goal else "open"
-        turn_status = str((latest_turn or {}).get("status") or "")
-        work_items = [
-            {
-                "id": str(item.get("id") or ""),
-                "candidateId": str(item.get("candidate_id") or ""),
-                "capability": str(item.get("capability") or ""),
-                "dependsOn": list(item.get("depends_on") or []),
-                "status": str(item.get("status") or "queued"),
-                "planRevision": int(item.get("plan_revision") or 0),
-                "provider": str(item.get("provider") or ""),
-            }
-            for item in (durable_work or current_plan.get("tasks") or [])
-            if isinstance(item, dict)
-        ]
         intent_topic = str(record.title or record.prompt or "").strip()
         latest_execution = executions[0] if executions else None
         return {
@@ -841,34 +824,8 @@ class Service:
             ],
             "goal": current_goal.to_dict() if current_goal else {},
             "goal_stack": list(session_state.get("goal_stack") or []),
-            "runtime_status": runtime_status,
-            # V2 additive compatibility fields.  The legacy status remains the
-            # task row status while these expose the independent run/turn/goal
-            # dimensions without forcing a frontend migration.
-            "turnStatus": turn_status
-            or (
-                "awaiting_user"
-                if runtime_status == str(RuntimeStatus.WAITING_FOR_USER)
-                else "delivered"
-                if runtime_status == str(RuntimeStatus.COMPLETED)
-                else "failed"
-                if runtime_status == str(RuntimeStatus.FAILED)
-                else "active"
-            ),
-            "goalStatus": goal_status,
-            "phase": str((latest_turn or {}).get("phase") or runtime_status.lower()),
-            "executionMode": str(
-                (latest_turn or {}).get("execution_mode")
-                or ("deterministic_fallback" if current_plan.get("degraded") else "normal")
-            ),
-            "currentTurnId": str(
-                (latest_turn or {}).get("id") or session_state.get("current_turn_id") or record.id
-            ),
-            "planRevision": int(
-                (latest_turn or {}).get("revision") or session_state.get("revision") or 0
-            ),
-            "workItems": work_items,
-            "plan": current_plan,
+            "runtime_status": session_state.get("runtime_status", ""),
+            "plan": dict(session_state.get("plan") or {}),
             "budget": dict(session_state.get("budget") or {}),
             # Which agents ran is a fact about this run, read from the decision
             # trace and the registry. There is no fixed roster to enumerate.
@@ -877,7 +834,7 @@ class Service:
                 "learning_objective": intent_topic,
                 "language": "zh-CN",
             },
-            "agents": _agents_from_trace(decisions),
+            "agents": _agents_from_trace(decisions, sidecars),
             "decisions": decisions,
             "artifacts": artifacts,
             "delivery": {
@@ -1114,9 +1071,6 @@ class Service:
             raise KeyError(f"unknown agent task: {task_id}")
         if record.status in {"completed", "partial", "handed_off", "failed", "cancelled"}:
             return {"id": task_id, "status": record.status}
-        for work in await self.repo.list_work(task_id):
-            if work.get("status") not in {"succeeded", "failed", "cancelled", "blocked"}:
-                await self.repo.cancel_work(task_id=task_id, work_id=str(work["id"]))
         await self.repo.set_agent_task_status(task_id, "cancelled")
         if record.current_execution_id:
             execution = await self.repo.get_agent_execution(record.current_execution_id, learner_id)
@@ -1133,14 +1087,12 @@ class Service:
                 )
         await self.repo.append_agent_events(
             task_id,
-            [
-                {
-                    "kind": "task.cancelled",
-                    "agent": "coordinator",
-                    "execution_id": record.current_execution_id,
-                    "payload": {"status": "cancelled"},
-                }
-            ],
+            [{
+                "kind": "task.cancelled",
+                "agent": "coordinator",
+                "execution_id": record.current_execution_id,
+                "payload": {"status": "cancelled"},
+            }],
         )
         self._notify_agent(task_id)
         return {"id": task_id, "status": "cancelled"}
@@ -1225,61 +1177,6 @@ class Service:
                 raise KeyError(str(exc)) from exc
         raise KeyError(f"unknown artifact kind: {kind}")
 
-    async def confirm_agent_work(
-        self,
-        task_id: str,
-        *,
-        work_item_id: str,
-        approve: bool,
-        payload_digest: str,
-        learner_id: str,
-        idempotency_key: str,
-    ) -> dict[str, Any]:
-        """Approve or reject one irreversible work item by exact digest."""
-
-        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
-        if record is None:
-            raise KeyError(f"unknown agent task: {task_id}")
-        work = await self.repo.get_work(task_id=task_id, work_id=work_item_id)
-        if work is None:
-            raise KeyError(f"unknown work item: {work_item_id}")
-        if not work.get("confirmation_digest"):
-            raise ValueError("work_item_does_not_require_confirmation")
-        if work["confirmation_digest"] != payload_digest:
-            raise ValueError("payload_digest_mismatch")
-        command = await self.repo.append_command(
-            task_id=task_id,
-            kind="confirmation",
-            payload={
-                "work_item_id": work_item_id,
-                "approve": approve,
-                "payload_digest": payload_digest,
-            },
-            idempotency_key=idempotency_key,
-        )
-        if not command.get("created", True):
-            if command.get("payload") != {
-                "work_item_id": work_item_id,
-                "approve": approve,
-                "payload_digest": payload_digest,
-            }:
-                raise ValueError("idempotency_key_reused")
-            return {
-                "workItemId": work_item_id,
-                "status": "accepted",
-                "payloadDigest": payload_digest,
-            }
-        accepted = await self.repo.confirm_work(
-            work_id=work_item_id, payload_digest=payload_digest, approve=approve
-        )
-        if approve and not accepted:
-            raise ValueError("confirmation_not_applied")
-        return {
-            "workItemId": work_item_id,
-            "status": "queued" if approve else "cancelled",
-            "payloadDigest": payload_digest,
-        }
-
     async def _artifact_snapshot(self, record: Any) -> dict[str, Any]:
         """The artifacts this task actually produced, read from disk.
 
@@ -1316,7 +1213,6 @@ class Service:
         *,
         attachments: list[dict[str, Any]] | None = None,
         learner_id: str | None = None,
-        idempotency_key: str | None = None,
     ) -> None:
         record = await (
             self.repo.get_agent_task_for_learner(task_id, learner_id)
@@ -1328,28 +1224,8 @@ class Service:
         if not message.strip():
             raise ValueError("message must not be empty")
         attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
-        if idempotency_key:
-            command = await self.repo.append_command(
-                task_id=task_id,
-                kind="message",
-                payload={"message": message.strip(), "attachments": attachment_refs},
-                idempotency_key=idempotency_key,
-            )
-            # A retry of an already-enqueued command must not schedule another
-            # conversation worker or append another interjection.
-            if not command.get("created", True):
-                if command.get("payload") != {
-                    "message": message.strip(),
-                    "attachments": attachment_refs,
-                }:
-                    raise ValueError("idempotency_key_reused")
-                return
         if record.status != "awaiting_user":
-            item = {
-                "message": message.strip(),
-                "attachments": attachment_refs,
-                "received_at": datetime.now(UTC).isoformat(),
-            }
+            item = {"message": message.strip(), "attachments": attachment_refs, "received_at": datetime.now(UTC).isoformat()}
             await self.runtime_state.push_interjection(task_id, item)
             await self._conversation_queue[task_id].put(item)
             self._spawn(self._serve_conversation(task_id, record.learner_id))
@@ -1363,23 +1239,6 @@ class Service:
             )
         )
 
-    async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
-        """Drain queued learner inputs through the normal turn coordinator."""
-        async with self._conversation_locks[task_id]:
-            queue = self._conversation_queue[task_id]
-            while not queue.empty():
-                item = await queue.get()
-                await self._drive_agent_task(
-                    task_id,
-                    learner_id,
-                    "",
-                    resume={
-                        "message": str(item.get("message") or ""),
-                        "kind": "chat",
-                        "attachments": item.get("attachments") or [],
-                    },
-                )
-
     async def submit_agent_quiz(
         self,
         task_id: str,
@@ -1387,7 +1246,6 @@ class Service:
         submission_id: str,
         answers: dict[str, Any],
         learner_id: str | None = None,
-        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         record = await (
             self.repo.get_agent_task_for_learner(task_id, learner_id)
@@ -1396,22 +1254,6 @@ class Service:
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
-        command = await self.repo.append_command(
-            task_id=task_id,
-            kind="quiz_submission",
-            payload={"submission_id": submission_id, "answers": answers},
-            idempotency_key=idempotency_key or f"quiz:{submission_id}",
-        )
-        if not command.get("created", True):
-            if command.get("payload") != {
-                "submission_id": submission_id,
-                "answers": answers,
-            }:
-                raise ValueError("idempotency_key_reused")
-            return {
-                "status": "duplicate",
-                "submission": await _submission_snapshot(self.repo, task_id),
-            }
         existing = await self.repo.get_quiz_submission(task_id)
         if existing is not None:
             if existing.submission_id == submission_id:
@@ -1445,32 +1287,10 @@ class Service:
         )
         return {"status": "accepted", "submission": await _submission_snapshot(self.repo, task_id)}
 
-    async def ack_delivery(
-        self,
-        task_id: str,
-        artifact: str,
-        *,
-        learner_id: str | None = None,
-        idempotency_key: str | None = None,
-    ) -> dict[str, Any]:
-        record = await (
-            self.repo.get_agent_task_for_learner(task_id, learner_id)
-            if learner_id
-            else self.repo.get_agent_task(task_id)
-        )
+    async def ack_delivery(self, task_id: str, artifact: str, *, learner_id: str | None = None) -> dict[str, Any]:
+        record = await (self.repo.get_agent_task_for_learner(task_id, learner_id) if learner_id else self.repo.get_agent_task(task_id))
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
-        if idempotency_key:
-            command = await self.repo.append_command(
-                task_id=task_id,
-                kind="delivery_ack",
-                payload={"artifact": artifact},
-                idempotency_key=idempotency_key,
-            )
-            if not command.get("created", True):
-                if command.get("payload") != {"artifact": artifact}:
-                    raise ValueError("idempotency_key_reused")
-                return {"artifact": artifact, "status": "duplicate"}
         async with self._hold_sweep_locks[task_id]:
             board = await self.runtime_state.get_board(task_id)
             queue = list(board.get("delivery") or [])
@@ -1478,11 +1298,7 @@ class Service:
             if match is None:
                 raise KeyError(f"unknown delivery artifact: {artifact}")
             if match.get("state") == "consumed":
-                return {
-                    "artifact": artifact,
-                    "cursor": int(board.get("cursor") or 0),
-                    "delivery": queue,
-                }
+                return {"artifact": artifact, "cursor": int(board.get("cursor") or 0), "delivery": queue}
             cursor = int(board.get("cursor") or 0)
             if cursor >= len(queue) or queue[cursor].get("artifact") != artifact:
                 raise ValueError("delivery_not_unlocked")
@@ -1490,19 +1306,7 @@ class Service:
             cursor += 1
             if cursor < len(queue):
                 queue[cursor]["state"] = "unlocked"
-                await self.repo.append_agent_events(
-                    task_id,
-                    [
-                        {
-                            "kind": "delivery.unlocked",
-                            "agent": "delivery",
-                            "payload": {
-                                "artifact": queue[cursor].get("artifact"),
-                                "cursor": cursor,
-                            },
-                        }
-                    ],
-                )
+                await self.repo.append_agent_events(task_id, [{"kind": "delivery.unlocked", "agent": "delivery", "payload": {"artifact": queue[cursor].get("artifact"), "cursor": cursor}}])
             board["delivery"] = queue
             board["cursor"] = cursor
             await self.runtime_state.save_board(task_id, board)
@@ -1570,12 +1374,6 @@ class Service:
             # task) already owns this run.
             return
         record = claimed
-        # Freeze the command set belonging to this turn.  Inputs arriving
-        # while the graph is running belong to a later turn and must remain
-        # pending for the next coordinator pass.
-        turn_command_ids = {
-            str(command["id"]) for command in await self.repo.pending_commands(task_id)
-        }
         execution_id = f"exec-{uuid.uuid4().hex}"
         try:
             await self.repo.create_agent_execution(
@@ -1641,32 +1439,11 @@ class Service:
             self._notify_agent(task_id)
             return
 
-        response_composed = False
-
         async def persist_buffer(events: list[dict[str, Any]]) -> None:
-            nonlocal response_composed
             if not events:
                 return
-            # The graph adapter can inspect provider-native messages for local
-            # control flow, but this is the sole public persistence boundary.
-            # Never store private reasoning or tool payloads/arguments.
-            public_events = [
-                item
-                for item in events
-                if item.get("kind") not in {"reasoning.delta", "tool.call.delta", "tool.result"}
-            ]
-            composed: list[dict[str, Any]] = []
-            for item in public_events:
-                if item.get("kind") == "agent.output":
-                    if response_composed:
-                        continue
-                    response_composed = True
-                composed.append(item)
-            public_events = composed
-            if not public_events:
-                return
             current_workflow_state = projector.snapshot()["workflowState"]
-            for item in public_events:
+            for item in events:
                 item.setdefault("execution_id", execution_id)
                 item.setdefault("runtime", (item.get("payload") or {}).get("runtime") or {})
                 item.setdefault("workflowState", current_workflow_state)
@@ -1674,7 +1451,7 @@ class Service:
                     **(item.get("payload") or {}),
                     "workflowState": current_workflow_state,
                 }
-            await self.repo.append_agent_events(task_id, public_events)
+            await self.repo.append_agent_events(task_id, events)
             await self.repo.update_agent_execution(
                 execution_id,
                 workflow_state=current_workflow_state,
@@ -1886,36 +1663,15 @@ class Service:
             return
         state = await graph.aget_state(config)
         values = dict(getattr(state, "values", None) or {})
-        status = _agent_task_status(values, interrupted=bool(getattr(state, "interrupts", None)))
+        status = _agent_task_status(
+            values, interrupted=bool(getattr(state, "interrupts", None))
+        )
         errors = [str(item) for item in values.get("errors") or []]
         if status == "failed" and values.get("finished_reason"):
             errors.append(str(values["finished_reason"]))
         await self.repo.set_agent_task_status(
             task_id, "handed_off" if status == "handed_off" else status, "; ".join(errors)
         )
-        turn = await self.repo.latest_turn(task_id)
-        if turn is not None:
-            turn_status = {
-                "awaiting_user": "awaiting_user",
-                "completed": "delivered",
-                "handed_off": "delivered",
-                "failed": "failed",
-                "cancelled": "cancelled",
-            }.get(status, "active")
-            await self.repo.update_turn(
-                turn_id=str(turn["id"]),
-                status=turn_status,
-                phase="evaluating" if turn_status == "active" else "delivered",
-                goal_status="satisfied" if status in {"completed", "handed_off"} else "open",
-            )
-        # A command remains pending while the turn is executing. It becomes
-        # consumed only after the graph has produced a durable outcome, so a
-        # crash cannot silently drop an input.
-        if status not in {"failed", "partial"}:
-            for command in await self.repo.pending_commands(task_id):
-                if str(command["id"]) not in turn_command_ids:
-                    continue
-                await self.repo.consume_command(str(command["id"]))
         await self.repo.update_agent_execution(
             execution_id,
             status="awaiting_user"
@@ -1933,6 +1689,229 @@ class Service:
         except Exception:  # noqa: BLE001 - projection must not fail the task
             logger.exception("failed to project task artifacts: %s", task_id)
         self._notify_agent(task_id)
+    async def schedule_capability(
+        self, task_id: str, learner_id: str, capability: str, inputs: dict[str, Any] | None = None
+    ) -> None:
+        """Queue one non-blocking capability run outside the learner's turn.
+
+        Background work is scheduled by capability, resolved through the same
+        registry the loop uses. There is no per-kind branch here: adding a
+        background capability means registering a skill, not editing this method.
+        """
+
+        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        if record is None:
+            return
+        try:
+            capability_info = capability_details(capability)
+        except UnknownCapability:
+            logger.warning("refusing to schedule unknown capability: %s", capability)
+            return
+
+        sidecar_id = f"{task_id}:{capability.replace('.', '-')}"
+        sidecar = await self.repo.upsert_agent_sidecar(
+            sidecar_id=sidecar_id,
+            task_id=task_id,
+            learner_id=learner_id,
+            kind=capability,
+            input={
+                "capability": capability,
+                "label": capability_info.label,
+                "inputs": _json_safe(inputs or {}),
+                "queued_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        if sidecar["status"] == "queued":
+            self._spawn(self._run_capability_sidecar(sidecar["id"]))
+
+    async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
+        async with self._conversation_locks[task_id]:
+            queue = self._conversation_queue[task_id]
+            while not queue.empty():
+                item = await queue.get()
+                while True:
+                    rows = await self.repo.list_agent_sidecars(task_id, learner_id)
+                    current = next((row for row in rows if row.get("kind") == "dialog.converse"), None)
+                    current_input = dict(current.get("input") or {}).get("inputs") if current else None
+                    if current is not None and current.get("status") in {"queued", "running"}:
+                        await asyncio.sleep(0.05)
+                        continue
+                    # A completed row with the same input is already the
+                    # response for this queue item.  Do not requeue it: the
+                    # unique (task_id, kind) sidecar row is reusable, but a
+                    # successful request must remain idempotent.
+                    if current is not None and current.get("status") == "succeeded" and current_input == item:
+                        break
+                    await self.schedule_capability(task_id, learner_id, "dialog.converse", item)
+                    rows = await self.repo.list_agent_sidecars(task_id, learner_id)
+                    current = next(
+                        (row for row in rows if row.get("kind") == "dialog.converse"),
+                        None,
+                    )
+                    if current is None:
+                        break
+
+    async def _run_capability_sidecar(self, sidecar_id: str) -> None:
+        async with self._sidecar_slots:
+            await self._run_capability_sidecar_inner(sidecar_id)
+
+    async def _run_capability_sidecar_inner(self, sidecar_id: str) -> None:
+        """Run one queued capability through the same dispatcher the loop uses."""
+
+        sidecar = await self.repo.claim_agent_sidecar(sidecar_id)
+        if sidecar is None:
+            return
+        task_id = sidecar["task_id"]
+        learner_id = sidecar["learner_id"]
+        capability = str(sidecar["kind"])
+        capability_info = capability_details(capability)
+        payload = dict(sidecar.get("input") or {})
+
+        await self.repo.append_agent_events(
+            task_id,
+            [{"kind": "sidecar.started", "agent": capability,
+              "payload": {"sidecar_id": sidecar_id, "capability": capability}}],
+        )
+        if isinstance(payload.get("inputs"), dict) and payload["inputs"].get("revision"):
+            await self.repo.append_agent_events(
+                task_id,
+                [{"kind": "node.revising", "agent": capability, "payload": {"capability": capability, "revising": True}}],
+            )
+        self._notify_agent(task_id)
+        try:
+            record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            if record is None:
+                raise KeyError("agent task not found")
+            if self.agent_model is None:
+                raise RuntimeError("agent model is not configured")
+
+            skills = await self.runtime_state.list_skills(
+                learner_id=learner_id, enabled_only=True
+            )
+            stack = await self.runtime_state.goal_stack(task_id)
+            goal = stack.current() or Goal(goal_type="learn", topic=record.prompt)
+            prior_results, prior_artifacts = self._task_results(record)
+
+            dispatcher = Dispatcher(
+                DispatchDeps(
+                    runtime_state=self.runtime_state,
+                    learner_id=learner_id,
+                    task_id=task_id,
+                    goal=goal,
+                    skills=skills,
+                    model=self.agent_model,
+                    settings=self.settings,
+                    artifacts=self.agent_artifacts,
+                    registry=self.registry,
+                    user_message=dict(payload.get("inputs") or {}),
+                )
+            )
+            sidecar_runtime = _SidecarRuntime(capability)
+            dispatcher.bind_runtime(
+                sidecar_runtime,
+                emit=lambda kind, event: sidecar_runtime.emit(
+                    EVENT_CHANNEL,
+                    {"type": kind, **dict(event)},
+                ),
+            )
+            dispatcher.seed_results(prior_results)
+            dispatcher.seed_artifacts(prior_artifacts)
+
+            task_inputs = dict(payload.get("inputs") or {})
+            runtime_meta = dict(task_inputs.pop("__runtime", {}) or {})
+            board = await self.runtime_state.get_board(task_id)
+            task_inputs["__board"] = board
+            task = PlannedTask(
+                id=str(runtime_meta.get("task_id") or f"bg-{capability}"),
+                capability=capability,
+                knowledge_point_id=str(runtime_meta.get("knowledge_point_id") or (goal.knowledge_points[0] if goal.knowledge_points else "")),
+                inputs=task_inputs,
+                done_when=DoneCondition.model_validate(runtime_meta.get("done_when")) if runtime_meta.get("done_when") else (DoneCondition(kind="artifact_exists", artifact=str((runtime_meta.get("artifacts") or [""])[0])) if runtime_meta.get("artifacts") else DoneCondition(kind="always")),
+                rationale=str(payload.get("label") or capability),
+                estimated_cost=Cost(blocking=False),
+            )
+            profile = {
+                str(row["knowledge_point_id"]): row
+                for row in await self.runtime_state.profile_for(learner_id)
+            }
+            outcome = await dispatcher.run(task, profile=profile, budget=Budget())
+
+            if outcome.status == "failed":
+                raise RuntimeError(outcome.detail or f"{capability} failed")
+
+            # Persist provider telemetry, including the learner-facing
+            # ``agent.output`` emitted by the dedicated conversation agent.
+            # Sidecars have no graph runtime of their own, so this bridge is
+            # the only path by which their output can reach SSE consumers.
+            if (
+                capability_info.conversational
+                and outcome.learner_message
+                and not any(item.get("kind") == "agent.output" for item in sidecar_runtime.events)
+            ):
+                sidecar_runtime.emit(
+                    EVENT_CHANNEL,
+                    {
+                        "type": "agent.output",
+                        "agent": outcome.provider or capability,
+                        "message": outcome.learner_message,
+                        "stream_id": f"{task_id}:{capability}:{task.id}",
+                    },
+                )
+            if sidecar_runtime.events:
+                await self.repo.append_agent_events(task_id, sidecar_runtime.events)
+                self._notify_agent(task_id)
+
+            for key, value in dispatcher.results.items():
+                # Revisions intentionally reuse the provider's persist key;
+                # writing only previously unseen keys would leave the durable
+                # result pointing at the pre-revision artifact.
+                await self.repo.update_agent_task_output(task_id, key, _json_safe(value))
+
+            if outcome.held:
+                async with self._board_locks[task_id]:
+                    board = await self.runtime_state.get_board(task_id)
+                    board.setdefault("holds", {})
+                    task_key = str(runtime_meta.get("task_key") or f"0:{task.id}")
+                    previous = dict(board["holds"].get(task_key) or {})
+                    board["holds"][task_key] = {
+                        "task_id": previous.get("task_id") or task.id,
+                        "capability": outcome.capability,
+                        "provider": outcome.provider,
+                        "skill_id": outcome.skill_id,
+                        "knowledge_point_id": task.knowledge_point_id,
+                        "artifacts": list(outcome.artifacts),
+                        "revisions": outcome.revision or int(previous.get("revisions") or 0),
+                        "step": int(runtime_meta.get("step") or 0),
+                        "detail": outcome.detail,
+                        "opened_at": datetime.now(UTC).isoformat(),
+                    }
+                    await self.runtime_state.save_board(task_id, board)
+                    await self.repo.append_agent_events(task_id, [{"kind": "node.held", "agent": outcome.provider, "payload": {"task_id": task.id, "task_key": task_key, "capability": outcome.capability, "held": True}}])
+
+            await self.repo.finish_agent_sidecar(
+                sidecar_id,
+                status="succeeded",
+                output={"capability": capability, "detail": outcome.detail,
+                        "artifacts": outcome.artifacts},
+            )
+            await self.repo.append_agent_events(
+                task_id,
+                [{"kind": "sidecar.completed", "agent": capability,
+                  "payload": {"sidecar_id": sidecar_id, "capability": capability,
+                              "detail": outcome.detail}}],
+            )
+        except Exception as exc:  # sidecars never fail the learner-facing run
+            logger.exception("capability sidecar failed: %s", sidecar_id)
+            detail = f"{type(exc).__name__}: {exc}"
+            await self.repo.finish_agent_sidecar(sidecar_id, status="failed", error=detail)
+            await self.repo.append_agent_events(
+                task_id,
+                [{"kind": "sidecar.failed", "agent": capability,
+                  "payload": {"sidecar_id": sidecar_id, "error": detail}}],
+            )
+        finally:
+            self._notify_agent(task_id)
+            await self._sweep_holds(task_id, learner_id)
 
     async def _sweep_holds(self, task_id: str, learner_id: str) -> None:
         async with self._hold_sweep_locks[task_id]:
@@ -1940,6 +1919,9 @@ class Service:
                 return
             record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
             if record is None or record.status != "awaiting_user":
+                return
+            sidecars = await self.repo.list_agent_sidecars(task_id, learner_id)
+            if any(item.get("status") in {"queued", "running"} for item in sidecars):
                 return
             board = await self.runtime_state.get_board(task_id)
             if not (board.get("holds") or {}):
@@ -2028,7 +2010,9 @@ class Service:
         event.set()
         event.clear()
 
-    async def _drive(self, session_id: str, pack: Pack, learner_id: str, payload: Any) -> None:
+    async def _drive(
+        self, session_id: str, pack: Pack, learner_id: str, payload: Any
+    ) -> None:
         """Run the loop to its next pause, persisting projections as it goes."""
 
         async with self._run_locks[session_id]:
@@ -2106,7 +2090,9 @@ class Service:
             latest = await self.runtime_state.get_session_state(session_id) or {}
             runtime_status = str(latest.get("runtime_status") or RuntimeStatus.PLANNING)
             if status == "awaiting_learner":
-                status = await self._finalize(session_id, pack, learner_id, runtime_status)
+                status = await self._finalize(
+                    session_id, pack, learner_id, runtime_status
+                )
             elif status in {"failed", "cancelled"}:
                 await self._finalize(
                     session_id, pack, learner_id, runtime_status, outcome_override="failed"
@@ -2134,9 +2120,13 @@ class Service:
         }:
             return "awaiting_learner"
 
-        completed = outcome_override is None and runtime_status == str(RuntimeStatus.COMPLETED)
+        completed = outcome_override is None and runtime_status == str(
+            RuntimeStatus.COMPLETED
+        )
         rows = await self.runtime_state.profile_for(learner_id)
-        mastery = {str(row["knowledge_point_id"]): float(row.get("mastery") or 0.0) for row in rows}
+        mastery = {
+            str(row["knowledge_point_id"]): float(row.get("mastery") or 0.0) for row in rows
+        }
         misconceptions = sorted(
             {
                 str(tag)
@@ -2216,7 +2206,9 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
-def _agents_from_trace(decisions: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _agents_from_trace(
+    decisions: list[dict[str, Any]], sidecars: list[dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
     """Which agents ran this task, derived rather than enumerated.
 
     The old snapshot hard-coded one key per specialist, which meant every new
@@ -2244,6 +2236,15 @@ def _agents_from_trace(decisions: list[dict[str, Any]]) -> dict[str, dict[str, A
             entry["runs"] += 1
             entry["status"] = str(task.get("status") or "completed")
             entry["detail"] = str(task.get("detail") or "")
+    for sidecar in sidecars:
+        name = str(sidecar.get("kind") or "")
+        entry = seen.setdefault(
+            name,
+            {"agent": name, "capability": name, "skill_id": "", "runs": 0,
+             "status": "pending", "detail": ""},
+        )
+        entry["status"] = str(sidecar.get("status") or entry["status"])
+        entry["background"] = True
     return {name: value for name, value in sorted(seen.items())}
 
 

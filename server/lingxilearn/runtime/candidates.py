@@ -12,11 +12,9 @@ any model is involved.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from hashlib import sha256
 from typing import Any
 
 from ..state.capabilities import Capability, UnknownCapability, info, parse
@@ -37,7 +35,6 @@ class WorldState:
     """
 
     target: ProfileView
-    targets: tuple[ProfileView, ...] = ()
     prerequisites: tuple[ProfileView, ...] = ()
     due_for_review: tuple[ProfileView, ...] = ()
     requested_capabilities: frozenset[str] = frozenset()
@@ -78,8 +75,7 @@ class WorldState:
         negotiation sentence before it runs.
         """
 
-        targets = self.targets or (self.target,)
-        found: list[tuple[ProfileView, bool]] = [(target, True) for target in targets]
+        found: list[tuple[ProfileView, bool]] = [(self.target, True)]
         for prerequisite in self.prerequisites:
             if prerequisite.is_weak:
                 found.append((prerequisite, False))
@@ -96,8 +92,6 @@ class RegisteredSkill:
     cost: dict[str, Any]
     preconditions: dict[str, Any]
     enabled: bool = True
-    version: str = ""
-    checksum: str = ""
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> RegisteredSkill:
@@ -108,29 +102,7 @@ class RegisteredSkill:
             cost=dict(row.get("cost") or {}),
             preconditions=dict(row.get("preconditions") or {}),
             enabled=bool(row.get("enabled", True)),
-            version=str(row.get("version") or row.get("skill_version") or ""),
-            checksum=str(row.get("checksum") or row.get("content_checksum") or ""),
         )
-
-
-def candidate_id(skill: RegisteredSkill, capability: str, knowledge_point_id: str) -> str:
-    """Return the stable identity of one executable candidate.
-
-    A plan must bind the selected skill at planning time.  The digest includes
-    the registry identity and executable binding so dispatch cannot silently
-    select a different provider when two skills expose the same capability.
-    """
-
-    payload = {
-        "capability": capability,
-        "knowledge_point_id": knowledge_point_id,
-        "skill_id": skill.skill_id,
-        "version": skill.version,
-        "checksum": skill.checksum,
-        "provider": skill.provider,
-    }
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return "candidate_" + sha256(encoded).hexdigest()[:24]
 
 
 def _precondition_block(
@@ -265,12 +237,9 @@ def generate(
                 )
                 utility = round(gain.value / cost.normalized, 4)
                 candidate = CandidateAction(
-                    candidate_id=candidate_id(skill, tag, view.knowledge_point_id),
                     capability=tag,
                     skill_id=skill.skill_id,
                     provider=skill.provider,
-                    skill_version=skill.version,
-                    skill_checksum=skill.checksum,
                     knowledge_point_id=view.knowledge_point_id,
                     gain=gain.value,
                     cost=cost.normalized,
@@ -322,7 +291,6 @@ __all__ = [
     "RegisteredSkill",
     "WorldState",
     "best",
-    "candidate_id",
     "deviates",
     "eligible_only",
     "generate",

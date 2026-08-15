@@ -70,7 +70,9 @@ def test_every_requested_role_is_one_the_host_builds() -> None:
     """The static half: no caller may ask for a role startup does not create."""
 
     built = set(model_roles())
-    missing = {role: sites for role, sites in _requested_roles().items() if role not in built}
+    missing = {
+        role: sites for role, sites in _requested_roles().items() if role not in built
+    }
     assert not missing, (
         "these roles are requested but never built, so they resolve to None in "
         f"production: {missing}"

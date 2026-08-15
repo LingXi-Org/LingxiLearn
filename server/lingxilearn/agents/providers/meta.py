@@ -62,20 +62,17 @@ async def skill_forge(context: ProviderContext) -> ProviderResult:
         system_prompt=FORGE_PROMPT,
         name="skill-forge",
     )
-    parsed = (
-        extract_json(
-            message_text(
-                await invoke_agent(
-                    agent,
-                    HumanMessage(json.dumps(payload, ensure_ascii=False)),
-                    context.runtime,
-                    agent_name="skill_forge",
-                    recursion_limit=10,
-                )
+    parsed = extract_json(
+        message_text(
+            await invoke_agent(
+                agent,
+                HumanMessage(json.dumps(payload, ensure_ascii=False)),
+                context.runtime,
+                agent_name="skill_forge",
+                recursion_limit=10,
             )
         )
-        or {}
-    )
+    ) or {}
 
     if str(parsed.get("action") or "no_forge") != "forge":
         return ProviderResult(

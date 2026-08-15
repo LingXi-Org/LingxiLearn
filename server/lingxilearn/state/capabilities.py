@@ -125,7 +125,9 @@ CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
     Capability.ASSESS_GENERATE: CapabilityInfo(
         Capability.ASSESS_GENERATE, "出题检测", True, False, False
     ),
-    Capability.ASSESS_GRADE: CapabilityInfo(Capability.ASSESS_GRADE, "判分", False, False, False),
+    Capability.ASSESS_GRADE: CapabilityInfo(
+        Capability.ASSESS_GRADE, "判分", False, False, False
+    ),
     Capability.ASSESS_INTERPRET: CapabilityInfo(
         Capability.ASSESS_INTERPRET, "解读作答证据", False, False, False
     ),

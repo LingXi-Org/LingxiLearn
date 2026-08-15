@@ -14,8 +14,6 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Any
 from uuid import uuid4
 
-import httpx
-import lingxigraph.integrations.openai_compat as _compat_module
 from lingxigraph import AIMessage, AIMessageChunk, ToolCallChunk
 from lingxigraph.integrations import OpenAICompatChatModel
 from lingxigraph.integrations._http import should_retry_status, sleep_before_retry
@@ -25,20 +23,6 @@ from lingxigraph.runtime import get_runtime
 
 class TracedOpenAICompatChatModel(OpenAICompatChatModel):
     """Keep reasoning deltas available to LingxiGraph's message stream."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        # Defer httpx's native TLS initialisation until a request is made.
-        original = _compat_module.httpx.AsyncClient
-        _compat_module.httpx.AsyncClient = _LazyAsyncClient  # type: ignore[assignment,misc]
-        try:
-            super().__init__(*args, **kwargs)
-        finally:
-            _compat_module.httpx.AsyncClient = original  # type: ignore[assignment,misc]
-
-    async def aclose(self) -> None:
-        client = getattr(self, "_client", None)
-        if client is not None:
-            await client.aclose()
 
     def _payload(
         self,
@@ -55,14 +39,10 @@ class TracedOpenAICompatChatModel(OpenAICompatChatModel):
                 continue
             additional = getattr(message, "additional_kwargs", {}) or {}
             reasoning = (
-                (
-                    additional.get("reasoning_content")
-                    or additional.get("reasoning")
-                    or additional.get("thinking")
-                )
-                if isinstance(additional, dict)
-                else None
-            )
+                additional.get("reasoning_content")
+                or additional.get("reasoning")
+                or additional.get("thinking")
+            ) if isinstance(additional, dict) else None
             if reasoning:
                 encoded["reasoning_content"] = str(reasoning)
         return payload
@@ -203,24 +183,3 @@ class TracedOpenAICompatChatModel(OpenAICompatChatModel):
 
 
 __all__ = ["TracedOpenAICompatChatModel"]
-
-
-class _LazyAsyncClient:
-    def __init__(self, **kwargs: Any) -> None:
-        self._kwargs = kwargs
-        self._client: httpx.AsyncClient | None = None
-
-    def _get(self) -> httpx.AsyncClient:
-        if self._client is None:
-            self._client = httpx.AsyncClient(**self._kwargs)
-        return self._client
-
-    async def post(self, *args: Any, **kwargs: Any) -> httpx.Response:
-        return await self._get().post(*args, **kwargs)
-
-    def stream(self, *args: Any, **kwargs: Any) -> Any:
-        return self._get().stream(*args, **kwargs)
-
-    async def aclose(self) -> None:
-        if self._client is not None:
-            await self._client.aclose()

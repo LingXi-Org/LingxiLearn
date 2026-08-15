@@ -82,13 +82,13 @@ class ArtifactDraft:
 def staged_artifact_tools(draft: ArtifactDraft, *, batch: bool = False) -> list[Any]:
     """Expose safe write/read/list tools without exposing the filesystem."""
 
-    @tool(name="stage_artifact_file", timeout=30.0, permissions=("artifact:write",))  # type: ignore[operator]
+    @tool(name="stage_artifact_file", timeout=30.0, permissions=("artifact:write",))
     def stage_artifact_file(path: str, content: str) -> str:
         """Write one complete artifact file into the private task draft."""
 
         return json.dumps(draft.write(path, content), ensure_ascii=False)
 
-    @tool(name="stage_artifact_chunk", timeout=30.0, permissions=("artifact:write",))  # type: ignore[operator]
+    @tool(name="stage_artifact_chunk", timeout=30.0, permissions=("artifact:write",))
     def stage_artifact_chunk(path: str, content: str, mode: str = "replace") -> str:
         """Write a bounded chunk when a complete file exceeds one tool payload."""
 
@@ -101,7 +101,7 @@ def staged_artifact_tools(draft: ArtifactDraft, *, batch: bool = False) -> list[
                 raise ArtifactError("cannot append before the first replace chunk") from None
         return json.dumps(draft.write(path, content), ensure_ascii=False)
 
-    @tool(name="stage_artifact_files", timeout=45.0, permissions=("artifact:write",))  # type: ignore[operator]
+    @tool(name="stage_artifact_files", timeout=45.0, permissions=("artifact:write",))
     def stage_artifact_files(files: list[dict[str, str]]) -> str:
         """Write two or three complete artifact files in one model turn."""
 
@@ -116,13 +116,13 @@ def staged_artifact_tools(draft: ArtifactDraft, *, batch: bool = False) -> list[
             written.append(draft.write(path, content))
         return json.dumps({"files": written, "status": "staged"}, ensure_ascii=False)
 
-    @tool(name="read_staged_artifact", timeout=30.0, read_only=True)  # type: ignore[operator]
+    @tool(name="read_staged_artifact", timeout=30.0, read_only=True)
     def read_staged_artifact(path: str) -> str:
         """Read back one file already staged by this Agent."""
 
         return draft.read(path)
 
-    @tool(name="list_staged_artifacts", timeout=30.0, read_only=True)  # type: ignore[operator]
+    @tool(name="list_staged_artifacts", timeout=30.0, read_only=True)
     def list_staged_artifacts() -> str:
         """List files currently staged by this Agent."""
 
@@ -189,13 +189,9 @@ def skill_constraints(
         f"After reading SKILL.md, read only relevant referenced resources; start with {resource_text}.",
     ]
     if stage_artifacts and batch_artifacts:
-        constraints.append(
-            "For artifact-generation skills, batch 2-3 complete files per stage_artifact_files call when possible; use stage_artifact_file only for a single-file repair, then return only a JSON receipt."
-        )
+        constraints.append("For artifact-generation skills, batch 2-3 complete files per stage_artifact_files call when possible; use stage_artifact_file only for a single-file repair, then return only a JSON receipt.")
     elif stage_artifacts:
-        constraints.append(
-            "For artifact-generation skills, write the complete file through stage_artifact_file and return only a JSON receipt."
-        )
+        constraints.append("For artifact-generation skills, write the complete file through stage_artifact_file and return only a JSON receipt.")
     return tuple(constraints)
 
 

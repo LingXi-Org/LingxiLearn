@@ -6,8 +6,6 @@ Secrets are :class:`SecretStr` so they never land in logs or tracebacks.
 
 from __future__ import annotations
 
-import asyncio
-import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -15,11 +13,6 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic.fields import AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-if sys.platform == "win32":
-    selector_policy = getattr(asyncio, "WindowsSelectorEventLoopPolicy", None)
-    if selector_policy is not None:
-        asyncio.set_event_loop_policy(selector_policy())
 
 _source_root = Path(__file__).resolve().parents[2]
 _installed_root = Path(__file__).resolve().parents[1]
@@ -49,9 +42,7 @@ class Settings(BaseSettings):
 
     # --- persistence -------------------------------------------------------
     # SQLite by default so a fresh clone runs with zero setup; point this at
-    # PostgreSQL (asyncpg or psycopg's async dialect) for the container
-    # deployment.  psycopg is also supported for Windows/Python builds where
-    # asyncpg can hit the OpenSSL Applink native exit.
+    # PostgreSQL (postgresql+asyncpg://...) for the container deployment.
     database_url: str = "sqlite+aiosqlite:///./var/lingxilearn.sqlite3"
     # LingxiGraph's checkpointers are synchronous drivers, so they need their
     # own DSN in the driver's native form.
@@ -100,8 +91,9 @@ class Settings(BaseSettings):
     agent_deck_recursion_limit: int = 40
     agent_visual_timeout: float = 240.0
     # A small production VM should queue expensive graph executions instead
-    # of allowing every request to retain a full model context.
+    # of allowing every request and sidecar to retain a full model context.
     agent_concurrency: int = 1
+    agent_sidecar_concurrency: int = 6
     agent_parallel_dispatch: bool = True
     agent_web_timeout: float = 20.0
     # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable
@@ -137,11 +129,7 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _known_async_driver(cls, value: str) -> str:
-        allowed = (
-            "sqlite+aiosqlite://",
-            "postgresql+asyncpg://",
-            "postgresql+psycopg://",
-        )
+        allowed = ("sqlite+aiosqlite://", "postgresql+asyncpg://")
         if not value.startswith(allowed):
             raise ValueError(f"LINGXILEARN_DATABASE_URL must start with one of {allowed}")
         return value
@@ -153,14 +141,6 @@ class Settings(BaseSettings):
         Without this, ``uvicorn`` started from ``server/`` and a script started
         from the repo root would quietly use two different databases.
         """
-        # asyncpg currently can terminate Python 3.13 Windows processes via
-        # OpenSSL_Applink.  psycopg 3 provides the same SQLAlchemy async
-        # interface and uses the supported SelectorEventLoop path instead.
-        if sys.platform == "win32" and self.database_url.startswith(
-            "postgresql+asyncpg://"
-        ):
-            return self.database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-
         prefix = "sqlite+aiosqlite:///"
         if not self.database_url.startswith(prefix):
             return self.database_url
@@ -176,9 +156,8 @@ class Settings(BaseSettings):
         """DSN for the LingxiGraph checkpointer, derived from the app DSN by default."""
         if self.checkpoint_url:
             return self.checkpoint_url
-        for prefix in ("postgresql+asyncpg://", "postgresql+psycopg://"):
-            if self.database_url.startswith(prefix):
-                return self.database_url.replace(prefix, "postgresql://", 1)
+        if self.database_url.startswith("postgresql+asyncpg://"):
+            return self.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
         path = self.resolved_database_url.split("///", 1)[-1]
         return str(Path(path).with_name("checkpoints.sqlite3"))
 

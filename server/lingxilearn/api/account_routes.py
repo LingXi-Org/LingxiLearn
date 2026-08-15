@@ -230,7 +230,9 @@ async def update_user_profile(
         raise HTTPException(status_code=422, detail="invalid_profile_name")
     if image is not None:
         if not isinstance(image, str) or not (
-            image.startswith("http://") or image.startswith("https://") or image.startswith("/api/")
+            image.startswith("http://")
+            or image.startswith("https://")
+            or image.startswith("/api/")
         ):
             raise HTTPException(status_code=422, detail="invalid_profile_image")
     svc = service_of(request)
@@ -311,8 +313,7 @@ async def update_user_settings(
     if "emailPreferences" in patch:
         preferences = patch["emailPreferences"]
         if not isinstance(preferences, dict) or any(
-            key
-            not in {
+            key not in {
                 "unsubscribeAll",
                 "unsubscribeMarketing",
                 "unsubscribeUpdates",
@@ -539,15 +540,11 @@ async def _usage_rows(
         except ValueError as exc:
             raise HTTPException(status_code=422, detail="invalid_usage_cursor") from exc
     async with service_of(request).db.session() as session:
-        query = (
-            select(AgentTask)
-            .where(
-                AgentTask.learner_id == learner.learner_id,
-                AgentTask.created_at >= start,
-                AgentTask.created_at <= end,
-            )
-            .order_by(AgentTask.created_at.desc(), AgentTask.id.desc())
-        )
+        query = select(AgentTask).where(
+            AgentTask.learner_id == learner.learner_id,
+            AgentTask.created_at >= start,
+            AgentTask.created_at <= end,
+        ).order_by(AgentTask.created_at.desc(), AgentTask.id.desc())
         tasks = list((await session.execute(query.offset(offset).limit(limit + 1))).scalars().all())
     has_more = len(tasks) > limit
     tasks = tasks[:limit]
@@ -555,7 +552,9 @@ async def _usage_rows(
         {
             "id": task.id,
             "createdAt": (
-                task.created_at.isoformat() if task.created_at else datetime.now(UTC).isoformat()
+                task.created_at.isoformat()
+                if task.created_at
+                else datetime.now(UTC).isoformat()
             ),
             "source": "sim-chat",
             "workflowName": None,
@@ -645,17 +644,14 @@ async def v2_billing_status(
     if workspaceId not in {None, "lingxi"}:
         raise not_found()
     async with service_of(request).db.session() as session:
-        used_bytes = (
-            await session.scalar(
-                select(func.coalesce(func.sum(WorkspaceFile.size), 0))
-                .join(Workspace, Workspace.id == WorkspaceFile.workspace_id)
-                .where(
-                    Workspace.learner_id == learner.learner_id,
-                    WorkspaceFile.archived.is_(False),
-                )
+        used_bytes = await session.scalar(
+            select(func.coalesce(func.sum(WorkspaceFile.size), 0))
+            .join(Workspace, Workspace.id == WorkspaceFile.workspace_id)
+            .where(
+                Workspace.learner_id == learner.learner_id,
+                WorkspaceFile.archived.is_(False),
             )
-            or 0
-        )
+        ) or 0
     storage_limit = 20 * 1024 * 1024 * 100
     used = int(used_bytes)
     return {

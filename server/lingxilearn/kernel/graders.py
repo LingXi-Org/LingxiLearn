@@ -122,7 +122,9 @@ def _numeric(spec: dict[str, Any], answer: Any, _ctx: dict[str, Any]) -> Judgeme
     try:
         value = float(str(raw).strip())
     except (TypeError, ValueError):
-        return Judgement(correct=False, score=0.0, feedback="请给出一个数值。", detail={"raw": raw})
+        return Judgement(
+            correct=False, score=0.0, feedback="请给出一个数值。", detail={"raw": raw}
+        )
     target = float(spec.get("value", 0.0))
     tolerance = float(spec.get("tolerance", max(abs(target) * 0.05, 1e-9)))
     correct = abs(value - target) <= tolerance
@@ -156,20 +158,6 @@ def _keywords(spec: dict[str, Any], answer: Any, _ctx: dict[str, Any]) -> Judgem
     hits = sum(
         1 for group in required if any(re.sub(r"\s+", "", a).casefold() in folded for a in group)
     )
-    score = hits / len(required) if required else 0.0
-    threshold = float(spec.get("threshold", 0.75))
-    tags = [
-        str(tag)
-        for phrase, tag in (spec.get("misconceptions") or {}).items()
-        if re.sub(r"\s+", "", str(phrase)).casefold() in folded
-    ]
-    return Judgement(
-        correct=score >= threshold,
-        score=score,
-        concept_scores=_concept_scores(spec, score),
-        misconceptions=tags,
-        detail={"matched": hits, "of": len(required), "threshold": threshold},
-    )
 
 
 @grader("sim_outcome")
@@ -197,6 +185,22 @@ def _sim_outcome(spec: dict[str, Any], _answer: Any, ctx: dict[str, Any]) -> Jud
         feedback="交付完整且效率达标。" if correct else "先保证交付结果完整，再优化效率。",
         detail={"delivered_intact": intact, "efficiency": efficiency, "min_efficiency": minimum},
     )
+    score = hits / len(required) if required else 0.0
+    threshold = float(spec.get("threshold", 0.75))
+    tags = [
+        str(tag)
+        for phrase, tag in (spec.get("misconceptions") or {}).items()
+        if re.sub(r"\s+", "", str(phrase)).casefold() in folded
+    ]
+    return Judgement(
+        correct=score >= threshold,
+        score=score,
+        concept_scores=_concept_scores(spec, score),
+        misconceptions=tags,
+        detail={"matched": hits, "of": len(required), "threshold": threshold},
+    )
+
+
 # --------------------------------------------------------------------------
 # Latency attribution — mission "慢在哪一环"
 # --------------------------------------------------------------------------

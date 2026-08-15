@@ -40,156 +40,66 @@ class VisibleExecution:
 
 
 _VISIBLE_EXECUTIONS: tuple[tuple[VisibleExecution, tuple[str, ...]], ...] = (
-    (
-        VisibleExecution("tutor", "Tutor"),
-        (
-            "answer_user",
-            "dialog.answer",
-            "teach.explain",
-            "dialog.negotiate",
-            "negotiator",
-        ),
-    ),
-    (
-        VisibleExecution("learning_companion", "Learning Companion"),
-        (
-            "learning_companion",
-            "dialog.converse",
-        ),
-    ),
-    (
-        VisibleExecution("learner_interview", "了解你的基础"),
-        (
-            "learner_interview",
-            "dialog.interview",
-        ),
-    ),
-    (
-        VisibleExecution("socratic_prober", "Socratic Probe"),
-        (
-            "probe_user",
-            "dialog.probe",
-        ),
-    ),
-    (
-        VisibleExecution("adaptive_tutor", "Adaptive Tutor"),
-        (
-            "adaptive_pedagogy",
-            "teach.strategy",
-        ),
-    ),
-    (
-        VisibleExecution("lesson_intro", "Lesson Intro"),
-        (
-            "lesson_intro",
-            "content.lesson_intro",
-            "lecture_hook",
-        ),
-    ),
-    (
-        VisibleExecution("lecture_deck", "Lecture Deck"),
-        (
-            "lecture_deck",
-            "content.deck",
-            "interactive_lecture_deck",
-        ),
-    ),
-    (
-        VisibleExecution("visual_explainer", "Visual Explainer"),
-        (
-            "visual_explainer",
-            "content.visual",
-            "interactive_visual_explainer",
-        ),
-    ),
-    (
-        VisibleExecution("quiz_generator", "Quiz Generator"),
-        (
-            "quiz_generator",
-            "assess.generate",
-        ),
-    ),
-    (
-        VisibleExecution("formative_assessor", "Formative Assessor"),
-        (
-            "formative_assessor",
-            "assess.interpret",
-        ),
-    ),
-    (
-        VisibleExecution("retrieval_practice", "Retrieval Practice"),
-        (
-            "retrieval_practice",
-            "review_scheduler",
-            "review.schedule",
-        ),
-    ),
-    (
-        VisibleExecution("curriculum_mapper", "Curriculum Mapper"),
-        (
-            "curriculum_mapper",
-            "curriculum_graph",
-            "prerequisite_analyzer",
-            "graph.build",
-            "graph.prerequisite",
-        ),
-    ),
-    (
-        VisibleExecution("learner_reflector", "Learner Reflector"),
-        (
-            "learner_reflector",
-            "learner_state_reflector",
-            "model.reflect",
-        ),
-    ),
-    (
-        VisibleExecution("investigator", "Investigator"),
-        (
-            "investigator",
-            "pack_investigate",
-            "tool.investigate",
-            "web_search",
-            "web_fetch",
-        ),
-    ),
-    (
-        VisibleExecution("learning_reporter", "Learning Reporter"),
-        (
-            "learning_reporter",
-            "pack_report",
-            "meta.report",
-        ),
-    ),
-    (
-        VisibleExecution("skill_forge", "Skill Forge"),
-        (
-            "skill_forge",
-            "meta.author_skill",
-        ),
-    ),
-    (
-        VisibleExecution("knowledge_probe", "Knowledge Probe", "function", "deterministic"),
-        (
-            "knowledge_probe",
-            "pack_probe",
-            "knowledge.search",
-            "kb.search",
-        ),
-    ),
-    (
-        VisibleExecution(
-            "deterministic_grader", "Deterministic Grader", "function", "deterministic"
-        ),
-        (
-            "deterministic_grader",
-            "assess.grade",
-            "quiz_submit",
-        ),
-    ),
+    (VisibleExecution("tutor", "Tutor"), (
+        "answer_user", "dialog.answer", "teach.explain", "dialog.negotiate", "negotiator",
+    )),
+    (VisibleExecution("learning_companion", "Learning Companion"), (
+        "learning_companion", "dialog.converse",
+    )),
+    (VisibleExecution("learner_interview", "了解你的基础"), (
+        "learner_interview", "dialog.interview",
+    )),
+    (VisibleExecution("socratic_prober", "Socratic Probe"), (
+        "probe_user", "dialog.probe",
+    )),
+    (VisibleExecution("adaptive_tutor", "Adaptive Tutor"), (
+        "adaptive_pedagogy", "teach.strategy",
+    )),
+    (VisibleExecution("lesson_intro", "Lesson Intro"), (
+        "lesson_intro", "content.lesson_intro", "lecture_hook",
+    )),
+    (VisibleExecution("lecture_deck", "Lecture Deck"), (
+        "lecture_deck", "content.deck", "interactive_lecture_deck",
+    )),
+    (VisibleExecution("visual_explainer", "Visual Explainer"), (
+        "visual_explainer", "content.visual", "interactive_visual_explainer",
+    )),
+    (VisibleExecution("quiz_generator", "Quiz Generator"), (
+        "quiz_generator", "assess.generate",
+    )),
+    (VisibleExecution("formative_assessor", "Formative Assessor"), (
+        "formative_assessor", "assess.interpret",
+    )),
+    (VisibleExecution("retrieval_practice", "Retrieval Practice"), (
+        "retrieval_practice", "review_scheduler", "review.schedule",
+    )),
+    (VisibleExecution("curriculum_mapper", "Curriculum Mapper"), (
+        "curriculum_mapper", "curriculum_graph", "prerequisite_analyzer", "graph.build", "graph.prerequisite",
+    )),
+    (VisibleExecution("learner_reflector", "Learner Reflector"), (
+        "learner_reflector", "learner_state_reflector", "model.reflect",
+    )),
+    (VisibleExecution("investigator", "Investigator"), (
+        "investigator", "pack_investigate", "tool.investigate", "web_search", "web_fetch",
+    )),
+    (VisibleExecution("learning_reporter", "Learning Reporter"), (
+        "learning_reporter", "pack_report", "meta.report",
+    )),
+    (VisibleExecution("skill_forge", "Skill Forge"), (
+        "skill_forge", "meta.author_skill",
+    )),
+    (VisibleExecution("knowledge_probe", "Knowledge Probe", "function", "deterministic"), (
+        "knowledge_probe", "pack_probe", "knowledge.search", "kb.search",
+    )),
+    (VisibleExecution("deterministic_grader", "Deterministic Grader", "function", "deterministic"), (
+        "deterministic_grader", "assess.grade", "quiz_submit",
+    )),
 )
 
 VISIBLE_EXECUTION_BY_ALIAS: dict[str, VisibleExecution] = {
-    alias.casefold(): execution for execution, aliases in _VISIBLE_EXECUTIONS for alias in aliases
+    alias.casefold(): execution
+    for execution, aliases in _VISIBLE_EXECUTIONS
+    for alias in aliases
 }
 
 
@@ -256,6 +166,7 @@ PRIMITIVE_CATALOG: dict[str, Primitive] = {
     "observe": Primitive("router_v2", "control", True),
     "update_state": Primitive("router_v2", "control", True),
     "evaluate_goal": Primitive("router_v2", "control", True),
+    "await_user": Primitive("human_in_the_loop", "interrupt"),
     "recognize_intent": Primitive("router_v2", "condition", True),
     "intent": Primitive("router_v2", "condition", True),
     "lecture_hook": Primitive("agent", "agent"),
@@ -458,8 +369,7 @@ class SimRunProjector:
 
     def _rebuild_planned_edges(self) -> None:
         self.workflow_state["edges"] = [
-            edge
-            for edge in self.workflow_state["edges"]
+            edge for edge in self.workflow_state["edges"]
             if (edge.get("data") or {}).get("kind") != "dependency"
         ]
         for task_id, target in self._planned_blocks.items():
@@ -477,22 +387,18 @@ class SimRunProjector:
                         ),
                     )
 
-    def _update_planned_execution(self, payload: dict[str, Any], *, status: str) -> str | None:
+    def _update_planned_execution(
+        self, payload: dict[str, Any], *, status: str
+    ) -> str | None:
         task_id = str(payload.get("task_id") or payload.get("node_id") or "")
         block_id = self._planned_blocks.get(task_id)
         if block_id is None:
             execution = visible_execution(
-                str(
-                    payload.get("provider")
-                    or payload.get("agent")
-                    or payload.get("capability")
-                    or ""
-                )
+                str(payload.get("provider") or payload.get("agent") or payload.get("capability") or "")
             )
             if execution is not None:
                 candidates = [
-                    item
-                    for item in self.blocks.values()
+                    item for item in self.blocks.values()
                     if (item.get("data") or {}).get("primitive") == execution.key
                     and item.get("executionState") in {"queued", "pending", "running"}
                 ]
@@ -590,9 +496,7 @@ class SimRunProjector:
             EventKind.NODE_RETRYING,
             EventKind.NODE_CACHED,
         }
-        span: dict[str, Any] | None = None
-        execution = visible_execution(node)
-        if kind in node_event_kinds and execution is not None:
+        if kind in node_event_kinds and visible_execution(node) is not None:
             block_id, block = self._ensure_block(event, agent)
             payload["blockId"] = block_id
             if kind is EventKind.NODE_STARTED:
@@ -608,7 +512,7 @@ class SimRunProjector:
                         "id": metadata["span_id"]
                         or (block_id if attempts == 0 else f"{block_id}:attempt:{attempts + 1}"),
                         "name": node,
-                        "type": execution.sim_type,
+                        "type": visible_execution(node).sim_type,
                         "blockId": block_id,
                         "node": node,
                         "status": "running",
@@ -623,9 +527,7 @@ class SimRunProjector:
                 legacy_kind = "node.completed"
                 block["status"] = "completed"
                 block["executionState"] = "completed"
-                block["outputs"] = (
-                    data.get("update") or {} if isinstance(data, dict) else {}
-                )
+                block["outputs"] = data.get("update") if isinstance(data, dict) else {}
                 span = self._active_spans.get(block_id)
                 if span:
                     span.update(
@@ -719,11 +621,9 @@ class SimRunProjector:
                 {"startedAt": _iso(getattr(event, "timestamp", None)), "status": "running"}
             )
         elif kind is EventKind.STATE_UPDATED:
-            update: dict[str, Any] = dict(data) if isinstance(data, dict) else {}
+            update = data
             if isinstance(data, dict):
-                candidate_update = data.get("values") or data.get("update") or data
-                if isinstance(candidate_update, dict):
-                    update = candidate_update
+                update = data.get("values") or data.get("update") or data
             self.workflow_state["variables"].update(update if isinstance(update, dict) else {})
             legacy_kind = "state.updated"
         elif kind is EventKind.CUSTOM:
@@ -732,9 +632,9 @@ class SimRunProjector:
                 legacy_kind = str(value["type"])
                 if legacy_kind == "node.appeared":
                     payload_data = {str(k): _json_safe(v) for k, v in value.items()}
-                    planned_block_id = self._ensure_planned_block(payload_data)
-                    if planned_block_id is not None:
-                        payload["blockId"] = planned_block_id
+                    block_id = self._ensure_planned_block(payload_data)
+                    if block_id is not None:
+                        payload["blockId"] = block_id
                 payload.update(
                     {k: _json_safe(v) for k, v in value.items() if k not in {"type", "agent"}}
                 )
@@ -769,14 +669,7 @@ class SimRunProjector:
                 result["payload"]["blockId"] = block_id
             else:
                 result["payload"]["hiddenBy"] = "lingxi-runtime"
-        elif kind in {
-            "node.started",
-            "node.held",
-            "node.revising",
-            "node.completed",
-            "node.failed",
-            "node.retrying",
-        }:
+        elif kind in {"node.started", "node.held", "node.revising", "node.completed", "node.failed", "node.retrying"}:
             status = {
                 "node.started": "running",
                 "node.held": "running",
@@ -794,7 +687,9 @@ class SimRunProjector:
 
     def snapshot(self) -> dict[str, Any]:
         metadata = self.workflow_state.setdefault("metadata", {})
-        self.workflow_state["layoutVersion"] = metadata.get("layoutVersion", "semantic-layered.v2")
+        self.workflow_state["layoutVersion"] = metadata.get(
+            "layoutVersion", "semantic-layered.v2"
+        )
         self.workflow_state["terminal"] = bool(metadata.get("terminal", False))
         self.workflow_state["status"] = metadata.get("status", "running")
         self.workflow_state["paused"] = bool(metadata.get("paused", False))

@@ -29,8 +29,11 @@ from xml.etree import ElementTree
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from sqlalchemy import delete, desc, false, func, or_, select, update
+from lingxi_identity import Principal  # type: ignore[import-untyped]
+from pydantic import BaseModel, Field
+from sqlalchemy import desc, func, or_, select, update
 
+from ..auth import get_principal
 from ..learner import LearnerContext
 from ..store.models import (
     AgentTask,
@@ -41,7 +44,9 @@ from ..store.models import (
     KnowledgeDocumentTag,
     KnowledgeTag,
     PersonalSkill,
+    RunEvent,
     Workspace,
+    WorkspaceActivityEvent,
     WorkspaceFile,
     WorkspaceFolder,
     WorkspacePinnedItem,
@@ -70,9 +75,7 @@ PINNED_RESOURCE_TYPES = {"workflow", "file", "knowledge_base", "table", "folder"
 async def _workspace(request: Request, context: LearnerContext) -> Workspace:
     svc = service_of(request)
     async with svc.db.session() as session:
-        row = await session.scalar(
-            select(Workspace).where(Workspace.learner_id == context.learner_id)
-        )
+        row = await session.scalar(select(Workspace).where(Workspace.learner_id == context.learner_id))
         if row is None:
             row = Workspace(
                 id=f"ws_{secrets.token_urlsafe(18)}",
@@ -85,9 +88,7 @@ async def _workspace(request: Request, context: LearnerContext) -> Workspace:
         return row
 
 
-async def _workspace_for_id(
-    request: Request, workspace_id: str, context: LearnerContext
-) -> Workspace:
+async def _workspace_for_id(request: Request, workspace_id: str, context: LearnerContext) -> Workspace:
     row = await _workspace(request, context)
     if workspace_id not in {"lingxi", row.id}:
         raise not_found()
@@ -175,9 +176,7 @@ def _file_public(row: WorkspaceFile, workspace_id: str) -> dict[str, Any]:
         "mimeType": row.mime_type,
         "width": row.width,
         "height": row.height,
-        "uploadedBy": row.metadata_payload.get("uploadedBy", "learner")
-        if row.metadata_payload
-        else "learner",
+        "uploadedBy": row.metadata_payload.get("uploadedBy", "learner") if row.metadata_payload else "learner",
         "folderId": row.folder_id,
         # v2 upload/file contracts require a canonical folder path and a
         # public uploader address. LingxiIdentity remains the source of the
@@ -210,25 +209,19 @@ def _column_public(row: WorkspaceTableColumn) -> dict[str, Any]:
     }
 
 
-def _table_public(
-    row: WorkspaceTable, columns: list[WorkspaceTableColumn], count: int = 0
-) -> dict[str, Any]:
-    public_columns = [
-        _column_public(column) for column in sorted(columns, key=lambda item: item.position)
-    ]
-    metadata: dict[str, Any] = dict(row.metadata_payload or {})
-    if metadata.get("source") == "lingxi-runtime":
+def _table_public(row: WorkspaceTable, columns: list[WorkspaceTableColumn], count: int = 0) -> dict[str, Any]:
+    public_columns = [_column_public(column) for column in sorted(columns, key=lambda item: item.position)]
+    metadata = row.metadata_payload or {}
+    if metadata.get('source') == 'lingxi-runtime':
         allowed_columns = RUNTIME_COLUMNS_BY_CATEGORY.get(
-            str(metadata.get("category")), RUNTIME_STUDENT_COLUMNS
+            str(metadata.get('category')), RUNTIME_STUDENT_COLUMNS
         )
         public_columns = [
-            {**column, "name": RUNTIME_COLUMN_LABELS.get(column["key"], column["name"])}
+            {**column, 'name': RUNTIME_COLUMN_LABELS.get(column['key'], column['name'])}
             for column in public_columns
-            if column["key"] in allowed_columns
+            if column['key'] in allowed_columns
         ]
-    stored_locks: dict[str, Any] = (
-        metadata["locks"] if isinstance(metadata.get("locks"), dict) else {}
-    )
+    stored_locks = metadata.get("locks") if isinstance(metadata.get("locks"), dict) else {}
     locks = {
         "schemaLocked": bool(stored_locks.get("schemaLocked", False)),
         "insertLocked": bool(stored_locks.get("insertLocked", False)),
@@ -290,15 +283,11 @@ def _view_public(row: WorkspaceTableView) -> dict[str, Any]:
     }
 
 
-async def _table_for_id(
-    request: Request, table_id: str, context: LearnerContext
-) -> tuple[Workspace, WorkspaceTable]:
+async def _table_for_id(request: Request, table_id: str, context: LearnerContext) -> tuple[Workspace, WorkspaceTable]:
     workspace = await _workspace(request, context)
     async with service_of(request).db.session() as session:
         table = await session.scalar(
-            select(WorkspaceTable).where(
-                WorkspaceTable.id == table_id, WorkspaceTable.workspace_id == workspace.id
-            )
+            select(WorkspaceTable).where(WorkspaceTable.id == table_id, WorkspaceTable.workspace_id == workspace.id)
         )
         if table is None:
             raise not_found()
@@ -333,34 +322,20 @@ def _knowledge_base_public(row: KnowledgeBase, document_count: int = 0) -> dict[
 
 
 def _document_tag_values(row: KnowledgeDocument) -> dict[str, Any]:
-    metadata: dict[str, Any] = dict(row.metadata_payload or {})
+    metadata = row.metadata_payload or {}
     return {
         key: metadata.get(key)
         for key in (
-            "tag1",
-            "tag2",
-            "tag3",
-            "tag4",
-            "tag5",
-            "tag6",
-            "tag7",
-            "number1",
-            "number2",
-            "number3",
-            "number4",
-            "number5",
-            "date1",
-            "date2",
-            "boolean1",
-            "boolean2",
-            "boolean3",
+            "tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7",
+            "number1", "number2", "number3", "number4", "number5",
+            "date1", "date2", "boolean1", "boolean2", "boolean3",
         )
     }
 
 
 def _document_public(row: KnowledgeDocument) -> dict[str, Any]:
     chunk_count = max(1, (len(row.content) + 1199) // 1200) if row.content else 0
-    metadata: dict[str, Any] = dict(row.metadata_payload or {})
+    metadata = row.metadata_payload or {}
     return {
         "id": row.id,
         "knowledgeBaseId": row.base_id,
@@ -398,7 +373,7 @@ def _chunk_public(
     document_updated_at: datetime | None = None,
     start_offset: int = 0,
 ) -> dict[str, Any]:
-    metadata: dict[str, Any] = dict(row.metadata_payload or {})
+    metadata = row.metadata_payload or {}
     content = row.text or ""
     return {
         "id": row.id,
@@ -409,28 +384,11 @@ def _chunk_public(
         "enabled": bool(metadata.get("enabled", True)),
         "startOffset": start_offset,
         "endOffset": start_offset + len(content),
-        **{
-            key: metadata.get(key)
-            for key in (
-                "tag1",
-                "tag2",
-                "tag3",
-                "tag4",
-                "tag5",
-                "tag6",
-                "tag7",
-                "number1",
-                "number2",
-                "number3",
-                "number4",
-                "number5",
-                "date1",
-                "date2",
-                "boolean1",
-                "boolean2",
-                "boolean3",
-            )
-        },
+        **{key: metadata.get(key) for key in (
+            "tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7",
+            "number1", "number2", "number3", "number4", "number5",
+            "date1", "date2", "boolean1", "boolean2", "boolean3",
+        )},
         "createdAt": (document_created_at or utcnow()).isoformat(),
         "updatedAt": (document_updated_at or document_created_at or utcnow()).isoformat(),
     }
@@ -478,9 +436,7 @@ def _parse_knowledge_document(body: dict[str, Any]) -> tuple[str, str, str]:
     ``pypdf``/``python-docx``-style parsers when present in a deployment.
     """
 
-    name = _safe_name(
-        str(body.get("name") or body.get("fileName") or body.get("filename") or "文档.txt")
-    )
+    name = _safe_name(str(body.get("name") or body.get("fileName") or body.get("filename") or "文档.txt"))
     mime = _mime_type(name, body.get("mimeType") or body.get("contentType"))
     supplied = body.get("content", "")
     file_url = body.get("fileUrl")
@@ -519,10 +475,7 @@ def _parse_knowledge_document(body: dict[str, Any]) -> tuple[str, str, str]:
             raise HTTPException(status_code=422, detail="invalid_csv_document") from exc
     elif lower_mime in {"text/html", "application/xhtml+xml"} or suffix in {".html", ".htm"}:
         text = unescape(re.sub(r"<[^>]+>", " ", raw.decode("utf-8", errors="replace")))
-    elif (
-        lower_mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        or suffix == ".docx"
-    ):
+    elif lower_mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or suffix == ".docx":
         try:
             with zipfile.ZipFile(io.BytesIO(raw)) as archive:
                 xml = archive.read("word/document.xml")
@@ -550,9 +503,7 @@ def _parse_knowledge_document(body: dict[str, Any]) -> tuple[str, str, str]:
 
 
 @router.get("/workspaces")
-async def list_workspaces(
-    request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def list_workspaces(request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     row = await _workspace(request, context)
     return {
         "workspaces": [_public_workspace(row)],
@@ -563,17 +514,13 @@ async def list_workspaces(
 
 
 @router.get("/workspaces/{workspace_id}")
-async def get_workspace(
-    workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def get_workspace(workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     row = await _workspace_for_id(request, workspace_id, context)
     return {"workspace": _public_workspace(row), "data": _public_workspace(row)}
 
 
 @router.get("/workspaces/{workspace_id}/members")
-async def list_workspace_members(
-    workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def list_workspace_members(workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _workspace_for_id(request, workspace_id, context)
     return {
         "members": [
@@ -587,9 +534,7 @@ async def list_workspace_members(
 
 
 @router.get("/workspaces/{workspace_id}/permissions")
-async def get_workspace_permissions(
-    workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def get_workspace_permissions(workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _workspace_for_id(request, workspace_id, context)
     user = {
         "userId": context.learner_id,
@@ -632,12 +577,7 @@ async def update_workspace_permissions(
 
 
 @router.patch("/workspaces/{workspace_id}")
-async def update_workspace(
-    workspace_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_workspace(workspace_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     row = await _workspace_for_id(request, workspace_id, context)
     if "name" in body:
         row.name = str(body["name"]).strip()[:160] or row.name
@@ -671,9 +611,7 @@ async def list_pinned_items(
         )
         if resourceType is not None:
             query = query.where(WorkspacePinnedItem.resource_type == resourceType)
-        rows = (
-            (await session.execute(query.order_by(WorkspacePinnedItem.pinned_at))).scalars().all()
-        )
+        rows = (await session.execute(query.order_by(WorkspacePinnedItem.pinned_at))).scalars().all()
     return {"pinnedItems": [_pinned_item_public(row, context.learner_id) for row in rows]}
 
 
@@ -752,15 +690,9 @@ def _folder_public(row: WorkspaceFolder, workspace_id: str) -> dict[str, Any]:
         "updatedAt": row.updated_at.isoformat() if row.updated_at else None,
     }
 
-
 @router.get("/workspaces/{workspace_id}/files/folders")
 @router.get("/workspaces/{workspace_id}/folders")
-async def list_folders(
-    workspace_id: str,
-    request: Request,
-    scope: str = Query("active"),
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def list_folders(workspace_id: str, request: Request, scope: str = Query("active"), context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     async with service_of(request).db.session() as session:
         query = select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id)
@@ -773,27 +705,12 @@ async def list_folders(
 
 @router.post("/workspaces/{workspace_id}/files/folders", status_code=201)
 @router.post("/workspaces/{workspace_id}/folders", status_code=201)
-async def create_folder(
-    workspace_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_folder(workspace_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
-    folder = WorkspaceFolder(
-        id=f"folder_{uuid.uuid4().hex}",
-        workspace_id=workspace.id,
-        parent_id=body.get("parentId"),
-        name=_safe_name(str(body.get("name") or "新文件夹")),
-    )
+    folder = WorkspaceFolder(id=f"folder_{uuid.uuid4().hex}", workspace_id=workspace.id, parent_id=body.get("parentId"), name=_safe_name(str(body.get("name") or "新文件夹")))
     async with service_of(request).db.session() as session:
         if folder.parent_id:
-            parent = await session.scalar(
-                select(WorkspaceFolder).where(
-                    WorkspaceFolder.id == folder.parent_id,
-                    WorkspaceFolder.workspace_id == workspace.id,
-                )
-            )
+            parent = await session.scalar(select(WorkspaceFolder).where(WorkspaceFolder.id == folder.parent_id, WorkspaceFolder.workspace_id == workspace.id))
             if parent is None:
                 raise not_found()
         session.add(folder)
@@ -803,20 +720,10 @@ async def create_folder(
 
 @router.patch("/workspaces/{workspace_id}/files/folders/{folder_id}")
 @router.patch("/workspaces/{workspace_id}/folders/{folder_id}")
-async def update_folder(
-    workspace_id: str,
-    folder_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_folder(workspace_id: str, folder_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     async with service_of(request).db.session() as session:
-        folder = await session.scalar(
-            select(WorkspaceFolder).where(
-                WorkspaceFolder.id == folder_id, WorkspaceFolder.workspace_id == workspace.id
-            )
-        )
+        folder = await session.scalar(select(WorkspaceFolder).where(WorkspaceFolder.id == folder_id, WorkspaceFolder.workspace_id == workspace.id))
         if folder is None:
             raise not_found()
         if "name" in body:
@@ -827,12 +734,7 @@ async def update_folder(
         if "parentId" in body:
             parent_id = body["parentId"] or None
             if parent_id:
-                parent = await session.scalar(
-                    select(WorkspaceFolder).where(
-                        WorkspaceFolder.id == parent_id,
-                        WorkspaceFolder.workspace_id == workspace.id,
-                    )
-                )
+                parent = await session.scalar(select(WorkspaceFolder).where(WorkspaceFolder.id == parent_id, WorkspaceFolder.workspace_id == workspace.id))
                 if parent is None or parent.id == folder.id:
                     raise not_found()
             folder.parent_id = parent_id
@@ -843,43 +745,22 @@ async def update_folder(
 
 @router.delete("/workspaces/{workspace_id}/files/folders/{folder_id}")
 @router.delete("/workspaces/{workspace_id}/folders/{folder_id}")
-async def archive_folder(
-    workspace_id: str,
-    folder_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def archive_folder(workspace_id: str, folder_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     async with service_of(request).db.session() as session:
-        folders = list(
-            (
-                await session.execute(
-                    select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        folders = list((await session.execute(select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id))).scalars().all())
         folder = next((row for row in folders if row.id == folder_id), None)
         if folder is None:
             raise not_found()
         folder_ids = _descendant_folder_ids(folders, {folder_id})
-        files = list(
-            (
-                await session.execute(
-                    select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        files = list((await session.execute(select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id))).scalars().all())
         for row in folders:
             if row.id in folder_ids:
                 row.archived = True
         archived_files = 0
-        for file_row in files:
-            if file_row.folder_id in folder_ids:
-                file_row.archived = True
+        for row in files:
+            if row.folder_id in folder_ids:
+                row.archived = True
                 archived_files += 1
         await session.commit()
     return {"success": True, "deletedItems": {"folders": len(folder_ids), "files": archived_files}}
@@ -898,187 +779,91 @@ def _descendant_folder_ids(folders: list[WorkspaceFolder], roots: set[str]) -> s
 
 
 @router.post("/workspaces/{workspace_id}/files/move")
-async def move_file_items(
-    workspace_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def move_file_items(workspace_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     file_ids = {str(item) for item in body.get("fileIds") or []}
     folder_ids = {str(item) for item in body.get("folderIds") or []}
     target_id = body.get("targetFolderId") or None
     async with service_of(request).db.session() as session:
-        folders = list(
-            (
-                await session.execute(
-                    select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        files = list(
-            (
-                await session.execute(
-                    select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        folders = list((await session.execute(select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id))).scalars().all())
+        files = list((await session.execute(select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id))).scalars().all())
         folder_map = {row.id: row for row in folders}
-        if target_id is not None and (
-            target_id not in folder_map or folder_map[target_id].archived
-        ):
+        if target_id is not None and (target_id not in folder_map or folder_map[target_id].archived):
             raise not_found()
         descendants = _descendant_folder_ids(folders, folder_ids)
         if target_id in descendants:
             raise HTTPException(status_code=422, detail="folder_cycle")
         if file_ids - {row.id for row in files} or folder_ids - set(folder_map):
             raise not_found()
-        for file_row in files:
-            if file_row.id in file_ids:
-                file_row.folder_id = target_id
-        for folder_row in folders:
-            if folder_row.id in folder_ids:
-                folder_row.parent_id = target_id
+        for row in files:
+            if row.id in file_ids:
+                row.folder_id = target_id
+        for row in folders:
+            if row.id in folder_ids:
+                row.parent_id = target_id
         await session.commit()
     return {"success": True, "movedItems": {"files": len(file_ids), "folders": len(folder_ids)}}
 
 
 @router.post("/workspaces/{workspace_id}/files/bulk-archive")
-async def bulk_archive_file_items(
-    workspace_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def bulk_archive_file_items(workspace_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     file_ids = {str(item) for item in body.get("fileIds") or []}
     root_folder_ids = {str(item) for item in body.get("folderIds") or []}
     async with service_of(request).db.session() as session:
-        folders = list(
-            (
-                await session.execute(
-                    select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        files = list(
-            (
-                await session.execute(
-                    select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        folders = list((await session.execute(select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id))).scalars().all())
+        files = list((await session.execute(select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id))).scalars().all())
         folder_ids = _descendant_folder_ids(folders, root_folder_ids)
         if root_folder_ids - {row.id for row in folders} or file_ids - {row.id for row in files}:
             raise not_found()
         archived_files = 0
-        for file_row in files:
-            if file_row.id in file_ids or file_row.folder_id in folder_ids:
-                if not file_row.archived:
+        for row in files:
+            if row.id in file_ids or row.folder_id in folder_ids:
+                if not row.archived:
                     archived_files += 1
-                file_row.archived = True
+                row.archived = True
         archived_folders = 0
-        for folder_row in folders:
-            if folder_row.id in folder_ids:
-                if not folder_row.archived:
+        for row in folders:
+            if row.id in folder_ids:
+                if not row.archived:
                     archived_folders += 1
-                folder_row.archived = True
+                row.archived = True
         await session.commit()
     return {"success": True, "deletedItems": {"folders": archived_folders, "files": archived_files}}
 
 
 @router.post("/workspaces/{workspace_id}/files/folders/{folder_id}/restore")
 @router.post("/workspaces/{workspace_id}/folders/{folder_id}/restore")
-async def restore_folder(
-    workspace_id: str,
-    folder_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def restore_folder(workspace_id: str, folder_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     async with service_of(request).db.session() as session:
-        folders = list(
-            (
-                await session.execute(
-                    select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        folders = list((await session.execute(select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id))).scalars().all())
         if folder_id not in {row.id for row in folders}:
             raise not_found()
         folder_ids = _descendant_folder_ids(folders, {folder_id})
-        files = list(
-            (
-                await session.execute(
-                    select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        files = list((await session.execute(select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id))).scalars().all())
         for row in folders:
             if row.id in folder_ids:
                 row.archived = False
         restored_files = 0
-        for file_row in files:
-            if file_row.folder_id in folder_ids and file_row.archived:
-                file_row.archived = False
+        for row in files:
+            if row.folder_id in folder_ids and row.archived:
+                row.archived = False
                 restored_files += 1
         await session.commit()
-    return {
-        "success": True,
-        "folder": _folder_public(next(row for row in folders if row.id == folder_id), workspace.id),
-        "restoredItems": {"folders": len(folder_ids), "files": restored_files},
-    }
+    return {"success": True, "folder": _folder_public(next(row for row in folders if row.id == folder_id), workspace.id), "restoredItems": {"folders": len(folder_ids), "files": restored_files}}
 
 
 @router.get("/workspaces/{workspace_id}/files/download")
-async def download_file_items(
-    workspace_id: str,
-    request: Request,
-    fileIds: list[str] | None = None,
-    folderIds: list[str] | None = None,
-    context: LearnerContext = Depends(current_learner_context),
-) -> StreamingResponse:
+async def download_file_items(workspace_id: str, request: Request, fileIds: list[str] | None = None, folderIds: list[str] | None = None, context: LearnerContext = Depends(current_learner_context)) -> StreamingResponse:
     workspace = await _workspace_for_id(request, workspace_id, context)
     requested_files = {str(item) for item in (fileIds or [])}
     requested_folders = {str(item) for item in (folderIds or [])}
     async with service_of(request).db.session() as session:
-        folders = list(
-            (
-                await session.execute(
-                    select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        files = list(
-            (
-                await session.execute(
-                    select(WorkspaceFile).where(
-                        WorkspaceFile.workspace_id == workspace.id,
-                        WorkspaceFile.archived.is_(False),
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        folders = list((await session.execute(select(WorkspaceFolder).where(WorkspaceFolder.workspace_id == workspace.id))).scalars().all())
+        files = list((await session.execute(select(WorkspaceFile).where(WorkspaceFile.workspace_id == workspace.id, WorkspaceFile.archived.is_(False)))).scalars().all())
     folder_ids = _descendant_folder_ids(folders, requested_folders)
-    if requested_files - {row.id for row in files} or requested_folders - {
-        row.id for row in folders
-    }:
+    if requested_files - {row.id for row in files} or requested_folders - {row.id for row in folders}:
         raise not_found()
     selected = [row for row in files if row.id in requested_files or row.folder_id in folder_ids]
     buffer = io.BytesIO()
@@ -1088,21 +873,11 @@ async def download_file_items(
             if target.is_file():
                 archive.writestr(row.path or row.name, target.read_bytes())
     buffer.seek(0)
-    return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=lingxi-files.zip"},
-    )
+    return StreamingResponse(iter([buffer.getvalue()]), media_type="application/zip", headers={"Content-Disposition": "attachment; filename=lingxi-files.zip"})
 
 
 @router.get("/workspaces/{workspace_id}/files")
-async def list_files(
-    workspace_id: str,
-    request: Request,
-    scope: str = Query("active"),
-    folderId: str | None = None,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def list_files(workspace_id: str, request: Request, scope: str = Query("active"), folderId: str | None = None, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     if scope not in {"active", "archived"}:
         raise HTTPException(status_code=400, detail="invalid_scope")
     await service_of(request).project_agent_artifacts(context.learner_id)
@@ -1112,19 +887,12 @@ async def list_files(
         query = query.where(WorkspaceFile.archived == (scope == "archived"))
         if folderId is not None:
             query = query.where(WorkspaceFile.folder_id == folderId)
-        rows = (
-            (await session.execute(query.order_by(WorkspaceFile.updated_at.desc()))).scalars().all()
-        )
+        rows = (await session.execute(query.order_by(WorkspaceFile.updated_at.desc()))).scalars().all()
     return {"success": True, "files": [_file_public(row, workspace.id) for row in rows]}
 
 
 @router.post("/workspaces/{workspace_id}/files", status_code=201)
-async def create_file(
-    workspace_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_file(workspace_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     content = body.get("content", "")
     if body.get("encoding") == "base64":
@@ -1147,76 +915,37 @@ async def create_file(
     storage_key = f"{context.learner_id}/{secrets.token_urlsafe(24)}"
     if folder_id:
         async with service_of(request).db.session() as session:
-            folder = await session.scalar(
-                select(WorkspaceFolder).where(
-                    WorkspaceFolder.id == folder_id,
-                    WorkspaceFolder.workspace_id == workspace.id,
-                    WorkspaceFolder.archived.is_(False),
-                )
-            )
+            folder = await session.scalar(select(WorkspaceFolder).where(WorkspaceFolder.id == folder_id, WorkspaceFolder.workspace_id == workspace.id, WorkspaceFolder.archived.is_(False)))
             if folder is None:
                 raise not_found()
     target = _storage_target(request, context.learner_id, storage_key)
     target.write_bytes(raw)
-    row = WorkspaceFile(
-        id=f"file_{uuid.uuid4().hex}",
-        workspace_id=workspace.id,
-        folder_id=folder_id,
-        name=name,
-        mime_type=mime,
-        size=len(raw),
-        storage_key=storage_key,
-        path=name,
-        metadata_payload={},
-    )
+    row = WorkspaceFile(id=f"file_{uuid.uuid4().hex}", workspace_id=workspace.id, folder_id=folder_id, name=name, mime_type=mime, size=len(raw), storage_key=storage_key, path=name, metadata_payload={})
     async with service_of(request).db.session() as session:
         session.add(row)
         await session.commit()
     return {"success": True, "file": _file_public(row, workspace.id)}
 
 
-async def _file_for_id(
-    request: Request, workspace_id: str, file_id: str, context: LearnerContext
-) -> tuple[Workspace, WorkspaceFile]:
+async def _file_for_id(request: Request, workspace_id: str, file_id: str, context: LearnerContext) -> tuple[Workspace, WorkspaceFile]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceFile).where(
-                WorkspaceFile.id == file_id, WorkspaceFile.workspace_id == workspace.id
-            )
-        )
+        row = await session.scalar(select(WorkspaceFile).where(WorkspaceFile.id == file_id, WorkspaceFile.workspace_id == workspace.id))
         if row is None:
             raise not_found()
         return workspace, row
 
 
 @router.get("/workspaces/{workspace_id}/files/{file_id}")
-async def get_file(
-    workspace_id: str,
-    file_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def get_file(workspace_id: str, file_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, row = await _file_for_id(request, workspace_id, file_id, context)
-    return {
-        "success": True,
-        "file": _file_public(row, workspace.id),
-        "data": _file_public(row, workspace.id),
-    }
+    return {"success": True, "file": _file_public(row, workspace.id), "data": _file_public(row, workspace.id)}
 
 
 @router.patch("/workspaces/{workspace_id}/files/{file_id}")
-async def update_file(
-    workspace_id: str,
-    file_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_file(workspace_id: str, file_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, row = await _file_for_id(request, workspace_id, file_id, context)
-    if (row.metadata_payload or {}).get("readOnly") and any(
-        key in body for key in ("name", "folderId")
-    ):
+    if (row.metadata_payload or {}).get("readOnly") and any(key in body for key in ("name", "folderId")):
         raise HTTPException(status_code=403, detail="read_only_file")
     async with service_of(request).db.session() as session:
         current = await session.get(WorkspaceFile, row.id)
@@ -1227,13 +956,7 @@ async def update_file(
         if "folderId" in body:
             folder_id = body["folderId"] or None
             if folder_id:
-                folder = await session.scalar(
-                    select(WorkspaceFolder).where(
-                        WorkspaceFolder.id == folder_id,
-                        WorkspaceFolder.workspace_id == workspace.id,
-                        WorkspaceFolder.archived.is_(False),
-                    )
-                )
+                folder = await session.scalar(select(WorkspaceFolder).where(WorkspaceFolder.id == folder_id, WorkspaceFolder.workspace_id == workspace.id, WorkspaceFolder.archived.is_(False)))
                 if folder is None:
                     raise not_found()
             current.folder_id = folder_id
@@ -1243,13 +966,7 @@ async def update_file(
 
 
 @router.patch("/workspaces/{workspace_id}/files/{file_id}/dimensions")
-async def update_file_dimensions(
-    workspace_id: str,
-    file_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_file_dimensions(workspace_id: str, file_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, row = await _file_for_id(request, workspace_id, file_id, context)
     if body.get("key") != row.storage_key:
         return {"success": False}
@@ -1268,12 +985,7 @@ async def update_file_dimensions(
 
 
 @router.delete("/workspaces/{workspace_id}/files/{file_id}")
-async def delete_file(
-    workspace_id: str,
-    file_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def delete_file(workspace_id: str, file_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, row = await _file_for_id(request, workspace_id, file_id, context)
     async with service_of(request).db.session() as session:
         current = await session.get(WorkspaceFile, row.id)
@@ -1284,12 +996,7 @@ async def delete_file(
 
 
 @router.post("/workspaces/{workspace_id}/files/{file_id}/restore")
-async def restore_file(
-    workspace_id: str,
-    file_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def restore_file(workspace_id: str, file_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, row = await _file_for_id(request, workspace_id, file_id, context)
     async with service_of(request).db.session() as session:
         current = await session.get(WorkspaceFile, row.id)
@@ -1300,13 +1007,7 @@ async def restore_file(
 
 
 @router.put("/workspaces/{workspace_id}/files/{file_id}/content")
-async def update_file_content(
-    workspace_id: str,
-    file_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_file_content(workspace_id: str, file_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, row = await _file_for_id(request, workspace_id, file_id, context)
     if (row.metadata_payload or {}).get("readOnly"):
         raise HTTPException(status_code=403, detail="read_only_file")
@@ -1343,12 +1044,7 @@ async def update_file_content(
 
 
 @router.get("/workspaces/{workspace_id}/files/{file_id}/content")
-async def get_file_content(
-    workspace_id: str,
-    file_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def get_file_content(workspace_id: str, file_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, row = await _file_for_id(request, workspace_id, file_id, context)
     target = _storage_target(request, context.learner_id, row.storage_key)
     if not target.is_file():
@@ -1360,26 +1056,15 @@ async def get_file_content(
     except UnicodeDecodeError:
         content = base64.b64encode(raw).decode("ascii")
         encoding = "base64"
-    return {
-        "success": True,
-        "file": _file_public(row, workspace.id),
-        "content": content,
-        "encoding": encoding,
-    }
+    return {"success": True, "file": _file_public(row, workspace.id), "content": content, "encoding": encoding}
 
 
 @router.get("/files/serve/{storage_key:path}")
-async def serve_file(
-    storage_key: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> FileResponse:
+async def serve_file(storage_key: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> FileResponse:
     if ".." in Path(storage_key).parts or not storage_key.startswith(f"{context.learner_id}/"):
         raise not_found()
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceFile).where(
-                WorkspaceFile.storage_key == storage_key, WorkspaceFile.archived.is_(False)
-            )
-        )
+        row = await session.scalar(select(WorkspaceFile).where(WorkspaceFile.storage_key == storage_key, WorkspaceFile.archived.is_(False)))
     if row is None:
         raise not_found()
     target = _storage_target(request, context.learner_id, storage_key)
@@ -1389,33 +1074,15 @@ async def serve_file(
 
 
 @router.get("/workspaces/{workspace_id}/files/inline")
-async def inline_file(
-    workspace_id: str,
-    request: Request,
-    key: str | None = None,
-    fileId: str | None = None,
-    context: LearnerContext = Depends(current_learner_context),
-) -> FileResponse:
+async def inline_file(workspace_id: str, request: Request, key: str | None = None, fileId: str | None = None, context: LearnerContext = Depends(current_learner_context)) -> FileResponse:
     workspace = await _workspace_for_id(request, workspace_id, context)
     if bool(key) == bool(fileId):
         raise HTTPException(status_code=422, detail="provide_exactly_one_file_reference")
     async with service_of(request).db.session() as session:
         if fileId:
-            row = await session.scalar(
-                select(WorkspaceFile).where(
-                    WorkspaceFile.id == fileId,
-                    WorkspaceFile.workspace_id == workspace.id,
-                    WorkspaceFile.archived.is_(False),
-                )
-            )
+            row = await session.scalar(select(WorkspaceFile).where(WorkspaceFile.id == fileId, WorkspaceFile.workspace_id == workspace.id, WorkspaceFile.archived.is_(False)))
         else:
-            row = await session.scalar(
-                select(WorkspaceFile).where(
-                    WorkspaceFile.storage_key == key,
-                    WorkspaceFile.workspace_id == workspace.id,
-                    WorkspaceFile.archived.is_(False),
-                )
-            )
+            row = await session.scalar(select(WorkspaceFile).where(WorkspaceFile.storage_key == key, WorkspaceFile.workspace_id == workspace.id, WorkspaceFile.archived.is_(False)))
     if row is None:
         raise not_found()
     target = _storage_target(request, context.learner_id, row.storage_key)
@@ -1425,23 +1092,12 @@ async def inline_file(
 
 
 @router.post("/workspaces/{workspace_id}/files/{file_id}/download")
-async def file_download_url(
-    workspace_id: str,
-    file_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def file_download_url(workspace_id: str, file_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, row = await _file_for_id(request, workspace_id, file_id, context)
     if row.archived:
         raise not_found()
     url = f"/api/files/serve/{row.storage_key}?context=workspace"
-    return {
-        "success": True,
-        "downloadUrl": url,
-        "viewerUrl": url,
-        "fileName": row.name,
-        "expiresIn": None,
-    }
+    return {"success": True, "downloadUrl": url, "viewerUrl": url, "fileName": row.name, "expiresIn": None}
 
 
 @router.get("/files/storage-status")
@@ -1452,37 +1108,13 @@ async def storage_status() -> dict[str, bool]:
 
 
 @router.get("/users/me/usage-limits")
-async def usage_limits(
-    request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def usage_limits(request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace(request, context)
     async with service_of(request).db.session() as session:
-        used = (
-            await session.scalar(
-                select(func.coalesce(func.sum(WorkspaceFile.size), 0)).where(
-                    WorkspaceFile.workspace_id == workspace.id, WorkspaceFile.archived.is_(False)
-                )
-            )
-            or 0
-        )
+        used = await session.scalar(select(func.coalesce(func.sum(WorkspaceFile.size), 0)).where(WorkspaceFile.workspace_id == workspace.id, WorkspaceFile.archived.is_(False))) or 0
     limit = MAX_FILE_SIZE * 100
-    empty_rate = {
-        "isLimited": False,
-        "requestsPerMinute": 0,
-        "maxBurst": 0,
-        "remaining": 0,
-        "resetAt": (datetime.now(UTC) + timedelta(minutes=1)).isoformat(),
-    }
-    return {
-        "success": True,
-        "rateLimit": {"sync": empty_rate, "async": empty_rate, "authType": "manual"},
-        "usage": {"currentPeriodCost": 0, "limit": 0, "plan": "internal"},
-        "storage": {
-            "usedBytes": int(used),
-            "limitBytes": limit,
-            "percentUsed": min(100, int(used) * 100 / limit),
-        },
-    }
+    empty_rate = {"isLimited": False, "requestsPerMinute": 0, "maxBurst": 0, "remaining": 0, "resetAt": (datetime.now(UTC) + timedelta(minutes=1)).isoformat()}
+    return {"success": True, "rateLimit": {"sync": empty_rate, "async": empty_rate, "authType": "manual"}, "usage": {"currentPeriodCost": 0, "limit": 0, "plan": "internal"}, "storage": {"usedBytes": int(used), "limitBytes": limit, "percentUsed": min(100, int(used) * 100 / limit)}}
 
 
 # Upload session compatibility (local single-process transfer) ----------------
@@ -1491,11 +1123,7 @@ _upload_sessions: dict[str, dict[str, Any]] = {}
 
 
 @router.post("/files/uploads")
-async def create_upload(
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_upload(body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     purpose = str(body.get("purpose") or "workspace_file")
     if purpose not in {"workspace_file", "mothership_attachment"}:
         raise HTTPException(status_code=422, detail="unsupported_upload_purpose")
@@ -1520,60 +1148,18 @@ async def create_upload(
     workspace = await _workspace_for_id(request, str(body.get("workspaceId", "lingxi")), context)
     expires = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     async with service_of(request).db.session() as session:
-        session.add(
-            WorkspaceUploadSession(
-                id=upload_id,
-                workspace_id=workspace.id,
-                learner_id=context.learner_id,
-                token_hash=hashlib.sha256(token.encode()).hexdigest(),
-                name=_safe_name(str(body.get("name") or "untitled")),
-                mime_type=_mime_type(str(body.get("name") or "untitled"), body.get("contentType")),
-                size=size,
-                temp_key=str(temp.relative_to(_storage_root(request, context.learner_id))),
-                status="uploading",
-                expires_at=datetime.fromisoformat(expires),
-            )
-        )
+        session.add(WorkspaceUploadSession(id=upload_id, workspace_id=workspace.id, learner_id=context.learner_id, token_hash=hashlib.sha256(token.encode()).hexdigest(), name=_safe_name(str(body.get("name") or "untitled")), mime_type=_mime_type(str(body.get("name") or "untitled"), body.get("contentType")), size=size, temp_key=str(temp.relative_to(_storage_root(request, context.learner_id))), status="uploading", expires_at=datetime.fromisoformat(expires)))
         await session.commit()
-    _upload_sessions[upload_id] = {
-        "token": token,
-        "body": body,
-        "learner_id": context.learner_id,
-        "temp": temp,
-        "workspace_id": workspace.id,
-        "parts": {},
-        "expiresAt": expires,
-    }
-    upload_session = {
-        "id": upload_id,
-        "purpose": body.get("purpose", "workspace_file"),
-        "status": "uploading",
-        "name": body.get("name", "untitled"),
-        "contentType": body.get("contentType", "application/octet-stream"),
-        "size": size,
-        "expiresAt": expires,
-        "error": None,
-        "result": None,
-    }
-    transfer = {
-        "method": "put",
-        "url": _public_origin(request) + f"/api/v2/uploads/{upload_id}",
-        "headers": {"upload-token": token},
-        "expiresAt": expires,
-    }
-    return {"data": {"session": upload_session, "uploadToken": token, "transfer": transfer}}
+    _upload_sessions[upload_id] = {"token": token, "body": body, "learner_id": context.learner_id, "temp": temp, "workspace_id": workspace.id, "parts": {}, "expiresAt": expires}
+    session = {"id": upload_id, "purpose": body.get("purpose", "workspace_file"), "status": "uploading", "name": body.get("name", "untitled"), "contentType": body.get("contentType", "application/octet-stream"), "size": size, "expiresAt": expires, "error": None, "result": None}
+    transfer = {"method": "put", "url": _public_origin(request) + f"/api/v2/uploads/{upload_id}", "headers": {"upload-token": token}, "expiresAt": expires}
+    return {"data": {"session": session, "uploadToken": token, "transfer": transfer}}
 
 
 @router.put("/v2/uploads/{upload_id}")
-async def put_upload(
-    upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> StreamingResponse:
+async def put_upload(upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> StreamingResponse:
     item = _upload_sessions.get(upload_id)
-    if (
-        item is None
-        or item["learner_id"] != context.learner_id
-        or request.headers.get("upload-token") != item["token"]
-    ):
+    if item is None or item["learner_id"] != context.learner_id or request.headers.get("upload-token") != item["token"]:
         raise not_found()
     raw = await request.body()
     if len(raw) > MAX_FILE_SIZE:
@@ -1591,12 +1177,7 @@ async def put_upload(
 
 
 @router.post("/files/uploads/{upload_id}/parts")
-async def create_upload_part_urls(
-    upload_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_upload_part_urls(upload_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     """Provide local multipart compatibility URLs for native upload hooks.
 
     Lingxi normally selects the single PUT transfer above. Keeping this small
@@ -1605,11 +1186,7 @@ async def create_upload_part_urls(
     """
 
     item = _upload_sessions.get(upload_id)
-    if (
-        item is None
-        or item["learner_id"] != context.learner_id
-        or request.headers.get("upload-token") != item["token"]
-    ):
+    if item is None or item["learner_id"] != context.learner_id or request.headers.get("upload-token") != item["token"]:
         raise not_found()
     numbers = body.get("partNumbers")
     if not isinstance(numbers, list) or not numbers or len(numbers) > 100:
@@ -1624,8 +1201,7 @@ async def create_upload_part_urls(
     parts = [
         {
             "partNumber": number,
-            "url": _public_origin(request)
-            + f"/api/v2/uploads/{upload_id}/parts/{number}?token={item['token']}",
+            "url": _public_origin(request) + f"/api/v2/uploads/{upload_id}/parts/{number}?token={item['token']}",
             "headers": {},
             "expiresAt": expires,
         }
@@ -1635,20 +1211,9 @@ async def create_upload_part_urls(
 
 
 @router.put("/v2/uploads/{upload_id}/parts/{part_number}", status_code=204)
-async def put_upload_part(
-    upload_id: str,
-    part_number: int,
-    request: Request,
-    token: str | None = None,
-    context: LearnerContext = Depends(current_learner_context),
-) -> Response:
+async def put_upload_part(upload_id: str, part_number: int, request: Request, token: str | None = None, context: LearnerContext = Depends(current_learner_context)) -> Response:
     item = _upload_sessions.get(upload_id)
-    if (
-        item is None
-        or item["learner_id"] != context.learner_id
-        or token != item["token"]
-        or part_number < 1
-    ):
+    if item is None or item["learner_id"] != context.learner_id or token != item["token"] or part_number < 1:
         raise not_found()
     raw = await request.body()
     if len(raw) > MAX_FILE_SIZE:
@@ -1660,37 +1225,17 @@ async def put_upload_part(
 
 
 @router.post("/files/uploads/{upload_id}/complete")
-async def complete_upload(
-    upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def complete_upload(upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     item = _upload_sessions.get(upload_id)
-    if (
-        item is None
-        or item["learner_id"] != context.learner_id
-        or request.headers.get("upload-token") != item["token"]
-    ):
+    if item is None or item["learner_id"] != context.learner_id or request.headers.get("upload-token") != item["token"]:
         raise not_found()
     body = item["body"]
     if item.get("status") == "completed" and item.get("result") is not None:
-        return {
-            "data": {
-                "id": upload_id,
-                "purpose": body.get("purpose", "workspace_file"),
-                "status": "completed",
-                "name": body.get("name", "untitled"),
-                "contentType": body.get("contentType", "application/octet-stream"),
-                "size": int(body.get("size", 0) or 0),
-                "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
-                "error": None,
-                "result": item["result"],
-            }
-        }
+        return {"data": {"id": upload_id, "purpose": body.get("purpose", "workspace_file"), "status": "completed", "name": body.get("name", "untitled"), "contentType": body.get("contentType", "application/octet-stream"), "size": int(body.get("size", 0) or 0), "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(), "error": None, "result": item["result"]}}
     if item["temp"].is_file():
         raw = item["temp"].read_bytes()
     elif item.get("parts"):
-        raw = b"".join(
-            path.read_bytes() for _number, path in sorted(item["parts"].items()) if path.is_file()
-        )
+        raw = b"".join(path.read_bytes() for _number, path in sorted(item["parts"].items()) if path.is_file())
     else:
         raw = b""
     try:
@@ -1706,29 +1251,13 @@ async def complete_upload(
     mime = _mime_type(name, body.get("contentType"))
     if folder_id:
         async with service_of(request).db.session() as session:
-            folder = await session.scalar(
-                select(WorkspaceFolder).where(
-                    WorkspaceFolder.id == folder_id,
-                    WorkspaceFolder.workspace_id == workspace.id,
-                    WorkspaceFolder.archived.is_(False),
-                )
-            )
+            folder = await session.scalar(select(WorkspaceFolder).where(WorkspaceFolder.id == folder_id, WorkspaceFolder.workspace_id == workspace.id, WorkspaceFolder.archived.is_(False)))
             if folder is None:
                 raise not_found()
     storage_key = f"{context.learner_id}/{secrets.token_urlsafe(24)}"
     target = _storage_target(request, context.learner_id, storage_key)
     target.write_bytes(raw)
-    row = WorkspaceFile(
-        id=f"file_{uuid.uuid4().hex}",
-        workspace_id=workspace.id,
-        folder_id=folder_id,
-        name=name,
-        mime_type=mime,
-        size=len(raw),
-        storage_key=storage_key,
-        path=name,
-        metadata_payload={"purpose": body.get("purpose", "workspace_file")},
-    )
+    row = WorkspaceFile(id=f"file_{uuid.uuid4().hex}", workspace_id=workspace.id, folder_id=folder_id, name=name, mime_type=mime, size=len(raw), storage_key=storage_key, path=name, metadata_payload={"purpose": body.get("purpose", "workspace_file")})
     async with service_of(request).db.session() as session:
         session.add(row)
         upload_row = await session.get(WorkspaceUploadSession, upload_id)
@@ -1752,31 +1281,13 @@ async def complete_upload(
         else public_file
     )
     item["status"] = "completed"
-    return {
-        "data": {
-            "id": upload_id,
-            "purpose": body.get("purpose", "workspace_file"),
-            "status": "completed",
-            "name": name,
-            "contentType": row.mime_type,
-            "size": row.size,
-            "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
-            "error": None,
-            "result": item["result"],
-        }
-    }
+    return {"data": {"id": upload_id, "purpose": body.get("purpose", "workspace_file"), "status": "completed", "name": name, "contentType": row.mime_type, "size": row.size, "expiresAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(), "error": None, "result": item["result"]}}
 
 
 @router.delete("/files/uploads/{upload_id}")
-async def abort_upload(
-    upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def abort_upload(upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     item = _upload_sessions.get(upload_id)
-    if (
-        item is None
-        or item["learner_id"] != context.learner_id
-        or request.headers.get("upload-token") != item["token"]
-    ):
+    if item is None or item["learner_id"] != context.learner_id or request.headers.get("upload-token") != item["token"]:
         raise not_found()
     _upload_sessions.pop(upload_id, None)
     item["temp"].unlink(missing_ok=True)
@@ -1788,20 +1299,7 @@ async def abort_upload(
             row.status = "aborted"
             await session.commit()
     body = item["body"]
-    return {
-        "data": {
-            "id": upload_id,
-            "purpose": body.get("purpose", "workspace_file"),
-            "status": "aborted",
-            "name": body.get("name", "untitled"),
-            "contentType": body.get("contentType", "application/octet-stream"),
-            "size": int(body.get("size", 0) or 0),
-            "expiresAt": item.get("expiresAt")
-            or (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
-            "error": None,
-            "result": None,
-        }
-    }
+    return {"data": {"id": upload_id, "purpose": body.get("purpose", "workspace_file"), "status": "aborted", "name": body.get("name", "untitled"), "contentType": body.get("contentType", "application/octet-stream"), "size": int(body.get("size", 0) or 0), "expiresAt": item.get("expiresAt") or (datetime.now(UTC) + timedelta(hours=1)).isoformat(), "error": None, "result": None}}
 
 
 # Tables ---------------------------------------------------------------------
@@ -1810,17 +1308,11 @@ async def abort_upload(
 def _csv_payload(raw: str, delimiter: str = ",") -> tuple[list[str], list[dict[str, Any]]]:
     reader = csv.DictReader(io.StringIO(raw), delimiter=delimiter)
     headers = [str(item or "column").strip() or "column" for item in (reader.fieldnames or [])]
-    return headers, [
-        {key: value for key, value in row.items() if key is not None} for row in reader
-    ]
+    return headers, [{key: value for key, value in row.items() if key is not None} for row in reader]
 
 
 @router.post("/table/import-csv", status_code=201)
-async def import_table_csv(
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def import_table_csv(body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, str(body.get("workspaceId", "lingxi")), context)
     raw = str(body.get("csv") or body.get("content") or "")
     if len(raw.encode("utf-8")) > MAX_FILE_SIZE:
@@ -1828,75 +1320,31 @@ async def import_table_csv(
     headers, rows = _csv_payload(raw, str(body.get("delimiter") or ","))
     if not headers:
         raise HTTPException(status_code=422, detail="csv_header_required")
-    table = WorkspaceTable(
-        id=f"table_{uuid.uuid4().hex}",
-        workspace_id=workspace.id,
-        name=str(body.get("name") or "CSV 表格"),
-        description="",
-        metadata_payload={},
-    )
+    table = WorkspaceTable(id=f"table_{uuid.uuid4().hex}", workspace_id=workspace.id, name=str(body.get("name") or "CSV 表格"), description="", metadata_payload={})
     async with service_of(request).db.session() as session:
         session.add(table)
         for position, name in enumerate(headers):
-            session.add(
-                WorkspaceTableColumn(
-                    id=f"col_{uuid.uuid4().hex}",
-                    table_id=table.id,
-                    key=name,
-                    name=name,
-                    type="string",
-                    position=position,
-                    options={},
-                )
-            )
+            session.add(WorkspaceTableColumn(id=f"col_{uuid.uuid4().hex}", table_id=table.id, key=name, name=name, type="string", position=position, options={}))
         for position, values in enumerate(rows):
-            session.add(
-                WorkspaceTableRow(
-                    id=f"row_{uuid.uuid4().hex}",
-                    table_id=table.id,
-                    values=values,
-                    position=position,
-                )
-            )
+            session.add(WorkspaceTableRow(id=f"row_{uuid.uuid4().hex}", table_id=table.id, values=values, position=position))
         await session.commit()
-    return {
-        "success": True,
-        "data": {"table": {"id": table.id, "name": table.name}, "importedRows": len(rows)},
-    }
+    return {"success": True, "data": {"table": {"id": table.id, "name": table.name}, "importedRows": len(rows)}}
 
 
 @router.post("/table/{table_id}/import")
-async def import_table_rows(
-    table_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def import_table_rows(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     raw = str(body.get("csv") or body.get("content") or "")
-    _headers, rows = (
-        _csv_payload(raw, str(body.get("delimiter") or ","))
-        if raw
-        else ([], body.get("rows") or [])
-    )
+    _headers, rows = _csv_payload(raw, str(body.get("delimiter") or ",")) if raw else ([], body.get("rows") or [])
     if body.get("mode") == "replace":
         async with service_of(request).db.session() as session:
-            await session.execute(
-                delete(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id)
-            )
+            await session.execute(WorkspaceTableRow.__table__.delete().where(WorkspaceTableRow.table_id == table.id))
             for position, values in enumerate(rows):
                 if isinstance(values, dict):
                     normalized = await _coerce_row_values(
                         session, table.id, dict(values), enforce_required=True
                     )
-                    session.add(
-                        WorkspaceTableRow(
-                            id=f"row_{uuid.uuid4().hex}",
-                            table_id=table.id,
-                            values=normalized,
-                            position=position,
-                        )
-                    )
+                    session.add(WorkspaceTableRow(id=f"row_{uuid.uuid4().hex}", table_id=table.id, values=normalized, position=position))
             await session.commit()
     else:
         await create_rows(table_id, {"rows": rows}, request, context)
@@ -1923,53 +1371,20 @@ async def list_tables(
             query = query.where(WorkspaceTable.archived.is_(scope == "archived"))
         elif includeArchived is False:
             query = query.where(WorkspaceTable.archived.is_(False))
-        tables = (
-            (await session.execute(query.order_by(WorkspaceTable.updated_at.desc())))
-            .scalars()
-            .all()
-        )
+        tables = (await session.execute(query.order_by(WorkspaceTable.updated_at.desc()))).scalars().all()
         result = []
         for table in tables:
             metadata = table.metadata_payload or {}
-            if (
-                metadata.get("source") == "lingxi-runtime"
-                and metadata.get("category") not in RUNTIME_STUDENT_CATEGORIES
-            ):
+            if metadata.get('source') == 'lingxi-runtime' and metadata.get('category') not in RUNTIME_STUDENT_CATEGORIES:
                 continue
-            cols = (
-                (
-                    await session.execute(
-                        select(WorkspaceTableColumn).where(
-                            WorkspaceTableColumn.table_id == table.id
-                        )
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            count = (
-                await session.scalar(
-                    select(func.count())
-                    .select_from(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                )
-                or 0
-            )
+            cols = (await session.execute(select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id))).scalars().all()
+            count = await session.scalar(select(func.count()).select_from(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id)) or 0
             result.append(_table_public(table, list(cols), int(count)))
-    return {
-        "success": True,
-        "data": {"tables": result, "totalCount": len(result)},
-        "tables": result,
-        "totalCount": len(result),
-    }
+    return {"success": True, "data": {"tables": result, "totalCount": len(result)}, "tables": result, "totalCount": len(result)}
 
 
 @router.post("/lingxi/learning-records")
-async def record_learning_event(
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def record_learning_event(body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     """Project a replayed runtime event into the canonical runtime tables."""
     task_id = str(body.get("taskId") or "").strip()
     event = body.get("event") or {}
@@ -2012,11 +1427,7 @@ def _pinned_item_public(row: WorkspacePinnedItem, learner_id: str) -> dict[str, 
 
 
 @router.post("/table")
-async def create_table(
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_table(body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, str(body.get("workspaceId", "lingxi")), context)
     schema = body.get("schema") or {}
     columns = schema.get("columns") or []
@@ -2036,46 +1447,19 @@ async def create_table(
             if ctype not in ALLOWED_COLUMN_TYPES:
                 raise HTTPException(status_code=422, detail="unsupported_column_type")
             name = str(column.get("name") or f"column_{index + 1}")
-            session.add(
-                WorkspaceTableColumn(
-                    id=str(column.get("id") or f"col_{uuid.uuid4().hex}"),
-                    table_id=table.id,
-                    key=name,
-                    name=name,
-                    type=ctype,
-                    position=int(column.get("position", index)),
-                    options={
-                        k: column[k]
-                        for k in ("required", "unique", "options", "multiple", "currencyCode")
-                        if k in column
-                    },
-                )
-            )
+            session.add(WorkspaceTableColumn(id=str(column.get("id") or f"col_{uuid.uuid4().hex}"), table_id=table.id, key=name, name=name, type=ctype, position=int(column.get("position", index)), options={k: column[k] for k in ("required", "unique", "options", "multiple", "currencyCode") if k in column}))
         for index in range(int(body.get("initialRowCount", 0) or 0)):
-            session.add(
-                WorkspaceTableRow(
-                    id=f"row_{uuid.uuid4().hex}", table_id=table.id, values={}, position=index
-                )
-            )
+            session.add(WorkspaceTableRow(id=f"row_{uuid.uuid4().hex}", table_id=table.id, values={}, position=index))
         await session.commit()
     async with service_of(request).db.session() as session:
         persisted_columns = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
-                )
+            await session.execute(
+                select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
             )
-            .scalars()
-            .all()
-        )
-        row_count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == table.id)
-            )
-            or 0
-        )
+        ).scalars().all()
+        row_count = await session.scalar(
+            select(func.count()).select_from(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id)
+        ) or 0
     return {
         "success": True,
         "data": {
@@ -2086,41 +1470,16 @@ async def create_table(
 
 
 @router.get("/table/{table_id}")
-async def get_table(
-    table_id: str,
-    request: Request,
-    workspaceId: str = "lingxi",
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def get_table(table_id: str, request: Request, workspaceId: str = "lingxi", context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, table = await _table_for_id(request, table_id, context)
     async with service_of(request).db.session() as session:
-        cols = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == table.id)
-            )
-            or 0
-        )
+        cols = (await session.execute(select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id))).scalars().all()
+        count = await session.scalar(select(func.count()).select_from(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id)) or 0
     return {"success": True, "data": {"table": _table_public(table, list(cols), int(count))}}
 
 
 @router.patch("/table/{table_id}")
-async def update_table(
-    table_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_table(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     async with service_of(request).db.session() as session:
@@ -2137,8 +1496,8 @@ async def update_table(
                 "folderId": body.get("folderId") or None,
             }
         if isinstance(body.get("locks"), dict):
-            existing_locks: dict[str, Any] = (
-                dict((current.metadata_payload or {}).get("locks") or {})
+            existing_locks = (
+                (current.metadata_payload or {}).get("locks")
                 if isinstance((current.metadata_payload or {}).get("locks"), dict)
                 else {}
             )
@@ -2154,31 +1513,14 @@ async def update_table(
                 },
             }
         await session.commit()
-        cols = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == current.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == current.id)
-            )
-            or 0
-        )
+        cols = (await session.execute(select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == current.id))).scalars().all()
+        count = await session.scalar(select(func.count()).select_from(WorkspaceTableRow).where(WorkspaceTableRow.table_id == current.id)) or 0
         table = current
     return {"success": True, "data": {"table": _table_public(table, list(cols), int(count))}}
 
 
 @router.delete("/table/{table_id}")
-async def archive_table(
-    table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def archive_table(table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     async with service_of(request).db.session() as session:
@@ -2190,9 +1532,7 @@ async def archive_table(
 
 
 @router.post("/table/{table_id}/restore")
-async def restore_table(
-    table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def restore_table(table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     async with service_of(request).db.session() as session:
@@ -2202,123 +1542,36 @@ async def restore_table(
             await session.commit()
     async with service_of(request).db.session() as session:
         current = await session.get(WorkspaceTable, table.id)
-        cols = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == table.id)
-            )
-            or 0
-        )
-    return {
-        "success": True,
-        "data": {"table": _table_public(current or table, list(cols), int(count))},
-    }
+        cols = (await session.execute(select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id))).scalars().all()
+        count = await session.scalar(select(func.count()).select_from(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id)) or 0
+    return {"success": True, "data": {"table": _table_public(current or table, list(cols), int(count))}}
 
 
 @router.get("/table/{table_id}/rows")
-async def list_rows(
-    table_id: str,
-    request: Request,
-    offset: int = 0,
-    limit: int = 100,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def list_rows(table_id: str, request: Request, offset: int = 0, limit: int = 100, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     async with service_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                    .order_by(WorkspaceTableRow.position)
-                    .offset(max(0, offset))
-                    .limit(min(1000, max(1, limit)))
-                )
-            )
-            .scalars()
-            .all()
-        )
-        count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == table.id)
-            )
-            or 0
-        )
+        rows = (await session.execute(select(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id).order_by(WorkspaceTableRow.position).offset(max(0, offset)).limit(min(1000, max(1, limit))))).scalars().all()
+        count = await session.scalar(select(func.count()).select_from(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id)) or 0
     public = [_table_row_public(row) for row in rows]
-    return {
-        "success": True,
-        "data": {
-            "rows": public,
-            "rowCount": len(public),
-            "totalCount": int(count),
-            "limit": limit,
-            "offset": offset,
-            "nextCursor": None,
-        },
-    }
+    return {"success": True, "data": {"rows": public, "rowCount": len(public), "totalCount": int(count), "limit": limit, "offset": offset, "nextCursor": None}}
 
 
 @router.get("/table/{table_id}/query")
-async def query_rows(
-    table_id: str,
-    request: Request,
-    q: str = "",
-    offset: int = 0,
-    limit: int = 100,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def query_rows(table_id: str, request: Request, q: str = "", offset: int = 0, limit: int = 100, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     needle = q.casefold().strip()
     async with service_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                    .order_by(WorkspaceTableRow.position)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows = (await session.execute(select(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id).order_by(WorkspaceTableRow.position))).scalars().all()
     if needle:
-        rows = [
-            row
-            for row in rows
-            if needle in json.dumps(row.values or {}, ensure_ascii=False).casefold()
-        ]
+        rows = [row for row in rows if needle in json.dumps(row.values or {}, ensure_ascii=False).casefold()]
     selected = rows[max(0, offset) : max(0, offset) + min(max(1, limit), 1000)]
     public = [_table_row_public(row) for row in selected]
-    return {
-        "success": True,
-        "data": {
-            "rows": public,
-            "rowCount": len(public),
-            "totalCount": len(rows),
-            "nextCursor": None,
-        },
-    }
+    return {"success": True, "data": {"rows": public, "rowCount": len(public), "totalCount": len(rows), "nextCursor": None}}
 
 
 @router.get("/table/{table_id}/rows/find")
-async def find_rows(
-    table_id: str,
-    request: Request,
-    q: str = "",
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def find_rows(table_id: str, request: Request, q: str = "", context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     """Compatibility projection for the grid's cell-navigation search.
 
     Lingxi tables are backed by the same row store as the query endpoint; this
@@ -2328,17 +1581,7 @@ async def find_rows(
     _workspace_row, table = await _table_for_id(request, table_id, context)
     needle = q.casefold().strip()
     async with service_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                    .order_by(WorkspaceTableRow.position)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows = (await session.execute(select(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id).order_by(WorkspaceTableRow.position))).scalars().all()
     matches: list[dict[str, Any]] = []
     if needle:
         for ordinal, row in enumerate(rows):
@@ -2349,58 +1592,24 @@ async def find_rows(
 
 
 @router.get("/table/{table_id}/export")
-async def export_table(
-    table_id: str,
-    request: Request,
-    format: str = "csv",
-    context: LearnerContext = Depends(current_learner_context),
-) -> StreamingResponse:
+async def export_table(table_id: str, request: Request, format: str = "csv", context: LearnerContext = Depends(current_learner_context)) -> StreamingResponse:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     async with service_of(request).db.session() as session:
-        columns = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn)
-                    .where(WorkspaceTableColumn.table_id == table.id)
-                    .order_by(WorkspaceTableColumn.position)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                    .order_by(WorkspaceTableRow.position)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        columns = (await session.execute(select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id).order_by(WorkspaceTableColumn.position))).scalars().all()
+        rows = (await session.execute(select(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id).order_by(WorkspaceTableRow.position))).scalars().all()
     headers = [column.key for column in columns]
     if format.lower() == "json":
-        return StreamingResponse(
-            iter([json.dumps([row.values or {} for row in rows], ensure_ascii=False)]),
-            media_type="application/json",
-        )
+        return StreamingResponse(iter([json.dumps([row.values or {} for row in rows], ensure_ascii=False)]), media_type="application/json")
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=headers)
     writer.writeheader()
     for row in rows:
         writer.writerow({header: (row.values or {}).get(header) for header in headers})
-    return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={table.name}.csv"},
-    )
+    return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename={table.name}.csv"})
 
 
 @router.get("/table/{table_id}/export/download")
-async def download_table_export(
-    table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> StreamingResponse:
+async def download_table_export(table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> StreamingResponse:
     return await export_table(table_id, request, "csv", context)
 
 
@@ -2426,14 +1635,10 @@ async def _coerce_row_values(
     """
 
     columns = (
-        (
-            await session.execute(
-                select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table_id)
-            )
+        await session.execute(
+            select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table_id)
         )
-        .scalars()
-        .all()
-    )
+    ).scalars().all()
     by_key = {column.key: column for column in columns}
     normalized: dict[str, Any] = {}
     for key, raw in values.items():
@@ -2455,9 +1660,7 @@ async def _coerce_row_values(
                 number = float(raw)
                 if not math.isfinite(number):
                     raise ValueError
-                normalized[column.key] = (
-                    int(number) if isinstance(raw, int) and not isinstance(raw, bool) else number
-                )
+                normalized[column.key] = int(number) if isinstance(raw, int) and not isinstance(raw, bool) else number
             elif column.type == "boolean":
                 if isinstance(raw, bool):
                     normalized[column.key] = raw
@@ -2473,9 +1676,7 @@ async def _coerce_row_values(
                 value = str(raw).strip().replace("Z", "+00:00")
                 try:
                     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-                        normalized[column.key] = (
-                            datetime.strptime(value, "%Y-%m-%d").date().isoformat()
-                        )
+                        normalized[column.key] = datetime.strptime(value, "%Y-%m-%d").date().isoformat()
                     else:
                         normalized[column.key] = datetime.fromisoformat(value).isoformat()
                 except ValueError:
@@ -2489,9 +1690,7 @@ async def _coerce_row_values(
                     for option in options
                 }
                 multiple = bool((column.options or {}).get("multiple", False))
-                candidate = (
-                    raw if multiple and isinstance(raw, list) else ([raw] if multiple else raw)
-                )
+                candidate = raw if multiple and isinstance(raw, list) else ([raw] if multiple else raw)
                 candidates = candidate if isinstance(candidate, list) else [candidate]
                 if allowed and any(str(item) not in allowed for item in candidates):
                     raise ValueError
@@ -2521,58 +1720,28 @@ async def _coerce_row_values(
 
 
 @router.post("/table/{table_id}/rows")
-async def create_rows(
-    table_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_rows(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     values = _row_input(body)
     async with service_of(request).db.session() as session:
-        highest = (
-            await session.scalar(
-                select(func.max(WorkspaceTableRow.position)).where(
-                    WorkspaceTableRow.table_id == table.id
-                )
-            )
-            or -1
-        )
+        highest = await session.scalar(select(func.max(WorkspaceTableRow.position)).where(WorkspaceTableRow.table_id == table.id)) or -1
         created = []
         for index, item in enumerate(values):
             normalized = await _coerce_row_values(session, table.id, item, enforce_required=True)
-            row = WorkspaceTableRow(
-                id=f"row_{uuid.uuid4().hex}",
-                table_id=table.id,
-                values=normalized,
-                position=int(highest) + index + 1,
-            )
+            row = WorkspaceTableRow(id=f"row_{uuid.uuid4().hex}", table_id=table.id, values=normalized, position=int(highest) + index + 1)
             session.add(row)
             created.append(_table_row_public(row))
         await session.commit()
-    return {
-        "success": True,
-        "data": {"rows": created, "row": created[0] if len(created) == 1 else None},
-    }
+    return {"success": True, "data": {"rows": created, "row": created[0] if len(created) == 1 else None}}
 
 
 @router.patch("/table/{table_id}/rows/{row_id}")
-async def update_row(
-    table_id: str,
-    row_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_row(table_id: str, row_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableRow).where(
-                WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id
-            )
-        )
+        row = await session.scalar(select(WorkspaceTableRow).where(WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id))
         if row is None:
             raise not_found()
         update = body.get("data") if isinstance(body.get("data"), dict) else body.get("values")
@@ -2586,12 +1755,7 @@ async def update_row(
 
 
 @router.post("/table/{table_id}/rows/upsert")
-async def upsert_rows(
-    table_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def upsert_rows(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     rows = _row_input(body)
@@ -2601,23 +1765,10 @@ async def upsert_rows(
             item = dict(item)
             row_id = str(item.pop("id", "") or f"row_{uuid.uuid4().hex}")
             normalized = await _coerce_row_values(session, table.id, item, enforce_required=True)
-            row = await session.scalar(
-                select(WorkspaceTableRow).where(
-                    WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id
-                )
-            )
+            row = await session.scalar(select(WorkspaceTableRow).where(WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id))
             if row is None:
-                highest = (
-                    await session.scalar(
-                        select(func.max(WorkspaceTableRow.position)).where(
-                            WorkspaceTableRow.table_id == table.id
-                        )
-                    )
-                    or -1
-                )
-                row = WorkspaceTableRow(
-                    id=row_id, table_id=table.id, values=normalized, position=int(highest) + 1
-                )
+                highest = await session.scalar(select(func.max(WorkspaceTableRow.position)).where(WorkspaceTableRow.table_id == table.id)) or -1
+                row = WorkspaceTableRow(id=row_id, table_id=table.id, values=normalized, position=int(highest) + 1)
                 session.add(row)
             else:
                 row.values = normalized
@@ -2627,20 +1778,11 @@ async def upsert_rows(
 
 
 @router.delete("/table/{table_id}/rows/{row_id}")
-async def delete_row(
-    table_id: str,
-    row_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def delete_row(table_id: str, row_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableRow).where(
-                WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id
-            )
-        )
+        row = await session.scalar(select(WorkspaceTableRow).where(WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id))
         if row is None:
             raise not_found()
         await session.delete(row)
@@ -2649,55 +1791,24 @@ async def delete_row(
 
 
 @router.post("/table/{table_id}/columns")
-async def add_column(
-    table_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def add_column(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
-    column: dict[str, Any] = (
-        body["column"] if isinstance(body.get("column"), dict) else body
-    )
+    column = body.get("column") if isinstance(body.get("column"), dict) else body
     ctype = str(column.get("type", "string"))
     if ctype not in ALLOWED_COLUMN_TYPES:
         raise HTTPException(status_code=422, detail="unsupported_column_type")
     async with service_of(request).db.session() as session:
-        max_pos = (
-            await session.scalar(
-                select(func.max(WorkspaceTableColumn.position)).where(
-                    WorkspaceTableColumn.table_id == table.id
-                )
-            )
-            or -1
-        )
+        max_pos = await session.scalar(select(func.max(WorkspaceTableColumn.position)).where(WorkspaceTableColumn.table_id == table.id)) or -1
         name = str(column.get("name") or f"column_{int(max_pos) + 2}")
-        row = WorkspaceTableColumn(
-            id=str(column.get("id") or f"col_{uuid.uuid4().hex}"),
-            table_id=table.id,
-            key=name,
-            name=name,
-            type=ctype,
-            position=int(column.get("position", max_pos + 1)),
-            options={
-                k: column[k]
-                for k in ("required", "unique", "options", "multiple", "currencyCode")
-                if k in column
-            },
-        )
+        row = WorkspaceTableColumn(id=str(column.get("id") or f"col_{uuid.uuid4().hex}"), table_id=table.id, key=name, name=name, type=ctype, position=int(column.get("position", max_pos + 1)), options={k: column[k] for k in ("required", "unique", "options", "multiple", "currencyCode") if k in column})
         session.add(row)
         await session.commit()
     return {"success": True, "data": {"columns": [_column_public(row)]}}
 
 
 @router.patch("/table/{table_id}/columns")
-async def update_column(
-    table_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_column(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     async with service_of(request).db.session() as session:
@@ -2709,46 +1820,22 @@ async def update_column(
         row = await session.scalar(query)
         if row is None:
             raise not_found()
-        updates: dict[str, Any] = (
-            dict(body["updates"])
-            if isinstance(body.get("updates"), dict)
-            else dict(body.get("column", body))
-        )
+        updates = body.get("updates") if isinstance(body.get("updates"), dict) else body.get("column", body)
         if updates.get("name"):
             row.name = row.key = str(updates["name"])
         if updates.get("type") in ALLOWED_COLUMN_TYPES:
             row.type = str(updates["type"])
-        row.options = {
-            **(row.options or {}),
-            **{
-                k: updates[k]
-                for k in ("required", "unique", "options", "multiple", "currencyCode")
-                if k in updates
-            },
-        }
+        row.options = {**(row.options or {}), **{k: updates[k] for k in ("required", "unique", "options", "multiple", "currencyCode") if k in updates}}
         await session.commit()
     return {"success": True, "data": {"columns": [_column_public(row)]}}
 
 
 @router.delete("/table/{table_id}/columns")
-async def delete_column(
-    table_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def delete_column(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     _assert_table_writable(table)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableColumn).where(
-                WorkspaceTableColumn.table_id == table.id,
-                or_(
-                    WorkspaceTableColumn.id == body.get("columnId"),
-                    WorkspaceTableColumn.key == body.get("columnName"),
-                ),
-            )
-        )
+        row = await session.scalar(select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id, or_(WorkspaceTableColumn.id == body.get("columnId"), WorkspaceTableColumn.key == body.get("columnName"))))
         if row is None:
             raise not_found()
         await session.delete(row)
@@ -2757,30 +1844,15 @@ async def delete_column(
 
 
 @router.get("/table/{table_id}/views")
-async def list_views(
-    table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def list_views(table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     async with service_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableView).where(WorkspaceTableView.table_id == table.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows = (await session.execute(select(WorkspaceTableView).where(WorkspaceTableView.table_id == table.id))).scalars().all()
     return {"success": True, "data": {"views": [_view_public(row) for row in rows]}}
 
 
 @router.post("/table/{table_id}/views")
-async def create_view(
-    table_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_view(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     row = WorkspaceTableView(
         id=f"view_{uuid.uuid4().hex}",
@@ -2796,20 +1868,10 @@ async def create_view(
 
 
 @router.patch("/table/{table_id}/views/{view_id}")
-async def update_view(
-    table_id: str,
-    view_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_view(table_id: str, view_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableView).where(
-                WorkspaceTableView.id == view_id, WorkspaceTableView.table_id == table.id
-            )
-        )
+        row = await session.scalar(select(WorkspaceTableView).where(WorkspaceTableView.id == view_id, WorkspaceTableView.table_id == table.id))
         if row is None:
             raise not_found()
         if body.get("name"):
@@ -2834,19 +1896,10 @@ async def update_view(
 
 
 @router.delete("/table/{table_id}/views/{view_id}")
-async def delete_view(
-    table_id: str,
-    view_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def delete_view(table_id: str, view_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableView).where(
-                WorkspaceTableView.id == view_id, WorkspaceTableView.table_id == table.id
-            )
-        )
+        row = await session.scalar(select(WorkspaceTableView).where(WorkspaceTableView.id == view_id, WorkspaceTableView.table_id == table.id))
         if row is None:
             raise not_found()
         await session.delete(row)
@@ -2858,13 +1911,7 @@ async def delete_view(
 
 
 @router.get("/knowledge")
-async def list_knowledge(
-    request: Request,
-    includeArchived: bool = False,
-    scope: str = "active",
-    workspaceId: str | None = None,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def list_knowledge(request: Request, includeArchived: bool = False, scope: str = "active", workspaceId: str | None = None, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await service_of(request).project_agent_artifacts(context.learner_id)
     async with service_of(request).db.session() as session:
         query = select(KnowledgeBase).where(KnowledgeBase.learner_id == context.learner_id)
@@ -2872,38 +1919,17 @@ async def list_knowledge(
             query = query.where(KnowledgeBase.archived.is_(scope == "archived"))
         elif not includeArchived:
             query = query.where(KnowledgeBase.archived.is_(False))
-        rows = (
-            (await session.execute(query.order_by(KnowledgeBase.updated_at.desc()))).scalars().all()
-        )
+        rows = (await session.execute(query.order_by(KnowledgeBase.updated_at.desc()))).scalars().all()
         result = []
         for row in rows:
-            count = (
-                await session.scalar(
-                    select(func.count())
-                    .select_from(KnowledgeDocument)
-                    .where(
-                        KnowledgeDocument.base_id == row.id, KnowledgeDocument.archived.is_(False)
-                    )
-                )
-                or 0
-            )
+            count = await session.scalar(select(func.count()).select_from(KnowledgeDocument).where(KnowledgeDocument.base_id == row.id, KnowledgeDocument.archived.is_(False))) or 0
             result.append(_knowledge_base_public(row, int(count)))
     return {"success": True, "data": result, "knowledgeBases": result}
 
 
 @router.post("/knowledge")
-async def create_knowledge(
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    row = KnowledgeBase(
-        id=f"kb_{uuid.uuid4().hex}",
-        learner_id=context.learner_id,
-        name=str(body.get("name") or "知识库"),
-        description=str(body.get("description") or ""),
-        metadata_payload={},
-    )
+async def create_knowledge(body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
+    row = KnowledgeBase(id=f"kb_{uuid.uuid4().hex}", learner_id=context.learner_id, name=str(body.get("name") or "知识库"), description=str(body.get("description") or ""), metadata_payload={})
     async with service_of(request).db.session() as session:
         session.add(row)
         await session.commit()
@@ -2913,11 +1939,7 @@ async def create_knowledge(
 
 async def _base_for_id(request: Request, base_id: str, context: LearnerContext) -> KnowledgeBase:
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeBase).where(
-                KnowledgeBase.id == base_id, KnowledgeBase.learner_id == context.learner_id
-            )
-        )
+        row = await session.scalar(select(KnowledgeBase).where(KnowledgeBase.id == base_id, KnowledgeBase.learner_id == context.learner_id))
     if row is None:
         raise not_found()
     return row
@@ -2935,17 +1957,13 @@ async def search_knowledge(
     needle = q.strip().casefold()
     async with service_of(request).db.session() as session:
         bases = (
-            (
-                await session.execute(
-                    select(KnowledgeBase).where(
-                        KnowledgeBase.learner_id == context.learner_id,
-                        KnowledgeBase.archived.is_(False),
-                    )
+            await session.execute(
+                select(KnowledgeBase).where(
+                    KnowledgeBase.learner_id == context.learner_id,
+                    KnowledgeBase.archived.is_(False),
                 )
             )
-            .scalars()
-            .all()
-        )
+        ).scalars().all()
         base_ids = [row.id for row in bases]
         query = (
             select(KnowledgeDocument).where(
@@ -2953,7 +1971,7 @@ async def search_knowledge(
                 KnowledgeDocument.archived.is_(False),
             )
             if base_ids
-            else select(KnowledgeDocument).where(false())
+            else select(KnowledgeDocument).where(False)
         )
         docs = (await session.execute(query)).scalars().all()
     matches = []
@@ -2980,15 +1998,9 @@ async def next_available_tag_slot(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    prefix = {"text": "tag", "number": "number", "date": "date", "boolean": "boolean"}.get(
-        fieldType, "tag"
-    )
+    prefix = {"text": "tag", "number": "number", "date": "date", "boolean": "boolean"}.get(fieldType, "tag")
     async with service_of(request).db.session() as session:
-        rows = (
-            (await session.execute(select(KnowledgeTag).where(KnowledgeTag.base_id == base_id)))
-            .scalars()
-            .all()
-        )
+        rows = (await session.execute(select(KnowledgeTag).where(KnowledgeTag.base_id == base_id))).scalars().all()
     used = [row.tag_slot for row in rows if row.tag_slot]
     for index in range(1, 8 if prefix == "tag" else 6):
         candidate = f"{prefix}{index}"
@@ -3016,56 +2028,30 @@ async def next_available_tag_slot(
 
 
 @router.get("/knowledge/{base_id}/tag-usage")
-async def tag_usage(
-    base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def tag_usage(base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        tags = (
-            (
-                await session.execute(
-                    select(KnowledgeTag)
-                    .where(KnowledgeTag.base_id == base_id)
-                    .order_by(KnowledgeTag.name)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        tags = (await session.execute(select(KnowledgeTag).where(KnowledgeTag.base_id == base_id).order_by(KnowledgeTag.name))).scalars().all()
         usages: list[dict[str, Any]] = []
         for tag in tags:
-            links = (
-                (
-                    await session.execute(
-                        select(KnowledgeDocumentTag).where(KnowledgeDocumentTag.tag_id == tag.id)
-                    )
-                )
-                .scalars()
-                .all()
-            )
+            links = (await session.execute(select(KnowledgeDocumentTag).where(KnowledgeDocumentTag.tag_id == tag.id))).scalars().all()
             documents: list[dict[str, Any]] = []
             for link in links:
                 document = await session.get(KnowledgeDocument, link.document_id)
                 if document is not None and not document.archived:
-                    documents.append(
-                        {"id": document.id, "name": document.name, "tagValue": link.value}
-                    )
+                    documents.append({"id": document.id, "name": document.name, "tagValue": link.value})
             public = _tag_public(tag)
-            usages.append(
-                {
-                    "tagName": public["displayName"],
-                    "tagSlot": public["tagSlot"],
-                    "documentCount": len(documents),
-                    "documents": documents,
-                }
-            )
+            usages.append({
+                "tagName": public["displayName"],
+                "tagSlot": public["tagSlot"],
+                "documentCount": len(documents),
+                "documents": documents,
+            })
     return {"success": True, "data": usages}
 
 
 @router.get("/knowledge/{base_id}")
-async def get_knowledge(
-    base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def get_knowledge(base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     row = await _base_for_id(request, base_id, context)
     public = _knowledge_base_public(row)
     return {"success": True, "data": public, "knowledgeBase": public}
@@ -3073,12 +2059,7 @@ async def get_knowledge(
 
 @router.put("/knowledge/{base_id}")
 @router.patch("/knowledge/{base_id}")
-async def update_knowledge(
-    base_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_knowledge(base_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     row = await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
         current = await session.get(KnowledgeBase, row.id)
@@ -3095,9 +2076,7 @@ async def update_knowledge(
 
 
 @router.delete("/knowledge/{base_id}")
-async def archive_knowledge(
-    base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def archive_knowledge(base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     row = await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
         current = await session.get(KnowledgeBase, row.id)
@@ -3108,9 +2087,7 @@ async def archive_knowledge(
 
 
 @router.post("/knowledge/{base_id}/restore")
-async def restore_knowledge(
-    base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def restore_knowledge(base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     row = await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
         current = await session.get(KnowledgeBase, row.id)
@@ -3143,24 +2120,11 @@ async def list_documents(
             query = query.where(KnowledgeDocument.archived.is_(False))
         elif enabledFilter == "disabled":
             query = query.where(KnowledgeDocument.archived.is_(True))
-        rows = (
-            (await session.execute(query.order_by(KnowledgeDocument.updated_at.desc())))
-            .scalars()
-            .all()
-        )
+        rows = (await session.execute(query.order_by(KnowledgeDocument.updated_at.desc()))).scalars().all()
     if search:
         needle = search.casefold()
         rows = [row for row in rows if needle in f"{row.name}\n{row.content}".casefold()]
-    if sortBy in {
-        "filename",
-        "fileSize",
-        "tokenCount",
-        "chunkCount",
-        "uploadedAt",
-        "processingStatus",
-        "enabled",
-    }:
-
+    if sortBy in {"filename", "fileSize", "tokenCount", "chunkCount", "uploadedAt", "processingStatus", "enabled"}:
         def sort_key(row: KnowledgeDocument) -> Any:
             values = {
                 "filename": row.name,
@@ -3172,54 +2136,24 @@ async def list_documents(
                 "enabled": not row.archived,
             }
             return values[sortBy]
-
         rows = sorted(rows, key=sort_key, reverse=sortOrder == "desc")
     total = len(rows)
     rows = rows[max(0, offset) : max(0, offset) + min(100, max(1, limit))]
     result = [_document_public(row) for row in rows]
-    return {
-        "success": True,
-        "data": {
-            "documents": result,
-            "pagination": {
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-                "hasMore": offset + len(result) < total,
-            },
-        },
-        "documents": result,
-    }
+    return {"success": True, "data": {"documents": result, "pagination": {"total": total, "limit": limit, "offset": offset, "hasMore": offset + len(result) < total}}, "documents": result}
 
 
 @router.get("/knowledge/{base_id}/tag-definitions")
-async def list_tag_definitions(
-    base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def list_tag_definitions(base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(KnowledgeTag)
-                    .where(KnowledgeTag.base_id == base_id)
-                    .order_by(KnowledgeTag.name)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows = (await session.execute(select(KnowledgeTag).where(KnowledgeTag.base_id == base_id).order_by(KnowledgeTag.name))).scalars().all()
     tags = [_tag_public(row) for row in rows]
     return {"success": True, "data": tags, "tags": tags}
 
 
 @router.post("/knowledge/{base_id}/tag-definitions", status_code=201)
-async def create_tag_definition(
-    base_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_tag_definition(base_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     name = str(body.get("displayName") or body.get("name") or "").strip()
     if not name:
@@ -3239,18 +2173,10 @@ async def create_tag_definition(
 
 
 @router.patch("/knowledge/{base_id}/tag-definitions/{tag_id}")
-async def update_tag_definition(
-    base_id: str,
-    tag_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_tag_definition(base_id: str, tag_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeTag).where(KnowledgeTag.id == tag_id, KnowledgeTag.base_id == base_id)
-        )
+        row = await session.scalar(select(KnowledgeTag).where(KnowledgeTag.id == tag_id, KnowledgeTag.base_id == base_id))
         if row is None:
             raise not_found()
         if body.get("name") is not None:
@@ -3262,17 +2188,10 @@ async def update_tag_definition(
 
 
 @router.delete("/knowledge/{base_id}/tag-definitions/{tag_id}")
-async def delete_tag_definition(
-    base_id: str,
-    tag_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def delete_tag_definition(base_id: str, tag_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeTag).where(KnowledgeTag.id == tag_id, KnowledgeTag.base_id == base_id)
-        )
+        row = await session.scalar(select(KnowledgeTag).where(KnowledgeTag.id == tag_id, KnowledgeTag.base_id == base_id))
         if row is None:
             raise not_found()
         await session.delete(row)
@@ -3297,17 +2216,7 @@ async def list_document_tag_definitions(
         )
         if document is None:
             raise not_found()
-        rows = (
-            (
-                await session.execute(
-                    select(KnowledgeTag)
-                    .where(KnowledgeTag.base_id == base_id)
-                    .order_by(KnowledgeTag.name)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows = (await session.execute(select(KnowledgeTag).where(KnowledgeTag.base_id == base_id).order_by(KnowledgeTag.name))).scalars().all()
     return {"success": True, "data": [_tag_public(row) for row in rows]}
 
 
@@ -3320,9 +2229,7 @@ async def save_document_tag_definitions(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    definitions: list[Any] = (
-        body["definitions"] if isinstance(body.get("definitions"), list) else []
-    )
+    definitions = body.get("definitions") if isinstance(body.get("definitions"), list) else []
     created: list[dict[str, Any]] = []
     updated: list[dict[str, Any]] = []
     async with service_of(request).db.session() as session:
@@ -3384,7 +2291,7 @@ async def delete_document_tag_definitions(
         if document is None:
             raise not_found()
         await session.execute(
-                delete(KnowledgeDocumentTag).where(
+            KnowledgeDocumentTag.__table__.delete().where(
                 KnowledgeDocumentTag.document_id == document_id
             )
         )
@@ -3433,13 +2340,7 @@ async def create_knowledge_upload(
         "id": upload_id,
         "knowledgeBaseId": base_id,
         "token": token,
-        "body": {
-            **body,
-            "name": name,
-            "contentType": content_type,
-            "size": size,
-            "purpose": "knowledge_document",
-        },
+        "body": {**body, "name": name, "contentType": content_type, "size": size, "purpose": "knowledge_document"},
         "learner_id": context.learner_id,
         "temp": temp,
         "workspace_id": workspace.id,
@@ -3482,38 +2383,25 @@ async def complete_knowledge_upload(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     item = _upload_sessions.get(upload_id)
-    if (
-        item is None
-        or item.get("knowledgeBaseId") != base_id
-        or item["learner_id"] != context.learner_id
-        or request.headers.get("upload-token") != item["token"]
-    ):
+    if item is None or item.get("knowledgeBaseId") != base_id or item["learner_id"] != context.learner_id or request.headers.get("upload-token") != item["token"]:
         raise not_found()
     await _base_for_id(request, base_id, context)
     if item.get("status") == "completed" and item.get("document") is not None:
-        return {
-            "data": _knowledge_upload_session_public(
-                item, status="completed", document=item["document"]
-            )
-        }
+        return {"data": _knowledge_upload_session_public(item, status="completed", document=item["document"])}
     if item["temp"].is_file():
         raw = item["temp"].read_bytes()
     elif item.get("parts"):
-        raw = b"".join(
-            path.read_bytes() for _number, path in sorted(item["parts"].items()) if path.is_file()
-        )
+        raw = b"".join(path.read_bytes() for _number, path in sorted(item["parts"].items()) if path.is_file())
     else:
         raw = b""
     if len(raw) != int(item["body"]["size"]):
         raise HTTPException(status_code=422, detail="upload_size_mismatch")
-    name, mime, content = _parse_knowledge_document(
-        {
-            "name": item["body"]["name"],
-            "content": base64.b64encode(raw).decode("ascii"),
-            "encoding": "base64",
-            "contentType": item["body"]["contentType"],
-        }
-    )
+    name, mime, content = _parse_knowledge_document({
+        "name": item["body"]["name"],
+        "content": base64.b64encode(raw).decode("ascii"),
+        "encoding": "base64",
+        "contentType": item["body"]["contentType"],
+    })
     metadata = {
         key: item["body"].get(key)
         for key in ("tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7")
@@ -3530,37 +2418,14 @@ async def complete_knowledge_upload(
         )
         session.add(row)
         for ordinal, start in enumerate(range(0, len(content), 1200)):
-            session.add(
-                KnowledgeChunk(
-                    id=f"chunk_{uuid.uuid4().hex}",
-                    document_id=row.id,
-                    ordinal=ordinal,
-                    text=content[start : start + 1200],
-                    metadata_payload={"enabled": True},
-                )
-            )
+            session.add(KnowledgeChunk(id=f"chunk_{uuid.uuid4().hex}", document_id=row.id, ordinal=ordinal, text=content[start : start + 1200], metadata_payload={"enabled": True}))
         upload_row = await session.get(WorkspaceUploadSession, upload_id)
         if upload_row is not None:
             upload_row.status = "completed"
             upload_row.file_id = row.id
         await session.commit()
     document = _document_public(row)
-    summary = {
-        key: document[key]
-        for key in (
-            "id",
-            "knowledgeBaseId",
-            "filename",
-            "fileSize",
-            "mimeType",
-            "processingStatus",
-            "chunkCount",
-            "tokenCount",
-            "characterCount",
-            "enabled",
-            "createdAt",
-        )
-    }
+    summary = {key: document[key] for key in ("id", "knowledgeBaseId", "filename", "fileSize", "mimeType", "processingStatus", "chunkCount", "tokenCount", "characterCount", "enabled", "createdAt")}
     item["status"] = "completed"
     item["document"] = summary
     item["temp"].unlink(missing_ok=True)
@@ -3578,12 +2443,7 @@ async def abort_knowledge_upload(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     item = _upload_sessions.get(upload_id)
-    if (
-        item is None
-        or item.get("knowledgeBaseId") != base_id
-        or item["learner_id"] != context.learner_id
-        or request.headers.get("upload-token") != item["token"]
-    ):
+    if item is None or item.get("knowledgeBaseId") != base_id or item["learner_id"] != context.learner_id or request.headers.get("upload-token") != item["token"]:
         raise not_found()
     await _base_for_id(request, base_id, context)
     _upload_sessions.pop(upload_id, None)
@@ -3599,151 +2459,71 @@ async def abort_knowledge_upload(
 
 
 @router.post("/knowledge/{base_id}/documents")
-async def create_document(
-    base_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_document(base_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     name, mime, content = _parse_knowledge_document(body)
-    row = KnowledgeDocument(
-        id=f"doc_{uuid.uuid4().hex}",
-        base_id=base_id,
-        name=name,
-        mime_type=mime,
-        content=content,
-        metadata_payload=dict(body.get("metadata") or {}),
-    )
+    row = KnowledgeDocument(id=f"doc_{uuid.uuid4().hex}", base_id=base_id, name=name, mime_type=mime, content=content, metadata_payload=dict(body.get("metadata") or {}))
     async with service_of(request).db.session() as session:
         session.add(row)
         # Deterministic chunks keep search and retrieval useful without embeddings.
         for ordinal, start in enumerate(range(0, len(content), 1200)):
-            session.add(
-                KnowledgeChunk(
-                    id=f"chunk_{uuid.uuid4().hex}",
-                    document_id=row.id,
-                    ordinal=ordinal,
-                    text=content[start : start + 1200],
-                    metadata_payload={},
-                )
-            )
+            session.add(KnowledgeChunk(id=f"chunk_{uuid.uuid4().hex}", document_id=row.id, ordinal=ordinal, text=content[start : start + 1200], metadata_payload={}))
         await session.commit()
     public = _document_public(row)
     return {"success": True, "data": public, "document": public}
 
 
 @router.post("/knowledge/{base_id}/documents/upsert")
-async def upsert_document(
-    base_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def upsert_document(base_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     document_id = str(body.get("documentId") or "").strip()
     name, mime, content = _parse_knowledge_document(body)
     async with service_of(request).db.session() as session:
-        row = (
-            await session.scalar(
-                select(KnowledgeDocument).where(
-                    KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-                )
-            )
-            if document_id
-            else None
-        )
+        row = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id)) if document_id else None
         is_update = row is not None
         if row is None:
-            row = KnowledgeDocument(
-                id=document_id or f"doc_{uuid.uuid4().hex}",
-                base_id=base_id,
-                name=name,
-                mime_type=mime,
-                content=content,
-                metadata_payload={},
-            )
+            row = KnowledgeDocument(id=document_id or f"doc_{uuid.uuid4().hex}", base_id=base_id, name=name, mime_type=mime, content=content, metadata_payload={})
             session.add(row)
         else:
             row.name, row.mime_type, row.content, row.archived = name, mime, content, False
-            await session.execute(
-                delete(KnowledgeChunk).where(KnowledgeChunk.document_id == row.id)
-            )
+            await session.execute(KnowledgeChunk.__table__.delete().where(KnowledgeChunk.document_id == row.id))
         for ordinal, start in enumerate(range(0, len(content), 1200)):
-            session.add(
-                KnowledgeChunk(
-                    id=f"chunk_{uuid.uuid4().hex}",
-                    document_id=row.id,
-                    ordinal=ordinal,
-                    text=content[start : start + 1200],
-                    metadata_payload={"enabled": True},
-                )
-            )
+            session.add(KnowledgeChunk(id=f"chunk_{uuid.uuid4().hex}", document_id=row.id, ordinal=ordinal, text=content[start : start + 1200], metadata_payload={"enabled": True}))
         await session.commit()
-    return {
-        "success": True,
-        "data": {
-            "documentsCreated": [{"documentId": row.id, "filename": row.name, "status": "pending"}],
-            "isUpdate": is_update,
-            "previousDocumentId": row.id if is_update else None,
-            "processingMethod": "background",
-            "processingConfig": {"maxConcurrentDocuments": 1, "batchSize": 1},
-        },
-    }
+    return {"success": True, "data": {
+        "documentsCreated": [{"documentId": row.id, "filename": row.name, "status": "pending"}],
+        "isUpdate": is_update,
+        "previousDocumentId": row.id if is_update else None,
+        "processingMethod": "background",
+        "processingConfig": {"maxConcurrentDocuments": 1, "batchSize": 1},
+    }}
 
 
 @router.patch("/knowledge/{base_id}/documents")
-async def bulk_update_documents(
-    base_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def bulk_update_documents(base_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     operation = str(body.get("operation") or "")
     ids = {str(item) for item in body.get("documentIds") or []}
     if operation not in {"enable", "disable", "delete"} or not ids:
         raise HTTPException(status_code=422, detail="invalid_document_operation")
     async with service_of(request).db.session() as session:
-        rows = list(
-            (
-                await session.execute(
-                    select(KnowledgeDocument).where(
-                        KnowledgeDocument.base_id == base_id, KnowledgeDocument.id.in_(ids)
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows = list((await session.execute(select(KnowledgeDocument).where(KnowledgeDocument.base_id == base_id, KnowledgeDocument.id.in_(ids)))).scalars().all())
         for row in rows:
             row.archived = operation != "enable"
         await session.commit()
-    return {
-        "success": True,
-        "data": {
-            "operation": operation,
-            "successCount": len(rows),
-            "failedCount": len(ids) - len(rows),
-            "updatedDocuments": [{"id": row.id, "enabled": not row.archived} for row in rows],
-        },
-    }
+    return {"success": True, "data": {
+        "operation": operation,
+        "successCount": len(rows),
+        "failedCount": len(ids) - len(rows),
+        "updatedDocuments": [{"id": row.id, "enabled": not row.archived} for row in rows],
+    }}
 
 
 @router.get("/knowledge/{base_id}/documents/{document_id}")
-async def get_document(
-    base_id: str,
-    document_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def get_document(base_id: str, document_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
+        row = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id))
     if row is None:
         raise not_found()
     public = _document_public(row)
@@ -3765,37 +2545,18 @@ async def list_chunks(
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
+        document = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id))
         if document is None:
             raise not_found()
-        rows = (
-            (
-                await session.execute(
-                    select(KnowledgeChunk)
-                    .where(KnowledgeChunk.document_id == document_id)
-                    .order_by(KnowledgeChunk.ordinal)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows = (await session.execute(select(KnowledgeChunk).where(KnowledgeChunk.document_id == document_id).order_by(KnowledgeChunk.ordinal))).scalars().all()
         document = await session.get(KnowledgeDocument, document_id)
     if search:
         needle = search.casefold()
         rows = [row for row in rows if needle in (row.text or "").casefold()]
     if enabled in {"true", "false"}:
         want_enabled = enabled == "true"
-        rows = [
-            row
-            for row in rows
-            if bool((row.metadata_payload or {}).get("enabled", True)) == want_enabled
-        ]
+        rows = [row for row in rows if bool((row.metadata_payload or {}).get("enabled", True)) == want_enabled]
     if sortBy in {"chunkIndex", "tokenCount", "enabled"}:
-
         def chunk_sort_key(row: KnowledgeChunk) -> Any:
             values = {
                 "chunkIndex": row.ordinal,
@@ -3803,7 +2564,6 @@ async def list_chunks(
                 "enabled": bool((row.metadata_payload or {}).get("enabled", True)),
             }
             return values[sortBy]
-
         rows = sorted(rows, key=chunk_sort_key, reverse=sortOrder == "desc")
     total = len(rows)
     page = rows[max(0, offset) : max(0, offset) + min(100, max(1, limit))]
@@ -3829,99 +2589,40 @@ async def list_chunks(
 
 
 @router.post("/knowledge/{base_id}/documents/{document_id}/chunks")
-async def create_chunk(
-    base_id: str,
-    document_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_chunk(base_id: str, document_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     content = str(body.get("content") or "")
     if not content:
         raise HTTPException(status_code=422, detail="chunk_content_required")
     async with service_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
+        document = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id))
         if document is None:
             raise not_found()
-        ordinal = await session.scalar(
-            select(func.max(KnowledgeChunk.ordinal)).where(
-                KnowledgeChunk.document_id == document_id
-            )
-        )
-        row = KnowledgeChunk(
-            id=f"chunk_{uuid.uuid4().hex}",
-            document_id=document_id,
-            ordinal=int(ordinal or -1) + 1,
-            text=content,
-            metadata_payload={"enabled": bool(body.get("enabled", True))},
-        )
+        ordinal = await session.scalar(select(func.max(KnowledgeChunk.ordinal)).where(KnowledgeChunk.document_id == document_id))
+        row = KnowledgeChunk(id=f"chunk_{uuid.uuid4().hex}", document_id=document_id, ordinal=int(ordinal or -1) + 1, text=content, metadata_payload={"enabled": bool(body.get("enabled", True))})
         session.add(row)
         await session.commit()
-    return {
-        "success": True,
-        "data": _chunk_public(
-            row, document_created_at=document.created_at, document_updated_at=document.updated_at
-        ),
-    }
+    return {"success": True, "data": _chunk_public(row, document_created_at=document.created_at, document_updated_at=document.updated_at)}
 
 
 @router.get("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}")
-async def get_chunk(
-    base_id: str,
-    document_id: str,
-    chunk_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def get_chunk(base_id: str, document_id: str, chunk_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        row = await session.scalar(
-            select(KnowledgeChunk).where(
-                KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id
-            )
-        )
+        document = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id))
+        row = await session.scalar(select(KnowledgeChunk).where(KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id))
     if document is None or row is None:
         raise not_found()
-    return {
-        "success": True,
-        "data": _chunk_public(
-            row, document_created_at=document.created_at, document_updated_at=document.updated_at
-        ),
-    }
+    return {"success": True, "data": _chunk_public(row, document_created_at=document.created_at, document_updated_at=document.updated_at)}
 
 
 @router.put("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}")
 @router.patch("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}")
-async def update_chunk(
-    base_id: str,
-    document_id: str,
-    chunk_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_chunk(base_id: str, document_id: str, chunk_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        row = await session.scalar(
-            select(KnowledgeChunk).where(
-                KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id
-            )
-        )
+        document = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id))
+        row = await session.scalar(select(KnowledgeChunk).where(KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id))
         if document is None or row is None:
             raise not_found()
         if body.get("content") is not None:
@@ -3931,29 +2632,14 @@ async def update_chunk(
             metadata["enabled"] = bool(body["enabled"])
         row.metadata_payload = metadata
         await session.commit()
-    return {
-        "success": True,
-        "data": _chunk_public(
-            row, document_created_at=document.created_at, document_updated_at=document.updated_at
-        ),
-    }
+    return {"success": True, "data": _chunk_public(row, document_created_at=document.created_at, document_updated_at=document.updated_at)}
 
 
 @router.delete("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}")
-async def delete_chunk(
-    base_id: str,
-    document_id: str,
-    chunk_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def delete_chunk(base_id: str, document_id: str, chunk_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeChunk).where(
-                KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id
-            )
-        )
+        row = await session.scalar(select(KnowledgeChunk).where(KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id))
         if row is None:
             raise not_found()
         await session.delete(row)
@@ -3962,98 +2648,46 @@ async def delete_chunk(
 
 
 @router.patch("/knowledge/{base_id}/documents/{document_id}/chunks")
-async def bulk_update_chunks(
-    base_id: str,
-    document_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def bulk_update_chunks(base_id: str, document_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     operation = str(body.get("operation") or "")
     chunk_ids = {str(item) for item in body.get("chunkIds") or []}
     if operation not in {"enable", "disable", "delete"} or not chunk_ids:
         raise HTTPException(status_code=422, detail="invalid_chunk_operation")
     async with service_of(request).db.session() as session:
-        rows = list(
-            (
-                await session.execute(
-                    select(KnowledgeChunk).where(
-                        KnowledgeChunk.document_id == document_id, KnowledgeChunk.id.in_(chunk_ids)
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
+        rows = list((await session.execute(select(KnowledgeChunk).where(KnowledgeChunk.document_id == document_id, KnowledgeChunk.id.in_(chunk_ids)))).scalars().all())
         if operation == "delete":
             for row in rows:
                 await session.delete(row)
         else:
             for row in rows:
-                row.metadata_payload = {
-                    **(row.metadata_payload or {}),
-                    "enabled": operation == "enable",
-                }
+                row.metadata_payload = {**(row.metadata_payload or {}), "enabled": operation == "enable"}
         await session.commit()
-    return {
-        "success": True,
-        "data": {
-            "operation": operation,
-            "successCount": len(rows),
-            "errorCount": 0,
-            "processed": len(rows),
-            "errors": [],
-        },
-    }
+    return {"success": True, "data": {"operation": operation, "successCount": len(rows), "errorCount": 0, "processed": len(rows), "errors": []}}
 
 
 @router.put("/knowledge/{base_id}/documents/{document_id}")
 @router.patch("/knowledge/{base_id}/documents/{document_id}")
-async def update_document(
-    base_id: str,
-    document_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_document(base_id: str, document_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
+        row = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id))
         if row is None:
             raise not_found()
-        if (row.metadata_payload or {}).get("readOnly") and any(
-            key in body for key in ("name", "filename", "content", "enabled")
-        ):
+        if (row.metadata_payload or {}).get("readOnly") and any(key in body for key in ("name", "filename", "content", "enabled")):
             raise HTTPException(status_code=403, detail="read_only_document")
         if body.get("name") is not None or body.get("filename") is not None:
             row.name = _safe_name(str(body.get("name") or body.get("filename")))
         if isinstance(body.get("content"), str):
             row.content = body["content"]
-            await session.execute(
-                delete(KnowledgeChunk).where(KnowledgeChunk.document_id == row.id)
-            )
+            await session.execute(KnowledgeChunk.__table__.delete().where(KnowledgeChunk.document_id == row.id))
             for ordinal, start in enumerate(range(0, len(row.content), 1200)):
-                session.add(
-                    KnowledgeChunk(
-                        id=f"chunk_{uuid.uuid4().hex}",
-                        document_id=row.id,
-                        ordinal=ordinal,
-                        text=row.content[start : start + 1200],
-                        metadata_payload={},
-                    )
-                )
+                session.add(KnowledgeChunk(id=f"chunk_{uuid.uuid4().hex}", document_id=row.id, ordinal=ordinal, text=row.content[start : start + 1200], metadata_payload={}))
         if body.get("enabled") is not None:
             row.archived = not bool(body["enabled"])
-        tag_keys = (
-            {f"tag{index}" for index in range(1, 8)}
-            | {f"number{index}" for index in range(1, 6)}
-            | {"date1", "date2", "boolean1", "boolean2", "boolean3"}
-        )
+        tag_keys = {f"tag{index}" for index in range(1, 8)} | {
+            f"number{index}" for index in range(1, 6)
+        } | {"date1", "date2", "boolean1", "boolean2", "boolean3"}
         if any(key in body for key in tag_keys):
             metadata = {**(row.metadata_payload or {})}
             for key in tag_keys:
@@ -4063,25 +2697,14 @@ async def update_document(
             for slot in [key for key in tag_keys if key.startswith("tag")]:
                 if slot not in body:
                     continue
-                tag = await session.scalar(
-                    select(KnowledgeTag).where(
-                        KnowledgeTag.base_id == base_id, KnowledgeTag.tag_slot == slot
-                    )
-                )
+                tag = await session.scalar(select(KnowledgeTag).where(KnowledgeTag.base_id == base_id, KnowledgeTag.tag_slot == slot))
                 if tag is None:
                     continue
-                link = await session.scalar(
-                    select(KnowledgeDocumentTag).where(
-                        KnowledgeDocumentTag.document_id == row.id,
-                        KnowledgeDocumentTag.tag_id == tag.id,
-                    )
-                )
+                link = await session.scalar(select(KnowledgeDocumentTag).where(KnowledgeDocumentTag.document_id == row.id, KnowledgeDocumentTag.tag_id == tag.id))
                 value = str(body.get(slot) or "")
                 if value:
                     if link is None:
-                        session.add(
-                            KnowledgeDocumentTag(document_id=row.id, tag_id=tag.id, value=value)
-                        )
+                        session.add(KnowledgeDocumentTag(document_id=row.id, tag_id=tag.id, value=value))
                     else:
                         link.value = value
                 elif link is not None:
@@ -4092,19 +2715,10 @@ async def update_document(
 
 
 @router.delete("/knowledge/{base_id}/documents/{document_id}")
-async def archive_document(
-    base_id: str,
-    document_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def archive_document(base_id: str, document_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
+        row = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id))
         if row is None:
             raise not_found()
         row.archived = True
@@ -4113,19 +2727,10 @@ async def archive_document(
 
 
 @router.post("/knowledge/{base_id}/documents/{document_id}/restore")
-async def restore_document(
-    base_id: str,
-    document_id: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def restore_document(base_id: str, document_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
+        row = await session.scalar(select(KnowledgeDocument).where(KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id))
         if row is None:
             raise not_found()
         row.archived = False
@@ -4138,22 +2743,11 @@ async def restore_document(
 
 
 @router.post("/skills")
-async def create_skill(
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def create_skill(body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     name = str(body.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=422, detail="name_required")
-    row = PersonalSkill(
-        id=f"skill_{uuid.uuid4().hex}",
-        learner_id=context.learner_id,
-        name=name[:128],
-        description=str(body.get("description") or ""),
-        content=str(body.get("content") or ""),
-        version=str(body.get("version") or "1.0.0"),
-    )
+    row = PersonalSkill(id=f"skill_{uuid.uuid4().hex}", learner_id=context.learner_id, name=name[:128], description=str(body.get("description") or ""), content=str(body.get("content") or ""), version=str(body.get("version") or "1.0.0"))
     async with service_of(request).db.session() as session:
         session.add(row)
         await session.commit()
@@ -4162,18 +2756,9 @@ async def create_skill(
 
 
 @router.patch("/skills/{skill_id}")
-async def update_skill(
-    skill_id: str,
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def update_skill(skill_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(PersonalSkill).where(
-                PersonalSkill.id == skill_id, PersonalSkill.learner_id == context.learner_id
-            )
-        )
+        row = await session.scalar(select(PersonalSkill).where(PersonalSkill.id == skill_id, PersonalSkill.learner_id == context.learner_id))
         if row is None:
             raise not_found()
         for field in ("name", "description", "content", "version"):
@@ -4185,15 +2770,9 @@ async def update_skill(
 
 
 @router.delete("/skills/{skill_id}")
-async def delete_skill(
-    skill_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
+async def delete_skill(skill_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     async with service_of(request).db.session() as session:
-        row = await session.scalar(
-            select(PersonalSkill).where(
-                PersonalSkill.id == skill_id, PersonalSkill.learner_id == context.learner_id
-            )
-        )
+        row = await session.scalar(select(PersonalSkill).where(PersonalSkill.id == skill_id, PersonalSkill.learner_id == context.learner_id))
         if row is None:
             raise not_found()
         await session.delete(row)
@@ -4202,47 +2781,17 @@ async def delete_skill(
 
 
 def _skill_public(row: PersonalSkill) -> dict[str, Any]:
-    return {
-        "id": row.id,
-        "name": row.name,
-        "display_name": row.name,
-        "description": row.description,
-        "content": row.content,
-        "version": row.version,
-        "source": "personal",
-        "is_system": False,
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-    }
+    return {"id": row.id, "name": row.name, "display_name": row.name, "description": row.description, "content": row.content, "version": row.version, "source": "personal", "is_system": False, "created_at": row.created_at.isoformat() if row.created_at else None, "updated_at": row.updated_at.isoformat() if row.updated_at else None}
 
 
 # Logs -----------------------------------------------------------------------
 
 
 @router.get("/logs")
-async def list_logs(
-    request: Request,
-    workspaceId: str = "lingxi",
-    limit: int = 50,
-    cursor: str | None = None,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def list_logs(request: Request, workspaceId: str = "lingxi", limit: int = 50, cursor: str | None = None, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _workspace_for_id(request, workspaceId, context)
     async with service_of(request).db.session() as session:
-        tasks = (
-            (
-                await session.execute(
-                    select(AgentTask)
-                    .where(
-                        AgentTask.learner_id == context.learner_id, AgentTask.deleted_at.is_(None)
-                    )
-                    .order_by(desc(AgentTask.updated_at))
-                    .limit(min(100, max(1, limit)))
-                )
-            )
-            .scalars()
-            .all()
-        )
+        tasks = (await session.execute(select(AgentTask).where(AgentTask.learner_id == context.learner_id, AgentTask.deleted_at.is_(None)).order_by(desc(AgentTask.updated_at)).limit(min(100, max(1, limit))))).scalars().all()
     logs = [
         {
             "id": task.id,
@@ -4254,20 +2803,14 @@ async def list_logs(
             "deploymentVersionName": None,
             "executionOrigin": None,
             "level": "error" if task.status == "failed" else "info",
-            "status": "completed"
-            if task.status in {"completed", "partial", "handed_off"}
-            else task.status,
+            "status": "completed" if task.status in {"completed", "partial", "handed_off"} else task.status,
             "duration": "0",
             "trigger": "agent-task",
             "createdAt": task.created_at.isoformat() if task.created_at else "",
             "workflow": {"id": "lingxi-agent", "name": "LingxiGraph · Sim runtime"},
             "jobTitle": task.title or None,
             "cost": {"total": 0},
-            "pauseSummary": {
-                "status": "awaiting_user" if task.status == "awaiting_user" else None,
-                "total": 1 if task.status == "awaiting_user" else 0,
-                "resumed": 0,
-            },
+            "pauseSummary": {"status": "awaiting_user" if task.status == "awaiting_user" else None, "total": 1 if task.status == "awaiting_user" else 0, "resumed": 0},
             "hasPendingPause": task.status == "awaiting_user",
         }
         for task in tasks
@@ -4276,29 +2819,11 @@ async def list_logs(
 
 
 @router.get("/logs/stats")
-async def log_stats(
-    request: Request,
-    workspaceId: str = "lingxi",
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def log_stats(request: Request, workspaceId: str = "lingxi", context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _workspace_for_id(request, workspaceId, context)
     async with service_of(request).db.session() as session:
-        total = (
-            await session.scalar(
-                select(func.count())
-                .select_from(AgentTask)
-                .where(AgentTask.learner_id == context.learner_id)
-            )
-            or 0
-        )
-        failed = (
-            await session.scalar(
-                select(func.count())
-                .select_from(AgentTask)
-                .where(AgentTask.learner_id == context.learner_id, AgentTask.status == "failed")
-            )
-            or 0
-        )
+        total = await session.scalar(select(func.count()).select_from(AgentTask).where(AgentTask.learner_id == context.learner_id)) or 0
+        failed = await session.scalar(select(func.count()).select_from(AgentTask).where(AgentTask.learner_id == context.learner_id, AgentTask.status == "failed")) or 0
     now = datetime.now(UTC).isoformat()
     return {
         "workflows": [],
@@ -4319,16 +2844,12 @@ async def export_logs(
 ) -> StreamingResponse:
     async with service_of(request).db.session() as session:
         tasks = (
-            (
-                await session.execute(
-                    select(AgentTask)
-                    .where(AgentTask.learner_id == context.learner_id)
-                    .order_by(desc(AgentTask.updated_at))
-                )
+            await session.execute(
+                select(AgentTask)
+                .where(AgentTask.learner_id == context.learner_id)
+                .order_by(desc(AgentTask.updated_at))
             )
-            .scalars()
-            .all()
-        )
+        ).scalars().all()
     records = [
         {
             "id": task.id,
@@ -4341,9 +2862,7 @@ async def export_logs(
     ]
     if format.lower() == "csv":
         buffer = io.StringIO()
-        writer = csv.DictWriter(
-            buffer, fieldnames=["id", "status", "prompt", "createdAt", "updatedAt"]
-        )
+        writer = csv.DictWriter(buffer, fieldnames=["id", "status", "prompt", "createdAt", "updatedAt"])
         writer.writeheader()
         writer.writerows(records)
         return StreamingResponse(
@@ -4351,9 +2870,7 @@ async def export_logs(
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=lingxi-logs.csv"},
         )
-    return StreamingResponse(
-        iter([json.dumps(records, ensure_ascii=False)]), media_type="application/json"
-    )
+    return StreamingResponse(iter([json.dumps(records, ensure_ascii=False)]), media_type="application/json")
 
 
 @router.get("/logs/by-execution/{execution_id}")
@@ -4372,19 +2889,12 @@ async def log_by_execution(
     task_id = snapshot["taskId"]
     async with svc.db.session() as session:
         events = (
-            (
-                await session.execute(
-                    select(AgentTaskEvent)
-                    .where(
-                        AgentTaskEvent.task_id == task_id,
-                        AgentTaskEvent.execution_id == execution_id,
-                    )
-                    .order_by(AgentTaskEvent.sequence)
-                )
+            await session.execute(
+                select(AgentTaskEvent)
+                .where(AgentTaskEvent.task_id == task_id, AgentTaskEvent.execution_id == execution_id)
+                .order_by(AgentTaskEvent.sequence)
             )
-            .scalars()
-            .all()
-        )
+        ).scalars().all()
     metadata = snapshot["executionMetadata"]
     started_at = metadata.get("startedAt") or datetime.now(UTC).isoformat()
     detail = {
@@ -4404,11 +2914,7 @@ async def log_by_execution(
         "workflow": {"id": "lingxi-agent", "name": "LingxiGraph · Sim runtime"},
         "jobTitle": None,
         "cost": {"total": 0},
-        "pauseSummary": {
-            "status": "awaiting_user" if snapshot["status"] == "awaiting_user" else None,
-            "total": 1 if snapshot["status"] == "awaiting_user" else 0,
-            "resumed": 0,
-        },
+        "pauseSummary": {"status": "awaiting_user" if snapshot["status"] == "awaiting_user" else None, "total": 1 if snapshot["status"] == "awaiting_user" else 0, "resumed": 0},
         "hasPendingPause": snapshot["status"] == "awaiting_user",
         "executionData": {
             "totalDuration": metadata.get("totalDurationMs"),
@@ -4419,15 +2925,7 @@ async def log_by_execution(
         },
         "files": None,
         "events": [
-            {
-                "id": event.sequence,
-                "sequence": event.sequence,
-                "type": event.kind,
-                "kind": event.kind,
-                "payload": event.payload,
-                "runtime": event.runtime or {},
-                "createdAt": event.created_at.isoformat() if event.created_at else None,
-            }
+            {"id": event.sequence, "sequence": event.sequence, "type": event.kind, "kind": event.kind, "payload": event.payload, "runtime": event.runtime or {}, "createdAt": event.created_at.isoformat() if event.created_at else None}
             for event in events
         ],
         "error": None,
@@ -4442,9 +2940,7 @@ async def execution_snapshot(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        snapshot = await service_of(request).agent_execution_snapshot(
-            execution_id, context.learner_id
-        )
+        snapshot = await service_of(request).agent_execution_snapshot(execution_id, context.learner_id)
         metadata = snapshot.get("executionMetadata") or {}
         metadata["startedAt"] = metadata.get("startedAt") or datetime.now(UTC).isoformat()
         snapshot["executionMetadata"] = metadata
@@ -4454,33 +2950,14 @@ async def execution_snapshot(
 
 
 @router.get("/logs/{log_id}")
-async def log_detail(
-    log_id: str,
-    request: Request,
-    workspaceId: str = "lingxi",
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
+async def log_detail(log_id: str, request: Request, workspaceId: str = "lingxi", context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     await _workspace_for_id(request, workspaceId, context)
     svc = service_of(request)
     async with svc.db.session() as session:
-        task = await session.scalar(
-            select(AgentTask).where(
-                AgentTask.id == log_id, AgentTask.learner_id == context.learner_id
-            )
-        )
+        task = await session.scalar(select(AgentTask).where(AgentTask.id == log_id, AgentTask.learner_id == context.learner_id))
         if task is None:
             raise not_found()
-        events = (
-            (
-                await session.execute(
-                    select(AgentTaskEvent)
-                    .where(AgentTaskEvent.task_id == task.id)
-                    .order_by(AgentTaskEvent.sequence)
-                )
-            )
-            .scalars()
-            .all()
-        )
+        events = (await session.execute(select(AgentTaskEvent).where(AgentTaskEvent.task_id == task.id).order_by(AgentTaskEvent.sequence))).scalars().all()
     started_at = task.created_at.isoformat() if task.created_at else datetime.now(UTC).isoformat()
     detail = {
         "id": task.id,
@@ -4499,11 +2976,7 @@ async def log_detail(
         "workflow": {"id": "lingxi-agent", "name": "LingxiGraph · Sim runtime"},
         "jobTitle": task.title or None,
         "cost": {"total": 0},
-        "pauseSummary": {
-            "status": "awaiting_user" if task.status == "awaiting_user" else None,
-            "total": 1 if task.status == "awaiting_user" else 0,
-            "resumed": 0,
-        },
+        "pauseSummary": {"status": "awaiting_user" if task.status == "awaiting_user" else None, "total": 1 if task.status == "awaiting_user" else 0, "resumed": 0},
         "hasPendingPause": task.status == "awaiting_user",
         "executionData": {
             "totalDuration": 0,
@@ -4513,19 +2986,7 @@ async def log_detail(
             "trigger": "agent-task",
         },
         "files": None,
-        "events": [
-            {
-                "id": event.sequence,
-                "sequence": event.sequence,
-                "type": event.kind,
-                "kind": event.kind,
-                "payload": event.payload,
-                "executionId": event.execution_id,
-                "runtime": event.runtime or {},
-                "createdAt": event.created_at.isoformat() if event.created_at else None,
-            }
-            for event in events
-        ],
+        "events": [{"id": event.sequence, "sequence": event.sequence, "type": event.kind, "kind": event.kind, "payload": event.payload, "executionId": event.execution_id, "runtime": event.runtime or {}, "createdAt": event.created_at.isoformat() if event.created_at else None} for event in events],
         "error": task.error or None,
     }
     return {"success": True, "data": detail}

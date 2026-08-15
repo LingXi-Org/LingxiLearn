@@ -24,10 +24,8 @@ AGENT_EVENT_KINDS: Final[frozenset[str]] = frozenset(
         "agent.status",
         "agent.output",
         "agent.output.delta",
-        "assistant.delta",
-        # Internal adapters may observe these, but the persistence/SSE
-        # boundary strips them before publication.
         "reasoning.delta",
+        "assistant.delta",
         "tool.call.delta",
         "tool.result",
         "model.started",
@@ -47,6 +45,9 @@ AGENT_EVENT_KINDS: Final[frozenset[str]] = frozenset(
         "artifact.recovered",
         "delivery.queued",
         "delivery.unlocked",
+        "sidecar.started",
+        "sidecar.completed",
+        "sidecar.failed",
         "schedule.proposed",
         "schedule.permission",
         "plan.created",
@@ -77,3 +78,4 @@ TERMINAL_AGENT_EVENT_KINDS: Final[frozenset[str]] = frozenset(
         "run.budget_exceeded",
     }
 )
+

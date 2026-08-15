@@ -37,7 +37,6 @@ from .models import (
     DecisionTrace,
     LearningEvidence,
     LearningProfile,
-    ProjectionCursor,
     SessionState,
     SessionStateEvent,
     SkillRegistryEntry,
@@ -168,64 +167,11 @@ class RuntimeStateRepository:
     def __init__(self, db: Database) -> None:
         self.db = db
         self._interjection_lock = asyncio.Lock()
-        self._projection_locks: dict[tuple[str, str], asyncio.Lock] = {}
-
-    def projection_lock(
-        self, learner_id: str, projection: str = "learning_profile"
-    ) -> asyncio.Lock:
-        """Return the per-projection process lock used during a fold.
-
-        The cursor is durable (and therefore survives a restart); this lock is
-        only a fast path that prevents two local workers from folding the same
-        batch concurrently.
-        """
-        key = (learner_id, projection)
-        lock = self._projection_locks.get(key)
-        if lock is None:
-            lock = asyncio.Lock()
-            self._projection_locks[key] = lock
-        return lock
-
-    async def projection_cursor(self, learner_id: str, projection: str = "learning_profile") -> int:
-        async with self.db.session() as s:
-            row = await s.scalar(
-                select(ProjectionCursor).where(
-                    ProjectionCursor.learner_id == learner_id,
-                    ProjectionCursor.projection == projection,
-                )
-            )
-            return int(row.last_event_id or 0) if row else 0
-
-    async def advance_projection_cursor(
-        self, learner_id: str, seq: int, projection: str = "learning_profile"
-    ) -> None:
-        if seq <= 0:
-            return
-        async with self.db.session() as s:
-            row = await s.scalar(
-                select(ProjectionCursor).where(
-                    ProjectionCursor.learner_id == learner_id,
-                    ProjectionCursor.projection == projection,
-                )
-            )
-            if row is None:
-                row = ProjectionCursor(
-                    id=f"cursor_{uuid4().hex}",
-                    learner_id=learner_id,
-                    projection=projection,
-                    last_event_id=str(seq),
-                )
-                s.add(row)
-            elif int(row.last_event_id or 0) < seq:
-                row.last_event_id = str(seq)
-            await s.commit()
 
     async def push_interjection(self, task_id: str, message: dict[str, Any]) -> None:
         async with self._interjection_lock:
             async with self.db.session() as session:
-                row = await session.scalar(
-                    select(SessionState).where(SessionState.task_id == task_id)
-                )
+                row = await session.scalar(select(SessionState).where(SessionState.task_id == task_id))
                 if row is None:
                     raise KeyError(f"unknown session state for task: {task_id}")
                 row.interjections = [*(row.interjections or []), dict(message)]
@@ -235,9 +181,7 @@ class RuntimeStateRepository:
     async def drain_interjections(self, task_id: str) -> list[dict[str, Any]]:
         async with self._interjection_lock:
             async with self.db.session() as session:
-                row = await session.scalar(
-                    select(SessionState).where(SessionState.task_id == task_id)
-                )
+                row = await session.scalar(select(SessionState).where(SessionState.task_id == task_id))
                 if row is None:
                     return []
                 messages = [dict(item) for item in (row.interjections or [])]
@@ -376,7 +320,9 @@ class RuntimeStateRepository:
             row = await s.get(LearningProfile, profile_id(learner_id, knowledge_point_id))
             return profile_dict(row) if row else None
 
-    async def apply_profile_deltas(self, deltas: Sequence[ProfileDelta]) -> list[ProfileChange]:
+    async def apply_profile_deltas(
+        self, deltas: Sequence[ProfileDelta]
+    ) -> list[ProfileChange]:
         """The only profile write path exposed to the rest of the service."""
 
         if not deltas:
@@ -636,7 +582,9 @@ class RuntimeStateRepository:
             await s.commit()
         return snapshot
 
-    async def update_decision_outcome(self, decision_id: str, outcome: dict[str, Any]) -> None:
+    async def update_decision_outcome(
+        self, decision_id: str, outcome: dict[str, Any]
+    ) -> None:
         async with self.db.session() as s:
             row = await s.get(DecisionTrace, decision_id)
             if row is None:

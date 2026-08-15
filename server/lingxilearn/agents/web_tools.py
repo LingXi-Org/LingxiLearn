@@ -129,16 +129,13 @@ def build_web_tools(settings: Settings) -> list[Any]:
         search_calls += 1
         params = {"q": query.strip(), "kl": "wt-wt"}
         if domains.strip():
-            sites = " ".join(f"site:{item.strip()}" for item in domains.split(",") if item.strip())
+            sites = " ".join(
+                f"site:{item.strip()}" for item in domains.split(",") if item.strip()
+            )
             params["q"] += " " + sites
-        search_url_base = str(
-            getattr(settings, "agent_search_url", "https://html.duckduckgo.com/html/")
-        )
-        search_url = (
-            search_url_base
-            + ("&" if "?" in search_url_base else "?")
-            + urlencode(params)
-        )
+        search_url = settings.agent_search_url + (
+            "&" if "?" in settings.agent_search_url else "?"
+        ) + urlencode(params)
         final_url, response = await _get_public(
             search_url,
             settings,

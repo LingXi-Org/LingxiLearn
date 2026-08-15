@@ -165,7 +165,9 @@ def test_the_guard_would_catch_a_real_violation() -> None:
         "    row = await session.get(SessionState, 'x')\n"
         "    row.runtime_status = 'PLANNING'\n"
     )
-    clean_scope = next(node for node in ast.walk(clean) if isinstance(node, ast.AsyncFunctionDef))
+    clean_scope = next(
+        node for node in ast.walk(clean) if isinstance(node, ast.AsyncFunctionDef)
+    )
     assert _profile_locals(clean_scope) == set()
 
 

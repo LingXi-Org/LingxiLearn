@@ -132,11 +132,8 @@ def _teaching_context(context: ProviderContext) -> dict[str, object]:
             "misconceptions": system.get("misconceptions") or [],
             "open_questions": profile.get("my_questions") or [],
         },
-        **(
-            {"revision": dict(context.task.inputs.get("revision") or {})}
-            if context.task.inputs.get("revision")
-            else {}
-        ),
+        **({"revision": dict(context.task.inputs.get("revision") or {})}
+           if context.task.inputs.get("revision") else {}),
     }
 
 
@@ -174,9 +171,7 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
     revision = brief.get("revision")
     if revision:
         try:
-            draft.write(
-                "lesson-intro.html", context.artifacts.read_lesson_intro_file(context.task_id)
-            )
+            draft.write("lesson-intro.html", context.artifacts.read_lesson_intro_file(context.task_id))
         except (OSError, ArtifactError):
             draft.write("lesson-intro.html", fallback_html)
     else:
@@ -192,7 +187,8 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
         + "按 lesson-intro-html.v1 直接生成课程引入页面，不联网检索。先读取 skill 和直接相关资源，"
         "尽快通过 stage_artifact_file 写入 lesson-intro.html；"
         "内容较长时用 stage_artifact_chunk 分块写入，"
-        "回读检查后只返回 JSON 回执。\nTASK JSON:\n" + json.dumps(brief, ensure_ascii=False)
+        "回读检查后只返回 JSON 回执。\nTASK JSON:\n"
+        + json.dumps(brief, ensure_ascii=False)
     )
     agent = create_agent(
         agent_model(context.model, "lesson_intro"),
@@ -206,7 +202,9 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
     configured = float(getattr(context.settings, "agent_lecture_timeout", 180.0))
     timeout = max(
         5.0,
-        min(90.0, configured - 15.0) if not revision else configured * 0.5,
+        min(90.0, configured - 15.0)
+        if not revision
+        else configured * 0.5,
     )
     warnings: list[str] = []
     published = False
@@ -314,13 +312,8 @@ async def lecture_deck(context: ProviderContext) -> ProviderResult:
 
     revision = brief.get("revision")
     prompt = (
-        (
-            "这是一次小幅改版。只修改与指令相关的部分，其余内容原样保留；改完仍写回完整文件。改版指令："
-            + str(revision)
-            + "\n"
-        )
-        if revision
-        else ""
+        ("这是一次小幅改版。只修改与指令相关的部分，其余内容原样保留；改完仍写回完整文件。改版指令：" + str(revision) + "\n")
+        if revision else ""
     ) + (
         "按最新分阶段协议完成 interactive-lecture-deck-result.v2.1。\n"
         "阶段 1：读取 skill 入口和直接相关 references。\n"
@@ -365,25 +358,21 @@ async def lecture_deck(context: ProviderContext) -> ProviderResult:
     recursion = 12 if revision else int(getattr(context.settings, "agent_deck_recursion_limit", 80))
     warnings: list[str] = []
     try:
-        parsed = (
-            extract_json(
-                message_text(
-                    await asyncio.wait_for(
-                        invoke_agent(
-                            agent,
-                            HumanMessage(prompt),
-                            context.runtime,
-                            agent_name="lecture_deck",
-                            recursion_limit=recursion,
-                            tool_permissions=("artifact:write",),
-                        ),
-                        timeout=float(getattr(context.settings, "agent_deck_timeout", 360.0))
-                        * (0.5 if revision else 1.0),
-                    )
+        parsed = extract_json(
+            message_text(
+                await asyncio.wait_for(
+                    invoke_agent(
+                        agent,
+                        HumanMessage(prompt),
+                        context.runtime,
+                        agent_name="lecture_deck",
+                        recursion_limit=recursion,
+                        tool_permissions=("artifact:write",),
+                    ),
+                    timeout=float(getattr(context.settings, "agent_deck_timeout", 360.0)) * (0.5 if revision else 1.0),
                 )
             )
-            or {}
-        )
+        ) or {}
     except (TimeoutError, GraphTimeoutError, GraphRecursionError):
         # Writes are durable in the draft: a child agent can stage its last file
         # and then run out of budget before emitting the receipt.
@@ -474,21 +463,13 @@ async def visual_explainer(context: ProviderContext) -> ProviderResult:
     revision = brief.get("revision")
     if revision:
         try:
-            draft.write(
-                "visual-explainer.html",
-                context.artifacts.read_html(context.task_id).decode("utf-8"),
-            )
+            draft.write("visual-explainer.html", context.artifacts.read_html(context.task_id).decode("utf-8"))
         except (OSError, ArtifactError):
             pass
     revision = brief.get("revision")
     prompt = (
-        (
-            "这是一次小幅改版。只修改与指令相关的部分，其余内容原样保留；改完仍写回完整文件。改版指令："
-            + str(revision)
-            + "\n"
-        )
-        if revision
-        else ""
+        ("这是一次小幅改版。只修改与指令相关的部分，其余内容原样保留；改完仍写回完整文件。改版指令：" + str(revision) + "\n")
+        if revision else ""
     ) + (
         "按最新协议完成 interactive-visual-explainer-delivery.v1.2。\n"
         "先读取 skill 和直接相关参考资料，选择一个主交互模式；然后通过 stage_artifact_file 写入"
@@ -500,7 +481,9 @@ async def visual_explainer(context: ProviderContext) -> ProviderResult:
         tools=staged_artifact_tools(draft),
         skills=_registry("interactive-visual-explainer"),
         system_prompt=VISUAL_PROMPT,
-        pinned_constraints=skill_constraints("interactive-visual-explainer", VISUAL_RESOURCES),
+        pinned_constraints=skill_constraints(
+            "interactive-visual-explainer", VISUAL_RESOURCES
+        ),
         name="interactive-visual-explainer",
     )
     try:
@@ -513,18 +496,12 @@ async def visual_explainer(context: ProviderContext) -> ProviderResult:
                 recursion_limit=12 if revision else 24,
                 tool_permissions=("artifact:write",),
             ),
-            timeout=float(getattr(context.settings, "agent_visual_timeout", 240.0))
-            * (0.5 if revision else 1.0),
+            timeout=float(getattr(context.settings, "agent_visual_timeout", 240.0)) * (0.5 if revision else 1.0),
         )
         html = draft.snapshot().get("visual-explainer.html")
     except (TimeoutError, GraphTimeoutError, GraphRecursionError):
         html = draft.snapshot().get("visual-explainer.html")
-        emit(
-            context.runtime,
-            "agent.output",
-            agent="visual_explainer",
-            message="可视化讲解生成超时，已保留已写入的内容。",
-        )
+        emit(context.runtime, "agent.output", agent="visual_explainer", message="可视化讲解生成超时，已保留已写入的内容。")
     finally:
         draft.cleanup()
 

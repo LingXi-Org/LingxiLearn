@@ -25,7 +25,8 @@ async def main() -> None:
             resources=claim.get("resources") or [],
             schedule_id=claim["schedule_id"],
             scheduled_for=claim["scheduled_for"],
-            graph_version=claim.get("graph_version") or f"{LOOP_GRAPH_NAME}@{LOOP_GRAPH_VERSION}",
+            graph_version=claim.get("graph_version")
+            or f"{LOOP_GRAPH_NAME}@{LOOP_GRAPH_VERSION}",
         )
         for _ in range(40):
             snapshot = await service.agent_task_snapshot(task_id, claim["learner_id"])

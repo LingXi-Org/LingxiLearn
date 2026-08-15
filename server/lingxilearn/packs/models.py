@@ -150,7 +150,9 @@ class Pack:
         return f"pack/{self.id}@{self.version}"
 
     def misconception_notes(self, tags: list[str]) -> dict[str, str]:
-        return {t: self.misconceptions[t].note for t in tags if t in self.misconceptions}
+        return {
+            t: self.misconceptions[t].note for t in tags if t in self.misconceptions
+        }
 
 
 @dataclass(frozen=True, slots=True)

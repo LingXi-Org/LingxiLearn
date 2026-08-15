@@ -79,8 +79,8 @@ def test_only_the_loop_declares_graph_topology() -> None:
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id == "StateGraph":
                     offenders.append(f"{path.relative_to(PACKAGE)}:{node.lineno}")
-    assert not offenders, "only runtime/loop.py may build a StateGraph; found one at " + "; ".join(
-        offenders
+    assert not offenders, (
+        "only runtime/loop.py may build a StateGraph; found one at " + "; ".join(offenders)
     )
 
 
@@ -138,8 +138,8 @@ def test_no_module_branches_on_a_routing_field_to_pick_what_runs() -> None:
                 continue
             if _body_dispatches(node):
                 offenders.append(f"{path.relative_to(PACKAGE)}:{node.lineno}")
-    assert not offenders, "a branch on an intent-like field decides what runs at " + "; ".join(
-        offenders
+    assert not offenders, (
+        "a branch on an intent-like field decides what runs at " + "; ".join(offenders)
     )
 
 
