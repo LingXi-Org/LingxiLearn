@@ -60,6 +60,16 @@ import type {
 
 const logger = createLogger('Home')
 
+const LINGXI_GREETINGS = [
+  '今天想学点什么？',
+  '准备从哪里开始？',
+  '今天一起攻克什么？',
+  '来规划今天的学习吧。',
+  '有什么知识想深入了解？',
+] as const
+
+const GREETING_STORAGE_PREFIX = 'lingxi-home-greeting:'
+
 /**
  * The resource preview panel pulls in the file-viewer stack (rich-markdown
  * editor, CSV/PDF viewers). It only renders once a chat has messages, so it is
@@ -79,7 +89,7 @@ interface HomeProps {
   tableViewsEnabled?: boolean
 }
 
-export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps) {
+export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
   useOAuthReturnRouter()
   const { workspaceId } = useParams<{ workspaceId: string }>()
   const router = useRouter()
@@ -124,7 +134,7 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
     () => [activeResourceParam, setActiveResourceUrl],
     [activeResourceParam, setActiveResourceUrl]
   )
-  const firstName = userName?.split(' ')[0] ?? ''
+  const [greeting, setGreeting] = useState(LINGXI_GREETINGS[0])
   const { data: workspaceFiles = [] } = useWorkspaceFiles(workspaceId)
   const posthog = usePostHog()
   const posthogRef = useRef(posthog)
@@ -133,6 +143,25 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
   const hasCheckedLandingStorageRef = useRef(false)
   const initialViewInputRef = useRef<HTMLDivElement>(null)
   const initialViewUserInputRef = useRef<UserInputHandle>(null)
+
+  useEffect(() => {
+    const storageKey = `${GREETING_STORAGE_PREFIX}${userId ?? 'anonymous'}`
+
+    try {
+      const storedIndex = Number.parseInt(sessionStorage.getItem(storageKey) ?? '', 10)
+      if (storedIndex >= 0 && storedIndex < LINGXI_GREETINGS.length) {
+        setGreeting(LINGXI_GREETINGS[storedIndex])
+        return
+      }
+
+      const nextIndex = Math.floor(Math.random() * LINGXI_GREETINGS.length)
+      sessionStorage.setItem(storageKey, String(nextIndex))
+      setGreeting(LINGXI_GREETINGS[nextIndex])
+    } catch {
+      // Storage can be unavailable in privacy-restricted browser contexts.
+      setGreeting(LINGXI_GREETINGS[Math.floor(Math.random() * LINGXI_GREETINGS.length)])
+    }
+  }, [userId])
 
   const [isInputEntering, setIsInputEntering] = useState(false)
 
@@ -546,7 +575,7 @@ export function Home({ chatId, userName, userId, tableViewsEnabled }: HomeProps)
             {/* Asymmetric padding biases the group up so the full cluster (heading + input + suggestions) sits at the optical center */}
             <div className='flex min-h-full flex-col items-center justify-center px-6 pt-[2vh] pb-[22vh]'>
               <h1 className='mb-7 max-w-chat text-balance font-season text-[26px] text-[var(--text-primary)] leading-[1.15] tracking-[-0.01em] sm:text-[28px]'>
-                What should we get done{firstName ? `, ${firstName}` : ''}?
+                {greeting}
               </h1>
               <div ref={initialViewInputRef} className='relative w-full max-w-chat'>
                 <ChatSurfaceProvider

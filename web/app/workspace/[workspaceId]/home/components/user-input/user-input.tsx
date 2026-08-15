@@ -575,7 +575,7 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
 
       <PromptEditor
         editor={editor}
-        placeholder='Ask Sim to '
+        placeholder={isInitialView ? '通过灵犀进行学习：' : '发送消息给灵犀'}
         onSubmit={handleEnterSubmit}
         onArrowUpOnEmpty={handleArrowUpOnEmpty}
         className={cn('max-h-[200px]', isInitialView && 'min-h-[56px]')}
