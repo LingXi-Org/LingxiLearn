@@ -9,6 +9,7 @@ learner sees it is.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -59,6 +60,21 @@ COMPANION_PROMPT = """你是学习陪伴 Agent。学习任务可能仍在运行�
 
 PROBE_PROMPT = """你是苏格拉底追问 Agent。根据学习者的掌握度和误区提出一个简短确认问题。
 不要给答案，不要连续问多个问题。只输出 JSON：{"text":"..."}。"""
+
+
+async def _emit_learner_output(runtime: Any, agent: str, text: str, stream_id: str) -> None:
+    """Emit safe learner text deltas, never the model's JSON stream."""
+    remaining = text
+    while remaining:
+        cut = min(180, len(remaining))
+        if cut < len(remaining):
+            boundary = max(remaining.rfind("\n", 0, cut), remaining.rfind(" ", 0, cut))
+            if boundary > 40:
+                cut = boundary + 1
+        chunk, remaining = remaining[:cut], remaining[cut:]
+        emit(runtime, "agent.output.delta", agent=agent, stream_id=stream_id, delta=chunk)
+        await asyncio.sleep(0)
+    emit(runtime, "agent.output", agent=agent, stream_id=stream_id, message=text)
 
 
 def _registry(name: str) -> SkillRegistry:
@@ -160,7 +176,7 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
         raise ProviderError("adaptive-pedagogy returned no learner-facing text")
 
     safe_text, withheld = _guarded(text, context)
-    emit(context.runtime, "agent.output", agent="adaptive_pedagogy", message=safe_text)
+    await _emit_learner_output(context.runtime, "adaptive_pedagogy", safe_text, f"{context.task_id}:adaptive_pedagogy:{context.task.id}")
 
     return ProviderResult(
         learner_message=safe_text,
@@ -215,7 +231,7 @@ async def answer_user(context: ProviderContext) -> ProviderResult:
         raise ProviderError("knowledge-qa returned no answer text")
 
     safe_text, withheld = _guarded(text, context)
-    emit(context.runtime, "agent.output", agent="answer_user", message=safe_text)
+    await _emit_learner_output(context.runtime, "answer_user", safe_text, f"{context.task_id}:answer_user:{context.task.id}")
 
     return ProviderResult(
         learner_message=safe_text,
@@ -311,7 +327,7 @@ async def learning_companion(context: ProviderContext) -> ProviderResult:
         text = str(parsed.get("text") or "").strip()
         if not text:
             raise ProviderError("learning companion returned no text")
-    emit(context.runtime, "agent.output", agent="learning_companion", message=text)
+    await _emit_learner_output(context.runtime, "learning_companion", text, f"{context.task_id}:learning_companion:{context.task.id}")
     return ProviderResult(
         learner_message=text,
         evidence=[EvidenceRecord(learner_id=context.learner_id, knowledge_point=context.knowledge_point_id, signal=Signal.SELF_REPORT, source_agent="learning_companion", task_id=context.task_id, summary=question[:200])],
@@ -332,7 +348,7 @@ async def probe_user(context: ProviderContext) -> ProviderResult:
         text = str(parsed.get("text") or "").strip()
         if not text:
             raise ProviderError("probe returned no question")
-    emit(context.runtime, "agent.output", agent="probe_user", message=text)
+    await _emit_learner_output(context.runtime, "probe_user", text, f"{context.task_id}:probe_user:{context.task.id}")
     return ProviderResult(learner_message=text, data={"text": text}, persist_as="probe_user", detail="已向学习者确认理解")
 
 

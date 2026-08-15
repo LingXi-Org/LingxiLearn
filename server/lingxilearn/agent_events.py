@@ -23,6 +23,7 @@ AGENT_EVENT_KINDS: Final[frozenset[str]] = frozenset(
         "agent.failed",
         "agent.status",
         "agent.output",
+        "agent.output.delta",
         "reasoning.delta",
         "assistant.delta",
         "tool.call.delta",

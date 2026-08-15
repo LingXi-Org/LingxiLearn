@@ -211,6 +211,7 @@ def _repair(
     goal: Goal,
     world: WorldState,
     candidates: Sequence[CandidateAction],
+    interjection_message: str = "",
 ) -> OrchestrationPlan | None:
     """Turn model output into a valid plan, or ``None`` if it cannot be saved.
 
@@ -265,6 +266,11 @@ def _repair(
                 ),
             )
         )
+
+    if interjection_message and any(task.capability == "dialog.converse" for task in tasks):
+        tasks = [task for task in tasks if task.capability != "dialog.probe"]
+    elif any(task.capability == "dialog.probe" for task in tasks):
+        tasks = [task for task in tasks if task.capability != "dialog.converse"]
 
     if not tasks and not parsed.get("awaits_user"):
         return None
@@ -376,7 +382,13 @@ async def plan(
     if not parsed:
         return unavailable_plan(candidates=candidates)
 
-    repaired = _repair(parsed, goal=goal, world=world, candidates=candidates)
+    repaired = _repair(
+        parsed,
+        goal=goal,
+        world=world,
+        candidates=candidates,
+        interjection_message=str((user_message or {}).get("message") or "").strip(),
+    )
     if repaired is None:
         return unavailable_plan(candidates=candidates)
     return repaired

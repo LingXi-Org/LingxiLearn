@@ -10,6 +10,7 @@ export const AGENT_EVENT_KINDS = [
   'agent.failed',
   'agent.status',
   'agent.output',
+  'agent.output.delta',
   'reasoning.delta',
   'assistant.delta',
   'tool.call.delta',

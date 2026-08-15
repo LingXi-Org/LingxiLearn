@@ -81,6 +81,7 @@ _AGENT_FORCE_FLUSH = frozenset(
         "agent.failed",
         "agent.status",
         "agent.output",
+        "agent.output.delta",
         "model.started",
         "model.completed",
         "model.failed",

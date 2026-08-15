@@ -501,6 +501,7 @@ export function projectLingxiGraphEvents(
   }))
   const emittedRuns = new Set<string>()
   const emittedTools = new Set<string>()
+  const streamedOutputBlocks = new Map<string, number>()
   let assistantText = ''
 
   for (const event of events) {
@@ -566,12 +567,27 @@ export function projectLingxiGraphEvents(
       continue
     }
 
-    if (event.kind === 'assistant.delta' || event.kind === 'agent.output') {
+    if (event.kind === 'assistant.delta' || event.kind === 'agent.output' || event.kind === 'agent.output.delta') {
       const text = eventText(event)
       if (!text) continue
       const learnerFacingOutput =
         event.kind === 'agent.output' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
-      if (learnerFacingOutput) {
+      const deltaOutput =
+        event.kind === 'agent.output.delta' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
+      if (deltaOutput) {
+        const streamId = stringValue(eventPayload(event).stream_id) || String(event.agent ?? 'learner')
+        const existingIndex = streamedOutputBlocks.get(streamId)
+        if (existingIndex === undefined) {
+          streamedOutputBlocks.set(streamId, blocks.length)
+          blocks.push({ type: 'text', content: text, timestamp: event.sequence })
+        } else {
+          const block = blocks[existingIndex]
+          block.content = `${block.content ?? ''}${text}`
+        }
+        assistantText += text
+      } else if (learnerFacingOutput) {
+        const streamId = stringValue(eventPayload(event).stream_id)
+        if (streamId && streamedOutputBlocks.has(streamId)) continue
         assistantText += `${assistantText ? '\n\n' : ''}${text}`
         blocks.push({ type: 'text', content: text, timestamp: event.sequence })
       }
