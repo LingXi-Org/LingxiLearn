@@ -19,6 +19,7 @@ metadata:
   parallel-safe: false
   latency-class: interactive
   capabilities: teach.strategy, teach.explain
+  status-line: 正在选择合适的教学方式…
   provider: adaptive_pedagogy
   ownership: dedicated
   eval-suite: adaptive-pedagogy-v1

@@ -18,6 +18,7 @@ metadata:
   parallel-safe: true
   latency-class: background
   capabilities: content.visual
+  status-line: 正在制作可视化讲解…
   provider: visual_explainer
   ownership: dedicated
   eval-suite: interactive-visual-explainer-v1

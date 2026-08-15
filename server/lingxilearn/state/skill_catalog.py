@@ -49,6 +49,7 @@ class SkillManifest:
     cost: dict[str, Any] = field(default_factory=dict)
     ownership: str = "dedicated"
     provider: str = ""
+    status_line: str = ""
     version: str = ""
     enabled: bool = True
     checksum: str = ""
@@ -70,7 +71,7 @@ class SkillManifest:
             "version": self.version,
             "enabled": self.enabled,
             "checksum": self.checksum,
-            "metadata_payload": dict(self.metadata),
+            "metadata_payload": dict(self.metadata) | {"status_line": self.status_line},
         }
 
 
@@ -128,6 +129,7 @@ def _cost(metadata: dict[str, Any], capabilities: tuple[Capability, ...]) -> dic
         "heavy_artifact": bool(heavy),
         "blocking": bool(blocking),
         "parallel_safe": bool(metadata.get("parallel-safe", False)),
+        "critical_path": str(metadata.get("critical-path", "true")).strip().casefold() != "false",
         "hop_budget": int(str(metadata.get("default-blocking-hop-budget") or 1) or 1),
     }
 
@@ -163,6 +165,10 @@ def parse_manifest(
     description = str(
         metadata.get("display-description") or frontmatter.get("description") or ""
     ).strip()
+    declared_status = str(metadata.get("status-line") or "").strip()
+    status_line = declared_status or (
+        f"正在{info(capabilities[0]).label}…" if capabilities else "正在处理你的学习任务…"
+    )
 
     return SkillManifest(
         skill_id=name,
@@ -176,6 +182,7 @@ def parse_manifest(
         cost=_cost(metadata, capabilities),
         ownership=ownership,
         provider=provider or str(metadata.get("provider") or ""),
+        status_line=status_line,
         version=str(metadata.get("version") or ""),
         enabled=source != "forged",
         checksum="sha256:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32],

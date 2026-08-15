@@ -6,10 +6,10 @@ from the learner's words.  The orchestrator chooses every round, from the
 learner's profile, and its choice can be overturned by what the last step
 produced.
 
-The model's role is deliberately small.  ``candidates`` has already enumerated
-what is possible and scored it; the model reorders and justifies within that
-list.  If it is unavailable, malformed, or picks something outside the list, the
-deterministic ranking stands and the loop keeps moving.
+The model evaluates every registry-eligible candidate and produces the plan.
+The host only enforces capability availability and schema safety. If the model
+is unavailable or malformed, the round fails closed; it never selects a local
+fallback route.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from ..agents.contracts import extract_json
 from ..agents.model_runtime import agent_model, invoke_agent, message_text
 from ..state.capabilities import UnknownCapability, info, parse
 from ..state.session_state import Goal
-from .candidates import WorldState, best, deviates, eligible_only, generate
+from .candidates import WorldState, deviates, eligible_only, generate
 from .contracts import (
     CandidateAction,
     Cost,
@@ -63,6 +63,96 @@ profile_reaches / user_replied / quiz_graded / always / all_of / any_of。
            "done_when":{"kind":"..."},"rationale":"...","depends_on":[]}],
  "goal_satisfied_when":{"kind":"..."},"awaits_user":false,"negotiation":null}"""
 
+UTILITY_PROMPT = """你是 LingxiLearn 的学习效用评估器。根据目标、学习画像、误区、历史证据和预算，
+为给出的候选能力逐项评估学习收益 gain 与综合效用 utility（均为 0 到 1）。
+成本和候选资格由宿主提供，不能改写、不能新增能力。utility 必须体现 gain / cost 的权衡。
+只输出 JSON：{"scores":[{"capability":"...","knowledge_point_id":"...","gain":0.0,"utility":0.0,"reason":"面向学习者的简短中文理由"}]}"""
+
+
+async def _score_candidates_with_model(
+    *,
+    goal: Goal,
+    world: WorldState,
+    candidates: Sequence[CandidateAction],
+    model: Any | None,
+    runtime: Any,
+) -> list[CandidateAction] | None:
+    """Let the control-plane model make the gain/cost judgement.
+
+    Registry filtering and cost facts remain host-enforced safety boundaries;
+    the learner-specific ranking itself is never selected by a code heuristic.
+    """
+    if model is None:
+        return None
+    # Do not pre-rank here: selecting a truncated candidate set by a local
+    # utility would quietly turn the control plane back into code. Registry
+    # eligibility is factual validation; the model judges every eligible item.
+    offered = eligible_only(candidates)
+    if not offered:
+        return None
+    payload = {
+        "goal": goal.to_dict(),
+        "target": _view_dict(world.target),
+        "prerequisites": [_view_dict(item) for item in world.prerequisites],
+        "candidates": [
+            {"capability": item.capability, "knowledge_point_id": item.knowledge_point_id,
+             "cost": item.cost, "skill_id": item.skill_id, "provider": item.provider}
+            for item in offered
+        ],
+    }
+    try:
+        agent = create_agent(agent_model(model, "utility_evaluator"), system_prompt=UTILITY_PROMPT, name="utility-evaluator")
+        parsed = extract_json(message_text(await invoke_agent(
+            agent, HumanMessage(json.dumps(payload, ensure_ascii=False)), runtime,
+            agent_name="utility_evaluator", recursion_limit=4,
+        ))) or {}
+        scores = parsed.get("scores") if isinstance(parsed, Mapping) else None
+        if not isinstance(scores, list):
+            raise ValueError("utility evaluator did not return scores")
+        by_key = {(item.capability, item.knowledge_point_id): item for item in offered}
+        judged: dict[tuple[str, str], CandidateAction] = {}
+        for raw in scores:
+            if not isinstance(raw, Mapping):
+                continue
+            key = (str(raw.get("capability") or ""), str(raw.get("knowledge_point_id") or ""))
+            candidate = by_key.get(key)
+            if candidate is None:
+                continue
+            gain = max(0.0, min(1.0, float(raw.get("gain"))))
+            utility = max(0.0, min(1.0, float(raw.get("utility"))))
+            reason = str(raw.get("reason") or candidate.reason).strip()
+            judged[key] = candidate.model_copy(update={"gain": gain, "utility": utility, "reason": reason})
+        if not judged:
+            raise ValueError("utility evaluator returned no offered candidates")
+        scored = [
+            judged.get(
+                (item.capability, item.knowledge_point_id),
+                item.model_copy(update={"gain": 0.0, "utility": 0.0, "reason": "本轮未被模型选为优先动作"}),
+            )
+            for item in candidates
+        ]
+        return sorted(scored, key=lambda item: item.utility, reverse=True)
+    except Exception:  # noqa: BLE001 - no code-selected control fallback
+        logger.exception("utility evaluation failed")
+        return None
+
+
+def unavailable_plan(*, candidates: Sequence[CandidateAction]) -> OrchestrationPlan:
+    """Fail closed when a control-plane model cannot make a decision.
+
+    A code-selected fallback plan would be fixed routing in disguise.  We keep
+    the candidate trace for observability, but ask the learner to retry rather
+    than executing a route which the model did not explicitly choose.
+    """
+    return OrchestrationPlan(
+        reasoning="本轮学习计划模型暂时没有给出可验证的决策。",
+        awaits_user=True,
+        negotiation="学习计划暂时无法确认，请稍后重试或补充你想达到的具体效果。",
+        goal_satisfied_when=DoneCondition(kind="always"),
+        candidates_considered=list(candidates),
+        degraded=True,
+    )
+
 
 def _default_done_condition(candidate: CandidateAction) -> DoneCondition:
     """A machine-checkable completion condition for a capability.
@@ -96,6 +186,10 @@ def _default_done_condition(candidate: CandidateAction) -> DoneCondition:
                 signal="self_report",
                 knowledge_point_id=candidate.knowledge_point_id,
             )
+        case "dialog.converse":
+            return DoneCondition(kind="evidence_observed", signal="self_report")
+        case "dialog.probe":
+            return DoneCondition(kind="user_replied")
     return DoneCondition(kind="always")
 
 
@@ -105,65 +199,10 @@ def _goal_condition(goal: Goal, world: WorldState) -> DoneCondition:
     point = world.target.knowledge_point_id or (
         goal.knowledge_points[0] if goal.knowledge_points else ""
     )
-    if not point:
-        return DoneCondition(kind="always")
-    return DoneCondition(kind="profile_reaches", knowledge_point_id=point, mastery=0.7)
-
-
-def _task_from_candidate(candidate: CandidateAction, index: int) -> PlannedTask:
-    return PlannedTask(
-        id=f"t{index}",
-        capability=candidate.capability,
-        knowledge_point_id=candidate.knowledge_point_id,
-        done_when=_default_done_condition(candidate),
-        rationale=candidate.reason or "按学习收益排序，这一步收益最高",
-        expected_learning_gain=candidate.gain,
-        estimated_cost=Cost(
-            heavy_artifact=info(parse(candidate.capability)).heavy_artifact,
-            irreversible=info(parse(candidate.capability)).irreversible,
-        ),
-    )
-
-
-def fallback_plan(
-    *, goal: Goal, world: WorldState, candidates: Sequence[CandidateAction]
-) -> OrchestrationPlan:
-    """The deterministic plan: take the top-scored action and say why.
-
-    Used when there is no model, when the model output cannot be parsed, and
-    when guardrails reject everything the model proposed. It is a worse plan
-    than a good model would write, and it is never a stalled loop.
-    """
-
-    top = best(candidates)
-    if top is None:
-        return OrchestrationPlan(
-            reasoning="当前状态下没有可执行且有收益的动作，交还给学习者。",
-            awaits_user=True,
-            goal_satisfied_when=_goal_condition(goal, world),
-            candidates_considered=list(candidates),
-            degraded=True,
-        )
-
-    task = _task_from_candidate(top, 1)
-    deviating = deviates(goal, top, world)
-    negotiation = None
-    if deviating:
-        label = top.knowledge_point_id or goal.topic
-        negotiation = (
-            f"你想学的是{goal.topic}。档案显示「{label}」还没打牢，"
-            f"我建议先补这一块再回来——你也可以让我直接讲，我就按你说的来。"
-        )
-    return OrchestrationPlan(
-        reasoning=f"按学习收益排序，当前最值得做的是{top.capability}：{top.reason}",
-        tasks=[task],
-        goal_satisfied_when=_goal_condition(goal, world),
-        awaits_user=bool(deviating),
-        negotiation=negotiation,
-        candidates_considered=list(candidates),
-        deviates_from_goal=deviating,
-        degraded=True,
-    )
+    # A user-facing turn is complete once it has delivered one useful result.
+    # Mastery is updated as evidence arrives, but it must not keep a simple
+    # answer trapped in an automatic re-planning loop.
+    return DoneCondition(kind="always")
 
 
 def _repair(
@@ -172,6 +211,7 @@ def _repair(
     goal: Goal,
     world: WorldState,
     candidates: Sequence[CandidateAction],
+    interjection_message: str = "",
 ) -> OrchestrationPlan | None:
     """Turn model output into a valid plan, or ``None`` if it cannot be saved.
 
@@ -221,9 +261,16 @@ def _repair(
                 estimated_cost=Cost(
                     heavy_artifact=capability_info.heavy_artifact,
                     irreversible=capability_info.irreversible,
+                    parallel_safe=candidate.parallel_safe,
+                    critical_path=candidate.critical_path,
                 ),
             )
         )
+
+    if interjection_message and any(task.capability == "dialog.converse" for task in tasks):
+        tasks = [task for task in tasks if task.capability != "dialog.probe"]
+    elif any(task.capability == "dialog.probe" for task in tasks):
+        tasks = [task for task in tasks if task.capability != "dialog.converse"]
 
     if not tasks and not parsed.get("awaits_user"):
         return None
@@ -232,7 +279,14 @@ def _repair(
         goal_when = (
             DoneCondition.model_validate(parsed["goal_satisfied_when"])
             if isinstance(parsed.get("goal_satisfied_when"), Mapping)
-            else _goal_condition(goal, world)
+            else (
+                DoneCondition(
+                    kind="any_of",
+                    conditions=[task.done_when for task in tasks],
+                )
+                if tasks
+                else _goal_condition(goal, world)
+            )
         )
     except ValueError:
         goal_when = _goal_condition(goal, world)
@@ -264,16 +318,24 @@ async def plan(
     budget: Budget,
     model: Any | None = None,
     runtime: Any = None,
+    user_message: Mapping[str, Any] | None = None,
 ) -> OrchestrationPlan:
     """Produce this round's plan from the current state."""
 
-    candidates = generate(goal=goal, world=world, skills=skills)
-    if model is None:
-        return fallback_plan(goal=goal, world=world, candidates=candidates)
+    registry_candidates = generate(goal=goal, world=world, skills=skills)
+    candidates = await _score_candidates_with_model(
+        goal=goal,
+        world=world,
+        candidates=registry_candidates,
+        model=model,
+        runtime=runtime,
+    )
+    if candidates is None:
+        return unavailable_plan(candidates=registry_candidates)
 
     offered = eligible_only(candidates)[:MAX_MODEL_CANDIDATES]
     if not offered:
-        return fallback_plan(goal=goal, world=world, candidates=candidates)
+        return unavailable_plan(candidates=candidates)
 
     payload = {
         "goal": goal.to_dict(),
@@ -282,6 +344,7 @@ async def plan(
             "prerequisites": [_view_dict(item) for item in world.prerequisites],
         },
         "budget": budget.to_dict(),
+        "learner_message": dict(user_message or {}),
         "candidates": [
             {
                 "capability": item.capability,
@@ -308,20 +371,26 @@ async def plan(
                     HumanMessage(json.dumps(payload, ensure_ascii=False)),
                     runtime,
                     agent_name="orchestrator",
-                    recursion_limit=8,
+                    recursion_limit=4,
                 )
             )
         )
     except Exception:  # noqa: BLE001 - planning must not be able to end a session
-        logger.exception("orchestrator planning failed; using the deterministic ranking")
-        return fallback_plan(goal=goal, world=world, candidates=candidates)
+        logger.exception("orchestrator planning failed; no route will be selected locally")
+        return unavailable_plan(candidates=candidates)
 
     if not parsed:
-        return fallback_plan(goal=goal, world=world, candidates=candidates)
+        return unavailable_plan(candidates=candidates)
 
-    repaired = _repair(parsed, goal=goal, world=world, candidates=candidates)
+    repaired = _repair(
+        parsed,
+        goal=goal,
+        world=world,
+        candidates=candidates,
+        interjection_message=str((user_message or {}).get("message") or "").strip(),
+    )
     if repaired is None:
-        return fallback_plan(goal=goal, world=world, candidates=candidates)
+        return unavailable_plan(candidates=candidates)
     return repaired
 
 
@@ -337,4 +406,4 @@ def _view_dict(view: Any) -> dict[str, Any]:
     }
 
 
-__all__ = ["MAX_MODEL_CANDIDATES", "SYSTEM_PROMPT", "fallback_plan", "plan"]
+__all__ = ["MAX_MODEL_CANDIDATES", "SYSTEM_PROMPT", "plan"]

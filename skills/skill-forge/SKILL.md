@@ -19,6 +19,7 @@ metadata:
   parallel-safe: true
   latency-class: offline
   capabilities: meta.author_skill
+  status-line: 正在起草新的学习能力…
   provider: skill_forge
   ownership: dedicated
 ---

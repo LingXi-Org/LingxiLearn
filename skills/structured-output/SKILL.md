@@ -8,6 +8,7 @@ metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 结构化输出
+  status-line: 正在整理结构化结果…
   display-description: 产出并修复严格 JSON 契约输出，用于结果由代码消费而非人阅读的步骤。
   output-language: zh-CN
   execution-mode: shared-contract

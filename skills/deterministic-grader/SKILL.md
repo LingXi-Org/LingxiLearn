@@ -19,6 +19,7 @@ metadata:
   parallel-safe: false
   latency-class: interactive
   capabilities: assess.grade
+  status-line: 正在核对你的作答…
   provider: deterministic_grader
   ownership: dedicated
 ---

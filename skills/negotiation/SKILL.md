@@ -19,6 +19,7 @@ metadata:
   parallel-safe: true
   latency-class: interactive
   capabilities: dialog.negotiate
+  status-line: 正在和你协商下一步…
   provider: negotiator
   ownership: dedicated
 ---

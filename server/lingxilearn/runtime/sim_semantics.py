@@ -43,6 +43,12 @@ _VISIBLE_EXECUTIONS: tuple[tuple[VisibleExecution, tuple[str, ...]], ...] = (
     (VisibleExecution("tutor", "Tutor"), (
         "answer_user", "dialog.answer", "teach.explain", "dialog.negotiate", "negotiator",
     )),
+    (VisibleExecution("learning_companion", "Learning Companion"), (
+        "learning_companion", "dialog.converse",
+    )),
+    (VisibleExecution("socratic_prober", "Socratic Probe"), (
+        "probe_user", "dialog.probe",
+    )),
     (VisibleExecution("adaptive_tutor", "Adaptive Tutor"), (
         "adaptive_pedagogy", "teach.strategy",
     )),
@@ -248,7 +254,7 @@ class SimRunProjector:
             "variables": {},
             "metadata": {"executionId": self.execution_id, "taskId": self.task_id},
         }
-        self.workflow_state["metadata"]["layoutVersion"] = "semantic-radial.v1"
+        self.workflow_state["metadata"]["layoutVersion"] = "semantic-layered.v2"
 
     @property
     def blocks(self) -> dict[str, Any]:
@@ -675,7 +681,7 @@ class SimRunProjector:
     def snapshot(self) -> dict[str, Any]:
         metadata = self.workflow_state.setdefault("metadata", {})
         self.workflow_state["layoutVersion"] = metadata.get(
-            "layoutVersion", "semantic-radial.v1"
+            "layoutVersion", "semantic-layered.v2"
         )
         self.workflow_state["terminal"] = bool(metadata.get("terminal", False))
         self.workflow_state["status"] = metadata.get("status", "running")

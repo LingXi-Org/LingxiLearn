@@ -61,6 +61,41 @@ const AGENT_LABELS: Record<string, string> = {
   quiz_generator: '知识检测技能',
   answer_user: '答疑智能体',
   quiz_submit: '测验提交智能体',
+  learning_companion: '即时学习陪伴',
+  probe_user: '理解检查',
+}
+
+const CONTROL_PLANE_AGENTS = new Set([
+  'coordinator',
+  'orchestrator',
+  'goal_interpreter',
+  'goal-interpreter',
+  'intent',
+  'plan.present',
+  'plan_presenter',
+])
+
+const LEARNER_FACING_OUTPUT_AGENTS = new Set([
+  'adaptive_pedagogy',
+  'answer_user',
+  'learning_companion',
+  'probe_user',
+  'lesson_intro',
+])
+
+const CAPABILITY_LABELS: Record<string, string> = {
+  'dialog.answer': '即时答疑',
+  'dialog.converse': '即时陪聊',
+  'dialog.probe': '检查理解',
+  'content.lesson_intro': '生成课程引入',
+  'content.deck': '生成互动讲义',
+  'content.visual': '生成可视化讲解',
+  'assess.generate': '生成知识检测',
+  'assess.grade': '批改学习结果',
+  'assess.interpret': '分析学习误区',
+  'model.reflect': '更新学习状态',
+  'meta.report': '整理学习报告',
+  'review.schedule': '安排复习计划',
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -206,7 +241,7 @@ interface ToolRun {
 
 function eventAgent(event: AgentTaskEvent): string | undefined {
   const agent = stringValue(event.agent)
-  return agent && agent !== 'coordinator' ? agent : undefined
+  return agent && !CONTROL_PLANE_AGENTS.has(agent) ? agent : undefined
 }
 
 function reduceAgentRuns(events: AgentTaskEvent[]): AgentRun[] {
@@ -316,165 +351,71 @@ function reasoningStep(
 }
 
 function reduceReasoningSteps(
-  task: AgentTaskSnapshot,
+  _task: AgentTaskSnapshot,
   events: AgentTaskEvent[],
-  runs: AgentRun[],
-  tools: ToolRun[]
+  _runs: AgentRun[],
+  _tools: ToolRun[]
 ): ReasoningStep[] {
+  // The plan card is a projection of the current orchestration decision, not
+  // a debug trace.  Raw loop nodes have no learner-facing task identity and
+  // previously created the repeated “执行学习计划” entries.
   const steps = new Map<string, ReasoningStep>()
-  const upsert = (step: ReasoningStep) => steps.set(step.id, step)
-  const terminal = TERMINAL_TASK_STATUSES.has(task.status)
+  let currentPlan = ''
 
   for (const event of events) {
     const timestamp = event.ts ? Date.parse(event.ts) || undefined : undefined
     const payload = eventPayload(event)
-    if (event.kind === 'task.started') {
-      upsert(
-        reasoningStep(
-          'task',
-          '准备学习任务',
-          '学习任务已创建，智能体图正在启动。',
-          terminal ? 'complete' : 'active',
-          timestamp
-        )
-      )
-    } else if (event.kind === 'intent.started') {
-      upsert(
-        reasoningStep(
-          'intent',
-          '理解学习目标',
-          '智能体图正在识别你的意图与学习范围。',
-          'active',
-          timestamp
-        )
-      )
-    } else if (event.kind === 'intent.completed') {
-      const topic = stringValue(payload.topic)
-      upsert(
-        reasoningStep(
-          'intent',
-          '理解学习目标',
-          topic
-            ? `智能体图识别到主题“${topic.slice(0, 120)}”。`
-            : '智能体图已识别学习意图。',
-          'complete',
-          timestamp,
-          timestamp
-        )
-      )
-    } else if (event.kind === 'agent.started') {
-      const run = runs.find(
-        (candidate) =>
-          candidate.startSequence === event.sequence && candidate.agent === eventAgent(event)
-      )
-      if (run)
-        upsert(
+    if (event.kind === 'plan.created' || event.kind === 'plan.replanned') {
+      currentPlan = stringValue(payload.decision_id) || `decision-${event.sequence}`
+      steps.clear()
+      const planTasks = Array.isArray(payload.tasks) ? payload.tasks : []
+      for (const rawTask of planTasks) {
+        const planned = asRecord(rawTask)
+        const taskId = stringValue(planned.id)
+        const capability = stringValue(planned.capability)
+        if (!taskId || !capability) continue
+        steps.set(
+          `${currentPlan}:${taskId}`,
           reasoningStep(
-            `agent:${run.startSequence}`,
-            agentLabel(run.agent),
-            `${agentLabel(run.agent)}已开始这一学习阶段。`,
-            run.status === 'executing' ? 'active' : run.status === 'error' ? 'error' : 'complete',
+            `${currentPlan}:${taskId}`,
+            CAPABILITY_LABELS[capability] ?? capability,
+            stringValue(planned.rationale) || '等待执行。',
+            'pending',
             timestamp
           )
         )
-    } else if (event.kind === 'agent.completed' || event.kind === 'agent.failed') {
-      const run = [...runs]
-        .reverse()
-        .find(
-          (candidate) =>
-            candidate.agent === eventAgent(event) && candidate.endSequence === event.sequence
-        )
-      if (run)
-        upsert(
-          reasoningStep(
-            `agent:${run.startSequence}`,
-            agentLabel(run.agent),
-            event.kind === 'agent.failed'
-              ? `${agentLabel(run.agent)}未能完成这一阶段。`
-              : `${agentLabel(run.agent)}已完成这一阶段。`,
-            event.kind === 'agent.failed' ? 'error' : 'complete',
-            undefined,
-            timestamp
-          )
-        )
-    } else if (event.kind === 'artifact.ready') {
-      const artifact = stringValue(payload.artifact)
-      upsert(
+      }
+      continue
+    }
+    if (!currentPlan || !['node.started', 'node.retrying', 'node.appeared', 'node.completed', 'node.failed'].includes(event.kind)) continue
+    {
+      const taskId = stringValue(payload.task_id)
+      if (!taskId) continue
+      const id = `${currentPlan}:${taskId}`
+      const existing = steps.get(id)
+      // Ignore internal graph nodes and only update tasks present in the
+      // latest user-visible plan snapshot.
+      if (!existing) continue
+      steps.set(
+        id,
         reasoningStep(
-          `artifact:${artifact || event.sequence}`,
-          '准备学习产物',
-          artifact
-            ? `${humanize(artifact)}产物已准备好，可查看。`
-            : '学习产物已准备好，可查看。',
-          'complete',
-          timestamp,
-          timestamp
-        )
-      )
-    } else if (event.kind === 'task.completed' || event.kind === 'run.completed' || event.kind === 'run.ended') {
-      upsert(
-        reasoningStep(
-          'task',
-          '准备学习任务',
-          payload.status === 'partial'
-            ? '当前学习产物已准备好，但部分阶段只完成了一部分。'
-            : '学习任务及其产物已完成。',
-          'complete',
-          undefined,
-          timestamp
-        )
-      )
-      upsert(
-        reasoningStep(
-          'finish',
-          '总结学习结果',
-          '智能体图已返回当前学习结果。',
-          'complete',
-          timestamp,
-          timestamp
-        )
-      )
-    } else if (event.kind === 'task.failed') {
-      upsert(
-        reasoningStep(
-          'finish',
-          '总结学习结果',
-          '智能体图在全部学习产物准备完成前停止了。',
-          'error',
-          timestamp,
-          timestamp
-        )
-      )
-    } else if (event.kind === 'node.started' || event.kind === 'node.retrying') {
-      upsert(
-        reasoningStep(
-          `node:${event.sequence}`,
-          '推进智能体图',
+          id,
+          existing.title,
           event.kind === 'node.retrying'
-            ? '图节点正在结合当前上下文重试。'
-            : '智能体图正在推进到下一个节点。',
-          'active',
-          timestamp
+            ? '正在根据新的学习证据重试。'
+            : stringValue(payload.detail) || existing.summary,
+          event.kind === 'node.failed'
+            ? 'error'
+            : event.kind === 'node.completed'
+              ? 'complete'
+              : event.kind === 'node.appeared'
+                ? 'pending'
+                : 'active',
+          existing.timestamp ?? timestamp,
+          event.kind === 'node.completed' || event.kind === 'node.failed' ? timestamp : undefined
         )
       )
     }
-  }
-
-  for (const tool of tools) {
-    upsert(
-      reasoningStep(
-        `tool:${tool.id}`,
-        toolLabel(tool.name),
-        tool.status === 'executing'
-          ? `智能体图正在通过“${toolLabel(tool.name)}”收集依据。`
-          : tool.status === 'error'
-            ? `${toolLabel(tool.name)}返回了错误；智能体图正在保留安全状态。`
-            : `${toolLabel(tool.name)}已为当前阶段返回结果。`,
-        tool.status === 'executing' ? 'active' : tool.status === 'error' ? 'error' : 'complete',
-        tool.startedAt,
-        tool.status === 'executing' ? undefined : tool.startedAt
-      )
-    )
   }
 
   return [...steps.values()]
@@ -560,6 +501,7 @@ export function projectLingxiGraphEvents(
   }))
   const emittedRuns = new Set<string>()
   const emittedTools = new Set<string>()
+  const streamedOutputBlocks = new Map<string, number>()
   let assistantText = ''
 
   for (const event of events) {
@@ -625,28 +567,32 @@ export function projectLingxiGraphEvents(
       continue
     }
 
-    if (event.kind === 'assistant.delta' || event.kind === 'agent.output') {
+    if (event.kind === 'assistant.delta' || event.kind === 'agent.output' || event.kind === 'agent.output.delta') {
       const text = eventText(event)
       if (!text) continue
-      if (event.kind === 'agent.output' && event.agent === 'adaptive_pedagogy') {
-        // The deep-dive graph has exactly one learner-facing writer. Keep its
-        // latest Chinese response in the chat body while retaining the run
-        // block for the debug trace.
-        assistantText = text
-      }
-      if (event.kind === 'assistant.delta' && !agent) {
+      const learnerFacingOutput =
+        event.kind === 'agent.output' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
+      const deltaOutput =
+        event.kind === 'agent.output.delta' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
+      if (deltaOutput) {
+        const streamId = stringValue(eventPayload(event).stream_id) || String(event.agent ?? 'learner')
+        const existingIndex = streamedOutputBlocks.get(streamId)
+        if (existingIndex === undefined) {
+          streamedOutputBlocks.set(streamId, blocks.length)
+          blocks.push({ type: 'text', content: text, timestamp: event.sequence })
+        } else {
+          const block = blocks[existingIndex]
+          block.content = `${block.content ?? ''}${text}`
+        }
         assistantText += text
+      } else if (learnerFacingOutput) {
+        const streamId = stringValue(eventPayload(event).stream_id)
+        if (streamId && streamedOutputBlocks.has(streamId)) continue
+        assistantText += `${assistantText ? '\n\n' : ''}${text}`
         blocks.push({ type: 'text', content: text, timestamp: event.sequence })
-      } else if (agent && run) {
-        blocks.push({
-          type: 'subagent_text',
-          content: text,
-          subagent: agent,
-          spanId: run.spanId,
-          parentSpanId: 'main',
-          timestamp: event.sequence,
-        })
       }
+      // Never project assistant.delta: it is raw model/tool reasoning and may
+      // contain partial JSON. Providers explicitly emit safe agent.output.
       continue
     }
 

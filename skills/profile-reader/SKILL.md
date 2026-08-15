@@ -9,6 +9,7 @@ metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 学习档案读取
+  status-line: 正在读取你的学习档案…
   display-description: 把 learning_profile 投影成教学或规划步骤真正需要的紧凑视图，只读不写。
   output-language: zh-CN
   execution-mode: shared-contract

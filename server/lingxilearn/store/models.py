@@ -441,6 +441,7 @@ class SessionState(Base):
     """Bottom-up: long-term goal → current goal → interrupt goals."""
     plan: Mapped[dict] = mapped_column(JSON, default=dict)
     budget: Mapped[dict] = mapped_column(JSON, default=dict)
+    interjections: Mapped[list] = mapped_column(JSON, default=list)
     revision: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

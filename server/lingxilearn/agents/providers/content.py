@@ -328,13 +328,16 @@ async def lecture_deck(context: ProviderContext) -> ProviderResult:
     try:
         parsed = extract_json(
             message_text(
-                await invoke_agent(
-                    agent,
-                    HumanMessage(prompt),
-                    context.runtime,
-                    agent_name="lecture_deck",
-                    recursion_limit=recursion,
-                    tool_permissions=("artifact:write",),
+                await asyncio.wait_for(
+                    invoke_agent(
+                        agent,
+                        HumanMessage(prompt),
+                        context.runtime,
+                        agent_name="lecture_deck",
+                        recursion_limit=recursion,
+                        tool_permissions=("artifact:write",),
+                    ),
+                    timeout=float(getattr(context.settings, "agent_deck_timeout", 360.0)),
                 )
             )
         ) or {}
@@ -442,15 +445,21 @@ async def visual_explainer(context: ProviderContext) -> ProviderResult:
         name="interactive-visual-explainer",
     )
     try:
-        await invoke_agent(
-            agent,
-            HumanMessage(prompt),
-            context.runtime,
-            agent_name="visual_explainer",
-            recursion_limit=24,
-            tool_permissions=("artifact:write",),
+        await asyncio.wait_for(
+            invoke_agent(
+                agent,
+                HumanMessage(prompt),
+                context.runtime,
+                agent_name="visual_explainer",
+                recursion_limit=24,
+                tool_permissions=("artifact:write",),
+            ),
+            timeout=float(getattr(context.settings, "agent_visual_timeout", 240.0)),
         )
         html = draft.snapshot().get("visual-explainer.html")
+    except (TimeoutError, GraphTimeoutError, GraphRecursionError):
+        html = draft.snapshot().get("visual-explainer.html")
+        emit(context.runtime, "agent.output", agent="visual_explainer", message="可视化讲解生成超时，已保留已写入的内容。")
     finally:
         draft.cleanup()
 

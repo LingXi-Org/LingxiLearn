@@ -8,6 +8,7 @@ metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 产物校验
+  status-line: 正在校验产物完整性…
   display-description: 在产物交付给学习者之前按交付契约校验，模型自称成功不算校验。
   output-language: zh-CN
   execution-mode: shared-contract

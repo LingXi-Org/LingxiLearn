@@ -8,6 +8,7 @@ metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 编排策略
+  status-line: 正在规划下一步学习动作…
   display-description: 从已打分的候选集中挑选并排序下一步动作，并给出学习者能读懂的理由；只谈能力，不谈 agent 名。
   output-language: zh-CN
   output-contract: orchestration-plan.v1

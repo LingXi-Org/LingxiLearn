@@ -19,6 +19,7 @@ metadata:
   parallel-safe: true
   latency-class: background
   capabilities: model.reflect
+  status-line: 正在整理你的学习状态…
   provider: learner_reflector
   ownership: dedicated
   eval-suite: learner-state-reflector-v1

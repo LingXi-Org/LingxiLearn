@@ -19,6 +19,7 @@ metadata:
   parallel-safe: true
   latency-class: background
   capabilities: meta.report
+  status-line: 正在整理学习报告…
   provider: pack_report
   ownership: dedicated
 ---

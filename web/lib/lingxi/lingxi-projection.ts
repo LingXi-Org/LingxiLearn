@@ -577,6 +577,8 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
     return `已识别主题：“${String(event.payload.topic || task.intent.topic || '未命名主题')}”。`
   if (event.kind === 'agent.started')
     return `${agentLabel(event.agent)} 已接收任务${event.payload.skill ? ` · ${String(event.payload.skill)}` : ''}，开始执行。`
+  if (event.kind === 'agent.status')
+    return typeof event.payload.text === 'string' ? event.payload.text : `${agentLabel(event.agent)} 正在执行。`
   if (event.kind === 'agent.output')
     return message || `${agentLabel(event.agent)} 生成了新的关键输出。`
   if (event.kind === 'artifact.ready')
@@ -609,6 +611,7 @@ function eventLine(event: AgentTaskEvent, task: AgentTaskSnapshot): string {
   if (event.kind === 'model.completed')
     return `模型本轮完成${event.payload.duration_ms ? ` · ${String(event.payload.duration_ms)}ms` : ''}`
   if (
+    event.kind === 'agent.status' ||
     event.kind === 'node.started' ||
     event.kind === 'node.completed' ||
     event.kind === 'node.retrying' ||

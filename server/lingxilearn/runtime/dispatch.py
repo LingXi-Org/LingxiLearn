@@ -14,6 +14,7 @@ leaves the task unsatisfied so the loop replans.
 from __future__ import annotations
 
 import logging
+import asyncio
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -44,6 +45,7 @@ class Resolution:
     skill_id: str
     provider: str
     cost: dict[str, Any] = field(default_factory=dict)
+    status_line: str = ""
 
 
 def resolve(capability: str, skills: Sequence[Mapping[str, Any]]) -> Resolution:
@@ -74,6 +76,7 @@ def resolve(capability: str, skills: Sequence[Mapping[str, Any]]) -> Resolution:
         skill_id=str(chosen["skill_id"]),
         provider=str(chosen["provider"]),
         cost=dict(chosen.get("cost") or {}),
+        status_line=str((chosen.get("metadata") or {}).get("status_line") or "正在处理这一步…"),
     )
 
 
@@ -105,6 +108,7 @@ class Dispatcher:
         self._results: dict[str, Any] = {}
         self._validations: dict[str, bool] = {}
         self._artifacts: set[str] = set()
+        self._state_lock = asyncio.Lock()
         load_providers()
 
     @property
@@ -138,6 +142,13 @@ class Dispatcher:
         if user_message is not None:
             self._deps.user_message = dict(user_message)
 
+    def bind_runtime(self, runtime: Any, *, emit: Any = None) -> None:
+        """Attach the live graph runtime for provider-side streaming events."""
+
+        self._deps.graph_runtime = runtime
+        if emit is not None:
+            self._deps.emit = emit
+
     def seed_results(self, results: Mapping[str, Any]) -> None:
         """Prime with results persisted by earlier rounds of the same task."""
 
@@ -159,6 +170,8 @@ class Dispatcher:
         try:
             resolution = resolve(task.capability, self._deps.skills)
         except NoProvider as exc:
+            if self._deps.emit is not None:
+                self._deps.emit("agent.status", {"task_id": task.id, "capability": task.capability, "text": "这一步没有可用的执行者，我换个方式。"})
             return TaskOutcome(
                 task_id=task.id,
                 capability=task.capability,
@@ -176,9 +189,21 @@ class Dispatcher:
                     "skill_id": resolution.skill_id,
                 },
             )
+            self._deps.emit(
+                "agent.status",
+                {
+                    "task_id": task.id,
+                    "capability": task.capability,
+                    "provider": resolution.provider,
+                    "skill_id": resolution.skill_id,
+                    "text": resolution.status_line,
+                },
+            )
 
         provider = get_provider(resolution.provider)
         if provider is None:
+            if self._deps.emit is not None:
+                self._deps.emit("agent.status", {"task_id": task.id, "capability": task.capability, "text": "这一步没有可用的执行者，我换个方式。"})
             return TaskOutcome(
                 task_id=task.id,
                 capability=task.capability,
@@ -216,12 +241,6 @@ class Dispatcher:
             return self._failed(task, resolution, f"{type(exc).__name__}: {exc}", started)
 
         evidence_ids = await self._persist(result)
-        budget.spend_step(
-            heavy=bool(task.estimated_cost.heavy_artifact),
-            tokens=result.tokens_used,
-            wall_ms=int((time.monotonic() - started) * 1000),
-        )
-
         satisfied, detail = await self._check_done(task, result, evidence_ids)
         return TaskOutcome(
             task_id=task.id,
@@ -236,6 +255,7 @@ class Dispatcher:
             learner_message=result.learner_message,
             tokens_used=result.tokens_used,
             duration_ms=int((time.monotonic() - started) * 1000),
+            heavy=bool(task.estimated_cost.heavy_artifact),
         )
 
     # -- internals -----------------------------------------------------------
@@ -243,6 +263,8 @@ class Dispatcher:
     def _failed(
         self, task: PlannedTask, resolution: Resolution, detail: str, started: float
     ) -> TaskOutcome:
+        if self._deps.emit is not None:
+            self._deps.emit("agent.status", {"task_id": task.id, "capability": task.capability, "text": "这一步遇到问题，我会保留已完成的部分。"})
         return TaskOutcome(
             task_id=task.id,
             capability=task.capability,
@@ -252,15 +274,17 @@ class Dispatcher:
             satisfied=False,
             detail=detail,
             duration_ms=int((time.monotonic() - started) * 1000),
+            heavy=bool(task.estimated_cost.heavy_artifact),
         )
 
     async def _persist(self, result: ProviderResult) -> list[str]:
         """Append the provider's evidence and remember its outputs."""
 
-        if result.persist_as:
-            self._results[result.persist_as] = dict(result.data)
-        self._artifacts.update(result.artifacts)
-        self._validations.update(result.validations)
+        async with self._state_lock:
+            if result.persist_as:
+                self._results[result.persist_as] = dict(result.data)
+            self._artifacts.update(result.artifacts)
+            self._validations.update(result.validations)
 
         records: list[EvidenceRecord] = list(result.evidence)
         if not records:

@@ -20,6 +20,7 @@ metadata:
   parallel-safe: true
   latency-class: interactive
   capabilities: graph.prerequisite
+  status-line: 正在分析前置知识…
   provider: prerequisite_analyzer
   ownership: dedicated
 ---

@@ -8,12 +8,16 @@ export const AGENT_EVENT_KINDS = [
   'agent.started',
   'agent.completed',
   'agent.failed',
+  'agent.status',
+  'agent.output',
+  'agent.output.delta',
   'reasoning.delta',
   'assistant.delta',
   'tool.call.delta',
   'tool.result',
   'model.started',
   'model.completed',
+  'model.failed',
   'model.usage',
   'node.appeared',
   'node.started',
@@ -60,4 +64,3 @@ export const TERMINAL_AGENT_EVENT_KINDS = new Set<string>([
 export function isKnownAgentEventKind(kind: string): kind is AgentEventKind {
   return (AGENT_EVENT_KINDS as readonly string[]).includes(kind)
 }
-

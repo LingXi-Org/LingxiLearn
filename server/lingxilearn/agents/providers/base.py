@@ -127,6 +127,7 @@ def load_all() -> dict[str, Provider]:
         knowledge,
         meta,
         pack,
+        plan,
         teaching,
     )
 

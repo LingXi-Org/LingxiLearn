@@ -24,7 +24,7 @@ function statusDotClass(status: ReasoningStepStatus): string {
 }
 
 /**
- * Sim's compact, collapsible reasoning lane. The component intentionally
+ * Sim's compact, collapsible plan lane. The component intentionally
  * accepts summaries rather than arbitrary model text: LingxiGraph's adapter
  * is responsible for producing the safe phase descriptions.
  */
@@ -51,9 +51,9 @@ export function ReasoningSteps({ steps, isStreaming = false }: ReasoningStepsPro
           />
         </div>
         {hasActiveStep && isStreaming ? (
-          <ShimmerText className='text-sm'>Thinking</ShimmerText>
+          <ShimmerText className='text-sm'>执行计划</ShimmerText>
         ) : (
-          <span className='text-[var(--text-body)] text-sm'>Thinking</span>
+          <span className='text-[var(--text-body)] text-sm'>执行计划</span>
         )}
         <ChevronDown
           className={cn(
