@@ -84,6 +84,13 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     # Build the verifier before opening graph/database resources so a strict
     # production configuration fails fast and cleanly.
     identity = await asyncio.to_thread(build_authenticator, settings)
+    # The LingxiIdentity SDK client is intentionally lazy and only exposes
+    # the identity-specific helpers.  The generic auth proxy needs the full
+    # httpx request interface for forwarding arbitrary methods and paths.
+    proxy_client = httpx.AsyncClient(
+        timeout=settings.identity_bff_timeout,
+        follow_redirects=False,
+    )
     # Convenience for the zero-setup SQLite path; this also repairs files
     # created by older local versions in place. Postgres deployments run
     # `alembic upgrade head` in a one-shot migrate step before the app starts.
@@ -91,12 +98,14 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
         await service.db.ensure_sqlite_schema()
     await service.startup()
     app.state.identity = identity
+    app.state.identity_proxy_client = proxy_client
     app.state.service = service
     try:
         yield
     finally:
         await service.shutdown()
         await identity.aclose()
+        await proxy_client.aclose()
 
 
 def create_app() -> FastAPI:
@@ -138,8 +147,14 @@ def create_app() -> FastAPI:
                 "x-logto-verification-id",
             }
         }
-        identity = getattr(request.app.state, "identity", None)
-        client = identity.client if identity is not None else None
+        client = getattr(request.app.state, "identity_proxy_client", None)
+        if client is None:
+            # Keep lightweight test applications and older embedders working
+            # when they provide a regular httpx client on the authenticator.
+            legacy_identity = getattr(request.app.state, "identity", None)
+            legacy_client = getattr(legacy_identity, "client", None)
+            if callable(getattr(legacy_client, "request", None)):
+                client = legacy_client
         if client is None:
             raise HTTPException(status_code=503, detail="identity_provider_unavailable")
         try:
