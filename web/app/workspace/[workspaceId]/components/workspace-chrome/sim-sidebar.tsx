@@ -192,7 +192,7 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
           </SidebarTooltip>
         ) : (
           <Link
-            href={`/workspace/${workspaceId}/home`}
+            href='/'
             className='flex h-[30px] min-w-0 flex-1 items-center gap-2 rounded-lg px-2 transition-colors hover-hover:bg-[var(--surface-hover)]'
             aria-label='灵犀智学'
           >

@@ -60,14 +60,23 @@ export function AuthEntry({ kind }: { kind: AuthKind }) {
         {content.action}
       </Chip>
       {kind === 'login' && (
-        <div className='flex items-center justify-center gap-2 text-sm'>
-          <span className='text-[var(--text-muted)]'>还没有账户？</span>
+        <div className='space-y-3 text-center text-sm'>
           <ChipLink
-            href={`/signup?callbackUrl=${encodeURIComponent(nextPath)}`}
+            href={identityApi.authUrl('forgot-password', nextPath)}
+            prefetch={false}
             className='px-1 text-[var(--text-primary)]'
           >
-            注册
+            忘记密码？
           </ChipLink>
+          <div className='flex items-center justify-center gap-2'>
+            <span className='text-[var(--text-muted)]'>还没有账户？</span>
+            <ChipLink
+              href={`/signup?callbackUrl=${encodeURIComponent(nextPath)}`}
+              className='px-1 text-[var(--text-primary)]'
+            >
+              注册
+            </ChipLink>
+          </div>
         </div>
       )}
       {kind === 'register' && (

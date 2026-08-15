@@ -1,4 +1,4 @@
-import { ChipLink } from '@/components/ui-kit'
+import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 import type { SolutionsFooterCtaConfig } from '@/app/(landing)/components/solutions-page/types'
 import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
 
@@ -42,13 +42,13 @@ export function Cta({
         </p>
       ) : null}
       <div className='flex items-center gap-1'>
-        <ChipLink variant='primary' href={primary.href}>
+        <AuthAwareChipLink variant='primary' href={primary.href}>
           {primary.label}
-        </ChipLink>
+        </AuthAwareChipLink>
         {secondary ? (
-          <ChipLink href={secondary.href} className='border border-[var(--border-1)]'>
+          <AuthAwareChipLink href={secondary.href} className='border border-[var(--border-1)]'>
             {secondary.label}
-          </ChipLink>
+          </AuthAwareChipLink>
         ) : null}
       </div>
     </section>

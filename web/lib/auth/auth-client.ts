@@ -55,6 +55,9 @@ export function useSession(): SessionHookResult {
 }
 
 type AuthRedirectOptions = { callbackURL?: string; callbackUrl?: string }
+type SocialSignInOptions = AuthRedirectOptions & {
+  provider: 'github' | 'google' | 'microsoft'
+}
 
 /**
  * The identity BFF starts authentication with a browser navigation rather
@@ -90,12 +93,12 @@ export const client = {
       window.location.assign(identityApi.authUrl('login', callbackPath(options)))
       return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
     },
-    social: async (_provider: string, options?: AuthRedirectOptions) => {
+    social: async (options: SocialSignInOptions) => {
       if (isMockAuthEnabled) {
         window.location.assign(callbackPath(options))
         return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
       }
-      window.location.assign(identityApi.authUrl('login', callbackPath(options)))
+      window.location.assign(identityApi.authUrl('login', callbackPath(options), options.provider))
       return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
     },
   },

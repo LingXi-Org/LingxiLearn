@@ -9,7 +9,7 @@ export const POST_AUTH_REDIRECT_STORAGE_KEY = 'postAuthRedirectUrl'
 export const VERIFY_FROM_SIGNUP_ROUTE = '/verify?fromSignup=true'
 
 /** Default post-auth destination when no callback URL was carried in. */
-export const DEFAULT_POST_AUTH_ROUTE = '/workspace'
+export const DEFAULT_POST_AUTH_ROUTE = '/workspace/lingxi/home/'
 
 /**
  * Where a successful email signup goes next.

@@ -120,7 +120,7 @@ export function useVerification({
           logger.warn('Failed to refetch session after verification', e)
         }
 
-        const destination = resolveRedirectUrl(searchParams.get('redirectAfter')) ?? '/workspace'
+        const destination = resolveRedirectUrl(searchParams.get('redirectAfter')) ?? '/workspace/lingxi/home/'
         sessionStorage.removeItem('verificationEmail')
         sessionStorage.removeItem(POST_AUTH_REDIRECT_STORAGE_KEY)
 
@@ -222,7 +222,7 @@ export function useVerification({
       if (destination) {
         window.location.href = destination
       } else {
-        router.push('/workspace')
+        router.push('/workspace/lingxi/home/')
       }
     }
 

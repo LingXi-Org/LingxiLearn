@@ -23,7 +23,7 @@ export function SocialLoginButtons({
   githubAvailable,
   googleAvailable,
   microsoftAvailable,
-  callbackURL = '/workspace',
+  callbackURL = '/workspace/lingxi/home/',
   isProduction,
   children,
 }: SocialLoginButtonsProps) {

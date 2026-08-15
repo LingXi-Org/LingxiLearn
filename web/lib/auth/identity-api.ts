@@ -159,9 +159,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const identityApi = {
   authUrl(
     kind: 'login' | 'register' | 'forgot-password' | 'sso',
-    nextPath = '/workspace/lingxi/home/'
+    nextPath = '/workspace/lingxi/home/',
+    provider?: 'github' | 'google' | 'microsoft'
   ) {
     const params = new URLSearchParams({ next_path: safeNextPath(nextPath) })
+    if (provider) params.set('provider', provider)
     return `${identityUrl(`/auth/${kind}`)}?${params}`
   },
 
