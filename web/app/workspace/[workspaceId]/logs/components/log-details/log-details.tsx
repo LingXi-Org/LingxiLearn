@@ -278,7 +278,7 @@ export const WorkflowOutputSection = memo(
   (prev, next) => prev.output === next.output
 )
 
-export type LogDetailsTab = 'overview' | 'trace'
+export type LogDetailsTab = 'overview' | 'trace' | 'events'
 
 interface LogDetailsContentProps {
   log: WorkflowLogRow
@@ -344,8 +344,13 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
   const showTraceTab = !permissionConfig.hideTraceSpans && isLikelyExecution
   // double-cast-allowed: contract schema makes duration/startTime optional for legacy persisted JSON; runtime data always supplies them.
   const traceSpans = log.executionData?.traceSpans as unknown as TraceSpan[] | undefined
+  const runtimeEvents = (log.executionData as { runtimeEvents?: Array<Record<string, unknown>> } | undefined)?.runtimeEvents ?? []
 
-  const resolvedTab: LogDetailsTab = activeTab === 'trace' && !showTraceTab ? 'overview' : activeTab
+  const showEventsTab = isLikelyExecution && runtimeEvents.length > 0
+  const resolvedTab: LogDetailsTab =
+    activeTab === 'trace' && !showTraceTab || activeTab === 'events' && !showEventsTab
+      ? 'overview'
+      : activeTab
 
   useLayoutEffect(() => {
     onActiveTabChange?.(resolvedTab)
@@ -457,6 +462,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
           tabs={[
             { value: 'overview', label: 'Overview' },
             ...(showTraceTab ? [{ value: 'trace', label: 'Trace' }] : []),
+            ...(showEventsTab ? [{ value: 'events', label: 'Events' }] : []),
           ]}
           value={resolvedTab}
           onChange={(v) => setActiveTab(v as LogDetailsTab)}
@@ -673,6 +679,24 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
                 <span className='text-[var(--text-tertiary)] text-sm'>Loading trace…</span>
               </div>
             )}
+          </div>
+        )}
+
+        {showEventsTab && resolvedTab === 'events' && (
+          <div ref={scrollAreaRef} className='mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border-subtle)]'>
+            <div className='divide-y divide-[var(--border-subtle)]'>
+              {runtimeEvents.map((event, index) => (
+                <details key={`${String(event.sequence ?? index)}-${String(event.kind)}`} className='group p-3'>
+                  <summary className='flex cursor-pointer list-none items-center justify-between gap-3 text-sm'>
+                    <span className='font-mono text-[var(--text-primary)]'>{String(event.kind ?? 'runtime.event')}</span>
+                    <span className='text-xs text-[var(--text-tertiary)]'>{String(event.agent ?? 'coordinator')} · {String(event.sequence ?? index + 1)}</span>
+                  </summary>
+                  <pre className='mt-2 overflow-x-auto rounded-md bg-[var(--surface-secondary)] p-2 text-xs text-[var(--text-secondary)]'>
+                    {JSON.stringify({ payload: event.payload, runtime: event.runtime, createdAt: event.createdAt }, null, 2)}
+                  </pre>
+                </details>
+              ))}
+            </div>
           </div>
         )}
       </div>

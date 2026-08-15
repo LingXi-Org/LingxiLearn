@@ -237,11 +237,22 @@ export const traceSpanSchema: z.ZodType<LogTraceSpan> = z
 
 export const traceSpansSchema = z.array(traceSpanSchema)
 
+export const runtimeEventSchema = z.object({
+  sequence: z.number().optional(),
+  kind: z.string(),
+  agent: z.string().optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
+  runtime: z.record(z.string(), z.unknown()).optional(),
+  executionId: z.string().nullable().optional(),
+  createdAt: z.string().nullable().optional(),
+})
+
 const executionDataDetailSchema = z
   .object({
     totalDuration: z.number().nullable().optional(),
     enhanced: z.literal(true).optional(),
     traceSpans: traceSpansSchema.optional(),
+    runtimeEvents: z.array(runtimeEventSchema).optional(),
     blockExecutions: z.array(blockExecutionSchema).optional(),
     finalOutput: z.unknown().optional(),
     workflowInput: z.unknown().optional(),

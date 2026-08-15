@@ -4414,6 +4414,16 @@ async def log_by_execution(
             "totalDuration": metadata.get("totalDurationMs"),
             "enhanced": True,
             "traceSpans": snapshot["traceSpans"],
+            "runtimeEvents": [
+                {
+                    "sequence": event.sequence,
+                    "kind": event.kind,
+                    "agent": event.agent,
+                    "runtime": event.runtime or {},
+                    "createdAt": event.created_at.isoformat() if event.created_at else None,
+                }
+                for event in events
+            ],
             "workflowInput": {"taskId": task_id},
             "trigger": metadata.get("trigger"),
         },
@@ -4482,6 +4492,14 @@ async def log_detail(
             .all()
         )
     started_at = task.created_at.isoformat() if task.created_at else datetime.now(UTC).isoformat()
+    task_snapshot = None
+    if task.latest_execution_id:
+        try:
+            task_snapshot = await svc.agent_execution_snapshot(
+                task.latest_execution_id, context.learner_id
+            )
+        except KeyError:
+            task_snapshot = None
     detail = {
         "id": task.id,
         "executionId": task.latest_execution_id or task.id,
@@ -4508,7 +4526,17 @@ async def log_detail(
         "executionData": {
             "totalDuration": 0,
             "enhanced": True,
-            "traceSpans": [],
+            "traceSpans": (task_snapshot or {}).get("traceSpans") or [],
+            "runtimeEvents": [
+                {
+                    "sequence": event.sequence,
+                    "kind": event.kind,
+                    "agent": event.agent,
+                    "runtime": event.runtime or {},
+                    "createdAt": event.created_at.isoformat() if event.created_at else None,
+                }
+                for event in events
+            ],
             "workflowInput": {"taskId": task.id, "prompt": task.prompt},
             "trigger": "agent-task",
         },

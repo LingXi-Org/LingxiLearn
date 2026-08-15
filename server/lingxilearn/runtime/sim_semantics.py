@@ -15,6 +15,8 @@ from typing import Any
 
 from lingxigraph import EventKind, RetryPolicy
 
+from .sim_trace import replay_trace, total_tokens
+
 PROJECTION_VERSION = "sim-runtime.v1"
 
 
@@ -803,3 +805,48 @@ class SimRunProjector:
             "traceSpans": _json_safe(self.trace_spans),
             "projectionVersion": PROJECTION_VERSION,
         }
+
+
+def _safe_trace_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Apply the V2 public event envelope before trace replay.
+
+    Reasoning deltas and raw tool call/result payloads are deliberately never
+    reconstructed into the learner-facing Sim trace.
+    """
+    private = {"reasoning.delta", "tool.call.delta", "tool.result", "assistant.delta"}
+    blocked = {"arguments", "input", "output", "result", "content", "thinking", "reasoning"}
+    safe: list[dict[str, Any]] = []
+    for record in records:
+        if str(record.get("kind") or "") in private:
+            continue
+        item = dict(record)
+        payload = dict(item.get("payload") or {})
+        item["payload"] = {key: value for key, value in payload.items() if key not in blocked}
+        safe.append(item)
+    return safe
+
+
+def replay_sim_trace(
+    records: Iterable[dict[str, Any]],
+    *,
+    execution_id: str,
+    task_id: str,
+    graph_version: str,
+    status: str | None = None,
+    started_at: Any = None,
+    ended_at: Any = None,
+) -> list[dict[str, Any]]:
+    return replay_trace(
+        _safe_trace_records(records),
+        execution_id=execution_id,
+        task_id=task_id,
+        graph_version=graph_version,
+        resolve_primitive=PrimitiveCatalog().resolve,
+        status=status,
+        started_at=started_at,
+        ended_at=ended_at,
+    )
+
+
+def sim_trace_total_tokens(trace: list[dict[str, Any]]) -> dict[str, int]:
+    return total_tokens(trace)

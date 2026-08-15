@@ -259,7 +259,14 @@ export interface TraceSpan {
    * This field only appears on legacy trace spans persisted before the unification.
    */
   toolCalls?: ToolCall[]
-  status?: 'success' | 'error'
+  status?: 'success' | 'error' | 'running' | 'completed'
+  primitive?: string
+  category?: string
+  capability?: string
+  skillId?: string
+  attempt?: number
+  cached?: boolean
+  events?: Array<Record<string, unknown>>
   /** Whether this block's error was handled by an error handler path */
   errorHandled?: boolean
   /** Total handler tries, present only when the block retried at least once. */
