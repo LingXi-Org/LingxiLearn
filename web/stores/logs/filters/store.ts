@@ -3,7 +3,7 @@ import { devtools } from 'zustand/middleware'
 import type { LogViewState } from '@/stores/logs/filters/types'
 
 /**
- * Logs view store. Holds only non-URL view state (the logs/dashboard toggle).
+ * Logs view store. Holds only non-URL view state (logs/dashboard/trajectory).
  * All filter state is URL-backed via `useLogFilters` (nuqs).
  */
 export const useFilterStore = create<LogViewState>()(
