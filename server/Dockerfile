@@ -15,7 +15,7 @@ RUN python -m pip install --no-cache-dir --index-url ${PYPI_INDEX_URL} uv \
 
 ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 FROM ${DOCKER_REGISTRY}/library/python:3.13-slim AS runtime
-ARG LINGXILEARN_VERSION=0.1.0
+ARG LINGXILEARN_VERSION=2.0.0
 LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}"
 RUN groupadd --gid 10001 lingxi \
  && useradd --uid 10001 --gid 10001 --create-home lingxi

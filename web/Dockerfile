@@ -28,7 +28,7 @@ RUN rm -rf out .next && bun run build && test -f .next/standalone/server.js
 ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 ARG BUN_VERSION=1.3.6
 FROM ${DOCKER_REGISTRY}/oven/bun:${BUN_VERSION} AS runtime
-ARG LINGXILEARN_VERSION=0.1.0
+ARG LINGXILEARN_VERSION=2.0.0
 LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}"
 
 WORKDIR /app
