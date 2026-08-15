@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -8,6 +10,51 @@ from sqlalchemy import select
 from lingxilearn.config import Settings
 from lingxilearn.store.db import Database, Repository
 from lingxilearn.store.models import Workspace, WorkspaceTable, WorkspaceTableRow
+
+
+@pytest.mark.asyncio
+async def test_agent_event_sequence_allocation_is_safe_for_concurrent_writers() -> None:
+    suffix = uuid4().hex
+    settings = Settings(
+        _env_file="",
+        database_url=f"sqlite+aiosqlite:///./var/test-event-lock-{suffix}.sqlite3",
+    )
+    database = Database(settings)
+    repository = Repository(database)
+    learner_id = f"learner-{suffix}"
+    task_id = f"task-{suffix}"
+    try:
+        await database.create_all()
+        await repository.ensure_learner(learner_id)
+        await repository.create_agent_task(
+            id=task_id,
+            learner_id=learner_id,
+            prompt="解释 TCP",
+            status="running",
+            resources=[],
+            intent={},
+            lecture_result={},
+            deck_result={},
+            quiz_result={},
+            adaptive_result={},
+            handoff_result={},
+            user_messages=[],
+            visual_result={},
+        )
+        await asyncio.gather(
+            *(
+                repository.append_agent_events(
+                    task_id,
+                    [{"kind": "node.appeared", "agent": "orchestrator", "payload": {}}],
+                )
+                for _ in range(12)
+            )
+        )
+        events = await repository.agent_events_after(task_id)
+        assert [event["sequence"] for event in events] == list(range(1, 13))
+    finally:
+        await database.dispose()
+        (Path("var") / f"test-event-lock-{suffix}.sqlite3").unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio

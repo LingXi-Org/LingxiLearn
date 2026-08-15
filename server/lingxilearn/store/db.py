@@ -8,9 +8,11 @@ caps you at 10 concurrent learners for no reason.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -158,6 +160,14 @@ class Database:
                 cursor.close()
 
         self.factory = async_sessionmaker(self.engine, expire_on_commit=False)
+        # Event producers include the graph stream, sidecars, and lifecycle
+        # handlers. They may append to one task concurrently. Serialise the
+        # sequence allocation in-process; PostgreSQL row locking below covers
+        # separate workers as well.
+        self._agent_event_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+    def agent_event_lock(self, task_id: str) -> asyncio.Lock:
+        return self._agent_event_locks[task_id]
 
     @asynccontextmanager
     async def session(self) -> AsyncIterator[AsyncSession]:
@@ -887,55 +897,63 @@ class Repository:
         if task_record is None:
             raise KeyError(f"unknown agent task: {task_id}")
         await self.ensure_workspace(task_record.learner_id)
-        async with self.db.session() as s:
-            task = await s.get(AgentTask, task_id)
-            highest = (
-                await s.execute(
-                    select(func.max(AgentTaskEvent.sequence)).where(
-                        AgentTaskEvent.task_id == task_id
+        async with self.db.agent_event_lock(task_id):
+            async with self.db.session() as s:
+                # FOR UPDATE makes the max(sequence) allocation atomic across
+                # API/worker processes on PostgreSQL. SQLite ignores it, but
+                # the per-task asyncio lock still serialises local writers.
+                task = await s.get(AgentTask, task_id, with_for_update=True)
+                if task is None:
+                    raise KeyError(f"unknown agent task: {task_id}")
+                highest = (
+                    await s.execute(
+                        select(func.max(AgentTaskEvent.sequence)).where(
+                            AgentTaskEvent.task_id == task_id
+                        )
                     )
-                )
-            ).scalar() or 0
-            runtime_records: list[dict[str, Any]] = []
-            for offset, event in enumerate(events, start=1):
-                sequence = highest + offset
-                s.add(
-                    AgentTaskEvent(
-                        task_id=task_id,
-                        sequence=sequence,
-                        kind=str(event.get("kind", "")),
-                        agent=str(event.get("agent", "")),
-                        payload=event.get("payload") or {},
-                        execution_id=event.get("execution_id"),
-                        runtime=event.get("runtime")
+                ).scalar() or 0
+                runtime_records: list[dict[str, Any]] = []
+                for offset, event in enumerate(events, start=1):
+                    sequence = highest + offset
+                    runtime = (
+                        event.get("runtime")
                         or (event.get("payload") or {}).get("runtime")
-                        or {},
+                        or {}
                     )
+                    payload = event.get("payload") or {}
+                    s.add(
+                        AgentTaskEvent(
+                            task_id=task_id,
+                            sequence=sequence,
+                            kind=str(event.get("kind", "")),
+                            agent=str(event.get("agent", "")),
+                            payload=payload,
+                            execution_id=event.get("execution_id"),
+                            runtime=runtime,
+                        )
+                    )
+                    runtime_records.append(
+                        {
+                            "record_key": f"task:{task_id}:{sequence}",
+                            "task_id": task_id,
+                            "sequence": sequence,
+                            "kind": str(event.get("kind", "")),
+                            "agent": str(event.get("agent", "")),
+                            "payload": payload,
+                            "execution_id": event.get("execution_id"),
+                            "runtime": runtime,
+                        }
+                    )
+                await project_runtime_events(
+                    s,
+                    learner_id=task.learner_id,
+                    records=runtime_records,
+                    workspace=await s.scalar(
+                        select(Workspace).where(Workspace.learner_id == task.learner_id)
+                    ),
                 )
-                runtime_records.append(
-                    {
-                        "record_key": f"task:{task_id}:{sequence}",
-                        "task_id": task_id,
-                        "sequence": sequence,
-                        "kind": str(event.get("kind", "")),
-                        "agent": str(event.get("agent", "")),
-                        "payload": event.get("payload") or {},
-                        "execution_id": event.get("execution_id"),
-                        "runtime": event.get("runtime")
-                        or (event.get("payload") or {}).get("runtime")
-                        or {},
-                    }
-                )
-            await project_runtime_events(
-                s,
-                learner_id=task.learner_id,
-                records=runtime_records,
-                workspace=await s.scalar(
-                    select(Workspace).where(Workspace.learner_id == task.learner_id)
-                ),
-            )
-            await s.commit()
-            return highest + len(events)
+                await s.commit()
+                return highest + len(events)
 
     async def agent_events_after(
         self, task_id: str, after: int = 0, limit: int = 500
