@@ -236,8 +236,8 @@ function TrajectoryTimeline({
           <div className='rounded-md border border-[var(--border)] bg-[var(--surface-2)] py-1.5'>
             {levels.map((entries, depth) => (
               <div key={depth} className='flex h-7 items-center'>
-                <span className='w-10 flex-shrink-0 text-center text-[var(--text-muted)] text-xs tabular-nums'>
-                  L{depth + 1}
+                <span className='w-14 flex-shrink-0 pr-2 text-right text-[var(--text-muted)] text-[10px] uppercase tracking-[0.06em]'>
+                  {depth === 0 ? 'Input' : depth === 1 ? 'Model' : 'Tools'}
                 </span>
                 <div
                   className='relative mr-2 h-full min-w-0 flex-1 border-[var(--border)] border-l'
@@ -260,7 +260,7 @@ function TrajectoryTimeline({
               </div>
             ))}
           </div>
-          <div className='mt-1.5 flex items-center justify-between pl-10 text-[var(--text-muted)] text-xs tabular-nums'>
+          <div className='mt-1.5 flex items-center justify-between pl-14 text-[var(--text-muted)] text-xs tabular-nums'>
             <span>0 ms</span>
             <span>{formatOffset(model.totalDurationMs / 2)}</span>
             <span>{formatOffset(model.totalDurationMs)}</span>
@@ -407,6 +407,11 @@ function TrajectoryLedger({
                     >
                       {getSpanName(entry.span)}
                     </span>
+                    {entry.depth === 0 ? (
+                      <span className='ml-1 flex-shrink-0 text-[var(--text-tertiary)] text-caption'>
+                        Turn {entry.path[0]}
+                      </span>
+                    ) : null}
                   </div>
                 </td>
                 <td className='px-2 py-2'>
@@ -500,6 +505,8 @@ function InspectorMetric({ label, value }: { label: string; value: string }) {
 }
 
 function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
+  const [activeTab, setActiveTab] = useState<'overview' | 'input' | 'output' | 'timing'>('overview')
+
   if (!entry) {
     return (
       <div className='flex h-full min-h-[240px] items-center justify-center px-4 text-center text-[var(--text-tertiary)] text-sm'>
@@ -527,6 +534,12 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
   const compactMetadata = Object.fromEntries(
     Object.entries(metadata).filter(([, value]) => value !== undefined && value !== null)
   )
+  const tabs = [
+    { id: 'overview' as const, label: 'Overview' },
+    { id: 'input' as const, label: 'Input' },
+    { id: 'output' as const, label: 'Output' },
+    { id: 'timing' as const, label: 'Timing' },
+  ]
 
   return (
     <aside className='flex h-full min-h-0 flex-col overflow-auto p-3.5'>
@@ -556,30 +569,71 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
         />
       </div>
 
+      <div className='mt-3 flex items-center gap-1 border-[var(--border)] border-b' role='tablist'>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type='button'
+            role='tab'
+            aria-selected={activeTab === tab.id}
+            className={cn(
+              'border-b-2 border-transparent px-2 py-1.5 text-xs transition-colors',
+              activeTab === tab.id
+                ? 'border-[var(--text-primary)] text-[var(--text-primary)]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+            )}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {span.errorMessage ? (
         <p className='mt-3 text-[var(--text-error)] text-sm'>{span.errorMessage}</p>
-      ) : (
+      ) : activeTab === 'overview' ? (
         <p className='mt-3 text-[var(--text-secondary)] text-sm'>
           {span.type} stage at level {entry.depth + 1} of the execution pipeline.
         </p>
-      )}
+      ) : null}
 
       <div className='mt-3 flex flex-col gap-2'>
-        <DetailCard
-          key={`${entry.id}-error`}
-          title='Error'
-          value={span.errorMessage || span.errorType}
-          defaultOpen
-          error
-        />
-        <DetailCard key={`${entry.id}-input`} title='Input' value={span.input} />
-        <DetailCard key={`${entry.id}-output`} title='Output' value={span.output} />
-        <DetailCard key={`${entry.id}-thinking`} title='Thinking' value={richSpan.thinking} />
-        <DetailCard
-          key={`${entry.id}-metadata`}
-          title='Metadata'
-          value={Object.keys(compactMetadata).length > 0 ? compactMetadata : undefined}
-        />
+        {activeTab === 'overview' && (
+          <>
+            <DetailCard
+              key={`${entry.id}-error`}
+              title='Error'
+              value={span.errorMessage || span.errorType}
+              defaultOpen
+              error
+            />
+            <DetailCard key={`${entry.id}-thinking`} title='Thinking' value={richSpan.thinking} />
+            <DetailCard
+              key={`${entry.id}-metadata`}
+              title='Metadata'
+              value={Object.keys(compactMetadata).length > 0 ? compactMetadata : undefined}
+            />
+          </>
+        )}
+        {activeTab === 'input' && (
+          <DetailCard key={`${entry.id}-input`} title='Input payload' value={span.input} defaultOpen />
+        )}
+        {activeTab === 'output' && (
+          <DetailCard key={`${entry.id}-output`} title='Output payload' value={span.output} defaultOpen />
+        )}
+        {activeTab === 'timing' && (
+          <DetailCard
+            key={`${entry.id}-timing`}
+            title='Timing details'
+            defaultOpen
+            value={{
+              startedAt: new Date(entry.startMs).toISOString(),
+              offsetMs: entry.offsetMs,
+              durationMs: entry.durationMs,
+              completedAt: new Date(entry.endMs).toISOString(),
+            }}
+          />
+        )}
       </div>
     </aside>
   )
@@ -648,6 +702,45 @@ function TrajectoryContent({ log, model }: { log: WorkflowLogDetail; model: Traj
 
   return (
     <div className='flex min-h-0 flex-1 flex-col gap-3'>
+      <div
+        className='flex min-h-[32px] flex-wrap items-center gap-1 border-[var(--border)] border-b pb-1'
+        role='toolbar'
+        aria-label='Trajectory controls'
+      >
+        <span className='mr-1 text-[var(--text-tertiary)] text-xs'>Timeline</span>
+        <Button
+          type='button'
+          variant='ghost'
+          className='h-7 px-2 text-xs'
+          aria-label='Use recorded duration'
+        >
+          <Clock className='mr-1 size-[13px]' />
+          Recorded duration
+        </Button>
+        <Button
+          type='button'
+          variant='ghost'
+          className='h-7 px-2 text-xs'
+          aria-label='Expand all turns'
+          onClick={() => setCollapsedIds(new Set())}
+        >
+          <ChevronsUpDown className='mr-1 size-[13px]' />
+          Expand turns
+        </Button>
+        <Button
+          type='button'
+          variant='ghost'
+          className='h-7 px-2 text-xs'
+          aria-label='Collapse all turns'
+          onClick={() => setCollapsedIds(new Set(childIds))}
+        >
+          <ChevronsDownUp className='mr-1 size-[13px]' />
+          Collapse turns
+        </Button>
+        <span className='ml-auto text-[var(--text-tertiary)] text-caption tabular-nums'>
+          {model.entries.length} records
+        </span>
+      </div>
       <TrajectorySummaryCards model={model} />
       <TrajectoryTimeline model={model} selectedId={effectiveSelectedId} onSelect={handleSelect} />
 
