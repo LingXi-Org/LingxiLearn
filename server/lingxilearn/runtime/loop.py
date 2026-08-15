@@ -567,8 +567,55 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         outcomes: list[TaskOutcome] = []
         messages: list[str] = []
         background_pending = False
+
+        # Artifact tasks often depend on a conversational teaching step for
+        # planning purposes, but their providers only need the goal and the
+        # learner profile.  Queue independent heavy artifacts immediately so
+        # a slow/failed explanation cannot leave the actual deliverables in
+        # ``queued`` forever.  Heavy-on-heavy dependencies remain ordered and
+        # are picked up by the normal tier loop after their prerequisite.
+        queued_background_ids: set[str] = set()
+        heavy_ids = {
+            task.id
+            for task in produced.tasks
+            if task.id in allowed
+            and task.estimated_cost.heavy_artifact
+            and not task.estimated_cost.critical_path
+        }
+
+        async def queue_background(task: PlannedTask) -> None:
+            nonlocal background_pending
+            if task.id in queued_background_ids:
+                return
+            inputs = dict(task.inputs)
+            revision = inputs.get("revision") if isinstance(inputs.get("revision"), Mapping) else {}
+            inputs["__runtime"] = {
+                "task_key": str(revision.get("of_task") or f"{int(state.get('step') or 0)}:{task.id}"),
+                "task_id": task.id,
+                "step": int(state.get("step") or 0),
+                "capability": task.capability,
+                "knowledge_point_id": task.knowledge_point_id,
+                "artifacts": [task.done_when.artifact] if task.done_when.artifact else [],
+                "done_when": task.done_when.model_dump(mode="json"),
+            }
+            await deps.schedule_background(task.capability, inputs)
+            queued_background_ids.add(task.id)
+            background_pending = True
+
+        for task in produced.tasks:
+            if (
+                task.id in heavy_ids
+                and not any(dep in heavy_ids for dep in task.depends_on)
+                and deps.schedule_background is not None
+            ):
+                await queue_background(task)
+
         for tier in produced.tiers():
-            ready = [task for task in tier if task.id in allowed]
+            ready = [
+                task
+                for task in tier
+                if task.id in allowed and task.id not in queued_background_ids
+            ]
             if budget.exhausted() is not None:
                 break
             # Heavy artifacts are deliberately detached from the learner's
@@ -589,18 +636,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             if background:
                 background_pending = True
             for task in background:
-                inputs = dict(task.inputs)
-                revision = inputs.get("revision") if isinstance(inputs.get("revision"), Mapping) else {}
-                inputs["__runtime"] = {
-                    "task_key": str(revision.get("of_task") or f"{int(state.get('step') or 0)}:{task.id}"),
-                    "task_id": task.id,
-                    "step": int(state.get("step") or 0),
-                    "capability": task.capability,
-                    "knowledge_point_id": task.knowledge_point_id,
-                    "artifacts": [task.done_when.artifact] if task.done_when.artifact else [],
-                    "done_when": task.done_when.model_dump(mode="json"),
-                }
-                await deps.schedule_background(task.capability, inputs)
+                await queue_background(task)
             ready = [task for task in ready if task not in background]
             safe = [task for task in ready if task.estimated_cost.parallel_safe and bool(getattr(deps.settings, "agent_parallel_dispatch", True))]
             serial = [task for task in ready if task not in safe]
