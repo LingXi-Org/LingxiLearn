@@ -51,14 +51,15 @@ export function AuthEntry({ kind }: { kind: AuthKind }) {
   return (
     <div className='space-y-6'>
       <AuthHeader title={content.title} description={content.description} />
-      <Chip
-        variant='primary'
-        fullWidth
-        className='h-9 text-sm'
-        onClick={() => window.location.assign(target)}
-      >
-        {content.action}
-      </Chip>
+      <div className='flex justify-center'>
+        <Chip
+          variant='primary'
+          className='h-9 min-w-[146px] text-sm'
+          onClick={() => window.location.assign(target)}
+        >
+          {content.action}
+        </Chip>
+      </div>
       {kind === 'login' && (
         <div className='space-y-3 text-center text-sm'>
           <ChipLink
