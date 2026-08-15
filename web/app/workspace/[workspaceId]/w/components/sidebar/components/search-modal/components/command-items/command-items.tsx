@@ -1,0 +1,383 @@
+'use client'
+
+import type { ComponentType } from 'react'
+import { memo } from 'react'
+import { cn } from '@sim/emcn'
+import { File, Workflow } from '@sim/emcn/icons'
+import { WorkflowTypeIcon } from '@sim/workflow-renderer'
+import { Command } from 'cmdk'
+import { HEX_COLOR_REGEX } from '@/lib/branding'
+import type { CommandItemProps } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/search-modal/utils'
+import { COMMAND_ITEM_CLASSNAME } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/search-modal/utils'
+import { getTileIconColorClass } from '@/blocks/icon-color'
+
+interface ResultMetaProps {
+  meta?: string
+}
+
+interface ItemMetaProps {
+  meta: string
+}
+
+function ItemMeta({ meta }: ItemMetaProps) {
+  return (
+    <span className='ml-auto flex-shrink-0 pl-2 text-[var(--text-subtle)] text-small'>{meta}</span>
+  )
+}
+
+interface ItemFolderPathProps {
+  folderPath: string[]
+}
+
+/** Trailing folder-path receipt whose head segments yield space to the leaf. */
+function ItemFolderPath({ folderPath }: ItemFolderPathProps) {
+  return (
+    <span className='ml-auto flex min-w-0 pl-2 text-[var(--text-subtle)] text-small'>
+      {folderPath.length > 1 && (
+        <>
+          <span className='min-w-0 truncate [flex-shrink:9999]'>
+            {folderPath.slice(0, -1).join(' / ')}
+          </span>
+          <span className='flex-shrink-0 whitespace-pre'> / </span>
+        </>
+      )}
+      <span className='min-w-0 truncate'>{folderPath[folderPath.length - 1]}</span>
+    </span>
+  )
+}
+
+/** Structural equality for the optional folder-path prop in memo comparators. */
+function sameFolderPath(prev?: string[], next?: string[]): boolean {
+  return (
+    prev === next ||
+    (prev?.length === next?.length && (prev ?? []).every((segment, i) => segment === next?.[i]))
+  )
+}
+
+interface ShortcutHintProps {
+  shortcut: string
+}
+
+function ShortcutHint({ shortcut }: ShortcutHintProps) {
+  const commandIndex = shortcut.indexOf('⌘')
+  const slots =
+    commandIndex === -1
+      ? ['', '', shortcut]
+      : [shortcut.slice(0, commandIndex), '⌘', shortcut.slice(commandIndex + 1)]
+
+  return (
+    <span
+      aria-label={`Keyboard shortcut ${shortcut}`}
+      className='ml-auto grid w-10 flex-shrink-0 grid-cols-3 text-center text-[var(--text-subtle)] text-small'
+    >
+      {slots.map((slot, index) => (
+        <span key={`${index}-${slot}`} aria-hidden='true'>
+          {slot}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+export const MemoizedCommandItem = memo(
+  function CommandItem({
+    value,
+    onSelect,
+    icon: Icon,
+    bgColor,
+    showColoredIcon,
+    workflowType,
+    label,
+    labelPrefix,
+    meta,
+  }: CommandItemProps) {
+    return (
+      <Command.Item value={value} onSelect={onSelect} className={COMMAND_ITEM_CLASSNAME}>
+        {workflowType ? (
+          <WorkflowTypeIcon type={workflowType} Icon={Icon} />
+        ) : (
+          <div
+            className='relative flex size-[16px] flex-shrink-0 items-center justify-center overflow-hidden rounded-sm [&_img]:size-full'
+            style={{ background: showColoredIcon ? bgColor : 'transparent' }}
+          >
+            <Icon
+              className={cn(
+                'transition-transform duration-100 group-hover:scale-110',
+                showColoredIcon
+                  ? `size-[10px] ${getTileIconColorClass(bgColor)}`
+                  : 'size-[16px] text-[var(--text-icon)]'
+              )}
+            />
+          </div>
+        )}
+        <span className='truncate text-[var(--text-body)]'>
+          {labelPrefix && <span className='text-[var(--text-subtle)]'>{labelPrefix} </span>}
+          {label}
+        </span>
+        {meta ? <ItemMeta meta={meta} /> : null}
+      </Command.Item>
+    )
+  },
+  (prev, next) =>
+    prev.value === next.value &&
+    prev.icon === next.icon &&
+    prev.bgColor === next.bgColor &&
+    prev.showColoredIcon === next.showColoredIcon &&
+    prev.workflowType === next.workflowType &&
+    prev.label === next.label &&
+    prev.labelPrefix === next.labelPrefix &&
+    prev.meta === next.meta
+)
+
+export const MemoizedActionItem = memo(
+  function ActionItem({
+    value,
+    onSelect,
+    icon: Icon,
+    name,
+    shortcut,
+    meta,
+  }: {
+    value: string
+    onSelect: () => void
+    icon: ComponentType<{ className?: string }>
+    name: string
+    shortcut?: string
+  } & ResultMetaProps) {
+    return (
+      <Command.Item value={value} onSelect={onSelect} className={COMMAND_ITEM_CLASSNAME}>
+        <Icon className='size-[16px] flex-shrink-0 text-[var(--text-icon)]' />
+        <span className='truncate text-[var(--text-body)]'>{name}</span>
+        {meta ? <ItemMeta meta={meta} /> : shortcut ? <ShortcutHint shortcut={shortcut} /> : null}
+      </Command.Item>
+    )
+  },
+  (prev, next) =>
+    prev.value === next.value &&
+    prev.icon === next.icon &&
+    prev.name === next.name &&
+    prev.shortcut === next.shortcut &&
+    prev.meta === next.meta
+)
+
+export const MemoizedWorkflowItem = memo(
+  function WorkflowItem({
+    value,
+    onSelect,
+    name,
+    folderPath,
+    isCurrent,
+    meta,
+  }: {
+    value: string
+    onSelect: () => void
+    name: string
+    folderPath?: string[]
+    isCurrent?: boolean
+  } & ResultMetaProps) {
+    return (
+      <Command.Item value={value} onSelect={onSelect} className={COMMAND_ITEM_CLASSNAME}>
+        <div className='relative flex size-[16px] flex-shrink-0 items-center justify-center'>
+          <Workflow className='size-[14px] text-[var(--text-icon)]' />
+        </div>
+        <span className='flex min-w-0 max-w-[75%] flex-shrink-0 text-[var(--text-body)]'>
+          <span className='truncate'>{name}</span>
+          {isCurrent && <span className='flex-shrink-0 whitespace-pre'> (current)</span>}
+        </span>
+        {meta ? (
+          <ItemMeta meta={meta} />
+        ) : folderPath && folderPath.length > 0 ? (
+          <ItemFolderPath folderPath={folderPath} />
+        ) : null}
+      </Command.Item>
+    )
+  },
+  (prev, next) =>
+    prev.value === next.value &&
+    prev.name === next.name &&
+    prev.isCurrent === next.isCurrent &&
+    prev.meta === next.meta &&
+    sameFolderPath(prev.folderPath, next.folderPath)
+)
+
+export const MemoizedFileItem = memo(
+  function FileItem({
+    value,
+    onSelect,
+    name,
+    folderPath,
+    meta,
+  }: {
+    value: string
+    onSelect: () => void
+    name: string
+    folderPath?: string[]
+  } & ResultMetaProps) {
+    return (
+      <Command.Item value={value} onSelect={onSelect} className={COMMAND_ITEM_CLASSNAME}>
+        <div className='relative flex size-[16px] flex-shrink-0 items-center justify-center'>
+          <File className='size-[14px] text-[var(--text-icon)]' />
+        </div>
+        <span className='flex min-w-0 max-w-[75%] flex-shrink-0 text-[var(--text-body)]'>
+          <span className='truncate'>{name}</span>
+        </span>
+        {meta ? (
+          <ItemMeta meta={meta} />
+        ) : folderPath && folderPath.length > 0 ? (
+          <ItemFolderPath folderPath={folderPath} />
+        ) : null}
+      </Command.Item>
+    )
+  },
+  (prev, next) =>
+    prev.value === next.value &&
+    prev.name === next.name &&
+    prev.meta === next.meta &&
+    sameFolderPath(prev.folderPath, next.folderPath)
+)
+
+export const MemoizedTaskItem = memo(
+  function TaskItem({
+    value,
+    onSelect,
+    name,
+    meta,
+  }: {
+    value: string
+    onSelect: () => void
+    name: string
+  } & ResultMetaProps) {
+    return (
+      <Command.Item value={value} onSelect={onSelect} className={COMMAND_ITEM_CLASSNAME}>
+        <span className='truncate text-[var(--text-body)]'>{name}</span>
+        {meta && <ItemMeta meta={meta} />}
+      </Command.Item>
+    )
+  },
+  (prev, next) => prev.value === next.value && prev.name === next.name && prev.meta === next.meta
+)
+
+export const MemoizedWorkspaceItem = memo(
+  function WorkspaceItem({
+    value,
+    onSelect,
+    name,
+    isCurrent,
+    logoUrl,
+    color,
+    meta,
+  }: {
+    value: string
+    onSelect: () => void
+    name: string
+    isCurrent?: boolean
+    logoUrl?: string | null
+    color?: string
+  } & ResultMetaProps) {
+    const backgroundColor = color && HEX_COLOR_REGEX.test(color) ? color : 'var(--brand-accent)'
+
+    return (
+      <Command.Item value={value} onSelect={onSelect} className={COMMAND_ITEM_CLASSNAME}>
+        {logoUrl ? (
+          <img
+            data-slot='workspace-icon'
+            src={logoUrl}
+            alt=''
+            className='size-[16px] flex-shrink-0 rounded-sm object-cover'
+          />
+        ) : (
+          <span
+            data-slot='workspace-icon'
+            aria-hidden='true'
+            className='relative flex size-[16px] flex-shrink-0 items-center justify-center overflow-hidden rounded-sm font-medium text-[9px] text-white leading-none'
+          >
+            <svg className='absolute inset-0 size-full' viewBox='0 0 16 16'>
+              <rect width='16' height='16' rx='2' fill={backgroundColor} />
+            </svg>
+            <span className='relative'>{name.charAt(0).toUpperCase() || 'W'}</span>
+          </span>
+        )}
+        <span className='flex min-w-0 text-[var(--text-body)]'>
+          <span className='truncate'>{name}</span>
+          {isCurrent && <span className='flex-shrink-0 whitespace-pre'> (current)</span>}
+        </span>
+        {meta && <ItemMeta meta={meta} />}
+      </Command.Item>
+    )
+  },
+  (prev, next) =>
+    prev.value === next.value &&
+    prev.name === next.name &&
+    prev.isCurrent === next.isCurrent &&
+    prev.logoUrl === next.logoUrl &&
+    prev.color === next.color &&
+    prev.meta === next.meta
+)
+
+export const MemoizedPageItem = memo(
+  function PageItem({
+    value,
+    onSelect,
+    icon: Icon,
+    name,
+    shortcut,
+    meta,
+  }: {
+    value: string
+    onSelect: () => void
+    icon: ComponentType<{ className?: string }>
+    name: string
+    shortcut?: string
+  } & ResultMetaProps) {
+    return (
+      <Command.Item value={value} onSelect={onSelect} className={COMMAND_ITEM_CLASSNAME}>
+        <Icon className='size-[16px] flex-shrink-0 text-[var(--text-icon)]' />
+        <span className='truncate text-[var(--text-body)]'>{name}</span>
+        {meta ? <ItemMeta meta={meta} /> : shortcut ? <ShortcutHint shortcut={shortcut} /> : null}
+      </Command.Item>
+    )
+  },
+  (prev, next) =>
+    prev.value === next.value &&
+    prev.icon === next.icon &&
+    prev.name === next.name &&
+    prev.shortcut === next.shortcut &&
+    prev.meta === next.meta
+)
+
+export const MemoizedIconItem = memo(
+  function IconItem({
+    value,
+    onSelect,
+    name,
+    icon: Icon,
+    folderPath,
+    meta,
+  }: {
+    value: string
+    onSelect: () => void
+    name: string
+    icon: ComponentType<{ className?: string }>
+    folderPath?: string[]
+  } & ResultMetaProps) {
+    return (
+      <Command.Item value={value} onSelect={onSelect} className={COMMAND_ITEM_CLASSNAME}>
+        <Icon className='size-[16px] flex-shrink-0 text-[var(--text-icon)]' />
+        <span className='flex min-w-0 max-w-[75%] flex-shrink-0 text-[var(--text-body)]'>
+          <span className='truncate'>{name}</span>
+        </span>
+        {meta ? (
+          <ItemMeta meta={meta} />
+        ) : folderPath && folderPath.length > 0 ? (
+          <ItemFolderPath folderPath={folderPath} />
+        ) : null}
+      </Command.Item>
+    )
+  },
+  (prev, next) =>
+    prev.value === next.value &&
+    prev.name === next.name &&
+    prev.icon === next.icon &&
+    prev.meta === next.meta &&
+    sameFolderPath(prev.folderPath, next.folderPath)
+)

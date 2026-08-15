@@ -1,0 +1,378 @@
+import { createLogger } from '@sim/logger'
+import { permissionSatisfies } from '@sim/platform-authz/workspace'
+import { toError } from '@sim/utils/errors'
+import { NextResponse } from 'next/server'
+import {
+  createTableColumnBodySchema,
+  deleteTableColumnBodySchema,
+  updateTableColumnBodySchema,
+} from '@/lib/api/contracts/tables'
+import { isFeatureEnabled } from '@/lib/core/config/feature-flags'
+import {
+  asOrchestrationError,
+  messageForOrchestrationError,
+  type OrchestrationErrorCode,
+  statusForOrchestrationError,
+} from '@/lib/core/orchestration/types'
+import type { MultipartError } from '@/lib/core/utils/multipart'
+import type { ColumnDefinition, Filter, TableDefinition, TablePredicate } from '@/lib/table'
+import { buildFilterClause, getTableById, TableQueryValidationError } from '@/lib/table'
+import { typeMetadataOf } from '@/lib/table/column-types'
+import { USER_TABLE_ROWS_SQL_NAME } from '@/lib/table/constants'
+import { TableLockedError } from '@/lib/table/mutation-locks'
+import { isTablePredicate } from '@/lib/table/query-builder/converters'
+import { validateStoragePredicate } from '@/lib/table/query-builder/validate'
+import type { TableLockKind } from '@/lib/table/types'
+import { getUserEntityPermissions } from '@/lib/workspaces/permissions/utils'
+import { getWorkspaceOrganizationId } from '@/lib/workspaces/utils'
+
+/**
+ * Gate for the v2 tables HTTP API (`tables-v2-api` flag). Returns a 404 response
+ * when the flag is off for the caller — the surface behaves as if it doesn't
+ * exist — or `null` to proceed. Gated by userId + the workspace's org cohort.
+ *
+ * **Call this AFTER the authz check, never before.** Ahead of authz it does a
+ * primary-DB read keyed on a caller-supplied `workspaceId`, and the 404-vs-403
+ * split tells an unauthorized caller whether that workspace's org is in the
+ * rollout cohort.
+ */
+export async function tablesV2GateError(
+  userId: string,
+  workspaceId: string
+): Promise<NextResponse | null> {
+  const orgId = await getWorkspaceOrganizationId(workspaceId)
+  if (await isFeatureEnabled('tables-v2-api', { userId, orgId })) return null
+  return NextResponse.json({ error: 'Not found' }, { status: 404 })
+}
+
+/**
+ * Maps a {@link TableLockedError} thrown by the service layer to a 423 response
+ * carrying `{ error, lock }`; returns `null` for any other error so the caller
+ * falls through to its existing handling. Call this as the FIRST statement of a
+ * table route's catch block — `TableLockedError` is an `HttpError`, not an
+ * `OrchestrationError`, so nothing else classifies it and it would otherwise
+ * reach the route's generic 500.
+ *
+ * The body deliberately omits a `details` array: the client's `isValidationError`
+ * treats any `ApiClientError` with array-valued `details` as a field-validation
+ * error and swallows its toast, so a lock rejection must not carry one.
+ */
+export function tableLockErrorResponse(error: unknown): NextResponse | null {
+  if (error instanceof TableLockedError) {
+    return NextResponse.json({ error: error.message, lock: error.lock }, { status: 423 })
+  }
+  return null
+}
+
+/**
+ * Validates a wire `filter` (either grammar) against the table's column schema,
+ * returning a 400 response on a bad field (or `null` when the filter is valid or
+ * absent). Shared by the routes that accept a filter (`delete-async`,
+ * `cancel-runs`, `columns/run`) so a bad field fails fast with a clear message.
+ *
+ * Pass the WIRE filter, not the `toLegacyFilter` downgrade: the downgrade
+ * compiles cleanly through `buildFilterClause` even when a predicate leaf names
+ * a column that doesn't exist, so validating only the downgraded form lets a
+ * typo'd field become a clause that silently matches nothing — a no-op where
+ * the sync bulk routes 400.
+ */
+export function tableFilterError(
+  filter: Filter | TablePredicate | undefined,
+  columns: ColumnDefinition[]
+): NextResponse | null {
+  if (!filter) return null
+  try {
+    if (isTablePredicate(filter)) {
+      // These routes speak storage keys (session grid uses column ids; system
+      // columns keep their names) — same keying the sync bulk routes validate.
+      validateStoragePredicate(filter, columns)
+    } else {
+      buildFilterClause(filter, USER_TABLE_ROWS_SQL_NAME, columns)
+    }
+    return null
+  } catch (error) {
+    if (error instanceof TableQueryValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    throw error
+  }
+}
+
+const logger = createLogger('TableUtils')
+
+/**
+ * Deepest `Error` message in the cause chain. Drizzle wraps DB errors in a
+ * `DrizzleQueryError` whose own message is just the failed SQL — substring
+ * classification must look at the root cause.
+ */
+export function rootErrorMessage(error: unknown): string {
+  let current: unknown = error
+  while (current instanceof Error && current.cause instanceof Error) {
+    current = current.cause
+  }
+  return toError(current).message
+}
+
+/**
+ * Maps a classified domain failure to its status, carrying the real message so
+ * client toasts can show the actual reason; `null` when the error carries no
+ * classification and the caller should log it and return its own generic 500 —
+ * an unrecognized error can hold SQL/internals that don't belong in a toast.
+ *
+ * This is the whole classification story for the UI and v1 table routes. It
+ * replaced per-route lists of message substrings, which decided a status by
+ * searching prose and so silently changed one whenever a message was reworded.
+ */
+export function orchestrationErrorResponse(error: unknown): NextResponse | null {
+  // A lock violation is a 423, and `TableLockedError` is an `HttpError` rather
+  // than an `OrchestrationError`, so it needs its own check first.
+  const lockResponse = tableLockErrorResponse(error)
+  if (lockResponse) return lockResponse
+
+  const classified = asOrchestrationError(error)
+  if (!classified) return null
+
+  return NextResponse.json(
+    { error: classified.message },
+    { status: statusForOrchestrationError(classified.code) }
+  )
+}
+
+/**
+ * The failure half of a `lib/table/orchestration` result. Every `perform*`
+ * function returns this shape, so one projection serves all of them.
+ */
+export interface TableOrchestrationFailure {
+  error?: string
+  errorCode?: OrchestrationErrorCode
+  /** Which lock rejected the write. Set only when `errorCode` is `'locked'`. */
+  lock?: TableLockKind
+}
+
+/**
+ * Projects an orchestration failure RESULT onto its HTTP response, the
+ * counterpart of {@link orchestrationErrorResponse} for the functions that
+ * return a failure instead of throwing one.
+ *
+ * Routes go through this rather than reading `outcome.error` themselves, for
+ * two reasons the per-route spellings kept getting wrong:
+ *
+ * - An unclassified failure carries whatever text the fault happened to have —
+ *   a driver's failed SQL and its bound parameters — so it renders `fallback`
+ *   instead. Only a classified, caller-fixable failure keeps its own message.
+ * - A `'locked'` failure answers 423 with `{ error, lock }`. The lock kind is
+ *   the only thing that tells a client which lock to clear, and it is computed
+ *   by every `perform*` function already.
+ */
+export function orchestrationOutcomeErrorResponse(
+  outcome: TableOrchestrationFailure,
+  fallback: string
+): NextResponse {
+  return NextResponse.json(
+    {
+      error: messageForOrchestrationError(outcome, fallback),
+      ...(outcome.lock ? { lock: outcome.lock } : {}),
+    },
+    { status: statusForOrchestrationError(outcome.errorCode) }
+  )
+}
+
+/**
+ * Next.js buffers the request body for the proxy and silently truncates it past this
+ * size (`experimental.proxyClientMaxBodySize`, default 10MB). The synchronous CSV
+ * import routes reject bodies over the cap up front; larger files use the async
+ * direct-to-storage path instead.
+ */
+export const CSV_IMPORT_PROXY_BODY_CAP_BYTES = 10 * 1024 * 1024
+
+/** 413 response when a synchronous CSV upload would exceed (and be truncated at) the proxy cap; `null` otherwise. */
+export function csvProxyBodyCapResponse(request: { headers: Headers }): NextResponse | null {
+  const contentLength = Number(request.headers.get('content-length') ?? 0)
+  if (contentLength > CSV_IMPORT_PROXY_BODY_CAP_BYTES) {
+    return NextResponse.json(
+      {
+        error:
+          'File too large to import through the server. Files over 10MB import in the background.',
+      },
+      { status: 413 }
+    )
+  }
+  return null
+}
+
+/** Maps a {@link MultipartError} from the streaming CSV parser to its HTTP response. */
+export function multipartErrorResponse(error: MultipartError): NextResponse {
+  if (error.code === 'FILE_TOO_LARGE') {
+    return NextResponse.json({ error: 'CSV import file exceeds maximum size' }, { status: 413 })
+  }
+  const message =
+    error.code === 'NO_FILE' ? 'CSV file is required' : `Invalid CSV upload: ${error.message}`
+  return NextResponse.json({ error: message }, { status: 400 })
+}
+
+interface TableAccessResult {
+  hasAccess: true
+  table: TableDefinition
+}
+
+interface TableAccessDenied {
+  hasAccess: false
+  notFound?: boolean
+  reason?: string
+}
+
+export type TableAccessCheck = TableAccessResult | TableAccessDenied
+
+export type AccessResult = { ok: true; table: TableDefinition } | { ok: false; status: 404 | 403 }
+
+interface ApiErrorResponse {
+  error: string
+  details?: unknown
+}
+
+/**
+ * Check if a user has read access to a table.
+ * Read access requires any workspace permission (read, write, or admin).
+ */
+async function checkTableAccess(tableId: string, userId: string): Promise<TableAccessCheck> {
+  const table = await getTableById(tableId)
+
+  if (!table) {
+    return { hasAccess: false, notFound: true }
+  }
+
+  const userPermission = await getUserEntityPermissions(userId, 'workspace', table.workspaceId)
+  if (userPermission !== null) {
+    return { hasAccess: true, table }
+  }
+
+  return { hasAccess: false, reason: 'User does not have access to this table' }
+}
+
+/**
+ * Check if a user has write access to a table.
+ * Write access requires write or admin workspace permission.
+ */
+async function checkTableWriteAccess(tableId: string, userId: string): Promise<TableAccessCheck> {
+  const table = await getTableById(tableId)
+
+  if (!table) {
+    return { hasAccess: false, notFound: true }
+  }
+
+  const userPermission = await getUserEntityPermissions(userId, 'workspace', table.workspaceId)
+  if (permissionSatisfies(userPermission, 'write')) {
+    return { hasAccess: true, table }
+  }
+
+  return { hasAccess: false, reason: 'User does not have write access to this table' }
+}
+
+/**
+ * Access check returning `{ ok, table }` or `{ ok: false, status }`.
+ * Uses workspace permissions only.
+ */
+export async function checkAccess(
+  tableId: string,
+  userId: string,
+  level: 'read' | 'write' | 'admin' = 'read'
+): Promise<AccessResult> {
+  const table = await getTableById(tableId)
+
+  if (!table) {
+    return { ok: false, status: 404 }
+  }
+
+  const permission = await getUserEntityPermissions(userId, 'workspace', table.workspaceId)
+  const hasAccess = permissionSatisfies(permission, level)
+
+  return hasAccess ? { ok: true, table } : { ok: false, status: 403 }
+}
+
+export function accessError(
+  result: { ok: false; status: 404 | 403 },
+  requestId: string,
+  context?: string
+): NextResponse {
+  const message = result.status === 404 ? 'Table not found' : 'Access denied'
+  logger.warn(`[${requestId}] ${message}${context ? `: ${context}` : ''}`)
+  return NextResponse.json({ error: message }, { status: result.status })
+}
+
+/**
+ * Converts a TableAccessDenied result to an appropriate HTTP response.
+ * Use with checkTableAccess or checkTableWriteAccess.
+ */
+export function tableAccessError(
+  result: TableAccessDenied,
+  requestId: string,
+  context?: string
+): NextResponse {
+  const status = result.notFound ? 404 : 403
+  const message = result.notFound ? 'Table not found' : (result.reason ?? 'Access denied')
+  logger.warn(`[${requestId}] ${message}${context ? `: ${context}` : ''}`)
+  return NextResponse.json({ error: message }, { status })
+}
+
+async function verifyTableWorkspace(tableId: string, workspaceId: string): Promise<boolean> {
+  const table = await getTableById(tableId)
+  return table?.workspaceId === workspaceId
+}
+
+export function errorResponse(
+  message: string,
+  status: number,
+  details?: unknown
+): NextResponse<ApiErrorResponse> {
+  const body: ApiErrorResponse = { error: message }
+  if (details !== undefined) {
+    body.details = details
+  }
+  return NextResponse.json(body, { status })
+}
+
+export function badRequestResponse(message: string, details?: unknown) {
+  return errorResponse(message, 400, details)
+}
+
+export function unauthorizedResponse(message = 'Authentication required') {
+  return errorResponse(message, 401)
+}
+
+export function forbiddenResponse(message = 'Access denied') {
+  return errorResponse(message, 403)
+}
+
+export function notFoundResponse(message = 'Resource not found') {
+  return errorResponse(message, 404)
+}
+
+export function serverErrorResponse(message = 'Internal server error') {
+  return errorResponse(message, 500)
+}
+
+/**
+ * Re-exports from `lib/api/contracts/tables` so existing routes that import
+ * these names keep working while sharing a single source of truth.
+ */
+export const CreateColumnSchema = createTableColumnBodySchema
+export const UpdateColumnSchema = updateTableColumnBodySchema
+export const DeleteColumnSchema = deleteTableColumnBodySchema
+
+export function normalizeColumn(
+  col: ColumnDefinition
+): ColumnDefinition & { required: boolean; unique: boolean } {
+  return {
+    // Preserve the stable column id — it's the row-data storage key, so dropping
+    // it makes clients fall back to `name` and miss id-keyed cell values.
+    ...(col.id ? { id: col.id } : {}),
+    name: col.name,
+    type: col.type,
+    required: col.required ?? false,
+    unique: col.unique ?? false,
+    ...(col.workflowGroupId ? { workflowGroupId: col.workflowGroupId } : {}),
+    // Type-specific metadata is forwarded generically: naming keys here meant a
+    // new type's metadata was stored server-side but silently never returned.
+    ...typeMetadataOf(col),
+  }
+}

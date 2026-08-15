@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { splitReferenceSegment } from '@/lib/workflows/sanitization/references'
 import type { WorkflowSearchRange } from '@/lib/workflows/search-replace/types'
-const WORKFLOW_SEARCH_HIGHLIGHT_CLASS = 'workflow-search-highlight'
+import { WORKFLOW_SEARCH_HIGHLIGHT_CLASS } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/constants'
 import { normalizeName, REFERENCE } from '@/executor/constants'
 import { createCombinedPattern } from '@/executor/utils/reference-validation'
 

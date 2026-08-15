@@ -1,6 +1,6 @@
 # Sim workspace source baseline
 
-This directory contains the non-workflow workspace source closure imported from
+This directory contains the native Sim workspace source closure imported from
 Sim v0.8.0 at commit `48c59c8a` (the fixed
 implementation baseline for this migration). Sim is distributed under the
 Apache License 2.0; the upstream notice is retained in
@@ -33,16 +33,15 @@ workspace routes.
    `/api/v1` to FastAPI through `LINGXILEARN_API_ORIGIN`.
 3. LingxiGraph task events replace Sim's workflow chat transport. Resource
    references and skill snapshots are carried on task requests.
-4. Workflow editor/CRUD, canvas, deployment, schedules, workflow columns,
-   enrichment, dispatch and connector management are intentionally absent.
-   `/w/**` therefore has no App Router page and returns 404; `/integrations`
-   redirects to `/skills`.
+4. Native workflow editor/CRUD, canvas, deployment, schedules, workflow
+   columns, enrichment, dispatch and connector source are restored from the
+   pinned Sim tag. Their adaptation to the current LingxiLearn/FastAPI/
+   LingxiGraph interfaces is intentionally deferred.
 5. Realtime collaboration is disabled. File editing is single-writer and table
    updates use the HTTP API; no Yjs, Socket.IO, Redis or S3 service is added.
 
 ## Upgrade procedure
 
 When upgrading Sim, update the pinned commit and the manifest in the same
-change, re-run the native source-closure type check, backend contract tests and
-the standalone production build. Do not copy workflow routes or reintroduce
-workflow resource registrations while resolving upstream changes.
+change, then re-run the native source-closure checks. Keep backend adaptation
+separate while the underlying interfaces are being reworked.
