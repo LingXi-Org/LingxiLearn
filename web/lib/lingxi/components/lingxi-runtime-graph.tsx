@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type SVGProps } from 'react'
 import ReactFlow, {
   EdgeLabelRenderer,
   Handle,
@@ -16,11 +16,42 @@ import { AgentIcon, CodeIcon, SlackIcon, StartIcon, TableIcon } from '@/componen
 import { StageBlockCard } from '@/app/(landing)/components/hero/components/hero-platform-loop/stage-block-card'
 import type { BlockDef } from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
 import type { EdgeRunStatus } from '@sim/workflow-renderer'
+import type { AgentTaskEvent } from '../types'
 import { layoutRuntimeGraph } from '../runtime-graph-layout'
 
 interface RuntimeGraphProps {
   taskId: string
   workflowState?: Record<string, unknown> | null
+  events?: AgentTaskEvent[]
+}
+
+const DICEBEAR_AGENT_AVATAR = 'https://api.dicebear.com/10.x/voxel-bot/svg?seed=Felix'
+const DICEBEAR_SKILL_ICON = 'https://api.dicebear.com/10.x/rings/svg?seed=pbqpdi5z'
+
+function DiceBearAgentAvatar(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
+      <image
+        href={DICEBEAR_AGENT_AVATAR}
+        width="24"
+        height="24"
+        preserveAspectRatio="xMidYMid slice"
+      />
+    </svg>
+  )
+}
+
+function DiceBearSkillIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
+      <image
+        href={DICEBEAR_SKILL_ICON}
+        width="24"
+        height="24"
+        preserveAspectRatio="xMidYMid slice"
+      />
+    </svg>
+  )
 }
 
 function blockState(data: Record<string, unknown>) {
@@ -32,7 +63,7 @@ function runtimeIcon(type: string) {
   if (type.includes('table')) return TableIcon
   if (type.includes('slack')) return SlackIcon
   if (type.includes('code') || type.includes('function')) return CodeIcon
-  return AgentIcon
+  return DiceBearAgentAvatar
 }
 
 /**
@@ -68,7 +99,12 @@ function runtimeRows(block: Record<string, unknown>) {
       title: '节点类型',
       value: metadata.nodeKind === 'deterministic' ? '确定性执行' : '智能体 / 服务提供方',
     })
-    if (metadata.capability) rows.push({ title: '能力', value: runtimeLabel(metadata.capability) })
+    if (metadata.capability)
+      rows.push({
+        title: '能力',
+        value: runtimeLabel(metadata.capability),
+        valueIcon: DiceBearSkillIcon,
+      })
     if (metadata.provider)
       rows.push({ title: '服务提供方', value: runtimeLabel(metadata.provider) })
     if (metadata.knowledgePointId)
@@ -83,6 +119,11 @@ function runtimeRows(block: Record<string, unknown>) {
       return {
         title: runtimeLabel(item.title ?? item.label ?? '详情'),
         value: runtimeLabel(item.value ?? '-'),
+        ...(String(item.title ?? item.label ?? '')
+          .toLowerCase()
+          .includes('skill')
+          ? { valueIcon: DiceBearSkillIcon }
+          : {}),
       }
     })
   }
@@ -304,6 +345,16 @@ registerCapability({ label: 'Tutor', type: 'agent', nodeKind: 'agent' }, [
   'dialog.negotiate',
   'negotiator',
 ])
+registerCapability({ label: '学习陪伴', type: 'agent', nodeKind: 'agent' }, [
+  '学习陪伴',
+  'learning_companion',
+  'dialog.converse',
+])
+registerCapability({ label: '主动追问', type: 'agent', nodeKind: 'agent' }, [
+  '主动追问',
+  'probe_user',
+  'dialog.probe',
+])
 registerCapability({ label: 'Adaptive Tutor', type: 'agent', nodeKind: 'agent' }, [
   'Adaptive Tutor',
   'adaptive_tutor',
@@ -469,7 +520,7 @@ function semanticGraph(
   return { blocks, edges }
 }
 
-export function LingxiRuntimeGraph({ taskId, workflowState }: RuntimeGraphProps) {
+export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: RuntimeGraphProps) {
   const previousPositions = useRef<Record<string, { x: number; y: number }>>({})
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null)
   const graph = workflowState ?? {}
@@ -509,6 +560,17 @@ export function LingxiRuntimeGraph({ taskId, workflowState }: RuntimeGraphProps)
   }, [blocks, edges])
   const metadata = (graph.metadata as Record<string, unknown> | undefined) ?? {}
   const running = !Boolean(graph.terminal ?? metadata.terminal)
+  const latestStatusText = [...events]
+    .reverse()
+    .map((event) => {
+      const payload = event.payload as Record<string, unknown>
+      return event.kind === 'agent.status'
+        ? String(payload.text ?? '')
+        : event.kind === 'agent.output'
+          ? String(payload.message ?? payload.text ?? '')
+          : ''
+    })
+    .find(Boolean)
   const nodes = useMemo<Node[]>(
     () =>
       Object.entries(blocks).map(([id, block]) => ({
@@ -581,7 +643,12 @@ export function LingxiRuntimeGraph({ taskId, workflowState }: RuntimeGraphProps)
       </div>
     )
   return (
-    <div className="h-full w-full overflow-auto bg-[var(--surface-1)]">
+    <div className="relative h-full w-full overflow-auto bg-[var(--surface-1)]">
+      {latestStatusText && (
+        <div className="pointer-events-none absolute left-4 right-4 top-3 z-10 rounded-lg border border-[var(--border-1)] bg-[var(--surface-2)]/95 px-3 py-2 text-xs text-[var(--text-body)] shadow-sm">
+          {latestStatusText}
+        </div>
+      )}
       <ReactFlowProvider>
         <ReactFlow
           nodes={nodes}

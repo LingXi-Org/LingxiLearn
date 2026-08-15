@@ -1,6 +1,5 @@
 'use client'
 
-import type { SVGProps } from 'react'
 import {
   AgentIcon,
   ConditionalIcon,
@@ -36,35 +35,6 @@ export interface WorkflowsEditorLoopProps {
   runtime?: WorkflowsEditorRuntime
   /** Render the graph as a live workspace panel instead of the decorative loop. */
   live?: boolean
-}
-
-const DICEBEAR_AGENT_AVATAR = 'https://api.dicebear.com/10.x/voxel-bot/svg?seed=Felix'
-const DICEBEAR_SKILL_ICON = 'https://api.dicebear.com/10.x/rings/svg?seed=pbqpdi5z'
-
-function DiceBearAgentAvatar(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-      <image
-        href={DICEBEAR_AGENT_AVATAR}
-        width="24"
-        height="24"
-        preserveAspectRatio="xMidYMid slice"
-      />
-    </svg>
-  )
-}
-
-function DiceBearSkillIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-      <image
-        href={DICEBEAR_SKILL_ICON}
-        width="24"
-        height="24"
-        preserveAspectRatio="xMidYMid slice"
-      />
-    </svg>
-  )
 }
 
 /**
@@ -176,21 +146,11 @@ const WORKFLOWS_EDITOR_CONTENT: EditorLoopContent = {
   selectedBlockId: 'agent',
 }
 
-interface WorkspaceAgentDefinition {
-  id: string
-  name: string
-  skill: string
-  icon: typeof AgentIcon
-  bgColor: string
-  x: number
-  y: number
-}
-
-const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
+const WORKSPACE_AGENT_DEFS = [
   {
     id: 'global_router',
     name: '全局路由',
-    skill: '全局编排',
+    skill: 'global-router',
     icon: ConditionalIcon,
     bgColor: 'var(--text-primary)',
     x: 555,
@@ -198,8 +158,8 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   },
   {
     id: 'knowledge_deep_dive',
-    name: '知识深度分析',
-    skill: '知识深度分析',
+    name: 'Knowledge Deep Dive',
+    skill: 'knowledge_deep_dive',
     icon: AgentIcon,
     bgColor: 'var(--brand-accent)',
     x: 555,
@@ -207,8 +167,8 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   },
   {
     id: 'practice',
-    name: '自适应练习',
-    skill: '自适应测评',
+    name: 'Adaptive Practice',
+    skill: 'assessment-builder',
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 100,
@@ -216,8 +176,8 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   },
   {
     id: 'review',
-    name: '检索复习',
-    skill: '检索练习',
+    name: 'Retrieval Review',
+    skill: 'retrieval',
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 330,
@@ -225,8 +185,8 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   },
   {
     id: 'learning_plan',
-    name: '学习路径',
-    skill: '课程知识图谱',
+    name: 'Learning Path',
+    skill: 'curriculum graph',
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 780,
@@ -234,8 +194,8 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   },
   {
     id: 'knowledge_map',
-    name: '知识地图',
-    skill: '课程知识图谱',
+    name: 'Knowledge Map',
+    skill: 'curriculum graph',
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 1010,
@@ -243,8 +203,8 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   },
   {
     id: 'direct_tutor',
-    name: '直接辅导',
-    skill: '自适应教学',
+    name: 'Direct Tutor',
+    skill: 'adaptive-pedagogy',
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 1010,
@@ -253,7 +213,7 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   {
     id: 'lecture_hook',
     name: '课程引入',
-    skill: '课程引入',
+    skill: 'lesson-intro',
     icon: AgentIcon,
     bgColor: 'var(--brand-accent)',
     x: 100,
@@ -262,7 +222,7 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   {
     id: 'interactive_lecture_deck',
     name: '交互式讲义',
-    skill: '交互式讲义',
+    skill: 'interactive-lecture-deck',
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 330,
@@ -271,7 +231,7 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   {
     id: 'quiz_generator',
     name: '知识检测',
-    skill: '知识检测',
+    skill: 'quiz-generator',
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 780,
@@ -280,7 +240,7 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   {
     id: 'interactive_visual_explainer',
     name: '可视化讲解',
-    skill: '可视化讲解',
+    skill: 'interactive-visual-explainer',
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 1010,
@@ -290,7 +250,7 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   {
     id: 'adaptive_pedagogy',
     name: '学习结果整合',
-    skill: '自适应教学',
+    skill: 'adaptive-pedagogy',
     icon: AgentIcon,
     bgColor: 'var(--text-primary)',
     x: 555,
@@ -298,8 +258,8 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   },
   {
     id: 'task_hub',
-    name: '任务中心',
-    skill: '任务交接',
+    name: '任务 Hub',
+    skill: 'handoff',
     icon: AgentIcon,
     bgColor: 'var(--text-primary)',
     x: 555,
@@ -307,14 +267,14 @@ const WORKSPACE_AGENT_DEFS: WorkspaceAgentDefinition[] = [
   },
   {
     id: 'session_end',
-    name: '学习反思',
-    skill: '元认知反思',
+    name: 'Session Reflection',
+    skill: 'metacognitive-reflection',
     icon: AgentIcon,
     bgColor: 'var(--text-primary)',
     x: 555,
     y: 1280,
   },
-]
+] as const
 
 const WORKSPACE_EDGES: ReadonlyArray<readonly [string, string]> = [
   ['start', 'global_router'],
@@ -345,46 +305,15 @@ const AGENT_LABELS: Record<string, string> = {
   intent: '全局路由',
   coordinator: '全局路由',
   global_router: '全局路由',
-  knowledge_deep_dive: '知识深度分析',
+  knowledge_deep_dive: 'Knowledge Deep Dive',
   lecture_hook: '课程引入',
   interactive_lecture_deck: '交互式讲义',
   quiz_generator: '知识检测',
   interactive_visual_explainer: '可视化讲解',
   adaptive_pedagogy: '学习结果整合',
-  answer_user: '直接辅导',
-  task_hub: '任务中心',
-  session_end: '学习反思',
-  practice: '自适应练习',
-  review: '检索复习',
-  learning_plan: '学习路径',
-  knowledge_map: '知识地图',
-  direct_tutor: '直接辅导',
-  learning_companion: '学习陪伴',
-  probe_user: '主动追问',
-}
-
-const RUNTIME_TEXT_LABELS: Record<string, string> = {
-  global_router: '全局编排',
-  adaptive_pedagogy: '自适应教学',
-  assessment_builder: '自适应测评',
-  curriculum_graph: '课程知识图谱',
-  interactive_lecture_deck: '交互式讲义',
-  interactive_visual_explainer: '可视化讲解',
-  lecture_deck: '讲义课件',
-  lesson_intro: '课程引入',
-  quiz_generator: '知识检测',
-  retrieval_practice_builder: '检索练习',
-  learning_companion: '学习陪伴',
-  probe_user: '主动追问',
-  answer_user: '直接辅导',
-  handoff: '任务交接',
-  model_reflect: '学习状态整理',
-  dialog_converse: '学习陪伴',
-  dialog_probe: '主动追问',
-  dialog_answer: '直接辅导',
-  content_deck: '交互式讲义',
-  content_visual: '可视化讲解',
-  content_lesson_intro: '课程引入',
+  answer_user: 'Direct Tutor',
+  task_hub: '任务 Hub',
+  session_end: 'Session Reflection',
 }
 
 const AGENT_NODE_ALIASES: Record<string, string> = {
@@ -395,80 +324,7 @@ const AGENT_NODE_ALIASES: Record<string, string> = {
 }
 
 function humanizeAgent(agent: string): string {
-  return RUNTIME_TEXT_LABELS[agent.replace(/[-.]/g, '_')] ?? '运行节点'
-}
-
-function localizeRuntimeText(value: string): string {
-  const normalized = value.replace(/[-.]/g, '_')
-  return RUNTIME_TEXT_LABELS[normalized] ?? value
-}
-
-/**
- * Lay out the live graph from dependency tiers. Every edge remains vertical:
- * its source is attached to the card's bottom center and its target to the
- * card's top center. A source may have any number of targets; each target is
- * assigned its own column in the next tier, so parallel branches never share
- * a card position or a side handle.
- */
-function layoutWorkspaceAgents(
-  definitions: WorkspaceAgentDefinition[],
-  edges: ReadonlyArray<readonly [string, string]>
-): { definitions: WorkspaceAgentDefinition[]; width: number; height: number } {
-  const ids = new Set(definitions.map((definition) => definition.id))
-  const ranks = new Map<string, number>(definitions.map((definition) => [definition.id, 0]))
-  const incomingFromDefinitions = new Set(
-    edges.filter(([from, to]) => ids.has(from) && ids.has(to)).map(([, to]) => to)
-  )
-  // The live canvas has a synthetic "学习任务" root outside this collection.
-  // Start every otherwise-unparented agent one tier below that root.
-  for (const definition of definitions) {
-    if (!incomingFromDefinitions.has(definition.id)) ranks.set(definition.id, 1)
-  }
-  for (let pass = 0; pass < definitions.length; pass += 1) {
-    let changed = false
-    for (const [from, to] of edges) {
-      if (!ids.has(from) || !ids.has(to)) continue
-      const nextRank = (ranks.get(from) ?? 0) + 1
-      if (nextRank > (ranks.get(to) ?? 0)) {
-        ranks.set(to, nextRank)
-        changed = true
-      }
-    }
-    if (!changed) break
-  }
-
-  const layers = new Map<number, WorkspaceAgentDefinition[]>()
-  for (const definition of definitions) {
-    const rank = ranks.get(definition.id) ?? 0
-    const layer = layers.get(rank) ?? []
-    layer.push(definition)
-    layers.set(rank, layer)
-  }
-
-  const cardWidth = 250
-  const columnGap = 42
-  const rowGap = 220
-  const marginX = 32
-  const marginY = 28
-  const maxLayerSize = Math.max(...Array.from(layers.values(), (layer) => layer.length), 1)
-  const width = Math.max(
-    760,
-    marginX * 2 + maxLayerSize * cardWidth + (maxLayerSize - 1) * columnGap
-  )
-  const height = marginY * 2 + (Math.max(...layers.keys(), 0) + 1) * rowGap
-
-  const positioned = definitions.map((definition) => {
-    const rank = ranks.get(definition.id) ?? 0
-    const layer = layers.get(rank) ?? [definition]
-    const index = layer.findIndex((item) => item.id === definition.id)
-    const layerWidth = layer.length * cardWidth + (layer.length - 1) * columnGap
-    return {
-      ...definition,
-      x: (width - layerWidth) / 2 + index * (cardWidth + columnGap),
-      y: marginY + rank * rowGap,
-    }
-  })
-  return { definitions: positioned, width, height }
+  return agent.replace(/[-_]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -585,8 +441,7 @@ export function projectWorkflowNodeActivities(
 function activityRows(activity: WorkflowNodeActivity, skill: string) {
   const latestMessage = activity.messages.at(-1) || '等待节点消息'
   const latestThought = activity.thoughts.at(-1) || '等待节点思考'
-  const skills =
-    activity.skills.length > 0 ? activity.skills.map(localizeRuntimeText).join(' · ') : skill
+  const skills = activity.skills.length > 0 ? activity.skills.join(' · ') : skill
   const status =
     activity.status === 'running'
       ? '执行中'
@@ -598,10 +453,10 @@ function activityRows(activity: WorkflowNodeActivity, skill: string) {
   return [
     { title: '状态', value: status },
     { title: '消息', value: compactText(latestMessage, 54) },
-    { title: '状态说明', value: compactText(latestThought, 54) },
-    { title: '能力', value: compactText(skills, 54), valueIcon: DiceBearSkillIcon },
+    { title: '思考', value: compactText(latestThought, 54) },
+    { title: 'Skill', value: compactText(skills, 54) },
     {
-      title: '追踪',
+      title: 'Trace',
       value: activity.executionId ? compactText(activity.executionId, 54) : '等待运行',
     },
   ]
@@ -615,22 +470,13 @@ function createWorkspaceContent(runtime: WorkflowsEditorRuntime): EditorLoopCont
     .map((id, index) => ({
       id,
       name: AGENT_LABELS[id] ?? humanizeAgent(id),
-      skill: localizeRuntimeText(id),
+      skill: humanizeAgent(id),
       icon: AgentIcon,
       bgColor: 'var(--text-secondary)',
       x: 100 + (index % 4) * 300,
       y: 1480 + Math.floor(index / 4) * 250,
-    })) as WorkspaceAgentDefinition[]
-  const graphEdges = [
-    ...WORKSPACE_EDGES,
-    ...additionalAgentDefs.map((definition) => ['global_router', definition.id] as const),
-  ]
-  const layout = layoutWorkspaceAgents(
-    [...WORKSPACE_AGENT_DEFS, ...additionalAgentDefs],
-    graphEdges
-  )
-  const agentDefs = layout.definitions
-  const rootX = agentDefs.find((definition) => definition.id === 'global_router')?.x ?? 555
+    }))
+  const agentDefs = [...WORKSPACE_AGENT_DEFS, ...additionalAgentDefs]
   const blocks = [
     {
       id: 'start',
@@ -639,21 +485,20 @@ function createWorkspaceContent(runtime: WorkflowsEditorRuntime): EditorLoopCont
       bgColor: 'var(--text-muted)',
       isTrigger: true,
       rows: [
-        {
-          title: '消息',
-          value: compactText(runtime.task?.prompt || '等待学习主题', 54),
-        },
-        { title: '节点', value: '灵犀运行图' },
+        { title: '消息', value: compactText(runtime.task?.prompt || '等待学习主题', 54) },
+        { title: '节点', value: 'LingxiGraph' },
       ],
-      x: rootX,
+      x: 555,
       y: 20,
     },
     ...agentDefs.map((definition) => ({
       ...definition,
-      icon: DiceBearAgentAvatar,
       rows: activityRows(activities[definition.id] ?? initialActivity(), definition.skill),
     })),
   ]
+  const additionalEdges: ReadonlyArray<readonly [string, string]> = additionalAgentDefs.map(
+    (definition) => ['global_router', definition.id] as const
+  )
   const active = Object.entries(activities)
     .filter(([, activity]) => activity.status === 'running')
     .sort(([, left], [, right]) => (right.lastSequence ?? 0) - (left.lastSequence ?? 0))[0]?.[0]
@@ -662,8 +507,8 @@ function createWorkspaceContent(runtime: WorkflowsEditorRuntime): EditorLoopCont
     sidebarChats: ['当前学习任务', '知识点复习', '错题回顾', '学习计划'],
     sidebarWorkflows: ['多智能体学习编排', '课程引入', '知识检测', '可视化讲解', '学习结果'],
     blocks,
-    edges: graphEdges,
-    canvas: { width: layout.width, height: layout.height },
+    edges: [...WORKSPACE_EDGES, ...additionalEdges],
+    canvas: { width: 1480, height: 1450 + Math.ceil(additionalAgentDefs.length / 4) * 250 },
     selectedBlockId: active || 'start',
   }
 }
@@ -673,15 +518,15 @@ function LiveWorkflowsEditor({ runtime }: { runtime: WorkflowsEditorRuntime }) {
   const visibleBlockIds = new Set(content.blocks.map((block) => block.id))
 
   return (
-    <div className="h-full min-h-[520px] w-full overflow-hidden rounded-[6px] border border-[var(--border)] bg-[var(--bg)]">
-      <div className="flex h-10 items-center justify-between border-[var(--border)] border-b px-3">
-        <div className="flex items-center gap-2 text-[var(--text-primary)] text-xs">
-          <span className="size-1.5 rounded-full bg-[var(--brand-accent)]" />
+    <div className='h-full min-h-[520px] w-full overflow-hidden rounded-[6px] border border-[var(--border)] bg-[var(--bg)]'>
+      <div className='flex h-10 items-center justify-between border-[var(--border)] border-b px-3'>
+        <div className='flex items-center gap-2 text-[var(--text-primary)] text-xs'>
+          <span className='size-1.5 rounded-full bg-[var(--brand-accent)]' />
           多智能体可视化编排
         </div>
-        <span className="text-[var(--text-muted)] text-[10px]">节点消息 · 状态说明 · 能力</span>
+        <span className='text-[var(--text-muted)] text-[10px]'>节点消息 · 思考 · Skill</span>
       </div>
-      <div className="h-[calc(100%-2.5rem)]">
+      <div className='h-[calc(100%-2.5rem)]'>
         <HeroWorkflowStage
           builtCount={content.blocks.length}
           blocks={content.blocks}

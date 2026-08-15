@@ -196,6 +196,7 @@ export const ResourceContent = memo(function ResourceContent({
       <LingxiRuntimeGraph
         taskId={resource.id.split(':')[1] ?? ''}
         workflowState={lingxiRuntime?.workflowState}
+        events={lingxiRuntime?.events}
       />
     )
   }

@@ -125,6 +125,10 @@ def test_runtime_loop_nodes_are_registered():
     ("alias", "label"),
     [
         ("answer_user", "Tutor"),
+        ("learning_companion", "Learning Companion"),
+        ("dialog.converse", "Learning Companion"),
+        ("probe_user", "Socratic Probe"),
+        ("dialog.probe", "Socratic Probe"),
         ("adaptive_pedagogy", "Adaptive Tutor"),
         ("lesson_intro", "Lesson Intro"),
         ("lecture_deck", "Lecture Deck"),
