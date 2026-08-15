@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import Image from 'next/image'
 import './profile-card.css'
 
 const ANIMATION_CONFIG = {
@@ -250,7 +251,15 @@ export function ProfileCard({
             <div className='pc-glare' aria-hidden='true' />
             <div className='pc-content pc-avatar-content'>
               {avatarUrl ? (
-                <img className='avatar' src={avatarUrl} alt={`${name}头像`} loading='lazy' />
+                <Image
+                  className='avatar'
+                  src={avatarUrl}
+                  alt={`${name}头像`}
+                  fill
+                  priority
+                  quality={72}
+                  sizes='(max-width: 768px) 100vw, 490px'
+                />
               ) : (
                 <div className='pc-avatar-placeholder' aria-label={`${name}头像占位`}>
                   <span>{name.slice(0, 1)}</span>
