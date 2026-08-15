@@ -1,8 +1,8 @@
 from pathlib import Path
 
+from lingxilearn.service import _SidecarRuntime
 from lingxilearn.state.capabilities import Capability
 from lingxilearn.state.skill_catalog import discover
-
 
 SKILLS = Path(__file__).resolve().parents[2] / "skills"
 
@@ -23,3 +23,28 @@ def test_realtime_conversation_capabilities_are_registry_backed() -> None:
 
 def test_every_discovered_skill_has_a_user_safe_status_line() -> None:
     assert all(manifest.status_line.strip() for manifest in discover(SKILLS))
+
+
+def test_sidecar_runtime_preserves_learner_facing_output() -> None:
+    runtime = _SidecarRuntime("dialog.converse")
+
+    runtime.emit(
+        "agent_task",
+        {
+            "type": "agent.output",
+            "agent": "learning_companion",
+            "stream_id": "task:dialog.converse:t1",
+            "message": "我已经收到你的问题，正在继续处理。",
+        },
+    )
+
+    assert runtime.events == [
+        {
+            "kind": "agent.output",
+            "agent": "learning_companion",
+            "payload": {
+                "stream_id": "task:dialog.converse:t1",
+                "message": "我已经收到你的问题，正在继续处理。",
+            },
+        }
+    ]

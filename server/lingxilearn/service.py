@@ -74,6 +74,32 @@ FLUSH_EVERY = 6
 AGENT_FLUSH_EVERY = 4
 """Batch size for persisting projections mid-run — small enough to feel live."""
 
+
+class _SidecarRuntime:
+    """Small runtime bridge for provider output emitted outside the graph.
+
+    Background sidecars do not have a compiled graph ``Runtime`` to bind to,
+    but providers still use the common ``emit`` helper.  Capturing those
+    events here lets the service persist them through the normal agent-event
+    stream, so learner-facing conversation output is not lost merely because
+    it ran while the foreground loop was busy.
+    """
+
+    context = None
+    cancellation = None
+
+    def __init__(self, agent: str) -> None:
+        self.agent = agent
+        self.events: list[dict[str, Any]] = []
+
+    def emit(self, _channel: str, event: dict[str, Any]) -> None:
+        kind = str(event.get("type") or "")
+        if not kind:
+            return
+        payload = _json_safe({key: value for key, value in event.items() if key != "type"})
+        agent = str(payload.pop("agent", self.agent))
+        self.events.append({"kind": kind, "agent": agent, "payload": payload})
+
 _AGENT_FORCE_FLUSH = frozenset(
     {
         "agent.started",
@@ -1707,29 +1733,23 @@ class Service:
                     rows = await self.repo.list_agent_sidecars(task_id, learner_id)
                     current = next((row for row in rows if row.get("kind") == "dialog.converse"), None)
                     current_input = dict(current.get("input") or {}).get("inputs") if current else None
-                    if (
-                        current is None
-                        or current.get("status") not in {"queued", "running"}
-                        or current_input == item
-                    ):
-                        await self.schedule_capability(
-                            task_id, learner_id, "dialog.converse", item
-                        )
-                        rows = await self.repo.list_agent_sidecars(task_id, learner_id)
-                        current = next(
-                            (row for row in rows if row.get("kind") == "dialog.converse"),
-                            None,
-                        )
-                    # If another conversation sidecar was already in flight,
-                    # wait for it and retry this exact queued message rather
-                    # than silently consuming the message while reusing the
-                    # unique (task_id, kind) row.
-                    if current is None or current.get("status") not in {"queued", "running"}:
-                        break
-                    if current_input is not None and current_input != item:
+                    if current is not None and current.get("status") in {"queued", "running"}:
                         await asyncio.sleep(0.05)
                         continue
-                    await asyncio.sleep(0.05)
+                    # A completed row with the same input is already the
+                    # response for this queue item.  Do not requeue it: the
+                    # unique (task_id, kind) sidecar row is reusable, but a
+                    # successful request must remain idempotent.
+                    if current is not None and current.get("status") == "succeeded" and current_input == item:
+                        break
+                    await self.schedule_capability(task_id, learner_id, "dialog.converse", item)
+                    rows = await self.repo.list_agent_sidecars(task_id, learner_id)
+                    current = next(
+                        (row for row in rows if row.get("kind") == "dialog.converse"),
+                        None,
+                    )
+                    if current is None:
+                        break
 
     async def _run_capability_sidecar(self, sidecar_id: str) -> None:
         async with self._sidecar_slots:
@@ -1744,6 +1764,7 @@ class Service:
         task_id = sidecar["task_id"]
         learner_id = sidecar["learner_id"]
         capability = str(sidecar["kind"])
+        capability_info = capability_details(capability)
         payload = dict(sidecar.get("input") or {})
 
         await self.repo.append_agent_events(
@@ -1785,6 +1806,14 @@ class Service:
                     user_message=dict(payload.get("inputs") or {}),
                 )
             )
+            sidecar_runtime = _SidecarRuntime(capability)
+            dispatcher.bind_runtime(
+                sidecar_runtime,
+                emit=lambda kind, event: sidecar_runtime.emit(
+                    EVENT_CHANNEL,
+                    {"type": kind, **dict(event)},
+                ),
+            )
             dispatcher.seed_results(prior_results)
             dispatcher.seed_artifacts(prior_artifacts)
 
@@ -1809,6 +1838,28 @@ class Service:
 
             if outcome.status == "failed":
                 raise RuntimeError(outcome.detail or f"{capability} failed")
+
+            # Persist provider telemetry, including the learner-facing
+            # ``agent.output`` emitted by the dedicated conversation agent.
+            # Sidecars have no graph runtime of their own, so this bridge is
+            # the only path by which their output can reach SSE consumers.
+            if (
+                capability_info.conversational
+                and outcome.learner_message
+                and not any(item.get("kind") == "agent.output" for item in sidecar_runtime.events)
+            ):
+                sidecar_runtime.emit(
+                    EVENT_CHANNEL,
+                    {
+                        "type": "agent.output",
+                        "agent": outcome.provider or capability,
+                        "message": outcome.learner_message,
+                        "stream_id": f"{task_id}:{capability}:{task.id}",
+                    },
+                )
+            if sidecar_runtime.events:
+                await self.repo.append_agent_events(task_id, sidecar_runtime.events)
+                self._notify_agent(task_id)
 
             for key, value in dispatcher.results.items():
                 # Revisions intentionally reuse the provider's persist key;
