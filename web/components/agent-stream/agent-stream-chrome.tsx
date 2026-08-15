@@ -224,7 +224,7 @@ export function AgentStreamToolCallsChrome({
         <ChevronDown
           className={cn('size-[14px] transition-transform', open ? 'rotate-0' : '-rotate-90')}
         />
-        <span>{isStreaming ? 'Using tools…' : 'Tools'}</span>
+        <span>{isStreaming ? '正在使用工具…' : '工具'}</span>
       </button>
       {open && (
         <ul className='mt-2 space-y-1.5 text-[var(--text-muted)] text-sm'>

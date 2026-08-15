@@ -246,7 +246,7 @@ export function FilesHeroLoop() {
           <div className='flex h-[44px] flex-shrink-0 items-center justify-between border-[var(--border)] border-b px-6'>
             <div className='flex items-center gap-3'>
               <File className='size-[14px] text-[var(--text-icon)]' />
-              <span className='font-medium text-[var(--text-body)] text-sm'>Files</span>
+              <span className='font-medium text-[var(--text-body)] text-sm'>文件</span>
             </div>
             <span className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
               <Plus className='mr-1.5 size-[14px] text-[var(--text-icon)]' />
@@ -257,7 +257,7 @@ export function FilesHeroLoop() {
           <div className='flex flex-shrink-0 items-center justify-between border-[var(--border)] border-b px-6 py-2.5'>
             <div className='flex flex-1 items-center gap-2.5'>
               <Search className='size-[14px] flex-shrink-0 text-[var(--text-icon)]' />
-              <span className='text-[var(--text-subtle)] text-caption'>Search files...</span>
+              <span className='text-[var(--text-subtle)] text-caption'>搜索文件…</span>
             </div>
             <div className='flex items-center gap-1.5'>
               <ToolbarChip

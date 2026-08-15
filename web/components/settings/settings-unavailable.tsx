@@ -21,7 +21,7 @@ export function SettingsUnavailable({
       <div className='flex max-w-md flex-col items-center gap-3 text-center'>
         <h1 className='text-[var(--text-body)] text-lg'>{title}</h1>
         <p className='text-[var(--text-muted)] text-sm'>{description}</p>
-        <ChipLink href='/workspace'>Back to workspaces</ChipLink>
+        <ChipLink href='/workspace'>返回工作区</ChipLink>
       </div>
     </div>
   )

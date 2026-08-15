@@ -66,7 +66,7 @@ export function SecretDetail({ workspaceId, credentialId }: SecretDetailProps) {
   if (isPending && !credential) {
     return (
       <CredentialDetailLayout back={back} actions={actions}>
-        <SettingsEmptyState variant='inline'>Loading…</SettingsEmptyState>
+        <SettingsEmptyState variant='inline'>正在加载…</SettingsEmptyState>
       </CredentialDetailLayout>
     )
   }
@@ -74,7 +74,7 @@ export function SecretDetail({ workspaceId, credentialId }: SecretDetailProps) {
   if (!credential) {
     return (
       <CredentialDetailLayout back={back} actions={actions}>
-        <SettingsEmptyState variant='inline'>Secret not found.</SettingsEmptyState>
+        <SettingsEmptyState variant='inline'>未找到此密钥。</SettingsEmptyState>
       </CredentialDetailLayout>
     )
   }

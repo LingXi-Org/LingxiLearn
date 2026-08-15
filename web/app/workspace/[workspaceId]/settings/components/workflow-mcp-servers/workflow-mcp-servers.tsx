@@ -379,7 +379,7 @@ function ServerDetailView({
   if (error || !data) {
     return (
       <SettingsPanel back={{ text: 'MCP servers', icon: ArrowLeft, onSelect: onBack }}>
-        <SettingsEmptyState tone='error'>Failed to load server details</SettingsEmptyState>
+        <SettingsEmptyState tone='error'>服务器详情加载失败</SettingsEmptyState>
       </SettingsPanel>
     )
   }
@@ -700,7 +700,7 @@ function ServerDetailView({
                         </div>
                         <div className='rounded-b-[4px] border-[var(--border-1)] border-t bg-[var(--surface-2)] px-2.5 pt-1.5 pb-2.5'>
                           <div className='flex flex-col gap-1.5'>
-                            <Label>Description</Label>
+                            <Label>描述</Label>
                             <ChipInput
                               value={editingParameterDescriptions[name] || ''}
                               onChange={(e) =>
@@ -802,7 +802,7 @@ function ServerDetailView({
           }}
           srTitle='Edit Server'
         >
-          <ChipModalHeader onClose={() => setShowEditServer(false)}>Edit Server</ChipModalHeader>
+          <ChipModalHeader onClose={() => setShowEditServer(false)}>编辑服务器</ChipModalHeader>
           <ChipModalBody>
             <ChipModalField
               type='input'
@@ -827,7 +827,7 @@ function ServerDetailView({
                   onValueChange={(value) => setEditServerIsPublic(value === 'public')}
                 >
                   <ButtonGroupItem value='private'>API Key</ButtonGroupItem>
-                  <ButtonGroupItem value='public'>Public</ButtonGroupItem>
+                  <ButtonGroupItem value='public'>公开</ButtonGroupItem>
                 </ButtonGroup>
                 <p className='text-[var(--text-muted)] text-caption'>
                   {editServerIsPublic

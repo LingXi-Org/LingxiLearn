@@ -131,7 +131,7 @@ export function ModelDirectory() {
 
       {!hasResults ? (
         <div className='px-6 py-12 text-center'>
-          <h3 className='text-[18px] text-[var(--text-primary)]'>No matches found</h3>
+          <h3 className='text-[18px] text-[var(--text-primary)]'>没有找到匹配项</h3>
           <p className='mt-2 text-[var(--text-muted)] text-sm leading-[150%]'>
             Try a provider name like OpenAI or Anthropic, or search for capabilities like
             &nbsp;structured outputs, reasoning, or deep research.

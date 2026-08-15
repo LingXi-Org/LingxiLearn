@@ -810,7 +810,7 @@ export function WorkflowSidebarBody({
         {isEditOutputMode && (
           <>
             <div className='flex flex-col gap-[9.5px]'>
-              <RequiredLabel htmlFor='workflow-sidebar-column-name'>Column name</RequiredLabel>
+              <RequiredLabel htmlFor='workflow-sidebar-column-name'>列名称</RequiredLabel>
               <ChipInput
                 id='workflow-sidebar-column-name'
                 value={columnNameInput}
@@ -840,7 +840,7 @@ export function WorkflowSidebarBody({
           <>
             <div className='flex flex-col gap-[9.5px]'>
               <div className='flex min-w-0 items-center justify-between gap-2 pl-0.5'>
-                <Label>Workflow preview</Label>
+                <Label>工作流预览</Label>
                 {!isEnrichment &&
                   startBlockInputs.blockId &&
                   missingInputColumnNames.length > 0 && (
@@ -902,7 +902,7 @@ export function WorkflowSidebarBody({
                             <SquareArrowUpRight className='size-[12px]' />
                           </Button>
                         </Tooltip.Trigger>
-                        <Tooltip.Content side='top'>Open workflow</Tooltip.Content>
+                        <Tooltip.Content side='top'>打开工作流</Tooltip.Content>
                       </Tooltip.Root>
                     )}
                   </>
@@ -920,7 +920,7 @@ export function WorkflowSidebarBody({
         )}
 
         <div className='flex flex-col gap-[9.5px]'>
-          <RequiredLabel>Workflow</RequiredLabel>
+          <RequiredLabel>工作流</RequiredLabel>
           <ChipCombobox
             options={workflows?.map((wf) => ({ label: wf.name, value: wf.id })) ?? []}
             value={selectedWorkflowId}
@@ -1022,15 +1022,15 @@ export function WorkflowSidebarBody({
                     {!isEnrichment && (
                       <>
                         <div className='flex items-center justify-between pl-0.5'>
-                          <Label>Workflow version</Label>
+                          <Label>工作流版本</Label>
                           <ButtonGroup
                             value={deploymentMode}
                             onValueChange={(v) =>
                               setDeploymentMode(v === 'deployed' ? 'deployed' : 'live')
                             }
                           >
-                            <ButtonGroupItem value='live'>Live</ButtonGroupItem>
-                            <ButtonGroupItem value='deployed'>Deployed</ButtonGroupItem>
+                            <ButtonGroupItem value='live'>实时</ButtonGroupItem>
+                            <ButtonGroupItem value='deployed'>已部署</ButtonGroupItem>
                           </ButtonGroup>
                         </div>
                         <FieldDivider />

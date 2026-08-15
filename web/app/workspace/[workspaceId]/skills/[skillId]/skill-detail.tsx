@@ -200,7 +200,7 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
   if ((skillsLoading || deleteSkill.isPending || deleteSkill.isSuccess) && !skill) {
     return (
       <CredentialDetailLayout back={back} actions={actions}>
-        <SettingsEmptyState variant='inline'>Loading…</SettingsEmptyState>
+        <SettingsEmptyState variant='inline'>正在加载…</SettingsEmptyState>
       </CredentialDetailLayout>
     )
   }
@@ -208,7 +208,7 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
   if (!skill) {
     return (
       <CredentialDetailLayout back={back} actions={actions}>
-        <SettingsEmptyState variant='inline'>Skill not found.</SettingsEmptyState>
+        <SettingsEmptyState variant='inline'>未找到此技能。</SettingsEmptyState>
       </CredentialDetailLayout>
     )
   }

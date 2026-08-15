@@ -39,9 +39,9 @@ export function ChatMessageContainer({
           {messages.length === 0 ? (
             <div className='flex flex-col items-center justify-center py-10'>
               <div className='space-y-2 text-center'>
-                <h3 className='text-[var(--text-primary)] text-lg'>How can I help you today?</h3>
+                <h3 className='text-[var(--text-primary)] text-lg'>今天想学什么？</h3>
                 <p className='text-[var(--text-muted)] text-sm'>
-                  {chatConfig?.description || 'Ask me anything.'}
+                  {chatConfig?.description || '你可以问我任何学习问题。'}
                 </p>
               </div>
             </div>
@@ -75,7 +75,7 @@ export function ChatMessageContainer({
             className='gap-1 rounded-full px-3 py-1 shadow-medium'
           >
             <ArrowDown className='size-3.5' />
-            <span className='sr-only'>Scroll to bottom</span>
+            <span className='sr-only'>滚动到底部</span>
           </Button>
         </div>
       )}

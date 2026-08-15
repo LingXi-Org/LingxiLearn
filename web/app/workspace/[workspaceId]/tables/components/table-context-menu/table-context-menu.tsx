@@ -125,7 +125,7 @@ export function TableContextMenu({
         {onCopyId && (
           <DropdownMenuItem onSelect={onCopyId}>
             <Duplicate />
-            Copy ID
+            复制 ID
           </DropdownMenuItem>
         )}
         {(onCopyId || onTogglePin) && onDelete && <DropdownMenuSeparator />}

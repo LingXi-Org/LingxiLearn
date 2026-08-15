@@ -112,7 +112,7 @@ export function GeneratedPasswordInput({
                 </Button>
               </Tooltip.Trigger>
               <Tooltip.Content>
-                <span>Generate</span>
+                <span>生成</span>
               </Tooltip.Content>
             </Tooltip.Root>
           ) : null}
@@ -130,7 +130,7 @@ export function GeneratedPasswordInput({
               </Button>
             </Tooltip.Trigger>
             <Tooltip.Content>
-              <span>{copied ? 'Copied' : 'Copy'}</span>
+                <span>{copied ? '已复制' : '复制'}</span>
             </Tooltip.Content>
           </Tooltip.Root>
           <Tooltip.Root>
@@ -153,7 +153,7 @@ export function GeneratedPasswordInput({
               </Button>
             </Tooltip.Trigger>
             <Tooltip.Content>
-              <span>{showPassword ? 'Hide' : 'Show'}</span>
+                <span>{showPassword ? '隐藏' : '显示'}</span>
             </Tooltip.Content>
           </Tooltip.Root>
         </div>

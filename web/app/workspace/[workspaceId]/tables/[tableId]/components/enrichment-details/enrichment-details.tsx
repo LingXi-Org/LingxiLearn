@@ -170,13 +170,13 @@ function EnrichmentDetailsContent({
           <div className='flex flex-col gap-2.5 pb-4'>
             <div className='grid grid-cols-2 gap-x-3 pb-0.5'>
               <div className='flex min-w-0 flex-col gap-0.5'>
-                <span className='text-[var(--text-tertiary)] text-caption'>Timestamp</span>
+                <span className='text-[var(--text-tertiary)] text-caption'>时间</span>
                 <span className='text-[var(--text-secondary)] text-sm tabular-nums'>
                   {timestamp ? `${timestamp.compactDate} ${timestamp.compactTime}` : '—'}
                 </span>
               </div>
               <div className='flex min-w-0 flex-col gap-0.5'>
-                <span className='text-[var(--text-tertiary)] text-caption'>Enrichment</span>
+                <span className='text-[var(--text-tertiary)] text-caption'>数据增强</span>
                 <span className='min-w-0 truncate text-[var(--text-secondary)] text-sm'>
                   {groupName || 'Enrichment'}
                 </span>
@@ -203,7 +203,7 @@ function EnrichmentDetailsContent({
 
             {lastError && (
               <div className='flex flex-col gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 dark:bg-transparent'>
-                <span className='text-[var(--text-error)] text-caption'>Error</span>
+                <span className='text-[var(--text-error)] text-caption'>错误</span>
                 <p className='break-words text-[var(--text-secondary)] text-caption'>{lastError}</p>
               </div>
             )}
@@ -361,7 +361,7 @@ export function EnrichmentDetails({
         {rowId && groupId && (
           <div className='flex h-full flex-col px-3.5 pt-3'>
             <div className='flex items-center justify-between'>
-              <h2 className='text-[var(--text-primary)] text-sm'>Enrichment Details</h2>
+              <h2 className='text-[var(--text-primary)] text-sm'>数据增强详情</h2>
               <Button variant='ghost' className='!p-1' onClick={onClose} aria-label='Close'>
                 <X className='size-[14px]' />
               </Button>

@@ -818,6 +818,43 @@ export const SETTINGS_SECTION_REGISTRY: readonly SettingsSectionRegistryEntry[] 
   },
 ]
 
+const SETTINGS_LABELS: Record<string, string> = {
+  General: '常规', Desktop: '桌面端', Browser: '浏览器', Terminal: '终端',
+  'Permission groups': '权限组', 'Audit logs': '审计日志', 'Workspace forks': '工作区分支',
+  Subscription: '订阅与计费', Teammates: '协作者', Members: '成员', Secrets: '密钥',
+  'Custom tools': '自定义工具', 'MCP tools': 'MCP 工具', 'Sim API keys': 'API 密钥',
+  'MCP servers': 'MCP 服务器', BYOK: '自带密钥（BYOK）', Sandboxes: '沙盒',
+  'Chat keys': '聊天密钥', 'Sim Mailer': '邮件触发器', 'Recently deleted': '最近删除',
+  'Self hosting': '自托管', 'Single sign-on': '单点登录', 'Session policies': '会话策略',
+  'Data retention': '数据留存', 'Data drains': '数据转发', 'White-labeling': '品牌定制',
+  'Custom blocks': '自定义模块', Admin: '管理员', Mothership: '平台管理',
+}
+
+const SETTINGS_DESCRIPTIONS: Record<string, string> = {
+  'Manage your profile, appearance, and preferences.': '管理个人资料、外观和偏好设置。',
+  'Manage notifications, startup, local folders, and updates.': '管理通知、启动项、本地文件夹和更新。',
+  'Control the browser Chat drives and the data it keeps.': '控制聊天驱动的浏览器以及其保存的数据。',
+  'Control the shells Chat runs commands in.': '控制聊天运行命令所使用的终端。',
+  'Manage permission groups across your organization.': '管理组织中的权限组。',
+  'Review activity and changes across your organization.': '查看组织中的活动和变更记录。',
+  'Manage your plan, pricing, and invoices.': '管理套餐、价格和发票。',
+  'Manage your personal plan, usage, and invoices.': '管理个人套餐、用量和发票。',
+  'Manage your teammates in this workspace.': '管理此工作区的协作者。',
+  'Manage organization members, roles, and seats.': '管理组织成员、角色和席位。',
+  'Store environment variables for your workflows.': '存储工作流使用的环境变量。',
+  'Create and manage custom tools for your agents.': '创建和管理智能体的自定义工具。',
+  'Connect external MCP servers and use their tools in this workspace.': '连接外部 MCP 服务器并在此工作区使用其工具。',
+  'Create and manage API keys for the Sim API.': '创建和管理 API 密钥。',
+  'Manage workspace API keys and personal-key policy.': '管理工作区 API 密钥和个人密钥策略。',
+  'Expose workflows from this workspace as tools on an MCP server.': '将此工作区的工作流作为 MCP 服务器工具公开。',
+  'Bring your own model-provider API keys.': '使用你自己的模型提供商 API 密钥。',
+  'Restore items deleted in the last 30 days.': '恢复最近 30 天内删除的项目。',
+  'Configure single sign-on for your organization.': '配置组织的单点登录。',
+}
+
+const settingsLabel = (value: string) => SETTINGS_LABELS[value] ?? value
+const settingsDescription = (value: string) => SETTINGS_DESCRIPTIONS[value] ?? value
+
 export function buildUnifiedSettingsNavigation(): UnifiedSettingsNavigationItem[] {
   return SETTINGS_SECTION_REGISTRY.flatMap(({ label, icon, docsLink, unified }) => {
     if (!unified) return []
@@ -828,7 +865,8 @@ export function buildUnifiedSettingsNavigation(): UnifiedSettingsNavigationItem[
     return [
       {
         ...item,
-        label,
+        label: settingsLabel(label),
+        description: settingsDescription(item.description),
         icon,
         section: group,
         ...(docsLink ? { docsLink } : {}),
@@ -854,8 +892,8 @@ function buildPlaneSettingsItems<Plane extends SettingsPlane>(
       }
       return {
         id: projection.id,
-        label: projection.label ?? entry.label,
-        description,
+        label: settingsLabel(projection.label ?? entry.label),
+        description: settingsDescription(description),
         icon: entry.icon,
         group: projection.group,
         ...(entry.docsLink ? { docsLink: entry.docsLink } : {}),

@@ -61,36 +61,36 @@ function signedOutPrompt({
   navigate,
 }: SignedOutPromptParams): { description: string; actions: InviteAction[] } {
   const signIn: InviteAction = {
-    label: 'Sign in',
+    label: '登录',
     onClick: () => navigate(inviteAuthLink('/login', callbackUrl)),
   }
 
   if (registrationDisabled) {
     return {
-      description: 'Account creation is disabled on this instance',
+      description: '此实例已关闭账户注册',
       actions: [signIn],
     }
   }
 
   if (isNewUser) {
     return {
-      description: 'Create an account to join this workspace on Sim',
+      description: '创建账户以加入此灵犀工作区',
       actions: [
         {
-          label: 'Create an account',
+          label: '创建账户',
           onClick: () => navigate(inviteAuthLink('/signup', callbackUrl)),
         },
-        { ...signIn, label: 'I already have an account' },
+        { ...signIn, label: '我已有账户' },
       ],
     }
   }
 
   return {
-    description: 'Sign in to your account to accept this invitation',
+    description: '登录账户以接受此邀请',
     actions: [
       signIn,
       {
-        label: 'Create an account',
+        label: '创建账户',
         onClick: () => navigate(inviteAuthLink('/signup', callbackUrl, true)),
       },
     ],
@@ -141,71 +141,71 @@ function getInviteError(code: string): InviteError {
   const errorMap: Record<string, InviteError> = {
     'missing-token': {
       code: 'missing-token',
-      message: 'The invitation link is invalid or missing a required parameter.',
+      message: '邀请链接无效或缺少必要参数。',
     },
     'invalid-token': {
       code: 'invalid-token',
-      message: 'The invitation link is invalid or has already been used.',
+      message: '邀请链接无效或已被使用。',
     },
     expired: {
       code: 'expired',
-      message: 'This invitation has expired. Please ask for a new invitation.',
+      message: '此邀请已过期，请请求新的邀请。',
     },
     'already-processed': {
       code: 'already-processed',
-      message: 'This invitation has already been accepted or declined.',
+      message: '此邀请已被接受或拒绝。',
     },
     'email-mismatch': {
       code: 'email-mismatch',
       message:
-        'This invitation was sent to a different email address. Please sign in with the correct account.',
+        '此邀请发送给了其他邮箱，请使用正确的账户登录。',
       requiresAuth: true,
     },
     'workspace-not-found': {
       code: 'workspace-not-found',
-      message: 'The workspace associated with this invitation could not be found.',
+      message: '找不到与此邀请关联的工作区。',
     },
     'disclosure-outdated': {
       code: 'disclosure-outdated',
       message:
-        'Your workspaces changed since this page loaded. Review the updated notice and accept again.',
+        '页面加载后你的工作区发生了变化，请查看最新提示并重新接受邀请。',
       canRetry: true,
     },
     'user-not-found': {
       code: 'user-not-found',
-      message: 'Your user account could not be found. Please try signing out and signing back in.',
+      message: '找不到你的用户账户，请退出后重新登录。',
       requiresAuth: true,
     },
     'already-member': {
       code: 'already-member',
-      message: 'You are already a member of this organization or workspace.',
+      message: '你已经是此组织或工作区的成员。',
     },
     'already-in-organization': {
       code: 'already-in-organization',
       message:
-        'You are already a member of an organization. Leave your current organization before accepting a new invitation.',
+        '你已经是某个组织的成员，请先离开当前组织再接受新邀请。',
     },
     'no-seats-available': {
       code: 'no-seats-available',
       message:
-        'This organization has reached its seat limit. Ask an admin to contact support to add seats, then try again.',
+        '此组织已达到席位上限，请让管理员联系支持团队增加席位后重试。',
       canRetry: true,
     },
     'upgrade-required': {
       code: 'upgrade-required',
       message:
-        'The workspace owner needs an active paid plan with billing set up before you can join. Ask them to update their plan, then try again.',
+        '工作区所有者需要启用付费套餐并完成计费设置后你才能加入，请让其更新套餐后重试。',
       canRetry: true,
     },
     'external-requires-paid-plan': {
       code: 'external-requires-paid-plan',
       message:
-        'External collaborators need their own paid Sim plan. Upgrade your plan, or ask the organization to re-invite you as a member — that uses one of their seats instead.',
+        '外部协作者需要自己的付费套餐。请升级套餐，或让组织以成员身份重新邀请你。',
       canRetry: true,
     },
     'invalid-invitation': {
       code: 'invalid-invitation',
-      message: 'This invitation is invalid or no longer exists.',
+      message: '此邀请无效或已不存在。',
     },
     'not-found': {
       code: 'invalid-invitation',
@@ -214,24 +214,24 @@ function getInviteError(code: string): InviteError {
     'server-error': {
       code: 'server-error',
       message:
-        'An unexpected error occurred while processing your invitation. Please try again later.',
+        '处理邀请时发生意外错误，请稍后重试。',
       canRetry: true,
     },
     unauthorized: {
       code: 'unauthorized',
-      message: 'You need to sign in to accept this invitation.',
+      message: '你需要登录才能接受此邀请。',
       requiresAuth: true,
     },
     forbidden: {
       code: 'forbidden',
       message:
-        'You do not have permission to accept this invitation. Please check you are signed in with the correct account.',
+        '你没有权限接受此邀请，请确认使用了正确的账户登录。',
       requiresAuth: true,
     },
     'network-error': {
       code: 'network-error',
       message:
-        'Unable to connect to the server. Please check your internet connection and try again.',
+        '无法连接服务器，请检查网络连接后重试。',
       canRetry: true,
     },
   }
@@ -240,7 +240,7 @@ function getInviteError(code: string): InviteError {
     errorMap[code] || {
       code: 'unknown',
       message:
-        'An unexpected error occurred while processing your invitation. Please try again or contact support.',
+        '处理邀请时发生意外错误，请重试或联系支持团队。',
       canRetry: true,
     }
   )
@@ -409,7 +409,7 @@ export default function Invite({ registrationDisabled }: InviteProps) {
           icon='userPlus'
           actions={[
             ...prompt.actions,
-            { label: 'Return to Home', onClick: () => router.push('/') },
+            { label: '返回首页', onClick: () => router.push('/') },
           ]}
         />
       </InviteLayout>
@@ -419,7 +419,7 @@ export default function Invite({ registrationDisabled }: InviteProps) {
   if (isLoading || isPending) {
     return (
       <InviteLayout>
-        <InviteStatusCard type='loading' title='' description='Loading invitation...' />
+        <InviteStatusCard type='loading' title='' description='正在加载邀请…' />
       </InviteLayout>
     )
   }
@@ -432,18 +432,18 @@ export default function Invite({ registrationDisabled }: InviteProps) {
         <InviteLayout>
           <InviteStatusCard
             type='warning'
-            title='Wrong Account'
+            title='账户不匹配'
             description={error.message}
             icon='userPlus'
             actions={[
               {
-                label: 'Sign in with a different account',
+                label: '使用其他账户登录',
                 onClick: async () => {
                   await client.signOut()
                   router.push(inviteAuthLink('/login', callbackUrl))
                 },
               },
-              { label: 'Return to Home', onClick: () => router.push('/') },
+              { label: '返回首页', onClick: () => router.push('/') },
             ]}
           />
         </InviteLayout>
@@ -455,12 +455,12 @@ export default function Invite({ registrationDisabled }: InviteProps) {
         <InviteLayout>
           <InviteStatusCard
             type='warning'
-            title='Already Part of a Team'
+            title='已经是团队成员'
             description={error.message}
             icon='users'
             actions={[
-              { label: 'Manage Team Settings', onClick: () => router.push('/workspace') },
-              { label: 'Return to Home', onClick: () => router.push('/') },
+              { label: '管理团队设置', onClick: () => router.push('/workspace') },
+              { label: '返回首页', onClick: () => router.push('/') },
             ]}
           />
         </InviteLayout>
@@ -472,23 +472,23 @@ export default function Invite({ registrationDisabled }: InviteProps) {
         <InviteLayout>
           <InviteStatusCard
             type='warning'
-            title='Authentication Required'
+            title='需要身份验证'
             description={error.message}
             icon='userPlus'
             actions={[
               {
-                label: 'Sign in to continue',
+                label: '登录后继续',
                 onClick: () => router.push(inviteAuthLink('/login', callbackUrl)),
               },
               ...(registrationDisabled
                 ? []
                 : [
                     {
-                      label: 'Create an account',
+                      label: '创建账户',
                       onClick: () => router.push(inviteAuthLink('/signup', callbackUrl)),
                     },
                   ]),
-              { label: 'Return to Home', onClick: () => router.push('/') },
+              { label: '返回首页', onClick: () => router.push('/') },
             ]}
           />
         </InviteLayout>
@@ -497,15 +497,15 @@ export default function Invite({ registrationDisabled }: InviteProps) {
 
     const actions: Array<{ label: string; onClick: () => void }> = []
     if (error.canRetry) {
-      actions.push({ label: 'Try Again', onClick: () => window.location.reload() })
+      actions.push({ label: '重试', onClick: () => window.location.reload() })
     }
-    actions.push({ label: 'Return to Home', onClick: () => router.push('/') })
+    actions.push({ label: '返回首页', onClick: () => router.push('/') })
 
     return (
       <InviteLayout>
         <InviteStatusCard
           type='error'
-          title='Invitation Error'
+          title='邀请错误'
           description={error.message}
           icon='error'
           isExpiredError={error.code === 'expired'}
@@ -527,18 +527,18 @@ export default function Invite({ registrationDisabled }: InviteProps) {
     invitation?.kind === 'workspace'
       ? grantedWorkspaceNames.length > 0
         ? formatQuotedNameList(grantedWorkspaceNames, MAX_LISTED_WORKSPACE_NAMES)
-        : 'a workspace'
-      : invitation?.organizationName || 'an organization'
+        : '一个工作区'
+      : invitation?.organizationName || '一个组织'
 
   if (accepted) {
     return (
       <InviteLayout>
         <InviteStatusCard
           type='success'
-          title='Welcome!'
-          description={`You have successfully joined ${displayName}. Redirecting...`}
+          title='欢迎！'
+          description={`你已成功加入${displayName}，正在跳转…`}
           icon='success'
-          actions={[{ label: 'Return to Home', onClick: () => router.push('/') }]}
+          actions={[{ label: '返回首页', onClick: () => router.push('/') }]}
         />
       </InviteLayout>
     )
@@ -550,17 +550,17 @@ export default function Invite({ registrationDisabled }: InviteProps) {
     <InviteLayout>
       <InviteStatusCard
         type='invitation'
-        title={isOrg ? 'Organization Invitation' : 'Workspace Invitation'}
-        description={`You've been invited to join ${displayName}.`}
+        title={isOrg ? '组织邀请' : '工作区邀请'}
+        description={`你受邀加入${displayName}。`}
         icon={isOrg ? 'users' : 'mail'}
         actions={[
           {
-            label: 'Accept Invitation',
+            label: '接受邀请',
             onClick: handleAcceptInvitation,
             disabled: isAccepting,
             loading: isAccepting,
           },
-          { label: 'Return to Home', onClick: () => router.push('/') },
+          { label: '返回首页', onClick: () => router.push('/') },
         ]}
       />
     </InviteLayout>

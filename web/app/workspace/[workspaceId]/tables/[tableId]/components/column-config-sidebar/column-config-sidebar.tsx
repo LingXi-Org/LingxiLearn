@@ -237,7 +237,7 @@ function ColumnConfigBody({
   return (
     <div className='flex h-full flex-col'>
       <div className='flex min-h-[48px] items-center justify-between border-[var(--border)] border-b px-3 py-[8.5px]'>
-        <h2 className='text-[var(--text-primary)] text-small'>Configure column</h2>
+        <h2 className='text-[var(--text-primary)] text-small'>配置列</h2>
         <Button
           variant='ghost'
           size='sm'
@@ -251,7 +251,7 @@ function ColumnConfigBody({
 
       <div className='flex-1 overflow-y-auto overflow-x-hidden px-2 pt-3 pb-2 [overflow-anchor:none]'>
         <div className='flex flex-col gap-[9.5px]'>
-          <RequiredLabel htmlFor='column-sidebar-name'>Column name</RequiredLabel>
+          <RequiredLabel htmlFor='column-sidebar-name'>列名称</RequiredLabel>
           <ChipInput
             id='column-sidebar-name'
             value={nameInput}
@@ -264,7 +264,7 @@ function ColumnConfigBody({
             error={Boolean((showValidation && !trimmedName) || nameError)}
             aria-invalid={(showValidation && !trimmedName) || nameError ? true : undefined}
           />
-          {showValidation && !trimmedName && <FieldError message='Column name is required' />}
+          {showValidation && !trimmedName && <FieldError message='请输入列名称' />}
           {nameError && !(showValidation && !trimmedName) && <FieldError message={nameError} />}
         </div>
 
@@ -322,7 +322,7 @@ function ColumnConfigBody({
             </div>
             <FieldDivider />
             <div className='flex items-center justify-between pl-0.5'>
-              <Label htmlFor='column-sidebar-multiple'>Multiselect</Label>
+              <Label htmlFor='column-sidebar-multiple'>允许多选</Label>
               <Switch
                 id='column-sidebar-multiple'
                 checked={multipleInput}
@@ -338,7 +338,7 @@ function ColumnConfigBody({
             <FieldDivider />
             <div className='flex flex-col gap-[9.5px]'>
               <div className='flex items-center justify-between pl-0.5'>
-                <Label htmlFor='column-sidebar-unique'>Unique</Label>
+                <Label htmlFor='column-sidebar-unique'>唯一</Label>
                 <Switch
                   id='column-sidebar-unique'
                   checked={uniqueInput}

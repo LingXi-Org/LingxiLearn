@@ -60,7 +60,7 @@ export function NewColumnDropdown({
         onClick={blocked ? onBlocked : undefined}
       >
         <Plus className={chipContentIconClass} />
-        <span className={chipContentLabelClass}>New column</span>
+        <span className={chipContentLabelClass}>新建列</span>
         <ChipChevronDown />
       </button>
     ) : (
@@ -71,7 +71,7 @@ export function NewColumnDropdown({
         onClick={blocked ? onBlocked : undefined}
       >
         <Plus className='size-[14px] shrink-0 text-[var(--text-icon)]' />
-        <span className='text-[var(--text-body)] text-small'>New column</span>
+        <span className='text-[var(--text-body)] text-small'>新建列</span>
       </button>
     )
 
@@ -94,7 +94,7 @@ export function NewColumnDropdown({
         <>
           <DropdownMenuItem onSelect={onPickEnrichment}>
             <Sparkles className='size-[14px] text-[var(--text-icon)]' />
-            Enrichments
+            数据增强
           </DropdownMenuItem>
           <DropdownMenuSeparator />
         </>

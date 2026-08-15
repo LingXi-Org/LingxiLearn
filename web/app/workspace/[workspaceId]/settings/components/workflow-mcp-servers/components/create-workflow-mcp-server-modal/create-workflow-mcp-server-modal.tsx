@@ -74,7 +74,7 @@ export function CreateWorkflowMcpServerModal({
 
   return (
     <ChipModal open={open} onOpenChange={onOpenChange} srTitle='Add New MCP Server'>
-      <ChipModalHeader onClose={() => onOpenChange(false)}>Add New MCP Server</ChipModalHeader>
+      <ChipModalHeader onClose={() => onOpenChange(false)}>添加 MCP 服务器</ChipModalHeader>
       <ChipModalBody>
         <ChipModalField
           type='input'
@@ -120,7 +120,7 @@ export function CreateWorkflowMcpServerModal({
               onValueChange={(value) => setFormData({ ...formData, isPublic: value === 'public' })}
             >
               <ButtonGroupItem value='private'>API Key</ButtonGroupItem>
-              <ButtonGroupItem value='public'>Public</ButtonGroupItem>
+              <ButtonGroupItem value='public'>公开</ButtonGroupItem>
             </ButtonGroup>
             {formData.isPublic && (
               <span className='text-[var(--text-muted)] text-caption'>

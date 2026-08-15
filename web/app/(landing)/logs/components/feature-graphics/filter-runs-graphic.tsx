@@ -55,7 +55,7 @@ export function FilterRunsGraphic() {
       >
         <div className='w-full max-w-[312px] sm:max-lg:[@container(min-width:500px)]:max-w-[400px]'>
           <div className='mb-2.5 flex items-center justify-between'>
-            <span className='font-medium text-[var(--text-primary)] text-base'>Search runs</span>
+            <span className='font-medium text-[var(--text-primary)] text-base'>搜索运行记录</span>
             <ChipTag variant='mono' className='bg-[var(--surface-6)]'>
               3 matches
             </ChipTag>

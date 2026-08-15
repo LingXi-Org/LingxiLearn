@@ -12,7 +12,7 @@ const COLUMNS = [
   { id: 'columns', header: 'Columns' },
   { id: 'rows', header: 'Rows' },
   { id: 'created', header: 'Created' },
-  { id: 'owner', header: 'Owner' },
+  { id: 'owner', header: '所有者' },
   { id: 'updated', header: 'Last Updated' },
 ]
 

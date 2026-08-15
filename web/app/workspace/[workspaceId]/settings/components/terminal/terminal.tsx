@@ -80,7 +80,7 @@ export function Terminal() {
       <SettingsSection label='General'>
         <div className='flex flex-col gap-3'>
           <div className='flex items-center justify-between'>
-            <Label htmlFor='terminal-enabled'>Let Chat run commands</Label>
+            <Label htmlFor='terminal-enabled'>允许聊天运行命令</Label>
             <Switch
               id='terminal-enabled'
               checked={preferences.terminalEnabled}
@@ -90,7 +90,7 @@ export function Terminal() {
           </div>
 
           <div className='flex items-center justify-between gap-4'>
-            <Label>Theme</Label>
+            <Label>主题</Label>
             <TerminalThemePicker
               value={preferences.terminalTheme}
               profiles={profiles}
@@ -101,7 +101,7 @@ export function Terminal() {
           </div>
 
           <div className='flex items-center justify-between gap-4'>
-            <Label>Default zoom</Label>
+            <Label>默认缩放</Label>
             <DefaultZoomSelect
               ariaLabel='Terminal default zoom'
               value={preferences.terminalDefaultZoom}

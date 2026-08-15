@@ -76,7 +76,7 @@ export function RenameDocumentModal({
 
   return (
     <ChipModal open={open} onOpenChange={onOpenChange} srTitle='Rename Document'>
-      <ChipModalHeader onClose={() => onOpenChange(false)}>Rename Document</ChipModalHeader>
+      <ChipModalHeader onClose={() => onOpenChange(false)}>重命名文档</ChipModalHeader>
       <ChipModalBody>
         <ChipModalField
           type='input'

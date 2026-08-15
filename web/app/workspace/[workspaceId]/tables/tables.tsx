@@ -88,7 +88,7 @@ const COLUMNS: ResourceColumn[] = [
   { id: 'columns', header: 'Columns' },
   { id: 'rows', header: 'Rows' },
   { id: 'created', header: 'Created' },
-  { id: 'owner', header: 'Owner' },
+  { id: 'owner', header: '所有者' },
   { id: 'updated', header: 'Last Updated' },
 ]
 
@@ -536,7 +536,7 @@ export function Tables() {
         { id: 'columns', label: 'Columns' },
         { id: 'rows', label: 'Rows' },
         { id: 'created', label: 'Created' },
-        { id: 'owner', label: 'Owner' },
+        { id: 'owner', label: '所有者' },
         { id: 'updated', label: 'Last Updated' },
       ],
       active: activeSort,
@@ -592,7 +592,7 @@ export function Tables() {
     () => (
       <div className='flex w-[240px] flex-col gap-3 p-3'>
         <div className='flex flex-col gap-1.5'>
-          <span className='text-[var(--text-secondary)] text-caption'>Row Count</span>
+          <span className='text-[var(--text-secondary)] text-caption'>行数</span>
           <ChipCombobox
             options={[
               { value: 'empty', label: 'Empty' },
@@ -612,7 +612,7 @@ export function Tables() {
         </div>
         {memberOptions.length > 0 && (
           <div className='flex flex-col gap-1.5'>
-            <span className='text-[var(--text-secondary)] text-caption'>Owner</span>
+          <span className='text-[var(--text-secondary)] text-caption'>所有者</span>
             <ChipCombobox
               options={memberOptions}
               multiSelect
@@ -668,8 +668,8 @@ export function Tables() {
     if (ownerFilter.length > 0) {
       const label =
         ownerFilter.length === 1
-          ? `Owner: ${membersById.get(ownerFilter[0])?.name ?? '1 member'}`
-          : `Owner: ${ownerFilter.length} members`
+          ? `所有者：${membersById.get(ownerFilter[0])?.name ?? '1 名成员'}`
+          : `所有者：${ownerFilter.length} 名成员`
       tags.push({ label, onRemove: () => setOwnerFilter([]) })
     }
     return tags

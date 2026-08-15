@@ -30,11 +30,11 @@ export const RunStatusControl = memo(function RunStatusControl({
       <div className='flex items-center gap-1.5 px-1 text-[var(--text-tertiary)] text-caption'>
         <Loader animate className='size-[14px] shrink-0' />
         {queueing ? (
-          <span>Queueing</span>
+          <span>排队中</span>
         ) : (
           <>
             <span className='tabular-nums'>{running}</span>
-            <span>running</span>
+            <span>运行中</span>
           </>
         )}
       </div>

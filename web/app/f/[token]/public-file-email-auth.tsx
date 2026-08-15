@@ -89,7 +89,7 @@ export function PublicFileEmailAuth({ token }: PublicFileEmailAuthProps) {
           className='space-y-6'
         >
           <div className='space-y-2'>
-            <Label htmlFor='email'>Email</Label>
+            <Label htmlFor='email'>邮箱</Label>
             <Input
               id='email'
               name='email'
@@ -173,7 +173,7 @@ export function PublicFileEmailAuth({ token }: PublicFileEmailAuthProps) {
             Didn't receive a code?{' '}
             {countdown > 0 ? (
               <span>
-                Resend in <span className='text-[var(--text-primary)]'>{countdown}s</span>
+                {countdown} 秒后重新发送
               </span>
             ) : (
               <button

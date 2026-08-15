@@ -396,8 +396,8 @@ export function ImportCsvDialog({
 
             <ChipModalField type='custom' title='Mode'>
               <ButtonGroup value={mode} onValueChange={handleModeChange}>
-                <ButtonGroupItem value='append'>Append</ButtonGroupItem>
-                {canReplace && <ButtonGroupItem value='replace'>Replace all rows</ButtonGroupItem>}
+                <ButtonGroupItem value='append'>追加</ButtonGroupItem>
+                {canReplace && <ButtonGroupItem value='replace'>替换全部行</ButtonGroupItem>}
               </ButtonGroup>
             </ChipModalField>
 
@@ -419,8 +419,8 @@ export function ImportCsvDialog({
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>CSV column</TableHead>
-                        <TableHead>Target column</TableHead>
+            <TableHead>CSV 列</TableHead>
+            <TableHead>目标列</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -507,7 +507,7 @@ export function ImportCsvDialog({
               : 'Importing...'
             : mode === 'replace'
               ? 'Replace rows'
-              : 'Append rows',
+              : '追加行',
           onClick: handleSubmit,
           disabled: !canSubmit,
           variant: mode === 'replace' ? 'destructive' : 'primary',

@@ -40,8 +40,8 @@ function UnsubscribeContent() {
     return (
       <InviteLayout>
         <div className='space-y-1 text-center'>
-          <h1 className={'text-[32px] text-[var(--text-primary)] tracking-tight'}>Loading</h1>
-          <p className={'text-[var(--text-muted)] text-md'}>Validating your unsubscribe link…</p>
+          <h1 className={'text-[32px] text-[var(--text-primary)] tracking-tight'}>正在加载</h1>
+          <p className={'text-[var(--text-muted)] text-md'}>正在验证退订链接…</p>
         </div>
         <div className={'mt-8 flex w-full items-center justify-center py-8'}>
           <Loader className='size-8 text-[var(--text-muted)]' animate />
@@ -141,7 +141,7 @@ function UnsubscribeContent() {
         </AuthSubmitButton>
 
         <div className='py-2 text-center'>
-          <span className={'text-[var(--text-muted)] text-sm'}>or choose specific types</span>
+          <span className={'text-[var(--text-muted)] text-sm'}>或选择特定类型</span>
         </div>
 
         <Chip
@@ -206,8 +206,8 @@ export default function Unsubscribe() {
       fallback={
         <InviteLayout>
           <div className='space-y-1 text-center'>
-            <h1 className={'text-[32px] text-[var(--text-primary)] tracking-tight'}>Loading</h1>
-            <p className={'text-[var(--text-muted)] text-md'}>Validating your unsubscribe link…</p>
+            <h1 className={'text-[32px] text-[var(--text-primary)] tracking-tight'}>正在加载</h1>
+            <p className={'text-[var(--text-muted)] text-md'}>正在验证退订链接…</p>
           </div>
           <div className={'mt-8 flex w-full items-center justify-center py-8'}>
             <Loader className='size-8 text-[var(--text-muted)]' animate />

@@ -48,7 +48,7 @@ export function PublicFileAuth({ token }: PublicFileAuthProps) {
         className='space-y-6'
       >
         <div className='space-y-2'>
-          <Label htmlFor='password'>Password</Label>
+          <Label htmlFor='password'>密码</Label>
           <div className='relative'>
             <Input
               id='password'

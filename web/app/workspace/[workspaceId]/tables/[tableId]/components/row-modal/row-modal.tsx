@@ -162,8 +162,8 @@ export function RowModal({ mode, isOpen, onClose, table, row, rowIds, onSuccess 
   }
 
   return (
-    <ChipModal open={isOpen} onOpenChange={handleClose} srTitle='Edit Row' size='lg'>
-      <ChipModalHeader onClose={handleClose}>Edit Row</ChipModalHeader>
+    <ChipModal open={isOpen} onOpenChange={handleClose} srTitle='编辑行' size='lg'>
+      <ChipModalHeader onClose={handleClose}>编辑行</ChipModalHeader>
       <ChipModalBody>
         <p className='px-2 text-[var(--text-tertiary)] text-small'>
           Update values for {table?.name ?? 'table'}

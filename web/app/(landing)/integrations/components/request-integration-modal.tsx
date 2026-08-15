@@ -127,7 +127,7 @@ export function RequestIntegrationModal() {
                 maxLength={2000}
               />
               {status === 'error' && (
-                <ChipModalError>Something went wrong. Please try again.</ChipModalError>
+                <ChipModalError>出了点问题，请重试。</ChipModalError>
               )}
             </>
           )}

@@ -155,7 +155,7 @@ export function AddDocumentsModal({
 
   return (
     <ChipModal open={open} onOpenChange={handleOpenChange} srTitle='New Documents' size='md'>
-      <ChipModalHeader onClose={() => handleOpenChange(false)}>New Documents</ChipModalHeader>
+      <ChipModalHeader onClose={() => handleOpenChange(false)}>添加文档</ChipModalHeader>
 
       <ChipModalBody>
         <ChipModalField

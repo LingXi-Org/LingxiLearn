@@ -108,7 +108,7 @@ export function SettingsSidebar<Section extends SettingsSection>({
             <LingxiWordmark />
           </button>
         ) : (
-          <SidebarTooltip label='Back' enabled={showCollapsedTooltips}>
+          <SidebarTooltip label='返回' enabled={showCollapsedTooltips}>
             <button
               type='button'
               onClick={() => requestLeave(() => router.push(WORKSPACE_HREF))}
@@ -118,7 +118,7 @@ export function SettingsSidebar<Section extends SettingsSection>({
               <span aria-hidden className={cn(chipIconSlotClass, 'text-[var(--text-icon)]')}>
                 <ChevronLeft className='size-[14px]' />
               </span>
-              <span className='sidebar-collapse-hide truncate text-[var(--text-body)]'>Back</span>
+              <span className='sidebar-collapse-hide truncate text-[var(--text-body)]'>返回</span>
             </button>
           </SidebarTooltip>
         )}
@@ -172,7 +172,7 @@ export function SettingsSidebar<Section extends SettingsSection>({
                           </span>
                           {item.locked && (
                             <span className='sidebar-collapse-hide ml-auto shrink-0 rounded-[3px] bg-[var(--surface-5)] px-1 py-[1px] font-medium text-[var(--text-icon)] text-micro uppercase tracking-wide'>
-                              Plan
+                              套餐
                             </span>
                           )}
                         </button>
@@ -188,11 +188,11 @@ export function SettingsSidebar<Section extends SettingsSection>({
       <ChipConfirmModal
         open={pendingLeave !== null}
         onOpenChange={(open) => !open && cancelLeave()}
-        srTitle='Unsaved changes'
-        title='Unsaved changes'
-        text='You have unsaved changes. Are you sure you want to discard them?'
-        dismissLabel='Keep editing'
-        confirm={{ label: 'Discard changes', onClick: confirmLeave }}
+        srTitle='未保存的更改'
+        title='未保存的更改'
+        text='你有未保存的更改，确定要放弃吗？'
+        dismissLabel='继续编辑'
+        confirm={{ label: '放弃更改', onClick: confirmLeave }}
       />
     </>
   )

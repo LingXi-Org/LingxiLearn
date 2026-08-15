@@ -173,7 +173,7 @@ export function KnowledgeHeroLoop() {
           <div className='flex h-[44px] flex-shrink-0 items-center justify-between border-[var(--border)] border-b px-6'>
             <div className='flex items-center gap-3'>
               <Database className='size-[14px] text-[var(--text-icon)]' />
-              <span className='font-medium text-[var(--text-body)] text-sm'>Knowledge Base</span>
+              <span className='font-medium text-[var(--text-body)] text-sm'>知识库</span>
             </div>
             <div className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
               <Plus className='mr-1.5 size-[14px] text-[var(--text-icon)]' />
@@ -261,7 +261,7 @@ export function KnowledgeHeroLoop() {
                             </span>
                           )}
                           {synced && (
-                            <span className='text-[var(--text-muted)] text-caption'>Updated</span>
+                            <span className='text-[var(--text-muted)] text-caption'>已更新</span>
                           )}
                         </span>
                       </td>

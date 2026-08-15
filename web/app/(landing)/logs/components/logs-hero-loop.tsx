@@ -294,7 +294,7 @@ export function LogsHeroLoop() {
             <div className='flex w-full items-center justify-between'>
               <div className='flex items-center gap-3'>
                 <Library className='size-[14px] text-[var(--text-icon)]' />
-                <span className='font-medium text-[var(--text-body)] text-sm'>Logs</span>
+                <span className='font-medium text-[var(--text-body)] text-sm'>日志</span>
               </div>
               <div className='flex items-center gap-1'>
                 <span className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
@@ -315,7 +315,7 @@ export function LogsHeroLoop() {
             <div className='flex items-center justify-between'>
               <div className='flex flex-1 items-center gap-2.5'>
                 <Search className='size-[14px] flex-shrink-0 text-[var(--text-icon)]' />
-                <span className='flex-1 text-[var(--text-muted)] text-caption'>Search logs...</span>
+                <span className='flex-1 text-[var(--text-muted)] text-caption'>搜索日志…</span>
               </div>
               <div className='flex items-center gap-1.5'>
                 <span className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>

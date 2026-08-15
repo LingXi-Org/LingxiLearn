@@ -72,7 +72,7 @@ function EnrichmentsSidebarBody({
     return (
       <div className='flex h-full flex-col'>
         <div className='flex min-h-[48px] items-center justify-between border-[var(--border)] border-b px-3 py-[8.5px]'>
-          <h2 className='text-[var(--text-primary)] text-small'>Enrichment</h2>
+          <h2 className='text-[var(--text-primary)] text-small'>数据增强</h2>
           <Button
             variant='ghost'
             size='sm'
@@ -118,7 +118,7 @@ function EnrichmentsSidebarBody({
   return (
     <div className='flex h-full flex-col'>
       <div className='flex min-h-[48px] items-center justify-between border-[var(--border)] border-b px-3 py-[8.5px]'>
-        <h2 className='text-[var(--text-primary)] text-small'>Enrichments</h2>
+        <h2 className='text-[var(--text-primary)] text-small'>数据增强</h2>
         <Button
           variant='ghost'
           size='sm'
@@ -143,7 +143,7 @@ function EnrichmentsSidebarBody({
 
       <div className='flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 [overflow-anchor:none]'>
         {filtered.length === 0 ? (
-          <p className='px-1 pt-2 text-[var(--text-tertiary)] text-small'>No enrichments found.</p>
+          <p className='px-1 pt-2 text-[var(--text-tertiary)] text-small'>未找到数据增强。</p>
         ) : (
           <ul className='flex flex-col'>
             {filtered.map((enrichment) => {

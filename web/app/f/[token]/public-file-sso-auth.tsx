@@ -67,7 +67,7 @@ export function PublicFileSSOAuth({ token }: PublicFileSSOAuthProps) {
         className='space-y-6'
       >
         <div className='space-y-2'>
-          <Label htmlFor='email'>Work Email</Label>
+          <Label htmlFor='email'>工作邮箱</Label>
           <Input
             id='email'
             name='email'

@@ -133,7 +133,7 @@ export function AddPeopleModal({
       }}
       srTitle='Add people'
     >
-      <ChipModalHeader onClose={handleClose}>Add people</ChipModalHeader>
+      <ChipModalHeader onClose={handleClose}>添加成员</ChipModalHeader>
       <ChipModalBody>
         <ChipModalField
           type='emails'

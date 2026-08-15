@@ -455,8 +455,8 @@ function ConnectorCard({
                     <Tooltip.Content>{syncTooltip}</Tooltip.Content>
                   </Tooltip.Root>
                   <DropdownMenuContent align='end'>
-                    <DropdownMenuItem onSelect={() => onSync(false)}>Sync now</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => onSync(true)}>Full resync</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => onSync(false)}>立即同步</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => onSync(true)}>完整重新同步</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
@@ -753,7 +753,7 @@ function SyncHistory({ logs, isLoading }: SyncHistoryProps) {
                     )}
                   </span>
                 )}
-                {isRunning && <span className='text-[var(--text-muted)]'>In progress…</span>}
+                {isRunning && <span className='text-[var(--text-muted)]'>处理中…</span>}
               </div>
 
               {isError && log.errorMessage && (

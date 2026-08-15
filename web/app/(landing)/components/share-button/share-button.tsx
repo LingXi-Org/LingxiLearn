@@ -41,7 +41,7 @@ export function ShareButton({ url, title }: ShareButtonProps) {
       <DropdownMenuContent align='end'>
         <DropdownMenuItem onSelect={() => copy(url)}>
           <Duplicate className='size-4' />
-          {copied ? 'Copied!' : 'Copy link'}
+          {copied ? '已复制！' : '复制链接'}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={handleShareTwitter}>
           <XIcon className='size-4' />

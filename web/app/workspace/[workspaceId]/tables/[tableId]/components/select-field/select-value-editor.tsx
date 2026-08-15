@@ -69,7 +69,7 @@ export function SelectValueEditor({
   const singleOptions = column.required
     ? options
     : [
-        { value: CLEAR_VALUE, label: <span className='text-[var(--text-muted)]'>None</span> },
+        { value: CLEAR_VALUE, label: <span className='text-[var(--text-muted)]'>无</span> },
         ...options,
       ]
 
