@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { API_BASE, api } from '@/lib/lingxi/api'
+import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
 
 function SettingsShell({
   title,
@@ -14,15 +15,11 @@ function SettingsShell({
   children: React.ReactNode
 }) {
   return (
-    <div className='flex h-full min-h-0 flex-col bg-[var(--bg)]'>
-      <header className='shrink-0 border-[var(--border)] border-b px-6 py-4'>
-        <h1 className='font-medium text-[15px] text-[var(--text-primary)]'>{title}</h1>
-        <p className='mt-1 text-[12px] text-[var(--text-muted)]'>{description}</p>
-      </header>
-      <main className='min-h-0 flex-1 overflow-y-auto p-6'>
-        <div className='mx-auto max-w-[900px]'>{children}</div>
-      </main>
-    </div>
+    <SettingsPanel title={title} description={description}>
+      <div className='w-full py-2'>
+        <div className='mx-auto w-full max-w-[900px]'>{children}</div>
+      </div>
+    </SettingsPanel>
   )
 }
 
@@ -141,35 +138,21 @@ export function LingxiUsagePage({
           导出 CSV
         </a>
       </div>
-      {rows.length === 0 ? (
-        <PlaceholderCard
-          title='暂无用量记录'
-          description='完成一次学习任务后，这里会显示只读的任务用量审计记录。'
-        />
-      ) : (
-        <div className='overflow-x-auto rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)]'>
-          <table className='w-full text-left text-[12px]'>
-            <thead>
-              <tr className='border-b border-[var(--border)] text-[var(--text-muted)]'>
-                <th className='px-4 py-3'>任务</th>
-                <th className='px-4 py-3'>来源</th>
-                <th className='px-4 py-3'>时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={String(row.id)} className='border-b border-[var(--border)] last:border-0'>
-                  <td className='px-4 py-3 text-[var(--text-primary)]'>{String(row.id)}</td>
-                  <td className='px-4 py-3 text-[var(--text-secondary)]'>{String(row.source)}</td>
-                  <td className='px-4 py-3 text-[var(--text-muted)]'>
-                    {String(row.createdAt || '')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Resource.Table
+        columns={[
+          { id: 'task', header: '任务' },
+          { id: 'source', header: '来源' },
+          { id: 'createdAt', header: '时间' },
+        ]}
+        rows={rows.map((row) => ({
+          id: String(row.id),
+          cells: {
+            task: { label: String(row.id) },
+            source: { label: String(row.source) },
+            createdAt: { label: String(row.createdAt || '') },
+          },
+        }))}
+      />
     </SettingsShell>
   )
 }

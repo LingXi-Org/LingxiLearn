@@ -1,7 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Checkbox, Chip, ChipInput, ChipSelect } from '@sim/emcn'
+import { Settings as SettingsIcon, Table as TableIcon } from '@sim/emcn/icons'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   API_BASE,
   api,
@@ -11,6 +14,9 @@ import {
   type WorkspaceFolderItem,
   type WorkspaceTableItem,
 } from '@/lib/lingxi/api'
+import { Resource } from '@/app/workspace/[workspaceId]/components'
+import { SettingsField } from '@/app/workspace/[workspaceId]/settings/components/settings-field'
+import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
 
 type ResourceKind = 'files' | 'tables' | 'knowledge' | 'logs' | 'settings'
 
@@ -24,15 +30,15 @@ function Shell({
   children: React.ReactNode
 }) {
   return (
-    <div className='flex h-full min-h-0 flex-col bg-[var(--bg)]'>
-      <header className='flex shrink-0 items-center justify-between border-b border-[var(--border)] px-6 py-4'>
-        <div>
-          <h1 className='text-[15px] font-medium text-[var(--text-primary)]'>{title}</h1>
-          <p className='mt-1 text-[12px] text-[var(--text-muted)]'>{description}</p>
-        </div>
-      </header>
-      <main className='min-h-0 flex-1 overflow-y-auto p-6'>{children}</main>
-    </div>
+    <Resource>
+      <Resource.Header icon={SettingsIcon} title={title} />
+      <main className='min-h-0 flex-1 overflow-y-auto p-6'>
+        <p className='mx-auto mb-5 max-w-[1100px] text-[12px] text-[var(--text-muted)]'>
+          {description}
+        </p>
+        {children}
+      </main>
+    </Resource>
   )
 }
 
@@ -48,14 +54,9 @@ function ActionButton({
   disabled?: boolean
 }) {
   return (
-    <button
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
-      className='rounded-[7px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-50'
-    >
+    <Chip type={type} disabled={disabled} onClick={onClick} className='text-[12px]'>
       {children}
-    </button>
+    </Chip>
   )
 }
 
@@ -237,6 +238,7 @@ function FilesPage() {
 }
 
 function TablesPage() {
+  const router = useRouter()
   const [tables, setTables] = useState<WorkspaceTableItem[]>([])
   const [name, setName] = useState('')
   const reload = useCallback(() => {
@@ -256,11 +258,13 @@ function TablesPage() {
     reload()
   }
   return (
-    <Shell
-      title='Tables'
-      description='七类原生列类型：string、number、currency、boolean、date、json、select。'
-    >
-      <div className='mx-auto max-w-[960px]'>
+    <Resource>
+      <Resource.Header icon={TableIcon} title='Tables' />
+      <Resource.Options />
+      <div className='min-h-0 flex-1 overflow-y-auto p-4'>
+        <p className='mx-auto mb-4 max-w-[960px] text-[12px] text-[var(--text-muted)]'>
+          七类原生列类型：string、number、currency、boolean、date、json、select。
+        </p>
         <form className='mb-4 flex gap-2' onSubmit={(event) => void create(event)}>
           <input
             className='min-w-0 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-[12px] text-[var(--text-primary)]'
@@ -270,27 +274,24 @@ function TablesPage() {
           />
           <ActionButton type='submit'>新建表格</ActionButton>
         </form>
-        {tables.length === 0 ? (
-          <Empty>还没有表格</Empty>
-        ) : (
-          <div className='grid gap-3 sm:grid-cols-2'>
-            {tables.map((table) => (
-              <Link
-                key={table.id}
-                href={`/workspace/lingxi/tables/${table.id}`}
-                className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-              >
-                <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>{table.name}</h2>
-                <p className='mt-1 text-[12px] text-[var(--text-muted)]'>
-                  {table.totalRows ?? table.rowCount ?? 0} 行 ·{' '}
-                  {(table.columns || table.schema?.columns || []).length} 列
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
+        <Resource.Table
+          columns={[
+            { id: 'name', header: '表格' },
+            { id: 'rows', header: '行数' },
+            { id: 'columns', header: '列数' },
+          ]}
+          rows={tables.map((table) => ({
+            id: table.id,
+            cells: {
+              name: { label: table.name },
+              rows: { label: String(table.totalRows ?? table.rowCount ?? 0) },
+              columns: { label: String((table.columns || table.schema?.columns || []).length) },
+            },
+          }))}
+          onRowClick={(tableId) => router.push(`/workspace/lingxi/tables/${tableId}`)}
+        />
       </div>
-    </Shell>
+    </Resource>
   )
 }
 
@@ -373,35 +374,21 @@ function LogsPage() {
             导出 CSV
           </a>
         </div>
-        {logs.length === 0 ? (
-          <Empty>还没有任务日志</Empty>
-        ) : (
-          <div className='overflow-x-auto rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)]'>
-            <table className='w-full text-left text-[12px]'>
-              <thead>
-                <tr className='border-b border-[var(--border)] text-[var(--text-muted)]'>
-                  <th className='px-4 py-3'>任务</th>
-                  <th className='px-4 py-3'>状态</th>
-                  <th className='px-4 py-3'>开始时间</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => (
-                  <tr
-                    key={String(log.id)}
-                    className='border-b border-[var(--border)] last:border-0'
-                  >
-                    <td className='px-4 py-3 text-[var(--text-primary)]'>{String(log.id)}</td>
-                    <td className='px-4 py-3 text-[var(--text-secondary)]'>{String(log.status)}</td>
-                    <td className='px-4 py-3 text-[var(--text-muted)]'>
-                      {String(log.startedAt || '')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <Resource.Table
+          columns={[
+            { id: 'task', header: '任务' },
+            { id: 'status', header: '状态' },
+            { id: 'startedAt', header: '开始时间' },
+          ]}
+          rows={logs.map((log) => ({
+            id: String(log.id),
+            cells: {
+              task: { label: String(log.id) },
+              status: { label: String(log.status) },
+              startedAt: { label: String(log.startedAt || '') },
+            },
+          }))}
+        />
       </div>
     </Shell>
   )
@@ -442,132 +429,136 @@ function SettingsPage() {
     setSaved(true)
   }
   return (
-    <Shell
-      title='Settings'
+    <SettingsPanel
+      title='常规设置'
       description='账户、学习偏好和个人工作区名称/外观。团队、凭据、API Keys、SSO 与工作流设置不开放。'
     >
-      <form onSubmit={(event) => void save(event)} className='mx-auto max-w-[680px] space-y-6'>
-        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>个人工作区</h2>
-          <label className='mt-4 block text-[12px] text-[var(--text-muted)]'>
-            名称
-            <input
-              className='mt-2 w-full rounded-[7px] border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-[13px] text-[var(--text-primary)]'
-              value={workspaceName}
-              onChange={(event) => setWorkspaceName(event.target.value)}
-              maxLength={160}
-            />
-          </label>
-        </section>
-        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>学习偏好</h2>
-          <div className='mt-4 grid gap-4 sm:grid-cols-2'>
-            <label className='text-[12px] text-[var(--text-muted)]'>
-              学习阶段
-              <select
-                className='mt-2 w-full rounded-[7px] border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-[13px] text-[var(--text-primary)]'
-                value={level}
-                onChange={(event) => setLevel(event.target.value)}
-              >
-                <option value='undergraduate'>本科</option>
-                <option value='graduate'>研究生</option>
-                <option value='professional'>工程实践</option>
-              </select>
-            </label>
-            <label className='text-[12px] text-[var(--text-muted)]'>
-              语言
-              <select
-                className='mt-2 w-full rounded-[7px] border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-[13px] text-[var(--text-primary)]'
-                value={locale}
-                onChange={(event) => setLocale(event.target.value)}
-              >
-                <option value='zh-CN'>简体中文</option>
-                <option value='en-US'>English</option>
-              </select>
-            </label>
+      <div className='w-full py-2'>
+        <form onSubmit={(event) => void save(event)} className='mx-auto max-w-[680px] space-y-6'>
+          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>个人工作区</h2>
+            <div className='mt-4'>
+              <SettingsField label='名称'>
+                <ChipInput
+                  value={workspaceName}
+                  onChange={(event) => setWorkspaceName(event.target.value)}
+                  maxLength={160}
+                  className='w-full'
+                />
+              </SettingsField>
+            </div>
+          </section>
+          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>学习偏好</h2>
+            <div className='mt-4 grid gap-4 sm:grid-cols-2'>
+              <SettingsField label='学习阶段'>
+                <ChipSelect
+                  fullWidth
+                  value={level}
+                  onChange={setLevel}
+                  options={[
+                    { value: 'undergraduate', label: '本科' },
+                    { value: 'graduate', label: '研究生' },
+                    { value: 'professional', label: '工程实践' },
+                  ]}
+                />
+              </SettingsField>
+              <SettingsField label='语言'>
+                <ChipSelect
+                  fullWidth
+                  value={locale}
+                  onChange={setLocale}
+                  options={[
+                    { value: 'zh-CN', label: '简体中文' },
+                    { value: 'en-US', label: 'English' },
+                  ]}
+                />
+              </SettingsField>
+            </div>
+          </section>
+          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>应用偏好</h2>
+            <div className='mt-4'>
+              <SettingsField label='主题'>
+                <ChipSelect
+                  fullWidth
+                  value={theme}
+                  onChange={setTheme}
+                  options={[
+                    { value: 'system', label: '跟随系统' },
+                    { value: 'light', label: '浅色' },
+                    { value: 'dark', label: '深色' },
+                  ]}
+                />
+              </SettingsField>
+            </div>
+            <div className='mt-4 space-y-3 text-[12px] text-[var(--text-secondary)]'>
+              <div className='flex items-center gap-2'>
+                <Checkbox
+                  checked={telemetryEnabled}
+                  onCheckedChange={(checked) => setTelemetryEnabled(checked === true)}
+                />
+                <span>允许匿名体验诊断</span>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Checkbox
+                  checked={billingNotificationsEnabled}
+                  onCheckedChange={(checked) => setBillingNotificationsEnabled(checked === true)}
+                />
+                <span>接收用量提醒</span>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Checkbox
+                  checked={showActionBar}
+                  onCheckedChange={(checked) => setShowActionBar(checked === true)}
+                />
+                <span>显示操作栏</span>
+              </div>
+            </div>
+          </section>
+          <div className='flex items-center gap-3'>
+            <ActionButton type='submit'>保存设置</ActionButton>
+            {saved && <span className='text-[12px] text-[var(--text-muted)]'>已保存</span>}
           </div>
-        </section>
-        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>应用偏好</h2>
-          <label className='mt-4 block text-[12px] text-[var(--text-muted)]'>
-            主题
-            <select
-              className='mt-2 w-full rounded-[7px] border border-[var(--border)] bg-[var(--surface-1)] px-3 py-2 text-[13px] text-[var(--text-primary)]'
-              value={theme}
-              onChange={(event) => setTheme(event.target.value)}
-            >
-              <option value='system'>跟随系统</option>
-              <option value='light'>浅色</option>
-              <option value='dark'>深色</option>
-            </select>
-          </label>
-          <div className='mt-4 space-y-3 text-[12px] text-[var(--text-secondary)]'>
-            <label className='flex items-center gap-2'>
-              <input
-                type='checkbox'
-                checked={telemetryEnabled}
-                onChange={(event) => setTelemetryEnabled(event.target.checked)}
-              />
-              允许匿名体验诊断
-            </label>
-            <label className='flex items-center gap-2'>
-              <input
-                type='checkbox'
-                checked={billingNotificationsEnabled}
-                onChange={(event) => setBillingNotificationsEnabled(event.target.checked)}
-              />
-              接收用量提醒
-            </label>
-            <label className='flex items-center gap-2'>
-              <input
-                type='checkbox'
-                checked={showActionBar}
-                onChange={(event) => setShowActionBar(event.target.checked)}
-              />
-              显示操作栏
-            </label>
-          </div>
-        </section>
-        <div className='flex items-center gap-3'>
-          <ActionButton type='submit'>保存设置</ActionButton>
-          {saved && <span className='text-[12px] text-[var(--text-muted)]'>已保存</span>}
+        </form>
+        <div className='mx-auto mt-6 grid max-w-[680px] gap-3 sm:grid-cols-2'>
+          <Link
+            href='/account/settings'
+            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+          >
+            <p className='text-[13px] text-[var(--text-primary)]'>账户与安全</p>
+            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
+              个人资料、密码、邮箱和设备会话
+            </p>
+          </Link>
+          <Link
+            href='/workspace/lingxi/settings/billing'
+            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+          >
+            <p className='text-[13px] text-[var(--text-primary)]'>计费与用量</p>
+            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>内部学习额度与只读审计</p>
+          </Link>
+          <Link
+            href='/workspace/lingxi/settings/users'
+            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+          >
+            <p className='text-[13px] text-[var(--text-primary)]'>用户管理</p>
+            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
+              个人账户中心；成员协作保留占位
+            </p>
+          </Link>
+          <Link
+            href='/workspace/lingxi/settings/integrations'
+            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+          >
+            <p className='text-[13px] text-[var(--text-primary)]'>未启用设置</p>
+            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
+              SSO、API Keys、凭据等占位页面
+            </p>
+          </Link>
         </div>
-      </form>
-      <div className='mx-auto mt-6 grid max-w-[680px] gap-3 sm:grid-cols-2'>
-        <Link
-          href='/account/settings'
-          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-        >
-          <p className='text-[13px] text-[var(--text-primary)]'>账户与安全</p>
-          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-            个人资料、密码、邮箱和设备会话
-          </p>
-        </Link>
-        <Link
-          href='/workspace/lingxi/settings/billing'
-          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-        >
-          <p className='text-[13px] text-[var(--text-primary)]'>计费与用量</p>
-          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>内部学习额度与只读审计</p>
-        </Link>
-        <Link
-          href='/workspace/lingxi/settings/users'
-          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-        >
-          <p className='text-[13px] text-[var(--text-primary)]'>用户管理</p>
-          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-            个人账户中心；成员协作保留占位
-          </p>
-        </Link>
-        <Link
-          href='/workspace/lingxi/settings/integrations'
-          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-        >
-          <p className='text-[13px] text-[var(--text-primary)]'>未启用设置</p>
-          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>SSO、API Keys、凭据等占位页面</p>
-        </Link>
       </div>
-    </Shell>
+    </SettingsPanel>
   )
 }
 
@@ -606,8 +597,13 @@ export function LingxiTableDetail({ tableId }: { tableId: string }) {
   }
   const columns = table?.columns || table?.schema?.columns || []
   return (
-    <Shell title={table?.name || 'Table'} description='行列、视图、筛选和排序均为个人工作区资源。'>
-      <div className='mx-auto max-w-[1100px]'>
+    <Resource>
+      <Resource.Header icon={TableIcon} title={table?.name || 'Table'} />
+      <Resource.Options />
+      <div className='min-h-0 flex-1 overflow-y-auto p-4'>
+        <p className='mx-auto mb-4 max-w-[1100px] text-[12px] text-[var(--text-muted)]'>
+          行列、视图、筛选和排序均为个人工作区资源。
+        </p>
         <div className='mb-4 flex gap-2'>
           <textarea
             className='min-h-[38px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 font-mono text-[12px] text-[var(--text-primary)]'
@@ -617,45 +613,23 @@ export function LingxiTableDetail({ tableId }: { tableId: string }) {
           />
           <ActionButton onClick={() => void add()}>添加行</ActionButton>
         </div>
-        {rows.length === 0 ? (
-          <Empty>还没有数据行</Empty>
-        ) : (
-          <div className='overflow-x-auto rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)]'>
-            <table className='w-full text-left text-[12px]'>
-              <thead>
-                <tr className='border-b border-[var(--border)]'>
-                  {columns.map((column: any) => (
-                    <th
-                      key={String(column.id || column.key)}
-                      className='px-3 py-2 text-[var(--text-muted)]'
-                    >
-                      {String(column.name || column.key)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row: any) => (
-                  <tr
-                    key={String(row.id)}
-                    className='border-b border-[var(--border)] last:border-0'
-                  >
-                    {columns.map((column: any) => (
-                      <td
-                        key={String(column.id || column.key)}
-                        className='px-3 py-2 text-[var(--text-primary)]'
-                      >
-                        {String((row.data || row.values)?.[column.key] ?? '')}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <Resource.Table
+          columns={columns.map((column: any) => ({
+            id: String(column.id || column.key),
+            header: String(column.name || column.key),
+          }))}
+          rows={rows.map((row: any) => ({
+            id: String(row.id),
+            cells: Object.fromEntries(
+              columns.map((column: any) => {
+                const id = String(column.id || column.key)
+                return [id, { label: String((row.data || row.values)?.[column.key] ?? '') }]
+              })
+            ),
+          }))}
+        />
       </div>
-    </Shell>
+    </Resource>
   )
 }
 

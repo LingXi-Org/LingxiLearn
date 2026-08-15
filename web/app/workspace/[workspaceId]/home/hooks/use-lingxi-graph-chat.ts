@@ -59,6 +59,16 @@ function attachmentRefs(attachments?: FileAttachmentForApi[]): LingxiAttachmentR
     }))
 }
 
+function normalizeArtifactKind(artifact: string): string {
+  if (artifact === 'lesson_intro') return 'lesson-intro'
+  if (artifact === 'lecture_deck') return 'lecture-deck'
+  return artifact
+}
+
+function artifactResourceId(taskId: string, artifact: string): string {
+  return `lingxi-artifact:${taskId}:${normalizeArtifactKind(artifact)}`
+}
+
 /**
  * Translate shared chat chips into the small, learner-scoped reference contract
  * understood by the LingxiGraph API. Unsupported legacy editor chips are
@@ -224,7 +234,7 @@ export function useLingxiGraphChat(
       if (eventWorkflowState) setWorkflowState(eventWorkflowState)
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
-        if (artifact) onResourceEventRef.current?.(`lingxi-artifact:${taskId}:${artifact}`)
+        if (artifact) onResourceEventRef.current?.(artifactResourceId(taskId, artifact))
         void currentAdapter
           .loadTask(taskId)
           .then((refreshed) => {
@@ -246,7 +256,8 @@ export function useLingxiGraphChat(
           })
           .catch(() => {
             if (loaded.latest_execution_id) {
-              void api.executionSnapshot(loaded.latest_execution_id)
+              void api
+                .executionSnapshot(loaded.latest_execution_id)
                 .then((snapshot) => setWorkflowState(snapshot.workflowState))
                 .catch(() => {})
             }

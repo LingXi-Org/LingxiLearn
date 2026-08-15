@@ -39,10 +39,17 @@ function parseResourceId(resourceId: string): ParsedResource {
     return { workspaceKind: 'workspace-tables' as const }
   if (resourceId === 'lingxi-workspace:files') return { workspaceKind: 'workspace-files' as const }
   if (resourceId === 'lingxi-workspace:logs') return { workspaceKind: 'runtime-logs' as const }
-  const [, taskId, kind] = resourceId.split(':')
+  const parts = resourceId.split(':')
+  const taskId = parts.slice(1, -1).join(':')
+  const rawKind = parts.at(-1)
+  const kind =
+    rawKind === 'lesson_intro'
+      ? 'lesson-intro'
+      : rawKind === 'lecture_deck'
+        ? 'lecture-deck'
+        : rawKind
   if (!taskId || !kind) return null
-  if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual'].includes(kind))
-    return null
+  if (!['lesson-intro', 'lecture-deck', 'quiz', 'visual'].includes(kind)) return null
   return { taskId, kind: kind as ArtifactKind }
 }
 
