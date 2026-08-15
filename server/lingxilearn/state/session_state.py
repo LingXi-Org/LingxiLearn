@@ -215,9 +215,7 @@ class GoalStack:
 
         before = self.to_list()
         target = (
-            next((g for g in self._goals if g.id == goal_id), None)
-            if goal_id
-            else self.current()
+            next((g for g in self._goals if g.id == goal_id), None) if goal_id else self.current()
         )
         if target is not None:
             index = self._goals.index(target)

@@ -17,6 +17,30 @@ from lingxi_identity import Principal  # type: ignore[import-untyped]
 from .config import Settings
 
 
+class _NoopClient:
+    """Avoid constructing a native TLS client in explicit local-auth mode."""
+
+    async def aclose(self) -> None:
+        return None
+
+
+class _LazyHttpClient:
+    """Create the TLS pool only when a production request actually needs it."""
+
+    def __init__(self, *, timeout: float) -> None:
+        self._timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    async def get(self, *args: Any, **kwargs: Any) -> httpx.Response:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self._timeout, follow_redirects=False)
+        return await self._client.get(*args, **kwargs)
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+
+
 def _authentication_error(detail: str = "invalid_token") -> HTTPException:
     return HTTPException(
         status_code=401,
@@ -80,7 +104,11 @@ def build_authenticator(settings: Settings) -> Authenticator:
         raise RuntimeError("LINGXILEARN_IDENTITY_BFF_URL is required")
     return Authenticator(
         settings=settings,
-        client=httpx.AsyncClient(timeout=settings.identity_bff_timeout, follow_redirects=False),
+        client=(
+            _NoopClient()  # type: ignore[arg-type]
+            if settings.insecure_dev_auth
+            else _LazyHttpClient(timeout=settings.identity_bff_timeout)
+        ),
     )
 
 

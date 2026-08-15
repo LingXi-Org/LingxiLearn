@@ -56,8 +56,12 @@ def ipv4_lpm(routes: list, destination: str) -> dict:
             continue
         matched = target in net
         considered.append(
-            {"prefix": str(net), "matches": matched, "prefix_length": net.prefixlen,
-             "next_hop": (entry.get("next_hop") if isinstance(entry, dict) else None)}
+            {
+                "prefix": str(net),
+                "matches": matched,
+                "prefix_length": net.prefixlen,
+                "next_hop": (entry.get("next_hop") if isinstance(entry, dict) else None),
+            }
         )
         if matched and (best is None or net.prefixlen > best["prefix_length"]):
             best = considered[-1]

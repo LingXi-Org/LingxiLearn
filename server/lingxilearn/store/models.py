@@ -66,9 +66,7 @@ class LearnerProfile(Base):
 
     __tablename__ = "learner_profiles"
 
-    learner_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("learners.id"), primary_key=True
-    )
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), primary_key=True)
     locale: Mapped[str] = mapped_column(String(32), default="zh-CN")
     level: Mapped[str] = mapped_column(String(64), default="undergraduate")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -107,7 +105,9 @@ class AgentTask(Base):
     title: Mapped[str] = mapped_column(Text, default="")
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_unread: Mapped[bool] = mapped_column(Boolean, default=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     resources: Mapped[list] = mapped_column(JSON, default=list)
     graph_version: Mapped[str] = mapped_column(String(32), default="difficult_knowledge.v2")
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
@@ -125,6 +125,211 @@ class AgentTask(Base):
     current_execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     latest_execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class AgentTurn(Base):
+    """Immutable interaction turn owned by the V2 coordinator."""
+
+    __tablename__ = "agent_turns"
+    __table_args__ = (
+        UniqueConstraint("task_id", "turn_index", name="uq_agent_turns_task_index"),
+        Index("ix_agent_turns_task_status", "task_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    turn_index: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(24), default="active", index=True)
+    phase: Mapped[str] = mapped_column(String(32), default="interpreting")
+    goal_status: Mapped[str] = mapped_column(String(24), default="open")
+    execution_mode: Mapped[str] = mapped_column(String(32), default="normal")
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+    input_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class CandidateSnapshot(Base):
+    """The exact registry binding used by a plan revision."""
+
+    __tablename__ = "candidate_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "task_id",
+            "turn_id",
+            "plan_revision",
+            "candidate_id",
+            name="uq_candidate_snapshot_binding",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    turn_id: Mapped[str] = mapped_column(String(128), ForeignKey("agent_turns.id"), index=True)
+    plan_revision: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_id: Mapped[str] = mapped_column(String(128), index=True)
+    capability: Mapped[str] = mapped_column(String(96))
+    knowledge_point_id: Mapped[str] = mapped_column(String(128), default="")
+    skill_id: Mapped[str] = mapped_column(String(160), default="")
+    skill_version: Mapped[str] = mapped_column(String(48), default="")
+    skill_checksum: Mapped[str] = mapped_column(String(128), default="")
+    provider: Mapped[str] = mapped_column(String(96), default="")
+    registry_snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CommandInbox(Base):
+    """Ordered, idempotent learner command queue."""
+
+    __tablename__ = "command_inbox"
+    __table_args__ = (
+        UniqueConstraint("task_id", "idempotency_key", name="uq_command_inbox_task_key"),
+        Index("ix_command_inbox_task_pending", "task_id", "consumed_at", "sequence"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    turn_id: Mapped[str] = mapped_column(String(128), ForeignKey("agent_turns.id"), index=True)
+    sequence: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(32))
+    idempotency_key: Mapped[str] = mapped_column(String(192))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class WorkItem(Base):
+    """Durable unit of provider work; replaces in-memory results."""
+
+    __tablename__ = "work_items"
+    __table_args__ = (
+        UniqueConstraint("turn_id", "work_key", name="uq_work_items_turn_key"),
+        Index("ix_work_items_claimable", "status", "lease_until"),
+        Index("ix_work_items_task_revision", "task_id", "plan_revision"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    turn_id: Mapped[str] = mapped_column(String(128), ForeignKey("agent_turns.id"), index=True)
+    work_key: Mapped[str] = mapped_column(String(160))
+    plan_revision: Mapped[int] = mapped_column(Integer, default=0)
+    candidate_id: Mapped[str] = mapped_column(String(128))
+    capability: Mapped[str] = mapped_column(String(96))
+    skill_id: Mapped[str] = mapped_column(String(160), default="")
+    skill_version: Mapped[str] = mapped_column(String(48), default="")
+    skill_checksum: Mapped[str] = mapped_column(String(128), default="")
+    provider: Mapped[str] = mapped_column(String(96), default="")
+    knowledge_point_id: Mapped[str] = mapped_column(String(128), default="")
+    input_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(192), unique=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    confirmation_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reserved_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_heavy: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_wall_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class WorkDependency(Base):
+    __tablename__ = "work_dependencies"
+    __table_args__ = (UniqueConstraint("work_id", "depends_on_id", name="uq_work_dependency"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    work_id: Mapped[str] = mapped_column(String(128), ForeignKey("work_items.id"), index=True)
+    depends_on_id: Mapped[str] = mapped_column(String(128), ForeignKey("work_items.id"), index=True)
+
+
+class WorkResult(Base):
+    __tablename__ = "work_results"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    work_id: Mapped[str] = mapped_column(String(128), ForeignKey("work_items.id"), unique=True)
+    schema_id: Mapped[str] = mapped_column(String(128), default="")
+    safe_summary: Mapped[str] = mapped_column(Text, default="")
+    artifact_refs: Mapped[list] = mapped_column(JSON, default=list)
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    usage: Mapped[dict] = mapped_column(JSON, default=dict)
+    output_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    error_code: Mapped[str] = mapped_column(String(64), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class FactSnapshot(Base):
+    """Immutable facts used by completion evaluation after a run resumes."""
+
+    __tablename__ = "fact_snapshots"
+    __table_args__ = (
+        UniqueConstraint("task_id", "turn_id", "plan_revision", name="uq_fact_snapshot_revision"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    turn_id: Mapped[str] = mapped_column(String(128), ForeignKey("agent_turns.id"), index=True)
+    plan_revision: Mapped[int] = mapped_column(Integer, default=0)
+    facts: Mapped[dict] = mapped_column(JSON, default=dict)
+    evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    artifact_refs: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BudgetLedger(Base):
+    __tablename__ = "budget_ledger"
+    __table_args__ = (
+        UniqueConstraint("task_id", "turn_id", "plan_revision", name="uq_budget_ledger_revision"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
+    turn_id: Mapped[str] = mapped_column(String(128), ForeignKey("agent_turns.id"), index=True)
+    plan_revision: Mapped[int] = mapped_column(Integer)
+    reserved_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    used_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_heavy: Mapped[int] = mapped_column(Integer, default=0)
+    used_heavy: Mapped[int] = mapped_column(Integer, default=0)
+    reserved_wall_ms: Mapped[int] = mapped_column(Integer, default=0)
+    used_wall_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TransactionalOutbox(Base):
+    __tablename__ = "transactional_outbox"
+    __table_args__ = (
+        UniqueConstraint("event_key", name="uq_transactional_outbox_event_key"),
+        Index("ix_transactional_outbox_pending", "published_at", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    event_key: Mapped[str] = mapped_column(String(192))
+    task_id: Mapped[str] = mapped_column(String(96), index=True)
+    turn_id: Mapped[str] = mapped_column(String(128), default="", index=True)
+    plan_revision: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[str] = mapped_column(String(64))
+    safe_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProjectionCursor(Base):
+    __tablename__ = "projection_cursors"
+    __table_args__ = (UniqueConstraint("learner_id", "projection", name="uq_projection_cursor"),)
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    projection: Mapped[str] = mapped_column(String(96))
+    last_event_id: Mapped[str] = mapped_column(String(128), default="")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
@@ -196,7 +401,9 @@ class AgentExecution(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class AgentSchedule(Base):
@@ -207,7 +414,9 @@ class AgentSchedule(Base):
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
-    source_task_id: Mapped[str | None] = mapped_column(String(96), ForeignKey("agent_tasks.id"), nullable=True, index=True)
+    source_task_id: Mapped[str | None] = mapped_column(
+        String(96), ForeignKey("agent_tasks.id"), nullable=True, index=True
+    )
     proposal_id: Mapped[str] = mapped_column(String(128), unique=True)
     prompt: Mapped[str] = mapped_column(Text)
     cron: Mapped[str] = mapped_column(String(128))
@@ -219,13 +428,17 @@ class AgentSchedule(Base):
     approval_scope: Mapped[str | None] = mapped_column(String(24), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revision: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class AgentScheduleRun(Base):
@@ -238,32 +451,14 @@ class AgentScheduleRun(Base):
     )
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    schedule_id: Mapped[str] = mapped_column(String(128), ForeignKey("agent_schedules.id"), index=True)
-    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    execution_id: Mapped[str | None] = mapped_column(String(128), ForeignKey("agent_executions.id"), nullable=True)
-    status: Mapped[str] = mapped_column(String(24), default="claimed", index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
-
-
-class AgentTaskSidecar(Base):
-    """Durable background work attached to one intent-driven task."""
-
-    __tablename__ = "agent_task_sidecars"
-    __table_args__ = (
-        UniqueConstraint("task_id", "kind", name="uq_agent_task_sidecars_task_kind"),
-        Index("ix_agent_task_sidecars_task_status", "task_id", "status"),
+    schedule_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("agent_schedules.id"), index=True
     )
-
-    id: Mapped[str] = mapped_column(String(160), primary_key=True)
-    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
-    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
-    kind: Mapped[str] = mapped_column(String(64))
-    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
-    input: Mapped[dict] = mapped_column(JSON, default=dict)
-    output: Mapped[dict] = mapped_column(JSON, default=dict)
-    error: Mapped[str] = mapped_column(Text, default="")
-    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    execution_id: Mapped[str | None] = mapped_column(
+        String(128), ForeignKey("agent_executions.id"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(24), default="claimed", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -308,9 +503,7 @@ class Misconception(Base):
     """Aggregated misconception observations for one learner."""
 
     __tablename__ = "misconceptions"
-    __table_args__ = (
-        UniqueConstraint("learner_id", "tag", name="uq_misconceptions_learner_tag"),
-    )
+    __table_args__ = (UniqueConstraint("learner_id", "tag", name="uq_misconceptions_learner_tag"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
@@ -398,9 +591,7 @@ class LearningProfile(Base):
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     my_questions: Mapped[list] = mapped_column(JSON, default=list)
     recent_performance: Mapped[dict] = mapped_column(JSON, default=dict)
-    last_studied_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_studied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_step: Mapped[dict] = mapped_column(JSON, default=dict)
     """Clickable entry point: {action_id, capability, label, params, rationale}."""
@@ -532,9 +723,7 @@ class LearningPreference(Base):
 
     __tablename__ = "learning_preferences"
 
-    learner_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("learners.id"), primary_key=True
-    )
+    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), primary_key=True)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -568,9 +757,7 @@ class ReportRecord(Base):
 
     __tablename__ = "reports"
 
-    session_id: Mapped[str] = mapped_column(
-        String(64), ForeignKey("sessions.id"), primary_key=True
-    )
+    session_id: Mapped[str] = mapped_column(String(64), ForeignKey("sessions.id"), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), index=True)
     mission_id: Mapped[str] = mapped_column(String(64))
     probe_score: Mapped[float] = mapped_column(Float, default=0.0)
@@ -678,9 +865,7 @@ class WorkspaceUploadSession(Base):
     """Durable metadata for a resumable local upload transfer."""
 
     __tablename__ = "workspace_upload_sessions"
-    __table_args__ = (
-        Index("ix_workspace_upload_sessions_learner_status", "learner_id", "status"),
-    )
+    __table_args__ = (Index("ix_workspace_upload_sessions_learner_status", "learner_id", "status"),)
 
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
     workspace_id: Mapped[str] = mapped_column(String(64), ForeignKey("workspaces.id"), index=True)
@@ -781,10 +966,14 @@ class KnowledgeBase(Base):
 
 class KnowledgeDocument(Base):
     __tablename__ = "workspace_knowledge_documents"
-    __table_args__ = (Index("ix_workspace_knowledge_documents_base_archived", "base_id", "archived"),)
+    __table_args__ = (
+        Index("ix_workspace_knowledge_documents_base_archived", "base_id", "archived"),
+    )
 
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
-    base_id: Mapped[str] = mapped_column(String(96), ForeignKey("workspace_knowledge_bases.id"), index=True)
+    base_id: Mapped[str] = mapped_column(
+        String(96), ForeignKey("workspace_knowledge_bases.id"), index=True
+    )
     name: Mapped[str] = mapped_column(String(255))
     mime_type: Mapped[str] = mapped_column(String(160), default="text/plain")
     content: Mapped[str] = mapped_column(Text, default="")
@@ -803,7 +992,9 @@ class KnowledgeChunk(Base):
     )
 
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
-    document_id: Mapped[str] = mapped_column(String(96), ForeignKey("workspace_knowledge_documents.id"), index=True)
+    document_id: Mapped[str] = mapped_column(
+        String(96), ForeignKey("workspace_knowledge_documents.id"), index=True
+    )
     ordinal: Mapped[int] = mapped_column(Integer, default=0)
     text: Mapped[str] = mapped_column(Text, default="")
     metadata_payload: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
@@ -814,7 +1005,9 @@ class KnowledgeTag(Base):
     __table_args__ = (UniqueConstraint("base_id", "name", name="uq_workspace_knowledge_tag_name"),)
 
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
-    base_id: Mapped[str] = mapped_column(String(96), ForeignKey("workspace_knowledge_bases.id"), index=True)
+    base_id: Mapped[str] = mapped_column(
+        String(96), ForeignKey("workspace_knowledge_bases.id"), index=True
+    )
     name: Mapped[str] = mapped_column(String(128))
     tag_slot: Mapped[str] = mapped_column(String(32), default="")
     field_type: Mapped[str] = mapped_column(String(32), default="string")
@@ -825,13 +1018,17 @@ class KnowledgeDocumentTag(Base):
     document_id: Mapped[str] = mapped_column(
         String(96), ForeignKey("workspace_knowledge_documents.id"), primary_key=True
     )
-    tag_id: Mapped[str] = mapped_column(String(96), ForeignKey("workspace_knowledge_tags.id"), primary_key=True)
+    tag_id: Mapped[str] = mapped_column(
+        String(96), ForeignKey("workspace_knowledge_tags.id"), primary_key=True
+    )
     value: Mapped[str] = mapped_column(Text, default="")
 
 
 class PersonalSkill(Base):
     __tablename__ = "workspace_personal_skills"
-    __table_args__ = (UniqueConstraint("learner_id", "name", name="uq_workspace_personal_skill_name"),)
+    __table_args__ = (
+        UniqueConstraint("learner_id", "name", name="uq_workspace_personal_skill_name"),
+    )
 
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)

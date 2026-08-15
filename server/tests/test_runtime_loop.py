@@ -13,7 +13,6 @@ import pytest
 from lingxilearn.agents.providers import base as provider_base
 from lingxilearn.agents.providers.base import ProviderContext, ProviderResult
 from lingxilearn.runtime.candidates import WorldState
-from lingxilearn.runtime.contracts import DoneCondition
 from lingxilearn.runtime.dispatch import NoProvider, resolve
 from lingxilearn.runtime.guardrails import Budget
 from lingxilearn.runtime.loop import LoopDeps, build_loop, initial_state
@@ -37,8 +36,13 @@ def registry_row(skill_id: str, capability: str, provider: str, **cost: Any) -> 
         "provider": provider,
         "enabled": True,
         "preconditions": {},
-        "cost": {"latency_class": "interactive", "latency_weight": 1.0,
-                 "heavy_artifact": False, "blocking": True, **cost},
+        "cost": {
+            "latency_class": "interactive",
+            "latency_weight": 1.0,
+            "heavy_artifact": False,
+            "blocking": True,
+            **cost,
+        },
     }
 
 
@@ -201,17 +205,15 @@ async def test_the_same_utterance_takes_different_paths_on_different_profiles(
     novice_plan = unavailable_plan(candidates=generate(goal=GOAL, world=novice, skills=skills))
     blocked_plan = unavailable_plan(candidates=generate(goal=GOAL, world=blocked, skills=skills))
 
-    assert not novice_plan.tasks and novice_plan.awaits_user
-    assert not blocked_plan.tasks and blocked_plan.awaits_user
+    assert len(novice_plan.tasks) == 1 and novice_plan.degraded
+    assert len(blocked_plan.tasks) == 1 and blocked_plan.degraded
 
 
 # --- criterion 2: a step's result changes the next step, visibly ------------
 
 
 @pytest.mark.asyncio
-async def test_the_loop_replans_and_the_replan_is_in_the_trace(
-    state_db, fake_providers
-) -> None:
+async def test_the_loop_replans_and_the_replan_is_in_the_trace(state_db, fake_providers) -> None:
     _database, runtime, learner_id = state_db
     await _seed_registry(runtime)
     task_id = "task-replan"
@@ -307,9 +309,7 @@ async def test_the_runtime_graph_grows_a_node_per_decision(state_db, fake_provid
 
 
 @pytest.mark.asyncio
-async def test_evidence_produced_by_a_round_reaches_the_profile(
-    state_db, fake_providers
-) -> None:
+async def test_evidence_produced_by_a_round_reaches_the_profile(state_db, fake_providers) -> None:
     _database, runtime, learner_id = state_db
     await _seed_registry(runtime)
     task_id = "task-evidence"
@@ -332,9 +332,7 @@ async def test_evidence_produced_by_a_round_reaches_the_profile(
 
 
 @pytest.mark.asyncio
-async def test_an_exhausted_budget_stops_the_loop_with_a_reason(
-    state_db, fake_providers
-) -> None:
+async def test_an_exhausted_budget_stops_the_loop_with_a_reason(state_db, fake_providers) -> None:
     _database, runtime, learner_id = state_db
     await _seed_registry(runtime)
     task_id = "task-budget"
@@ -402,14 +400,15 @@ def test_a_skill_without_a_provider_is_not_resolvable() -> None:
 # --- fallback planning ------------------------------------------------------
 
 
-def test_an_unavailable_control_model_never_selects_a_local_route() -> None:
+def test_an_unavailable_control_model_uses_one_safe_fallback_route() -> None:
     from lingxilearn.runtime.candidates import generate
 
     world = WorldState(target=ProfileView.unseen("tcp-congestion"))
     plan = unavailable_plan(candidates=generate(goal=GOAL, world=world, skills=REGISTRY))
     assert plan.degraded
-    assert not plan.tasks
-    assert plan.awaits_user
+    assert len(plan.tasks) == 1
+    assert plan.tasks[0].candidate_id
+    assert not plan.awaits_user
 
 
 def test_with_no_eligible_candidate_the_fallback_hands_back_to_the_learner() -> None:

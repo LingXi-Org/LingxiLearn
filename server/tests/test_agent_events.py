@@ -20,4 +20,3 @@ def test_agent_event_vocabulary_contains_runtime_lifecycle() -> None:
     }
     assert required <= AGENT_EVENT_KINDS
     assert TERMINAL_AGENT_EVENT_KINDS <= AGENT_EVENT_KINDS
-
