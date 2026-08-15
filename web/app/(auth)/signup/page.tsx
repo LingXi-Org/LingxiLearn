@@ -1,13 +1,19 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import type { SearchParams } from 'nuqs/server'
-import { isRegistrationDisabled } from '@/lib/core/config/env-flags'
+import {
+  isEmailSignupDisabled,
+  isMockAuthEnabled,
+  isProd,
+  isRegistrationDisabled,
+} from '@/lib/core/config/env-flags'
 import { validateCallbackUrl } from '@/lib/core/security/input-validation'
 import { resolveAuthRedirect } from '@/app/(auth)/auth-redirect'
-import { AuthEntry } from '@/app/(auth)/components/auth-entry'
+import { getOAuthProviderStatus } from '@/app/(auth)/components/oauth-provider-checker'
 import SignupLoading from '@/app/(auth)/signup/loading'
 import { RegistrationDisabled } from '@/app/(auth)/signup/registration-disabled'
 import { signupSearchParamsCache } from '@/app/(auth)/signup/search-params'
+import SignupForm from '@/app/(auth)/signup/signup-form'
 
 export const metadata: Metadata = { title: '注册' }
 export const dynamic = 'force-dynamic'
@@ -32,9 +38,22 @@ export default async function SignupPage({
     )
   }
 
+  const { githubAvailable, googleAvailable, microsoftAvailable, isProduction } =
+    await getOAuthProviderStatus()
+  const emailVerificationEnabled = isMockAuthEnabled
+    ? false
+    : (await import('@/lib/messaging/email/verification')).isEmailVerificationEffectivelyEnabled()
+
   return (
     <Suspense fallback={<SignupLoading />}>
-      <AuthEntry kind='register' />
+      <SignupForm
+        githubAvailable={githubAvailable}
+        googleAvailable={googleAvailable}
+        microsoftAvailable={microsoftAvailable}
+        isProduction={isProduction}
+        emailSignupEnabled={!isEmailSignupDisabled}
+        emailVerificationEnabled={isProd ? emailVerificationEnabled : false}
+      />
     </Suspense>
   )
 }

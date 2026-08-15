@@ -287,6 +287,7 @@ function SignupFormContent({
           email: emailValue,
           password: passwordValue,
           name: trimmedName,
+          callbackURL: redirectUrl || '/workspace/lingxi/home/',
         },
         {
           headers: {
@@ -410,7 +411,9 @@ function SignupFormContent({
     <div className='space-y-6'>
       <AuthHeader title='创建账户' description='注册灵犀智学账户' />
 
-      {hasOnlySSO && <SSOLoginButton callbackURL={redirectUrl || '/workspace/lingxi/home/'} variant='primary' />}
+      {hasOnlySSO && (
+        <SSOLoginButton callbackURL={redirectUrl || '/workspace/lingxi/home/'} variant='primary' />
+      )}
 
       {emailEnabled && (
         <form onSubmit={onSubmit} className='space-y-6'>
@@ -488,7 +491,10 @@ function SignupFormContent({
           isProduction={isProduction}
         >
           {ssoEnabled && !hasOnlySSO && (
-            <SSOLoginButton callbackURL={redirectUrl || '/workspace/lingxi/home/'} variant='outline' />
+            <SSOLoginButton
+              callbackURL={redirectUrl || '/workspace/lingxi/home/'}
+              variant='outline'
+            />
           )}
         </SocialLoginButtons>
       )}
