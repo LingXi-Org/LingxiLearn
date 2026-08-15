@@ -112,7 +112,7 @@ const SidebarNavItem = memo(function SidebarNavItem({
   collapsed: boolean
 }) {
   const className = cn(
-    'h-[30px] gap-2 text-[12px]',
+    'h-[30px] w-full gap-2 text-[12px]',
     collapsed && 'justify-center px-0',
     item.disabled && 'cursor-not-allowed opacity-50 hover-hover:bg-transparent'
   )
@@ -308,7 +308,7 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
               onClick={toggleCollapsed}
               aria-label='展开侧栏'
               leftAdornment={<PanelLeft className='-scale-x-100 size-4' />}
-              className='size-[30px] shrink-0 justify-center px-0'
+              className='mx-auto size-[30px] shrink-0 justify-center px-0'
             />
           </SidebarTooltip>
         ) : (

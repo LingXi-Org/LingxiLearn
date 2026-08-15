@@ -253,9 +253,6 @@ export function TablesPage() {
     <Resource>
       <Resource.Header icon={TableIcon} title='学习记录' />
       <div className='min-h-0 flex-1 overflow-y-auto p-4'>
-        <p className='mx-auto mb-4 max-w-[960px] text-[12px] text-[var(--text-muted)]'>
-          以下内容由学习过程自动生成，仅供查看。
-        </p>
         <Resource.Table
           columns={[
             { id: 'name', header: '表格' },
