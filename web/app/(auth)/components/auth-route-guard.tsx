@@ -8,6 +8,11 @@ function safeDestination(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) {
     return '/workspace/lingxi/home/'
   }
+  const pathname = value.split('?')[0]
+  const isAuthEntry = ['/login', '/signup', '/sso', '/verify', '/reset-password'].some(
+    (entry) => pathname === entry || pathname.startsWith(`${entry}/`)
+  )
+  if (isAuthEntry) return '/workspace/lingxi/home/'
   return value
 }
 
