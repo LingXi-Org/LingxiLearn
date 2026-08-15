@@ -32,7 +32,7 @@ export default function Contact() {
             title='技术负责人'
             handle='chengyang.li'
             status='LingXi Engineering'
-            avatarUrl='/landing/contact/portrait-li-chengyang.png'
+            avatarUrl='/landing/contact/portrait-li-chengyang.webp'
             iconUrl='/landing/contact/code-icon.svg'
             contactHref='mailto:team@lingxilearn.cn'
           />
@@ -41,7 +41,7 @@ export default function Contact() {
             title='产品负责人'
             handle='yuanyang.li'
             status='LingXi Product'
-            avatarUrl='/landing/contact/portrait-li-yuanyang.png'
+            avatarUrl='/landing/contact/portrait-li-yuanyang.webp'
             iconUrl='/landing/contact/product-icon.svg'
             contactHref='mailto:team@lingxilearn.cn'
           />

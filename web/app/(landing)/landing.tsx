@@ -5,7 +5,6 @@ import { Hero } from '@/app/(landing)/components/hero'
 import { HomeStructuredData } from '@/app/(landing)/components/home-structured-data'
 import { LANDING_SECTION_RHYTHM } from '@/app/(landing)/components/landing-layout'
 import { Mothership } from '@/app/(landing)/components/mothership/mothership'
-import { ProductDemo } from '@/app/(landing)/components/product-demo'
 
 /**
  * Landing page root - owns the section order and the `<main>` content region.
@@ -26,7 +25,6 @@ export default function Landing() {
     <main id='main-content' className={cn('flex flex-col', LANDING_SECTION_RHYTHM)}>
       <HomeStructuredData />
       <Hero />
-      <ProductDemo />
       <Mothership />
       <Features />
       <Cta />

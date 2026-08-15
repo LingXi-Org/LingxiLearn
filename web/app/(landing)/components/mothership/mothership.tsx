@@ -40,34 +40,34 @@ interface Area {
 
 const AREAS: Area[] = [
   {
-    word: '集成',
+    word: '可视化',
     Mark: IsoIntegrateIllustration,
     size: 180,
     definition: (
       <>
-        LingXi 连接你的学习资源，
+        将抽象知识转化为交互式课件、图解与练习，
         <br />
-        让学习任务围绕你的目标展开。
+        让知识被看见、被理解、被掌握。
       </>
     ),
   },
   {
-    word: '上下文',
+    word: '理解',
     Mark: IsoIngestIllustration,
     size: 170,
-    definition: '沉淀课程、笔记、错题和对话，让学习上下文持续可用。',
+    definition: '所有工作以知识状态、学习目标与掌握状态为纲，形成个性化学习上下文。',
   },
   {
-    word: '构建',
+    word: '协作',
     Mark: IsoBuildIllustration,
     size: 176,
-    definition: '由多智能体协作完成讲解、图解、练习和复习。',
+    definition: '多个专业 Agent 基于 Skill 自动组合，并行完成讲解、练习与反馈任务。',
   },
   {
-    word: '监控',
+    word: '成长',
     Mark: IsoMonitorIllustration,
     size: 174,
-    definition: '根据每次作答和反馈更新学习状态，给出下一步建议。',
+    definition: '持续分析学习过程，根据反馈动态调整教学策略。',
   },
 ]
 
@@ -82,10 +82,10 @@ export function Mothership() {
         id='mothership-heading'
         className='max-w-[1200px] text-balance text-[28px] leading-[1.2] max-sm:text-[22px]'
       >
-        <span className='block text-[var(--text-primary)]'>
-          完成学习闭环所需的一切，集中于一个工作空间。
+        <span className='block text-[var(--text-primary)]'>一个全闭环的 AI 学习工作空间</span>
+        <span className='block text-[var(--text-body)]'>
+          让多智能体理解学习目标、协同完成任务，并实时反馈每一步学习进展。
         </span>
-        <span className='block text-[var(--text-body)]'>讲解、练习并持续复习每一个知识点。</span>
       </h2>
 
       <ul className='mt-16 grid grid-cols-4 gap-8 max-sm:mt-8 max-sm:grid-cols-1 max-sm:gap-10 max-lg:mt-12 max-lg:grid-cols-2 max-lg:gap-x-8 max-lg:gap-y-12'>

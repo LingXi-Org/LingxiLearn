@@ -2,108 +2,120 @@ import { AgentIcon, BrainIcon, ChartBarIcon, StartIcon, TableIcon } from '@/comp
 import type { BlockDef } from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
 import { BLOCK_WIDTH } from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
 
-/**
- * Design-space geometry for the hero's live workflow stage - the adaptive
- * learning flow the chat conversation "builds": Start feeds the learner-state
- * agent, then branches into explanation, practice, and review. Block tiles use
- * the platform's existing grey text ramp and icon treatment.
- *
- * Blocks are ordered by build sequence - the stage reveals `blocks[0..built-1]`
- * as the loop's build counter advances, and an edge draws once both its
- * endpoints are on canvas.
- */
+/** The learning loop rendered inside the homepage's existing workflow stage. */
 export const STAGE_BLOCKS: BlockDef[] = [
   {
-    id: 'start',
-    name: '开始学习',
+    id: 'goal',
+    name: '你的目标',
     icon: StartIcon,
     bgColor: 'var(--text-muted)',
     isTrigger: true,
-    rows: [{ title: '输入', value: '-' }],
+    rows: [{ title: '主题', value: '交叉熵为什么有效' }],
     x: 155,
-    y: 12,
+    y: 10,
   },
   {
-    id: 'enrich',
-    name: '分析学习状态',
+    id: 'topic',
+    name: '理解「交叉熵为什么有效」',
+    icon: BrainIcon,
+    bgColor: 'var(--text-primary)',
+    rows: [{ title: '主题', value: '交叉熵为什么有效' }],
+    x: 155,
+    y: 125,
+  },
+  {
+    id: 'question',
+    name: '理解你的问题',
     icon: AgentIcon,
     bgColor: 'var(--text-primary)',
     rows: [
-      { title: '目标', value: '-' },
-      { title: '掌握度', value: '-' },
-      { title: '薄弱点', value: '-' },
+      { title: '问题', value: '分类误差' },
+      { title: '目标', value: '建立理解' },
     ],
     x: 155,
-    y: 172,
+    y: 240,
   },
   {
-    id: 'score',
-    name: '个性化讲解',
+    id: 'state',
+    name: '检查当前掌握状态',
     icon: BrainIcon,
     bgColor: 'var(--text-secondary)',
     rows: [
-      { title: '方式', value: '图解 + 对话' },
-      { title: '重点', value: '-' },
+      { title: '知识', value: '概率与信息量' },
+      { title: '状态', value: '待确认' },
     ],
     x: 155,
-    y: 390,
+    y: 355,
   },
   {
-    id: 'practice',
-    name: '针对性练习',
-    icon: ChartBarIcon,
-    bgColor: '#611F69',
-    isTerminal: true,
-    rows: [
-      { title: '难度', value: '-' },
-      { title: '题目', value: '-' },
-    ],
-    x: 0,
-    y: 580,
-  },
-  {
-    id: 'review',
-    name: '生成复习建议',
+    id: 'prerequisite',
+    name: '补充前置概念',
     icon: TableIcon,
     bgColor: 'var(--text-body)',
-    isTerminal: true,
     rows: [
-      { title: '薄弱点', value: '-' },
-      { title: '下一步', value: '-' },
+      { title: '内容', value: '概率与信息量' },
+      { title: '方式', value: '讲解' },
+    ],
+    x: 0,
+    y: 485,
+  },
+  {
+    id: 'visual',
+    name: '建立直观理解',
+    icon: BrainIcon,
+    bgColor: 'var(--text-body)',
+    rows: [
+      { title: '内容', value: '可视化解释' },
+      { title: '方式', value: '图解' },
     ],
     x: 310,
-    y: 580,
+    y: 485,
+  },
+  {
+    id: 'check',
+    name: '检验理解',
+    icon: ChartBarIcon,
+    bgColor: 'var(--text-secondary)',
+    rows: [
+      { title: '形式', value: '练习题' },
+      { title: '反馈', value: '即时' },
+    ],
+    x: 155,
+    y: 620,
+  },
+  {
+    id: 'update',
+    name: '更新学习状态',
+    icon: AgentIcon,
+    bgColor: 'var(--text-primary)',
+    isTerminal: true,
+    rows: [
+      { title: '结果', value: '已记录' },
+      { title: '下一步', value: '动态调整' },
+    ],
+    x: 155,
+    y: 750,
   },
 ]
 
-/** Source → target pairs, drawn in order as their endpoints land on canvas. */
 export const STAGE_EDGES: ReadonlyArray<readonly [string, string]> = [
-  ['start', 'enrich'],
-  ['enrich', 'score'],
-  ['score', 'practice'],
-  ['score', 'review'],
+  ['goal', 'topic'],
+  ['topic', 'question'],
+  ['question', 'state'],
+  ['state', 'prerequisite'],
+  ['state', 'visual'],
+  ['prerequisite', 'check'],
+  ['visual', 'check'],
+  ['check', 'update'],
 ]
 
-/** Design-space bounding box of the layout above. */
-export const STAGE_CANVAS = { width: 560, height: 700 } as const
+export const STAGE_CANVAS = { width: 560, height: 880 } as const
 
-/**
- * Approximate rendered block height - the icon-tile header (~40px) plus the
- * rows section (16px padding + 21px per row + 8px gaps). Used to place a
- * block's bottom (outgoing) handle; a few px of drift is invisible at stage
- * scale.
- */
 export function blockHeight(block: BlockDef): number {
   const n = block.rows.length
   return 40 + (n > 0 ? 16 + n * 21 + (n - 1) * 8 : 0)
 }
 
-/**
- * Rounded orthogonal ("smoothstep") path for a VERTICAL flow - from a source's
- * bottom-center handle to a target's top-center handle, stepping at the
- * vertical midpoint with `r`-radius corners. The horizontal-flow counterpart
- * lives in `hero-visual/workflow-data.ts`.
- */
 export function verticalSmoothStep(sx: number, sy: number, tx: number, ty: number, r = 8): string {
   if (Math.abs(tx - sx) < 1) return `M ${sx} ${sy} L ${tx} ${ty}`
   const midY = (sy + ty) / 2
@@ -118,7 +130,6 @@ export function verticalSmoothStep(sx: number, sy: number, tx: number, ty: numbe
   ].join(' ')
 }
 
-/** Handle anchor points for a block at its fixed position. */
 export function handleAnchors(block: BlockDef) {
   return {
     out: { x: block.x + BLOCK_WIDTH / 2, y: block.y + blockHeight(block) },
