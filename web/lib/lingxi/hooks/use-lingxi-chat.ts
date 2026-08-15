@@ -5,17 +5,11 @@ import { useRouter } from 'next/navigation'
 import { api, subscribeAgentEvents } from '@/lib/lingxi/api'
 import type { LingxiChatMessage } from '@/lib/lingxi/chat-types'
 import { projectLingxiGraphEvents } from '@/lib/lingxi/lingxi-graph-adapter'
-import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
-
-const TERMINAL_STATUSES = new Set([
-  'handed_off',
-  'completed',
-  'partial',
-  'failed',
-  'timed_out',
-  'budget_exceeded',
-  'cancelled',
-])
+import {
+  type AgentTaskEvent,
+  type AgentTaskSnapshot,
+  isAgentTaskTerminal,
+} from '@/lib/lingxi/types'
 
 export type LingxiArtifactKind =
   | 'lesson-intro'
@@ -35,7 +29,7 @@ export interface LingxiArtifactResourceDescriptor {
 }
 
 function isTerminal(task: AgentTaskSnapshot | null): boolean {
-  return Boolean(task && TERMINAL_STATUSES.has(task.status))
+  return isAgentTaskTerminal(task)
 }
 
 function artifactResources(task: AgentTaskSnapshot | null): LingxiArtifactResourceDescriptor[] {

@@ -9,7 +9,11 @@ import {
   type LingxiGraphChatAdapter,
   projectLingxiGraphEvents,
 } from '@/lib/lingxi/lingxi-graph-adapter'
-import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import {
+  type AgentTaskEvent,
+  type AgentTaskSnapshot,
+  isAgentTaskTerminal,
+} from '@/lib/lingxi/types'
 import type { ChatContext } from '@/stores/panel'
 import type {
   ChatMessage,
@@ -19,18 +23,8 @@ import type {
 } from '../types'
 import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './use-chat'
 
-const TERMINAL_TASK_STATUSES = new Set([
-  'handed_off',
-  'completed',
-  'partial',
-  'failed',
-  'timed_out',
-  'budget_exceeded',
-  'cancelled',
-])
-
 function taskIsTerminal(task: AgentTaskSnapshot | null): boolean {
-  return task !== null && TERMINAL_TASK_STATUSES.has(task.status)
+  return isAgentTaskTerminal(task)
 }
 
 function userMessage(id: string, content: string, contexts?: ChatContext[]): ChatMessage {

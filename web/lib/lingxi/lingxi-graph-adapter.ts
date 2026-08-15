@@ -1,11 +1,15 @@
-import { api, subscribeAgentEvents, type LingxiAttachmentRef } from '@/lib/lingxi/api'
+import { api, type LingxiAttachmentRef, subscribeAgentEvents } from '@/lib/lingxi/api'
 import type {
   ContentBlock,
   ReasoningStep,
   ToolCallInfo,
   ToolCallStatus,
 } from '@/lib/lingxi/chat-types'
-import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import {
+  type AgentTaskEvent,
+  type AgentTaskSnapshot,
+  isAgentTaskTerminal,
+} from '@/lib/lingxi/types'
 
 export const LINGXI_GRAPH_ADAPTER_KIND = 'lingxigraph' as const
 
@@ -106,7 +110,6 @@ const TOOL_LABELS: Record<string, string> = {
   list_staged_artifacts: '列出学习产物',
 }
 
-const TERMINAL_TASK_STATUSES = new Set(['handed_off', 'completed', 'partial', 'failed', 'cancelled'])
 const TERMINAL_AGENT_EVENTS = new Set(['agent.completed', 'agent.failed'])
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -446,7 +449,7 @@ function toolInfo(tool: ToolRun): ToolCallInfo {
 }
 
 function isTerminal(task: AgentTaskSnapshot): boolean {
-  return TERMINAL_TASK_STATUSES.has(task.status)
+  return isAgentTaskTerminal(task)
 }
 
 function quizQuestionTag(task: AgentTaskSnapshot): string | null {

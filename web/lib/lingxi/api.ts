@@ -1,3 +1,4 @@
+import { AGENT_EVENT_KINDS } from './agent-events'
 import type {
   AgentTaskEvent,
   AgentTaskListItem,
@@ -10,7 +11,6 @@ import type {
   SessionSnapshot,
   SimExecutionSnapshot,
 } from './types'
-import { AGENT_EVENT_KINDS } from './agent-events'
 
 /**
  * When the app is served by FastAPI (the single-process deployment) the API is
@@ -42,6 +42,11 @@ export interface LingxiAttachmentRef {
 export interface LingxiTaskContextOptions {
   resourceRefs?: Array<Record<string, unknown>>
   skillIds?: string[]
+  idempotencyKey?: string
+}
+
+function idempotencyKey(prefix: string): string {
+  return `${prefix}:${crypto.randomUUID()}`
 }
 
 export interface WorkspaceFileItem {
@@ -518,6 +523,7 @@ export const api = {
         attachments,
         resource_refs: context.resourceRefs ?? [],
         skill_ids: context.skillIds ?? [],
+        idempotency_key: context.idempotencyKey ?? idempotencyKey(`message:${taskId}`),
       }),
     }),
 
@@ -633,17 +639,45 @@ export const api = {
     })
   },
 
-  submitAgentQuiz: (taskId: string, submissionId: string, answers: Record<string, unknown>) =>
+  submitAgentQuiz: (
+    taskId: string,
+    submissionId: string,
+    answers: Record<string, unknown>,
+    requestKey = idempotencyKey(`quiz:${taskId}:${submissionId}`)
+  ) =>
     request<{ status: string; submission: QuizSubmissionSnapshot }>(
       `/agent-tasks/${taskId}/quiz-submissions`,
       {
         method: 'POST',
-        body: JSON.stringify({ submission_id: submissionId, answers }),
+        body: JSON.stringify({
+          submission_id: submissionId,
+          answers,
+          idempotency_key: requestKey,
+        }),
       }
     ),
-  ackAgentDelivery: (taskId: string, artifact: string) =>
+  confirmAgentWork: (
+    taskId: string,
+    input: { workItemId: string; approve: boolean; payloadDigest: string; idempotencyKey?: string }
+  ) =>
+    request<{ status: string; workItemId: string }>(`/agent-tasks/${taskId}/confirmations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        work_item_id: input.workItemId,
+        approve: input.approve,
+        payload_digest: input.payloadDigest,
+        idempotency_key:
+          input.idempotencyKey ?? idempotencyKey(`confirmation:${taskId}:${input.workItemId}`),
+      }),
+    }),
+  ackAgentDelivery: (
+    taskId: string,
+    artifact: string,
+    requestKey = idempotencyKey(`delivery:${taskId}:${artifact}`)
+  ) =>
     request<{ artifact: string; cursor: number; delivery: AgentTaskSnapshot['delivery']['queue'] }>(
-      `/agent-tasks/${taskId}/delivery/${artifact}/ack`, { method: 'POST' }
+      `/agent-tasks/${taskId}/delivery/${artifact}/ack`,
+      { method: 'POST', headers: { 'Idempotency-Key': requestKey } }
     ),
 
   agentArtifactUrl: (taskId: string, kind: 'lesson-intro' | 'lecture-deck' | 'visual') =>

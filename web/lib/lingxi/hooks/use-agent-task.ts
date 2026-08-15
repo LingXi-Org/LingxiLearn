@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, subscribeAgentEvents } from '@/lib/lingxi/api'
-import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import { type AgentTaskEvent, type AgentTaskSnapshot, isAgentTaskActive } from '@/lib/lingxi/types'
 
 export function useAgentTask(taskId: string) {
   const [task, setTask] = useState<AgentTaskSnapshot | null>(null)
@@ -50,7 +50,7 @@ export function useAgentTask(taskId: string) {
   }, [taskId, refresh])
 
   useEffect(() => {
-    if (!task || (task.status !== 'queued' && task.status !== 'running')) return
+    if (!isAgentTaskActive(task)) return
     const timer = setInterval(() => void refresh(), 1800)
     return () => clearInterval(timer)
   }, [refresh, task])

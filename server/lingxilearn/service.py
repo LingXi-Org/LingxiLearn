@@ -798,6 +798,7 @@ class Service:
                 "status": str(item.get("status") or "queued"),
                 "planRevision": int(item.get("plan_revision") or 0),
                 "provider": str(item.get("provider") or ""),
+                "payloadDigest": str(item.get("confirmation_digest") or "") or None,
             }
             for item in (durable_work or current_plan.get("tasks") or [])
             if isinstance(item, dict)

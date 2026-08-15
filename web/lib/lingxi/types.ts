@@ -118,6 +118,27 @@ export type AgentTaskStatus =
   | 'budget_exceeded'
   | 'cancelled'
 
+export type AgentTurnStatus =
+  | 'active'
+  | 'awaiting_user'
+  | 'delivered'
+  | 'failed'
+  | 'cancelled'
+  | string
+
+export type AgentGoalStatus = 'open' | 'active' | 'completed' | 'failed' | 'cancelled' | string
+
+export interface AgentWorkItem {
+  id: string
+  candidateId: string
+  capability: string
+  dependsOn: string[]
+  status: string
+  planRevision: number
+  provider: string
+  payloadDigest?: string | null
+}
+
 export interface AgentTaskListItem {
   id: string
   prompt: string
@@ -210,6 +231,15 @@ export interface QuizSubmissionSnapshot {
 export interface AgentTaskSnapshot {
   id: string
   status: AgentTaskStatus
+  turnStatus?: AgentTurnStatus
+  goalStatus?: AgentGoalStatus
+  phase?: string
+  executionMode?: string
+  currentTurnId?: string
+  planRevision?: number
+  workItems?: AgentWorkItem[]
+  plan?: Record<string, unknown>
+  budget?: Record<string, unknown>
   prompt: string
   graph_version: string
   intent: {
@@ -261,6 +291,29 @@ export interface AgentTaskSnapshot {
     started_at: string | null
     ended_at: string | null
   }>
+}
+
+const TERMINAL_AGENT_TASK_STATUSES = new Set<AgentTaskStatus>([
+  'handed_off',
+  'completed',
+  'partial',
+  'failed',
+  'timed_out',
+  'budget_exceeded',
+  'cancelled',
+])
+
+export function isAgentTaskTerminal(task: AgentTaskSnapshot | null | undefined): boolean {
+  if (!task) return false
+  return (
+    TERMINAL_AGENT_TASK_STATUSES.has(task.status) ||
+    ['delivered', 'failed', 'cancelled'].includes(task.turnStatus) ||
+    ['completed', 'failed', 'cancelled'].includes(task.goalStatus)
+  )
+}
+
+export function isAgentTaskActive(task: AgentTaskSnapshot | null | undefined): boolean {
+  return Boolean(task && !isAgentTaskTerminal(task) && task.turnStatus !== 'awaiting_user')
 }
 
 export interface SimExecutionSnapshot {

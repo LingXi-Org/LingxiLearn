@@ -616,10 +616,20 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
           </>
         )}
         {activeTab === 'input' && (
-          <DetailCard key={`${entry.id}-input`} title='Input payload' value={span.input} defaultOpen />
+          <DetailCard
+            key={`${entry.id}-input`}
+            title='Input payload'
+            value={span.input}
+            defaultOpen
+          />
         )}
         {activeTab === 'output' && (
-          <DetailCard key={`${entry.id}-output`} title='Output payload' value={span.output} defaultOpen />
+          <DetailCard
+            key={`${entry.id}-output`}
+            title='Output payload'
+            value={span.output}
+            defaultOpen
+          />
         )}
         {activeTab === 'timing' && (
           <DetailCard
