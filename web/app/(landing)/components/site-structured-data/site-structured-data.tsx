@@ -12,7 +12,7 @@ const SITE_JSON_LD = {
       alternateName: 'LingXi',
       legalName: '灵犀智学',
       description:
-        'Sim 是一个开源 AI 工作空间，帮助团队构建、部署和管理 AI 智能体。连接 1,000+ 个集成和所有主流 LLM，创建能够自动处理真实工作的智能体。',
+        'LingXi 灵犀智学是面向学习任务的 AI 学习工作台，基于学习状态组织讲解、图解、练习和复习。',
       url: SITE_URL,
       foundingDate: '2025',
       address: {

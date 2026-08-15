@@ -53,11 +53,6 @@ import { TrustedBy } from '@/app/(landing)/components/trusted-by'
  * four sides. Decorative, `aria-hidden`; the `--surface-3` fill remains as the
  * loading fallback under the backdrop.
  *
- * The headline/CTA column shares its row with the right-aligned
- * {@link HeroStat} (the "Global work done by Sim" figure with its vertical
- * progress rail and staggered page-load entrance), hidden below `lg` where
- * the row has no room.
- *
  * The shared {@link TrustedBy} block renders in its `row` layout - a centered
  * muted label above a single centered row of bare wordmarks.
  *
@@ -76,21 +71,23 @@ export function Hero() {
       )}
     >
       <p className='sr-only'>
-        Sim 是一个开源 AI 工作空间，帮助团队构建、部署和管理 AI 智能体。连接 1,000+ 个集成和所有主流
-        LLM，以可视化、对话式或代码方式创建能自动处理真实工作的智能体。已有超过 100,000
-        名构建者信赖， 符合 SOC2 要求，可供各种规模的团队用于生产环境。
+        LingXi 灵犀智学是面向学习任务的 AI 学习工作台。多智能体持续关注学习状态，从讲解、图解、练习到复习，帮助每位学习者完成个性化学习闭环。
       </p>
 
       <LandingHeroHeader
         headingId='hero-heading'
         heading={
           <>
-            构建与管理 AI 智能体，
+            AI学习，因你而变。
             <br />
-            尽在一个 AI 工作空间。
+            构建你的个性化学习闭环。
           </>
         }
-        description='开源，支持 1,000+ 个集成和所有主流 LLM。以可视化、对话式或代码方式构建、部署和管理智能体。'
+        description='多智能体共同关注你的学习状态，从讲解、图解、练习到复习，完成教育闭环。想怎么学，就怎么学。'
+        showStat
+        statValue='68%'
+        statLabel='LingXi 开发进度'
+        statProgressClassName='h-[68%]'
       />
 
       <div

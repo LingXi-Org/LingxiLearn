@@ -22,14 +22,14 @@ import { JsonLd } from '@/app/(landing)/components/json-ld'
  * `WebPage.description` below, so the three surfaces never drift.
  */
 export const HOME_PAGE_DESCRIPTION =
-  'Sim 是一个开源 AI 工作空间，帮助团队通过 1,000+ 个集成和所有主流 LLM，以可视化或代码方式构建、部署和管理 AI 智能体。'
+  'LingXi 灵犀智学是面向学习任务的 AI 学习工作台，多智能体关注学习状态，从讲解、图解、练习到复习，帮助学习者完成个性化学习闭环。'
 
 /**
  * The home page's canonical title - the single string shared by the
  * `<title>`, OG/Twitter titles (`page.tsx`), and the JSON-LD `WebPage.name`
  * below, so the title surfaces never drift.
  */
-export const HOME_PAGE_TITLE = 'AI 工作空间｜构建、部署和管理 AI 智能体｜Sim'
+export const HOME_PAGE_TITLE = 'AI学习，因你而变｜LingXi 灵犀智学'
 
 const HOME_JSON_LD = {
   '@context': 'https://schema.org',
@@ -60,11 +60,11 @@ const HOME_JSON_LD = {
       '@type': 'WebApplication',
       '@id': `${SITE_URL}#software`,
       url: SITE_URL,
-      name: 'Sim，AI 工作空间',
+      name: 'LingXi 灵犀智学，AI 学习工作台',
       description:
-        'Sim 是一个开源 AI 工作空间，帮助团队构建、部署和管理 AI 智能体。连接 1,000+ 个集成和所有主流 LLM，以可视化、对话式或代码方式创建能自动处理真实工作的智能体。已有超过 100,000 名构建者信赖，符合 SOC2 要求。',
-      applicationCategory: 'BusinessApplication',
-      applicationSubCategory: 'AI Workspace',
+        'LingXi 灵犀智学面向学习任务组织连续对话、课程资源、知识图解、练习反馈和复习建议，让多智能体根据学习状态持续调整下一步。',
+      applicationCategory: 'EducationalApplication',
+      applicationSubCategory: 'AI Learning Workspace',
       operatingSystem: 'Web',
       browserRequirements: 'Requires a modern browser with JavaScript enabled',
       installUrl: `${SITE_URL}/signup`,
@@ -106,18 +106,12 @@ const HOME_JSON_LD = {
         },
       ],
       featureList: [
-        '面向团队的 AI 工作空间',
-        '对话：用自然语言构建和管理智能体',
-        '可视化工作流构建器',
-        '1,000+ 个集成',
-        'LLM 编排（OpenAI、Anthropic、Google、xAI、Mistral、Perplexity）',
-        '知识库创建',
-        '数据表创建',
-        '文档创建',
-        'API 访问',
-        '自定义函数',
-        '定时工作流',
-        '事件触发器',
+        '面向学习任务的 AI 学习工作台',
+        '连续对话与学习目标管理',
+        '个性化讲解与知识图解',
+        '分层练习与即时反馈',
+        '学习状态与薄弱点诊断',
+        '复习建议与学习路径',
       ],
       review: [
         {

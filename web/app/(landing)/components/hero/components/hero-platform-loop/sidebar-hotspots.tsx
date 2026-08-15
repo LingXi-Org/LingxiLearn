@@ -36,7 +36,7 @@ interface RowHotspot extends HotspotBounds {
 const TOOLTIP_HOTSPOTS: TooltipHotspot[] = [
   { label: '收起侧边栏', left: '16.72%', top: '2.45%', width: '1.56%', height: '2.45%' },
   { label: '更多操作', left: '14.69%', top: '62.59%', width: '1.4%', height: '2.18%' },
-  { label: '创建工作流', left: '16.56%', top: '62.59%', width: '1.4%', height: '2.18%' },
+  { label: '创建学习任务', left: '16.56%', top: '62.59%', width: '1.4%', height: '2.18%' },
 ]
 
 /**
@@ -47,9 +47,9 @@ const TOOLTIP_HOTSPOTS: TooltipHotspot[] = [
  * real row's 8px icon gutter) so the icon sits inside the highlight.
  */
 const ROW_HOTSPOTS: RowHotspot[] = [
-  { name: '数据表', left: '0.82%', top: '39.25%', width: '17.15%', height: '4.08%' },
-  { name: '文件', left: '0.82%', top: '43.61%', width: '17.15%', height: '4.08%' },
-  { name: '知识库', left: '0.82%', top: '48.16%', width: '17.15%', height: '4.08%' },
+  { name: '学习计划', left: '0.82%', top: '39.25%', width: '17.15%', height: '4.08%' },
+  { name: '知识图谱', left: '0.82%', top: '43.61%', width: '17.15%', height: '4.08%' },
+  { name: '错题复习', left: '0.82%', top: '48.16%', width: '17.15%', height: '4.08%' },
 ]
 
 /**

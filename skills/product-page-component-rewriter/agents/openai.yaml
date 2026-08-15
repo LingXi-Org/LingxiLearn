@@ -1,0 +1,7 @@
+interface:
+  display_name: "Product Page Component Rewriter"
+  short_description: "复用现有组件改写产品主页与介绍页"
+  default_prompt: "使用 $product-page-component-rewriter，定位指定页面元素并仅复用或改写现有组件完成文案、组件和静态资源替换。"
+
+policy:
+  allow_implicit_invocation: true

@@ -22,7 +22,7 @@ interface TrustedByProps {
 export function TrustedBy({ className, layout = 'grid' }: TrustedByProps) {
   return (
     <div className={cn('flex flex-col gap-[22px]', layout === 'row' && 'items-center', className)}>
-      <p className='text-[var(--text-muted)] text-sm'>受到技术团队信赖</p>
+      <p className='text-[var(--text-muted)] text-sm'>为学习者持续工作</p>
       <Logos layout={layout} />
     </div>
   )

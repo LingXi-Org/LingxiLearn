@@ -42,12 +42,10 @@ export function ProductDemo() {
             id='product-demo-heading'
             className='text-balance font-medium text-[22px] text-[var(--text-primary)] leading-[1.3] max-sm:text-[20px]'
           >
-            描述需求，Sim 自动构建。
+            描述目标，LingXi 帮你组织学习。
           </h2>
           <p className='mt-3 text-pretty text-[15px] text-[var(--text-muted)] leading-[1.6]'>
-            用自然语言描述你想自动化的事情。Sim 作为 AI
-            智能体构建器，会连接合适的模块、模型、工具和数据，
-            生成可运行的工作流，供你审查、自定义、测试和部署。
+            用自然语言描述你想学什么、哪里卡住了。LingXi 会结合学习目标、知识资源和掌握状态，组织讲解、图解、练习与复习，让每一次对话都能推动下一步学习。
           </p>
         </div>
       </div>

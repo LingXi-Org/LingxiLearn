@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   description: HOME_PAGE_DESCRIPTION,
   keywords:
-    'AI 工作空间, AI 智能体构建器, AI 智能体工作流构建器, 构建 AI 智能体, 可视化工作流构建器, 开源 AI 智能体平台, AI 智能体, 智能体工作流, LLM 编排, AI 自动化, 知识库, 工作流构建器, AI 集成, SOC2, 企业级 AI',
+    'AI 学习, 个性化学习, 学习助手, AI 教育, 学习状态, 知识图解, 智能练习, 复习规划, LingXi, 灵犀智学',
   authors: [{ name: '灵犀智学' }],
   creator: '灵犀智学',
   publisher: '灵犀智学',

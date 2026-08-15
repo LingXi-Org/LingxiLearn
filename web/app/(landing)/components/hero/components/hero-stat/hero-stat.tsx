@@ -46,7 +46,17 @@ const FILL_AT_MS = REVEAL_AT_MS + 350
  * Under `prefers-reduced-motion` everything renders settled immediately (the
  * fades are also disabled in the CSS module).
  */
-export function HeroStat() {
+interface HeroStatProps {
+  value?: string
+  label?: string
+  progressClassName?: string
+}
+
+export function HeroStat({
+  value,
+  label = 'Sim 已完成的全球工作量',
+  progressClassName = 'h-[4px]',
+}: HeroStatProps = {}) {
   const [settled, setSettled] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [filled, setFilled] = useState(false)
@@ -128,7 +138,7 @@ export function HeroStat() {
           <div
             className={cn(
               'w-full rounded-full bg-[var(--text-body)] transition-[height] duration-300',
-              filled ? 'h-[4px]' : 'h-0'
+              filled ? progressClassName : 'h-0'
             )}
           />
         </div>
@@ -141,9 +151,17 @@ export function HeroStat() {
             revealed ? 'text-[var(--text-primary)]' : 'text-[var(--surface-7)]'
           )}
         >
-          <span className='sr-only'>{STAT_VALUE}</span>
+          <span className='sr-only'>{value ?? STAT_VALUE}</span>
           <span aria-hidden='true'>
-            {revealed
+            {value
+              ? revealed
+                ? value
+                : value.split('').map((ch, i) => (
+                    <span key={i} className={styles.char}>
+                      {ch}
+                    </span>
+                  ))
+              : revealed
               ? `0.00000${String(count).padStart(3, '0')}%`
               : START_CHARS.map((ch, i) => (
                   <span key={i} className={styles.char}>
@@ -158,7 +176,7 @@ export function HeroStat() {
             revealed ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
           )}
         >
-          Sim 已完成的全球工作量
+          {label}
         </p>
       </div>
     </div>

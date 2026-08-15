@@ -16,15 +16,15 @@ import {
 } from '@/components/ui-kit/icons'
 import { HERO_TOOLTIP_OFFSET } from '@/app/(landing)/components/hero/components/hero-platform-loop/sidebar-hotspots'
 
-/** The conversation the loop plays - mirrors the seeded capture chat. */
-const USER_MESSAGE = '有新线索注册时，补充公司数据并将其发布到 #sales。'
+/** The conversation the loop plays - mirrors the learning workspace demo. */
+const USER_MESSAGE = '帮我复习函数与导数，先讲清概念，再根据我的薄弱点安排练习。'
 const REPLY_MESSAGE =
-  '收到。我会构建一个工作流，为每个新注册线索补充公司信息、进行评分，并将摘要发布到 Slack 的 #sales 频道。'
+  '收到。我会先确认你的学习目标和掌握状态，再组织概念讲解、可视化推导、分层练习，并根据每次作答调整下一步复习。'
 const REPLY_WORDS = REPLY_MESSAGE.split(' ')
 /** Word-reveal cadence for the streamed reply. */
 const STREAM_WORD_MS = 55
 /** Follow-up suggestions shown once the reply completes, like the real chat. */
-const FOLLOW_UPS = ['用示例线索运行测试', '部署工作流', '添加线索评分标准'] as const
+const FOLLOW_UPS = ['开始概念讲解', '查看知识图解', '做一组针对性练习'] as const
 
 /** Where the chat pane is within one loop pass. */
 export type HeroChatPhase = 'idle' | 'user' | 'thinking' | 'reply'
@@ -174,7 +174,7 @@ export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
       </div>
 
       <div className='pointer-events-auto mx-auto mb-5 w-[calc(100%-40px)] max-w-[600px] shrink-0 rounded-2xl border border-[var(--border-1)] bg-[var(--white)] px-2.5 py-2'>
-        <p className='px-1.5 pt-1 text-[15px] text-[var(--text-muted)]'>向 Sim 发送消息</p>
+        <p className='px-1.5 pt-1 text-[15px] text-[var(--text-muted)]'>向 LingXi 发送消息</p>
         <div className='mt-2 flex items-center gap-1.5'>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>

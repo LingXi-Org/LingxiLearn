@@ -45,9 +45,9 @@ const AREAS: Area[] = [
     size: 180,
     definition: (
       <>
-        Sim 目录中的 1,000+ 个集成，
+        LingXi 连接你的学习资源，
         <br />
-        让智能体连接并操作你的工具。
+        让学习任务围绕你的目标展开。
       </>
     ),
   },
@@ -55,19 +55,19 @@ const AREAS: Area[] = [
     word: '上下文',
     Mark: IsoIngestIllustration,
     size: 170,
-    definition: '将数据以语义方式存储在 Sim 中，作为智能体推理所需的记忆。',
+    definition: '沉淀课程、笔记、错题和对话，让学习上下文持续可用。',
   },
   {
     word: '构建',
     Mark: IsoBuildIllustration,
     size: 176,
-    definition: '在可视化构建器中编排智能体逻辑，也可以直接向 Sim 描述需求。',
+    definition: '由多智能体协作完成讲解、图解、练习和复习。',
   },
   {
     word: '监控',
     Mark: IsoMonitorIllustration,
     size: 174,
-    definition: '深入查看 Sim 中的每次运行：实时追踪、日志和实际成本。',
+    definition: '根据每次作答和反馈更新学习状态，给出下一步建议。',
   },
 ]
 
@@ -83,9 +83,9 @@ export function Mothership() {
         className='max-w-[1200px] text-balance text-[28px] leading-[1.2] max-sm:text-[22px]'
       >
         <span className='block text-[var(--text-primary)]'>
-          AI 智能体所需的一切，集中于一个工作空间。
+          完成学习闭环所需的一切，集中于一个工作空间。
         </span>
-        <span className='block text-[var(--text-body)]'>构建、运行并监控每一个智能体。</span>
+        <span className='block text-[var(--text-body)]'>讲解、练习并持续复习每一个知识点。</span>
       </h2>
 
       <ul className='mt-16 grid grid-cols-4 gap-8 max-sm:mt-8 max-sm:grid-cols-1 max-sm:gap-10 max-lg:mt-12 max-lg:grid-cols-2 max-lg:gap-x-8 max-lg:gap-y-12'>

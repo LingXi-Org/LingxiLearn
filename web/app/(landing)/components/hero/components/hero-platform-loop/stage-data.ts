@@ -1,14 +1,12 @@
-import { AgentIcon, CodeIcon, SlackIcon, StartIcon, TableIcon } from '@/components/icons'
+import { AgentIcon, BrainIcon, ChartBarIcon, StartIcon, TableIcon } from '@/components/icons'
 import type { BlockDef } from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
 import { BLOCK_WIDTH } from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
 
 /**
- * Design-space geometry for the hero's live workflow stage - the lead-enrichment
- * flow the chat conversation "builds": Start feeds the enrichment agent, a
- * scoring function follows, and the flow fans out to Slack and Tables. Block
- * tiles use the platform's grey text ramp (each block a different shade, dark
- * enough to carry the white glyph) - color is reserved for REAL third-party
- * marks, so only Slack keeps its brand tile (#611F69).
+ * Design-space geometry for the hero's live workflow stage - the adaptive
+ * learning flow the chat conversation "builds": Start feeds the learner-state
+ * agent, then branches into explanation, practice, and review. Block tiles use
+ * the platform's existing grey text ramp and icon treatment.
  *
  * Blocks are ordered by build sequence - the stage reveals `blocks[0..built-1]`
  * as the loop's build counter advances, and an edge draws once both its
@@ -17,7 +15,7 @@ import { BLOCK_WIDTH } from '@/app/(landing)/components/hero/components/hero-vis
 export const STAGE_BLOCKS: BlockDef[] = [
   {
     id: 'start',
-    name: '开始',
+    name: '开始学习',
     icon: StartIcon,
     bgColor: 'var(--text-muted)',
     isTrigger: true,
@@ -27,51 +25,51 @@ export const STAGE_BLOCKS: BlockDef[] = [
   },
   {
     id: 'enrich',
-    name: '补充线索信息',
+    name: '分析学习状态',
     icon: AgentIcon,
     bgColor: 'var(--text-primary)',
     rows: [
-      { title: '消息', value: '-' },
-      { title: '模型', value: '-' },
-      { title: '文件', value: '-' },
+      { title: '目标', value: '-' },
+      { title: '掌握度', value: '-' },
+      { title: '薄弱点', value: '-' },
     ],
     x: 155,
     y: 172,
   },
   {
     id: 'score',
-    name: '评估匹配度',
-    icon: CodeIcon,
+    name: '个性化讲解',
+    icon: BrainIcon,
     bgColor: 'var(--text-secondary)',
     rows: [
-      { title: '代码', value: '-' },
-      { title: '超时', value: '-' },
+      { title: '方式', value: '图解 + 对话' },
+      { title: '重点', value: '-' },
     ],
     x: 155,
     y: 390,
   },
   {
-    id: 'slack',
-    name: '发布到 #sales',
-    icon: SlackIcon,
+    id: 'practice',
+    name: '针对性练习',
+    icon: ChartBarIcon,
     bgColor: '#611F69',
     isTerminal: true,
     rows: [
-      { title: '频道', value: '-' },
-      { title: '消息', value: '-' },
+      { title: '难度', value: '-' },
+      { title: '题目', value: '-' },
     ],
     x: 0,
     y: 580,
   },
   {
-    id: 'tables',
-    name: '保存到数据表',
+    id: 'review',
+    name: '生成复习建议',
     icon: TableIcon,
     bgColor: 'var(--text-body)',
     isTerminal: true,
     rows: [
-      { title: '数据表', value: '-' },
-      { title: '操作', value: '-' },
+      { title: '薄弱点', value: '-' },
+      { title: '下一步', value: '-' },
     ],
     x: 310,
     y: 580,
@@ -82,8 +80,8 @@ export const STAGE_BLOCKS: BlockDef[] = [
 export const STAGE_EDGES: ReadonlyArray<readonly [string, string]> = [
   ['start', 'enrich'],
   ['enrich', 'score'],
-  ['score', 'slack'],
-  ['score', 'tables'],
+  ['score', 'practice'],
+  ['score', 'review'],
 ]
 
 /** Design-space bounding box of the layout above. */

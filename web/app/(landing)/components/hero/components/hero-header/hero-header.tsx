@@ -9,20 +9,29 @@ interface LandingHeroHeaderProps {
   eyebrow?: ReactNode
   heading: ReactNode
   headingId: string
+  showStat?: boolean
+  statValue?: string
+  statLabel?: string
+  statProgressClassName?: string
 }
 
 /**
  * Shared homepage hero header geometry. Marketing routes use this component so
- * the headline measure, CTA stack, and right-side global-work stat cannot drift.
+ * the headline measure and CTA stack cannot drift. The optional stat remains
+ * available to platform/solution pages while the homepage can omit it.
  */
 export function LandingHeroHeader({
   description,
   eyebrow,
   heading,
   headingId,
+  showStat = true,
+  statValue,
+  statLabel,
+  statProgressClassName,
 }: LandingHeroHeaderProps) {
   return (
-    <div className='flex w-full items-end justify-between gap-8'>
+    <div className='flex w-full items-end gap-8'>
       <div className='flex min-w-0 flex-1 flex-col items-start gap-[22px] text-left'>
         {eyebrow}
 
@@ -41,8 +50,13 @@ export function LandingHeroHeader({
           <HeroCta />
         </div>
       </div>
-
-      <HeroStat />
+      {showStat ? (
+        <HeroStat
+          value={statValue}
+          label={statLabel}
+          progressClassName={statProgressClassName}
+        />
+      ) : null}
     </div>
   )
 }
