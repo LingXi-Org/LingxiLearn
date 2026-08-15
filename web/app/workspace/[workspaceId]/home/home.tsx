@@ -193,6 +193,24 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
   activeResourceParamRef.current = activeResourceParam
 
   function handleResourceEvent(resourceId: string) {
+    const isLingxiArtifact = resourceId.startsWith('lingxi-artifact:')
+
+    // Every newly generated Lingxi teaching artifact is a deliverable. It must
+    // become the active native Sim resource tab immediately, even when the
+    // learner is currently viewing another artifact or the runtime graph.
+    // Other background resources retain Sim's normal activity-marker behavior.
+    if (isLingxiArtifact) {
+      setResourceActivityIds((current) => {
+        if (!current.has(resourceId)) return current
+        const next = new Set(current)
+        next.delete(resourceId)
+        return next
+      })
+      if (activeResourceParamRef.current !== resourceId) setActiveResourceUrl(resourceId)
+      setIsResourceCollapsed(false)
+      return
+    }
+
     // Agent work should always make the resource surface available, but it
     // must never replace an existing selection. Activity in another resource
     // stays in the background and gets an attention marker instead.
