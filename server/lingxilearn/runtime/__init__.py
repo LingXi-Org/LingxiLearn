@@ -6,6 +6,8 @@ from .sim_semantics import (
     PrimitiveCatalog,
     SimRunProjector,
     SimRuntimeError,
+    replay_sim_trace,
+    sim_trace_total_tokens,
 )
 
 __all__ = [
@@ -14,4 +16,6 @@ __all__ = [
     "PrimitiveCatalog",
     "SimRunProjector",
     "SimRuntimeError",
+    "replay_sim_trace",
+    "sim_trace_total_tokens",
 ]

@@ -1019,6 +1019,35 @@ class Repository:
             )
             return int(count or 0)
 
+    async def agent_events_for_execution(
+        self, execution_id: str, learner_id: str, limit: int = 5000
+    ) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(AgentTaskEvent)
+                    .join(AgentTask, AgentTask.id == AgentTaskEvent.task_id)
+                    .where(
+                        AgentTaskEvent.execution_id == execution_id,
+                        AgentTask.learner_id == learner_id,
+                    )
+                    .order_by(AgentTaskEvent.sequence)
+                    .limit(limit)
+                )
+            ).scalars().all()
+            return [
+                {
+                    "sequence": row.sequence,
+                    "kind": row.kind,
+                    "agent": row.agent,
+                    "payload": row.payload or {},
+                    "execution_id": row.execution_id,
+                    "runtime": row.runtime or {},
+                    "ts": row.created_at.isoformat() if row.created_at else None,
+                }
+                for row in rows
+            ]
+
     async def agent_events_after_for_learner(
         self, task_id: str, learner_id: str, after: int = 0, limit: int = 500
     ) -> list[dict[str, Any]]:

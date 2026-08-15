@@ -49,7 +49,12 @@ from .runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from .runtime.loop import LoopDeps, build_loop
 from .runtime.loop import initial_state as initial_loop_state
 from .runtime.schedules import next_schedule_time, validate_schedule
-from .runtime.sim_semantics import PrimitiveCatalog, SimRunProjector
+from .runtime.sim_semantics import (
+    PrimitiveCatalog,
+    SimRunProjector,
+    replay_sim_trace,
+    sim_trace_total_tokens,
+)
 from .state.session_state import Goal, GoalKind, RuntimeStatus, new_budget
 from .state.skill_catalog import discover as discover_skill_manifests
 from .store.db import Database, Repository
@@ -946,6 +951,18 @@ class Service:
         started = row.started_at
         ended = row.ended_at
         duration = int((ended - started).total_seconds() * 1000) if ended and started else None
+        records = await self.repo.agent_events_for_execution(execution_id, learner_id)
+        trace = replay_sim_trace(
+            records,
+            execution_id=row.id,
+            task_id=row.task_id,
+            graph_version=row.graph_version,
+            status=row.status,
+            started_at=started,
+            ended_at=ended,
+        )
+        if len(trace) <= 1 and row.trace_spans:
+            trace = row.trace_spans
         return {
             "executionId": row.id,
             "workflowId": "lingxi-agent",
@@ -955,14 +972,14 @@ class Service:
             "graphVersion": row.graph_version,
             "projectionVersion": (row.workflow_state or {}).get("version", "sim-runtime.v1"),
             "workflowState": row.workflow_state or {},
-            "traceSpans": row.trace_spans or [],
+            "traceSpans": trace,
             "executionMetadata": {
                 "trigger": row.trigger,
                 "startedAt": started.isoformat() if started else None,
                 "endedAt": ended.isoformat() if ended else None,
                 "totalDurationMs": duration,
                 "cost": None,
-                "totalTokens": None,
+                "totalTokens": sim_trace_total_tokens(trace) or None,
                 "scheduleId": row.schedule_id,
                 "scheduledFor": row.scheduled_for.isoformat() if row.scheduled_for else None,
             },
