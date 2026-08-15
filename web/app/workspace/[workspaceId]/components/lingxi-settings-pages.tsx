@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Resource } from '@/app/workspace/[workspaceId]/components'
-import { Settings as SettingsIcon } from '@sim/emcn/icons'
 import { API_BASE, api } from '@/lib/lingxi/api'
+import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
 
 function SettingsShell({
   title,
@@ -16,16 +15,11 @@ function SettingsShell({
   children: React.ReactNode
 }) {
   return (
-    <Resource>
-      <Resource.Header icon={SettingsIcon} title={title} />
-      <Resource.Options />
-      <main className='min-h-0 flex-1 overflow-y-auto p-6'>
-        <p className='mx-auto mb-5 max-w-[900px] text-[12px] text-[var(--text-muted)]'>
-          {description}
-        </p>
-        <div className='mx-auto max-w-[900px]'>{children}</div>
-      </main>
-    </Resource>
+    <SettingsPanel title={title} description={description}>
+      <div className='w-full py-2'>
+        <div className='mx-auto w-full max-w-[900px]'>{children}</div>
+      </div>
+    </SettingsPanel>
   )
 }
 

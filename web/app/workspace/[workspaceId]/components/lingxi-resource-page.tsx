@@ -1,12 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import { Checkbox, Chip, ChipInput, ChipSelect } from '@sim/emcn'
-import { Settings as SettingsIcon } from '@sim/emcn/icons'
-import { Table as TableIcon } from '@sim/emcn/icons'
-import { Resource } from '@/app/workspace/[workspaceId]/components'
-import { SettingsField } from '@/app/workspace/[workspaceId]/settings/components/settings-field'
+import { Settings as SettingsIcon, Table as TableIcon } from '@sim/emcn/icons'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   API_BASE,
@@ -17,6 +14,9 @@ import {
   type WorkspaceFolderItem,
   type WorkspaceTableItem,
 } from '@/lib/lingxi/api'
+import { Resource } from '@/app/workspace/[workspaceId]/components'
+import { SettingsField } from '@/app/workspace/[workspaceId]/settings/components/settings-field'
+import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
 
 type ResourceKind = 'files' | 'tables' | 'knowledge' | 'logs' | 'settings'
 
@@ -54,12 +54,7 @@ function ActionButton({
   disabled?: boolean
 }) {
   return (
-    <Chip
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
-      className='text-[12px]'
-    >
+    <Chip type={type} disabled={disabled} onClick={onClick} className='text-[12px]'>
       {children}
     </Chip>
   )
@@ -434,132 +429,136 @@ function SettingsPage() {
     setSaved(true)
   }
   return (
-    <Shell
-      title='Settings'
+    <SettingsPanel
+      title='常规设置'
       description='账户、学习偏好和个人工作区名称/外观。团队、凭据、API Keys、SSO 与工作流设置不开放。'
     >
-      <form onSubmit={(event) => void save(event)} className='mx-auto max-w-[680px] space-y-6'>
-        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>个人工作区</h2>
-          <div className='mt-4'>
-            <SettingsField label='名称'>
-              <ChipInput
-                value={workspaceName}
-                onChange={(event) => setWorkspaceName(event.target.value)}
-                maxLength={160}
-                className='w-full'
-              />
-            </SettingsField>
+      <div className='w-full py-2'>
+        <form onSubmit={(event) => void save(event)} className='mx-auto max-w-[680px] space-y-6'>
+          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>个人工作区</h2>
+            <div className='mt-4'>
+              <SettingsField label='名称'>
+                <ChipInput
+                  value={workspaceName}
+                  onChange={(event) => setWorkspaceName(event.target.value)}
+                  maxLength={160}
+                  className='w-full'
+                />
+              </SettingsField>
+            </div>
+          </section>
+          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>学习偏好</h2>
+            <div className='mt-4 grid gap-4 sm:grid-cols-2'>
+              <SettingsField label='学习阶段'>
+                <ChipSelect
+                  fullWidth
+                  value={level}
+                  onChange={setLevel}
+                  options={[
+                    { value: 'undergraduate', label: '本科' },
+                    { value: 'graduate', label: '研究生' },
+                    { value: 'professional', label: '工程实践' },
+                  ]}
+                />
+              </SettingsField>
+              <SettingsField label='语言'>
+                <ChipSelect
+                  fullWidth
+                  value={locale}
+                  onChange={setLocale}
+                  options={[
+                    { value: 'zh-CN', label: '简体中文' },
+                    { value: 'en-US', label: 'English' },
+                  ]}
+                />
+              </SettingsField>
+            </div>
+          </section>
+          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>应用偏好</h2>
+            <div className='mt-4'>
+              <SettingsField label='主题'>
+                <ChipSelect
+                  fullWidth
+                  value={theme}
+                  onChange={setTheme}
+                  options={[
+                    { value: 'system', label: '跟随系统' },
+                    { value: 'light', label: '浅色' },
+                    { value: 'dark', label: '深色' },
+                  ]}
+                />
+              </SettingsField>
+            </div>
+            <div className='mt-4 space-y-3 text-[12px] text-[var(--text-secondary)]'>
+              <div className='flex items-center gap-2'>
+                <Checkbox
+                  checked={telemetryEnabled}
+                  onCheckedChange={(checked) => setTelemetryEnabled(checked === true)}
+                />
+                <span>允许匿名体验诊断</span>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Checkbox
+                  checked={billingNotificationsEnabled}
+                  onCheckedChange={(checked) => setBillingNotificationsEnabled(checked === true)}
+                />
+                <span>接收用量提醒</span>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Checkbox
+                  checked={showActionBar}
+                  onCheckedChange={(checked) => setShowActionBar(checked === true)}
+                />
+                <span>显示操作栏</span>
+              </div>
+            </div>
+          </section>
+          <div className='flex items-center gap-3'>
+            <ActionButton type='submit'>保存设置</ActionButton>
+            {saved && <span className='text-[12px] text-[var(--text-muted)]'>已保存</span>}
           </div>
-        </section>
-        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>学习偏好</h2>
-          <div className='mt-4 grid gap-4 sm:grid-cols-2'>
-            <SettingsField label='学习阶段'>
-              <ChipSelect
-                fullWidth
-                value={level}
-                onChange={setLevel}
-                options={[
-                  { value: 'undergraduate', label: '本科' },
-                  { value: 'graduate', label: '研究生' },
-                  { value: 'professional', label: '工程实践' },
-                ]}
-              />
-            </SettingsField>
-            <SettingsField label='语言'>
-              <ChipSelect
-                fullWidth
-                value={locale}
-                onChange={setLocale}
-                options={[
-                  { value: 'zh-CN', label: '简体中文' },
-                  { value: 'en-US', label: 'English' },
-                ]}
-              />
-            </SettingsField>
-          </div>
-        </section>
-        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>应用偏好</h2>
-          <div className='mt-4'>
-            <SettingsField label='主题'>
-              <ChipSelect
-                fullWidth
-                value={theme}
-                onChange={setTheme}
-                options={[
-                  { value: 'system', label: '跟随系统' },
-                  { value: 'light', label: '浅色' },
-                  { value: 'dark', label: '深色' },
-                ]}
-              />
-            </SettingsField>
-          </div>
-          <div className='mt-4 space-y-3 text-[12px] text-[var(--text-secondary)]'>
-            <label className='flex items-center gap-2'>
-              <Checkbox
-                checked={telemetryEnabled}
-                onCheckedChange={(checked) => setTelemetryEnabled(checked === true)}
-              />
-              允许匿名体验诊断
-            </label>
-            <label className='flex items-center gap-2'>
-              <Checkbox
-                checked={billingNotificationsEnabled}
-                onCheckedChange={(checked) => setBillingNotificationsEnabled(checked === true)}
-              />
-              接收用量提醒
-            </label>
-            <label className='flex items-center gap-2'>
-              <Checkbox
-                checked={showActionBar}
-                onCheckedChange={(checked) => setShowActionBar(checked === true)}
-              />
-              显示操作栏
-            </label>
-          </div>
-        </section>
-        <div className='flex items-center gap-3'>
-          <ActionButton type='submit'>保存设置</ActionButton>
-          {saved && <span className='text-[12px] text-[var(--text-muted)]'>已保存</span>}
+        </form>
+        <div className='mx-auto mt-6 grid max-w-[680px] gap-3 sm:grid-cols-2'>
+          <Link
+            href='/account/settings'
+            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+          >
+            <p className='text-[13px] text-[var(--text-primary)]'>账户与安全</p>
+            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
+              个人资料、密码、邮箱和设备会话
+            </p>
+          </Link>
+          <Link
+            href='/workspace/lingxi/settings/billing'
+            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+          >
+            <p className='text-[13px] text-[var(--text-primary)]'>计费与用量</p>
+            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>内部学习额度与只读审计</p>
+          </Link>
+          <Link
+            href='/workspace/lingxi/settings/users'
+            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+          >
+            <p className='text-[13px] text-[var(--text-primary)]'>用户管理</p>
+            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
+              个人账户中心；成员协作保留占位
+            </p>
+          </Link>
+          <Link
+            href='/workspace/lingxi/settings/integrations'
+            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+          >
+            <p className='text-[13px] text-[var(--text-primary)]'>未启用设置</p>
+            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
+              SSO、API Keys、凭据等占位页面
+            </p>
+          </Link>
         </div>
-      </form>
-      <div className='mx-auto mt-6 grid max-w-[680px] gap-3 sm:grid-cols-2'>
-        <Link
-          href='/account/settings'
-          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-        >
-          <p className='text-[13px] text-[var(--text-primary)]'>账户与安全</p>
-          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-            个人资料、密码、邮箱和设备会话
-          </p>
-        </Link>
-        <Link
-          href='/workspace/lingxi/settings/billing'
-          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-        >
-          <p className='text-[13px] text-[var(--text-primary)]'>计费与用量</p>
-          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>内部学习额度与只读审计</p>
-        </Link>
-        <Link
-          href='/workspace/lingxi/settings/users'
-          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-        >
-          <p className='text-[13px] text-[var(--text-primary)]'>用户管理</p>
-          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-            个人账户中心；成员协作保留占位
-          </p>
-        </Link>
-        <Link
-          href='/workspace/lingxi/settings/integrations'
-          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-        >
-          <p className='text-[13px] text-[var(--text-primary)]'>未启用设置</p>
-          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>SSO、API Keys、凭据等占位页面</p>
-        </Link>
       </div>
-    </Shell>
+    </SettingsPanel>
   )
 }
 

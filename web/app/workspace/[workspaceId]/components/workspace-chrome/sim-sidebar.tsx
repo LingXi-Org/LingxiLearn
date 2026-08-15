@@ -1,8 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Chip, ChipLink, cn, Tooltip } from '@sim/emcn'
+import { memo, type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
+  Chip,
+  ChipLink,
+  cn,
+  disclosureChevronClass,
+  Expandable,
+  ExpandableContent,
+  Tooltip,
+} from '@sim/emcn'
+import {
+  ChevronDown,
   Database,
   Files,
   Home,
@@ -19,10 +28,10 @@ import { useParams, usePathname } from 'next/navigation'
 import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import { api } from '@/lib/lingxi/api'
 import type { AgentTaskListItem } from '@/lib/lingxi/types'
-import { useTablesList } from '@/hooks/queries/tables'
-import { useSidebarResize } from '@/app/workspace/[workspaceId]/w/components/sidebar/hooks/use-sidebar-resize'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { createCommands } from '@/app/workspace/[workspaceId]/utils/commands-utils'
+import { useSidebarResize } from '@/app/workspace/[workspaceId]/w/components/sidebar/hooks/use-sidebar-resize'
+import { useTablesList } from '@/hooks/queries/tables'
 import { useSidebarStore } from '@/stores/sidebar/store'
 
 export function SidebarTooltip({
@@ -79,6 +88,131 @@ function statusLabel(status: AgentTaskListItem['status']): string {
   return '已完成'
 }
 
+function isPathActive(pathname: string | null, href: string): boolean {
+  return pathname === href || pathname?.startsWith(`${href}/`) === true
+}
+
+interface SidebarNavItemData {
+  id: string
+  label: string
+  icon: typeof Home
+  href?: string
+  active?: boolean
+  disabled?: boolean
+  badge?: string
+}
+
+/** Sim's native sidebar item contract: one Chip/ChipLink in both rail states. */
+const SidebarNavItem = memo(function SidebarNavItem({
+  item,
+  collapsed,
+}: {
+  item: SidebarNavItemData
+  collapsed: boolean
+}) {
+  const className = cn(
+    'h-[30px] gap-2 text-[12px]',
+    collapsed && 'justify-center px-0',
+    item.disabled && 'cursor-not-allowed opacity-50 hover-hover:bg-transparent'
+  )
+  const label = (
+    <span className='sidebar-collapse-hide min-w-0 truncate'>
+      {item.label}
+      {item.badge && (
+        <span className='ml-auto shrink-0 text-[10px] text-[var(--text-muted)]'>{item.badge}</span>
+      )}
+    </span>
+  )
+  const element =
+    item.href && !item.disabled ? (
+      <ChipLink
+        href={item.href}
+        data-item-id={item.id}
+        leftIcon={item.icon}
+        active={item.active}
+        fullWidth
+        className={className}
+      >
+        {label}
+      </ChipLink>
+    ) : (
+      <Chip
+        data-item-id={item.id}
+        leftIcon={item.icon}
+        active={item.active}
+        fullWidth
+        disabled={item.disabled}
+        title={item.disabled ? '未接入' : undefined}
+        className={className}
+      >
+        {label}
+      </Chip>
+    )
+
+  return (
+    <SidebarTooltip
+      label={item.disabled ? `${item.label}（未接入）` : item.label}
+      enabled={collapsed}
+    >
+      {element}
+    </SidebarTooltip>
+  )
+})
+
+/** Native Sim's collapsible section rhythm, reused for Lingxi data sections. */
+function SidebarSection({
+  title,
+  collapsed,
+  children,
+}: {
+  title: string
+  collapsed: boolean
+  children: ReactNode
+}) {
+  const [expanded, setExpanded] = useState(true)
+  const [animationsEnabled, setAnimationsEnabled] = useState(false)
+
+  return (
+    <div className='group/section flex flex-col'>
+      <div className='flex h-[18px] shrink-0 items-center'>
+        {collapsed ? (
+          <div className='flex h-full min-w-0 flex-1 items-center gap-2 px-2'>
+            <span className='sidebar-collapse-hide min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]'>
+              {title}
+            </span>
+          </div>
+        ) : (
+          <button
+            type='button'
+            onClick={() => {
+              setAnimationsEnabled(true)
+              setExpanded((value) => !value)
+            }}
+            aria-expanded={expanded}
+            className='group/toggle flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 px-2 text-left'
+          >
+            <span className='min-w-0 truncate text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]'>
+              {title}
+            </span>
+            <ChevronDown
+              className={cn(
+                disclosureChevronClass,
+                'opacity-0 group-hover/section:opacity-100 group-focus-visible/toggle:opacity-100',
+                !expanded && '-rotate-90'
+              )}
+            />
+          </button>
+        )}
+      </div>
+      <Expandable expanded={collapsed || expanded}>
+        <ExpandableContent className={cn(!animationsEnabled && '!animate-none')}>
+          <div className='pt-1.5'>{children}</div>
+        </ExpandableContent>
+      </Expandable>
+    </div>
+  )
+}
+
 function SidebarRow({
   icon: Icon,
   label,
@@ -96,46 +230,18 @@ function SidebarRow({
   disabled?: boolean
   badge?: string
 }) {
-  const className = cn(
-    'h-[30px] gap-2 text-[12px]',
-    collapsed && 'justify-center px-0 [&>span]:hidden',
-    disabled && 'cursor-not-allowed opacity-50 hover-hover:bg-transparent'
-  )
-  const children = !collapsed ? (
-    <>
-      <span className='min-w-0 truncate'>{label}</span>
-      {badge && <span className='shrink-0 text-[10px] text-[var(--text-muted)]'>{badge}</span>}
-    </>
-  ) : null
-
-  const wrapped =
-    href && !disabled ? (
-      <ChipLink href={href} leftIcon={Icon} active={active} fullWidth className={className}>
-        {children}
-      </ChipLink>
-    ) : (
-      <Chip
-        leftIcon={Icon}
-        active={active}
-        fullWidth
-        disabled={disabled}
-        title={disabled ? '未接入' : undefined}
-        className={className}
-      >
-        {children}
-      </Chip>
-    )
-
   return (
-    <SidebarTooltip label={disabled ? `${label}（未接入）` : label} enabled={collapsed}>
-      {wrapped}
-    </SidebarTooltip>
+    <SidebarNavItem
+      item={{ id: label, label, icon: Icon, href, active, disabled, badge }}
+      collapsed={collapsed}
+    />
   )
 }
 
 function SidebarEmptyRow({ label }: { label: string }) {
   return (
-    <div className='flex h-[30px] items-center gap-2 rounded-lg px-2 text-[12px] text-[var(--text-muted)]'
+    <div
+      className='flex h-[30px] items-center gap-2 rounded-lg px-2 text-[12px] text-[var(--text-muted)]'
       aria-live='polite'
     >
       <Task className='size-[16px] shrink-0 opacity-70' />
@@ -269,7 +375,10 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
           icon={Home}
           label='首页'
           href={`/workspace/${workspaceId}/home`}
-          active={pathname?.endsWith('/home') || pathname === `/workspace/${workspaceId}`}
+          active={
+            isPathActive(pathname, `/workspace/${workspaceId}/home`) ||
+            pathname === `/workspace/${workspaceId}`
+          }
           collapsed={compact}
         />
         <SidebarRow icon={Search} label='搜索' collapsed={compact} disabled />
@@ -277,71 +386,72 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
 
       <div className='my-4 h-px bg-[var(--border)]' />
 
-      <div className='space-y-1'>
-        <SidebarRow
-          icon={Table}
-          label='表格'
-          href={`/workspace/${workspaceId}/tables`}
-          active={pathname?.includes(`/workspace/${workspaceId}/tables`)}
-          collapsed={compact}
-        />
-        {!compact && (
-          <div className='ml-2 space-y-1 border-l border-[var(--border)] pl-2'>
-            {tableRows.map((table) => (
+      <SidebarSection title='资源' collapsed={compact}>
+        <div className='space-y-1'>
+          <SidebarRow
+            icon={Table}
+            label='表格'
+            href={`/workspace/${workspaceId}/tables`}
+            active={isPathActive(pathname, `/workspace/${workspaceId}/tables`)}
+            collapsed={compact}
+          />
+          {!compact && (
+            <div className='ml-2 space-y-1 border-l border-[var(--border)] pl-2'>
+              {tableRows.map((table) => (
+                <SidebarRow
+                  key={table.id}
+                  icon={Table}
+                  label={table.name}
+                  href={`/workspace/${workspaceId}/tables/${table.id}`}
+                  active={isPathActive(pathname, `/workspace/${workspaceId}/tables/${table.id}`)}
+                  collapsed={false}
+                />
+              ))}
+              {tablesError && <SidebarEmptyRow label='表格暂时无法加载' />}
+              {!tablesError && tableRows.length === 0 && <SidebarEmptyRow label='暂无表格' />}
+            </div>
+          )}
+          {resourceItems.map(({ label, icon, segment }) => (
+            <SidebarRow
+              key={label}
+              icon={icon}
+              label={label}
+              href={`/workspace/${workspaceId}/${segment}`}
+              active={isPathActive(pathname, `/workspace/${workspaceId}/${segment}`)}
+              collapsed={compact}
+            />
+          ))}
+        </div>
+      </SidebarSection>
+
+      <div className='min-h-0 flex-1 overflow-y-auto'>
+        <SidebarSection title='学习任务' collapsed={compact}>
+          <div className='space-y-1'>
+            {taskRows.map((task) => (
               <SidebarRow
-                key={table.id}
-                icon={Table}
-                label={table.name}
-                href={`/workspace/${workspaceId}/tables/${table.id}`}
-                active={pathname?.includes(`/workspace/${workspaceId}/tables/${table.id}`)}
-                collapsed={false}
+                key={task.id}
+                icon={Task}
+                label={formatTaskName(task)}
+                href={`/workspace/${workspaceId}/chat/${task.id}`}
+                active={isPathActive(pathname, `/workspace/${workspaceId}/chat/${task.id}`)}
+                collapsed={compact}
+                badge={!compact ? statusLabel(task.status) : undefined}
               />
             ))}
-            {tablesError && <SidebarEmptyRow label='表格暂时无法加载' />}
-            {!tablesError && tableRows.length === 0 && <SidebarEmptyRow label='暂无表格' />}
+            {loadError && !compact && <SidebarEmptyRow label='任务暂时无法加载' />}
+            {!loadError && taskRows.length === 0 && !compact && (
+              <SidebarEmptyRow label='暂无学习任务，从首页开始提问' />
+            )}
           </div>
-        )}
+        </SidebarSection>
       </div>
 
-      {!compact && (
-        <div className='px-2 pb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]'>
-          学习任务
-        </div>
-      )}
-      <div className='min-h-0 flex-1 space-y-1 overflow-y-auto'>
-        {taskRows.map((task) => (
-          <SidebarRow
-            key={task.id}
-            icon={Task}
-            label={formatTaskName(task)}
-            href={`/workspace/${workspaceId}/chat/${task.id}`}
-            active={pathname?.includes(`/chat/${task.id}`)}
-            collapsed={compact}
-            badge={!compact ? statusLabel(task.status) : undefined}
-          />
-        ))}
-        {loadError && !compact && <SidebarEmptyRow label='任务暂时无法加载' />}
-        {!loadError && taskRows.length === 0 && !compact && (
-          <SidebarEmptyRow label='暂无学习任务，从首页开始提问' />
-        )}
-      </div>
-
-      <div className='mt-3 space-y-1 border-t border-[var(--border)] pt-3'>
-        {resourceItems.map(({ label, icon, segment }) => (
-          <SidebarRow
-            key={label}
-            icon={icon}
-            label={label}
-            href={`/workspace/${workspaceId}/${segment}`}
-            active={pathname?.includes(`/workspace/${workspaceId}/${segment}`)}
-            collapsed={compact}
-          />
-        ))}
+      <div className='mt-3 border-t border-[var(--border)] pt-3'>
         <SidebarRow
           icon={Settings}
           label='设置'
           href={`/workspace/${workspaceId}/settings`}
-          active={pathname?.includes(`/workspace/${workspaceId}/settings`)}
+          active={isPathActive(pathname, `/workspace/${workspaceId}/settings`)}
           collapsed={compact}
         />
       </div>
