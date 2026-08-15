@@ -8,6 +8,7 @@ metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 降级回退
+  status-line: 正在保留已完成的内容…
   display-description: 在模型、工具或产物步骤失败时让运行时循环继续，失败必须降级成可用结果而不是卡住。
   output-language: zh-CN
   execution-mode: shared-contract

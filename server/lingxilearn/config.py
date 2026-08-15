@@ -88,12 +88,13 @@ class Settings(BaseSettings):
     # A deck requires several progressive-disclosure and artifact-writing
     # turns. Keep this independent from the parent graph limit so a verbose
     # model cannot exhaust the child graph at the old hard-coded limit.
-    agent_deck_recursion_limit: int = 80
+    agent_deck_recursion_limit: int = 40
     agent_visual_timeout: float = 240.0
     # A small production VM should queue expensive graph executions instead
     # of allowing every request and sidecar to retain a full model context.
     agent_concurrency: int = 1
-    agent_sidecar_concurrency: int = 1
+    agent_sidecar_concurrency: int = 4
+    agent_parallel_dispatch: bool = True
     agent_web_timeout: float = 20.0
     # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable
     # prompt/tool prefix intact so DeepSeek can use its native prompt cache.

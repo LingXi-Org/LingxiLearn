@@ -79,6 +79,8 @@ _AGENT_FORCE_FLUSH = frozenset(
         "agent.started",
         "agent.completed",
         "agent.failed",
+        "agent.status",
+        "agent.output",
         "model.started",
         "model.completed",
         "tool.call.delta",
@@ -497,6 +499,7 @@ class Service:
                 confirmed_actions=confirmed_actions,
                 prior_results=prior_results,
                 prior_artifacts=prior_artifacts,
+                schedule_background=(lambda capability, inputs: self.schedule_capability(task_id, learner_id, capability, inputs)),
             ),
             checkpointer=self.checkpointer,
             store=self.graph_store,
@@ -1168,11 +1171,13 @@ class Service:
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
-        if record.status != "awaiting_user":
-            raise ValueError(f"task_not_waiting:{record.status}")
         if not message.strip():
             raise ValueError("message must not be empty")
         attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
+        if record.status != "awaiting_user":
+            await self.runtime_state.push_interjection(task_id, {"message": message.strip(), "attachments": attachment_refs, "received_at": datetime.now(UTC).isoformat()})
+            await self.schedule_capability(task_id, record.learner_id, "dialog.converse", {"message": message.strip(), "attachments": attachment_refs})
+            return
         self._spawn(
             self._drive_agent_task(
                 task_id,
@@ -1683,6 +1688,7 @@ class Service:
                     settings=self.settings,
                     artifacts=self.agent_artifacts,
                     registry=self.registry,
+                    user_message=dict(payload.get("inputs") or {}),
                 )
             )
             dispatcher.seed_results(prior_results)

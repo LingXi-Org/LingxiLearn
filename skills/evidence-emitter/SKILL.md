@@ -9,6 +9,7 @@ metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 学习证据产出
+  status-line: 正在整理学习证据…
   display-description: 把对学习者的观察产出为结构化证据，这是 agent 影响学习档案的唯一通道。
   output-language: zh-CN
   execution-mode: shared-contract

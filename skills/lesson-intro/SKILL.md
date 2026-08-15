@@ -20,6 +20,7 @@ metadata:
   parallel-safe: true
   latency-class: interactive
   capabilities: content.lesson_intro
+  status-line: 正在准备课程引入…
   provider: lesson_intro
   ownership: dedicated
   eval-suite: lesson-intro-v1

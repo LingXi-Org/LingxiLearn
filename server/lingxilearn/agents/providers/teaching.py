@@ -53,6 +53,13 @@ NEGOTIATION_PROMPT = """你是教学协商 Agent。系统打算做的事和学�
 一到两句，不要道歉式措辞，不要写成选择题。
 只输出 JSON：{"text":"..."}。"""
 
+COMPANION_PROMPT = """你是学习陪伴 Agent。学习任务可能仍在运行。
+用简短中文回应学习者，明确说明当前正在进行的工作；可以回答基于已有材料的问题，
+但不要假装后台任务已经完成，也不要泄露未提交测验答案。只输出 JSON：{"text":"..."}。"""
+
+PROBE_PROMPT = """你是苏格拉底追问 Agent。根据学习者的掌握度和误区提出一个简短确认问题。
+不要给答案，不要连续问多个问题。只输出 JSON：{"text":"..."}。"""
+
 
 def _registry(name: str) -> SkillRegistry:
     return SkillRegistry((FilesystemSkillSource(REPO_ROOT / "skills" / name),))
@@ -80,7 +87,7 @@ def _guarded(text: str, context: ProviderContext) -> tuple[str, bool]:
 
     The quiz answer key is the leak guard: while questions are outstanding, a
     teaching turn may not contain the phrases or numbers that give them away.
-    """
+"""
 
     quiz = dict(context.result_of("quiz_generator"))
     graded = dict(context.result_of("grading"))
@@ -278,4 +285,49 @@ async def negotiator(context: ProviderContext) -> ProviderResult:
     )
 
 
-__all__ = ["adaptive_pedagogy", "answer_user", "negotiator"]
+@register("learning_companion")
+async def learning_companion(context: ProviderContext) -> ProviderResult:
+    """Give a fast response while the main loop continues."""
+    question = str(context.user_message.get("message") or "").strip()
+    if not question:
+        raise ProviderError("there is no learner message")
+    payload = {
+        "message": question,
+        "learner_state": _learner_brief(context),
+        "current_work": [context.task.rationale, *context.prior_results.keys()],
+        "artifacts": sorted(context.prior_results.keys()),
+    }
+    if context.model is None:
+        text = f"我收到你的消息了。当前仍在处理「{context.goal.topic}」，我会把你的要求带入下一轮编排。"
+    else:
+        agent = create_agent(agent_model(context.model, "learning_companion"), system_prompt=COMPANION_PROMPT, name="learning-companion")
+        parsed = extract_json(message_text(await invoke_agent(agent, HumanMessage(json.dumps(payload, ensure_ascii=False)), context.runtime, agent_name="learning_companion", recursion_limit=6))) or {}
+        text = str(parsed.get("text") or "").strip()
+        if not text:
+            raise ProviderError("learning companion returned no text")
+    emit(context.runtime, "agent.output", agent="learning_companion", message=text)
+    return ProviderResult(
+        learner_message=text,
+        evidence=[EvidenceRecord(learner_id=context.learner_id, knowledge_point=context.knowledge_point_id, signal=Signal.SELF_REPORT, source_agent="learning_companion", task_id=context.task_id, summary=question[:200])],
+        data={"text": text, "message": question},
+        persist_as="learning_companion",
+        detail="已即时回应学习者消息",
+    )
+
+
+@register("probe_user")
+async def probe_user(context: ProviderContext) -> ProviderResult:
+    brief = _learner_brief(context)
+    if context.model is None:
+        text = f"关于「{brief.get('knowledge_point') or context.goal.topic}」，你会如何用自己的话解释它？"
+    else:
+        agent = create_agent(agent_model(context.model, "probe_user"), system_prompt=PROBE_PROMPT, name="socratic-prober")
+        parsed = extract_json(message_text(await invoke_agent(agent, HumanMessage(json.dumps(brief, ensure_ascii=False)), context.runtime, agent_name="probe_user", recursion_limit=6))) or {}
+        text = str(parsed.get("text") or "").strip()
+        if not text:
+            raise ProviderError("probe returned no question")
+    emit(context.runtime, "agent.output", agent="probe_user", message=text)
+    return ProviderResult(learner_message=text, data={"text": text}, persist_as="probe_user", detail="已向学习者确认理解")
+
+
+__all__ = ["adaptive_pedagogy", "answer_user", "negotiator", "learning_companion", "probe_user"]

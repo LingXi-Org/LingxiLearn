@@ -101,6 +101,8 @@ class Cost(BaseModel):
     heavy_artifact: bool = False
     blocking: bool = True
     irreversible: bool = False
+    parallel_safe: bool = False
+    critical_path: bool = True
 
     @property
     def normalized(self) -> float:
@@ -128,6 +130,8 @@ class CandidateAction(BaseModel):
     reason: str = ""
     eligible: bool = True
     blocked_by: str = ""
+    parallel_safe: bool = False
+    critical_path: bool = True
     """Why an ineligible candidate was excluded; kept for the trace."""
 
     @field_validator("capability")
@@ -201,24 +205,23 @@ class OrchestrationPlan(BaseModel):
     def ordered_tasks(self) -> list[PlannedTask]:
         """Dependency order. Cycles raise rather than deadlocking the loop."""
 
+        return [task for tier in self.tiers() for task in tier]
+
+    def tiers(self) -> list[list[PlannedTask]]:
+        """Return stable dependency tiers without flattening ready tasks."""
         remaining = {task.id: task for task in self.tasks}
         done: set[str] = set()
-        ordered: list[PlannedTask] = []
+        tiers: list[list[PlannedTask]] = []
         while remaining:
-            ready = [
-                task
-                for task in remaining.values()
-                if all(dep in done for dep in task.depends_on)
-            ]
+            ready = [task for task in remaining.values() if all(dep in done for dep in task.depends_on)]
             if not ready:
                 raise ValueError(f"cyclic task dependencies: {sorted(remaining)}")
-            # Stable within a tier: highest expected gain first.
             ready.sort(key=lambda t: (-t.expected_learning_gain, t.id))
+            tiers.append(ready)
+            done.update(task.id for task in ready)
             for task in ready:
-                ordered.append(task)
-                done.add(task.id)
                 remaining.pop(task.id)
-        return ordered
+        return tiers
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
@@ -242,6 +245,7 @@ class TaskOutcome(BaseModel):
     learner_message: str = ""
     tokens_used: int = 0
     duration_ms: int = 0
+    heavy: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

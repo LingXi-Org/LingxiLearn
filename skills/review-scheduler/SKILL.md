@@ -19,6 +19,7 @@ metadata:
   parallel-safe: true
   latency-class: interactive
   capabilities: review.schedule
+  status-line: 正在安排复习节奏…
   provider: review_scheduler
   ownership: dedicated
 ---

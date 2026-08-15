@@ -20,6 +20,7 @@ metadata:
   parallel-safe: false
   latency-class: interactive
   capabilities: dialog.answer
+  status-line: 正在回答你的追问…
   provider: answer_user
   ownership: dedicated
 ---

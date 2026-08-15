@@ -8,6 +8,7 @@ metadata:
   author: LingXi-Org
   version: 1.0.0
   display-name: 目标解析
+  status-line: 正在理解你的学习目标…
   display-description: 把学习者的话解析成目标对象（要什么/关于什么/多急），不决定跑哪个 agent 或流程。
   output-language: zh-CN
   output-contract: goal.v1

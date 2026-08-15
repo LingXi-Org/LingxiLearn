@@ -96,6 +96,10 @@ def _default_done_condition(candidate: CandidateAction) -> DoneCondition:
                 signal="self_report",
                 knowledge_point_id=candidate.knowledge_point_id,
             )
+        case "dialog.converse":
+            return DoneCondition(kind="evidence_observed", signal="self_report")
+        case "dialog.probe":
+            return DoneCondition(kind="user_replied")
     return DoneCondition(kind="always")
 
 
@@ -121,6 +125,8 @@ def _task_from_candidate(candidate: CandidateAction, index: int) -> PlannedTask:
         estimated_cost=Cost(
             heavy_artifact=info(parse(candidate.capability)).heavy_artifact,
             irreversible=info(parse(candidate.capability)).irreversible,
+            parallel_safe=candidate.parallel_safe,
+            critical_path=candidate.critical_path,
         ),
     )
 
@@ -221,6 +227,8 @@ def _repair(
                 estimated_cost=Cost(
                     heavy_artifact=capability_info.heavy_artifact,
                     irreversible=capability_info.irreversible,
+                    parallel_safe=candidate.parallel_safe,
+                    critical_path=candidate.critical_path,
                 ),
             )
         )
@@ -264,6 +272,7 @@ async def plan(
     budget: Budget,
     model: Any | None = None,
     runtime: Any = None,
+    user_message: Mapping[str, Any] | None = None,
 ) -> OrchestrationPlan:
     """Produce this round's plan from the current state."""
 
@@ -282,6 +291,7 @@ async def plan(
             "prerequisites": [_view_dict(item) for item in world.prerequisites],
         },
         "budget": budget.to_dict(),
+        "learner_message": dict(user_message or {}),
         "candidates": [
             {
                 "capability": item.capability,

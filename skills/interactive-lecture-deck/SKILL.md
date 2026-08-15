@@ -19,6 +19,7 @@ metadata:
   latency-class: interactive
   default-blocking-hop-budget: "0"
   capabilities: content.deck
+  status-line: 正在把讲义拆成幻灯片…
   provider: lecture_deck
   ownership: dedicated
   eval-suite: interactive-lecture-deck-v1

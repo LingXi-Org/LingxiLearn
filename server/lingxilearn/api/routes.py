@@ -596,7 +596,7 @@ async def post_agent_message(
     except KeyError as exc:
         raise not_found() from exc
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"status": "accepted"}
 
 

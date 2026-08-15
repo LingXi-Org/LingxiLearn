@@ -19,6 +19,7 @@ metadata:
   parallel-safe: true
   latency-class: interactive
   capabilities: tool.investigate
+  status-line: 正在核查相关资料…
   provider: pack_investigate
   ownership: dedicated
 ---

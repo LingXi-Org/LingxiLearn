@@ -19,7 +19,9 @@ capability, a skill, or a subject changes data; it never changes this file.
 from __future__ import annotations
 
 import logging
+import asyncio
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Annotated, Any, TypedDict
 
 from lingxigraph import END, START, Runtime, StateGraph, interrupt
@@ -89,6 +91,7 @@ class LoopDeps:
         confirmed_actions: frozenset[str] = frozenset(),
         prior_results: Mapping[str, Any] | None = None,
         prior_artifacts: Sequence[str] = (),
+        schedule_background: Any = None,
     ) -> None:
         self.runtime_state = runtime_state
         self.learner_id = learner_id
@@ -103,6 +106,7 @@ class LoopDeps:
         self.confirmed_actions = confirmed_actions
         self.prior_results = dict(prior_results or {})
         self.prior_artifacts = tuple(prior_artifacts)
+        self.schedule_background = schedule_background
         self.updater = StateUpdater(runtime_state)
         self.tracer = DecisionTracer(
             runtime_state,
@@ -219,6 +223,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     dispatcher.seed_artifacts(deps.prior_artifacts)
 
     async def interpret_goal(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
+        if deps.emit is not None:
+            deps.emit("agent.status", {"text": "正在理解你的学习目标…", "phase": "interpret_goal"})
         rows = await deps.runtime_state.profile_for(deps.learner_id)
         stack = await deps.runtime_state.goal_stack(deps.task_id)
         utterance = str(state.get("utterance") or "").strip()
@@ -253,12 +259,18 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         return {"goal": goal.to_dict(), "runtime_status": str(RuntimeStatus.PLANNING)}
 
     async def orchestrate(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
+        if deps.emit is not None:
+            deps.emit("agent.status", {"text": "正在根据当前状态重新规划…" if state.get("replanning") else "正在规划下一步学习动作…", "phase": "orchestrate"})
         # A replan enters this node in REPLANNING. Persist the explicit
         # REPLANNING -> PLANNING transition before choosing the next action so
         # the table follows the same closed state machine as the checkpoint.
         await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)
         goal = Goal.from_dict(state.get("goal") or {})
         budget = Budget.from_dict(state.get("budget"))
+        interjections = await deps.runtime_state.drain_interjections(deps.task_id)
+        latest_message = interjections[-1] if interjections else {}
+        if latest_message:
+            dispatcher.retarget(user_message=latest_message)
         skills = await deps.runtime_state.list_skills(
             learner_id=deps.learner_id, enabled_only=True
         )
@@ -279,6 +291,14 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             budget.spend_replan()
 
         world, profile_rows = await _world(deps, goal, dispatcher=dispatcher)
+        if latest_message:
+            requested = set(world.requested_capabilities)
+            requested.update(str(item) for item in latest_message.get("requested_capabilities") or [])
+            if any(word in str(latest_message.get("message") or "") for word in ("课件", "幻灯片", "讲义")):
+                requested.add("content.deck")
+            if any(word in str(latest_message.get("message") or "") for word in ("解释", "回答", "为什么")):
+                requested.add("dialog.answer")
+            world = replace(world, requested_capabilities=frozenset(requested), awaiting_user_reply=True)
         produced = await orchestrator.plan(
             goal=goal,
             world=world,
@@ -286,6 +306,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             budget=budget,
             model=deps.model,
             runtime=runtime,
+            user_message=latest_message,
         )
         verdict = check_plan(
             produced,
@@ -297,6 +318,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         )
         if verdict.findings:
             deps.tracer.guardrail_triggered(verdict)
+            if deps.emit is not None:
+                deps.emit("agent.status", {"text": degrade_message(verdict.findings), "phase": "guardrail"})
 
         step = await deps.tracer.next_step()
         record = DecisionRecord(
@@ -386,28 +409,40 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
 
         outcomes: list[TaskOutcome] = []
         messages: list[str] = []
-        for task in produced.ordered_tasks():
-            if task.id not in allowed:
-                continue
+        for tier in produced.tiers():
+            ready = [task for task in tier if task.id in allowed]
             if budget.exhausted() is not None:
                 break
-            outcome = await dispatcher.run(task, profile=profile_rows, budget=budget)
-            outcomes.append(outcome)
-            if deps.emit is not None:
-                deps.emit(
-                    "node.completed" if outcome.status in {"completed", "incomplete"} else "node.failed",
-                    {
-                        "task_id": task.id,
-                        "capability": task.capability,
-                        "provider": outcome.provider,
-                        "status": outcome.status,
-                        "satisfied": outcome.satisfied,
-                        "detail": outcome.detail,
-                        "step": int(state.get("step") or 0),
-                    },
-                )
-            if outcome.learner_message:
-                messages.append(outcome.learner_message)
+            background = [task for task in ready if not task.estimated_cost.critical_path and not task.estimated_cost.blocking and deps.schedule_background is not None]
+            for task in background:
+                await deps.schedule_background(task.capability, dict(task.inputs))
+            ready = [task for task in ready if task not in background]
+            safe = [task for task in ready if task.estimated_cost.parallel_safe and bool(getattr(deps.settings, "agent_parallel_dispatch", True))]
+            serial = [task for task in ready if task not in safe]
+            results = []
+            if safe:
+                gathered = await asyncio.gather(*(dispatcher.run(task, profile=profile_rows, budget=budget) for task in safe), return_exceptions=True)
+                results.extend(item if isinstance(item, TaskOutcome) else TaskOutcome(task_id=safe[index].id, capability=safe[index].capability, status="failed", detail=f"{type(item).__name__}: {item}") for index, item in enumerate(gathered))
+            for task in serial:
+                results.append(await dispatcher.run(task, profile=profile_rows, budget=budget))
+            for outcome in results:
+                outcomes.append(outcome)
+                budget.spend_step(heavy=outcome.heavy, tokens=outcome.tokens_used, wall_ms=outcome.duration_ms)
+                if deps.emit is not None:
+                    deps.emit(
+                        "node.completed" if outcome.status in {"completed", "incomplete"} else "node.failed",
+                        {
+                            "task_id": outcome.task_id,
+                            "capability": outcome.capability,
+                            "provider": outcome.provider,
+                            "status": outcome.status,
+                            "satisfied": outcome.satisfied,
+                            "detail": outcome.detail,
+                            "step": int(state.get("step") or 0),
+                        },
+                    )
+                if outcome.learner_message:
+                    messages.append(outcome.learner_message)
 
         await deps.runtime_state.save_budget(deps.task_id, budget.to_dict())
         await deps.runtime_state.set_runtime_status(
@@ -433,6 +468,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         return {"runtime_status": str(RuntimeStatus.UPDATING)}
 
     async def update_state(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:
+        if deps.emit is not None:
+            deps.emit("agent.status", {"text": "正在更新对你的掌握度判断…", "phase": "update_state"})
         if str(state.get("runtime_status")) != str(RuntimeStatus.UPDATING):
             return {}
         changes = await deps.updater.apply(learner_id=deps.learner_id)

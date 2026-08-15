@@ -143,6 +143,13 @@ def _precondition_block(
         case Capability.DIALOG_ANSWER:
             if not view.open_questions:
                 return "没有待回答的提问"
+        case Capability.DIALOG_PROBE:
+            misconceptions = tuple(view.misconceptions)
+            uncertain = 0.25 <= view.mastery <= 0.75 or bool(misconceptions)
+            if not is_target or not uncertain:
+                return "当前掌握度不需要主动追问"
+            if world.has_open_quiz or world.has_ungraded_submission:
+                return "存在未完成的测验"
         case Capability.META_REPORT:
             if not is_target:
                 return "报告只针对当前目标"
@@ -179,6 +186,8 @@ def _cost_of(skill: RegisteredSkill, capability: Capability) -> Cost:
         heavy_artifact=bool(skill.cost.get("heavy_artifact") or detail.heavy_artifact),
         blocking=bool(skill.cost.get("blocking", True)),
         irreversible=detail.irreversible,
+        parallel_safe=bool(skill.cost.get("parallel_safe", False)),
+        critical_path=bool(skill.cost.get("critical_path", True)),
     )
 
 
@@ -234,6 +243,8 @@ def generate(
                     reason=gain.reason if is_target else _prerequisite_reason(gain.reason, view),
                     eligible=not block and utility >= MIN_UTILITY,
                     blocked_by=block or ("学习收益过低" if utility < MIN_UTILITY else ""),
+                    parallel_safe=cost.parallel_safe,
+                    critical_path=cost.critical_path,
                 )
                 (eligible if candidate.eligible else excluded).append(candidate)
 
