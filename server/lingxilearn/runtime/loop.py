@@ -236,6 +236,18 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     async def interpret_goal(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
         if deps.emit is not None:
             deps.emit("agent.status", {"text": "已收到你的学习目标，正在准备学习安排。", "phase": "interpret_goal"})
+            # The first learner-facing acknowledgement must not wait for goal
+            # interpretation or any artifact provider.  In particular, a
+            # lesson/visual/deck provider may take minutes, while the learner
+            # should see that the companion is present immediately.
+            deps.emit(
+                "agent.output",
+                {
+                    "agent": "learning_companion",
+                    "message": "我先陪你开始：正在快速了解你的目标，稍后把最先能学的内容送到你面前。",
+                    "stream_id": f"{deps.task_id}:opening-companion",
+                },
+            )
         rows = await deps.runtime_state.profile_for(deps.learner_id)
         stack = await deps.runtime_state.goal_stack(deps.task_id)
         utterance = str(state.get("utterance") or "").strip()
@@ -559,7 +571,21 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             ready = [task for task in tier if task.id in allowed]
             if budget.exhausted() is not None:
                 break
-            background = [task for task in ready if not task.estimated_cost.critical_path and not task.estimated_cost.blocking and deps.schedule_background is not None]
+            # Heavy artifacts are deliberately detached from the learner's
+            # turn even when their provider declares itself blocking.  The
+            # latter describes provider semantics, not whether the chat must
+            # wait for it.  Waiting here made a single visual/deck generation
+            # hold the whole conversation for several minutes.
+            background = [
+                task
+                for task in ready
+                if not task.estimated_cost.critical_path
+                and (
+                    task.estimated_cost.heavy_artifact
+                    or not task.estimated_cost.blocking
+                )
+                and deps.schedule_background is not None
+            ]
             if background:
                 background_pending = True
             for task in background:
