@@ -1,15 +1,16 @@
 ---
-name: orchestrator-policy
+name: learning-plan-decision
 description: >-
-  Choose and order the next actions from a pre-scored candidate set, and justify the choice in
-  terms the learner could read. It selects among capabilities; it never names an agent.
+  Evaluate learning utility and choose the next actions in one model decision. The contract keeps
+  utility evaluation and plan orchestration as two separately auditable skills while exposing one
+  fast runtime control node.
 license: MIT
 metadata:
   author: LingXi-Org
   version: 1.0.0
-  display-name: 编排策略
-  status-line: 正在规划下一步学习动作…
-  display-description: 从已打分的候选集中挑选并排序下一步动作，并给出学习者能读懂的理由；只谈能力，不谈 agent 名。
+  display-name: 学习计划决策
+  status-line: 正在评估学习效用并生成下一步计划…
+  display-description: 在一个极速模型节点中分别完成学习效用评估与学习计划编排；保留两个可审计技能语义，只谈能力，不谈 agent 名。
   output-language: zh-CN
   output-contract: orchestration-plan.v1
   execution-mode: shared-contract
@@ -22,7 +23,15 @@ metadata:
   ownership: shared
 ---
 
-# 编排策略
+# 学习计划决策
+
+本技能由两个独立、可审计的子技能组成，但在 Runtime Loop 中使用一次模型调用完成：
+
+1. **学习效用评估**：逐项输出 `gain`、`utility` 和中文理由，体现学习收益与成本权衡。
+2. **学习计划编排**：使用上述评分选择任务、判断真实依赖并生成分层计划。
+
+两者不得拆成串行模型调用。候选任务没有真实数据依赖时，`depends_on` 必须为空，
+让运行时把它们放入同一层并行执行。
 
 ## 角色
 

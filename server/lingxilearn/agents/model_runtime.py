@@ -19,7 +19,7 @@ from lingxigraph import AIMessage, EventKind, HumanMessage, Runtime, ToolMessage
 logger = logging.getLogger(__name__)
 EVENT_CHANNEL = "agent_task"
 
-RUNTIME_MODEL_ROLES = ("orchestrator", "goal_interpreter", "utility_evaluator")
+RUNTIME_MODEL_ROLES = ("orchestrator", "goal_interpreter", "utility_evaluator", "learning_plan_decision")
 """Roles the loop itself needs, which are not capability providers."""
 
 

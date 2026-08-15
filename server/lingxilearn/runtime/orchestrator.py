@@ -40,10 +40,12 @@ logger = logging.getLogger(__name__)
 MAX_MODEL_CANDIDATES = 12
 """How many scored options the model is shown. More is noise, not choice."""
 
-SYSTEM_PROMPT = """你是 LingxiLearn 的编排器。每一轮重新决策，不要套用固定流程。
+SYSTEM_PROMPT = """你是 LingxiLearn 的学习计划决策器。每一轮重新决策，不要套用固定流程。
 
-宿主已经按「学习收益 / 成本」给候选集打好分。你只能从候选集里挑选和排序，
-不能发明列表之外的动作，不能写 agent 名——只写 capability。
+你必须在一次响应中完成两个可审计技能：
+1. 学习效用评估：为每个候选输出 gain、utility 和中文 reason，utility 要体现 gain / cost；
+2. 学习计划编排：根据这些评估选择任务并生成依赖关系。
+宿主只提供候选能力和事实成本；不能发明列表之外的动作，不能写 agent 名——只写 capability。
 
 规则：
 - 一轮最多 3 个任务。
@@ -59,83 +61,10 @@ profile_reaches / user_replied / quiz_graded / always / all_of / any_of。
 
 只输出 JSON：
 {"reasoning":"...","hypotheses":["..."],
+"scores":[{"capability":"...","knowledge_point_id":"...","gain":0.0,"utility":0.0,"reason":"..."}],
  "tasks":[{"id":"t1","capability":"...","knowledge_point_id":"...",
            "done_when":{"kind":"..."},"rationale":"...","depends_on":[]}],
  "goal_satisfied_when":{"kind":"..."},"awaits_user":false,"negotiation":null}"""
-
-UTILITY_PROMPT = """你是 LingxiLearn 的学习效用评估器。根据目标、学习画像、误区、历史证据和预算，
-为给出的候选能力逐项评估学习收益 gain 与综合效用 utility（均为 0 到 1）。
-成本和候选资格由宿主提供，不能改写、不能新增能力。utility 必须体现 gain / cost 的权衡。
-只输出 JSON：{"scores":[{"capability":"...","knowledge_point_id":"...","gain":0.0,"utility":0.0,"reason":"面向学习者的简短中文理由"}]}"""
-
-
-async def _score_candidates_with_model(
-    *,
-    goal: Goal,
-    world: WorldState,
-    candidates: Sequence[CandidateAction],
-    model: Any | None,
-    runtime: Any,
-) -> list[CandidateAction] | None:
-    """Let the control-plane model make the gain/cost judgement.
-
-    Registry filtering and cost facts remain host-enforced safety boundaries;
-    the learner-specific ranking itself is never selected by a code heuristic.
-    """
-    if model is None:
-        return None
-    # Do not pre-rank here: selecting a truncated candidate set by a local
-    # utility would quietly turn the control plane back into code. Registry
-    # eligibility is factual validation; the model judges every eligible item.
-    offered = eligible_only(candidates)
-    if not offered:
-        return None
-    payload = {
-        "goal": goal.to_dict(),
-        "target": _view_dict(world.target),
-        "prerequisites": [_view_dict(item) for item in world.prerequisites],
-        "candidates": [
-            {"capability": item.capability, "knowledge_point_id": item.knowledge_point_id,
-             "cost": item.cost, "skill_id": item.skill_id, "provider": item.provider}
-            for item in offered
-        ],
-    }
-    try:
-        agent = create_agent(agent_model(model, "utility_evaluator"), system_prompt=UTILITY_PROMPT, name="utility-evaluator")
-        parsed = extract_json(message_text(await invoke_agent(
-            agent, HumanMessage(json.dumps(payload, ensure_ascii=False)), runtime,
-            agent_name="utility_evaluator", recursion_limit=4,
-        ))) or {}
-        scores = parsed.get("scores") if isinstance(parsed, Mapping) else None
-        if not isinstance(scores, list):
-            raise ValueError("utility evaluator did not return scores")
-        by_key = {(item.capability, item.knowledge_point_id): item for item in offered}
-        judged: dict[tuple[str, str], CandidateAction] = {}
-        for raw in scores:
-            if not isinstance(raw, Mapping):
-                continue
-            key = (str(raw.get("capability") or ""), str(raw.get("knowledge_point_id") or ""))
-            candidate = by_key.get(key)
-            if candidate is None:
-                continue
-            gain = max(0.0, min(1.0, float(raw.get("gain"))))
-            utility = max(0.0, min(1.0, float(raw.get("utility"))))
-            reason = str(raw.get("reason") or candidate.reason).strip()
-            judged[key] = candidate.model_copy(update={"gain": gain, "utility": utility, "reason": reason})
-        if not judged:
-            raise ValueError("utility evaluator returned no offered candidates")
-        scored = [
-            judged.get(
-                (item.capability, item.knowledge_point_id),
-                item.model_copy(update={"gain": 0.0, "utility": 0.0, "reason": "本轮未被模型选为优先动作"}),
-            )
-            for item in candidates
-        ]
-        return sorted(scored, key=lambda item: item.utility, reverse=True)
-    except Exception:  # noqa: BLE001 - no code-selected control fallback
-        logger.exception("utility evaluation failed")
-        return None
-
 
 def unavailable_plan(*, candidates: Sequence[CandidateAction]) -> OrchestrationPlan:
     """Fail closed when a control-plane model cannot make a decision.
@@ -323,19 +252,9 @@ async def plan(
     """Produce this round's plan from the current state."""
 
     registry_candidates = generate(goal=goal, world=world, skills=skills)
-    candidates = await _score_candidates_with_model(
-        goal=goal,
-        world=world,
-        candidates=registry_candidates,
-        model=model,
-        runtime=runtime,
-    )
-    if candidates is None:
+    candidates = eligible_only(registry_candidates)
+    if model is None or not candidates:
         return unavailable_plan(candidates=registry_candidates)
-
-    offered = eligible_only(candidates)[:MAX_MODEL_CANDIDATES]
-    if not offered:
-        return unavailable_plan(candidates=candidates)
 
     payload = {
         "goal": goal.to_dict(),
@@ -355,14 +274,14 @@ async def plan(
                 "reason": item.reason,
                 "skill_id": item.skill_id,
             }
-            for item in offered
+            for item in candidates
         ],
     }
     try:
         agent = create_agent(
-            agent_model(model, "orchestrator"),
+            agent_model(model, "learning_plan_decision"),
             system_prompt=SYSTEM_PROMPT,
-            name="orchestrator",
+            name="learning-plan-decision",
         )
         parsed = extract_json(
             message_text(
@@ -370,17 +289,47 @@ async def plan(
                     agent,
                     HumanMessage(json.dumps(payload, ensure_ascii=False)),
                     runtime,
-                    agent_name="orchestrator",
+                    agent_name="learning_plan_decision",
                     recursion_limit=4,
                 )
             )
         )
     except Exception:  # noqa: BLE001 - planning must not be able to end a session
         logger.exception("orchestrator planning failed; no route will be selected locally")
-        return unavailable_plan(candidates=candidates)
+        return unavailable_plan(candidates=registry_candidates)
 
     if not parsed:
-        return unavailable_plan(candidates=candidates)
+        return unavailable_plan(candidates=registry_candidates)
+
+    scores = parsed.get("scores") if isinstance(parsed, Mapping) else None
+    if not isinstance(scores, list):
+        return unavailable_plan(candidates=registry_candidates)
+    by_key = {(item.capability, item.knowledge_point_id): item for item in candidates}
+    judged: dict[tuple[str, str], CandidateAction] = {}
+    for raw in scores:
+        if not isinstance(raw, Mapping):
+            continue
+        key = (str(raw.get("capability") or ""), str(raw.get("knowledge_point_id") or ""))
+        candidate = by_key.get(key)
+        if candidate is None:
+            continue
+        try:
+            gain = max(0.0, min(1.0, float(raw.get("gain"))))
+            utility = max(0.0, min(1.0, float(raw.get("utility"))))
+        except (TypeError, ValueError):
+            continue
+        judged[key] = candidate.model_copy(update={
+            "gain": gain,
+            "utility": utility,
+            "reason": str(raw.get("reason") or candidate.reason).strip(),
+        })
+    if not judged:
+        return unavailable_plan(candidates=registry_candidates)
+    candidates = sorted([
+        judged.get((item.capability, item.knowledge_point_id), item.model_copy(update={"gain": 0.0, "utility": 0.0}))
+        for item in registry_candidates
+    ], key=lambda item: item.utility, reverse=True)
+    offered = eligible_only(candidates)[:MAX_MODEL_CANDIDATES]
 
     repaired = _repair(
         parsed,

@@ -529,13 +529,15 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
   const semantic = useMemo(() => semanticGraph(rawBlocks, rawEdges), [rawBlocks, rawEdges])
   const blocks = useMemo(() => {
     const controls: Record<string, Record<string, unknown>> = {}
+    let inputState = 'completed'
     const labels: Record<string, string> = {
-      goal_interpreter: '意图识别',
-      utility_evaluator: '学习效用评估',
-      orchestrator: '学习计划编排',
+      learning_plan_decision: '学习计划决策',
     }
     for (const event of events) {
       const agent = String(event.agent ?? '')
+      if (agent === 'goal_interpreter' && ['model.started', 'model.completed', 'model.failed'].includes(event.kind)) {
+        inputState = event.kind === 'model.failed' ? 'failed' : event.kind === 'model.started' ? 'running' : 'completed'
+      }
       if (!labels[agent] || !['model.started', 'model.completed', 'model.failed'].includes(event.kind)) continue
       const id = `control-${agent}`
       controls[id] = {
@@ -546,7 +548,7 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
     }
     return {
       'runtime-user-input': {
-        name: '用户输入', type: 'input', executionState: 'completed',
+        name: '用户输入', type: 'input', executionState: inputState,
         data: { nodeKind: 'input', input: true },
         rows: [{ title: '节点类型', value: '用户输入' }, { title: '作用', value: '触发本轮学习计划' }],
       },
@@ -580,7 +582,7 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
         })
       }
     }
-    const controlChain = ['runtime-user-input', 'control-goal_interpreter', 'control-utility_evaluator', 'control-orchestrator']
+    const controlChain = ['runtime-user-input', 'control-learning_plan_decision']
       .filter((id) => Boolean(blocks[id]))
     for (let index = 1; index < controlChain.length; index += 1) {
       const source = controlChain[index - 1]
@@ -592,13 +594,13 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
         id: `runtime-control-${source}-${target}`,
         source,
         target,
-        data: { kind: 'control', label: target === 'control-goal_interpreter' ? '理解学习请求' : target === 'control-utility_evaluator' ? '评估学习效用' : '生成动态计划' },
+        data: { kind: 'control', label: '评估效用并生成动态学习计划' },
       })
     }
     for (const id of Object.keys(blocks)) {
       if (id === 'runtime-user-input' || id.startsWith('control-')) continue
-      const source = blocks['control-orchestrator']
-        ? 'control-orchestrator'
+      const source = blocks['control-learning_plan_decision']
+        ? 'control-learning_plan_decision'
         : controlChain.at(-1) ?? 'runtime-user-input'
       const key = `${source}->${id}`
       if (known.has(key)) continue
@@ -607,7 +609,7 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
         id: `runtime-intent-${id}`,
         source,
         target: id,
-        data: { kind: 'request', label: source === 'control-orchestrator' ? '动态计划任务' : '控制面结果' },
+        data: { kind: 'request', label: source === 'control-learning_plan_decision' ? '动态计划任务' : '控制面结果' },
       })
     }
     return next
