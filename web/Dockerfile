@@ -2,10 +2,10 @@ ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 ARG BUN_VERSION=1.3.6
 ARG NODE_VERSION=22-bookworm-slim
 
-# Keep Bun as the lockfile-aware dependency installer, but run Next.js itself on
-# Node. Restored server routes depend on Node worker_threads APIs during
-# `next build` page-data collection, so executing the build under Bun can fail
-# before a route is ever invoked.
+# Use Bun only to materialize the existing bun.lock dependency graph. The app
+# declares Node >=22.19 and restored server routes rely on Node worker_threads
+# APIs during `next build` page-data collection, so build and runtime stay on
+# Node instead of executing Next.js under Bun.
 FROM ${DOCKER_REGISTRY}/oven/bun:${BUN_VERSION} AS deps
 
 WORKDIR /app
