@@ -38,6 +38,7 @@ class Capability(StrEnum):
     DIALOG_NEGOTIATE = "dialog.negotiate"
     DIALOG_CONVERSE = "dialog.converse"
     DIALOG_PROBE = "dialog.probe"
+    PLAN_PRESENT = "plan.present"
 
     # --- assessing ---------------------------------------------------------
     ASSESS_GENERATE = "assess.generate"
@@ -105,6 +106,9 @@ CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
     ),
     Capability.DIALOG_PROBE: CapabilityInfo(
         Capability.DIALOG_PROBE, "向你确认理解", True, False, False
+    ),
+    Capability.PLAN_PRESENT: CapabilityInfo(
+        Capability.PLAN_PRESENT, "更新执行计划", True, False, False
     ),
     Capability.ASSESS_GENERATE: CapabilityInfo(
         Capability.ASSESS_GENERATE, "出题检测", True, False, False

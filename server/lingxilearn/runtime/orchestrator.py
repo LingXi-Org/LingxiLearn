@@ -103,15 +103,29 @@ def _default_done_condition(candidate: CandidateAction) -> DoneCondition:
     return DoneCondition(kind="always")
 
 
+FAST_GOAL_TYPES = frozenset({"learn", "ask", "practice", "review", "assess"})
+
+
+def _can_use_fast_path(goal: Goal, user_message: Mapping[str, Any] | None) -> bool:
+    """Common learner turns do not need a model call in the control plane."""
+
+    if goal.goal_type not in FAST_GOAL_TYPES:
+        return False
+    text = str((user_message or {}).get("message") or goal.raw_utterance or "")
+    # Explicit corrections, negotiations and multi-part requests deserve the
+    # model fallback; ordinary learning requests use deterministic ranking.
+    return not any(marker in text for marker in ("不是", "不对", "改成", "同时", "比较", "还是"))
+
 def _goal_condition(goal: Goal, world: WorldState) -> DoneCondition:
     """When the goal itself is satisfied, if nothing more specific is stated."""
 
     point = world.target.knowledge_point_id or (
         goal.knowledge_points[0] if goal.knowledge_points else ""
     )
-    if not point:
-        return DoneCondition(kind="always")
-    return DoneCondition(kind="profile_reaches", knowledge_point_id=point, mastery=0.7)
+    # A user-facing turn is complete once it has delivered one useful result.
+    # Mastery is updated as evidence arrives, but it must not keep a simple
+    # answer trapped in an automatic re-planning loop.
+    return DoneCondition(kind="always")
 
 
 def _task_from_candidate(candidate: CandidateAction, index: int) -> PlannedTask:
@@ -134,7 +148,7 @@ def _task_from_candidate(candidate: CandidateAction, index: int) -> PlannedTask:
 def fallback_plan(
     *, goal: Goal, world: WorldState, candidates: Sequence[CandidateAction]
 ) -> OrchestrationPlan:
-    """The deterministic plan: take the top-scored action and say why.
+    """The deterministic plan: keep a small useful set of ranked actions.
 
     Used when there is no model, when the model output cannot be parsed, and
     when guardrails reject everything the model proposed. It is a worse plan
@@ -151,7 +165,25 @@ def fallback_plan(
             degraded=True,
         )
 
-    task = _task_from_candidate(top, 1)
+    eligible = [item for item in candidates if item.eligible]
+    selected: list[CandidateAction] = []
+    heavy_selected = False
+    for candidate in eligible:
+        candidate_info = info(parse(candidate.capability))
+        if candidate_info.heavy_artifact and heavy_selected:
+            continue
+        selected.append(candidate)
+        heavy_selected = heavy_selected or candidate_info.heavy_artifact
+        if len(selected) >= 3:
+            break
+    if not selected:
+        selected = [top]
+    tasks = []
+    for index, candidate in enumerate(selected, start=1):
+        task = _task_from_candidate(candidate, index)
+        if index > 1 and selected[index - 2].capability.startswith("content."):
+            task = task.model_copy(update={"depends_on": [f"t{index - 1}"]})
+        tasks.append(task)
     deviating = deviates(goal, top, world)
     negotiation = None
     if deviating:
@@ -162,8 +194,8 @@ def fallback_plan(
         )
     return OrchestrationPlan(
         reasoning=f"按学习收益排序，当前最值得做的是{top.capability}：{top.reason}",
-        tasks=[task],
-        goal_satisfied_when=_goal_condition(goal, world),
+        tasks=tasks,
+        goal_satisfied_when=DoneCondition(kind="any_of", conditions=[task.done_when for task in tasks]),
         awaits_user=bool(deviating),
         negotiation=negotiation,
         candidates_considered=list(candidates),
@@ -240,7 +272,14 @@ def _repair(
         goal_when = (
             DoneCondition.model_validate(parsed["goal_satisfied_when"])
             if isinstance(parsed.get("goal_satisfied_when"), Mapping)
-            else _goal_condition(goal, world)
+            else (
+                DoneCondition(
+                    kind="any_of",
+                    conditions=[task.done_when for task in tasks],
+                )
+                if tasks
+                else _goal_condition(goal, world)
+            )
         )
     except ValueError:
         goal_when = _goal_condition(goal, world)
@@ -277,7 +316,7 @@ async def plan(
     """Produce this round's plan from the current state."""
 
     candidates = generate(goal=goal, world=world, skills=skills)
-    if model is None:
+    if model is None or _can_use_fast_path(goal, user_message):
         return fallback_plan(goal=goal, world=world, candidates=candidates)
 
     offered = eligible_only(candidates)[:MAX_MODEL_CANDIDATES]

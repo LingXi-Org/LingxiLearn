@@ -224,7 +224,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
 
     async def interpret_goal(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
         if deps.emit is not None:
-            deps.emit("agent.status", {"text": "正在理解你的学习目标…", "phase": "interpret_goal"})
+            deps.emit("agent.status", {"text": "已收到你的学习目标，正在准备学习安排。", "phase": "interpret_goal"})
         rows = await deps.runtime_state.profile_for(deps.learner_id)
         stack = await deps.runtime_state.goal_stack(deps.task_id)
         utterance = str(state.get("utterance") or "").strip()
@@ -259,8 +259,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         return {"goal": goal.to_dict(), "runtime_status": str(RuntimeStatus.PLANNING)}
 
     async def orchestrate(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
-        if deps.emit is not None:
-            deps.emit("agent.status", {"text": "正在根据当前状态重新规划…" if state.get("replanning") else "正在规划下一步学习动作…", "phase": "orchestrate"})
+        # The plan list is the user-facing representation of this phase.  Do
+        # not expose a generic control-plane "replanning" banner.
         # A replan enters this node in REPLANNING. Persist the explicit
         # REPLANNING -> PLANNING transition before choosing the next action so
         # the table follows the same closed state machine as the checkpoint.
@@ -333,6 +333,22 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             replan_of=state.get("last_decision_id") if state.get("replanning") else None,
         )
         stored = await deps.tracer.record(record)
+        if deps.schedule_background is not None:
+            await deps.schedule_background(
+                "plan.present",
+                {
+                    "decision_id": str(stored["id"]),
+                    "tasks": [
+                        {
+                            "id": task.id,
+                            "capability": task.capability,
+                            "rationale": task.rationale,
+                            "depends_on": list(task.depends_on),
+                        }
+                        for task in produced.tasks
+                    ],
+                },
+            )
 
         if verdict.fatal:
             message = degrade_message(verdict.findings)
@@ -540,6 +556,18 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 "runtime_status": str(RuntimeStatus.REPLANNING),
                 "goal": remaining.to_dict(),
                 "replanning": True,
+            }
+
+        # A failed or empty round has no new evidence to justify another trip
+        # through the graph.  Returning a terminal status here prevents a
+        # provider outage from becoming an invisible re-planning loop.
+        if not outcomes or all(item.status in {"failed", "skipped", "blocked"} for item in outcomes[-3:]):
+            message = "本轮没有产生新的学习结果，已暂停自动编排，请换一种说法或继续补充要求。"
+            await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+            return {
+                "runtime_status": str(RuntimeStatus.FAILED),
+                "finished_reason": message,
+                "messages": [message],
             }
 
         # Either a task did not reach its done_when, or the goal is not yet

@@ -175,12 +175,37 @@ class DecisionTracer:
         if record.replan_of:
             self._project(
                 "plan.replanned",
-                {"decision_id": record.decision_id, "replan_of": record.replan_of,
-                 "step": record.step},
+                {
+                    "decision_id": record.decision_id,
+                    "replan_of": record.replan_of,
+                    "step": record.step,
+                    "tasks": [
+                        {
+                            "id": task.id,
+                            "capability": task.capability,
+                            "rationale": task.rationale,
+                            "depends_on": list(task.depends_on),
+                        }
+                        for task in record.plan.tasks
+                    ],
+                },
             )
         else:
             self._project(
-                "plan.created", {"decision_id": record.decision_id, "step": record.step}
+                "plan.created",
+                {
+                    "decision_id": record.decision_id,
+                    "step": record.step,
+                    "tasks": [
+                        {
+                            "id": task.id,
+                            "capability": task.capability,
+                            "rationale": task.rationale,
+                            "depends_on": list(task.depends_on),
+                        }
+                        for task in record.plan.tasks
+                    ],
+                },
             )
         return stored
 

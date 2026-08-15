@@ -276,17 +276,24 @@ function RuntimeNode({ id, data }: NodeProps) {
   )
 }
 
+const revealedRuntimeEdges = new Set<string>()
+
 function RuntimeEdge(props: EdgeProps) {
   const data = (props.data ?? {}) as {
     runStatus?: EdgeRunStatus
     isTargetActive?: boolean
     label?: string
   }
-  const [visible, setVisible] = useState(false)
+  const [visible, setVisible] = useState(revealedRuntimeEdges.has(props.id))
   useEffect(() => {
+    if (revealedRuntimeEdges.has(props.id)) {
+      setVisible(true)
+      return
+    }
     const frame = requestAnimationFrame(() => setVisible(true))
+    revealedRuntimeEdges.add(props.id)
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [props.id])
   const runStatus = data.runStatus
   const stroke =
     runStatus === 'error'
@@ -306,7 +313,7 @@ function RuntimeEdge(props: EdgeProps) {
         stroke={stroke}
         strokeWidth={2}
         strokeLinecap="round"
-        className="transition-[stroke-dashoffset,stroke] duration-700 [stroke-dasharray:1] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+        className="transition-[stroke-dashoffset,stroke] duration-700 [stroke-dasharray:1] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:!transition-none"
         style={{
           strokeDashoffset: visible ? 0 : 1,
           opacity: data.isTargetActive ? 1 : 0.9,
@@ -553,11 +560,19 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
     }
     return next
   }, [blocks, explicitEdges])
+  const topologySignature = useMemo(
+    () =>
+      [
+        ...Object.keys(blocks).sort(),
+        ...edges.map((edge) => `${edge.id}:${edge.source}->${edge.target}`).sort(),
+      ].join('|'),
+    [blocks, edges]
+  )
   const positions = useMemo(() => {
     const next = layoutRuntimeGraph(blocks, edges, previousPositions.current)
     previousPositions.current = next
     return next
-  }, [blocks, edges])
+  }, [topologySignature])
   const metadata = (graph.metadata as Record<string, unknown> | undefined) ?? {}
   const running = !Boolean(graph.terminal ?? metadata.terminal)
   const latestStatusText = [...events]
@@ -619,18 +634,13 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
       }),
     [blocks, edges, running]
   )
-  const topologySignature = useMemo(
-    () =>
-      [
-        ...Object.keys(blocks).sort(),
-        ...edges.map((edge) => `${edge.source}->${edge.target}`).sort(),
-      ].join('|'),
-    [blocks, edges]
-  )
+  const lastFittedTopology = useRef('')
   useEffect(() => {
     if (!flowInstance || nodes.length === 0) return
+    if (lastFittedTopology.current === topologySignature) return
+    lastFittedTopology.current = topologySignature
     const frame = requestAnimationFrame(() => {
-      void flowInstance.fitView({ padding: 0.12, minZoom: 0.1, maxZoom: 1.2, duration: 420 })
+      void flowInstance.fitView({ padding: 0.12, minZoom: 0.1, maxZoom: 1.2, duration: 180 })
     })
     return () => cancelAnimationFrame(frame)
   }, [flowInstance, nodes.length, topologySignature])

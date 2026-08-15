@@ -152,6 +152,10 @@ async def interpret(
     text = str(utterance or "").strip()
     if not text:
         raise ValueError("goal_interpreter requires a non-empty utterance")
+    # Keep the common path local: the control plane should acknowledge a
+    # straightforward learning request without waiting for another model.
+    if not any(marker in text for marker in ("不是", "不对", "改成", "同时", "比较", "还是")):
+        return fallback_goal(text, profile_rows=profile_rows)
     if model is None:
         return fallback_goal(text, profile_rows=profile_rows)
 

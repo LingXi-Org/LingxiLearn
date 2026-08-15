@@ -61,6 +61,41 @@ const AGENT_LABELS: Record<string, string> = {
   quiz_generator: '知识检测技能',
   answer_user: '答疑智能体',
   quiz_submit: '测验提交智能体',
+  learning_companion: '即时学习陪伴',
+  probe_user: '理解检查',
+}
+
+const CONTROL_PLANE_AGENTS = new Set([
+  'coordinator',
+  'orchestrator',
+  'goal_interpreter',
+  'goal-interpreter',
+  'intent',
+  'plan.present',
+  'plan_presenter',
+])
+
+const LEARNER_FACING_OUTPUT_AGENTS = new Set([
+  'adaptive_pedagogy',
+  'answer_user',
+  'learning_companion',
+  'probe_user',
+  'lesson_intro',
+])
+
+const CAPABILITY_LABELS: Record<string, string> = {
+  'dialog.answer': '即时答疑',
+  'dialog.converse': '即时陪聊',
+  'dialog.probe': '检查理解',
+  'content.lesson_intro': '生成课程引入',
+  'content.deck': '生成互动讲义',
+  'content.visual': '生成可视化讲解',
+  'assess.generate': '生成知识检测',
+  'assess.grade': '批改学习结果',
+  'assess.interpret': '分析学习误区',
+  'model.reflect': '更新学习状态',
+  'meta.report': '整理学习报告',
+  'review.schedule': '安排复习计划',
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -206,7 +241,7 @@ interface ToolRun {
 
 function eventAgent(event: AgentTaskEvent): string | undefined {
   const agent = stringValue(event.agent)
-  return agent && agent !== 'coordinator' ? agent : undefined
+  return agent && !CONTROL_PLANE_AGENTS.has(agent) ? agent : undefined
 }
 
 function reduceAgentRuns(events: AgentTaskEvent[]): AgentRun[] {
@@ -338,30 +373,6 @@ function reduceReasoningSteps(
           timestamp
         )
       )
-    } else if (event.kind === 'intent.started') {
-      upsert(
-        reasoningStep(
-          'intent',
-          '理解学习目标',
-          '智能体图正在识别你的意图与学习范围。',
-          'active',
-          timestamp
-        )
-      )
-    } else if (event.kind === 'intent.completed') {
-      const topic = stringValue(payload.topic)
-      upsert(
-        reasoningStep(
-          'intent',
-          '理解学习目标',
-          topic
-            ? `智能体图识别到主题“${topic.slice(0, 120)}”。`
-            : '智能体图已识别学习意图。',
-          'complete',
-          timestamp,
-          timestamp
-        )
-      )
     } else if (event.kind === 'agent.started') {
       const run = runs.find(
         (candidate) =>
@@ -445,16 +456,43 @@ function reduceReasoningSteps(
           timestamp
         )
       )
-    } else if (event.kind === 'node.started' || event.kind === 'node.retrying') {
+    } else if (event.kind === 'plan.created' || event.kind === 'plan.replanned') {
+      const planTasks = Array.isArray(payload.tasks) ? payload.tasks : []
+      for (const rawTask of planTasks) {
+        const task = asRecord(rawTask)
+        const taskId = stringValue(task.id) || `step-${event.sequence}`
+        const capability = stringValue(task.capability)
+        upsert(
+          reasoningStep(
+            `plan:${taskId}`,
+            CAPABILITY_LABELS[capability] ?? '执行学习计划',
+            stringValue(task.rationale) || '已加入当前学习计划。',
+            'pending',
+            timestamp
+          )
+        )
+      }
+    } else if (event.kind === 'node.started' || event.kind === 'node.retrying' || event.kind === 'node.appeared' || event.kind === 'node.completed' || event.kind === 'node.failed') {
+      const capability = stringValue(payload.capability)
+      const title = CAPABILITY_LABELS[capability] ?? '执行学习计划'
+      const taskId = stringValue(payload.task_id)
+      const existing = taskId ? steps.get(`plan:${taskId}`) : undefined
       upsert(
         reasoningStep(
-          `node:${event.sequence}`,
-          '推进智能体图',
+          taskId ? `plan:${taskId}` : `node:${event.sequence}`,
+          title,
           event.kind === 'node.retrying'
-            ? '图节点正在结合当前上下文重试。'
-            : '智能体图正在推进到下一个节点。',
-          'active',
-          timestamp
+            ? '这一项正在结合最新学习情况重试。'
+            : existing?.summary ?? '这一项已加入当前学习计划。',
+          event.kind === 'node.failed'
+            ? 'error'
+            : event.kind === 'node.completed'
+              ? 'complete'
+              : event.kind === 'node.appeared'
+                ? 'pending'
+                : 'active',
+          existing?.timestamp ?? timestamp,
+          event.kind === 'node.completed' || event.kind === 'node.failed' ? timestamp : undefined
         )
       )
     }
@@ -628,14 +666,13 @@ export function projectLingxiGraphEvents(
     if (event.kind === 'assistant.delta' || event.kind === 'agent.output') {
       const text = eventText(event)
       if (!text) continue
-      if (event.kind === 'agent.output' && event.agent === 'adaptive_pedagogy') {
-        // The deep-dive graph has exactly one learner-facing writer. Keep its
-        // latest Chinese response in the chat body while retaining the run
-        // block for the debug trace.
-        assistantText = text
-      }
+      const learnerFacingOutput =
+        event.kind === 'agent.output' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
       if (event.kind === 'assistant.delta' && !agent) {
         assistantText += text
+        blocks.push({ type: 'text', content: text, timestamp: event.sequence })
+      } else if (learnerFacingOutput) {
+        assistantText += `${assistantText ? '\n\n' : ''}${text}`
         blocks.push({ type: 'text', content: text, timestamp: event.sequence })
       } else if (agent && run) {
         blocks.push({
