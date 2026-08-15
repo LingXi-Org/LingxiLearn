@@ -102,7 +102,10 @@ async function readNextCleanupArtifact(
     nextCleanupRootIndex = (nextCleanupRootIndex + 1) % CLEANUP_ROOTS.length
     if (exhaustedRoots.has(rootIndex)) continue
 
-    const directoryPath = join(UPLOAD_DIR_SERVER, CLEANUP_ROOTS[rootIndex])
+    const directoryPath = join(
+      /*turbopackIgnore: true*/ UPLOAD_DIR_SERVER,
+      CLEANUP_ROOTS[rootIndex]
+    )
     const state = cleanupRootStates[rootIndex]
     if (!state.directory) {
       try {
