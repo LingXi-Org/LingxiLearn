@@ -144,10 +144,11 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
       .filter((item) => item.state === 'unlocked' || item.state === 'consumed')
       .map((item) => item.artifact)
   )
+  const hasDeliveryGate = (task.delivery?.queue ?? []).length > 0
   const artifactResources = entries
     .filter(({ key }) => {
       const artifact = key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key
-      return Boolean(task.artifacts[key]?.available) && unlocked.has(artifact)
+      return Boolean(task.artifacts[key]?.available) && (!hasDeliveryGate || unlocked.has(artifact))
     })
     .sort((left, right) => {
       const order = task.delivery?.order ?? []
@@ -271,6 +272,12 @@ export function useLingxiGraphChat(
         const loaded = await currentAdapter.loadTask(taskId)
         if (cancelled) return
         setTask(loaded)
+        // Hydrate the durable event log in one state update.  Replaying old
+        // SSE frames one-by-one makes a historical chat look like it has just
+        // started running again and retriggers graph animations.
+        const historyEvents = await currentAdapter.loadEvents(taskId)
+        if (cancelled) return
+        setEvents(historyEvents.sort((left, right) => left.sequence - right.sequence))
         void api
           .runtimeGraph(taskId)
           .then((graph) => {
@@ -290,6 +297,7 @@ export function useLingxiGraphChat(
         requestIdRef.current = loaded.id
         setIsReconnecting(false)
         unsubscribeRef.current = currentAdapter.subscribe(taskId, {
+          from: historyEvents.at(-1)?.sequence ?? 0,
           onEvent: appendEvent,
           onEnd: async () => {
             try {

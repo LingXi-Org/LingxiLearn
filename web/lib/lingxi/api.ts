@@ -522,6 +522,8 @@ export const api = {
     }),
 
   agentTask: (id: string) => request<AgentTaskSnapshot>(`/agent-tasks/${id}`),
+  agentTaskEvents: (id: string) =>
+    request<{ events: AgentTaskEvent[] }>(`/agent-tasks/${id}/events?format=json`),
   runtimeGraph: (taskId: string) =>
     request<{
       id: string
@@ -532,6 +534,10 @@ export const api = {
       updatedAt: string | null
       workflowState: Record<string, unknown>
     }>(`/agent-tasks/${taskId}/runtime-graph`),
+  agentTaskDecisions: (taskId: string) =>
+    request<{ decisions: Array<Record<string, unknown>> }>(
+      `/agent-tasks/${taskId}/decisions`
+    ),
 
   executionSnapshot: (executionId: string) =>
     request<SimExecutionSnapshot>(`/logs/execution/${encodeURIComponent(executionId)}`),

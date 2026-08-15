@@ -775,6 +775,17 @@ async def stream_agent_events(
     except KeyError as exc:
         raise not_found() from exc
 
+    # History hydration uses one atomic JSON snapshot so the client can render
+    # the final graph state without replaying every old event as a new run.
+    if request.query_params.get("format") == "json":
+        events = await svc.repo.agent_events_after_for_learner(
+            task_id, context.learner_id, 0
+        )
+        return Response(
+            content=json.dumps({"events": events}, ensure_ascii=False, separators=(",", ":")),
+            media_type="application/json",
+        )
+
     header = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
     try:
         cursor = int(header) if header else 0

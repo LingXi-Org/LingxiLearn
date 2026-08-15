@@ -71,8 +71,9 @@ function artifactResources(task: AgentTaskSnapshot | null): LingxiArtifactResour
       .filter((item) => item.state === 'unlocked' || item.state === 'consumed')
       .map((item) => item.artifact)
   )
+  const hasDeliveryGate = (task.delivery?.queue ?? []).length > 0
   const artifactDescriptors = resources
-    .filter((resource) => resource.available && unlocked.has(resource.kind))
+    .filter((resource) => resource.available && (!hasDeliveryGate || unlocked.has(resource.kind)))
     .sort((left, right) => (task.delivery?.order ?? []).indexOf(left.kind) - (task.delivery?.order ?? []).indexOf(right.kind))
     .map((resource) => ({ ...resource, id: `lingxi-artifact:${task.id}:${resource.kind}` }))
   return [
@@ -94,6 +95,7 @@ export function useLingxiChat(workspaceId: string, initialTaskId?: string) {
   const [error, setError] = useState<string | null>(null)
   const [locallyStopped, setLocallyStopped] = useState(false)
   const taskIdRef = useRef(taskId)
+  const lastSequenceRef = useRef(0)
 
   useEffect(() => {
     taskIdRef.current = taskId
@@ -117,6 +119,7 @@ export function useLingxiChat(workspaceId: string, initialTaskId?: string) {
 
     let cancelled = false
     let refreshTimer: ReturnType<typeof setTimeout> | null = null
+    lastSequenceRef.current = 0
     setIsReconnecting(true)
     setError(null)
 
@@ -139,21 +142,40 @@ export function useLingxiChat(workspaceId: string, initialTaskId?: string) {
       }
     }
 
-    void refresh()
-    const unsubscribe = subscribeAgentEvents(
-      taskId,
-      (event) => {
+    const hydrate = async () => {
+      await refresh()
+      try {
+        const history = await api.agentTaskEvents(taskId)
         if (cancelled) return
-        setEvents((current) =>
-          current.some((candidate) => candidate.sequence === event.sequence)
-            ? current
-            : [...current, event].sort((a, b) => a.sequence - b.sequence)
-        )
-        if (refreshTimer) clearTimeout(refreshTimer)
-        refreshTimer = setTimeout(() => void refresh(), 180)
-      },
-      { onEnd: () => void refresh() }
-    )
+        const replay = history.events.sort((left, right) => left.sequence - right.sequence)
+        setEvents(replay)
+        lastSequenceRef.current = replay.at(-1)?.sequence ?? 0
+      } catch {
+        // The live subscription below remains the fallback for older servers.
+      }
+    }
+
+    let unsubscribe = () => {}
+    const start = async () => {
+      await hydrate()
+      if (cancelled) return
+      unsubscribe = subscribeAgentEvents(
+        taskId,
+        (event) => {
+          if (cancelled) return
+          lastSequenceRef.current = Math.max(lastSequenceRef.current, event.sequence)
+          setEvents((current) =>
+            current.some((candidate) => candidate.sequence === event.sequence)
+              ? current
+              : [...current, event].sort((a, b) => a.sequence - b.sequence)
+          )
+          if (refreshTimer) clearTimeout(refreshTimer)
+          refreshTimer = setTimeout(() => void refresh(), 180)
+        },
+        { from: lastSequenceRef.current, onEnd: () => void refresh() }
+      )
+    }
+    void start()
 
     return () => {
       cancelled = true

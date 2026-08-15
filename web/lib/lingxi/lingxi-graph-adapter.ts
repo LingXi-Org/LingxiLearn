@@ -35,6 +35,7 @@ export interface LingxiGraphChatAdapter {
     options?: LingxiTaskContextOptions
   ): Promise<{ id: string; status: string }>
   loadTask(taskId: string): Promise<AgentTaskSnapshot>
+  loadEvents(taskId: string): Promise<AgentTaskEvent[]>
   sendMessage(
     taskId: string,
     message: string,
@@ -651,6 +652,7 @@ export function createLingxiGraphAdapter(): LingxiGraphChatAdapter {
     kind: LINGXI_GRAPH_ADAPTER_KIND,
     createTask: api.createAgentTask,
     loadTask: api.agentTask,
+    loadEvents: async (taskId) => (await api.agentTaskEvents(taskId)).events,
     sendMessage: api.agentMessage,
     cancelTask: api.cancelAgentTask,
     updateTaskMetadata: (taskId, patch) => api.updateAgentTask(taskId, patch),
