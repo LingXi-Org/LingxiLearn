@@ -172,6 +172,7 @@ async def _world(
             has_ungraded_submission=bool(results.get("pending_submission")),
             open_questions=len(target_row.get("my_questions") or []) if target_row else 0,
             goal_type=goal.goal_type,
+            interview_completed="learner_interview" in results,
         ),
         by_id,
     )

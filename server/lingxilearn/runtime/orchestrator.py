@@ -238,12 +238,10 @@ def _repair(
         ),
         None,
     )
-    has_conversation = any(info(task.capability).conversational for task in tasks)
     if (
         opening_candidate is not None
-        and world.target.evidence_count == 0
-        and not interjection_message
-        and not has_conversation
+        and not world.interview_completed
+        and not any(info(task.capability).opening_conversation for task in tasks)
     ):
         tasks.insert(
             0,

@@ -45,6 +45,7 @@ class WorldState:
     artifacts: frozenset[str] = frozenset()
     open_questions: int = 0
     goal_type: str = "learn"
+    interview_completed: bool = False
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def enriched(self, view: ProfileView, *, is_target: bool) -> ProfileView:
