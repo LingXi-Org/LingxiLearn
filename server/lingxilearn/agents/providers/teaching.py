@@ -149,7 +149,13 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
         )
     ) or {}
 
-    text = str(parsed.get("text") or "").strip()
+    # The skill's rich contract nests the learner-facing message in
+    # ``student_response``; the compact provider prompt uses top-level text.
+    # Accept both forms so a valid teaching delivery is never discarded.
+    student_response = parsed.get("student_response")
+    decision = parsed.get("decision")
+    nested_text = student_response.get("text") if isinstance(student_response, dict) else ""
+    text = str(parsed.get("text") or nested_text or "").strip()
     if not text:
         raise ProviderError("adaptive-pedagogy returned no learner-facing text")
 
@@ -160,7 +166,7 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
         learner_message=safe_text,
         data={
             "text": safe_text,
-            "strategy": str(parsed.get("strategy") or "explain"),
+            "strategy": str(parsed.get("strategy") or (decision.get("strategy") if isinstance(decision, dict) else "") or "explain"),
             "next_step": str(parsed.get("next_step") or ""),
             "withheld_for_leakage": withheld,
         },

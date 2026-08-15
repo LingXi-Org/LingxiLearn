@@ -18,8 +18,8 @@ export interface RuntimeGraphPosition {
   y: number
 }
 
-export const RUNTIME_GRAPH_CANVAS = { width: 560, height: 700 } as const
-export const RUNTIME_GRAPH_NODE_WIDTH = 250
+export const RUNTIME_GRAPH_CANVAS = { width: 760, height: 700 } as const
+export const RUNTIME_GRAPH_NODE_WIDTH = 360
 const NODE_MIN_HEIGHT = 76
 const NODE_GAP_X = 52
 const NODE_GAP_Y = 108

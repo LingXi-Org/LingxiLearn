@@ -25,21 +25,7 @@ interface RuntimeGraphProps {
   events?: AgentTaskEvent[]
 }
 
-const DICEBEAR_AGENT_AVATAR = 'https://api.dicebear.com/10.x/voxel-bot/svg?seed=Felix'
 const DICEBEAR_SKILL_ICON = 'https://api.dicebear.com/10.x/rings/svg?seed=pbqpdi5z'
-
-function DiceBearAgentAvatar(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
-      <image
-        href={DICEBEAR_AGENT_AVATAR}
-        width="24"
-        height="24"
-        preserveAspectRatio="xMidYMid slice"
-      />
-    </svg>
-  )
-}
 
 function DiceBearSkillIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -63,7 +49,7 @@ function runtimeIcon(type: string) {
   if (type.includes('table')) return TableIcon
   if (type.includes('slack')) return SlackIcon
   if (type.includes('code') || type.includes('function')) return CodeIcon
-  return DiceBearAgentAvatar
+  return AgentIcon
 }
 
 /**
@@ -260,7 +246,7 @@ function RuntimeNode({ id, data }: NodeProps) {
   const terminal =
     status === 'completed' || status === 'cached' || status === 'failed' || status === 'cancelled'
   return (
-    <div className="relative" data-runtime-node-state={status}>
+    <div className="relative w-[360px]" data-runtime-node-state={status}>
       <Handle
         type="target"
         position={Position.Top}
@@ -535,6 +521,7 @@ function semanticGraph(
 
 export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: RuntimeGraphProps) {
   const previousPositions = useRef<Record<string, { x: number; y: number }>>({})
+  const observedNodeIds = useRef(new Set<string>())
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null)
   const graph = workflowState ?? {}
   const rawBlocks = (graph.blocks ?? {}) as Record<string, Record<string, unknown>>
@@ -702,13 +689,26 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
   const lastFittedTopology = useRef('')
   useEffect(() => {
     if (!flowInstance || nodes.length === 0) return
-    if (lastFittedTopology.current === topologySignature) return
+    if (lastFittedTopology.current) return
     lastFittedTopology.current = topologySignature
     const frame = requestAnimationFrame(() => {
       void flowInstance.fitView({ padding: 0.12, minZoom: 0.1, maxZoom: 1.2, duration: 180 })
     })
     return () => cancelAnimationFrame(frame)
   }, [flowInstance, nodes.length, topologySignature])
+  useEffect(() => {
+    if (!flowInstance || nodes.length === 0) return
+    const fresh = nodes.filter((node) => !observedNodeIds.current.has(node.id))
+    nodes.forEach((node) => observedNodeIds.current.add(node.id))
+    // The initial fit above frames the whole graph. Afterwards follow only
+    // newly created runtime nodes, preserving the learner's live context.
+    if (fresh.length === 0 || observedNodeIds.current.size === fresh.length) return
+    const newest = fresh.at(-1)!
+    void flowInstance.setCenter(newest.position.x + 180, newest.position.y + 72, {
+      zoom: flowInstance.getZoom(),
+      duration: 220,
+    })
+  }, [flowInstance, nodes, topologySignature])
 
   if (!taskId) return <div className="p-6 text-sm text-[var(--text-muted)]">暂无运行任务。</div>
   if (nodes.length === 0)

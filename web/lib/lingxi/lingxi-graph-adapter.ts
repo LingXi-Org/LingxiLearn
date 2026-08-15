@@ -571,22 +571,12 @@ export function projectLingxiGraphEvents(
       if (!text) continue
       const learnerFacingOutput =
         event.kind === 'agent.output' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
-      if (event.kind === 'assistant.delta' && !agent) {
-        assistantText += text
-        blocks.push({ type: 'text', content: text, timestamp: event.sequence })
-      } else if (learnerFacingOutput) {
+      if (learnerFacingOutput) {
         assistantText += `${assistantText ? '\n\n' : ''}${text}`
         blocks.push({ type: 'text', content: text, timestamp: event.sequence })
-      } else if (agent && run) {
-        blocks.push({
-          type: 'subagent_text',
-          content: text,
-          subagent: agent,
-          spanId: run.spanId,
-          parentSpanId: 'main',
-          timestamp: event.sequence,
-        })
       }
+      // Never project assistant.delta: it is raw model/tool reasoning and may
+      // contain partial JSON. Providers explicitly emit safe agent.output.
       continue
     }
 
