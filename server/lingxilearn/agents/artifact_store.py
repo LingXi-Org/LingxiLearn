@@ -19,9 +19,7 @@ HEX_PATTERN = re.compile(r"#[0-9a-fA-F]{6}\b")
 TOKEN_PATTERN = re.compile(r"--c[1-7]\s*:\s*(#[0-9a-fA-F]{6})\b")
 TEXT_TAG_RE = re.compile(r"(<text\b)([^>]*)(>)", re.IGNORECASE)
 VALID_SVG_TEXT_CLASS = {"t", "ts", "th", "tn"}
-DEFAULT_PALETTE = (
-    "#7f77dd,#1d9e75,#d85a30,#378add,#ba7517,#d4537e,#639922"
-)
+DEFAULT_PALETTE = "#7f77dd,#1d9e75,#d85a30,#378add,#ba7517,#d4537e,#639922"
 
 
 class ArtifactError(RuntimeError):
@@ -102,7 +100,9 @@ class ArtifactStore:
             if not isinstance(content, str) or not content.strip():
                 raise ArtifactError(f"empty lecture deck file: {name}")
             if len(content.encode("utf-8")) > self.max_html_bytes:
-                raise ArtifactError(f"lecture deck file exceeds {self.max_html_bytes} bytes: {name}")
+                raise ArtifactError(
+                    f"lecture deck file exceeds {self.max_html_bytes} bytes: {name}"
+                )
             if name == "lecture.json":
                 content = _normalize_lecture_json(content)
             elif name.startswith("slides/") and name.endswith(".html"):
@@ -249,7 +249,11 @@ class ArtifactStore:
             [str(path)],
             REPO_ROOT / "skills" / "lesson-intro",
         )
-        return {"ok": validation["ok"], "contract": "lesson-intro-html.v1", "validation": validation}
+        return {
+            "ok": validation["ok"],
+            "contract": "lesson-intro-html.v1",
+            "validation": validation,
+        }
 
     async def recover_lesson_intro_draft(self, task_id: str) -> dict[str, Any] | None:
         """Promote a valid lesson draft after the generating Agent was interrupted."""
@@ -343,9 +347,7 @@ def _normalize_lecture_json(content: str) -> str:
         # These fields belonged to the pre-v2 deck envelope. Preserve them in
         # an extension instead of letting json-schema reject the whole deck.
         legacy_deck = {
-            key: deck.pop(key)
-            for key in ("course", "subtitle", "durationSec")
-            if key in deck
+            key: deck.pop(key) for key in ("course", "subtitle", "durationSec") if key in deck
         }
         if legacy_deck:
             extensions = data.setdefault("extensions", {})
@@ -380,7 +382,10 @@ def _normalize_lecture_json(content: str) -> str:
             if (
                 isinstance(rect, list)
                 and len(rect) == 4
-                and all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in rect)
+                and all(
+                    isinstance(value, (int, float)) and not isinstance(value, bool)
+                    for value in rect
+                )
             ):
                 anchor["rect"] = dict(zip(("x", "y", "w", "h"), rect))
                 changed = True
@@ -430,7 +435,7 @@ def _normalize_slide_html(content: str) -> str:
             quote = class_match.group(1)
             replacement = f"class={quote}{class_match.group(2)} t{quote}"
             changed = True
-            attrs = attrs[:class_match.start()] + replacement + attrs[class_match.end():]
+            attrs = attrs[: class_match.start()] + replacement + attrs[class_match.end() :]
             return prefix + attrs + suffix
         changed = True
         return prefix + ' class="t"' + attrs + suffix

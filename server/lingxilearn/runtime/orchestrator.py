@@ -25,7 +25,7 @@ from ..agents.contracts import extract_json
 from ..agents.model_runtime import agent_model, invoke_agent, message_text
 from ..state.capabilities import UnknownCapability, info, parse
 from ..state.session_state import Goal
-from .candidates import WorldState, deviates, eligible_only, generate
+from .candidates import WorldState, best, deviates, eligible_only, generate
 from .contracts import (
     CandidateAction,
     Cost,
@@ -46,10 +46,11 @@ SYSTEM_PROMPT = """你是 LingxiLearn 的学习计划决策器。每一轮重新
 你必须在一次响应中完成两个可审计技能：
 1. 学习效用评估：为每个候选输出 gain、utility 和中文 reason，utility 要体现 gain / cost；
 2. 学习计划编排：根据这些评估选择任务并生成依赖关系。
-宿主只提供候选能力和事实成本；不能发明列表之外的动作，不能写 agent 名——只写 capability。
+宿主只提供候选能力和事实成本；不能发明列表之外的动作，不能写 agent 名。
+每个任务必须提交候选的 candidate_id；candidate_id 已绑定 skill、provider、版本和知识点，不能只写 capability。
 
 规则：
-- 一轮最多 6 个任务。
+- 一轮最多 3 个任务。
 - 每个任务必须有 done_when，且必须可机器判定；「agent 跑完」不是完成条件。
 - 每个任务必须有 rationale，能直接展示给学习者。
 - 如果打算做的事和学习者字面要求不同（换了知识点，或忽略了明确请求），
@@ -64,11 +65,12 @@ profile_reaches / user_replied / quiz_graded / always / all_of / any_of。
 只输出 JSON：
 {"reasoning":"...","hypotheses":["..."],
 "scores":[{"capability":"...","knowledge_point_id":"...","gain":0.0,"utility":0.0,"reason":"..."}],
- "tasks":[{"id":"t1","capability":"...","knowledge_point_id":"...",
+ "tasks":[{"id":"t1","candidate_id":"candidate_...","capability":"...","knowledge_point_id":"...",
            "done_when":{"kind":"..."},"rationale":"...","depends_on":[]}],
  "goal_satisfied_when":{"kind":"..."},"awaits_user":false,"negotiation":null,
  "holds":[{"task_key":"step:task-id","action":"revise|close","instruction":"..."}],
  "delivery_order":["lesson-intro","visual","lecture-deck","quiz"]}"""
+
 
 def unavailable_plan(*, candidates: Sequence[CandidateAction]) -> OrchestrationPlan:
     """Fail closed when a control-plane model cannot make a decision.
@@ -77,11 +79,36 @@ def unavailable_plan(*, candidates: Sequence[CandidateAction]) -> OrchestrationP
     the candidate trace for observability, but ask the learner to retry rather
     than executing a route which the model did not explicitly choose.
     """
+    selected = best(candidates)
+    if selected is not None:
+        capability_info = info(parse(selected.capability))
+        task = PlannedTask(
+            id=f"fallback-{selected.candidate_id or selected.skill_id}",
+            candidate_id=selected.candidate_id,
+            capability=selected.capability,
+            knowledge_point_id=selected.knowledge_point_id,
+            done_when=_default_done_condition(selected),
+            rationale=selected.reason or "先完成当前最有帮助的一步，再根据结果继续安排。",
+            expected_learning_gain=selected.gain,
+            estimated_cost=Cost(
+                heavy_artifact=capability_info.heavy_artifact,
+                irreversible=capability_info.irreversible,
+                parallel_safe=selected.parallel_safe,
+                critical_path=selected.critical_path,
+            ),
+        )
+        return OrchestrationPlan(
+            reasoning="计划模型暂不可用，已执行一项可逆且满足前置条件的安全降级动作。",
+            tasks=[task],
+            goal_satisfied_when=task.done_when,
+            candidates_considered=list(candidates),
+            degraded=True,
+        )
     return OrchestrationPlan(
         reasoning="本轮学习计划模型暂时没有给出可验证的决策。",
         awaits_user=True,
         negotiation="学习计划暂时无法确认，请稍后重试或补充你想达到的具体效果。",
-        goal_satisfied_when=DoneCondition(kind="always"),
+        goal_satisfied_when=DoneCondition(kind="user_replied"),
         candidates_considered=list(candidates),
         degraded=True,
     )
@@ -125,19 +152,51 @@ def _default_done_condition(candidate: CandidateAction) -> DoneCondition:
             return DoneCondition(kind="evidence_observed", signal="self_report")
         case "dialog.probe":
             return DoneCondition(kind="user_replied")
-    return DoneCondition(kind="always")
+    return DoneCondition(kind="evidence_observed", signal="provider_result")
 
 
 def _goal_condition(goal: Goal, world: WorldState) -> DoneCondition:
     """When the goal itself is satisfied, if nothing more specific is stated."""
 
-    point = world.target.knowledge_point_id or (
-        goal.knowledge_points[0] if goal.knowledge_points else ""
-    )
-    # A user-facing turn is complete once it has delivered one useful result.
-    # Mastery is updated as evidence arrives, but it must not keep a simple
-    # answer trapped in an automatic re-planning loop.
-    return DoneCondition(kind="always")
+    point_ids = tuple(point for point in goal.knowledge_points if str(point).strip())
+    goal_type = goal.goal_type.casefold()
+    if goal.satisfied_when:
+        try:
+            candidate_condition = DoneCondition.model_validate(goal.satisfied_when)
+            if candidate_condition.kind != "always":
+                return candidate_condition
+        except ValueError:
+            pass
+    if goal_type in {"assess", "quiz", "evaluate", "assessment"}:
+        return DoneCondition(kind="quiz_graded")
+    if goal_type in {"report", "content", "artifact"}:
+        return DoneCondition(kind="artifact_valid", artifact="lesson-intro")
+    if goal_type in {"learn", "study", "review", "practice"} and not point_ids:
+        return DoneCondition(kind="evidence_observed", signal="goal_clarified")
+    if point_ids:
+        return DoneCondition(
+            kind="all_of",
+            conditions=[
+                DoneCondition(
+                    kind="all_of",
+                    conditions=[
+                        DoneCondition(
+                            kind="profile_reaches",
+                            knowledge_point_id=point,
+                            mastery=0.75,
+                        ),
+                        DoneCondition(
+                            kind="evidence_observed",
+                            knowledge_point_id=point,
+                            signal="correct",
+                            min_count=2,
+                        ),
+                    ],
+                )
+                for point in point_ids
+            ],
+        )
+    return DoneCondition(kind="user_replied")
 
 
 def _repair(
@@ -155,20 +214,36 @@ def _repair(
     and forgot a ``done_when`` should not cost the learner a round.
     """
 
-    allowed = {item.capability: item for item in eligible_only(candidates)}
+    eligible = eligible_only(candidates)
+    by_id = {item.candidate_id: item for item in eligible if item.candidate_id}
+    by_capability: dict[str, list[CandidateAction]] = {}
+    for item in eligible:
+        by_capability.setdefault(item.capability, []).append(item)
     tasks: list[PlannedTask] = []
 
     for index, raw in enumerate(parsed.get("tasks") or [], start=1):
         capability = str(raw.get("capability") or "").strip()
-        candidate = allowed.get(capability)
+        selected_id = str(raw.get("candidate_id") or "").strip()
+        candidate = by_id.get(selected_id) if selected_id else None
+        # Compatibility for old planners: only accept capability-only output
+        # when it is unambiguous.  A collision must never be resolved again at
+        # dispatch time.
+        if candidate is None:
+            matches = by_capability.get(capability, [])
+            candidate = matches[0] if len(matches) == 1 else None
         if candidate is None:
             # Outside the offered set: the model invented an action.
             logger.info("orchestrator proposed an unavailable capability: %s", capability)
             continue
         try:
+            raw_done = raw.get("done_when")
+            if isinstance(raw_done, Mapping) and str(raw_done.get("kind")) == "always":
+                # ``always`` is an internal strategy fallback only; accepting
+                # it from a model would let a provider forge completion.
+                raw_done = None
             done_when = (
-                DoneCondition.model_validate(raw["done_when"])
-                if isinstance(raw.get("done_when"), Mapping)
+                DoneCondition.model_validate(raw_done)
+                if isinstance(raw_done, Mapping)
                 else _default_done_condition(candidate)
             )
         except ValueError:
@@ -185,6 +260,7 @@ def _repair(
         tasks.append(
             PlannedTask(
                 id=str(raw.get("id") or f"t{index}"),
+                candidate_id=candidate.candidate_id,
                 capability=capability,
                 knowledge_point_id=str(
                     raw.get("knowledge_point_id") or candidate.knowledge_point_id
@@ -223,7 +299,13 @@ def _repair(
         instruction = str(raw_hold.get("instruction") or "").strip()
         if action == "revise" and not instruction:
             action = "close"
-        holds.append(HoldDecision(task_key=task_key, action=action, instruction=instruction))
+        holds.append(
+            HoldDecision(
+                task_key=task_key,
+                action="revise" if action == "revise" else "close",
+                instruction=instruction,
+            )
+        )
 
     # A new learner has no evidence from which to personalize the first
     # explanation.  Keep the dedicated opening conversation agent present in
@@ -267,10 +349,10 @@ def _repair(
 
     known_artifacts = {"lesson-intro", "visual", "lecture-deck", "quiz"}
     delivery_order: list[str] = []
-    for item in parsed.get("delivery_order") or []:
-        item = str(item)
-        if item in known_artifacts and item not in delivery_order:
-            delivery_order.append(item)
+    for raw_delivery in parsed.get("delivery_order") or []:
+        delivery_item = str(raw_delivery)
+        if delivery_item in known_artifacts and delivery_item not in delivery_order:
+            delivery_order.append(delivery_item)
     produced_order = list(board.get("produced_order") or [])
     produced_order.extend(
         str(artifact)
@@ -283,10 +365,10 @@ def _repair(
         for item in (board.get("delivery") or [])
         if isinstance(item, Mapping) and item.get("artifact")
     )
-    for item in produced_order:
-        item = str(item)
-        if item in known_artifacts and item not in delivery_order:
-            delivery_order.append(item)
+    for raw_artifact in produced_order:
+        artifact_name = str(raw_artifact)
+        if artifact_name in known_artifacts and artifact_name not in delivery_order:
+            delivery_order.append(artifact_name)
     try:
         goal_when = (
             DoneCondition.model_validate(parsed["goal_satisfied_when"])
@@ -303,7 +385,12 @@ def _repair(
     except ValueError:
         goal_when = _goal_condition(goal, world)
 
-    deviating = any(deviates(goal, allowed[t.capability], world) for t in tasks)
+    candidate_by_id = {item.candidate_id: item for item in candidates}
+    deviating = any(
+        deviates(goal, candidate_by_id[t.candidate_id], world)
+        for t in tasks
+        if t.candidate_id in candidate_by_id
+    )
     try:
         return OrchestrationPlan(
             reasoning=str(parsed.get("reasoning") or ""),
@@ -351,10 +438,13 @@ async def plan(
         },
         "budget": budget.to_dict(),
         "held": [
-            {"task_key": key, "capability": value.get("capability", ""),
-             "artifacts": list(value.get("artifacts") or []),
-             "revisions": int(value.get("revisions") or 0),
-             "detail": value.get("detail", "")}
+            {
+                "task_key": key,
+                "capability": value.get("capability", ""),
+                "artifacts": list(value.get("artifacts") or []),
+                "revisions": int(value.get("revisions") or 0),
+                "detail": value.get("detail", ""),
+            }
             for key, value in ((board or {}).get("holds") or {}).items()
         ],
         "delivery": {
@@ -372,6 +462,7 @@ async def plan(
                 "cost": item.cost,
                 "reason": item.reason,
                 "skill_id": item.skill_id,
+                "candidate_id": item.candidate_id,
             }
             for item in candidates
         ],
@@ -416,27 +507,34 @@ async def plan(
         if candidate is None:
             continue
         try:
-            gain = max(0.0, min(1.0, float(raw.get("gain"))))
-            utility = max(0.0, min(1.0, float(raw.get("utility"))))
+            gain = max(0.0, min(1.0, float(raw.get("gain") or 0.0)))
+            utility = max(0.0, min(1.0, float(raw.get("utility") or 0.0)))
         except (TypeError, ValueError):
             continue
-        judged[key] = candidate.model_copy(update={
-            "gain": gain,
-            "utility": utility,
-            "reason": str(raw.get("reason") or candidate.reason).strip(),
-        })
+        judged[key] = candidate.model_copy(
+            update={
+                "gain": gain,
+                "utility": utility,
+                "reason": str(raw.get("reason") or candidate.reason).strip(),
+            }
+        )
     # When the board is the only actionable source of work, the model may
     # quite correctly return no candidate scores and only holds/delivery.  In
     # that case preserve the state decision instead of replacing it with the
     # empty fallback plan.
     if not judged and not ((board or {}).get("holds") and parsed.get("holds")):
         return unavailable_plan(candidates=registry_candidates)
-    candidates = sorted([
-        judged.get((item.capability, item.knowledge_point_id), item.model_copy(update={"gain": 0.0, "utility": 0.0}))
-        for item in registry_candidates
-    ], key=lambda item: item.utility, reverse=True)
-    offered = eligible_only(candidates)[:MAX_MODEL_CANDIDATES]
-
+    candidates = sorted(
+        [
+            judged.get(
+                (item.capability, item.knowledge_point_id),
+                item.model_copy(update={"gain": 0.0, "utility": 0.0}),
+            )
+            for item in registry_candidates
+        ],
+        key=lambda item: item.utility,
+        reverse=True,
+    )
     repaired = _repair(
         parsed,
         goal=goal,

@@ -119,8 +119,7 @@ async def pack_probe(context: ProviderContext) -> ProviderResult:
     return ProviderResult(
         learner_message=f"{phase} 判分完成，总体 {overall:.0%}。",
         evidence=evidence,
-        data={"phase": phase, "records": records, "overall": overall,
-              "ledger": ledger.delta()},
+        data={"phase": phase, "records": records, "overall": overall, "ledger": ledger.delta()},
         persist_as=f"pack_{phase}",
         detail=f"{phase} 判分 {len(records)} 题，总体 {overall:.2f}",
     )
@@ -150,7 +149,7 @@ async def pack_investigate(context: ProviderContext) -> ProviderResult:
         arguments = dict(call.get("args") or {})
         outcome = context.registry.call(name, **arguments)
         entry = ledger.add(
-            kind="tool_output",
+            kind="tool_result",
             source=name,
             summary=f"{name} → {'ok' if outcome.ok else outcome.error}",
             locator={"tool": name},

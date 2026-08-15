@@ -213,7 +213,11 @@ def extract_json(text: str) -> dict[str, Any] | None:
             # the actual contract. Prefer the candidate with contract keys.
             if {"schema_version", "topic", "selected_hook"}.issubset(value):
                 return value
-            if not any({"schema_version", "topic", "selected_hook"}.issubset(item) for item in candidates if isinstance(item, dict)):
+            if not any(
+                {"schema_version", "topic", "selected_hook"}.issubset(item)
+                for item in candidates
+                if isinstance(item, dict)
+            ):
                 return value
     return None
 

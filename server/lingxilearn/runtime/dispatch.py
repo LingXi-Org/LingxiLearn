@@ -26,6 +26,7 @@ from ..agents.providers import load_all as load_providers
 from ..state.evidence import EvidenceRecord
 from ..state.session_state import Goal
 from ..store.runtime_state import RuntimeStateRepository
+from .candidates import RegisteredSkill, candidate_id
 from .completion import CompletionContext, StoreArtifactProbe, evaluate
 from .contracts import PlannedTask, TaskOutcome
 from .guardrails import Budget
@@ -46,24 +47,39 @@ class Resolution:
     provider: str
     cost: dict[str, Any] = field(default_factory=dict)
     status_line: str = ""
+    candidate_id: str = ""
 
 
-def resolve(capability: str, skills: Sequence[Mapping[str, Any]]) -> Resolution:
+def resolve(
+    capability: str,
+    skills: Sequence[Mapping[str, Any]],
+    *,
+    selected_candidate_id: str = "",
+    knowledge_point_id: str = "",
+) -> Resolution:
     """Pick the cheapest enabled skill that provides ``capability``.
 
     Ties break on skill id so the same state always resolves the same way; a
     resolution that varies run to run would make the trace unreproducible.
     """
 
-    matches = [
-        row
-        for row in skills
-        if row.get("enabled", True)
-        and row.get("provider")
-        and capability in (row.get("capabilities") or ())
-    ]
+    matches = []
+    for row in skills:
+        skill = RegisteredSkill.from_row(row)
+        if not skill.enabled or not skill.provider or capability not in skill.capabilities:
+            continue
+        if (
+            selected_candidate_id
+            and candidate_id(skill, capability, knowledge_point_id) == selected_candidate_id
+        ):
+            matches.append(row)
+        elif not selected_candidate_id:
+            matches.append(row)
     if not matches:
-        raise NoProvider(f"no enabled skill provides {capability}")
+        suffix = f" bound candidate {selected_candidate_id}" if selected_candidate_id else ""
+        raise NoProvider(f"no enabled skill provides {capability}{suffix}")
+    if selected_candidate_id and len(matches) != 1:
+        raise NoProvider(f"candidate binding is ambiguous: {selected_candidate_id}")
     matches.sort(
         key=lambda row: (
             float((row.get("cost") or {}).get("latency_weight") or 1.0),
@@ -77,6 +93,7 @@ def resolve(capability: str, skills: Sequence[Mapping[str, Any]]) -> Resolution:
         provider=str(chosen["provider"]),
         cost=dict(chosen.get("cost") or {}),
         status_line=str((chosen.get("metadata") or {}).get("status_line") or "正在处理这一步…"),
+        candidate_id=selected_candidate_id,
     )
 
 
@@ -89,6 +106,7 @@ class DispatchDeps:
     task_id: str
     goal: Goal
     skills: Sequence[Mapping[str, Any]]
+    repository: Any = None
     model: Any = None
     settings: Any = None
     artifacts: Any = None
@@ -167,11 +185,57 @@ class Dispatcher:
         """Execute one task, then check whether it is actually done."""
 
         started = time.monotonic()
+        work_id = str(task.inputs.get("__work_item_id") or "")
+        claimed: dict[str, Any] | None = None
+        if work_id and self._deps.repository is not None:
+            claimed = await self._deps.repository.claim_work_item(
+                work_id=work_id,
+                owner=f"dispatcher:{self._deps.task_id}",
+            )
+            if claimed is None:
+                return TaskOutcome(
+                    task_id=task.id,
+                    capability=task.capability,
+                    status="blocked",
+                    detail="work item is not claimable or its dependencies have not succeeded",
+                )
+        owner = f"dispatcher:{self._deps.task_id}"
+        heartbeat: asyncio.Task[None] | None = None
+        if work_id and self._deps.repository is not None:
+
+            async def keep_lease() -> None:
+                while True:
+                    await asyncio.sleep(20)
+                    if not await self._deps.repository.heartbeat_work(work_id=work_id, owner=owner):
+                        return
+
+            heartbeat = asyncio.create_task(keep_lease())
         try:
-            resolution = resolve(task.capability, self._deps.skills)
+            resolution = resolve(
+                task.capability,
+                self._deps.skills,
+                selected_candidate_id=task.candidate_id,
+                knowledge_point_id=task.knowledge_point_id,
+            )
         except NoProvider as exc:
+            if heartbeat is not None:
+                heartbeat.cancel()
+            if work_id and self._deps.repository is not None:
+                await self._deps.repository.finish_work(
+                    work_id=work_id,
+                    owner=owner,
+                    status="failed",
+                    result={"safe_summary": str(exc), "error_code": "no_provider"},
+                )
             if self._deps.emit is not None:
-                self._deps.emit("agent.status", {"task_id": task.id, "capability": task.capability, "text": "这一步没有可用的执行者，我换个方式。"})
+                self._deps.emit(
+                    "agent.status",
+                    {
+                        "task_id": task.id,
+                        "capability": task.capability,
+                        "text": "这一步没有可用的执行者，我换个方式。",
+                    },
+                )
             return TaskOutcome(
                 task_id=task.id,
                 capability=task.capability,
@@ -213,8 +277,27 @@ class Dispatcher:
 
         provider = get_provider(resolution.provider)
         if provider is None:
+            if heartbeat is not None:
+                heartbeat.cancel()
+            if work_id and self._deps.repository is not None:
+                await self._deps.repository.finish_work(
+                    work_id=work_id,
+                    owner=owner,
+                    status="failed",
+                    result={
+                        "safe_summary": "provider is not implemented",
+                        "error_code": "provider_missing",
+                    },
+                )
             if self._deps.emit is not None:
-                self._deps.emit("agent.status", {"task_id": task.id, "capability": task.capability, "text": "这一步没有可用的执行者，我换个方式。"})
+                self._deps.emit(
+                    "agent.status",
+                    {
+                        "task_id": task.id,
+                        "capability": task.capability,
+                        "text": "这一步没有可用的执行者，我换个方式。",
+                    },
+                )
             return TaskOutcome(
                 task_id=task.id,
                 capability=task.capability,
@@ -246,13 +329,67 @@ class Dispatcher:
             result = await provider(context)
         except ProviderError as exc:
             logger.info("provider %s declined: %s", resolution.provider, exc)
+            if work_id and self._deps.repository is not None:
+                await self._deps.repository.finish_work(
+                    work_id=work_id,
+                    owner=owner,
+                    status="failed",
+                    result={"safe_summary": str(exc), "error_code": "provider_error"},
+                )
             return self._failed(task, resolution, str(exc), started)
         except Exception as exc:  # noqa: BLE001 - one provider must not end the run
             logger.exception("provider %s failed", resolution.provider)
+            if work_id and self._deps.repository is not None:
+                await self._deps.repository.finish_work(
+                    work_id=work_id,
+                    owner=owner,
+                    status="failed",
+                    result={
+                        "safe_summary": f"{type(exc).__name__}: {exc}",
+                        "error_code": "provider_failed",
+                    },
+                )
             return self._failed(task, resolution, f"{type(exc).__name__}: {exc}", started)
+        finally:
+            if heartbeat is not None:
+                heartbeat.cancel()
 
         evidence_ids = await self._persist(result)
         satisfied, detail = await self._check_done(task, result, evidence_ids)
+        if work_id and self._deps.repository is not None:
+            await self._deps.repository.finish_work(
+                work_id=work_id,
+                owner=owner,
+                status="succeeded" if satisfied else "incomplete",
+                result={
+                    "schema_id": str(getattr(result, "schema_id", "")),
+                    "safe_summary": result.detail,
+                    "artifact_refs": list(result.artifacts),
+                    "evidence_refs": list(evidence_ids),
+                    "usage": {
+                        "tokens": result.tokens_used,
+                        "wall_ms": int((time.monotonic() - started) * 1000),
+                        "heavy": 1 if result.artifacts else 0,
+                    },
+                    "output_payload": {},
+                },
+            )
+            if claimed is not None:
+                await self._deps.repository.save_fact_snapshot(
+                    task_id=self._deps.task_id,
+                    turn_id=str(claimed.get("turn_id") or ""),
+                    plan_revision=int(claimed.get("plan_revision") or 0),
+                    facts={
+                        "work_id": work_id,
+                        "task_id": task.id,
+                        "capability": task.capability,
+                        "status": "succeeded" if satisfied else "incomplete",
+                        "satisfied": bool(satisfied),
+                        "schema_id": str(getattr(result, "schema_id", "")),
+                    },
+                    evidence_refs=list(evidence_ids),
+                    artifact_refs=list(result.artifacts),
+                )
         held = bool(result.artifacts) and satisfied
         revision = int((task.inputs.get("revision") or {}).get("number") or 0)
         if held and self._deps.emit is not None:
@@ -273,7 +410,7 @@ class Dispatcher:
             capability=task.capability,
             provider=resolution.provider,
             skill_id=resolution.skill_id,
-            status=result.status if satisfied else "incomplete",
+            status="completed" if satisfied else "incomplete",
             satisfied=satisfied,
             detail=detail or result.detail,
             evidence_ids=evidence_ids,
@@ -292,7 +429,14 @@ class Dispatcher:
         self, task: PlannedTask, resolution: Resolution, detail: str, started: float
     ) -> TaskOutcome:
         if self._deps.emit is not None:
-            self._deps.emit("agent.status", {"task_id": task.id, "capability": task.capability, "text": "这一步遇到问题，我会保留已完成的部分。"})
+            self._deps.emit(
+                "agent.status",
+                {
+                    "task_id": task.id,
+                    "capability": task.capability,
+                    "text": "这一步遇到问题，我会保留已完成的部分。",
+                },
+            )
         return TaskOutcome(
             task_id=task.id,
             capability=task.capability,

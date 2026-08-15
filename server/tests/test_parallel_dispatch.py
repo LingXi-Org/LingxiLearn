@@ -1,7 +1,9 @@
 from lingxilearn.runtime.contracts import Cost, DoneCondition, OrchestrationPlan, PlannedTask
 
 
-def _task(task_id: str, *, depends_on: list[str] | None = None, parallel_safe: bool = False) -> PlannedTask:
+def _task(
+    task_id: str, *, depends_on: list[str] | None = None, parallel_safe: bool = False
+) -> PlannedTask:
     return PlannedTask(
         id=task_id,
         capability="content.lesson_intro",
@@ -13,7 +15,13 @@ def _task(task_id: str, *, depends_on: list[str] | None = None, parallel_safe: b
 
 
 def test_plan_preserves_dependency_tiers_for_parallel_dispatch() -> None:
-    plan = OrchestrationPlan(tasks=[_task("a", parallel_safe=True), _task("b", parallel_safe=True), _task("c", depends_on=["a"])])
+    plan = OrchestrationPlan(
+        tasks=[
+            _task("a", parallel_safe=True),
+            _task("b", parallel_safe=True),
+            _task("c", depends_on=["a"]),
+        ]
+    )
     tiers = plan.tiers()
     assert [[task.id for task in tier] for tier in tiers] == [["a", "b"], ["c"]]
     assert [task.id for task in plan.ordered_tasks()] == ["a", "b", "c"]

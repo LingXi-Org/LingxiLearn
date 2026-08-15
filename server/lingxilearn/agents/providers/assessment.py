@@ -267,8 +267,7 @@ async def deterministic_grader(context: ProviderContext) -> ProviderResult:
     return ProviderResult(
         learner_message=f"判分完成：{correct_count}/{len(graded['per_question'])} 题正确。",
         evidence=evidence,
-        data={**graded, "overall": overall,
-              "submission_id": submission.get("submission_id", "")},
+        data={**graded, "overall": overall, "submission_id": submission.get("submission_id", "")},
         persist_as="grading",
         detail=f"判分 {len(graded['per_question'])} 题，总体 {overall:.2f}",
     )
@@ -316,18 +315,22 @@ async def formative_assessor(context: ProviderContext) -> ProviderResult:
         raise ProviderError("formative-assessor returned no JSON result")
 
     patterns = [str(item) for item in (parsed.get("error_patterns") or [])]
-    evidence = [
-        EvidenceRecord(
-            learner_id=context.learner_id,
-            knowledge_point=context.knowledge_point_id,
-            signal=Signal.ERROR_PATTERN,
-            source_agent="formative_assessor",
-            misconceptions=tuple(patterns),
-            task_id=context.task_id,
-            summary=str(parsed.get("summary") or "识别到错误模式"),
-            payload={"patterns": patterns},
-        )
-    ] if patterns else []
+    evidence = (
+        [
+            EvidenceRecord(
+                learner_id=context.learner_id,
+                knowledge_point=context.knowledge_point_id,
+                signal=Signal.ERROR_PATTERN,
+                source_agent="formative_assessor",
+                misconceptions=tuple(patterns),
+                task_id=context.task_id,
+                summary=str(parsed.get("summary") or "识别到错误模式"),
+                payload={"patterns": patterns},
+            )
+        ]
+        if patterns
+        else []
+    )
 
     return ProviderResult(
         evidence=evidence,

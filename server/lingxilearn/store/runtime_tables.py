@@ -33,33 +33,59 @@ RUNTIME_TABLES: dict[str, dict[str, str]] = {
 
 # Only learner-facing records belong in the workspace table catalog. Tool and
 # node execution traces remain audit data, but are not useful student tables.
-RUNTIME_STUDENT_CATEGORIES = frozenset({'evidence', 'mastery', 'assessment', 'task', 'interaction'})
+RUNTIME_STUDENT_CATEGORIES = frozenset({"evidence", "mastery", "assessment", "task", "interaction"})
 
 RUNTIME_COLUMN_LABELS: dict[str, str] = {
-    'task_id': '学习任务',
-    'event_kind': '学习事件',
-    'agent': '执行智能体',
-    'sequence': '序号',
-    'recorded_at': '记录时间',
-    'knowledge_point': '知识点',
-    'learning_state': '学习状态',
-    'mastery': '掌握度',
-    'progress': '学习进度',
-    'score': '得分',
-    'question': '题目',
-    'answer': '作答',
-    'result': '结果',
-    'summary': '学习摘要',
+    "task_id": "学习任务",
+    "event_kind": "学习事件",
+    "agent": "执行智能体",
+    "sequence": "序号",
+    "recorded_at": "记录时间",
+    "knowledge_point": "知识点",
+    "learning_state": "学习状态",
+    "mastery": "掌握度",
+    "progress": "学习进度",
+    "score": "得分",
+    "question": "题目",
+    "answer": "作答",
+    "result": "结果",
+    "summary": "学习摘要",
 }
 
 RUNTIME_STUDENT_COLUMNS = frozenset(RUNTIME_COLUMN_LABELS)
 
 RUNTIME_COLUMNS_BY_CATEGORY: dict[str, frozenset[str]] = {
-    'evidence': frozenset({'task_id', 'knowledge_point', 'event_kind', 'agent', 'summary', 'recorded_at'}),
-    'mastery': frozenset({'task_id', 'knowledge_point', 'mastery', 'learning_state', 'progress', 'summary', 'recorded_at'}),
-    'assessment': frozenset({'task_id', 'knowledge_point', 'question', 'answer', 'score', 'result', 'recorded_at'}),
-    'task': frozenset({'task_id', 'knowledge_point', 'event_kind', 'progress', 'learning_state', 'summary', 'recorded_at'}),
-    'interaction': frozenset({'task_id', 'knowledge_point', 'event_kind', 'question', 'answer', 'summary', 'recorded_at'}),
+    "evidence": frozenset(
+        {"task_id", "knowledge_point", "event_kind", "agent", "summary", "recorded_at"}
+    ),
+    "mastery": frozenset(
+        {
+            "task_id",
+            "knowledge_point",
+            "mastery",
+            "learning_state",
+            "progress",
+            "summary",
+            "recorded_at",
+        }
+    ),
+    "assessment": frozenset(
+        {"task_id", "knowledge_point", "question", "answer", "score", "result", "recorded_at"}
+    ),
+    "task": frozenset(
+        {
+            "task_id",
+            "knowledge_point",
+            "event_kind",
+            "progress",
+            "learning_state",
+            "summary",
+            "recorded_at",
+        }
+    ),
+    "interaction": frozenset(
+        {"task_id", "knowledge_point", "event_kind", "question", "answer", "summary", "recorded_at"}
+    ),
 }
 
 RUNTIME_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -99,7 +125,13 @@ def runtime_category(kind: str) -> str:
         "state.updated",
     }:
         return "mastery"
-    if normalized in {"plan.ready", "stage.changed", "step.completed", "task.created", "task.updated"}:
+    if normalized in {
+        "plan.ready",
+        "stage.changed",
+        "step.completed",
+        "task.created",
+        "task.updated",
+    }:
         return "task"
     if normalized.startswith("assessment.") or normalized.startswith("quiz."):
         return "assessment"
@@ -117,7 +149,6 @@ def runtime_category(kind: str) -> str:
     if (
         normalized.startswith("node.")
         or normalized.startswith("agent.")
-        or normalized.startswith("sidecar.")
         or normalized.startswith("artifact.")
     ):
         return "node"
@@ -139,9 +170,7 @@ def _student_field(payload: Mapping[str, Any], runtime: Mapping[str, Any], *keys
 async def ensure_workspace(session: AsyncSession, learner_id: str) -> Workspace:
     """Get or create the learner's private workspace in the current session."""
 
-    workspace = await session.scalar(
-        select(Workspace).where(Workspace.learner_id == learner_id)
-    )
+    workspace = await session.scalar(select(Workspace).where(Workspace.learner_id == learner_id))
     if workspace is None:
         workspace = Workspace(
             id=f"ws_{uuid4().hex}",
@@ -199,9 +228,7 @@ async def _runtime_table(
         column.key
         for column in (
             await session.execute(
-                select(WorkspaceTableColumn).where(
-                    WorkspaceTableColumn.table_id == table.id
-                )
+                select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
             )
         ).scalars()
     }
@@ -269,13 +296,15 @@ async def project_runtime_events(
             "agent": str(raw.get("agent") or ""),
             "payload": payload,
             "runtime": runtime,
-            "recorded_at": str(
-                raw.get("recorded_at") or datetime.now(UTC).isoformat()
+            "recorded_at": str(raw.get("recorded_at") or datetime.now(UTC).isoformat()),
+            "knowledge_point": _student_field(
+                payload, runtime, "knowledge_point", "concept", "topic"
             ),
-            "knowledge_point": _student_field(payload, runtime, "knowledge_point", "concept", "topic"),
             "learning_state": _student_field(payload, runtime, "learning_state", "state"),
             "mastery": _student_field(payload, runtime, "mastery", "mastery_after"),
-            "progress": _student_field(payload, runtime, "progress", "completion", "progress_percent"),
+            "progress": _student_field(
+                payload, runtime, "progress", "completion", "progress_percent"
+            ),
             "score": _student_field(payload, runtime, "score", "total_score", "points"),
             "question": _student_field(payload, runtime, "question", "prompt"),
             "answer": _student_field(payload, runtime, "answer", "response"),

@@ -38,7 +38,8 @@ def test_goal_has_no_route_field_and_never_grows_one() -> None:
 
 def test_known_knowledge_points_are_reused_rather_than_reinvented() -> None:
     goal = build_goal(
-        {"topic": "我想搞懂 TCP 拥塞控制"}, utterance="我想搞懂 TCP 拥塞控制",
+        {"topic": "我想搞懂 TCP 拥塞控制"},
+        utterance="我想搞懂 TCP 拥塞控制",
         profile_rows=PROFILE_ROWS,
     )
     assert goal.knowledge_points == ("tcp-congestion",)
@@ -78,9 +79,7 @@ def test_an_interruption_stacks_and_a_correction_replaces() -> None:
     apply_to_stack(stack, Goal(goal_type="learn", topic="TCP 拥塞控制"))
     assert len(stack.goals) == 1
 
-    apply_to_stack(
-        stack, Goal(goal_type="ask", topic="什么是慢启动", kind=GoalKind.INTERRUPT)
-    )
+    apply_to_stack(stack, Goal(goal_type="ask", topic="什么是慢启动", kind=GoalKind.INTERRUPT))
     assert len(stack.goals) == 2
     assert stack.current().topic == "什么是慢启动"
 
@@ -92,9 +91,7 @@ def test_an_interruption_stacks_and_a_correction_replaces() -> None:
 def test_stack_operations_carry_an_undo_snapshot() -> None:
     stack = GoalStack()
     apply_to_stack(stack, Goal(goal_type="learn", topic="A"))
-    operation = apply_to_stack(
-        stack, Goal(goal_type="ask", topic="B", kind=GoalKind.INTERRUPT)
-    )
+    operation = apply_to_stack(stack, Goal(goal_type="ask", topic="B", kind=GoalKind.INTERRUPT))
     assert operation.op == "push"
     assert [g["topic"] for g in operation.before] == ["A"]
     assert [g["topic"] for g in operation.after] == ["A", "B"]
@@ -146,8 +143,9 @@ async def test_a_second_pass_consumes_nothing_new(state_db) -> None:
     assert await updater.apply(learner_id=learner_id, now=NOW)
     assert await updater.apply(learner_id=learner_id, now=NOW) == []
 
-    await runtime.append_evidence([_evidence(learner_id, score=0.2, signal=Signal.INCORRECT,
-                                             locator={"q": 2})])
+    await runtime.append_evidence(
+        [_evidence(learner_id, score=0.2, signal=Signal.INCORRECT, locator={"q": 2})]
+    )
     assert await updater.apply(learner_id=learner_id, now=NOW)
 
 
@@ -246,14 +244,28 @@ async def test_a_wrong_answer_schedules_a_sooner_review(state_db) -> None:
     updater = StateUpdater(runtime)
 
     await runtime.append_evidence(
-        [_evidence(learner_id, knowledge_point="solid", score=1.0, locator={"q": 1}),
-         _evidence(learner_id, knowledge_point="solid", score=1.0, locator={"q": 2})]
+        [
+            _evidence(learner_id, knowledge_point="solid", score=1.0, locator={"q": 1}),
+            _evidence(learner_id, knowledge_point="solid", score=1.0, locator={"q": 2}),
+        ]
     )
     await runtime.append_evidence(
-        [_evidence(learner_id, knowledge_point="shaky", signal=Signal.INCORRECT, score=0.0,
-                   locator={"q": 1}),
-         _evidence(learner_id, knowledge_point="shaky", signal=Signal.INCORRECT, score=0.1,
-                   locator={"q": 2})]
+        [
+            _evidence(
+                learner_id,
+                knowledge_point="shaky",
+                signal=Signal.INCORRECT,
+                score=0.0,
+                locator={"q": 1},
+            ),
+            _evidence(
+                learner_id,
+                knowledge_point="shaky",
+                signal=Signal.INCORRECT,
+                score=0.1,
+                locator={"q": 2},
+            ),
+        ]
     )
     await updater.apply(learner_id=learner_id, now=NOW)
 

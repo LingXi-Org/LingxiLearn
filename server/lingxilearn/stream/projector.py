@@ -167,9 +167,7 @@ class EventProjector:
         if event.kind is EventKind.MESSAGE:
             text = _message_text(data.get("value"))
             if text:
-                return [
-                    self._emit(Projection.ASSISTANT_DELTA, event, node_key, {"delta": text})
-                ]
+                return [self._emit(Projection.ASSISTANT_DELTA, event, node_key, {"delta": text})]
 
         return []
 
@@ -192,9 +190,7 @@ class EventProjector:
             )
         ]
 
-    def _emit(
-        self, kind: Projection, event: Event, key: str, payload: dict[str, Any]
-    ) -> Emission:
+    def _emit(self, kind: Projection, event: Event, key: str, payload: dict[str, Any]) -> Emission:
         return Emission(
             kind=kind.value, payload=payload, node=event.node, run_id=event.run_id, key=key
         )

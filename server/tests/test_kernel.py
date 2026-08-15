@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-from lingxigraph import Command, InMemorySaver
-
-from lingxilearn.brains.scripted import ScriptedBrain
-from lingxilearn.kernel.evidence import Ledger, verify_citations
-from lingxilearn.kernel.state import initial_state, merge_evidence, merge_tags
+from lingxilearn.kernel.evidence import Ledger
+from lingxilearn.kernel.state import merge_evidence, merge_tags
 
 # --------------------------------------------------------------------------
 # Reducers and the ledger

@@ -53,10 +53,20 @@ def skill(skill_id: str, capability: str, provider: str, **cost) -> dict:
 
 REGISTRY = [
     skill("lesson-intro", "content.lesson_intro", "lesson_intro", heavy_artifact=True),
-    skill("interactive-lecture-deck", "content.deck", "lecture_deck", heavy_artifact=True,
-          latency_weight=2.0),
-    skill("interactive-visual-explainer", "content.visual", "visual_explainer",
-          heavy_artifact=True, latency_weight=2.0),
+    skill(
+        "interactive-lecture-deck",
+        "content.deck",
+        "lecture_deck",
+        heavy_artifact=True,
+        latency_weight=2.0,
+    ),
+    skill(
+        "interactive-visual-explainer",
+        "content.visual",
+        "visual_explainer",
+        heavy_artifact=True,
+        latency_weight=2.0,
+    ),
     skill("prerequisite-analyzer", "graph.prerequisite", "prerequisite_analyzer"),
     skill("quiz-generator", "assess.generate", "quiz_generator"),
     skill("adaptive-pedagogy", "teach.strategy", "adaptive_pedagogy"),
@@ -168,7 +178,7 @@ def test_scoring_is_deterministic_across_runs() -> None:
 
 
 def test_ineligible_candidates_are_kept_with_a_reason() -> None:
-    """"Why didn't it do X" has to be answerable from the trace."""
+    """ "Why didn't it do X" has to be answerable from the trace."""
 
     world = WorldState(
         target=ProfileView.unseen("tcp-congestion"),
@@ -231,7 +241,9 @@ def test_deviation_is_detected_for_another_knowledge_point() -> None:
 def test_requested_capability_raises_but_does_not_force_the_ranking() -> None:
     base = WorldState(
         target=ProfileView(
-            knowledge_point_id="tcp-congestion", mastery=0.30, evidence_count=4,
+            knowledge_point_id="tcp-congestion",
+            mastery=0.30,
+            evidence_count=4,
             prerequisites=("sliding-window",),
         ),
         prerequisites=(
@@ -366,8 +378,17 @@ def _plan(*tasks: PlannedTask, **overrides) -> OrchestrationPlan:
 
 
 def test_allow_list_excludes_capabilities_without_a_provider() -> None:
-    registry = [*REGISTRY, {"skill_id": "x", "capabilities": ["meta.report"], "provider": "",
-                            "enabled": True, "cost": {}, "preconditions": {}}]
+    registry = [
+        *REGISTRY,
+        {
+            "skill_id": "x",
+            "capabilities": ["meta.report"],
+            "provider": "",
+            "enabled": True,
+            "cost": {},
+            "preconditions": {},
+        },
+    ]
     allow = allowed_capabilities(registry)
     assert "meta.report" not in allow
     assert "content.deck" in allow

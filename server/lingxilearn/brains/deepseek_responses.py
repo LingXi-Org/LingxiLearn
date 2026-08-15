@@ -112,11 +112,7 @@ class DeepSeekResponsesModel:
                     if value:
                         additional["reasoning_content"] = str(value)
                     value = ""
-                usage = dict(
-                    event.get("usage")
-                    or (event.get("response") or {}).get("usage")
-                    or {}
-                )
+                usage = dict(event.get("usage") or (event.get("response") or {}).get("usage") or {})
                 if value or additional or usage:
                     yield AIMessageChunk(
                         str(value),

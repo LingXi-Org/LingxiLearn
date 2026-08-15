@@ -31,7 +31,11 @@ SPEC = {
     "require_pins": True,
     "confusion_threshold_ratio": 0.1,
     "confusions": [
-        {"over": "ttfb", "under": "retransmission", "misconception": "transfer_time_as_server_think"}
+        {
+            "over": "ttfb",
+            "under": "retransmission",
+            "misconception": "transfer_time_as_server_think",
+        }
     ],
     "pin_misconceptions": {"dns": "pins_do_not_support_claim"},
     "concepts": ["perf.attribution"],
@@ -39,8 +43,11 @@ SPEC = {
 CTX = {"tools": {"waterfall": TRUTH}}
 
 GOOD_PINS = {
-    "dns": [1, 2], "tcp_connect": [3, 4, 5], "ttfb": [6, 7],
-    "transfer": [8, 9], "retransmission": [13, 14],
+    "dns": [1, 2],
+    "tcp_connect": [3, 4, 5],
+    "ttfb": [6, 7],
+    "transfer": [8, 9],
+    "retransmission": [13, 14],
 }
 
 
@@ -63,8 +70,11 @@ def test_blaming_the_server_is_named_as_a_specific_misconception():
     """The classic error: the retransmission stall filed as server think time."""
     answer = {
         "allocations": {
-            "dns": 121.4, "tcp_connect": 31.9, "ttfb": 400.0,
-            "transfer": 30.0, "retransmission": 0.0,
+            "dns": 121.4,
+            "tcp_connect": 31.9,
+            "ttfb": 400.0,
+            "transfer": 30.0,
+            "retransmission": 0.0,
         },
         "pins": GOOD_PINS,
     }
