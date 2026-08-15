@@ -67,6 +67,7 @@ class CapabilityInfo:
     irreversible: bool
     """True when running it has effects outside the run; needs confirmation."""
     conversational: bool = False
+    opening_conversation: bool = False
 
 
 CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
@@ -107,7 +108,13 @@ CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
         Capability.DIALOG_CONVERSE, "回应你的消息", True, False, False, True
     ),
     Capability.DIALOG_INTERVIEW: CapabilityInfo(
-        Capability.DIALOG_INTERVIEW, "了解你的基础", True, False, False, True
+        Capability.DIALOG_INTERVIEW,
+        "了解你的基础",
+        True,
+        False,
+        False,
+        True,
+        True,
     ),
     Capability.DIALOG_PROBE: CapabilityInfo(
         Capability.DIALOG_PROBE, "向你确认理解", True, False, False

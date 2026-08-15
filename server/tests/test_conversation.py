@@ -1,7 +1,12 @@
 from pathlib import Path
 
+from lingxilearn.runtime.candidates import WorldState
+from lingxilearn.runtime.contracts import CandidateAction
+from lingxilearn.runtime.orchestrator import _repair
 from lingxilearn.service import _SidecarRuntime
 from lingxilearn.state.capabilities import Capability
+from lingxilearn.state.gain import ProfileView
+from lingxilearn.state.session_state import Goal
 from lingxilearn.state.skill_catalog import discover
 
 SKILLS = Path(__file__).resolve().parents[2] / "skills"
@@ -48,3 +53,26 @@ def test_sidecar_runtime_preserves_learner_facing_output() -> None:
             },
         }
     ]
+
+
+def test_new_learner_plan_keeps_opening_conversation_present() -> None:
+    candidate = CandidateAction(
+        capability=str(Capability.DIALOG_INTERVIEW),
+        skill_id="learner-interview",
+        provider="learner_interview",
+        knowledge_point_id="kp-1",
+        gain=0.5,
+        utility=0.5,
+        reason="先了解学习起点",
+        parallel_safe=False,
+        critical_path=True,
+    )
+    plan = _repair(
+        {"tasks": [], "awaits_user": True},
+        goal=Goal(goal_type="learn", topic="TCP", knowledge_points=("kp-1",)),
+        world=WorldState(target=ProfileView.unseen("kp-1")),
+        candidates=[candidate],
+    )
+
+    assert plan is not None
+    assert [task.capability for task in plan.tasks] == [str(Capability.DIALOG_INTERVIEW)]

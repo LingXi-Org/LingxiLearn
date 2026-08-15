@@ -224,6 +224,42 @@ def _repair(
         if action == "revise" and not instruction:
             action = "close"
         holds.append(HoldDecision(task_key=task_key, action=action, instruction=instruction))
+
+    # A new learner has no evidence from which to personalize the first
+    # explanation.  Keep the dedicated opening conversation agent present in
+    # that state even if the model spends its one call selecting artifacts;
+    # this is derived from candidate metadata and profile evidence, never from
+    # the learner's wording or a goal/intent route.
+    opening_candidate = next(
+        (
+            item
+            for item in candidates
+            if item.eligible and info(item.capability).opening_conversation
+        ),
+        None,
+    )
+    has_conversation = any(info(task.capability).conversational for task in tasks)
+    if (
+        opening_candidate is not None
+        and world.target.evidence_count == 0
+        and not interjection_message
+        and not has_conversation
+    ):
+        tasks.insert(
+            0,
+            PlannedTask(
+                id=f"opening-{opening_candidate.skill_id}",
+                capability=opening_candidate.capability,
+                knowledge_point_id=opening_candidate.knowledge_point_id,
+                done_when=_default_done_condition(opening_candidate),
+                rationale=opening_candidate.reason or "先了解你的基础，再安排最合适的学习路径。",
+                expected_learning_gain=opening_candidate.gain,
+                estimated_cost=Cost(
+                    parallel_safe=opening_candidate.parallel_safe,
+                    critical_path=opening_candidate.critical_path,
+                ),
+            ),
+        )
     # A control-plane round may contain only hold decisions.  This is valid
     # even when every artifact candidate is currently precondition-blocked:
     # closing or revising an existing hold is driven by the board, not by a
