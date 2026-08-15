@@ -1,5 +1,5 @@
 ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
-ARG BUN_VERSION=1.3.6
+ARG BUN_VERSION=1.3.14
 ARG NODE_VERSION=22-bookworm-slim
 
 # Use Bun only to materialize the existing bun.lock dependency graph. The app
@@ -18,11 +18,15 @@ FROM ${DOCKER_REGISTRY}/node:${NODE_VERSION} AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Build-time values let Next.js safely evaluate server modules while collecting
+# route data. Production Compose supplies the real public app URL at runtime.
 ARG NEXT_PUBLIC_API_BASE=
+ARG NEXT_PUBLIC_APP_URL=http://localhost:3000
 ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
 ARG NODE_OPTIONS=--max-old-space-size=768
 
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE \
+    NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
     DATABASE_URL=$DATABASE_URL \
     LINGXILEARN_API_ORIGIN=http://api:8000 \
     NEXT_STATIC_EXPORT=1 \
