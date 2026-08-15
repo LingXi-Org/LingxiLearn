@@ -262,7 +262,13 @@ function RuntimeNode({ id, data }: NodeProps) {
       />
       <span
         aria-hidden
-        className={`pointer-events-none absolute inset-0 rounded-[13px] ring-[1.75px] ring-[var(--text-secondary)] transition-opacity duration-300 ${active || terminal ? 'opacity-100' : 'opacity-0'}`}
+        className={`pointer-events-none absolute inset-[-4px] rounded-[17px] transition-[opacity,box-shadow] duration-300 ${
+          active
+            ? 'animate-pulse border-2 border-blue-500 opacity-100 shadow-[0_0_0_3px_rgba(59,130,246,0.18),0_0_22px_rgba(59,130,246,0.32)]'
+            : terminal
+              ? 'border border-[var(--text-secondary)] opacity-70'
+              : 'border border-transparent opacity-0'
+        }`}
       />
     </div>
   )
@@ -500,7 +506,11 @@ function semanticGraph(
         seen.add(key)
         edges.push({
           ...edge,
-          id: collapsed ? `runtime-collapse-${source}-${edge.target}` : edge.id,
+          // Backend event sequence numbers can change when a plan is
+          // re-emitted. React Flow treats a changed edge id as a new edge and
+          // restarts its growth animation, which is the source of the
+          // flicker. The semantic endpoints are the stable identity here.
+          id: `runtime-edge-${encodeURIComponent(source)}-${encodeURIComponent(edge.target)}`,
           source,
           label: collapsed ? '灵析运行时' : runtimeLabel(edge.label || 'Capability dependency'),
           data: {
@@ -733,7 +743,6 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
           nodeTypes={{ lingxiRuntimeNode: RuntimeNode }}
           edgeTypes={{ lingxiRuntimeEdge: RuntimeEdge }}
           onInit={setFlowInstance}
-          fitView
           fitViewOptions={{ padding: 0.12, minZoom: 0.1, maxZoom: 1.2 }}
           defaultViewport={{ x: 0, y: 0, zoom: 0.71 }}
           minZoom={0.1}

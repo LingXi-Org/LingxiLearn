@@ -183,7 +183,11 @@ export function layoutRuntimeGraph(
     const maxHeight = Math.max(...layerIds.map((id) => blockHeight(blocks[id])))
     const startX = CANVAS_PADDING
     layerIds.forEach((id, index) => {
-      result[id] = {
+      // A live graph receives status, output and plan events independently.
+      // Never move a node that already has a position when a later event adds
+      // a dependency: doing so makes an initially parallel plan appear to
+      // turn serial and causes React Flow to animate the whole canvas.
+      result[id] = previous[id] ?? {
         x: startX + index * (RUNTIME_GRAPH_NODE_WIDTH + NODE_GAP_X),
         y,
       }
