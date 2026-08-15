@@ -36,9 +36,9 @@ PEDAGOGY_PROMPT = progressive_skill_prompt(
     "adaptive-pedagogy",
     "adaptive-pedagogy-result.v2",
     referenced_resources=PEDAGOGY_RESOURCES,
-    artifact_instructions="""这是自适应教学 Agent，是本轮唯一面向学习者的教学写作者。
+    artifact_instructions="""这是自适应教学 Agent，为独占的学习对话 Agent 提供教学内容草稿。
 基于学习档案里的掌握度、证据条数和未消解误区选择最小可用的教学动作，不要把苏格拉底式追问
-最大化。只输出 JSON：{"text":"...","strategy":"...","next_step":"..."}。""",
+最大化。只输出 JSON：{"text":"...","strategy":"...","next_step":"..."}；不要直接向学习者发言。""",
     stage_artifacts=False,
 )
 
@@ -54,12 +54,16 @@ NEGOTIATION_PROMPT = """你是教学协商 Agent。系统打算做的事和学�
 一到两句，不要道歉式措辞，不要写成选择题。
 只输出 JSON：{"text":"..."}。"""
 
-COMPANION_PROMPT = """你是学习陪伴 Agent。学习任务可能仍在运行。
+COMPANION_PROMPT = """你是学习对话 Agent。学习任务可能仍在运行。
 用简短中文回应学习者，明确说明当前正在进行的工作；可以回答基于已有材料的问题，
-但不要假装后台任务已经完成，也不要泄露未提交测验答案。只输出 JSON：{"text":"..."}。"""
+但不要假装后台任务已经完成，也不要泄露未提交测验答案。运行看板中的状态必须如实表达；
+等待期间用有价值的问题推进对话。只输出 JSON：{"text":"..."}。"""
 
 PROBE_PROMPT = """你是苏格拉底追问 Agent。根据学习者的掌握度和误区提出一个简短确认问题。
 不要给答案，不要连续问多个问题。只输出 JSON：{"text":"..."}。"""
+
+INTERVIEW_PROMPT = """你是学习起点访谈 Agent。围绕当前知识点提出两三个简短问题，了解学习者已经接触过什么、
+最不确定的地方和希望达到的程度。只输出 JSON：{"text":"...","summary":"..."}；不要讲解答案。"""
 
 
 async def _emit_learner_output(runtime: Any, agent: str, text: str, stream_id: str) -> None:
@@ -175,20 +179,16 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
     if not text:
         raise ProviderError("adaptive-pedagogy returned no learner-facing text")
 
-    safe_text, withheld = _guarded(text, context)
-    await _emit_learner_output(context.runtime, "adaptive_pedagogy", safe_text, f"{context.task_id}:adaptive_pedagogy:{context.task.id}")
-
     return ProviderResult(
-        learner_message=safe_text,
+        learner_message=text,
         data={
-            "text": safe_text,
+            "text": text,
             "strategy": str(parsed.get("strategy") or (decision.get("strategy") if isinstance(decision, dict) else "") or "explain"),
             "next_step": str(parsed.get("next_step") or ""),
-            "withheld_for_leakage": withheld,
+            "withheld_for_leakage": False,
         },
         persist_as="adaptive_pedagogy",
         detail=f"教学策略：{parsed.get('strategy') or 'explain'}",
-        warnings=["生成内容触发泄题保护，已改用提示阶梯"] if withheld else [],
     )
 
 
@@ -230,11 +230,8 @@ async def answer_user(context: ProviderContext) -> ProviderResult:
     if not text:
         raise ProviderError("knowledge-qa returned no answer text")
 
-    safe_text, withheld = _guarded(text, context)
-    await _emit_learner_output(context.runtime, "answer_user", safe_text, f"{context.task_id}:answer_user:{context.task.id}")
-
     return ProviderResult(
-        learner_message=safe_text,
+        learner_message=text,
         evidence=[
             EvidenceRecord(
                 learner_id=context.learner_id,
@@ -245,10 +242,9 @@ async def answer_user(context: ProviderContext) -> ProviderResult:
                 summary=question[:200],
             )
         ],
-        data={"text": safe_text, "out_of_scope": bool(parsed.get("out_of_scope"))},
+        data={"text": text, "out_of_scope": bool(parsed.get("out_of_scope"))},
         persist_as="answer_user",
         detail="已回答学习者的追问",
-        warnings=["回答触发泄题保护，已改用提示阶梯"] if withheld else [],
     )
 
 
@@ -318,6 +314,12 @@ async def learning_companion(context: ProviderContext) -> ProviderResult:
         "learner_state": _learner_brief(context),
         "current_work": [context.task.rationale, *context.prior_results.keys()],
         "artifacts": sorted(context.prior_results.keys()),
+        "supporting_text": [
+            str(value.get("text") or value.get("message") or "")
+            for value in context.prior_results.values()
+            if isinstance(value, dict) and (value.get("text") or value.get("message"))
+        ][-8:],
+        "runtime_board": context.task.inputs.get("__board") or {},
     }
     if context.model is None:
         text = f"我收到你的消息了。当前仍在处理「{context.goal.topic}」，我会把你的要求带入下一轮编排。"
@@ -327,11 +329,12 @@ async def learning_companion(context: ProviderContext) -> ProviderResult:
         text = str(parsed.get("text") or "").strip()
         if not text:
             raise ProviderError("learning companion returned no text")
+    text, withheld = _guarded(text, context)
     await _emit_learner_output(context.runtime, "learning_companion", text, f"{context.task_id}:learning_companion:{context.task.id}")
     return ProviderResult(
         learner_message=text,
         evidence=[EvidenceRecord(learner_id=context.learner_id, knowledge_point=context.knowledge_point_id, signal=Signal.SELF_REPORT, source_agent="learning_companion", task_id=context.task_id, summary=question[:200])],
-        data={"text": text, "message": question},
+        data={"text": text, "message": question, "withheld_for_leakage": withheld},
         persist_as="learning_companion",
         detail="已即时回应学习者消息",
     )
@@ -348,8 +351,49 @@ async def probe_user(context: ProviderContext) -> ProviderResult:
         text = str(parsed.get("text") or "").strip()
         if not text:
             raise ProviderError("probe returned no question")
-    await _emit_learner_output(context.runtime, "probe_user", text, f"{context.task_id}:probe_user:{context.task.id}")
     return ProviderResult(learner_message=text, data={"text": text}, persist_as="probe_user", detail="已向学习者确认理解")
 
 
-__all__ = ["adaptive_pedagogy", "answer_user", "negotiator", "learning_companion", "probe_user"]
+@register("learner_interview")
+async def learner_interview(context: ProviderContext) -> ProviderResult:
+    """Ask a couple of short baseline questions and persist self-report evidence."""
+
+    message = str(context.user_message.get("message") or "").strip()
+    if context.model is None:
+        text = f"开始学习「{context.goal.topic}」前，你已经接触过哪些内容？最不确定的地方是什么？"
+    else:
+        prompt = {
+            "topic": context.goal.topic,
+            "knowledge_point": context.knowledge_point_id,
+            "message": message,
+            "instruction": "提出两三个短问题了解起点，只输出 JSON {text, summary}。",
+        }
+        agent = create_agent(
+            agent_model(context.model, "learner_interview"),
+            system_prompt=INTERVIEW_PROMPT,
+            name="learner-interview",
+        )
+        parsed = extract_json(message_text(await invoke_agent(agent, HumanMessage(json.dumps(prompt, ensure_ascii=False)), context.runtime, agent_name="learner_interview", recursion_limit=6))) or {}
+        text = str(parsed.get("text") or "").strip()
+        if not text:
+            raise ProviderError("learner interview returned no questions")
+    evidence = EvidenceRecord(
+        learner_id=context.learner_id,
+        knowledge_point=context.knowledge_point_id,
+        signal=Signal.SELF_REPORT,
+        source_agent="learner_interview",
+        task_id=context.task_id,
+        summary=(message or text)[:200],
+    )
+    text, withheld = _guarded(text, context)
+    await _emit_learner_output(context.runtime, "learner_interview", text, f"{context.task_id}:learner_interview:{context.task.id}")
+    return ProviderResult(
+        learner_message=text,
+        evidence=[evidence],
+        data={"text": text, "withheld_for_leakage": withheld},
+        persist_as="learner_interview",
+        detail="已了解学习起点",
+    )
+
+
+__all__ = ["adaptive_pedagogy", "answer_user", "negotiator", "learning_companion", "learner_interview", "probe_user"]

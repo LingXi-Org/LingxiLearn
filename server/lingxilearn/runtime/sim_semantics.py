@@ -46,6 +46,9 @@ _VISIBLE_EXECUTIONS: tuple[tuple[VisibleExecution, tuple[str, ...]], ...] = (
     (VisibleExecution("learning_companion", "Learning Companion"), (
         "learning_companion", "dialog.converse",
     )),
+    (VisibleExecution("learner_interview", "了解你的基础"), (
+        "learner_interview", "dialog.interview",
+    )),
     (VisibleExecution("socratic_prober", "Socratic Probe"), (
         "probe_user", "dialog.probe",
     )),
@@ -71,7 +74,7 @@ _VISIBLE_EXECUTIONS: tuple[tuple[VisibleExecution, tuple[str, ...]], ...] = (
         "retrieval_practice", "review_scheduler", "review.schedule",
     )),
     (VisibleExecution("curriculum_mapper", "Curriculum Mapper"), (
-        "curriculum_mapper", "prerequisite_analyzer", "graph.build", "graph.prerequisite",
+        "curriculum_mapper", "curriculum_graph", "prerequisite_analyzer", "graph.build", "graph.prerequisite",
     )),
     (VisibleExecution("learner_reflector", "Learner Reflector"), (
         "learner_reflector", "learner_state_reflector", "model.reflect",
@@ -666,9 +669,11 @@ class SimRunProjector:
                 result["payload"]["blockId"] = block_id
             else:
                 result["payload"]["hiddenBy"] = "lingxi-runtime"
-        elif kind in {"node.started", "node.completed", "node.failed", "node.retrying"}:
+        elif kind in {"node.started", "node.held", "node.revising", "node.completed", "node.failed", "node.retrying"}:
             status = {
                 "node.started": "running",
+                "node.held": "running",
+                "node.revising": "running",
                 "node.completed": "completed",
                 "node.failed": "failed",
                 "node.retrying": "retrying",
@@ -676,6 +681,8 @@ class SimRunProjector:
             block_id = self._update_planned_execution(safe_payload, status=status)
             if block_id is not None:
                 result["payload"] = {**safe_payload, "blockId": block_id}
+                if kind in {"node.held", "node.revising"}:
+                    result["payload"]["held" if kind == "node.held" else "revising"] = True
         return result
 
     def snapshot(self) -> dict[str, Any]:

@@ -635,6 +635,10 @@ export const api = {
         body: JSON.stringify({ submission_id: submissionId, answers }),
       }
     ),
+  ackAgentDelivery: (taskId: string, artifact: string) =>
+    request<{ artifact: string; cursor: number; delivery: AgentTaskSnapshot['delivery']['queue'] }>(
+      `/agent-tasks/${taskId}/delivery/${artifact}/ack`, { method: 'POST' }
+    ),
 
   agentArtifactUrl: (taskId: string, kind: 'lesson-intro' | 'lecture-deck' | 'visual') =>
     `${API_BASE}/api/agent-tasks/${taskId}/artifacts/${kind}`,
@@ -824,6 +828,10 @@ export const KNOWN_EVENT_KINDS = [
   'run.paused',
   'node.started',
   'node.completed',
+  'node.held',
+  'node.revising',
+  'delivery.queued',
+  'delivery.unlocked',
   'node.retrying',
   'interrupt.raised',
   'assistant.delta',

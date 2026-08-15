@@ -1199,7 +1199,7 @@ function ensureWorkflowInRegistry(resourceId: string, title: string, workspaceId
 export interface UseChatOptions {
   /** Optional transport/projection adapter. Omitted means the native Lingxi stream. */
   adapter?: LingxiGraphChatAdapter
-  onResourceEvent?: (resourceId: string) => void
+  onResourceEvent?: (resourceId: string, eventKind?: 'artifact.ready' | 'delivery.unlocked') => void
   apiPath?: string
   stopPath?: string
   workflowId?: string

@@ -37,6 +37,7 @@ class Capability(StrEnum):
     DIALOG_ANSWER = "dialog.answer"
     DIALOG_NEGOTIATE = "dialog.negotiate"
     DIALOG_CONVERSE = "dialog.converse"
+    DIALOG_INTERVIEW = "dialog.interview"
     DIALOG_PROBE = "dialog.probe"
     PLAN_PRESENT = "plan.present"
 
@@ -65,6 +66,7 @@ class CapabilityInfo:
     """True when one run produces an expensive artifact; counted by guardrails."""
     irreversible: bool
     """True when running it has effects outside the run; needs confirmation."""
+    conversational: bool = False
 
 
 CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
@@ -102,7 +104,10 @@ CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
         Capability.DIALOG_NEGOTIATE, "与学习者协商", True, False, False
     ),
     Capability.DIALOG_CONVERSE: CapabilityInfo(
-        Capability.DIALOG_CONVERSE, "回应你的消息", True, False, False
+        Capability.DIALOG_CONVERSE, "回应你的消息", True, False, False, True
+    ),
+    Capability.DIALOG_INTERVIEW: CapabilityInfo(
+        Capability.DIALOG_INTERVIEW, "了解你的基础", True, False, False, True
     ),
     Capability.DIALOG_PROBE: CapabilityInfo(
         Capability.DIALOG_PROBE, "向你确认理解", True, False, False

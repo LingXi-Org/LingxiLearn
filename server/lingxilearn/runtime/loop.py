@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import asyncio
+from datetime import UTC, datetime
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Annotated, Any, TypedDict
@@ -27,6 +28,7 @@ from typing import Annotated, Any, TypedDict
 from lingxigraph import END, START, Runtime, StateGraph, interrupt
 
 from ..state.gain import ProfileView
+from ..state.capabilities import info
 from ..state.session_state import (
     TERMINAL_STATUSES,
     Goal,
@@ -37,9 +39,9 @@ from ..store.runtime_state import RuntimeStateRepository
 from . import goal_interpreter, orchestrator
 from .candidates import WorldState
 from .completion import CompletionContext, StoreArtifactProbe, evaluate
-from .contracts import DoneCondition, OrchestrationPlan, TaskOutcome
+from .contracts import Cost, DoneCondition, OrchestrationPlan, PlannedTask, TaskOutcome
 from .dispatch import DispatchDeps, Dispatcher
-from .guardrails import Budget, check_plan, check_replan, degrade_message
+from .guardrails import Budget, apply_hold_policy, check_plan, check_replan, degrade_message
 from .state_updater import StateUpdater
 from .trace import DecisionRecord, DecisionTracer, summarise_profile
 
@@ -47,6 +49,7 @@ logger = logging.getLogger(__name__)
 
 GRAPH_NAME = "lingxilearn-runtime-loop"
 GRAPH_VERSION = "1.0.0"
+DEFAULT_DELIVERY_ORDER = ("lesson-intro", "visual", "lecture-deck", "quiz")
 
 
 def _append(left: list[Any], right: list[Any]) -> list[Any]:
@@ -70,6 +73,7 @@ class LoopState(TypedDict, total=False):
     replanning: bool
     user_message: dict[str, Any]
     finished_reason: str
+    background_pending: bool
 
 
 class LoopDeps:
@@ -92,6 +96,7 @@ class LoopDeps:
         prior_results: Mapping[str, Any] | None = None,
         prior_artifacts: Sequence[str] = (),
         schedule_background: Any = None,
+        board_lock: asyncio.Lock | None = None,
     ) -> None:
         self.runtime_state = runtime_state
         self.learner_id = learner_id
@@ -107,6 +112,7 @@ class LoopDeps:
         self.prior_results = dict(prior_results or {})
         self.prior_artifacts = tuple(prior_artifacts)
         self.schedule_background = schedule_background
+        self.board_lock = board_lock
         self.updater = StateUpdater(runtime_state)
         self.tracer = DecisionTracer(
             runtime_state,
@@ -221,6 +227,10 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     )
     dispatcher.seed_results(deps.prior_results)
     dispatcher.seed_artifacts(deps.prior_artifacts)
+    # The service supplies one task-scoped lock shared with sidecars and
+    # delivery acknowledgements. Unit callers may omit it and get a local
+    # lock, preserving the loop's standalone contract.
+    board_lock = deps.board_lock or asyncio.Lock()
 
     async def interpret_goal(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
         if deps.emit is not None:
@@ -299,6 +309,15 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             budget.spend_replan()
 
         world, profile_rows = await _world(deps, goal, dispatcher=dispatcher)
+        board = await deps.runtime_state.get_board(deps.task_id)
+        board.setdefault("holds", {})
+        board.setdefault("delivery", [])
+        if not board.get("order"):
+            board["order"] = list(DEFAULT_DELIVERY_ORDER)
+        board.setdefault("cursor", 0)
+        board["produced_order"] = [
+            str(item.get("artifact")) for item in board["delivery"] if item.get("artifact")
+        ]
         if latest_message:
             requested = set(world.requested_capabilities)
             requested.update(str(item) for item in latest_message.get("requested_capabilities") or [])
@@ -315,7 +334,104 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             model=deps.model,
             runtime=runtime,
             user_message=latest_message,
+            board=board,
         )
+        produced.holds = apply_hold_policy(
+            produced.holds,
+            board,
+            budget,
+            goal_satisfied=bool(world.target.mastery >= 1.0),
+        )
+        requested_order = [str(item) for item in produced.delivery_order if str(item) in {"lesson-intro", "visual", "lecture-deck", "quiz"}]
+        board["order"] = requested_order + [item for item in board.get("order", []) if item not in requested_order]
+        revision_tasks: list[PlannedTask] = []
+        for decision in produced.holds:
+            if decision.action != "revise":
+                continue
+            held = board["holds"].get(decision.task_key)
+            if not held:
+                continue
+            revision_number = int(held.get("revisions") or 0) + 1
+            capability = str(held.get("capability") or "")
+            revision_tasks.append(
+                PlannedTask(
+                    id=f"revision-{decision.task_key.replace(':', '-')}-{revision_number}",
+                    capability=capability,
+                    knowledge_point_id=str(held.get("knowledge_point_id") or ""),
+                    inputs={
+                        "revision": {
+                            "instruction": decision.instruction,
+                            "artifact": (held.get("artifacts") or [""])[0],
+                            "of_task": decision.task_key,
+                            "number": revision_number,
+                        }
+                    },
+                    done_when=DoneCondition(
+                        kind="artifact_valid",
+                        artifact=str((held.get("artifacts") or [""])[0]),
+                    ),
+                    rationale=decision.instruction,
+                    estimated_cost=Cost(
+                        heavy_artifact=True,
+                        blocking=False,
+                        critical_path=False,
+                        parallel_safe=True,
+                    ),
+                    expected_learning_gain=0.0,
+                )
+            )
+        if revision_tasks:
+            produced.tasks = revision_tasks + produced.tasks
+        for decision in produced.holds:
+            if decision.action != "close":
+                continue
+            held = board["holds"].pop(decision.task_key, None)
+            if not held:
+                continue
+            if deps.emit is not None:
+                deps.emit(
+                    "node.completed",
+                    {
+                        "task_id": held.get("task_id") or decision.task_key,
+                        "task_key": decision.task_key,
+                        "capability": held.get("capability") or "",
+                        "provider": held.get("provider") or "",
+                        "status": "completed",
+                        "satisfied": True,
+                        "held": False,
+                        "detail": held.get("detail") or "",
+                    },
+                )
+            for artifact in held.get("artifacts") or []:
+                artifact = str(artifact)
+                if artifact not in board["order"]:
+                    board["order"].append(artifact)
+                if not any(item.get("artifact") == artifact for item in board["delivery"]):
+                    entry = {"artifact": artifact, "task_key": decision.task_key, "title": held.get("detail") or artifact, "sequence": 0, "state": "queued", "closed_at": datetime.now(UTC).isoformat()}
+                    target_position = board["order"].index(artifact)
+                    position = next(
+                        (
+                            index
+                            for index, item in enumerate(board["delivery"])
+                            if str(item.get("artifact")) in board["order"]
+                            and board["order"].index(str(item.get("artifact"))) > target_position
+                        ),
+                        len(board["delivery"]),
+                    )
+                    board["delivery"].insert(position, entry)
+                    for index, item in enumerate(board["delivery"], start=1):
+                        item["sequence"] = index
+                    if deps.emit is not None:
+                        deps.emit("delivery.queued", {"artifact": artifact, "task_key": decision.task_key})
+        if produced.holds and not produced.tasks:
+            produced.awaits_user = True
+        cursor = int(board.get("cursor") or 0)
+        if cursor < len(board["delivery"]):
+            was_unlocked = board["delivery"][cursor].get("state") == "unlocked"
+            board["delivery"][cursor]["state"] = "unlocked"
+            if deps.emit is not None and not was_unlocked:
+                deps.emit("delivery.unlocked", {"artifact": board["delivery"][cursor].get("artifact"), "cursor": cursor})
+        await deps.runtime_state.save_board(deps.task_id, board)
         verdict = check_plan(
             produced,
             goal=goal,
@@ -437,13 +553,27 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
 
         outcomes: list[TaskOutcome] = []
         messages: list[str] = []
+        background_pending = False
         for tier in produced.tiers():
             ready = [task for task in tier if task.id in allowed]
             if budget.exhausted() is not None:
                 break
             background = [task for task in ready if not task.estimated_cost.critical_path and not task.estimated_cost.blocking and deps.schedule_background is not None]
+            if background:
+                background_pending = True
             for task in background:
-                await deps.schedule_background(task.capability, dict(task.inputs))
+                inputs = dict(task.inputs)
+                revision = inputs.get("revision") if isinstance(inputs.get("revision"), Mapping) else {}
+                inputs["__runtime"] = {
+                    "task_key": str(revision.get("of_task") or f"{int(state.get('step') or 0)}:{task.id}"),
+                    "task_id": task.id,
+                    "step": int(state.get("step") or 0),
+                    "capability": task.capability,
+                    "knowledge_point_id": task.knowledge_point_id,
+                    "artifacts": [task.done_when.artifact] if task.done_when.artifact else [],
+                    "done_when": task.done_when.model_dump(mode="json"),
+                }
+                await deps.schedule_background(task.capability, inputs)
             ready = [task for task in ready if task not in background]
             safe = [task for task in ready if task.estimated_cost.parallel_safe and bool(getattr(deps.settings, "agent_parallel_dispatch", True))]
             serial = [task for task in ready if task not in safe]
@@ -456,7 +586,38 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             for outcome in results:
                 outcomes.append(outcome)
                 budget.spend_step(heavy=outcome.heavy, tokens=outcome.tokens_used, wall_ms=outcome.duration_ms)
-                if deps.emit is not None:
+                if outcome.held:
+                    async with board_lock:
+                        board = await deps.runtime_state.get_board(deps.task_id)
+                        board.setdefault("holds", {})
+                        planned = next(
+                            (item for item in produced.tasks if item.id == outcome.task_id),
+                            None,
+                        )
+                        revision = (
+                            planned.inputs.get("revision")
+                            if planned and isinstance(planned.inputs.get("revision"), Mapping)
+                            else {}
+                        )
+                        task_key = str(
+                            revision.get("of_task")
+                            or f"{int(state.get('step') or 0)}:{outcome.task_id}"
+                        )
+                        previous = dict(board["holds"].get(task_key) or {})
+                        board["holds"][task_key] = {
+                            "task_id": previous.get("task_id") or outcome.task_id,
+                            "capability": outcome.capability,
+                            "provider": outcome.provider,
+                            "skill_id": outcome.skill_id,
+                            "knowledge_point_id": planned.knowledge_point_id if planned else "",
+                            "artifacts": list(outcome.artifacts),
+                            "revisions": outcome.revision or int(previous.get("revisions") or 0),
+                            "step": int(state.get("step") or 0),
+                            "detail": outcome.detail,
+                            "opened_at": datetime.now(UTC).isoformat(),
+                        }
+                        await deps.runtime_state.save_board(deps.task_id, board)
+                if deps.emit is not None and not outcome.held:
                     deps.emit(
                         "node.completed" if outcome.status in {"completed", "incomplete"} else "node.failed",
                         {
@@ -469,7 +630,11 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                             "step": int(state.get("step") or 0),
                         },
                     )
-                if outcome.learner_message:
+                # Only capabilities explicitly marked conversational may
+                # enter the learner-facing message channel. Other writers
+                # return reusable teaching content for the exclusive dialog
+                # agent instead of speaking in parallel.
+                if outcome.learner_message and info(outcome.capability).conversational:
                     messages.append(outcome.learner_message)
 
         await deps.runtime_state.save_budget(deps.task_id, budget.to_dict())
@@ -482,6 +647,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             "outcomes": [item.to_dict() for item in outcomes],
             "budget": budget.to_dict(),
             "messages": messages,
+            "background_pending": background_pending,
         }
 
     async def observe(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:
@@ -568,6 +734,20 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 "runtime_status": str(RuntimeStatus.REPLANNING),
                 "goal": remaining.to_dict(),
                 "replanning": True,
+            }
+
+        # Background artifact sidecars are deliberately allowed to outlive
+        # this graph turn. Keep the task in the learner-facing waiting state
+        # until those sidecars settle; ``_sweep_holds`` resumes the graph with
+        # a board-driven holds decision instead of treating an empty
+        # foreground outcome as a failure.
+        if bool(state.get("background_pending")):
+            await deps.runtime_state.set_runtime_status(
+                deps.task_id, RuntimeStatus.WAITING_FOR_USER
+            )
+            return {
+                "runtime_status": str(RuntimeStatus.WAITING_FOR_USER),
+                "messages": [],
             }
 
         # A failed or empty round has no new evidence to justify another trip

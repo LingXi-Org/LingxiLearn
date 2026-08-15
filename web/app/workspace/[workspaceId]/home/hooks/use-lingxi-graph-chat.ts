@@ -139,8 +139,20 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
     id: `runtime-graph:${task.id}`,
     title: '实时运行图',
   }
+  const unlocked = new Set(
+    (task.delivery?.queue ?? [])
+      .filter((item) => item.state === 'unlocked' || item.state === 'consumed')
+      .map((item) => item.artifact)
+  )
   const artifactResources = entries
-    .filter(({ key }) => Boolean(task.artifacts[key]?.available))
+    .filter(({ key }) => {
+      const artifact = key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key
+      return Boolean(task.artifacts[key]?.available) && unlocked.has(artifact)
+    })
+    .sort((left, right) => {
+      const order = task.delivery?.order ?? []
+      return order.indexOf(left.key === 'lesson_intro' ? 'lesson-intro' : left.key === 'lecture_deck' ? 'lecture-deck' : left.key) - order.indexOf(right.key === 'lesson_intro' ? 'lesson-intro' : right.key === 'lecture_deck' ? 'lecture-deck' : right.key)
+    })
     .map(({ key, title, path }) => ({
       type: 'file' as const,
       id: `lingxi-artifact:${task.id}:${key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key}`,
@@ -234,7 +246,17 @@ export function useLingxiGraphChat(
       if (eventWorkflowState) setWorkflowState(eventWorkflowState)
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
-        if (artifact) onResourceEventRef.current?.(artifactResourceId(taskId, artifact))
+        if (artifact) onResourceEventRef.current?.(artifactResourceId(taskId, artifact), 'artifact.ready')
+        void currentAdapter
+          .loadTask(taskId)
+          .then((refreshed) => {
+            if (!cancelled) setTask(refreshed)
+          })
+          .catch(() => {})
+      }
+      if (event.kind === 'delivery.unlocked') {
+        const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
+        if (artifact) onResourceEventRef.current?.(artifactResourceId(taskId, artifact), 'delivery.unlocked')
         void currentAdapter
           .loadTask(taskId)
           .then((refreshed) => {

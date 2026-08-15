@@ -227,6 +227,18 @@ export interface AgentTaskSnapshot {
     quiz: { available: boolean; data?: PublicQuiz | null }
     visual: ArtifactSnapshot
   }
+  delivery: {
+    order: string[]
+    queue: Array<{
+      artifact: string
+      task_key: string
+      title?: string
+      sequence?: number
+      state: 'queued' | 'unlocked' | 'consumed'
+      closed_at?: string | null
+    }>
+    cursor: number
+  }
   quiz_submission: QuizSubmissionSnapshot | null
   error: string
   created_at: string | null

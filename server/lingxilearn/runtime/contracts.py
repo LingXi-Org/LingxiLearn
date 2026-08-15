@@ -171,6 +171,14 @@ class PlannedTask(BaseModel):
         return parse(self.capability)
 
 
+class HoldDecision(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    task_key: str
+    action: Literal["revise", "close"]
+    instruction: str = ""
+
+
 class OrchestrationPlan(BaseModel):
     """What the orchestrator decided this round, and why."""
 
@@ -187,6 +195,8 @@ class OrchestrationPlan(BaseModel):
     """Set when the top-ranked capability is not what the learner literally asked for."""
     degraded: bool = False
     """Set when the plan came from the deterministic fallback rather than the model."""
+    holds: list[HoldDecision] = Field(default_factory=list)
+    delivery_order: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _task_ids_are_unique_and_dependencies_resolve(self) -> OrchestrationPlan:
@@ -246,6 +256,8 @@ class TaskOutcome(BaseModel):
     tokens_used: int = 0
     duration_ms: int = 0
     heavy: bool = False
+    held: bool = False
+    revision: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
@@ -257,6 +269,7 @@ __all__ = [
     "DoneCondition",
     "DoneKind",
     "OrchestrationPlan",
+    "HoldDecision",
     "PlannedTask",
     "TaskOutcome",
     "UnknownCapability",

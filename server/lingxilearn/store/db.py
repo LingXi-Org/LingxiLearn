@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 # compatibility DDL explicit and small: production PostgreSQL still uses the
 # normal Alembic chain, while a local SQLite restart upgrades the existing
 # file in place without discarding learner data.
-_SQLITE_SCHEMA_HEAD = "0012_multi_agent_runtime"
+_SQLITE_SCHEMA_HEAD = "0015_agent_hold_board"
 _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "agent_tasks": {
         "title": "TEXT NOT NULL DEFAULT ''",
@@ -88,6 +88,9 @@ _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
         "payload": "JSON NOT NULL DEFAULT '{}'",
         "seq": "INTEGER NOT NULL DEFAULT 0",
         "observed_at": "DATETIME",
+    },
+    "session_state": {
+        "board": "JSON NOT NULL DEFAULT '{}'",
     },
 }
 
@@ -732,6 +735,11 @@ class Repository:
                 row.handoff_result = value
             elif agent == "user_message":
                 row.user_messages = [*(row.user_messages or []), value][-100:]
+            elif agent in {"learning_companion", "learner_interview", "answer_user", "probe_user"}:
+                row.user_messages = [
+                    *(row.user_messages or []),
+                    {"agent": agent, **value},
+                ][-100:]
             elif agent == "visual_explainer":
                 row.visual_result = value
             else:

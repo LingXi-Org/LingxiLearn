@@ -66,8 +66,14 @@ function artifactResources(task: AgentTaskSnapshot | null): LingxiArtifactResour
       available: Boolean(task.artifacts.visual?.available),
     },
   ]
+  const unlocked = new Set(
+    (task.delivery?.queue ?? [])
+      .filter((item) => item.state === 'unlocked' || item.state === 'consumed')
+      .map((item) => item.artifact)
+  )
   const artifactDescriptors = resources
-    .filter((resource) => resource.available)
+    .filter((resource) => resource.available && unlocked.has(resource.kind))
+    .sort((left, right) => (task.delivery?.order ?? []).indexOf(left.kind) - (task.delivery?.order ?? []).indexOf(right.kind))
     .map((resource) => ({ ...resource, id: `lingxi-artifact:${task.id}:${resource.kind}` }))
   return [
     ...artifactDescriptors,

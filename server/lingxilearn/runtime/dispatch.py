@@ -13,8 +13,8 @@ leaves the task unsatisfied so the loop replans.
 
 from __future__ import annotations
 
-import logging
 import asyncio
+import logging
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -180,6 +180,17 @@ class Dispatcher:
             )
 
         if self._deps.emit is not None:
+            if task.inputs.get("revision"):
+                self._deps.emit(
+                    "node.revising",
+                    {
+                        "task_id": task.id,
+                        "capability": task.capability,
+                        "provider": resolution.provider,
+                        "skill_id": resolution.skill_id,
+                        "revising": True,
+                    },
+                )
             self._deps.emit(
                 "node.started",
                 {
@@ -242,6 +253,21 @@ class Dispatcher:
 
         evidence_ids = await self._persist(result)
         satisfied, detail = await self._check_done(task, result, evidence_ids)
+        held = bool(result.artifacts) and satisfied
+        revision = int((task.inputs.get("revision") or {}).get("number") or 0)
+        if held and self._deps.emit is not None:
+            self._deps.emit(
+                "node.held",
+                {
+                    "task_id": task.id,
+                    "capability": task.capability,
+                    "provider": resolution.provider,
+                    "skill_id": resolution.skill_id,
+                    "status": "completed",
+                    "satisfied": True,
+                    "held": True,
+                },
+            )
         return TaskOutcome(
             task_id=task.id,
             capability=task.capability,
@@ -256,6 +282,8 @@ class Dispatcher:
             tokens_used=result.tokens_used,
             duration_ms=int((time.monotonic() - started) * 1000),
             heavy=bool(task.estimated_cost.heavy_artifact),
+            held=held,
+            revision=revision,
         )
 
     # -- internals -----------------------------------------------------------
