@@ -138,7 +138,11 @@ function eventStatus(
     .sort((a, b) => a.sequence - b.sequence)
   let status = current
   for (const event of relevant) {
-    if (['node.started', 'intent.started', 'agent.started', 'model.started'].includes(event.kind))
+    if (
+      ['node.started', 'node.held', 'node.revising', 'intent.started', 'agent.started', 'model.started'].includes(
+        event.kind
+      )
+    )
       status = 'running'
     if (['node.completed', 'node.cached', 'intent.completed', 'agent.completed'].includes(event.kind))
       status = 'complete'

@@ -24,6 +24,9 @@ from .base import ProviderContext, ProviderError, ProviderResult, register
 
 logger = logging.getLogger(__name__)
 
+CURRICULUM_GRAPH_PROMPT = """你是课程知识图构建 Agent。只生成 proposal-only 的知识图 patch JSON，不写数据库。
+只输出 {\"nodes\":[...],\"edges\":[...],\"rationale\":\"...\"}，节点和边必须来自当前主题与已有档案。"""
+
 PREREQ_PROMPT = """你是前置依赖分析 Agent。
 
 只列出真正的推导依赖：每个前置点必须能指出它在目标推导的哪一步被用到。
@@ -296,7 +299,26 @@ async def learner_reflector(context: ProviderContext) -> ProviderResult:
     )
 
 
+@register("curriculum_graph")
+async def curriculum_graph(context: ProviderContext) -> ProviderResult:
+    """Propose a curriculum graph patch without mutating graph storage."""
+
+    if context.model is None:
+        return ProviderResult(
+            status="incomplete",
+            data={"nodes": [], "edges": [], "proposal_only": True},
+            persist_as="curriculum_graph",
+            detail="无可用模型，未生成知识图补丁",
+        )
+    payload = {"topic": context.goal.topic, "knowledge_point": context.knowledge_point_id, "profile": list(context.profile.values())[:30]}
+    agent = create_agent(agent_model(context.model, "curriculum_graph"), system_prompt=CURRICULUM_GRAPH_PROMPT, name="curriculum-graph-builder")
+    parsed = extract_json(message_text(await invoke_agent(agent, HumanMessage(json.dumps(payload, ensure_ascii=False)), context.runtime, agent_name="curriculum_graph", recursion_limit=8))) or {}
+    value = {"nodes": list(parsed.get("nodes") or []), "edges": list(parsed.get("edges") or []), "rationale": str(parsed.get("rationale") or ""), "proposal_only": True}
+    return ProviderResult(data=value, persist_as="curriculum_graph", detail="已生成知识图补丁提案")
+
+
 __all__ = [
+    "curriculum_graph",
     "learner_reflector",
     "prerequisite_analyzer",
     "review_scheduler",

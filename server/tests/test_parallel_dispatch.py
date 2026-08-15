@@ -22,3 +22,15 @@ def test_plan_preserves_dependency_tiers_for_parallel_dispatch() -> None:
 def test_parallel_safety_is_explicit_and_defaults_off() -> None:
     assert _task("safe", parallel_safe=True).estimated_cost.parallel_safe is True
     assert _task("serial").estimated_cost.parallel_safe is False
+
+
+def test_four_independent_artifacts_share_one_tier() -> None:
+    tasks = [
+        _task("intro", parallel_safe=True),
+        _task("visual", parallel_safe=True),
+        _task("deck", parallel_safe=True),
+        _task("quiz", parallel_safe=True),
+    ]
+    assert [[task.id for task in tier] for tier in OrchestrationPlan(tasks=tasks).tiers()] == [
+        ["deck", "intro", "quiz", "visual"]
+    ]

@@ -76,16 +76,14 @@ const CONTROL_PLANE_AGENTS = new Set([
 ])
 
 const LEARNER_FACING_OUTPUT_AGENTS = new Set([
-  'adaptive_pedagogy',
-  'answer_user',
   'learning_companion',
-  'probe_user',
-  'lesson_intro',
+  'learner_interview',
 ])
 
 const CAPABILITY_LABELS: Record<string, string> = {
   'dialog.answer': '即时答疑',
   'dialog.converse': '即时陪聊',
+  'dialog.interview': '了解你的基础',
   'dialog.probe': '检查理解',
   'content.lesson_intro': '生成课程引入',
   'content.deck': '生成互动讲义',
@@ -387,7 +385,7 @@ function reduceReasoningSteps(
       }
       continue
     }
-    if (!currentPlan || !['node.started', 'node.retrying', 'node.appeared', 'node.completed', 'node.failed'].includes(event.kind)) continue
+    if (!currentPlan || !['node.started', 'node.retrying', 'node.held', 'node.revising', 'node.appeared', 'node.completed', 'node.failed'].includes(event.kind)) continue
     {
       const taskId = stringValue(payload.task_id)
       if (!taskId) continue
@@ -401,7 +399,7 @@ function reduceReasoningSteps(
         reasoningStep(
           id,
           existing.title,
-          event.kind === 'node.retrying'
+          event.kind === 'node.retrying' || event.kind === 'node.revising' || event.kind === 'node.held'
             ? '正在根据新的学习证据重试。'
             : stringValue(payload.detail) || existing.summary,
           event.kind === 'node.failed'

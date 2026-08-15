@@ -88,6 +88,10 @@ _AGENT_FORCE_FLUSH = frozenset(
         "tool.call.delta",
         "tool.result",
         "artifact.ready",
+        "node.held",
+        "node.revising",
+        "delivery.queued",
+        "delivery.unlocked",
         "task.cancelled",
         "run.paused",
         "run.resumed",
@@ -359,6 +363,11 @@ class Service:
         self._workspace_projection_lock = asyncio.Lock()
         self._agent_slots = asyncio.Semaphore(max(1, self.settings.agent_concurrency))
         self._sidecar_slots = asyncio.Semaphore(max(1, self.settings.agent_sidecar_concurrency))
+        self._board_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._hold_sweep_locks = self._board_locks
+        self._hold_sweep_pending: set[str] = set()
+        self._conversation_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._conversation_queue: defaultdict[str, asyncio.Queue[dict[str, Any]]] = defaultdict(asyncio.Queue)
 
     # -- lifecycle -------------------------------------------------------
 
@@ -502,6 +511,7 @@ class Service:
                 prior_results=prior_results,
                 prior_artifacts=prior_artifacts,
                 schedule_background=(lambda capability, inputs: self.schedule_capability(task_id, learner_id, capability, inputs)),
+                board_lock=self._board_locks[task_id],
             ),
             checkpointer=self.checkpointer,
             store=self.graph_store,
@@ -801,6 +811,14 @@ class Service:
             "agents": _agents_from_trace(decisions, sidecars),
             "decisions": decisions,
             "artifacts": artifacts,
+            "delivery": {
+                "order": list(
+                    (session_state.get("board") or {}).get("order")
+                    or ["lesson-intro", "visual", "lecture-deck", "quiz"]
+                ),
+                "queue": list((session_state.get("board") or {}).get("delivery") or []),
+                "cursor": int((session_state.get("board") or {}).get("cursor") or 0),
+            },
             "quiz_submission": await _submission_snapshot(self.repo, record.id),
             "error": record.error,
             "created_at": record.created_at.isoformat() if record.created_at else None,
@@ -836,6 +854,10 @@ class Service:
             for key, column in result_columns
             if isinstance(value := getattr(record, column, None), dict) and value
         }
+        messages = list(getattr(record, "user_messages", None) or [])
+        for item in messages[-20:]:
+            if isinstance(item, dict) and item.get("agent"):
+                results[str(item["agent"])] = dict(item)
 
         artifact_paths = (
             ("lesson-intro", self.agent_artifacts.lesson_intro_path(record.id)),
@@ -1177,8 +1199,10 @@ class Service:
             raise ValueError("message must not be empty")
         attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
         if record.status != "awaiting_user":
-            await self.runtime_state.push_interjection(task_id, {"message": message.strip(), "attachments": attachment_refs, "received_at": datetime.now(UTC).isoformat()})
-            await self.schedule_capability(task_id, record.learner_id, "dialog.converse", {"message": message.strip(), "attachments": attachment_refs})
+            item = {"message": message.strip(), "attachments": attachment_refs, "received_at": datetime.now(UTC).isoformat()}
+            await self.runtime_state.push_interjection(task_id, item)
+            await self._conversation_queue[task_id].put(item)
+            self._spawn(self._serve_conversation(task_id, record.learner_id))
             return
         self._spawn(
             self._drive_agent_task(
@@ -1223,6 +1247,10 @@ class Service:
             total_score=result["total_score"],
             total_points=result["total_points"],
         )
+        try:
+            await self.ack_delivery(task_id, "quiz", learner_id=record.learner_id)
+        except (KeyError, ValueError):
+            pass
         self._spawn(
             self._drive_agent_task(
                 task_id,
@@ -1232,6 +1260,31 @@ class Service:
             )
         )
         return {"status": "accepted", "submission": await _submission_snapshot(self.repo, task_id)}
+
+    async def ack_delivery(self, task_id: str, artifact: str, *, learner_id: str | None = None) -> dict[str, Any]:
+        record = await (self.repo.get_agent_task_for_learner(task_id, learner_id) if learner_id else self.repo.get_agent_task(task_id))
+        if record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        async with self._hold_sweep_locks[task_id]:
+            board = await self.runtime_state.get_board(task_id)
+            queue = list(board.get("delivery") or [])
+            match = next((item for item in queue if item.get("artifact") == artifact), None)
+            if match is None:
+                raise KeyError(f"unknown delivery artifact: {artifact}")
+            if match.get("state") == "consumed":
+                return {"artifact": artifact, "cursor": int(board.get("cursor") or 0), "delivery": queue}
+            cursor = int(board.get("cursor") or 0)
+            if cursor >= len(queue) or queue[cursor].get("artifact") != artifact:
+                raise ValueError("delivery_not_unlocked")
+            queue[cursor]["state"] = "consumed"
+            cursor += 1
+            if cursor < len(queue):
+                queue[cursor]["state"] = "unlocked"
+                await self.repo.append_agent_events(task_id, [{"kind": "delivery.unlocked", "agent": "delivery", "payload": {"artifact": queue[cursor].get("artifact"), "cursor": cursor}}])
+            board["delivery"] = queue
+            board["cursor"] = cursor
+            await self.runtime_state.save_board(task_id, board)
+            return {"artifact": artifact, "cursor": cursor, "delivery": queue}
 
     async def _drive_agent_task(
         self,
@@ -1265,6 +1318,7 @@ class Service:
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
     ) -> None:
+        self._hold_sweep_pending.discard(task_id)
         if self.agent_model is None:
             await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
             self._notify_agent(task_id)
@@ -1644,6 +1698,39 @@ class Service:
         if sidecar["status"] == "queued":
             self._spawn(self._run_capability_sidecar(sidecar["id"]))
 
+    async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
+        async with self._conversation_locks[task_id]:
+            queue = self._conversation_queue[task_id]
+            while not queue.empty():
+                item = await queue.get()
+                while True:
+                    rows = await self.repo.list_agent_sidecars(task_id, learner_id)
+                    current = next((row for row in rows if row.get("kind") == "dialog.converse"), None)
+                    current_input = dict(current.get("input") or {}).get("inputs") if current else None
+                    if (
+                        current is None
+                        or current.get("status") not in {"queued", "running"}
+                        or current_input == item
+                    ):
+                        await self.schedule_capability(
+                            task_id, learner_id, "dialog.converse", item
+                        )
+                        rows = await self.repo.list_agent_sidecars(task_id, learner_id)
+                        current = next(
+                            (row for row in rows if row.get("kind") == "dialog.converse"),
+                            None,
+                        )
+                    # If another conversation sidecar was already in flight,
+                    # wait for it and retry this exact queued message rather
+                    # than silently consuming the message while reusing the
+                    # unique (task_id, kind) row.
+                    if current is None or current.get("status") not in {"queued", "running"}:
+                        break
+                    if current_input is not None and current_input != item:
+                        await asyncio.sleep(0.05)
+                        continue
+                    await asyncio.sleep(0.05)
+
     async def _run_capability_sidecar(self, sidecar_id: str) -> None:
         async with self._sidecar_slots:
             await self._run_capability_sidecar_inner(sidecar_id)
@@ -1664,6 +1751,11 @@ class Service:
             [{"kind": "sidecar.started", "agent": capability,
               "payload": {"sidecar_id": sidecar_id, "capability": capability}}],
         )
+        if isinstance(payload.get("inputs"), dict) and payload["inputs"].get("revision"):
+            await self.repo.append_agent_events(
+                task_id,
+                [{"kind": "node.revising", "agent": capability, "payload": {"capability": capability, "revising": True}}],
+            )
         self._notify_agent(task_id)
         try:
             record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
@@ -1696,12 +1788,16 @@ class Service:
             dispatcher.seed_results(prior_results)
             dispatcher.seed_artifacts(prior_artifacts)
 
+            task_inputs = dict(payload.get("inputs") or {})
+            runtime_meta = dict(task_inputs.pop("__runtime", {}) or {})
+            board = await self.runtime_state.get_board(task_id)
+            task_inputs["__board"] = board
             task = PlannedTask(
-                id=f"bg-{capability}",
+                id=str(runtime_meta.get("task_id") or f"bg-{capability}"),
                 capability=capability,
-                knowledge_point_id=goal.knowledge_points[0] if goal.knowledge_points else "",
-                inputs=dict(payload.get("inputs") or {}),
-                done_when=DoneCondition(kind="always"),
+                knowledge_point_id=str(runtime_meta.get("knowledge_point_id") or (goal.knowledge_points[0] if goal.knowledge_points else "")),
+                inputs=task_inputs,
+                done_when=DoneCondition.model_validate(runtime_meta.get("done_when")) if runtime_meta.get("done_when") else (DoneCondition(kind="artifact_exists", artifact=str((runtime_meta.get("artifacts") or [""])[0])) if runtime_meta.get("artifacts") else DoneCondition(kind="always")),
                 rationale=str(payload.get("label") or capability),
                 estimated_cost=Cost(blocking=False),
             )
@@ -1715,8 +1811,31 @@ class Service:
                 raise RuntimeError(outcome.detail or f"{capability} failed")
 
             for key, value in dispatcher.results.items():
-                if key not in prior_results:
-                    await self.repo.update_agent_task_output(task_id, key, _json_safe(value))
+                # Revisions intentionally reuse the provider's persist key;
+                # writing only previously unseen keys would leave the durable
+                # result pointing at the pre-revision artifact.
+                await self.repo.update_agent_task_output(task_id, key, _json_safe(value))
+
+            if outcome.held:
+                async with self._board_locks[task_id]:
+                    board = await self.runtime_state.get_board(task_id)
+                    board.setdefault("holds", {})
+                    task_key = str(runtime_meta.get("task_key") or f"0:{task.id}")
+                    previous = dict(board["holds"].get(task_key) or {})
+                    board["holds"][task_key] = {
+                        "task_id": previous.get("task_id") or task.id,
+                        "capability": outcome.capability,
+                        "provider": outcome.provider,
+                        "skill_id": outcome.skill_id,
+                        "knowledge_point_id": task.knowledge_point_id,
+                        "artifacts": list(outcome.artifacts),
+                        "revisions": outcome.revision or int(previous.get("revisions") or 0),
+                        "step": int(runtime_meta.get("step") or 0),
+                        "detail": outcome.detail,
+                        "opened_at": datetime.now(UTC).isoformat(),
+                    }
+                    await self.runtime_state.save_board(task_id, board)
+                    await self.repo.append_agent_events(task_id, [{"kind": "node.held", "agent": outcome.provider, "payload": {"task_id": task.id, "task_key": task_key, "capability": outcome.capability, "held": True}}])
 
             await self.repo.finish_agent_sidecar(
                 sidecar_id,
@@ -1741,6 +1860,23 @@ class Service:
             )
         finally:
             self._notify_agent(task_id)
+            await self._sweep_holds(task_id, learner_id)
+
+    async def _sweep_holds(self, task_id: str, learner_id: str) -> None:
+        async with self._hold_sweep_locks[task_id]:
+            if task_id in self._hold_sweep_pending:
+                return
+            record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            if record is None or record.status != "awaiting_user":
+                return
+            sidecars = await self.repo.list_agent_sidecars(task_id, learner_id)
+            if any(item.get("status") in {"queued", "running"} for item in sidecars):
+                return
+            board = await self.runtime_state.get_board(task_id)
+            if not (board.get("holds") or {}):
+                return
+            self._hold_sweep_pending.add(task_id)
+        self._spawn(self._drive_agent_task(task_id, learner_id, "", resume={"kind": "holds_ready"}))
 
     async def answer(self, session_id: str, payload: Any, learner_id: str | None = None) -> None:
         record = (

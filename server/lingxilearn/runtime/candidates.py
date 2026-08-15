@@ -137,6 +137,9 @@ def _precondition_block(
         case Capability.CONTENT_DECK:
             if view.has_deck:
                 return "讲义课件已存在"
+        case Capability.CONTENT_VISUAL:
+            if view.has_visual:
+                return "可视化讲解已存在"
         case Capability.ASSESS_GENERATE:
             if view.has_open_quiz:
                 return "已有未作答的检测题"

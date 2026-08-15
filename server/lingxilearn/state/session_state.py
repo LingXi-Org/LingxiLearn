@@ -257,7 +257,7 @@ DEFAULT_BUDGET: dict[str, Any] = {
     "wall_ms_used": 0,
     "wall_ms_budget": 1_800_000,
     "heavy_artifacts_used": 0,
-    "max_heavy_artifacts": 4,
+    "max_heavy_artifacts": 6,
     "forged_skills_used": 0,
     "max_forged_skills": 1,
 }

@@ -12,8 +12,8 @@ run.
 
 from __future__ import annotations
 
-import logging
 import asyncio
+import logging
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -112,6 +112,7 @@ def session_state_dict(row: SessionState) -> dict[str, Any]:
         "plan": dict(row.plan or {}),
         "budget": dict(row.budget or {}),
         "interjections": list(row.interjections or []),
+        "board": dict(row.board or {}),
         "revision": int(row.revision or 0),
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -450,6 +451,23 @@ class RuntimeStateRepository:
             snapshot = session_state_dict(row)
             await s.commit()
         return snapshot
+
+    async def get_board(self, task_id: str) -> dict[str, Any]:
+        async with self.db.session() as s:
+            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            return dict(row.board or {}) if row is not None else {}
+
+    async def save_board(self, task_id: str, board: dict[str, Any]) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            if row is None:
+                return None
+            row.board = dict(board)
+            row.revision = int(row.revision or 0) + 1
+            row.updated_at = datetime.now(UTC)
+            snapshot = session_state_dict(row)
+            await s.commit()
+            return snapshot
 
     async def save_budget(self, task_id: str, budget: dict[str, Any]) -> None:
         async with self.db.session() as s:

@@ -12,11 +12,12 @@ metadata:
   output-contract: interactive-lecture-deck-result.v2.1
   execution-mode: artifact-generation
   phase: prepare
-  critical-path: true
+  critical-path: false
   learner-facing: artifact
   state-write-mode: none
   parallel-safe: true
-  latency-class: interactive
+  latency-class: background
+  blocking: false
   default-blocking-hop-budget: "0"
   capabilities: content.deck
   status-line: 正在把讲义拆成幻灯片…

@@ -192,13 +192,15 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
   const activeResourceParamRef = useRef(activeResourceParam)
   activeResourceParamRef.current = activeResourceParam
 
-  function handleResourceEvent(resourceId: string) {
+  function handleResourceEvent(
+    resourceId: string,
+    eventKind?: 'artifact.ready' | 'delivery.unlocked'
+  ) {
     const isLingxiArtifact = resourceId.startsWith('lingxi-artifact:')
 
-    // Every newly generated Lingxi teaching artifact is a deliverable. It must
-    // become the active native Sim resource tab immediately, even when the
-    // learner is currently viewing another artifact or the runtime graph.
-    // Other background resources retain Sim's normal activity-marker behavior.
+    // Artifact readiness is only a notification. The resource hook exposes
+    // unlocked/consumed delivery items; the cursor advancement controls when
+    // a resource may become active, so simultaneous artifacts do not抢占 each other.
     if (isLingxiArtifact) {
       setResourceActivityIds((current) => {
         if (!current.has(resourceId)) return current
@@ -206,8 +208,11 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
         next.delete(resourceId)
         return next
       })
-      if (activeResourceParamRef.current !== resourceId) setActiveResourceUrl(resourceId)
-      setIsResourceCollapsed(false)
+      if (eventKind === 'delivery.unlocked' && activeResourceParamRef.current !== resourceId) {
+        setResourceActivityIds((current) => new Set(current).add(resourceId))
+        if (isResourceCollapsedRef.current) setIsResourceCollapsed(false)
+        if (!activeResourceParamRef.current) setActiveResourceUrl(resourceId)
+      }
       return
     }
 

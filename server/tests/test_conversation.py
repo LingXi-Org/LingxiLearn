@@ -15,7 +15,10 @@ def test_realtime_conversation_capabilities_are_registry_backed() -> None:
     assert str(Capability.DIALOG_PROBE) in {
         str(capability) for capability in manifests["socratic-prober"].capabilities
     }
-    assert manifests["learning-companion"].cost["blocking"] is False
+    assert manifests["learning-companion"].cost["blocking"] is True
+    assert str(Capability.DIALOG_INTERVIEW) in {
+        str(capability) for capability in manifests["learner-interview"].capabilities
+    }
 
 
 def test_every_discovered_skill_has_a_user_safe_status_line() -> None:

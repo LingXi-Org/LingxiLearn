@@ -30,6 +30,7 @@ from .contracts import (
     CandidateAction,
     Cost,
     DoneCondition,
+    HoldDecision,
     OrchestrationPlan,
     PlannedTask,
 )
@@ -48,12 +49,13 @@ SYSTEM_PROMPT = """你是 LingxiLearn 的学习计划决策器。每一轮重新
 宿主只提供候选能力和事实成本；不能发明列表之外的动作，不能写 agent 名——只写 capability。
 
 规则：
-- 一轮最多 3 个任务。
+- 一轮最多 6 个任务。
 - 每个任务必须有 done_when，且必须可机器判定；「agent 跑完」不是完成条件。
 - 每个任务必须有 rationale，能直接展示给学习者。
 - 如果打算做的事和学习者字面要求不同（换了知识点，或忽略了明确请求），
   必须写 negotiation 并置 awaits_user=true。
-- 重资产（讲义/课件/可视化）一轮最多一个。
+- 同一知识点的相关产物应在同一轮一起下发；彼此无真实数据依赖时 depends_on 必须为空。
+- 输出 holds（对已有产物 revise 或 close）和 delivery_order（学生学习顺序，不是生成顺序）。
 - 候选之间 utility 差距小于 0.05 时可以按连贯性选择；否则跟随打分。
 
 done_when 可用类型：artifact_exists / artifact_valid / evidence_observed /
@@ -64,7 +66,9 @@ profile_reaches / user_replied / quiz_graded / always / all_of / any_of。
 "scores":[{"capability":"...","knowledge_point_id":"...","gain":0.0,"utility":0.0,"reason":"..."}],
  "tasks":[{"id":"t1","capability":"...","knowledge_point_id":"...",
            "done_when":{"kind":"..."},"rationale":"...","depends_on":[]}],
- "goal_satisfied_when":{"kind":"..."},"awaits_user":false,"negotiation":null}"""
+ "goal_satisfied_when":{"kind":"..."},"awaits_user":false,"negotiation":null,
+ "holds":[{"task_key":"step:task-id","action":"revise|close","instruction":"..."}],
+ "delivery_order":["lesson-intro","visual","lecture-deck","quiz"]}"""
 
 def unavailable_plan(*, candidates: Sequence[CandidateAction]) -> OrchestrationPlan:
     """Fail closed when a control-plane model cannot make a decision.
@@ -117,6 +121,8 @@ def _default_done_condition(candidate: CandidateAction) -> DoneCondition:
             )
         case "dialog.converse":
             return DoneCondition(kind="evidence_observed", signal="self_report")
+        case "dialog.interview":
+            return DoneCondition(kind="evidence_observed", signal="self_report")
         case "dialog.probe":
             return DoneCondition(kind="user_replied")
     return DoneCondition(kind="always")
@@ -141,6 +147,7 @@ def _repair(
     world: WorldState,
     candidates: Sequence[CandidateAction],
     interjection_message: str = "",
+    board: Mapping[str, Any] | None = None,
 ) -> OrchestrationPlan | None:
     """Turn model output into a valid plan, or ``None`` if it cannot be saved.
 
@@ -201,9 +208,51 @@ def _repair(
     elif any(task.capability == "dialog.probe" for task in tasks):
         tasks = [task for task in tasks if task.capability != "dialog.converse"]
 
-    if not tasks and not parsed.get("awaits_user"):
+    board = board or {}
+    known_holds = set((board.get("holds") or {}).keys())
+    holds: list[HoldDecision] = []
+    for raw_hold in parsed.get("holds") or []:
+        if not isinstance(raw_hold, Mapping):
+            continue
+        task_key = str(raw_hold.get("task_key") or "")
+        if task_key not in known_holds:
+            continue
+        action = str(raw_hold.get("action") or "close")
+        if action not in {"revise", "close"}:
+            action = "close"
+        instruction = str(raw_hold.get("instruction") or "").strip()
+        if action == "revise" and not instruction:
+            action = "close"
+        holds.append(HoldDecision(task_key=task_key, action=action, instruction=instruction))
+    # A control-plane round may contain only hold decisions.  This is valid
+    # even when every artifact candidate is currently precondition-blocked:
+    # closing or revising an existing hold is driven by the board, not by a
+    # freshly generated candidate.  Do not discard that state-only decision.
+    if not tasks and not parsed.get("awaits_user") and not holds:
         return None
 
+    known_artifacts = {"lesson-intro", "visual", "lecture-deck", "quiz"}
+    delivery_order: list[str] = []
+    for item in parsed.get("delivery_order") or []:
+        item = str(item)
+        if item in known_artifacts and item not in delivery_order:
+            delivery_order.append(item)
+    produced_order = list(board.get("produced_order") or [])
+    produced_order.extend(
+        str(artifact)
+        for row in (board.get("holds") or {}).values()
+        if isinstance(row, Mapping)
+        for artifact in (row.get("artifacts") or [])
+    )
+    produced_order.extend(
+        str(item.get("artifact"))
+        for item in (board.get("delivery") or [])
+        if isinstance(item, Mapping) and item.get("artifact")
+    )
+    for item in produced_order:
+        item = str(item)
+        if item in known_artifacts and item not in delivery_order:
+            delivery_order.append(item)
     try:
         goal_when = (
             DoneCondition.model_validate(parsed["goal_satisfied_when"])
@@ -233,6 +282,8 @@ def _repair(
             else None,
             candidates_considered=list(candidates),
             deviates_from_goal=deviating,
+            holds=holds,
+            delivery_order=delivery_order,
         )
     except ValueError:
         logger.info("orchestrator plan failed validation", exc_info=True)
@@ -248,12 +299,14 @@ async def plan(
     model: Any | None = None,
     runtime: Any = None,
     user_message: Mapping[str, Any] | None = None,
+    board: Mapping[str, Any] | None = None,
 ) -> OrchestrationPlan:
     """Produce this round's plan from the current state."""
 
     registry_candidates = generate(goal=goal, world=world, skills=skills)
     candidates = eligible_only(registry_candidates)
-    if model is None or not candidates:
+    board_holds = (board or {}).get("holds") or {}
+    if model is None or (not candidates and not board_holds):
         return unavailable_plan(candidates=registry_candidates)
 
     payload = {
@@ -263,6 +316,18 @@ async def plan(
             "prerequisites": [_view_dict(item) for item in world.prerequisites],
         },
         "budget": budget.to_dict(),
+        "held": [
+            {"task_key": key, "capability": value.get("capability", ""),
+             "artifacts": list(value.get("artifacts") or []),
+             "revisions": int(value.get("revisions") or 0),
+             "detail": value.get("detail", "")}
+            for key, value in ((board or {}).get("holds") or {}).items()
+        ],
+        "delivery": {
+            "order": list((board or {}).get("order") or []),
+            "queued": list((board or {}).get("delivery") or []),
+            "cursor": int((board or {}).get("cursor") or 0),
+        },
         "learner_message": dict(user_message or {}),
         "candidates": [
             {
@@ -303,7 +368,10 @@ async def plan(
 
     scores = parsed.get("scores") if isinstance(parsed, Mapping) else None
     if not isinstance(scores, list):
-        return unavailable_plan(candidates=registry_candidates)
+        if board_holds and parsed.get("holds"):
+            scores = []
+        else:
+            return unavailable_plan(candidates=registry_candidates)
     by_key = {(item.capability, item.knowledge_point_id): item for item in candidates}
     judged: dict[tuple[str, str], CandidateAction] = {}
     for raw in scores:
@@ -323,7 +391,11 @@ async def plan(
             "utility": utility,
             "reason": str(raw.get("reason") or candidate.reason).strip(),
         })
-    if not judged:
+    # When the board is the only actionable source of work, the model may
+    # quite correctly return no candidate scores and only holds/delivery.  In
+    # that case preserve the state decision instead of replacing it with the
+    # empty fallback plan.
+    if not judged and not ((board or {}).get("holds") and parsed.get("holds")):
         return unavailable_plan(candidates=registry_candidates)
     candidates = sorted([
         judged.get((item.capability, item.knowledge_point_id), item.model_copy(update={"gain": 0.0, "utility": 0.0}))
@@ -337,6 +409,7 @@ async def plan(
         world=world,
         candidates=candidates,
         interjection_message=str((user_message or {}).get("message") or "").strip(),
+        board=board,
     )
     if repaired is None:
         return unavailable_plan(candidates=candidates)

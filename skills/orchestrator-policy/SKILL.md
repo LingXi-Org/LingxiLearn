@@ -1,5 +1,5 @@
 ---
-name: learning-plan-decision
+name: orchestrator-policy
 description: >-
   Evaluate learning utility and choose the next actions in one model decision. The contract keeps
   utility evaluation and plan orchestration as two separately auditable skills while exposing one
@@ -48,7 +48,7 @@ metadata:
   "goal": { "...goal.v1..." },
   "profile": { "target": {...}, "prerequisites": [...], "due_for_review": [...] },
   "budget": {"steps_used": 3, "max_steps": 24, "replans_used": 1, "max_replans": 6,
-             "heavy_artifacts_used": 1, "max_heavy_artifacts": 4},
+             "heavy_artifacts_used": 1, "max_heavy_artifacts": 6},
   "candidates": [
     {"capability": "graph.prerequisite", "utility": 0.72, "gain": 0.55, "cost": 0.76,
      "reason": "尚未分析该知识点的前置依赖", "skill_id": "prerequisite-analyzer"},
@@ -80,7 +80,7 @@ metadata:
 
 ## 规则
 
-1. **一轮最多 3 个任务**。计划长了就不是计划，是猜测；未达成会重规划。
+1. **一轮最多 6 个任务**。计划长了就不是计划，是猜测；未达成会重规划。
 2. **每个任务必须有 `done_when`，而且必须可机器判定**。
    「agent 跑完」不是完成条件。可用类型：`artifact_exists` / `artifact_valid` /
    `evidence_observed` / `profile_reaches` / `user_replied` / `quiz_graded` /
@@ -89,7 +89,8 @@ metadata:
 4. **偏离用户字面要求时必须写 `negotiation` 并置 `awaits_user=true`**。
    护栏会拒绝「偏离但没协商」的计划。
 5. **不要为了用满预算而加任务**。剩余步数不是必须花掉的。
-6. **重资产（讲义 / 课件 / 可视化）一轮最多一个**，且要检查 `heavy_artifacts_used`。
+6. **同一知识点的相关产物应在同一轮一起下发**；彼此无真实数据依赖时 `depends_on` 必须为空。
+7. 输出 `holds` 与 `delivery_order`；`delivery_order` 是学生学习顺序，不是生成顺序。
 7. **不要写 agent 名**。`capability` 是唯一的选择维度；谁来执行由注册表在运行时解析。
 
 ## 排序直觉

@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     # A small production VM should queue expensive graph executions instead
     # of allowing every request and sidecar to retain a full model context.
     agent_concurrency: int = 1
-    agent_sidecar_concurrency: int = 4
+    agent_sidecar_concurrency: int = 6
     agent_parallel_dispatch: bool = True
     agent_web_timeout: float = 20.0
     # LingxiGraph 2.2.0 cache-first projection keeps each agent's stable

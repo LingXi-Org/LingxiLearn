@@ -14,11 +14,12 @@ metadata:
   output-contract: lesson-intro-html.v1
   execution-mode: direct-editorial-html
   phase: prepare
-  critical-path: true
+  critical-path: false
   learner-facing: artifact
   state-write-mode: none
   parallel-safe: true
-  latency-class: interactive
+  latency-class: background
+  blocking: false
   capabilities: content.lesson_intro
   status-line: 正在准备课程引入…
   provider: lesson_intro

@@ -291,6 +291,7 @@ function LingxiTaskArtifactResource({ parsed }: { parsed: ParsedTaskResource | n
           ])
         )
         await api.submitAgentQuiz(parsed.taskId, crypto.randomUUID(), normalizedAnswers)
+        await api.ackAgentDelivery(parsed.taskId, 'quiz')
         setSubmittedAnswers(answers)
         await refresh()
       } catch (cause) {
@@ -308,12 +309,23 @@ function LingxiTaskArtifactResource({ parsed }: { parsed: ParsedTaskResource | n
     if (!artifactUrl)
       return <div className='p-6 text-[var(--text-secondary)] text-sm'>正在加载学习产物…</div>
     return (
-      <iframe
-        className='h-full w-full border-0 bg-white'
-        src={artifactUrl}
-        title='LingxiGraph 学习产物'
-        sandbox='allow-scripts allow-same-origin allow-forms allow-popups'
-      />
+      <div className='flex h-full flex-col'>
+        <iframe
+          className='min-h-0 flex-1 w-full border-0 bg-white'
+          src={artifactUrl}
+          title='LingxiGraph 学习产物'
+          sandbox='allow-scripts allow-same-origin allow-forms allow-popups'
+        />
+        {task?.delivery.queue.some((item) => item.artifact === parsed.kind && item.state === 'unlocked') && (
+          <Button
+            className='m-3'
+            variant='primary'
+            onClick={() => void api.ackAgentDelivery(parsed.taskId, parsed.kind).then(() => refresh())}
+          >
+            继续下一步
+          </Button>
+        )}
+      </div>
     )
   }
 

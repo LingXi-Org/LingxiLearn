@@ -723,6 +723,21 @@ async def submit_agent_quiz(
         raise HTTPException(status_code=409 if detail in {"already_submitted", "task_not_waiting:awaiting_user"} or detail.startswith("task_not_waiting") else 400, detail=detail) from exc
 
 
+@router.post("/agent-tasks/{task_id}/delivery/{artifact}/ack")
+async def ack_agent_delivery(
+    task_id: str,
+    artifact: str,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    try:
+        return await service_of(request).ack_delivery(task_id, artifact, learner_id=context.learner_id)
+    except KeyError as exc:
+        raise not_found() from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get("/agent-tasks/{task_id}/artifacts/{kind}")
 async def get_agent_artifact(
     task_id: str,

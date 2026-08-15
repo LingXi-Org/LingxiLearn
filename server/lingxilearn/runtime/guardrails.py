@@ -23,7 +23,7 @@ from typing import Any
 
 from ..state.capabilities import Capability, UnknownCapability, info, parse
 from ..state.session_state import Goal
-from .contracts import OrchestrationPlan, PlannedTask
+from .contracts import HoldDecision, OrchestrationPlan, PlannedTask
 
 
 class Violation(StrEnum):
@@ -40,8 +40,10 @@ class Violation(StrEnum):
     TOO_MANY_TASKS = "too_many_tasks"
 
 
-MAX_TASKS_PER_ROUND = 3
+MAX_TASKS_PER_ROUND = 6
 """A longer plan is a guess; the loop replans after each round anyway."""
+MAX_REVISIONS_PER_TASK = 2
+MAX_OPEN_HOLDS = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +100,7 @@ class Budget:
     wall_ms_used: int = 0
     wall_ms_budget: int = 1_800_000
     heavy_artifacts_used: int = 0
-    max_heavy_artifacts: int = 4
+    max_heavy_artifacts: int = 6
     forged_skills_used: int = 0
     max_forged_skills: int = 1
 
@@ -236,6 +238,7 @@ def check_plan(
     allowed: list[PlannedTask] = []
     heavy_planned = budget.heavy_artifacts_used
 
+    conversational_planned = 0
     for task in plan.tasks[:MAX_TASKS_PER_ROUND]:
         try:
             capability = parse(task.capability)
@@ -258,6 +261,18 @@ def check_plan(
                 )
             )
             continue
+
+        if info(capability).conversational:
+            conversational_planned += 1
+            if conversational_planned > 1:
+                findings.append(
+                    GuardrailFinding(
+                        Violation.TOO_MANY_TASKS,
+                        "一轮最多安排一个对话类任务",
+                        task.id,
+                    )
+                )
+                continue
 
         if not task.rationale.strip():
             findings.append(
@@ -307,6 +322,49 @@ def check_plan(
     return GuardrailVerdict(findings=tuple(findings), allowed_tasks=tuple(allowed))
 
 
+def apply_hold_policy(
+    decisions: Sequence[HoldDecision],
+    board: Mapping[str, Any],
+    budget: Budget,
+    *,
+    goal_satisfied: bool = False,
+) -> list[HoldDecision]:
+    """Apply deterministic hold limits before any model decision is executed."""
+
+    holds = dict(board.get("holds") or {})
+    result: list[HoldDecision] = []
+    for decision in decisions:
+        row = holds.get(decision.task_key)
+        if row is None:
+            continue
+        revisions = int(row.get("revisions") or 0)
+        action = decision.action
+        instruction = decision.instruction.strip()
+        if action == "revise" and not instruction:
+            action = "close"
+        if (
+            action == "revise"
+            and (
+                revisions >= MAX_REVISIONS_PER_TASK
+                or budget.exhausted() is not None
+                or goal_satisfied
+                or len(holds) > MAX_OPEN_HOLDS
+            )
+        ):
+            action = "close"
+            instruction = ""
+        result.append(HoldDecision(task_key=decision.task_key, action=action, instruction=instruction))
+    if len(holds) > MAX_OPEN_HOLDS:
+        known = {item.task_key for item in result}
+        result.extend(
+            HoldDecision(task_key=key, action="close")
+            for key in holds
+            if key not in known
+        )
+        return [item.model_copy(update={"action": "close", "instruction": ""}) for item in result]
+    return result
+
+
 def check_replan(budget: Budget) -> GuardrailFinding | None:
     """Whether another replan is permitted."""
 
@@ -329,6 +387,9 @@ def degrade_message(findings: Sequence[GuardrailFinding]) -> str:
 
 __all__ = [
     "MAX_TASKS_PER_ROUND",
+    "MAX_REVISIONS_PER_TASK",
+    "MAX_OPEN_HOLDS",
+    "apply_hold_policy",
     "Budget",
     "GuardrailFinding",
     "GuardrailVerdict",
