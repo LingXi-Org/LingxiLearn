@@ -237,10 +237,9 @@ function FilesPage() {
   )
 }
 
-function TablesPage() {
+export function TablesPage() {
   const router = useRouter()
   const [tables, setTables] = useState<WorkspaceTableItem[]>([])
-  const [name, setName] = useState('')
   const reload = useCallback(() => {
     void api
       .workspaceTables()
@@ -250,30 +249,13 @@ function TablesPage() {
   useEffect(() => {
     reload()
   }, [reload])
-  const create = async (event: React.FormEvent) => {
-    event.preventDefault()
-    if (!name.trim()) return
-    await api.createWorkspaceTable(name.trim())
-    setName('')
-    reload()
-  }
   return (
     <Resource>
-      <Resource.Header icon={TableIcon} title='Tables' />
-      <Resource.Options />
+      <Resource.Header icon={TableIcon} title='学习记录' />
       <div className='min-h-0 flex-1 overflow-y-auto p-4'>
         <p className='mx-auto mb-4 max-w-[960px] text-[12px] text-[var(--text-muted)]'>
-          七类原生列类型：string、number、currency、boolean、date、json、select。
+          以下内容由学习过程自动生成，仅供查看。
         </p>
-        <form className='mb-4 flex gap-2' onSubmit={(event) => void create(event)}>
-          <input
-            className='min-w-0 flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-[12px] text-[var(--text-primary)]'
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder='表格名称'
-          />
-          <ActionButton type='submit'>新建表格</ActionButton>
-        </form>
         <Resource.Table
           columns={[
             { id: 'name', header: '表格' },
@@ -573,7 +555,6 @@ export function LingxiResourcePage({ kind }: { kind: ResourceKind }) {
 export function LingxiTableDetail({ tableId }: { tableId: string }) {
   const [table, setTable] = useState<WorkspaceTableItem | null>(null)
   const [rows, setRows] = useState<Array<Record<string, any>>>([])
-  const [draft, setDraft] = useState('{}')
   const reload = useCallback(() => {
     void Promise.all([api.workspaceTable(tableId), api.workspaceTableRows(tableId)])
       .then(([tableResult, rowResult]) => {
@@ -585,43 +566,40 @@ export function LingxiTableDetail({ tableId }: { tableId: string }) {
   useEffect(() => {
     reload()
   }, [reload])
-  const add = async () => {
-    try {
-      const data = JSON.parse(draft)
-      await api.createWorkspaceRows(tableId, [data])
-      setDraft('{}')
-      reload()
-    } catch {
-      /* keep invalid JSON visible */
-    }
-  }
   const columns = table?.columns || table?.schema?.columns || []
+  const columnLabels: Record<string, string> = {
+    task_id: '学习任务',
+    event_kind: '学习事件',
+    agent: '执行智能体',
+    sequence: '序号',
+    recorded_at: '记录时间',
+    knowledge_point: '知识点',
+    learning_state: '学习状态',
+    mastery: '掌握度',
+    progress: '学习进度',
+    score: '得分',
+    question: '题目',
+    answer: '作答',
+    result: '结果',
+    summary: '学习摘要',
+  }
+  const displayColumns = columns.filter((column: any) => columnLabels[String(column.key)])
   return (
     <Resource>
-      <Resource.Header icon={TableIcon} title={table?.name || 'Table'} />
-      <Resource.Options />
+      <Resource.Header icon={TableIcon} title={table?.name || '学习记录'} />
       <div className='min-h-0 flex-1 overflow-y-auto p-4'>
         <p className='mx-auto mb-4 max-w-[1100px] text-[12px] text-[var(--text-muted)]'>
-          行列、视图、筛选和排序均为个人工作区资源。
+          学习记录为只读数据，不能手动新增或修改。
         </p>
-        <div className='mb-4 flex gap-2'>
-          <textarea
-            className='min-h-[38px] flex-1 rounded-[7px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 font-mono text-[12px] text-[var(--text-primary)]'
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            aria-label='row JSON'
-          />
-          <ActionButton onClick={() => void add()}>添加行</ActionButton>
-        </div>
         <Resource.Table
-          columns={columns.map((column: any) => ({
+          columns={displayColumns.map((column: any) => ({
             id: String(column.id || column.key),
-            header: String(column.name || column.key),
+            header: columnLabels[String(column.key)],
           }))}
           rows={rows.map((row: any) => ({
             id: String(row.id),
             cells: Object.fromEntries(
-              columns.map((column: any) => {
+              displayColumns.map((column: any) => {
                 const id = String(column.id || column.key)
                 return [id, { label: String((row.data || row.values)?.[column.key] ?? '') }]
               })

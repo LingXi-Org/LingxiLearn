@@ -70,10 +70,10 @@ function artifactResources(task: AgentTaskSnapshot | null): LingxiArtifactResour
     .filter((resource) => resource.available)
     .map((resource) => ({ ...resource, id: `lingxi-artifact:${task.id}:${resource.kind}` }))
   return [
+    ...artifactDescriptors,
     { id: 'lingxi-workspace:tables', kind: 'workspace-tables', title: '运行表格', available: true },
     { id: 'lingxi-workspace:files', kind: 'workspace-files', title: '运行文件', available: true },
     { id: 'lingxi-workspace:logs', kind: 'runtime-logs', title: '运行日志', available: true },
-    ...artifactDescriptors,
   ]
 }
 

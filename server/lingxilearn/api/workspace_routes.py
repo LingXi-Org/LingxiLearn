@@ -57,7 +57,13 @@ from ..store.models import (
     WorkspaceUploadSession,
     utcnow,
 )
-from ..store.runtime_tables import ensure_runtime_tables
+from ..store.runtime_tables import (
+    RUNTIME_COLUMN_LABELS,
+    RUNTIME_COLUMNS_BY_CATEGORY,
+    RUNTIME_STUDENT_CATEGORIES,
+    RUNTIME_STUDENT_COLUMNS,
+    ensure_runtime_tables,
+)
 from .routes import current_learner_context, not_found, service_of
 
 router = APIRouter(prefix="/api")
@@ -206,6 +212,15 @@ def _column_public(row: WorkspaceTableColumn) -> dict[str, Any]:
 def _table_public(row: WorkspaceTable, columns: list[WorkspaceTableColumn], count: int = 0) -> dict[str, Any]:
     public_columns = [_column_public(column) for column in sorted(columns, key=lambda item: item.position)]
     metadata = row.metadata_payload or {}
+    if metadata.get('source') == 'lingxi-runtime':
+        allowed_columns = RUNTIME_COLUMNS_BY_CATEGORY.get(
+            str(metadata.get('category')), RUNTIME_STUDENT_COLUMNS
+        )
+        public_columns = [
+            {**column, 'name': RUNTIME_COLUMN_LABELS.get(column['key'], column['name'])}
+            for column in public_columns
+            if column['key'] in allowed_columns
+        ]
     stored_locks = metadata.get("locks") if isinstance(metadata.get("locks"), dict) else {}
     locks = {
         "schemaLocked": bool(stored_locks.get("schemaLocked", False)),
@@ -277,6 +292,11 @@ async def _table_for_id(request: Request, table_id: str, context: LearnerContext
         if table is None:
             raise not_found()
         return workspace, table
+
+
+def _assert_table_writable(table: WorkspaceTable) -> None:
+    if (table.metadata_payload or {}).get("source") == "lingxi-runtime":
+        raise HTTPException(status_code=403, detail="learning_records_are_read_only")
 
 
 def _knowledge_base_public(row: KnowledgeBase, document_count: int = 0) -> dict[str, Any]:
@@ -1354,6 +1374,9 @@ async def list_tables(
         tables = (await session.execute(query.order_by(WorkspaceTable.updated_at.desc()))).scalars().all()
         result = []
         for table in tables:
+            metadata = table.metadata_payload or {}
+            if metadata.get('source') == 'lingxi-runtime' and metadata.get('category') not in RUNTIME_STUDENT_CATEGORIES:
+                continue
             cols = (await session.execute(select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id))).scalars().all()
             count = await session.scalar(select(func.count()).select_from(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id)) or 0
             result.append(_table_public(table, list(cols), int(count)))
@@ -1458,6 +1481,7 @@ async def get_table(table_id: str, request: Request, workspaceId: str = "lingxi"
 @router.patch("/table/{table_id}")
 async def update_table(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     workspace, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     async with service_of(request).db.session() as session:
         current = await session.get(WorkspaceTable, table.id)
         if current is None:
@@ -1498,6 +1522,7 @@ async def update_table(table_id: str, body: dict[str, Any], request: Request, co
 @router.delete("/table/{table_id}")
 async def archive_table(table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     async with service_of(request).db.session() as session:
         current = await session.get(WorkspaceTable, table.id)
         if current is not None:
@@ -1509,6 +1534,7 @@ async def archive_table(table_id: str, request: Request, context: LearnerContext
 @router.post("/table/{table_id}/restore")
 async def restore_table(table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     async with service_of(request).db.session() as session:
         current = await session.get(WorkspaceTable, table.id)
         if current is not None:
@@ -1696,6 +1722,7 @@ async def _coerce_row_values(
 @router.post("/table/{table_id}/rows")
 async def create_rows(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     values = _row_input(body)
     async with service_of(request).db.session() as session:
         highest = await session.scalar(select(func.max(WorkspaceTableRow.position)).where(WorkspaceTableRow.table_id == table.id)) or -1
@@ -1712,6 +1739,7 @@ async def create_rows(table_id: str, body: dict[str, Any], request: Request, con
 @router.patch("/table/{table_id}/rows/{row_id}")
 async def update_row(table_id: str, row_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     async with service_of(request).db.session() as session:
         row = await session.scalar(select(WorkspaceTableRow).where(WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id))
         if row is None:
@@ -1729,6 +1757,7 @@ async def update_row(table_id: str, row_id: str, body: dict[str, Any], request: 
 @router.post("/table/{table_id}/rows/upsert")
 async def upsert_rows(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     rows = _row_input(body)
     async with service_of(request).db.session() as session:
         created: list[dict[str, Any]] = []
@@ -1751,6 +1780,7 @@ async def upsert_rows(table_id: str, body: dict[str, Any], request: Request, con
 @router.delete("/table/{table_id}/rows/{row_id}")
 async def delete_row(table_id: str, row_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     async with service_of(request).db.session() as session:
         row = await session.scalar(select(WorkspaceTableRow).where(WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id))
         if row is None:
@@ -1763,6 +1793,7 @@ async def delete_row(table_id: str, row_id: str, request: Request, context: Lear
 @router.post("/table/{table_id}/columns")
 async def add_column(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     column = body.get("column") if isinstance(body.get("column"), dict) else body
     ctype = str(column.get("type", "string"))
     if ctype not in ALLOWED_COLUMN_TYPES:
@@ -1779,6 +1810,7 @@ async def add_column(table_id: str, body: dict[str, Any], request: Request, cont
 @router.patch("/table/{table_id}/columns")
 async def update_column(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     async with service_of(request).db.session() as session:
         query = select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
         if body.get("columnId"):
@@ -1801,6 +1833,7 @@ async def update_column(table_id: str, body: dict[str, Any], request: Request, c
 @router.delete("/table/{table_id}/columns")
 async def delete_column(table_id: str, body: dict[str, Any], request: Request, context: LearnerContext = Depends(current_learner_context)) -> dict[str, Any]:
     _workspace_row, table = await _table_for_id(request, table_id, context)
+    _assert_table_writable(table)
     async with service_of(request).db.session() as session:
         row = await session.scalar(select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id, or_(WorkspaceTableColumn.id == body.get("columnId"), WorkspaceTableColumn.key == body.get("columnName"))))
         if row is None:

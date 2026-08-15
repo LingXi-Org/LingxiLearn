@@ -31,8 +31,8 @@ import type { AgentTaskListItem } from '@/lib/lingxi/types'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { createCommands } from '@/app/workspace/[workspaceId]/utils/commands-utils'
 import { useSidebarResize } from '@/app/workspace/[workspaceId]/w/components/sidebar/hooks/use-sidebar-resize'
-import { useTablesList } from '@/hooks/queries/tables'
 import { useSidebarStore } from '@/stores/sidebar/store'
+import { useLingxiIdentity } from '@/lib/lingxi/lingxi-identity-provider'
 
 export function SidebarTooltip({
   children,
@@ -100,6 +100,7 @@ interface SidebarNavItemData {
   active?: boolean
   disabled?: boolean
   badge?: string
+  onClick?: () => void
 }
 
 /** Sim's native sidebar item contract: one Chip/ChipLink in both rail states. */
@@ -124,7 +125,7 @@ const SidebarNavItem = memo(function SidebarNavItem({
     </span>
   )
   const element =
-    item.href && !item.disabled ? (
+    item.href && !item.disabled && !item.onClick ? (
       <ChipLink
         href={item.href}
         data-item-id={item.id}
@@ -144,6 +145,7 @@ const SidebarNavItem = memo(function SidebarNavItem({
         disabled={item.disabled}
         title={item.disabled ? '未接入' : undefined}
         className={className}
+        onClick={item.onClick}
       >
         {label}
       </Chip>
@@ -221,6 +223,7 @@ function SidebarRow({
   collapsed,
   disabled = false,
   badge,
+  onClick,
 }: {
   icon: typeof Home
   label: string
@@ -229,10 +232,11 @@ function SidebarRow({
   collapsed: boolean
   disabled?: boolean
   badge?: string
+  onClick?: () => void
 }) {
   return (
     <SidebarNavItem
-      item={{ id: label, label, icon: Icon, href, active, disabled, badge }}
+      item={{ id: label, label, icon: Icon, href, active, disabled, badge, onClick }}
       collapsed={collapsed}
     />
   )
@@ -256,10 +260,11 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
   const workspaceId = params?.workspaceId || 'lingxi'
   const [tasks, setTasks] = useState<AgentTaskListItem[]>([])
   const [loadError, setLoadError] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
   const compact = isCollapsed && !isPeeking
   const toggleCollapsed = useSidebarStore((state) => state.toggleCollapsed)
   const { handlePointerDown } = useSidebarResize()
-  const { data: tables = [], isError: tablesError } = useTablesList(workspaceId, 'active')
+  const identity = useLingxiIdentity()
 
   useRegisterGlobalCommands(() =>
     createCommands([
@@ -289,7 +294,6 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
   }, [pathname])
 
   const taskRows = useMemo(() => tasks.slice(0, 30), [tasks])
-  const tableRows = useMemo(() => tables.slice(0, 30), [tables])
 
   return (
     <aside
@@ -395,22 +399,6 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
             active={isPathActive(pathname, `/workspace/${workspaceId}/tables`)}
             collapsed={compact}
           />
-          {!compact && (
-            <div className='ml-2 space-y-1 border-l border-[var(--border)] pl-2'>
-              {tableRows.map((table) => (
-                <SidebarRow
-                  key={table.id}
-                  icon={Table}
-                  label={table.name}
-                  href={`/workspace/${workspaceId}/tables/${table.id}`}
-                  active={isPathActive(pathname, `/workspace/${workspaceId}/tables/${table.id}`)}
-                  collapsed={false}
-                />
-              ))}
-              {tablesError && <SidebarEmptyRow label='表格暂时无法加载' />}
-              {!tablesError && tableRows.length === 0 && <SidebarEmptyRow label='暂无表格' />}
-            </div>
-          )}
           {resourceItems.map(({ label, icon, segment }) => (
             <SidebarRow
               key={label}
@@ -424,7 +412,7 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
         </div>
       </SidebarSection>
 
-      <div className='min-h-0 flex-1 overflow-y-auto'>
+      <div className='scrollbar-hide min-h-0 flex-1 overflow-y-auto'>
         <SidebarSection title='学习任务' collapsed={compact}>
           <div className='space-y-1'>
             {taskRows.map((task) => (
@@ -450,10 +438,20 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
         <SidebarRow
           icon={Settings}
           label='设置'
-          href={`/workspace/${workspaceId}/settings`}
-          active={isPathActive(pathname, `/workspace/${workspaceId}/settings`)}
+          onClick={() => setAccountOpen((open) => !open)}
           collapsed={compact}
         />
+        {accountOpen && !compact && (
+          <div className='mt-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3 text-[11px] text-[var(--text-muted)]'>
+            <p className='font-medium text-[var(--text-primary)]'>Sim 源码实现</p>
+            <p className='mt-1'>设置页面已关闭，账户操作保留在这里。</p>
+            {identity.authenticated && identity.client && (
+              <button type='button' className='mt-3 text-[var(--text-primary)] hover:underline' onClick={() => void identity.client?.logout()}>
+                退出登录
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   )

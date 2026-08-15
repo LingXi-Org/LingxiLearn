@@ -89,6 +89,7 @@ import {
 import type { V2TableImportSource, V2TableImportTarget } from '@/lib/api/contracts/v2/tables'
 import { buildUpgradeHref } from '@/lib/billing/upgrade-reasons'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
+import { api as lingxiApi } from '@/lib/lingxi/api'
 import type {
   CsvHeaderMapping,
   EnrichmentRunDetail,
@@ -164,6 +165,10 @@ async function fetchTable(
   tableId: string,
   signal?: AbortSignal
 ): Promise<TableDefinition> {
+  if (workspaceId === LINGXI_WORKSPACE_ID) {
+    const response = await lingxiApi.workspaceTable(tableId)
+    return response.data.table as TableDefinition
+  }
   const response = await requestJson(getTableContract, {
     params: { tableId },
     query: { workspaceId },
@@ -183,6 +188,13 @@ async function fetchTableRows({
   includeTotal,
   signal,
 }: TableRowsParams & { signal?: AbortSignal }): Promise<TableRowsResponse> {
+  if (workspaceId === LINGXI_WORKSPACE_ID) {
+    const response = await lingxiApi.workspaceTableRows(tableId)
+    return {
+      rows: response.data.rows as TableRow[],
+      totalCount: response.data.totalCount,
+    }
+  }
   const response = await requestJson(listTableRowsContract, {
     params: { tableId },
     query: {

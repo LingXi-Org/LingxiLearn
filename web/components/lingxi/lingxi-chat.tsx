@@ -158,7 +158,7 @@ function ArtifactPanel({
       </div>
       <ArtifactTabs resources={resources} activeResourceId={resource.id} onSelect={onSelect} />
       <div className='min-h-0 flex-1'>
-        <LingxiArtifactResource resourceId={resource.id} />
+        <LingxiArtifactResource key={resource.id} resourceId={resource.id} />
       </div>
     </aside>
   )

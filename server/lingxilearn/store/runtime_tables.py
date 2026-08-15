@@ -22,12 +22,44 @@ RUNTIME_TABLE_VERSION = "lingxi-runtime.v1"
 
 RUNTIME_TABLES: dict[str, dict[str, str]] = {
     "evidence": {"name": "学习证据", "description": "LingxiGraph 学习证据运行记录"},
-    "mastery": {"name": "掌握度变化", "description": "Learner State 掌握度变化记录"},
-    "assessment": {"name": "学习测评", "description": "题目、作答与评分运行记录"},
-    "tool": {"name": "工具调用", "description": "LingxiGraph 工具调用运行记录"},
-    "interaction": {"name": "学习交互", "description": "学习者与教学系统的交互记录"},
-    "node": {"name": "节点执行", "description": "图节点、Agent 和 Sidecar 执行记录"},
-    "run": {"name": "学习运行", "description": "未归类的学习运行事件"},
+    "mastery": {"name": "知识点进展", "description": "知识点掌握与学习状态"},
+    "assessment": {"name": "练习测评", "description": "练习、测验与评分记录"},
+    "task": {"name": "学习任务", "description": "学习目标与任务进度"},
+    "interaction": {"name": "学习互动", "description": "学习者与学习助手的互动记录"},
+    "tool": {"name": "工具调用", "description": "内部运行数据"},
+    "node": {"name": "节点执行", "description": "内部运行数据"},
+    "run": {"name": "学习运行", "description": "内部运行数据"},
+}
+
+# Only learner-facing records belong in the workspace table catalog. Tool and
+# node execution traces remain audit data, but are not useful student tables.
+RUNTIME_STUDENT_CATEGORIES = frozenset({'evidence', 'mastery', 'assessment', 'task', 'interaction'})
+
+RUNTIME_COLUMN_LABELS: dict[str, str] = {
+    'task_id': '学习任务',
+    'event_kind': '学习事件',
+    'agent': '执行智能体',
+    'sequence': '序号',
+    'recorded_at': '记录时间',
+    'knowledge_point': '知识点',
+    'learning_state': '学习状态',
+    'mastery': '掌握度',
+    'progress': '学习进度',
+    'score': '得分',
+    'question': '题目',
+    'answer': '作答',
+    'result': '结果',
+    'summary': '学习摘要',
+}
+
+RUNTIME_STUDENT_COLUMNS = frozenset(RUNTIME_COLUMN_LABELS)
+
+RUNTIME_COLUMNS_BY_CATEGORY: dict[str, frozenset[str]] = {
+    'evidence': frozenset({'task_id', 'knowledge_point', 'event_kind', 'agent', 'summary', 'recorded_at'}),
+    'mastery': frozenset({'task_id', 'knowledge_point', 'mastery', 'learning_state', 'progress', 'summary', 'recorded_at'}),
+    'assessment': frozenset({'task_id', 'knowledge_point', 'question', 'answer', 'score', 'result', 'recorded_at'}),
+    'task': frozenset({'task_id', 'knowledge_point', 'event_kind', 'progress', 'learning_state', 'summary', 'recorded_at'}),
+    'interaction': frozenset({'task_id', 'knowledge_point', 'event_kind', 'question', 'answer', 'summary', 'recorded_at'}),
 }
 
 RUNTIME_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -42,6 +74,15 @@ RUNTIME_COLUMNS: tuple[tuple[str, str], ...] = (
     ("payload", "json"),
     ("runtime", "json"),
     ("recorded_at", "date"),
+    ("knowledge_point", "string"),
+    ("learning_state", "string"),
+    ("mastery", "number"),
+    ("progress", "number"),
+    ("score", "number"),
+    ("question", "string"),
+    ("answer", "string"),
+    ("result", "string"),
+    ("summary", "string"),
 )
 
 
@@ -58,6 +99,8 @@ def runtime_category(kind: str) -> str:
         "state.updated",
     }:
         return "mastery"
+    if normalized in {"plan.ready", "stage.changed", "step.completed", "task.created", "task.updated"}:
+        return "task"
     if normalized.startswith("assessment.") or normalized.startswith("quiz."):
         return "assessment"
     if normalized.startswith("tool."):
@@ -83,6 +126,14 @@ def runtime_category(kind: str) -> str:
 
 def _json_safe(value: Any) -> Any:
     return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+
+
+def _student_field(payload: Mapping[str, Any], runtime: Mapping[str, Any], *keys: str) -> Any:
+    for source in (payload, runtime):
+        for key in keys:
+            if source.get(key) not in (None, ""):
+                return source[key]
+    return ""
 
 
 async def ensure_workspace(session: AsyncSession, learner_id: str) -> Workspace:
@@ -112,10 +163,19 @@ async def _runtime_table(
     table = await session.scalar(
         select(WorkspaceTable).where(
             WorkspaceTable.workspace_id == workspace_id,
-            WorkspaceTable.name == definition["name"],
             WorkspaceTable.archived.is_(False),
+            WorkspaceTable.metadata_payload["source"].as_string() == "lingxi-runtime",
+            WorkspaceTable.metadata_payload["category"].as_string() == category,
         )
     )
+    if table is None:
+        table = await session.scalar(
+            select(WorkspaceTable).where(
+                WorkspaceTable.workspace_id == workspace_id,
+                WorkspaceTable.name == definition["name"],
+                WorkspaceTable.archived.is_(False),
+            )
+        )
     if table is None:
         table = WorkspaceTable(
             id=f"table_{uuid4().hex}",
@@ -126,10 +186,14 @@ async def _runtime_table(
                 "source": "lingxi-runtime",
                 "category": category,
                 "schema_version": RUNTIME_TABLE_VERSION,
+                "readOnly": True,
             },
         )
         session.add(table)
         await session.flush()
+    else:
+        table.name = definition["name"]
+        table.description = definition["description"]
 
     existing = {
         column.key
@@ -208,6 +272,15 @@ async def project_runtime_events(
             "recorded_at": str(
                 raw.get("recorded_at") or datetime.now(UTC).isoformat()
             ),
+            "knowledge_point": _student_field(payload, runtime, "knowledge_point", "concept", "topic"),
+            "learning_state": _student_field(payload, runtime, "learning_state", "state"),
+            "mastery": _student_field(payload, runtime, "mastery", "mastery_after"),
+            "progress": _student_field(payload, runtime, "progress", "completion", "progress_percent"),
+            "score": _student_field(payload, runtime, "score", "total_score", "points"),
+            "question": _student_field(payload, runtime, "question", "prompt"),
+            "answer": _student_field(payload, runtime, "answer", "response"),
+            "result": _student_field(payload, runtime, "result", "status", "judgement"),
+            "summary": _student_field(payload, runtime, "summary", "message", "reason"),
         }
         existing = await session.scalar(
             select(WorkspaceTableRow).where(
