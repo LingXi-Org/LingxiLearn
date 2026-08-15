@@ -565,6 +565,14 @@ function SearchModalContent({
               run: invoke('logs-show-logs'),
             }
       )
+      list.push({
+        id: 'logs-show-trajectory',
+        name: 'Switch to Trajectory',
+        keywords: 'trace timeline spans pipeline levels',
+        icon: Library,
+        context: pageContext,
+        run: invoke('logs-show-trajectory'),
+      })
     }
     return list
   }, [

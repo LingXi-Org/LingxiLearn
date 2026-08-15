@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -120,13 +121,13 @@ class EvidenceRecord:
         }
 
 
-def graded(row: dict[str, Any]) -> bool:
+def graded(row: Mapping[str, Any]) -> bool:
     """True when a stored evidence row carries a usable score."""
 
     return str(row.get("signal") or "") in {str(s) for s in GRADED_SIGNALS}
 
 
-def score_of(row: dict[str, Any]) -> float | None:
+def score_of(row: Mapping[str, Any]) -> float | None:
     value = row.get("value")
     if not isinstance(value, dict):
         return None
@@ -134,14 +135,14 @@ def score_of(row: dict[str, Any]) -> float | None:
     return float(score) if isinstance(score, (int, float)) else None
 
 
-def misconceptions_of(row: dict[str, Any]) -> list[str]:
+def misconceptions_of(row: Mapping[str, Any]) -> list[str]:
     value = row.get("value")
     if not isinstance(value, dict):
         return []
     return [str(tag) for tag in (value.get("misconceptions") or [])]
 
 
-def hint_level_of(row: dict[str, Any]) -> int:
+def hint_level_of(row: Mapping[str, Any]) -> int:
     value = row.get("value")
     if not isinstance(value, dict):
         return 0

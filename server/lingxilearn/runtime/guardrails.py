@@ -40,7 +40,7 @@ class Violation(StrEnum):
     TOO_MANY_TASKS = "too_many_tasks"
 
 
-MAX_TASKS_PER_ROUND = 6
+MAX_TASKS_PER_ROUND = 3
 """A longer plan is a guess; the loop replans after each round anyway."""
 MAX_REVISIONS_PER_TASK = 2
 MAX_OPEN_HOLDS = 6
@@ -342,24 +342,21 @@ def apply_hold_policy(
         instruction = decision.instruction.strip()
         if action == "revise" and not instruction:
             action = "close"
-        if (
-            action == "revise"
-            and (
-                revisions >= MAX_REVISIONS_PER_TASK
-                or budget.exhausted() is not None
-                or goal_satisfied
-                or len(holds) > MAX_OPEN_HOLDS
-            )
+        if action == "revise" and (
+            revisions >= MAX_REVISIONS_PER_TASK
+            or budget.exhausted() is not None
+            or goal_satisfied
+            or len(holds) > MAX_OPEN_HOLDS
         ):
             action = "close"
             instruction = ""
-        result.append(HoldDecision(task_key=decision.task_key, action=action, instruction=instruction))
+        result.append(
+            HoldDecision(task_key=decision.task_key, action=action, instruction=instruction)
+        )
     if len(holds) > MAX_OPEN_HOLDS:
         known = {item.task_key for item in result}
         result.extend(
-            HoldDecision(task_key=key, action="close")
-            for key in holds
-            if key not in known
+            HoldDecision(task_key=key, action="close") for key in holds if key not in known
         )
         return [item.model_copy(update={"action": "close", "instruction": ""}) for item in result]
     return result

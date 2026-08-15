@@ -24,8 +24,8 @@ const STAGE_OPEN_AT = 1900
 /** Block N (build order) pops in at BUILD_START + N * BUILD_STEP. */
 const BUILD_START = 2400
 const BUILD_STEP = 620
-const REPLY_AT = 6400
-const TOTAL_MS = 12_500
+const REPLY_AT = 7800
+const TOTAL_MS = 14_500
 const RESET_FADE_MS = 260
 
 /**

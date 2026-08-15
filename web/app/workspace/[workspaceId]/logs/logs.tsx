@@ -88,7 +88,13 @@ import { useDebounce } from '@/hooks/use-debounce'
 import { useUrlSort } from '@/hooks/use-url-sort'
 import { useFilterStore } from '@/stores/logs/filters/store'
 import { CORE_TRIGGER_TYPES } from '@/stores/logs/filters/types'
-import { Dashboard, ExecutionSnapshot, LogDetails, LogRowContextMenu } from './components'
+import {
+  Dashboard,
+  ExecutionSnapshot,
+  LogDetails,
+  LogRowContextMenu,
+  Trajectory,
+} from './components'
 import {
   DELETED_WORKFLOW_LABEL,
   formatDate,
@@ -236,6 +242,9 @@ export default function Logs() {
 
   const viewMode = useFilterStore((s) => s.viewMode)
   const setViewMode = useFilterStore((s) => s.setViewMode)
+  const isLogsView = viewMode === 'logs'
+  const isDashboardView = viewMode === 'dashboard'
+  const isTrajectoryView = viewMode === 'trajectory'
 
   const [{ selectedLogId, isSidebarOpen }, dispatch] = useReducer(logSelectionReducer, {
     selectedLogId: null,
@@ -366,6 +375,7 @@ export default function Logs() {
   )
 
   const dashboardStatsQuery = useDashboardStats(workspaceId, dashboardFilters, {
+    enabled: isDashboardView,
     refetchInterval: isLive ? LIVE_REFRESH_INTERVAL_MS : false,
   })
 
@@ -705,6 +715,7 @@ export default function Logs() {
     { id: 'logs-export', handler: () => void handleExport() },
     { id: 'logs-show-dashboard', handler: () => setViewMode('dashboard') },
     { id: 'logs-show-logs', handler: () => setViewMode('logs') },
+    { id: 'logs-show-trajectory', handler: () => setViewMode('trajectory') },
   ])
 
   const loadMoreLogs = useCallback(() => {
@@ -772,8 +783,6 @@ export default function Logs() {
   function handleClosePreview() {
     setPreviewLogId(null)
   }
-
-  const isDashboardView = viewMode === 'dashboard'
 
   const rows: ResourceRow[] = useMemo(
     () =>
@@ -1139,16 +1148,23 @@ export default function Logs() {
       {
         text: 'Logs',
         onSelect: () => setViewMode('logs'),
-        active: !isDashboardView,
+        active: isLogsView,
       },
       {
         text: 'Dashboard',
         onSelect: () => setViewMode('dashboard'),
         active: isDashboardView,
       },
+      {
+        text: 'Trajectory',
+        onSelect: () => setViewMode('trajectory'),
+        active: isTrajectoryView,
+      },
     ],
     [
+      isLogsView,
       isDashboardView,
+      isTrajectoryView,
       setViewMode,
       refreshIcon,
       isVisuallyRefreshing,
@@ -1186,6 +1202,13 @@ export default function Logs() {
                 error={dashboardStatsQuery.error}
                 searchQuery={debouncedSearchQuery}
               />
+            </div>
+            {sidebarOverlay}
+          </div>
+        ) : isTrajectoryView ? (
+          <div className='relative flex min-h-0 flex-1 flex-col overflow-auto'>
+            <div className='flex min-h-0 flex-1 flex-col px-6'>
+              <Trajectory logs={logs} isLoading={logsQuery.isLoading} />
             </div>
             {sidebarOverlay}
           </div>

@@ -19,7 +19,12 @@ from lingxigraph import AIMessage, EventKind, HumanMessage, Runtime, ToolMessage
 logger = logging.getLogger(__name__)
 EVENT_CHANNEL = "agent_task"
 
-RUNTIME_MODEL_ROLES = ("orchestrator", "goal_interpreter", "utility_evaluator", "learning_plan_decision")
+RUNTIME_MODEL_ROLES = (
+    "orchestrator",
+    "goal_interpreter",
+    "utility_evaluator",
+    "learning_plan_decision",
+)
 """Roles the loop itself needs, which are not capability providers."""
 
 
@@ -55,8 +60,7 @@ def agent_model(model: Any, role: str) -> Any:
         resolved = model.get(role) or model.get("default")
         if resolved is None:
             raise UnregisteredModelRole(
-                f"no model registered for agent role {role!r}; "
-                f"known roles: {sorted(model)}"
+                f"no model registered for agent role {role!r}; known roles: {sorted(model)}"
             )
         return resolved
     resolver = getattr(model, "for_agent", None)
@@ -65,9 +69,7 @@ def agent_model(model: Any, role: str) -> Any:
     return model
 
 
-def emit_agent_failure(
-    runtime: Runtime[Any], agent_name: str, exc: BaseException
-) -> None:
+def emit_agent_failure(runtime: Runtime[Any], agent_name: str, exc: BaseException) -> None:
     """Emit one correctly attributed failure even when siblings run in parallel."""
 
     emit(
@@ -92,9 +94,7 @@ def message_text(result: Any) -> str:
     messages = result.get("messages", []) if isinstance(result, dict) else []
     for message in reversed(messages):
         content = (
-            message.content
-            if isinstance(message, AIMessage)
-            else getattr(message, "content", None)
+            message.content if isinstance(message, AIMessage) else getattr(message, "content", None)
         )
         if content:
             return str(content)
@@ -192,8 +192,8 @@ async def invoke_agent(
             if event.kind is EventKind.MESSAGE:
                 envelope = event.data.get("value")
                 native_message = (
-                envelope[0] if isinstance(envelope, (tuple, list)) and envelope else None
-            )
+                    envelope[0] if isinstance(envelope, (tuple, list)) and envelope else None
+                )
                 if native_message is not None:
                     reasoning, content = message_payload(native_message)
                     replayed = (getattr(native_message, "additional_kwargs", {}) or {}).get(
@@ -221,13 +221,13 @@ async def invoke_agent(
                 flush_text()
                 response = messages[-1] if messages else None
                 if isinstance(response, AIMessage):
-                    for call in response.tool_calls:
+                    for tool_call in response.tool_calls:
                         call_payload = {
-                            "id": call.id,
-                            "name": call.name,
-                            "args": dict(call.args),
+                            "id": tool_call.id,
+                            "name": tool_call.name,
+                            "args": dict(tool_call.args),
                         }
-                        tool_calls[call.id] = call_payload
+                        tool_calls[tool_call.id] = call_payload
                         emit(
                             runtime,
                             "tool.call.delta",
@@ -257,14 +257,14 @@ async def invoke_agent(
                 for result in messages:
                     if not isinstance(result, ToolMessage):
                         continue
-                    call = tool_calls.get(result.tool_call_id, {})
+                    call_payload = tool_calls.get(result.tool_call_id, {})
                     emit(
                         runtime,
                         "tool.result",
                         agent=agent_name,
                         tool_call_id=result.tool_call_id,
                         name=result.name,
-                        arguments=call.get("args", {}),
+                        arguments=call_payload.get("args", {}),
                         content=result.content,
                         status=result.status,
                         duration_ms=duration_ms,

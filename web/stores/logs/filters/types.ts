@@ -38,12 +38,12 @@ export type CoreTriggerType = (typeof CORE_TRIGGER_TYPES)[number]
 
 export type TriggerType = CoreTriggerType | 'all' | (string & {})
 
-export type LogViewMode = 'logs' | 'dashboard'
+export type LogViewMode = 'logs' | 'dashboard' | 'trajectory'
 
 /**
  * Non-URL logs view state. The filter state itself (time range, level,
  * workflows, folders, triggers, search) lives in the URL via nuqs
- * (`useLogFilters`); only the view-mode toggle is kept in this store.
+ * (`useLogFilters`); only the selected view is kept in this store.
  */
 export interface LogViewState {
   viewMode: LogViewMode

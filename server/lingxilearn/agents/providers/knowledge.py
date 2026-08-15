@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -96,8 +97,11 @@ async def prerequisite_analyzer(context: ProviderContext) -> ProviderResult:
         # inventing one, and let the orchestrator proceed on the target.
         return ProviderResult(
             status="incomplete",
-            data={"prerequisites": [], "verdict": "teach_target",
-                  "rationale": "无可用模型，未能分析依赖"},
+            data={
+                "prerequisites": [],
+                "verdict": "teach_target",
+                "rationale": "无可用模型，未能分析依赖",
+            },
             persist_as="prerequisites",
             detail="未能分析前置依赖（无模型）",
         )
@@ -113,17 +117,20 @@ async def prerequisite_analyzer(context: ProviderContext) -> ProviderResult:
         system_prompt=PREREQ_PROMPT,
         name="prerequisite-analyzer",
     )
-    parsed = extract_json(
-        message_text(
-            await invoke_agent(
-                agent,
-                HumanMessage(json.dumps(payload, ensure_ascii=False)),
-                context.runtime,
-                agent_name="prerequisite_analyzer",
-                recursion_limit=8,
+    parsed = (
+        extract_json(
+            message_text(
+                await invoke_agent(
+                    agent,
+                    HumanMessage(json.dumps(payload, ensure_ascii=False)),
+                    context.runtime,
+                    agent_name="prerequisite_analyzer",
+                    recursion_limit=8,
+                )
             )
         )
-    ) or {}
+        or {}
+    )
 
     prerequisites = [
         {
@@ -220,13 +227,13 @@ async def review_scheduler(context: ProviderContext) -> ProviderResult:
     )
 
 
-def _review_form(row: dict[str, Any], system: dict[str, Any]) -> str:
+def _review_form(row: Mapping[str, Any], system: Mapping[str, Any]) -> str:
     if system.get("misconceptions"):
         return "discriminate"
     return "transfer" if float(row.get("mastery") or 0.0) >= 0.75 else "retrieval"
 
 
-def _review_reason(overdue_days: float, row: dict[str, Any], system: dict[str, Any]) -> str:
+def _review_reason(overdue_days: float, row: Mapping[str, Any], system: Mapping[str, Any]) -> str:
     parts: list[str] = []
     if overdue_days > 0:
         parts.append(f"逾期 {overdue_days:g} 天")
@@ -249,9 +256,7 @@ async def learner_reflector(context: ProviderContext) -> ProviderResult:
 
     request = {
         "events": list(context.task.inputs.get("events") or [])[-120:],
-        "prior_state": {
-            key: dict(value) for key, value in list(context.profile.items())[:20]
-        },
+        "prior_state": {key: dict(value) for key, value in list(context.profile.items())[:20]},
         "topic": context.goal.topic,
         "learning_objective": context.goal.expected_outcome,
     }
@@ -310,10 +315,36 @@ async def curriculum_graph(context: ProviderContext) -> ProviderResult:
             persist_as="curriculum_graph",
             detail="无可用模型，未生成知识图补丁",
         )
-    payload = {"topic": context.goal.topic, "knowledge_point": context.knowledge_point_id, "profile": list(context.profile.values())[:30]}
-    agent = create_agent(agent_model(context.model, "curriculum_graph"), system_prompt=CURRICULUM_GRAPH_PROMPT, name="curriculum-graph-builder")
-    parsed = extract_json(message_text(await invoke_agent(agent, HumanMessage(json.dumps(payload, ensure_ascii=False)), context.runtime, agent_name="curriculum_graph", recursion_limit=8))) or {}
-    value = {"nodes": list(parsed.get("nodes") or []), "edges": list(parsed.get("edges") or []), "rationale": str(parsed.get("rationale") or ""), "proposal_only": True}
+    payload = {
+        "topic": context.goal.topic,
+        "knowledge_point": context.knowledge_point_id,
+        "profile": list(context.profile.values())[:30],
+    }
+    agent = create_agent(
+        agent_model(context.model, "curriculum_graph"),
+        system_prompt=CURRICULUM_GRAPH_PROMPT,
+        name="curriculum-graph-builder",
+    )
+    parsed = (
+        extract_json(
+            message_text(
+                await invoke_agent(
+                    agent,
+                    HumanMessage(json.dumps(payload, ensure_ascii=False)),
+                    context.runtime,
+                    agent_name="curriculum_graph",
+                    recursion_limit=8,
+                )
+            )
+        )
+        or {}
+    )
+    value = {
+        "nodes": list(parsed.get("nodes") or []),
+        "edges": list(parsed.get("edges") or []),
+        "rationale": str(parsed.get("rationale") or ""),
+        "proposal_only": True,
+    }
     return ProviderResult(data=value, persist_as="curriculum_graph", detail="已生成知识图补丁提案")
 
 

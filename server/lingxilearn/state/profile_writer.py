@@ -21,6 +21,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..store.models import LearningProfile
+from .scheduling import confidence as compute_confidence
+
 LEARNING_STATES = {
     "unknown",
     "not_observed",
@@ -29,8 +32,6 @@ LEARNING_STATES = {
     "misconception_evidence",
     "needs_recheck",
 }
-from ..store.models import LearningProfile
-from .scheduling import confidence as compute_confidence
 
 DEFAULT_MASTERY = 0.35
 

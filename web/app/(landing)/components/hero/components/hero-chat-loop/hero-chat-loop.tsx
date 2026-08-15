@@ -17,14 +17,14 @@ import {
 import { HERO_TOOLTIP_OFFSET } from '@/app/(landing)/components/hero/components/hero-platform-loop/sidebar-hotspots'
 
 /** The conversation the loop plays - mirrors the learning workspace demo. */
-const USER_MESSAGE = '帮我复习函数与导数，先讲清概念，再根据我的薄弱点安排练习。'
+const USER_MESSAGE = '为什么交叉熵可以衡量分类误差？'
 const REPLY_MESSAGE =
-  '收到。我会先确认你的学习目标和掌握状态，再组织概念讲解、可视化推导、分层练习，并根据每次作答调整下一步复习。'
-const REPLY_WORDS = REPLY_MESSAGE.split(' ')
+  '我会先理解你的问题，检查当前掌握状态，再补充概率与信息量等前置概念，用可视化解释建立直观理解，最后检验理解并更新学习状态。'
+const REPLY_WORDS = Array.from(REPLY_MESSAGE)
 /** Word-reveal cadence for the streamed reply. */
 const STREAM_WORD_MS = 55
 /** Follow-up suggestions shown once the reply completes, like the real chat. */
-const FOLLOW_UPS = ['开始概念讲解', '查看知识图解', '做一组针对性练习'] as const
+const FOLLOW_UPS = ['补充前置概念', '建立直观理解', '检验理解'] as const
 
 /** Where the chat pane is within one loop pass. */
 export type HeroChatPhase = 'idle' | 'user' | 'thinking' | 'reply'
@@ -136,7 +136,7 @@ export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
           )}
         >
           <p className='text-[15px] text-[var(--text-primary)] leading-[1.6]'>
-            {REPLY_WORDS.slice(0, revealedWords).join(' ')}
+            {REPLY_WORDS.slice(0, revealedWords).join('')}
           </p>
           <div
             className={cn(

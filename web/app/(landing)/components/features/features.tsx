@@ -38,11 +38,11 @@ export function Features() {
       </h2>
 
       <div className='mx-auto grid w-full max-w-[1460px] grid-cols-1 gap-28 px-20 max-sm:gap-12 max-sm:px-5 max-lg:px-8'>
-        {/* Resources: bring learning materials in. */}
+        {/* Visualization: turn abstract knowledge into something learners can see. */}
         <FeatureCard
-          eyebrow='资源'
-          title='把你的学习材料放在一起。'
-          description='整理课程、笔记、文档和错题，让每一次讲解与练习都建立在你的学习上下文之上。'
+          eyebrow='可视化'
+          title='将抽象知识转化为直观的学习体验。'
+          description='AI 自动生成交互式课件、知识图解、动态演示与练习题卡，让复杂概念被看见、被理解、被掌握。'
           href='/library'
           linkLabel='查看学习资源'
           backdropSrc='/landing/feature-integrate-backdrop.jpg'
@@ -50,33 +50,33 @@ export function Features() {
           <IntegrationsCallout />
         </FeatureCard>
 
-        {/* State: keep the learner context useful. */}
+        {/* Understanding: keep the learner context useful. */}
         <FeatureCard
-          eyebrow='状态'
-          title='让学习状态真正参与下一步。'
-          description='LingXi 关注你的目标、进度、错误和掌握情况，为每一次讲解、练习和复习提供更合适的上下文。'
+          eyebrow='理解'
+          title='持续记忆每位学生的学习上下文'
+          description='所有行动基于个性化的学习档案、历史交互与知识状态，理解学生当前水平、薄弱点与学习目标。'
           backdropSrc='/landing/feature-context-backdrop.jpg'
           mediaSide='right'
         >
           <KnowledgeCallout />
         </FeatureCard>
 
-        {/* Learn: explain and practice. */}
+        {/* Collaboration: let specialized agents work together. */}
         <FeatureCard
-          eyebrow='学习'
-          title='从讲解走到真正会做。'
-          description='多智能体协作组织概念讲解、知识图解、分层练习和即时反馈，让学习过程随着你的回答持续调整。'
+          eyebrow='协作'
+          title='多智能体协同完成学习任务'
+          description='多个专业 Agent 根据学习目标自动组合，以 Skill 为能力单元并行协作，生成讲义、可视化解释、练习与学习反馈。'
           href='/learning'
           linkLabel='探索学习闭环'
         >
           <BuildCallout />
         </FeatureCard>
 
-        {/* Review: keep improving. */}
+        {/* Growth: keep improving. */}
         <FeatureCard
-          eyebrow='复习'
-          title='把每次练习变成下一步建议。'
-          description='回顾学习记录、测试结果和薄弱知识点，持续更新你的复习重点与学习路径。'
+          eyebrow='成长'
+          title='持续追踪学习过程与效果'
+          description='实时分析学习过程中的反馈、理解程度与知识掌握变化，让 AI 根据学生状态动态调整教学策略。'
           backdropSrc='/landing/feature-monitor-backdrop.jpg'
           mediaSide='right'
           flushBottom

@@ -60,8 +60,8 @@ def _learning_state(
 
 def _recent_performance(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     window = list(rows)[-RECENT_WINDOW:]
-    scored = [score_of(row) for row in window if graded(row)]
-    scored = [value for value in scored if value is not None]
+    scored_values = [score_of(row) for row in window if graded(row)]
+    scored: list[float] = [value for value in scored_values if value is not None]
     return {
         "observations": len(window),
         "graded": len(scored),
@@ -139,36 +139,47 @@ class StateUpdater:
         """
 
         moment = now or datetime.now(UTC)
-        pending = await self._state.evidence_after(learner_id, 0, limit=limit)
-        if not pending:
-            return []
+        async with self._state.projection_lock(learner_id):
+            watermark = await self._state.projection_cursor(learner_id)
+            pending = await self._state.evidence_after(learner_id, watermark, limit=limit)
+            if not pending:
+                return []
 
-        grouped = _group_by_point(pending)
-        existing = {
-            row["knowledge_point_id"]: row for row in await self._state.profile_for(learner_id)
-        }
+            grouped = _group_by_point(pending)
+            existing = {
+                row["knowledge_point_id"]: row for row in await self._state.profile_for(learner_id)
+            }
 
-        deltas: list[ProfileDelta] = []
-        for point, rows in grouped.items():
-            current = existing.get(point)
-            watermark = int(((current or {}).get("system") or {}).get("last_evidence_seq") or 0)
-            fresh = [row for row in rows if int(row.get("seq") or 0) > watermark]
-            if not fresh:
-                continue
-            deltas.append(
-                self._delta_for(
-                    learner_id=learner_id,
-                    point=point,
-                    current=current,
-                    fresh=fresh,
-                    source_agent=source_agent,
-                    now=moment,
+            deltas: list[ProfileDelta] = []
+            for point, rows in grouped.items():
+                current = existing.get(point)
+                point_watermark = int(
+                    ((current or {}).get("system") or {}).get("last_evidence_seq") or 0
                 )
-            )
+                fresh = [row for row in rows if int(row.get("seq") or 0) > point_watermark]
+                if not fresh:
+                    continue
+                deltas.append(
+                    self._delta_for(
+                        learner_id=learner_id,
+                        point=point,
+                        current=current,
+                        fresh=fresh,
+                        source_agent=source_agent,
+                        now=moment,
+                    )
+                )
 
-        if not deltas:
-            return []
-        return await self._state.apply_profile_deltas(deltas)
+            if not deltas:
+                await self._state.advance_projection_cursor(
+                    learner_id, max(int(row.get("seq") or 0) for row in pending)
+                )
+                return []
+            changes = await self._state.apply_profile_deltas(deltas)
+            await self._state.advance_projection_cursor(
+                learner_id, max(int(row.get("seq") or 0) for row in pending)
+            )
+            return changes
 
     def _delta_for(
         self,

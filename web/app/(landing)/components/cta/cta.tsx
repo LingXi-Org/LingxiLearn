@@ -19,7 +19,7 @@ import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
 interface CtaProps extends Partial<SolutionsFooterCtaConfig> {}
 
 export function Cta({
-  heading = '今天就开始你的个性化学习。',
+  heading = '立刻开始你的个性化学习之旅。',
   description,
   primary = { label: '立即开始', href: SIGNUP_HREF },
   secondary = { label: '联系销售', href: DEMO_HREF },

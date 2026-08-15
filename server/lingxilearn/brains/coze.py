@@ -24,9 +24,7 @@ class CozeBrain(LlmBrain):
             base_url=settings.coze_base_url,
             timeout=settings.coze_timeout,
         )
-        super().__init__(
-            CozeChatModel(settings.coze_bot_id, client=self._client, user_id=user_id)
-        )
+        super().__init__(CozeChatModel(settings.coze_bot_id, client=self._client, user_id=user_id))
 
     async def aclose(self) -> None:
         closer = getattr(self._client, "aclose", None) or getattr(self._client, "close", None)

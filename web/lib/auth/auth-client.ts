@@ -54,7 +54,7 @@ export function useSession(): SessionHookResult {
   }
 }
 
-type AuthRedirectOptions = { callbackURL?: string; callbackUrl?: string }
+type AuthRedirectOptions = { callbackURL?: unknown; callbackUrl?: unknown }
 type SocialSignInOptions = AuthRedirectOptions & {
   provider: 'github' | 'google' | 'microsoft'
 }
@@ -70,8 +70,28 @@ type AuthRedirectResult = {
   redirectStarted: true
 }
 
-function callbackPath(options?: AuthRedirectOptions): string {
-  return options?.callbackURL ?? options?.callbackUrl ?? '/workspace/lingxi/home/'
+const DEFAULT_AUTH_CALLBACK = '/workspace/lingxi/home/'
+
+function isSafeCallbackPath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('/') &&
+    !value.startsWith('//') &&
+    !value.includes('\\')
+  )
+}
+
+/**
+ * Better Auth places callbackURL in the credential payload for email flows,
+ * while social callers put it in the options object. The LingxiIdentity
+ * adapter accepts both shapes so the native Sim forms keep their redirect.
+ */
+function callbackPath(...sources: Array<AuthRedirectOptions | undefined>): string {
+  for (const source of sources) {
+    const value = source?.callbackURL ?? source?.callbackUrl
+    if (isSafeCallbackPath(value)) return value
+  }
+  return DEFAULT_AUTH_CALLBACK
 }
 
 export const client = {
@@ -85,30 +105,33 @@ export const client = {
     }
   },
   signIn: {
-    email: async (_credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
+    email: async (credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
+      const nextPath = callbackPath(credentials, options)
       if (isMockAuthEnabled) {
-        window.location.assign(callbackPath(options))
+        window.location.assign(nextPath)
         return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
       }
-      window.location.assign(identityApi.authUrl('login', callbackPath(options)))
+      window.location.assign(identityApi.authUrl('login', nextPath))
       return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
     },
     social: async (options: SocialSignInOptions) => {
+      const nextPath = callbackPath(options)
       if (isMockAuthEnabled) {
-        window.location.assign(callbackPath(options))
+        window.location.assign(nextPath)
         return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
       }
-      window.location.assign(identityApi.authUrl('login', callbackPath(options), options.provider))
+      window.location.assign(identityApi.authUrl('login', nextPath, options.provider))
       return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
     },
   },
   signUp: {
-    email: async (_credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
+    email: async (credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
+      const nextPath = callbackPath(credentials, options)
       if (isMockAuthEnabled) {
-        window.location.assign(callbackPath(options))
+        window.location.assign(nextPath)
         return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
       }
-      window.location.assign(identityApi.authUrl('register', callbackPath(options)))
+      window.location.assign(identityApi.authUrl('register', nextPath))
       return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
     },
   },

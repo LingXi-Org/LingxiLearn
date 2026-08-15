@@ -1,5 +1,9 @@
 ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
-FROM ${DOCKER_REGISTRY}/oven/bun:1.3.14 AS builder
+# Bun 1.3.14 crashes with SIGILL while Next collects page data on the CI
+# runner. Keep the image pinned to the stable 1.3.6 runtime until that Bun
+# regression is resolved upstream.
+ARG BUN_VERSION=1.3.6
+FROM ${DOCKER_REGISTRY}/oven/bun:${BUN_VERSION} AS builder
 
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -22,7 +26,8 @@ COPY . .
 RUN rm -rf out .next && bun run build && test -f .next/standalone/server.js
 
 ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
-FROM ${DOCKER_REGISTRY}/oven/bun:1.3.14 AS runtime
+ARG BUN_VERSION=1.3.6
+FROM ${DOCKER_REGISTRY}/oven/bun:${BUN_VERSION} AS runtime
 ARG LINGXILEARN_VERSION=0.1.0
 LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}"
 

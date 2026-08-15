@@ -107,7 +107,7 @@ def _guarded(text: str, context: ProviderContext) -> tuple[str, bool]:
 
     The quiz answer key is the leak guard: while questions are outstanding, a
     teaching turn may not contain the phrases or numbers that give them away.
-"""
+    """
 
     quiz = dict(context.result_of("quiz_generator"))
     graded = dict(context.result_of("grading"))
@@ -142,9 +142,7 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
     if context.model is None:
         raise ProviderError("adaptive-pedagogy requires a model")
 
-    emit(
-        context.runtime, "agent.started", agent="adaptive_pedagogy", skill="adaptive-pedagogy"
-    )
+    emit(context.runtime, "agent.started", agent="adaptive_pedagogy", skill="adaptive-pedagogy")
     brief = _learner_brief(context)
     brief["task_rationale"] = context.task.rationale
 
@@ -157,17 +155,20 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
         ),
         name="adaptive-pedagogy",
     )
-    parsed = extract_json(
-        message_text(
-            await invoke_agent(
-                agent,
-                HumanMessage(json.dumps(brief, ensure_ascii=False)),
-                context.runtime,
-                agent_name="adaptive_pedagogy",
-                recursion_limit=10,
+    parsed = (
+        extract_json(
+            message_text(
+                await invoke_agent(
+                    agent,
+                    HumanMessage(json.dumps(brief, ensure_ascii=False)),
+                    context.runtime,
+                    agent_name="adaptive_pedagogy",
+                    recursion_limit=10,
+                )
             )
         )
-    ) or {}
+        or {}
+    )
 
     # The skill's rich contract nests the learner-facing message in
     # ``student_response``; the compact provider prompt uses top-level text.
@@ -183,7 +184,11 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
         learner_message=text,
         data={
             "text": text,
-            "strategy": str(parsed.get("strategy") or (decision.get("strategy") if isinstance(decision, dict) else "") or "explain"),
+            "strategy": str(
+                parsed.get("strategy")
+                or (decision.get("strategy") if isinstance(decision, dict) else "")
+                or "explain"
+            ),
             "next_step": str(parsed.get("next_step") or ""),
             "withheld_for_leakage": False,
         },
@@ -214,17 +219,20 @@ async def answer_user(context: ProviderContext) -> ProviderResult:
         system_prompt=QA_PROMPT,
         name="knowledge-qa",
     )
-    parsed = extract_json(
-        message_text(
-            await invoke_agent(
-                agent,
-                HumanMessage(json.dumps(payload, ensure_ascii=False)),
-                context.runtime,
-                agent_name="answer_user",
-                recursion_limit=8,
+    parsed = (
+        extract_json(
+            message_text(
+                await invoke_agent(
+                    agent,
+                    HumanMessage(json.dumps(payload, ensure_ascii=False)),
+                    context.runtime,
+                    agent_name="answer_user",
+                    recursion_limit=8,
+                )
             )
         )
-    ) or {}
+        or {}
+    )
 
     text = str(parsed.get("text") or "").strip()
     if not text:
@@ -279,17 +287,20 @@ async def negotiator(context: ProviderContext) -> ProviderResult:
         system_prompt=NEGOTIATION_PROMPT,
         name="negotiation",
     )
-    parsed = extract_json(
-        message_text(
-            await invoke_agent(
-                agent,
-                HumanMessage(json.dumps(brief, ensure_ascii=False)),
-                context.runtime,
-                agent_name="negotiator",
-                recursion_limit=6,
+    parsed = (
+        extract_json(
+            message_text(
+                await invoke_agent(
+                    agent,
+                    HumanMessage(json.dumps(brief, ensure_ascii=False)),
+                    context.runtime,
+                    agent_name="negotiator",
+                    recursion_limit=6,
+                )
             )
         )
-    ) or {}
+        or {}
+    )
     text = str(parsed.get("text") or "").strip()
     if not text:
         raise ProviderError("negotiation returned no text")
@@ -324,16 +335,47 @@ async def learning_companion(context: ProviderContext) -> ProviderResult:
     if context.model is None:
         text = f"我收到你的消息了。当前仍在处理「{context.goal.topic}」，我会把你的要求带入下一轮编排。"
     else:
-        agent = create_agent(agent_model(context.model, "learning_companion"), system_prompt=COMPANION_PROMPT, name="learning-companion")
-        parsed = extract_json(message_text(await invoke_agent(agent, HumanMessage(json.dumps(payload, ensure_ascii=False)), context.runtime, agent_name="learning_companion", recursion_limit=6))) or {}
+        agent = create_agent(
+            agent_model(context.model, "learning_companion"),
+            system_prompt=COMPANION_PROMPT,
+            name="learning-companion",
+        )
+        parsed = (
+            extract_json(
+                message_text(
+                    await invoke_agent(
+                        agent,
+                        HumanMessage(json.dumps(payload, ensure_ascii=False)),
+                        context.runtime,
+                        agent_name="learning_companion",
+                        recursion_limit=6,
+                    )
+                )
+            )
+            or {}
+        )
         text = str(parsed.get("text") or "").strip()
         if not text:
             raise ProviderError("learning companion returned no text")
     text, withheld = _guarded(text, context)
-    await _emit_learner_output(context.runtime, "learning_companion", text, f"{context.task_id}:learning_companion:{context.task.id}")
+    await _emit_learner_output(
+        context.runtime,
+        "learning_companion",
+        text,
+        f"{context.task_id}:learning_companion:{context.task.id}",
+    )
     return ProviderResult(
         learner_message=text,
-        evidence=[EvidenceRecord(learner_id=context.learner_id, knowledge_point=context.knowledge_point_id, signal=Signal.SELF_REPORT, source_agent="learning_companion", task_id=context.task_id, summary=question[:200])],
+        evidence=[
+            EvidenceRecord(
+                learner_id=context.learner_id,
+                knowledge_point=context.knowledge_point_id,
+                signal=Signal.SELF_REPORT,
+                source_agent="learning_companion",
+                task_id=context.task_id,
+                summary=question[:200],
+            )
+        ],
         data={"text": text, "message": question, "withheld_for_leakage": withheld},
         persist_as="learning_companion",
         detail="已即时回应学习者消息",
@@ -346,12 +388,34 @@ async def probe_user(context: ProviderContext) -> ProviderResult:
     if context.model is None:
         text = f"关于「{brief.get('knowledge_point') or context.goal.topic}」，你会如何用自己的话解释它？"
     else:
-        agent = create_agent(agent_model(context.model, "probe_user"), system_prompt=PROBE_PROMPT, name="socratic-prober")
-        parsed = extract_json(message_text(await invoke_agent(agent, HumanMessage(json.dumps(brief, ensure_ascii=False)), context.runtime, agent_name="probe_user", recursion_limit=6))) or {}
+        agent = create_agent(
+            agent_model(context.model, "probe_user"),
+            system_prompt=PROBE_PROMPT,
+            name="socratic-prober",
+        )
+        parsed = (
+            extract_json(
+                message_text(
+                    await invoke_agent(
+                        agent,
+                        HumanMessage(json.dumps(brief, ensure_ascii=False)),
+                        context.runtime,
+                        agent_name="probe_user",
+                        recursion_limit=6,
+                    )
+                )
+            )
+            or {}
+        )
         text = str(parsed.get("text") or "").strip()
         if not text:
             raise ProviderError("probe returned no question")
-    return ProviderResult(learner_message=text, data={"text": text}, persist_as="probe_user", detail="已向学习者确认理解")
+    return ProviderResult(
+        learner_message=text,
+        data={"text": text},
+        persist_as="probe_user",
+        detail="已向学习者确认理解",
+    )
 
 
 @register("learner_interview")
@@ -373,7 +437,20 @@ async def learner_interview(context: ProviderContext) -> ProviderResult:
             system_prompt=INTERVIEW_PROMPT,
             name="learner-interview",
         )
-        parsed = extract_json(message_text(await invoke_agent(agent, HumanMessage(json.dumps(prompt, ensure_ascii=False)), context.runtime, agent_name="learner_interview", recursion_limit=6))) or {}
+        parsed = (
+            extract_json(
+                message_text(
+                    await invoke_agent(
+                        agent,
+                        HumanMessage(json.dumps(prompt, ensure_ascii=False)),
+                        context.runtime,
+                        agent_name="learner_interview",
+                        recursion_limit=6,
+                    )
+                )
+            )
+            or {}
+        )
         text = str(parsed.get("text") or "").strip()
         if not text:
             raise ProviderError("learner interview returned no questions")
@@ -386,7 +463,12 @@ async def learner_interview(context: ProviderContext) -> ProviderResult:
         summary=(message or text)[:200],
     )
     text, withheld = _guarded(text, context)
-    await _emit_learner_output(context.runtime, "learner_interview", text, f"{context.task_id}:learner_interview:{context.task.id}")
+    await _emit_learner_output(
+        context.runtime,
+        "learner_interview",
+        text,
+        f"{context.task_id}:learner_interview:{context.task.id}",
+    )
     return ProviderResult(
         learner_message=text,
         evidence=[evidence],
@@ -396,4 +478,11 @@ async def learner_interview(context: ProviderContext) -> ProviderResult:
     )
 
 
-__all__ = ["adaptive_pedagogy", "answer_user", "negotiator", "learning_companion", "learner_interview", "probe_user"]
+__all__ = [
+    "adaptive_pedagogy",
+    "answer_user",
+    "negotiator",
+    "learning_companion",
+    "learner_interview",
+    "probe_user",
+]

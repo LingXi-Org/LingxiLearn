@@ -7,7 +7,6 @@ import {
   LANDING_GUTTER,
   LANDING_HERO_TOP_PADDING,
 } from '@/app/(landing)/components/landing-layout'
-import { TrustedBy } from '@/app/(landing)/components/trusted-by'
 
 /**
  * Landing hero - the only `<h1>` on the page.
@@ -53,9 +52,6 @@ import { TrustedBy } from '@/app/(landing)/components/trusted-by'
  * four sides. Decorative, `aria-hidden`; the `--surface-3` fill remains as the
  * loading fallback under the backdrop.
  *
- * The shared {@link TrustedBy} block renders in its `row` layout - a centered
- * muted label above a single centered row of bare wordmarks.
- *
  * Carries the sr-only ~50-word product summary for AI citation (CLAUDE.md → GEO).
  */
 export function Hero() {
@@ -71,7 +67,8 @@ export function Hero() {
       )}
     >
       <p className='sr-only'>
-        LingXi 灵犀智学是面向学习任务的 AI 学习工作台。多智能体持续关注学习状态，从讲解、图解、练习到复习，帮助每位学习者完成个性化学习闭环。
+        LingXi 灵犀智学是面向学习任务的 AI
+        学习工作台。多智能体持续关注学习状态，从讲解、图解、练习到复习，帮助每位学习者完成个性化学习闭环。
       </p>
 
       <LandingHeroHeader
@@ -117,8 +114,6 @@ export function Hero() {
           </div>
         </div>
       </div>
-
-      <TrustedBy layout='row' className='mt-[42px] w-full max-sm:mt-6' />
     </section>
   )
 }

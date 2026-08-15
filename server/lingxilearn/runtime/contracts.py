@@ -120,9 +120,14 @@ class CandidateAction(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    # Kept optional for deserialising pre-V2 traces; new candidates always
+    # receive one from candidate generation.
+    candidate_id: str = ""
     capability: str
     skill_id: str
     provider: str
+    skill_version: str = ""
+    skill_checksum: str = ""
     knowledge_point_id: str = ""
     gain: float = 0.0
     cost: float = 1.0
@@ -150,6 +155,7 @@ class PlannedTask(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     id: str
+    candidate_id: str = ""
     capability: str
     inputs: dict[str, Any] = Field(default_factory=dict)
     depends_on: list[str] = Field(default_factory=list)
@@ -223,7 +229,9 @@ class OrchestrationPlan(BaseModel):
         done: set[str] = set()
         tiers: list[list[PlannedTask]] = []
         while remaining:
-            ready = [task for task in remaining.values() if all(dep in done for dep in task.depends_on)]
+            ready = [
+                task for task in remaining.values() if all(dep in done for dep in task.depends_on)
+            ]
             if not ready:
                 raise ValueError(f"cyclic task dependencies: {sorted(remaining)}")
             ready.sort(key=lambda t: (-t.expected_learning_gain, t.id))

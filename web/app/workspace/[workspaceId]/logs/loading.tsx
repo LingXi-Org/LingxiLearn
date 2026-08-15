@@ -21,6 +21,7 @@ const ACTIONS: ChromeActionSpec[] = [
   { text: 'Refresh', icon: RefreshCw },
   { text: 'Logs', active: true },
   { text: 'Dashboard' },
+  { text: 'Trajectory' },
 ]
 
 export default function LogsLoading() {

@@ -15,8 +15,9 @@ const PRODUCT_LINKS: FooterItem[] = [
 ]
 
 const TECHNOLOGY_LINKS: FooterItem[] = [
-  { label: 'DeepSeek', href: '/models' },
-  { label: 'Coze', href: '/integrations' },
+  { label: 'DeepSeek', href: 'https://platform.deepseek.com/api_keys' },
+  { label: 'Coze', href: 'https://code.coze.cn/playground' },
+  { label: '感谢 GOAI', href: 'https://www.goaihz.com/' },
 ]
 
 const ABOUT_LINKS: FooterItem[] = [
@@ -50,7 +51,7 @@ export function Footer() {
               <LingxiWordmark />
             </Link>
             <p className='mt-4 max-w-[220px] text-sm leading-6 text-[var(--text-muted)]'>
-              面向学生的 AI 学习 Agent
+              AI 学习，因你而变。
             </p>
           </div>
 
@@ -62,9 +63,7 @@ export function Footer() {
         <div className='mt-16 border-[var(--border)] border-t pt-6 max-sm:mt-12'>
           <p className='text-sm text-[var(--text-muted)]'>© 2026 LingXi</p>
           <p className='mt-3 max-w-[620px] text-sm leading-6 text-[var(--text-muted)]'>
-            感谢 GOAI 世界人工智能开源大赛「无界应用 · Boundless Agents」
-            <br className='max-sm:hidden' />
-            为项目提供赛事平台与交流机会。
+            LingXi 灵犀智学
           </p>
         </div>
       </div>
