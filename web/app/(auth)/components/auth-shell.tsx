@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { ChipLink } from '@/components/ui-kit'
+import { ChipLink } from '@sim/emcn'
 import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 
 export function AuthShell({
@@ -22,7 +22,7 @@ export function AuthShell({
               width={58}
               height={25}
               priority
-              className='h-[22px] w-auto'
+              className='h-[22px] w-auto translate-y-[2px]'
             />
           </Link>
         </nav>

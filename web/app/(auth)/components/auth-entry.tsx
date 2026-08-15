@@ -1,7 +1,7 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { Chip, ChipLink } from '@/components/ui-kit'
+import { Chip, ChipLink } from '@sim/emcn'
 import { identityApi } from '@/lib/auth/identity-api'
 import { isMockAuthEnabled } from '@/lib/core/config/env-flags'
 import { AuthHeader, AuthLegalFooter } from './auth-shell'
