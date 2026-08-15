@@ -97,7 +97,13 @@ function runtimeRows(block: Record<string, unknown>) {
     const rows: Array<{ title: string; value: string }> = []
     rows.push({
       title: '节点类型',
-      value: metadata.nodeKind === 'deterministic' ? '确定性执行' : '智能体 / 服务提供方',
+      value: metadata.controlPlane
+        ? '大模型控制面'
+        : metadata.nodeKind === 'deterministic'
+          ? '确定性执行'
+          : metadata.nodeKind === 'input'
+            ? '用户输入'
+            : '智能体 / 服务提供方',
     })
     if (metadata.capability)
       rows.push({
@@ -563,9 +569,9 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
   }, [events, semantic.blocks])
   const explicitEdges = semantic.edges
   const edges = useMemo(() => {
-    // Control-plane cards are observable. Intent recognition is the one
-    // explicit bridge from the learner's request into the planned skill graph;
-    // utility scoring and planning remain internal decision cards.
+    // The control plane is a real, observable model chain.  Each card has a
+    // concrete predecessor and successor; it is never rendered as an orphan
+    // annotation or replaced by a fixed graph edge.
     const next = explicitEdges.filter((edge) => !String(edge.source).startsWith('control-') && !String(edge.target).startsWith('control-'))
     const known = new Set(next.map((edge) => `${edge.source}->${edge.target}`))
     for (const [target, block] of Object.entries(blocks)) {
@@ -587,21 +593,26 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
         })
       }
     }
-    if (blocks['control-goal_interpreter']) {
-      const key = 'runtime-user-input->control-goal_interpreter'
-      if (!known.has(key)) {
-        known.add(key)
-        next.push({
-          id: 'runtime-input-intent',
-          source: 'runtime-user-input',
-          target: 'control-goal_interpreter',
-          data: { kind: 'request', label: '用户学习请求' },
-        })
-      }
+    const controlChain = ['runtime-user-input', 'control-goal_interpreter', 'control-utility_evaluator', 'control-orchestrator']
+      .filter((id) => Boolean(blocks[id]))
+    for (let index = 1; index < controlChain.length; index += 1) {
+      const source = controlChain[index - 1]
+      const target = controlChain[index]
+      const key = `${source}->${target}`
+      if (known.has(key)) continue
+      known.add(key)
+      next.push({
+        id: `runtime-control-${source}-${target}`,
+        source,
+        target,
+        data: { kind: 'control', label: target === 'control-goal_interpreter' ? '理解学习请求' : target === 'control-utility_evaluator' ? '评估学习效用' : '生成动态计划' },
+      })
     }
     for (const id of Object.keys(blocks)) {
       if (id === 'runtime-user-input' || id.startsWith('control-')) continue
-      const source = blocks['control-goal_interpreter'] ? 'control-goal_interpreter' : 'runtime-user-input'
+      const source = blocks['control-orchestrator']
+        ? 'control-orchestrator'
+        : controlChain.at(-1) ?? 'runtime-user-input'
       const key = `${source}->${id}`
       if (known.has(key)) continue
       known.add(key)
@@ -609,7 +620,7 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
         id: `runtime-intent-${id}`,
         source,
         target: id,
-        data: { kind: 'request', label: source === 'control-goal_interpreter' ? '意图识别结果' : '用户学习请求' },
+        data: { kind: 'request', label: source === 'control-orchestrator' ? '动态计划任务' : '控制面结果' },
       })
     }
     return next

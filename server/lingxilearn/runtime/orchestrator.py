@@ -6,10 +6,10 @@ from the learner's words.  The orchestrator chooses every round, from the
 learner's profile, and its choice can be overturned by what the last step
 produced.
 
-The model's role is deliberately small.  ``candidates`` has already enumerated
-what is possible and scored it; the model reorders and justifies within that
-list.  If it is unavailable, malformed, or picks something outside the list, the
-deterministic ranking stands and the loop keeps moving.
+The model evaluates every registry-eligible candidate and produces the plan.
+The host only enforces capability availability and schema safety. If the model
+is unavailable or malformed, the round fails closed; it never selects a local
+fallback route.
 """
 
 from __future__ import annotations
@@ -132,8 +132,8 @@ async def _score_candidates_with_model(
             for item in candidates
         ]
         return sorted(scored, key=lambda item: item.utility, reverse=True)
-    except Exception:  # noqa: BLE001 - service continuity still needs a safe fallback
-        logger.exception("utility evaluation failed; retaining safe registry ranking")
+    except Exception:  # noqa: BLE001 - no code-selected control fallback
+        logger.exception("utility evaluation failed")
         return None
 
 
@@ -203,14 +203,6 @@ def _goal_condition(goal: Goal, world: WorldState) -> DoneCondition:
     # Mastery is updated as evidence arrives, but it must not keep a simple
     # answer trapped in an automatic re-planning loop.
     return DoneCondition(kind="always")
-
-
-def fallback_plan(
-    *, goal: Goal, world: WorldState, candidates: Sequence[CandidateAction]
-) -> OrchestrationPlan:
-    """Legacy compatibility entry point that never selects a route."""
-
-    return unavailable_plan(candidates=candidates)
 
 
 def _repair(
@@ -402,4 +394,4 @@ def _view_dict(view: Any) -> dict[str, Any]:
     }
 
 
-__all__ = ["MAX_MODEL_CANDIDATES", "SYSTEM_PROMPT", "fallback_plan", "plan"]
+__all__ = ["MAX_MODEL_CANDIDATES", "SYSTEM_PROMPT", "plan"]

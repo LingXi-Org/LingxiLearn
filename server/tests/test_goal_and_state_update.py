@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 import pytest
 
 from lingxilearn.runtime.goal_interpreter import (
+    GoalInterpretationUnavailable,
     apply_to_stack,
     build_goal,
-    fallback_goal,
     interpret,
 )
 from lingxilearn.runtime.state_updater import StateUpdater
@@ -61,17 +61,10 @@ def test_urgency_is_clamped_and_survives_garbage() -> None:
     assert build_goal({"topic": "x", "urgency": "soon"}, utterance="x").urgency == 0.5
 
 
-def test_fallback_goal_keeps_the_loop_moving_without_a_model() -> None:
-    goal = fallback_goal("帮我讲讲 TCP", profile_rows=PROFILE_ROWS)
-    assert goal.goal_type == "learn"
-    assert goal.topic == "帮我讲讲 TCP"
-    assert goal.created_by.endswith("fallback")
-
-
 @pytest.mark.asyncio
-async def test_interpret_without_a_model_degrades_instead_of_raising() -> None:
-    goal = await interpret(utterance="讲讲 TCP", model=None, profile_rows=PROFILE_ROWS)
-    assert goal.topic == "讲讲 TCP"
+async def test_interpret_without_a_model_fails_closed() -> None:
+    with pytest.raises(GoalInterpretationUnavailable):
+        await interpret(utterance="讲讲 TCP", model=None, profile_rows=PROFILE_ROWS)
 
 
 @pytest.mark.asyncio

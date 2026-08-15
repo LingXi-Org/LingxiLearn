@@ -24,6 +24,10 @@ from ..state.session_state import Goal, GoalKind, GoalStack, StackOperation
 
 logger = logging.getLogger(__name__)
 
+
+class GoalInterpretationUnavailable(RuntimeError):
+    """The control-plane model did not return a valid goal."""
+
 GOAL_TYPES = frozenset({"learn", "review", "assess", "ask", "practice", "report", "manage"})
 
 SYSTEM_PROMPT = """你是 LingxiLearn 的目标解析器。
@@ -124,21 +128,6 @@ def build_goal(
     )
 
 
-def fallback_goal(utterance: str, *, profile_rows: Sequence[Mapping[str, Any]] = ()) -> Goal:
-    """The goal used when no model is available.
-
-    Degrading to "the learner wants to learn what they just said" keeps the loop
-    running; it is a worse goal, never a stalled session.
-    """
-
-    return build_goal(
-        {"goal_type": "learn", "topic": utterance},
-        utterance=utterance,
-        profile_rows=profile_rows,
-        created_by="goal_interpreter:fallback",
-    )
-
-
 async def interpret(
     *,
     utterance: str,
@@ -153,7 +142,7 @@ async def interpret(
     if not text:
         raise ValueError("goal_interpreter requires a non-empty utterance")
     if model is None:
-        return fallback_goal(text, profile_rows=profile_rows)
+        raise GoalInterpretationUnavailable("目标识别模型不可用")
 
     payload = {
         "utterance": text,
@@ -174,12 +163,12 @@ async def interpret(
             recursion_limit=4,
         )
         parsed = extract_json(message_text(result)) or {}
-    except Exception:  # noqa: BLE001 - a parse failure must not stall the loop
-        logger.exception("goal interpretation failed; using the fallback goal")
-        return fallback_goal(text, profile_rows=profile_rows)
+    except Exception as exc:  # noqa: BLE001 - do not route with local heuristics
+        logger.exception("goal interpretation failed")
+        raise GoalInterpretationUnavailable("目标识别模型执行失败") from exc
 
     if not parsed:
-        return fallback_goal(text, profile_rows=profile_rows)
+        raise GoalInterpretationUnavailable("目标识别模型没有返回有效结果")
     # A model that tries to route anyway is answering a question it was not
     # asked. Drop the field rather than letting it reach the orchestrator.
     for forbidden in ("route", "agent", "workflow", "next_node"):
@@ -212,9 +201,9 @@ def apply_to_stack(
 
 __all__ = [
     "GOAL_TYPES",
+    "GoalInterpretationUnavailable",
     "SYSTEM_PROMPT",
     "apply_to_stack",
     "build_goal",
-    "fallback_goal",
     "interpret",
 ]

@@ -244,13 +244,21 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             )
             return {"goal": current.to_dict(), "runtime_status": str(RuntimeStatus.PLANNING)}
 
-        goal = await goal_interpreter.interpret(
-            utterance=utterance,
-            model=deps.model,
-            profile_rows=rows,
-            runtime=runtime,
-            current_goal=stack.current(),
-        )
+        try:
+            goal = await goal_interpreter.interpret(
+                utterance=utterance,
+                model=deps.model,
+                profile_rows=rows,
+                runtime=runtime,
+                current_goal=stack.current(),
+            )
+        except goal_interpreter.GoalInterpretationUnavailable as exc:
+            await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+            return {
+                "runtime_status": str(RuntimeStatus.FAILED),
+                "finished_reason": str(exc),
+                "messages": ["目标识别失败，本轮没有执行任何学习技能。"],
+            }
         operation = goal_interpreter.apply_to_stack(stack, goal)
         await deps.runtime_state.apply_stack_operation(deps.task_id, operation)
         await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)

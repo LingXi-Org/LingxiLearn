@@ -17,7 +17,7 @@ from lingxilearn.runtime.contracts import DoneCondition
 from lingxilearn.runtime.dispatch import NoProvider, resolve
 from lingxilearn.runtime.guardrails import Budget
 from lingxilearn.runtime.loop import LoopDeps, build_loop, initial_state
-from lingxilearn.runtime.orchestrator import fallback_plan
+from lingxilearn.runtime.orchestrator import unavailable_plan
 from lingxilearn.state.evidence import EvidenceRecord, Signal
 from lingxilearn.state.gain import ProfileView
 from lingxilearn.state.session_state import Goal, RuntimeStatus, new_budget
@@ -198,21 +198,11 @@ async def test_the_same_utterance_takes_different_paths_on_different_profiles(
 
     from lingxilearn.runtime.candidates import generate
 
-    novice_plan = fallback_plan(
-        goal=GOAL, world=novice, candidates=generate(goal=GOAL, world=novice, skills=skills)
-    )
-    blocked_plan = fallback_plan(
-        goal=GOAL, world=blocked, candidates=generate(goal=GOAL, world=blocked, skills=skills)
-    )
+    novice_plan = unavailable_plan(candidates=generate(goal=GOAL, world=novice, skills=skills))
+    blocked_plan = unavailable_plan(candidates=generate(goal=GOAL, world=blocked, skills=skills))
 
-    assert novice_plan.tasks and blocked_plan.tasks
-    novice_step = (novice_plan.tasks[0].capability, novice_plan.tasks[0].knowledge_point_id)
-    blocked_step = (blocked_plan.tasks[0].capability, blocked_plan.tasks[0].knowledge_point_id)
-    assert novice_step != blocked_step
-    # And the blocked learner's plan is a deviation, so it must negotiate first.
-    assert blocked_plan.deviates_from_goal
-    assert blocked_plan.negotiation
-    assert blocked_plan.awaits_user
+    assert not novice_plan.tasks and novice_plan.awaits_user
+    assert not blocked_plan.tasks and blocked_plan.awaits_user
 
 
 # --- criterion 2: a step's result changes the next step, visibly ------------
@@ -412,23 +402,18 @@ def test_a_skill_without_a_provider_is_not_resolvable() -> None:
 # --- fallback planning ------------------------------------------------------
 
 
-def test_the_fallback_plan_is_marked_degraded_and_still_actionable() -> None:
+def test_an_unavailable_control_model_never_selects_a_local_route() -> None:
     from lingxilearn.runtime.candidates import generate
 
     world = WorldState(target=ProfileView.unseen("tcp-congestion"))
-    plan = fallback_plan(
-        goal=GOAL, world=world, candidates=generate(goal=GOAL, world=world, skills=REGISTRY)
-    )
+    plan = unavailable_plan(candidates=generate(goal=GOAL, world=world, skills=REGISTRY))
     assert plan.degraded
-    assert plan.tasks
-    assert plan.tasks[0].rationale
-    assert isinstance(plan.tasks[0].done_when, DoneCondition)
+    assert not plan.tasks
+    assert plan.awaits_user
 
 
 def test_with_no_eligible_candidate_the_fallback_hands_back_to_the_learner() -> None:
-    plan = fallback_plan(
-        goal=GOAL, world=WorldState(target=ProfileView.unseen("x")), candidates=[]
-    )
+    plan = unavailable_plan(candidates=[])
     assert plan.awaits_user
     assert not plan.tasks
 

@@ -29,6 +29,7 @@ AGENT_EVENT_KINDS: Final[frozenset[str]] = frozenset(
         "tool.result",
         "model.started",
         "model.completed",
+        "model.failed",
         "model.usage",
         "node.appeared",
         "node.started",

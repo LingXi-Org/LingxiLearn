@@ -83,6 +83,7 @@ _AGENT_FORCE_FLUSH = frozenset(
         "agent.output",
         "model.started",
         "model.completed",
+        "model.failed",
         "tool.call.delta",
         "tool.result",
         "artifact.ready",

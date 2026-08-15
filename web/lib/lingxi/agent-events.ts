@@ -16,6 +16,7 @@ export const AGENT_EVENT_KINDS = [
   'tool.result',
   'model.started',
   'model.completed',
+  'model.failed',
   'model.usage',
   'node.appeared',
   'node.started',
