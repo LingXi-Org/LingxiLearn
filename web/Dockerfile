@@ -1,14 +1,23 @@
 ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
-# Bun 1.3.14 crashes with SIGILL while Next collects page data on the CI
-# runner. Keep the image pinned to the stable 1.3.6 runtime until that Bun
-# regression is resolved upstream.
 ARG BUN_VERSION=1.3.6
-FROM ${DOCKER_REGISTRY}/oven/bun:${BUN_VERSION} AS builder
+ARG NODE_VERSION=22-bookworm-slim
+
+# Keep Bun as the lockfile-aware dependency installer, but run Next.js itself on
+# Node. Restored server routes depend on Node worker_threads APIs during
+# `next build` page-data collection, so executing the build under Bun can fail
+# before a route is ever invoked.
+FROM ${DOCKER_REGISTRY}/oven/bun:${BUN_VERSION} AS deps
+
+WORKDIR /app
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+COPY package.json bun.lock bunfig.toml ./
+RUN bun install --ignore-scripts --registry ${NPM_REGISTRY}
+
+FROM ${DOCKER_REGISTRY}/node:${NODE_VERSION} AS builder
 
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
-ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG NEXT_PUBLIC_API_BASE=
 ARG DATABASE_URL=postgresql://build:build@localhost:5432/build
 ARG NODE_OPTIONS=--max-old-space-size=768
@@ -19,15 +28,14 @@ ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE \
     NEXT_STATIC_EXPORT=1 \
     NODE_OPTIONS=$NODE_OPTIONS
 
-COPY package.json bun.lock bunfig.toml ./
-RUN bun install --ignore-scripts --registry ${NPM_REGISTRY}
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN rm -rf out .next && bun run build && test -f .next/standalone/server.js
+RUN rm -rf out .next && node ./node_modules/next/dist/bin/next build && test -f .next/standalone/server.js
 
 ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
-ARG BUN_VERSION=1.3.6
-FROM ${DOCKER_REGISTRY}/oven/bun:${BUN_VERSION} AS runtime
+ARG NODE_VERSION=22-bookworm-slim
+FROM ${DOCKER_REGISTRY}/node:${NODE_VERSION} AS runtime
 ARG LINGXILEARN_VERSION=0.1.0
 LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}"
 
@@ -37,4 +45,4 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 EXPOSE 3000
-CMD ["bun", "server.js"]
+CMD ["node", "server.js"]

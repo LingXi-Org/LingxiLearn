@@ -1,0 +1,507 @@
+import { createLogger } from '@sim/logger'
+import { type NextRequest, NextResponse } from 'next/server'
+import {
+  type V1BatchInsertTableRowsBody,
+  v1CreateTableRowContract,
+  v1DeleteTableRowsContract,
+  v1ListTableRowsContract,
+  v1UpdateRowsByFilterContract,
+} from '@/lib/api/contracts/v1/tables'
+import { parseRequest } from '@/lib/api/server'
+import { generateRequestId } from '@/lib/core/utils/request'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import type { Filter, RowData, TableSchema } from '@/lib/table'
+import {
+  batchInsertRows,
+  deleteRowsByFilter,
+  deleteRowsByIds,
+  insertRow,
+  updateRowsByFilter,
+  validateBatchRows,
+  validateRowData,
+  validateRowSize,
+} from '@/lib/table'
+import { namedRowMapper } from '@/lib/table/cell-format'
+import {
+  buildIdByName,
+  filterNamesToIds,
+  rowDataNameToId,
+  sortNamesToIds,
+} from '@/lib/table/column-keys'
+import { TableQueryValidationError } from '@/lib/table/errors'
+import { signalTableRowsChanged } from '@/lib/table/events'
+import { createExactEmptyTableRowSecretProvenance } from '@/lib/table/rows/secret-provenance'
+import { queryRows } from '@/lib/table/rows/service'
+import { resolveFilterSelectValues } from '@/lib/table/select-values'
+import { accessError, checkAccess, orchestrationErrorResponse } from '@/app/api/table/utils'
+import {
+  checkRateLimit,
+  checkWorkspaceScope,
+  createRateLimitResponse,
+  resolveWorkspaceRequestActor,
+  v1ValidationErrorResponse,
+  v1ValidationErrorResponseFromError,
+} from '@/app/api/v1/middleware'
+
+const logger = createLogger('V1TableRowsAPI')
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+interface TableRowsRouteParams {
+  params: Promise<{ tableId: string }>
+}
+
+async function handleBatchInsert(
+  requestId: string,
+  tableId: string,
+  validated: V1BatchInsertTableRowsBody,
+  userId: string,
+  actorUserId: string
+): Promise<NextResponse> {
+  const accessResult = await checkAccess(tableId, userId, 'write')
+  if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
+
+  const { table } = accessResult
+
+  if (validated.workspaceId !== table.workspaceId) {
+    return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+  }
+
+  // External callers key row data by column name; storage keys by id.
+  const idByName = buildIdByName(table.schema as TableSchema)
+  const toNamedRow = namedRowMapper((table.schema as TableSchema).columns)
+  const rows = (validated.rows as RowData[]).map((r) => rowDataNameToId(r, idByName))
+
+  const validation = await validateBatchRows({
+    rows,
+    schema: table.schema as TableSchema,
+    tableId,
+  })
+  if (!validation.valid) return validation.response
+
+  try {
+    const insertedRows = await batchInsertRows(
+      {
+        tableId,
+        rows,
+        workspaceId: validated.workspaceId,
+        userId: actorUserId,
+        secretProvenance: rows.map(createExactEmptyTableRowSecretProvenance),
+      },
+      table,
+      requestId
+    )
+    signalTableRowsChanged(tableId)
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        rows: insertedRows.map((r) => ({
+          id: r.id,
+          data: toNamedRow(r.data),
+          position: r.position,
+          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+          updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : r.updatedAt,
+        })),
+        insertedCount: insertedRows.length,
+        message: `Successfully inserted ${insertedRows.length} rows`,
+      },
+    })
+  } catch (error) {
+    const response = orchestrationErrorResponse(error)
+    if (response) return response
+
+    logger.error(`[${requestId}] Error batch inserting rows:`, error)
+    return NextResponse.json({ error: 'Failed to insert rows' }, { status: 500 })
+  }
+}
+
+/** GET /api/v1/tables/[tableId]/rows — Query rows with filtering, sorting, pagination. */
+export const GET = withRouteHandler(async (request: NextRequest, context: TableRowsRouteParams) => {
+  const requestId = generateRequestId()
+
+  try {
+    const rateLimit = await checkRateLimit(request, 'table-rows')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
+    }
+
+    const userId = rateLimit.userId!
+    const parsed = await parseRequest(v1ListTableRowsContract, request, context, {
+      validationErrorResponse: (error) => {
+        const hasJsonError = error.issues.some(
+          (issue) =>
+            issue.message === 'Invalid filter JSON' || issue.message === 'Invalid sort JSON'
+        )
+        if (hasJsonError) {
+          return NextResponse.json({ error: 'Invalid filter or sort JSON' }, { status: 400 })
+        }
+        return v1ValidationErrorResponse(error)
+      },
+    })
+    if (!parsed.success) return parsed.response
+
+    const { tableId } = parsed.data.params
+    const validated = parsed.data.query
+    const scopeError = await checkWorkspaceScope(rateLimit, validated.workspaceId)
+    if (scopeError) return scopeError
+
+    const accessResult = await checkAccess(tableId, userId, 'read')
+    if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
+
+    const { table } = accessResult
+
+    if (validated.workspaceId !== table.workspaceId) {
+      return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+    }
+
+    // Translate name-keyed filter/sort fields → column ids; translate rows back.
+    const idByName = buildIdByName(table.schema as TableSchema)
+    const toNamedRow = namedRowMapper((table.schema as TableSchema).columns)
+    const filter = validated.filter
+      ? resolveFilterSelectValues(
+          filterNamesToIds(validated.filter as Filter, idByName),
+          (table.schema as TableSchema).columns
+        )
+      : undefined
+    const sort = validated.sort ? sortNamesToIds(validated.sort, idByName) : undefined
+
+    const result = await queryRows(
+      table,
+      {
+        filter,
+        sort,
+        limit: validated.limit,
+        offset: validated.offset,
+        includeTotal: validated.includeTotal,
+        withExecutions: false,
+      },
+      requestId
+    )
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        rows: result.rows.map((r) => ({
+          id: r.id,
+          data: toNamedRow(r.data),
+          position: r.position,
+          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+          updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : String(r.updatedAt),
+        })),
+        rowCount: result.rowCount,
+        totalCount: result.totalCount,
+        limit: result.limit,
+        offset: result.offset,
+        // Non-null when more rows exist; a page may return fewer than `limit`
+        // rows (byte budget) with more remaining, so page fullness is not a
+        // termination signal — external pagers should stop on null.
+        nextCursor: result.nextCursor,
+      },
+    })
+  } catch (error) {
+    const validationResponse = v1ValidationErrorResponseFromError(error)
+    if (validationResponse) return validationResponse
+
+    if (error instanceof TableQueryValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    logger.error(`[${requestId}] Error querying rows:`, error)
+    return NextResponse.json({ error: 'Failed to query rows' }, { status: 500 })
+  }
+})
+
+/** POST /api/v1/tables/[tableId]/rows — Insert row(s). Supports single or batch. */
+export const POST = withRouteHandler(
+  async (request: NextRequest, context: TableRowsRouteParams) => {
+    const requestId = generateRequestId()
+
+    try {
+      const rateLimit = await checkRateLimit(request, 'table-rows')
+      if (!rateLimit.allowed) {
+        return createRateLimitResponse(rateLimit)
+      }
+
+      const userId = rateLimit.userId!
+      const parsed = await parseRequest(v1CreateTableRowContract, request, context, {
+        validationErrorResponse: v1ValidationErrorResponse,
+      })
+      if (!parsed.success) return parsed.response
+
+      const { tableId } = parsed.data.params
+      if ('rows' in parsed.data.body) {
+        const batchValidated = parsed.data.body
+        const scopeError = await checkWorkspaceScope(rateLimit, batchValidated.workspaceId)
+        if (scopeError) return scopeError
+        const actorUserId = await resolveWorkspaceRequestActor(
+          rateLimit,
+          batchValidated.workspaceId
+        )
+        if (!actorUserId) {
+          throw new Error(
+            `Unable to resolve system actor for workspace ${batchValidated.workspaceId}`
+          )
+        }
+        return handleBatchInsert(requestId, tableId, batchValidated, userId, actorUserId)
+      }
+
+      const validated = parsed.data.body
+
+      const scopeError = await checkWorkspaceScope(rateLimit, validated.workspaceId)
+      if (scopeError) return scopeError
+      const actorUserId = await resolveWorkspaceRequestActor(rateLimit, validated.workspaceId)
+      if (!actorUserId) {
+        throw new Error(`Unable to resolve system actor for workspace ${validated.workspaceId}`)
+      }
+
+      const accessResult = await checkAccess(tableId, userId, 'write')
+      if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
+
+      const { table } = accessResult
+
+      if (validated.workspaceId !== table.workspaceId) {
+        return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+      }
+
+      const idByName = buildIdByName(table.schema as TableSchema)
+      const toNamedRow = namedRowMapper((table.schema as TableSchema).columns)
+      const rowData = rowDataNameToId(validated.data as RowData, idByName)
+
+      const validation = await validateRowData({
+        rowData,
+        schema: table.schema as TableSchema,
+        tableId,
+      })
+      if (!validation.valid) return validation.response
+
+      const row = await insertRow(
+        {
+          tableId,
+          data: rowData,
+          workspaceId: validated.workspaceId,
+          userId: actorUserId,
+          secretProvenance: createExactEmptyTableRowSecretProvenance(rowData),
+        },
+        table,
+        requestId
+      )
+      signalTableRowsChanged(tableId)
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          row: {
+            id: row.id,
+            data: toNamedRow(row.data),
+            position: row.position,
+            createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+            updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
+          },
+          message: 'Row inserted successfully',
+        },
+      })
+    } catch (error) {
+      const validationResponse = v1ValidationErrorResponseFromError(error)
+      if (validationResponse) return validationResponse
+
+      const response = orchestrationErrorResponse(error)
+      if (response) return response
+
+      logger.error(`[${requestId}] Error inserting row:`, error)
+      return NextResponse.json({ error: 'Failed to insert row' }, { status: 500 })
+    }
+  }
+)
+
+/** PUT /api/v1/tables/[tableId]/rows — Bulk update rows by filter. */
+export const PUT = withRouteHandler(async (request: NextRequest, context: TableRowsRouteParams) => {
+  const requestId = generateRequestId()
+
+  try {
+    const rateLimit = await checkRateLimit(request, 'table-rows')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
+    }
+
+    const userId = rateLimit.userId!
+    const parsed = await parseRequest(v1UpdateRowsByFilterContract, request, context, {
+      validationErrorResponse: v1ValidationErrorResponse,
+    })
+    if (!parsed.success) return parsed.response
+    const { tableId } = parsed.data.params
+    const validated = parsed.data.body
+
+    const scopeError = await checkWorkspaceScope(rateLimit, validated.workspaceId)
+    if (scopeError) return scopeError
+    const actorUserId = await resolveWorkspaceRequestActor(rateLimit, validated.workspaceId)
+    if (!actorUserId) {
+      throw new Error(`Unable to resolve system actor for workspace ${validated.workspaceId}`)
+    }
+
+    const accessResult = await checkAccess(tableId, userId, 'write')
+    if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
+
+    const { table } = accessResult
+
+    if (validated.workspaceId !== table.workspaceId) {
+      return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+    }
+
+    const idByName = buildIdByName(table.schema as TableSchema)
+    const patchData = rowDataNameToId(validated.data as RowData, idByName)
+
+    const sizeValidation = validateRowSize(patchData)
+    if (!sizeValidation.valid) {
+      return NextResponse.json(
+        { error: 'Validation error', details: sizeValidation.errors },
+        { status: 400 }
+      )
+    }
+
+    const result = await updateRowsByFilter(
+      table,
+      {
+        filter: resolveFilterSelectValues(
+          filterNamesToIds(validated.filter as Filter, idByName),
+          (table.schema as TableSchema).columns
+        ),
+        data: patchData,
+        limit: validated.limit,
+        actorUserId,
+        secretProvenance: createExactEmptyTableRowSecretProvenance(patchData),
+      },
+      requestId
+    )
+    if (result.affectedCount > 0) signalTableRowsChanged(tableId)
+
+    if (result.affectedCount === 0) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          message: 'No rows matched the filter criteria',
+          updatedCount: 0,
+        },
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        message: 'Rows updated successfully',
+        updatedCount: result.affectedCount,
+        updatedRowIds: result.affectedRowIds,
+      },
+    })
+  } catch (error) {
+    const validationResponse = v1ValidationErrorResponseFromError(error)
+    if (validationResponse) return validationResponse
+
+    if (error instanceof TableQueryValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    const response = orchestrationErrorResponse(error)
+    if (response) return response
+
+    logger.error(`[${requestId}] Error updating rows by filter:`, error)
+    return NextResponse.json({ error: 'Failed to update rows' }, { status: 500 })
+  }
+})
+
+/** DELETE /api/v1/tables/[tableId]/rows — Delete rows by filter or IDs. */
+export const DELETE = withRouteHandler(
+  async (request: NextRequest, context: TableRowsRouteParams) => {
+    const requestId = generateRequestId()
+
+    try {
+      const rateLimit = await checkRateLimit(request, 'table-rows')
+      if (!rateLimit.allowed) {
+        return createRateLimitResponse(rateLimit)
+      }
+
+      const userId = rateLimit.userId!
+      const parsed = await parseRequest(v1DeleteTableRowsContract, request, context, {
+        validationErrorResponse: v1ValidationErrorResponse,
+      })
+      if (!parsed.success) return parsed.response
+      const { tableId } = parsed.data.params
+      const validated = parsed.data.body
+
+      const scopeError = await checkWorkspaceScope(rateLimit, validated.workspaceId)
+      if (scopeError) return scopeError
+
+      const accessResult = await checkAccess(tableId, userId, 'write')
+      if (!accessResult.ok) return accessError(accessResult, requestId, tableId)
+
+      const { table } = accessResult
+
+      if (validated.workspaceId !== table.workspaceId) {
+        return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+      }
+
+      if (validated.rowIds) {
+        const result = await deleteRowsByIds(
+          table,
+          { tableId, rowIds: validated.rowIds, workspaceId: validated.workspaceId },
+          requestId
+        )
+        if (result.deletedCount > 0) signalTableRowsChanged(tableId)
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            message:
+              result.deletedCount === 0
+                ? 'No matching rows found for the provided IDs'
+                : 'Rows deleted successfully',
+            deletedCount: result.deletedCount,
+            deletedRowIds: result.deletedRowIds,
+            requestedCount: result.requestedCount,
+            ...(result.missingRowIds.length > 0 ? { missingRowIds: result.missingRowIds } : {}),
+          },
+        })
+      }
+
+      const idByName = buildIdByName(table.schema as TableSchema)
+      const result = await deleteRowsByFilter(
+        table,
+        {
+          filter: resolveFilterSelectValues(
+            filterNamesToIds(validated.filter as Filter, idByName),
+            (table.schema as TableSchema).columns
+          ),
+          limit: validated.limit,
+        },
+        requestId
+      )
+      if (result.affectedCount > 0) signalTableRowsChanged(tableId)
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          message:
+            result.affectedCount === 0
+              ? 'No rows matched the filter criteria'
+              : 'Rows deleted successfully',
+          deletedCount: result.affectedCount,
+          deletedRowIds: result.affectedRowIds,
+        },
+      })
+    } catch (error) {
+      const validationResponse = v1ValidationErrorResponseFromError(error)
+      if (validationResponse) return validationResponse
+
+      if (error instanceof TableQueryValidationError) {
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+
+      const response = orchestrationErrorResponse(error)
+      if (response) return response
+
+      logger.error(`[${requestId}] Error deleting rows:`, error)
+      return NextResponse.json({ error: 'Failed to delete rows' }, { status: 500 })
+    }
+  }
+)

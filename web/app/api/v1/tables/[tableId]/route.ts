@@ -1,0 +1,160 @@
+import { createLogger } from '@sim/logger'
+import { type NextRequest, NextResponse } from 'next/server'
+import { v1DeleteTableContract, v1GetTableContract } from '@/lib/api/contracts/v1/tables'
+import { parseRequest } from '@/lib/api/server'
+import { generateRequestId } from '@/lib/core/utils/request'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import type { TableSchema } from '@/lib/table'
+import { performDeleteTable } from '@/lib/table/orchestration'
+import {
+  accessError,
+  checkAccess,
+  normalizeColumn,
+  orchestrationOutcomeErrorResponse,
+  tableLockErrorResponse,
+} from '@/app/api/table/utils'
+import {
+  checkRateLimit,
+  checkWorkspaceScope,
+  createRateLimitResponse,
+} from '@/app/api/v1/middleware'
+
+const logger = createLogger('V1TableDetailAPI')
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+interface TableRouteParams {
+  params: Promise<{ tableId: string }>
+}
+
+/** GET /api/v1/tables/[tableId] — Get table details. */
+export const GET = withRouteHandler(async (request: NextRequest, context: TableRouteParams) => {
+  const requestId = generateRequestId()
+
+  try {
+    const rateLimit = await checkRateLimit(request, 'table-detail')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
+    }
+
+    const userId = rateLimit.userId!
+    const parsed = await parseRequest(v1GetTableContract, request, context, {
+      validationErrorResponse: (error) => {
+        const hasInvalidTableId = error.issues.some((issue) => issue.path.includes('tableId'))
+        return NextResponse.json(
+          {
+            error: hasInvalidTableId
+              ? 'Invalid table ID'
+              : 'workspaceId query parameter is required',
+          },
+          { status: 400 }
+        )
+      },
+    })
+    if (!parsed.success) return parsed.response
+
+    const { tableId } = parsed.data.params
+    const { workspaceId } = parsed.data.query
+
+    const scopeError = await checkWorkspaceScope(rateLimit, workspaceId)
+    if (scopeError) return scopeError
+
+    const result = await checkAccess(tableId, userId, 'read')
+    if (!result.ok) return accessError(result, requestId, tableId)
+
+    const { table } = result
+
+    if (table.workspaceId !== workspaceId) {
+      return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+    }
+
+    const schemaData = table.schema as TableSchema
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        table: {
+          id: table.id,
+          name: table.name,
+          description: table.description,
+          schema: {
+            columns: schemaData.columns.map(normalizeColumn),
+          },
+          rowCount: table.rowCount,
+          maxRows: table.maxRows,
+          locks: table.locks,
+          createdAt:
+            table.createdAt instanceof Date
+              ? table.createdAt.toISOString()
+              : String(table.createdAt),
+          updatedAt:
+            table.updatedAt instanceof Date
+              ? table.updatedAt.toISOString()
+              : String(table.updatedAt),
+        },
+      },
+    })
+  } catch (error) {
+    logger.error(`[${requestId}] Error getting table:`, error)
+    return NextResponse.json({ error: 'Failed to get table' }, { status: 500 })
+  }
+})
+
+/** DELETE /api/v1/tables/[tableId] — Archive a table. */
+export const DELETE = withRouteHandler(async (request: NextRequest, context: TableRouteParams) => {
+  const requestId = generateRequestId()
+
+  try {
+    const rateLimit = await checkRateLimit(request, 'table-detail')
+    if (!rateLimit.allowed) {
+      return createRateLimitResponse(rateLimit)
+    }
+
+    const userId = rateLimit.userId!
+    const parsed = await parseRequest(v1DeleteTableContract, request, context, {
+      validationErrorResponse: (error) => {
+        const hasInvalidTableId = error.issues.some((issue) => issue.path.includes('tableId'))
+        return NextResponse.json(
+          {
+            error: hasInvalidTableId
+              ? 'Invalid table ID'
+              : 'workspaceId query parameter is required',
+          },
+          { status: 400 }
+        )
+      },
+    })
+    if (!parsed.success) return parsed.response
+
+    const { tableId } = parsed.data.params
+    const { workspaceId } = parsed.data.query
+
+    const scopeError = await checkWorkspaceScope(rateLimit, workspaceId)
+    if (scopeError) return scopeError
+
+    const result = await checkAccess(tableId, userId, 'write')
+    if (!result.ok) return accessError(result, requestId, tableId)
+
+    if (result.table.workspaceId !== workspaceId) {
+      return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+    }
+
+    const outcome = await performDeleteTable({ table: result.table, userId, requestId, request })
+    if (!outcome.success) {
+      return orchestrationOutcomeErrorResponse(outcome, 'Failed to delete table')
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        message: 'Table archived successfully',
+      },
+    })
+  } catch (error) {
+    const lockError = tableLockErrorResponse(error)
+    if (lockError) return lockError
+    logger.error(`[${requestId}] Error deleting table:`, error)
+    return NextResponse.json({ error: 'Failed to delete table' }, { status: 500 })
+  }
+})

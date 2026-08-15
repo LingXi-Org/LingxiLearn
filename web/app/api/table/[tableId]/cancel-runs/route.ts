@@ -1,0 +1,80 @@
+import { createLogger } from '@sim/logger'
+import { type NextRequest, NextResponse } from 'next/server'
+import { cancelTableRunsContract } from '@/lib/api/contracts/tables'
+import { parseRequest } from '@/lib/api/server'
+import { checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
+import { generateRequestId } from '@/lib/core/utils/request'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { TableQueryValidationError } from '@/lib/table/errors'
+import { signalTableRowsChanged } from '@/lib/table/events'
+import { toLegacyFilter } from '@/lib/table/query-builder/converters'
+import { cancelWorkflowGroupRuns } from '@/lib/table/workflow-columns'
+import { accessError, checkAccess, tableFilterError } from '@/app/api/table/utils'
+
+const logger = createLogger('TableCancelRunsAPI')
+
+interface RouteParams {
+  params: Promise<{ tableId: string }>
+}
+
+/**
+ * POST /api/table/[tableId]/cancel-runs
+ *
+ * Cancels in-flight and pending workflow-column runs for this table. Scopes:
+ * `all` (every cell) or `row` (every cell for `rowId`).
+ */
+export const POST = withRouteHandler(async (request: NextRequest, { params }: RouteParams) => {
+  const requestId = generateRequestId()
+
+  try {
+    const authResult = await checkSessionOrInternalAuth(request, { requireWorkflowId: false })
+    if (!authResult.success || !authResult.userId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    const parsed = await parseRequest(cancelTableRunsContract, request, { params })
+    if (!parsed.success) return parsed.response
+    const { tableId } = parsed.data.params
+    const { workspaceId, scope, rowId, filter: wireFilter, excludeRowIds } = parsed.data.body
+    // Dual-grammar wire: a predicate downgrades losslessly-or-throws to the
+    // legacy Filter the runners/persisted payloads still compile.
+    const filter = toLegacyFilter(wireFilter)
+
+    const result = await checkAccess(tableId, authResult.userId, 'write')
+    if (!result.ok) return accessError(result, requestId, tableId)
+    const { table } = result
+
+    if (table.workspaceId !== workspaceId) {
+      return NextResponse.json({ error: 'Invalid workspace ID' }, { status: 400 })
+    }
+
+    const filterError = tableFilterError(wireFilter, table.schema.columns)
+    if (filterError) return filterError
+
+    const cancelled = await cancelWorkflowGroupRuns(tableId, scope === 'row' ? rowId : undefined, {
+      filter,
+      excludeRowIds,
+    })
+    logger.info(
+      `[${requestId}] cancel-runs: tableId=${tableId} scope=${scope}${
+        rowId ? ` rowId=${rowId}` : ''
+      } cancelled=${cancelled}`
+    )
+
+    // Cancelling clears/tombstones affected rows' exec state in the DB. The `dispatch: cancelled` events
+    // drop the run overlay, but the client then renders the row's authoritative DB state — so refetch the
+    // grid to pick up the cleared cells. Unconditional: `cancelled` counts dispatches, but tombstone row
+    // writes can happen even when that is 0, and a stale-but-harmless refetch beats a missed one.
+    signalTableRowsChanged(tableId)
+
+    return NextResponse.json({ success: true, data: { cancelled } })
+  } catch (error) {
+    // A predicate that Zod accepts but the downgrade rejects (hybrid node,
+    // eq-with-array, valueless op) is caller error, not a server fault.
+    if (error instanceof TableQueryValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    logger.error(`[${requestId}] cancel-runs failed:`, error)
+    return NextResponse.json({ error: 'Failed to cancel runs' }, { status: 500 })
+  }
+})
