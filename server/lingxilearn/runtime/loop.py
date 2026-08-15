@@ -422,6 +422,10 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             for row in await deps.runtime_state.profile_for(deps.learner_id)
         }
         dispatcher.retarget(goal=goal)
+        # Providers emit learner-facing output through ProviderContext.runtime.
+        # Binding it here is essential: the dispatcher is created before the
+        # compiled graph supplies its per-run runtime object.
+        dispatcher.bind_runtime(runtime, emit=deps.emit)
 
         outcomes: list[TaskOutcome] = []
         messages: list[str] = []

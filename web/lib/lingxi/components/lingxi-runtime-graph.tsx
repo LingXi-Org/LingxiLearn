@@ -59,7 +59,7 @@ function blockState(data: Record<string, unknown>) {
 }
 
 function runtimeIcon(type: string) {
-  if (type.includes('start') || type === 'trigger') return StartIcon
+  if (type.includes('start') || type === 'trigger' || type === 'input' || type === 'intent') return StartIcon
   if (type.includes('table')) return TableIcon
   if (type.includes('slack')) return SlackIcon
   if (type.includes('code') || type.includes('function')) return CodeIcon
@@ -534,10 +534,39 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
   const rawBlocks = (graph.blocks ?? {}) as Record<string, Record<string, unknown>>
   const rawEdges = (graph.edges ?? []) as Array<Record<string, unknown>>
   const semantic = useMemo(() => semanticGraph(rawBlocks, rawEdges), [rawBlocks, rawEdges])
-  const blocks = semantic.blocks
+  const blocks = useMemo(() => {
+    const controls: Record<string, Record<string, unknown>> = {}
+    const labels: Record<string, string> = {
+      goal_interpreter: '意图识别',
+      utility_evaluator: '学习效用评估',
+      orchestrator: '学习计划编排',
+    }
+    for (const event of events) {
+      const agent = String(event.agent ?? '')
+      if (!labels[agent] || !['model.started', 'model.completed', 'model.failed'].includes(event.kind)) continue
+      const id = `control-${agent}`
+      controls[id] = {
+        name: labels[agent], type: 'intent', executionState: event.kind === 'model.failed' ? 'failed' : event.kind === 'model.completed' ? 'completed' : 'running',
+        data: { nodeKind: 'intent', controlPlane: true, provider: agent, capability: `control.${agent}` },
+        rows: [{ title: '节点类型', value: '运行时控制面' }, { title: '模型节点', value: labels[agent] }],
+      }
+    }
+    return {
+      'runtime-user-input': {
+        name: '用户输入', type: 'input', executionState: 'completed',
+        data: { nodeKind: 'input', input: true },
+        rows: [{ title: '节点类型', value: '用户输入' }, { title: '作用', value: '触发本轮学习计划' }],
+      },
+      ...controls,
+      ...semantic.blocks,
+    }
+  }, [events, semantic.blocks])
   const explicitEdges = semantic.edges
   const edges = useMemo(() => {
-    const next = [...explicitEdges]
+    // Control-plane cards are observable. Intent recognition is the one
+    // explicit bridge from the learner's request into the planned skill graph;
+    // utility scoring and planning remain internal decision cards.
+    const next = explicitEdges.filter((edge) => !String(edge.source).startsWith('control-') && !String(edge.target).startsWith('control-'))
     const known = new Set(next.map((edge) => `${edge.source}->${edge.target}`))
     for (const [target, block] of Object.entries(blocks)) {
       const dependencies =
@@ -557,6 +586,31 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
           data: { kind: 'dependency' },
         })
       }
+    }
+    if (blocks['control-goal_interpreter']) {
+      const key = 'runtime-user-input->control-goal_interpreter'
+      if (!known.has(key)) {
+        known.add(key)
+        next.push({
+          id: 'runtime-input-intent',
+          source: 'runtime-user-input',
+          target: 'control-goal_interpreter',
+          data: { kind: 'request', label: '用户学习请求' },
+        })
+      }
+    }
+    for (const id of Object.keys(blocks)) {
+      if (id === 'runtime-user-input' || id.startsWith('control-')) continue
+      const source = blocks['control-goal_interpreter'] ? 'control-goal_interpreter' : 'runtime-user-input'
+      const key = `${source}->${id}`
+      if (known.has(key)) continue
+      known.add(key)
+      next.push({
+        id: `runtime-intent-${id}`,
+        source,
+        target: id,
+        data: { kind: 'request', label: source === 'control-goal_interpreter' ? '意图识别结果' : '用户学习请求' },
+      })
     }
     return next
   }, [blocks, explicitEdges])

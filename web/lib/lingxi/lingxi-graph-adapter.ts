@@ -351,139 +351,59 @@ function reasoningStep(
 }
 
 function reduceReasoningSteps(
-  task: AgentTaskSnapshot,
+  _task: AgentTaskSnapshot,
   events: AgentTaskEvent[],
-  runs: AgentRun[],
-  tools: ToolRun[]
+  _runs: AgentRun[],
+  _tools: ToolRun[]
 ): ReasoningStep[] {
+  // The plan card is a projection of the current orchestration decision, not
+  // a debug trace.  Raw loop nodes have no learner-facing task identity and
+  // previously created the repeated “执行学习计划” entries.
   const steps = new Map<string, ReasoningStep>()
-  const upsert = (step: ReasoningStep) => steps.set(step.id, step)
-  const terminal = TERMINAL_TASK_STATUSES.has(task.status)
+  let currentPlan = ''
 
   for (const event of events) {
     const timestamp = event.ts ? Date.parse(event.ts) || undefined : undefined
     const payload = eventPayload(event)
-    if (event.kind === 'task.started') {
-      upsert(
-        reasoningStep(
-          'task',
-          '准备学习任务',
-          '学习任务已创建，智能体图正在启动。',
-          terminal ? 'complete' : 'active',
-          timestamp
-        )
-      )
-    } else if (event.kind === 'agent.started') {
-      const run = runs.find(
-        (candidate) =>
-          candidate.startSequence === event.sequence && candidate.agent === eventAgent(event)
-      )
-      if (run)
-        upsert(
-          reasoningStep(
-            `agent:${run.startSequence}`,
-            agentLabel(run.agent),
-            `${agentLabel(run.agent)}已开始这一学习阶段。`,
-            run.status === 'executing' ? 'active' : run.status === 'error' ? 'error' : 'complete',
-            timestamp
-          )
-        )
-    } else if (event.kind === 'agent.completed' || event.kind === 'agent.failed') {
-      const run = [...runs]
-        .reverse()
-        .find(
-          (candidate) =>
-            candidate.agent === eventAgent(event) && candidate.endSequence === event.sequence
-        )
-      if (run)
-        upsert(
-          reasoningStep(
-            `agent:${run.startSequence}`,
-            agentLabel(run.agent),
-            event.kind === 'agent.failed'
-              ? `${agentLabel(run.agent)}未能完成这一阶段。`
-              : `${agentLabel(run.agent)}已完成这一阶段。`,
-            event.kind === 'agent.failed' ? 'error' : 'complete',
-            undefined,
-            timestamp
-          )
-        )
-    } else if (event.kind === 'artifact.ready') {
-      const artifact = stringValue(payload.artifact)
-      upsert(
-        reasoningStep(
-          `artifact:${artifact || event.sequence}`,
-          '准备学习产物',
-          artifact
-            ? `${humanize(artifact)}产物已准备好，可查看。`
-            : '学习产物已准备好，可查看。',
-          'complete',
-          timestamp,
-          timestamp
-        )
-      )
-    } else if (event.kind === 'task.completed' || event.kind === 'run.completed' || event.kind === 'run.ended') {
-      upsert(
-        reasoningStep(
-          'task',
-          '准备学习任务',
-          payload.status === 'partial'
-            ? '当前学习产物已准备好，但部分阶段只完成了一部分。'
-            : '学习任务及其产物已完成。',
-          'complete',
-          undefined,
-          timestamp
-        )
-      )
-      upsert(
-        reasoningStep(
-          'finish',
-          '总结学习结果',
-          '智能体图已返回当前学习结果。',
-          'complete',
-          timestamp,
-          timestamp
-        )
-      )
-    } else if (event.kind === 'task.failed') {
-      upsert(
-        reasoningStep(
-          'finish',
-          '总结学习结果',
-          '智能体图在全部学习产物准备完成前停止了。',
-          'error',
-          timestamp,
-          timestamp
-        )
-      )
-    } else if (event.kind === 'plan.created' || event.kind === 'plan.replanned') {
+    if (event.kind === 'plan.created' || event.kind === 'plan.replanned') {
+      currentPlan = stringValue(payload.decision_id) || `decision-${event.sequence}`
+      steps.clear()
       const planTasks = Array.isArray(payload.tasks) ? payload.tasks : []
       for (const rawTask of planTasks) {
-        const task = asRecord(rawTask)
-        const taskId = stringValue(task.id) || `step-${event.sequence}`
-        const capability = stringValue(task.capability)
-        upsert(
+        const planned = asRecord(rawTask)
+        const taskId = stringValue(planned.id)
+        const capability = stringValue(planned.capability)
+        if (!taskId || !capability) continue
+        steps.set(
+          `${currentPlan}:${taskId}`,
           reasoningStep(
-            `plan:${taskId}`,
-            CAPABILITY_LABELS[capability] ?? '执行学习计划',
-            stringValue(task.rationale) || '已加入当前学习计划。',
+            `${currentPlan}:${taskId}`,
+            CAPABILITY_LABELS[capability] ?? capability,
+            stringValue(planned.rationale) || '等待执行。',
             'pending',
             timestamp
           )
         )
       }
-    } else if (event.kind === 'node.started' || event.kind === 'node.retrying' || event.kind === 'node.appeared' || event.kind === 'node.completed' || event.kind === 'node.failed') {
-      const capability = stringValue(payload.capability)
-      const title = CAPABILITY_LABELS[capability] ?? '执行学习计划'
+      continue
+    }
+    if (!currentPlan || !['node.started', 'node.retrying', 'node.appeared', 'node.completed', 'node.failed'].includes(event.kind)) continue
+    {
       const taskId = stringValue(payload.task_id)
-      const existing = taskId ? steps.get(`plan:${taskId}`) : undefined
-      upsert(
+      if (!taskId) continue
+      const id = `${currentPlan}:${taskId}`
+      const existing = steps.get(id)
+      // Ignore internal graph nodes and only update tasks present in the
+      // latest user-visible plan snapshot.
+      if (!existing) continue
+      steps.set(
+        id,
         reasoningStep(
-          taskId ? `plan:${taskId}` : `node:${event.sequence}`,
-          title,
+          id,
+          existing.title,
           event.kind === 'node.retrying'
-            ? '这一项正在结合最新学习情况重试。'
-            : existing?.summary ?? '这一项已加入当前学习计划。',
+            ? '正在根据新的学习证据重试。'
+            : stringValue(payload.detail) || existing.summary,
           event.kind === 'node.failed'
             ? 'error'
             : event.kind === 'node.completed'
@@ -491,28 +411,11 @@ function reduceReasoningSteps(
               : event.kind === 'node.appeared'
                 ? 'pending'
                 : 'active',
-          existing?.timestamp ?? timestamp,
+          existing.timestamp ?? timestamp,
           event.kind === 'node.completed' || event.kind === 'node.failed' ? timestamp : undefined
         )
       )
     }
-  }
-
-  for (const tool of tools) {
-    upsert(
-      reasoningStep(
-        `tool:${tool.id}`,
-        toolLabel(tool.name),
-        tool.status === 'executing'
-          ? `智能体图正在通过“${toolLabel(tool.name)}”收集依据。`
-          : tool.status === 'error'
-            ? `${toolLabel(tool.name)}返回了错误；智能体图正在保留安全状态。`
-            : `${toolLabel(tool.name)}已为当前阶段返回结果。`,
-        tool.status === 'executing' ? 'active' : tool.status === 'error' ? 'error' : 'complete',
-        tool.startedAt,
-        tool.status === 'executing' ? undefined : tool.startedAt
-      )
-    )
   }
 
   return [...steps.values()]

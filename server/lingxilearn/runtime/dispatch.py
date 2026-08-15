@@ -142,6 +142,13 @@ class Dispatcher:
         if user_message is not None:
             self._deps.user_message = dict(user_message)
 
+    def bind_runtime(self, runtime: Any, *, emit: Any = None) -> None:
+        """Attach the live graph runtime for provider-side streaming events."""
+
+        self._deps.graph_runtime = runtime
+        if emit is not None:
+            self._deps.emit = emit
+
     def seed_results(self, results: Mapping[str, Any]) -> None:
         """Prime with results persisted by earlier rounds of the same task."""
 
