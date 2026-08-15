@@ -1,4 +1,5 @@
-import { ChipLink, cn } from '@/components/ui-kit'
+import { cn } from '@/components/ui-kit'
+import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 import type { SolutionsPillCta } from '@/app/(landing)/components/solutions-page/types'
 import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
 
@@ -34,17 +35,17 @@ export function HeroCta({
 }: HeroCtaProps = {}) {
   return (
     <div className='flex items-center gap-2 max-sm:w-full max-sm:flex-col max-sm:items-stretch'>
-      <ChipLink variant='primary' href={primary.href} className={CTA_SIZE}>
+      <AuthAwareChipLink variant='primary' href={primary.href} className={CTA_SIZE}>
         {primary.label}
-      </ChipLink>
+      </AuthAwareChipLink>
       {secondary ? (
-        <ChipLink
+        <AuthAwareChipLink
           href={secondary.href}
           prefetch={false}
           className={cn(CTA_SIZE, 'border border-[var(--border-1)] max-sm:justify-center')}
         >
           {secondary.label}
-        </ChipLink>
+        </AuthAwareChipLink>
       ) : null}
     </div>
   )

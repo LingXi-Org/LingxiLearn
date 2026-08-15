@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { GithubOutlineIcon } from '@/components/icons'
-import { ChipLink, cn } from '@/components/ui-kit'
+import { cn } from '@/components/ui-kit'
 import { Menu, X } from '@/components/ui-kit/icons'
 import { NAV_MENUS } from '@/app/(landing)/components/navbar/components/nav-menu-chip'
 import {
@@ -11,6 +11,7 @@ import {
   useNavbarFrost,
 } from '@/app/(landing)/components/navbar/components/navbar-shell'
 import { SIGNUP_HREF } from '@/app/(landing)/constants'
+import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 
 /**
  * Mobile navigation - the `< lg` counterpart to the desktop nav clusters.
@@ -58,9 +59,9 @@ export function MobileNav() {
 
   return (
     <div className='ml-auto flex items-center gap-2 lg:hidden'>
-      <ChipLink variant='primary' href={SIGNUP_HREF} prefetch={false}>
+      <AuthAwareChipLink variant='primary' href={SIGNUP_HREF}>
         立即体验
-      </ChipLink>
+      </AuthAwareChipLink>
       <button
         type='button'
         aria-label={open ? '关闭菜单' : '打开菜单'}
@@ -136,7 +137,7 @@ export function MobileNav() {
           </a>
 
           <div className='mt-3 flex flex-col gap-2'>
-            <ChipLink
+            <AuthAwareChipLink
               variant='primary'
               href={SIGNUP_HREF}
               fullWidth
@@ -144,7 +145,7 @@ export function MobileNav() {
               onClick={() => setOpen(false)}
             >
               立即体验
-            </ChipLink>
+            </AuthAwareChipLink>
           </div>
         </div>
       </div>

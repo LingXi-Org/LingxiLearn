@@ -19,7 +19,7 @@ export function SSOForm({ registrationDisabled }: { registrationDisabled: boolea
   const [isLoading, setIsLoading] = useState(false)
   const callbackParam = searchParams.get('callbackUrl')
   const callbackUrl =
-    callbackParam && validateCallbackUrl(callbackParam) ? callbackParam : '/workspace'
+    callbackParam && validateCallbackUrl(callbackParam) ? callbackParam : '/workspace/lingxi/home/'
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()

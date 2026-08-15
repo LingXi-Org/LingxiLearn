@@ -6,6 +6,7 @@ import { GlobalCommandsProvider } from './providers/global-commands-provider'
 import { WorkspaceHostProvider } from './providers/workspace-host-provider'
 import { LingxiWorkspacePermissionsProvider } from './providers/lingxi-workspace-permissions-provider'
 import { inter } from '@/app/_styles/fonts/inter/inter'
+import { WorkspaceAuthGuard } from '@/app/workspace/workspace-auth-guard'
 
 const LINGXI_HOST_CONTEXT: LingxiWorkspaceHostContext = {
   workspace: {
@@ -50,22 +51,24 @@ export default async function WorkspaceLayout({
   }
 
   return (
-    <WorkspaceHostProvider
-      workspaceId={workspaceId}
-      initialContext={hostContext}
-      queryEnabled={false}
-    >
-      <ToastProvider>
-        <GlobalCommandsProvider>
-          <div className={`${inter.variable} flex h-screen min-h-0 w-full max-w-none flex-col overflow-hidden bg-[var(--surface-1)]`}>
-            <LingxiWorkspacePermissionsProvider>
-              <WorkspaceChrome initialSidebarCollapsed={initialSidebarCollapsed}>
-                {children}
-              </WorkspaceChrome>
-            </LingxiWorkspacePermissionsProvider>
-          </div>
-        </GlobalCommandsProvider>
-      </ToastProvider>
-    </WorkspaceHostProvider>
+    <WorkspaceAuthGuard>
+      <WorkspaceHostProvider
+        workspaceId={workspaceId}
+        initialContext={hostContext}
+        queryEnabled={false}
+      >
+        <ToastProvider>
+          <GlobalCommandsProvider>
+            <div className={`${inter.variable} flex h-screen min-h-0 w-full max-w-none flex-col overflow-hidden bg-[var(--surface-1)]`}>
+              <LingxiWorkspacePermissionsProvider>
+                <WorkspaceChrome initialSidebarCollapsed={initialSidebarCollapsed}>
+                  {children}
+                </WorkspaceChrome>
+              </LingxiWorkspacePermissionsProvider>
+            </div>
+          </GlobalCommandsProvider>
+        </ToastProvider>
+      </WorkspaceHostProvider>
+    </WorkspaceAuthGuard>
   )
 }

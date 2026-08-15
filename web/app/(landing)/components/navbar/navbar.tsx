@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { ChipLink } from '@/components/ui-kit'
 import {
   GitHubChip,
   LingxiWordmark,
@@ -10,6 +9,7 @@ import {
   NavMenuChip,
 } from '@/app/(landing)/components/navbar/components'
 import { SIGNUP_HREF } from '@/app/(landing)/constants'
+import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 
 /**
  * Landing navbar.
@@ -80,9 +80,9 @@ export function Navbar({ logoOnly = false }: NavbarProps) {
             </div>
 
             <div className='ml-auto hidden items-center gap-1 lg:flex'>
-              <ChipLink variant='primary' href={SIGNUP_HREF} prefetch={false}>
+              <AuthAwareChipLink variant='primary' href={SIGNUP_HREF}>
                 立即体验
-              </ChipLink>
+              </AuthAwareChipLink>
             </div>
 
             <MobileNav />

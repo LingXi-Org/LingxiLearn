@@ -109,7 +109,7 @@ export default function LoginPage({
     invalidCallbackRef.current = true
     logger.warn('Invalid callback URL detected and blocked:', { url: callbackUrlParam })
   }
-  const callbackUrl = isValidCallbackUrl ? callbackUrlParam! : '/workspace'
+  const callbackUrl = isValidCallbackUrl ? callbackUrlParam! : '/workspace/lingxi/home/'
   const isInviteFlow = searchParams?.get('invite_flow') === 'true'
   const signupHref = buildAuthCrossLink('/signup', {
     callbackUrl: isValidCallbackUrl ? callbackUrl : null,

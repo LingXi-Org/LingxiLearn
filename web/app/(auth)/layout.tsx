@@ -1,5 +1,10 @@
 import { AuthShell } from './components/auth-shell'
+import { AuthRouteGuard } from './components/auth-route-guard'
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return <AuthShell>{children}</AuthShell>
+  return (
+    <AuthRouteGuard>
+      <AuthShell>{children}</AuthShell>
+    </AuthRouteGuard>
+  )
 }
