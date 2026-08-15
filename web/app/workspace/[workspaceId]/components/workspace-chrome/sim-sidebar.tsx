@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { chipVariants, cn, Tooltip } from '@sim/emcn'
+import { Chip, ChipLink, cn, Tooltip } from '@sim/emcn'
 import {
   Database,
   Files,
@@ -19,7 +19,10 @@ import { useParams, usePathname } from 'next/navigation'
 import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 import { api } from '@/lib/lingxi/api'
 import type { AgentTaskListItem } from '@/lib/lingxi/types'
+import { useTablesList } from '@/hooks/queries/tables'
 import { useSidebarResize } from '@/app/workspace/[workspaceId]/w/components/sidebar/hooks/use-sidebar-resize'
+import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
+import { createCommands } from '@/app/workspace/[workspaceId]/utils/commands-utils'
 import { useSidebarStore } from '@/stores/sidebar/store'
 
 export function SidebarTooltip({
@@ -59,7 +62,6 @@ interface SidebarProps {
 
 const resourceItems = [
   { label: '文件', icon: Files, segment: 'files' },
-  { label: '表格', icon: Table, segment: 'tables' },
   { label: '知识库', icon: Database, segment: 'knowledge' },
   { label: '日志', icon: List, segment: 'logs' },
   { label: 'Skills', icon: Sparkles, segment: 'skills' },
@@ -94,33 +96,34 @@ function SidebarRow({
   disabled?: boolean
   badge?: string
 }) {
-  const content = (
-    <div
-      className={cn(
-        chipVariants({ active, fullWidth: true }),
-        'group h-[30px] gap-2 text-[12px]',
-        collapsed && 'justify-center px-0',
-        disabled &&
-          'cursor-not-allowed opacity-50 hover-hover:bg-transparent hover-hover:text-[var(--text-secondary)]'
-      )}
-      aria-disabled={disabled || undefined}
-      title={disabled ? '未接入' : undefined}
-    >
-      <Icon className='size-[16px] shrink-0' />
-      {!collapsed && <span className='min-w-0 flex-1 truncate'>{label}</span>}
-      {!collapsed && badge && (
-        <span className='shrink-0 text-[10px] text-[var(--text-muted)]'>{badge}</span>
-      )}
-    </div>
+  const className = cn(
+    'h-[30px] gap-2 text-[12px]',
+    collapsed && 'justify-center px-0 [&>span]:hidden',
+    disabled && 'cursor-not-allowed opacity-50 hover-hover:bg-transparent'
   )
+  const children = !collapsed ? (
+    <>
+      <span className='min-w-0 truncate'>{label}</span>
+      {badge && <span className='shrink-0 text-[10px] text-[var(--text-muted)]'>{badge}</span>}
+    </>
+  ) : null
 
   const wrapped =
     href && !disabled ? (
-      <Link href={href}>{content}</Link>
+      <ChipLink href={href} leftIcon={Icon} active={active} fullWidth className={className}>
+        {children}
+      </ChipLink>
     ) : (
-      <button type='button' className='w-full' disabled={disabled}>
-        {content}
-      </button>
+      <Chip
+        leftIcon={Icon}
+        active={active}
+        fullWidth
+        disabled={disabled}
+        title={disabled ? '未接入' : undefined}
+        className={className}
+      >
+        {children}
+      </Chip>
     )
 
   return (
@@ -132,11 +135,7 @@ function SidebarRow({
 
 function SidebarEmptyRow({ label }: { label: string }) {
   return (
-    <div
-      className={cn(
-        chipVariants({ fullWidth: true }),
-        'h-[30px] gap-2 px-2 text-[12px] text-[var(--text-muted)]'
-      )}
+    <div className='flex h-[30px] items-center gap-2 rounded-lg px-2 text-[12px] text-[var(--text-muted)]'
       aria-live='polite'
     >
       <Task className='size-[16px] shrink-0 opacity-70' />
@@ -154,13 +153,26 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
   const compact = isCollapsed && !isPeeking
   const toggleCollapsed = useSidebarStore((state) => state.toggleCollapsed)
   const { handlePointerDown } = useSidebarResize()
+  const { data: tables = [], isError: tablesError } = useTablesList(workspaceId, 'active')
+
+  useRegisterGlobalCommands(() =>
+    createCommands([
+      {
+        id: 'toggle-sidebar',
+        handler: () => toggleCollapsed(),
+      },
+    ])
+  )
 
   useEffect(() => {
     let active = true
     void api
       .agentTasks()
       .then((result) => {
-        if (active) setTasks(result.tasks)
+        if (active) {
+          setTasks(result.tasks)
+          setLoadError(false)
+        }
       })
       .catch(() => {
         if (active) setLoadError(true)
@@ -171,6 +183,7 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
   }, [pathname])
 
   const taskRows = useMemo(() => tasks.slice(0, 30), [tasks])
+  const tableRows = useMemo(() => tables.slice(0, 30), [tables])
 
   return (
     <aside
@@ -181,14 +194,12 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
       <div className='relative flex h-[30px] shrink-0 items-center gap-1'>
         {compact ? (
           <SidebarTooltip label='展开侧栏' enabled side='right'>
-            <button
-              type='button'
+            <Chip
               onClick={toggleCollapsed}
-              className='flex size-[30px] shrink-0 items-center justify-center rounded-lg text-[var(--text-icon)] transition-colors hover-hover:bg-[var(--surface-active)]'
               aria-label='展开侧栏'
-            >
-              <PanelLeft className='-scale-x-100 size-4' />
-            </button>
+              leftAdornment={<PanelLeft className='-scale-x-100 size-4' />}
+              className='size-[30px] shrink-0 justify-center px-0'
+            />
           </SidebarTooltip>
         ) : (
           <Link
@@ -223,14 +234,12 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
         )}
         {!compact && (
           <SidebarTooltip label='收起侧栏' enabled side='bottom' shortcut='Ctrl+B'>
-            <button
-              type='button'
+            <Chip
               onClick={toggleCollapsed}
-              className='flex size-[30px] shrink-0 items-center justify-center rounded-lg text-[var(--text-icon)] transition-colors hover-hover:bg-[var(--surface-active)]'
               aria-label='收起侧栏'
-            >
-              <PanelLeft className='size-4' />
-            </button>
+              leftAdornment={<PanelLeft className='size-4' />}
+              className='size-[30px] shrink-0 justify-center px-0'
+            />
           </SidebarTooltip>
         )}
       </div>
@@ -267,6 +276,32 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
       </nav>
 
       <div className='my-4 h-px bg-[var(--border)]' />
+
+      <div className='space-y-1'>
+        <SidebarRow
+          icon={Table}
+          label='表格'
+          href={`/workspace/${workspaceId}/tables`}
+          active={pathname?.includes(`/workspace/${workspaceId}/tables`)}
+          collapsed={compact}
+        />
+        {!compact && (
+          <div className='ml-2 space-y-1 border-l border-[var(--border)] pl-2'>
+            {tableRows.map((table) => (
+              <SidebarRow
+                key={table.id}
+                icon={Table}
+                label={table.name}
+                href={`/workspace/${workspaceId}/tables/${table.id}`}
+                active={pathname?.includes(`/workspace/${workspaceId}/tables/${table.id}`)}
+                collapsed={false}
+              />
+            ))}
+            {tablesError && <SidebarEmptyRow label='表格暂时无法加载' />}
+            {!tablesError && tableRows.length === 0 && <SidebarEmptyRow label='暂无表格' />}
+          </div>
+        )}
+      </div>
 
       {!compact && (
         <div className='px-2 pb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--text-muted)]'>

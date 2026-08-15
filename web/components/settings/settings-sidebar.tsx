@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChipConfirmModal, chipIconSlotClass, chipVariants, cn, Tooltip } from '@sim/emcn'
+import { Chip, ChipConfirmModal, cn, Tooltip } from '@sim/emcn'
 import { ChevronLeft } from '@sim/emcn/icons'
 import { useRouter } from 'next/navigation'
 import {
@@ -109,17 +109,13 @@ export function SettingsSidebar<Section extends SettingsSection>({
           </button>
         ) : (
           <SidebarTooltip label='返回' enabled={showCollapsedTooltips}>
-            <button
-              type='button'
+            <Chip
               onClick={() => requestLeave(() => router.push(WORKSPACE_HREF))}
-              className={chipVariants({ fullWidth: true })}
+              leftIcon={ChevronLeft}
+              className='w-full justify-start'
             >
-              {/* The 16px slot every settings row gives its icon, so Back's label starts on their baseline. */}
-              <span aria-hidden className={cn(chipIconSlotClass, 'text-[var(--text-icon)]')}>
-                <ChevronLeft className='size-[14px]' />
-              </span>
               <span className='sidebar-collapse-hide truncate text-[var(--text-body)]'>返回</span>
-            </button>
+            </Chip>
           </SidebarTooltip>
         )}
       </div>
@@ -156,9 +152,11 @@ export function SettingsSidebar<Section extends SettingsSection>({
                         label={item.label}
                         enabled={showCollapsedTooltips}
                       >
-                        <button
-                          type='button'
-                          className={chipVariants({ active, fullWidth: true })}
+                        <Chip
+                          active={active}
+                          fullWidth
+                          leftIcon={Icon}
+                          className='h-[30px] text-[12px]'
                           onClick={() => {
                             if (active) return
                             requestLeave(() => {
@@ -166,7 +164,6 @@ export function SettingsSidebar<Section extends SettingsSection>({
                             })
                           }}
                         >
-                          <Icon className='size-[16px] flex-shrink-0 text-[var(--text-icon)]' />
                           <span className='sidebar-collapse-hide min-w-0 truncate text-[var(--text-body)]'>
                             {item.label}
                           </span>
@@ -175,7 +172,7 @@ export function SettingsSidebar<Section extends SettingsSection>({
                               套餐
                             </span>
                           )}
-                        </button>
+                        </Chip>
                       </SidebarTooltip>
                     )
                   })}

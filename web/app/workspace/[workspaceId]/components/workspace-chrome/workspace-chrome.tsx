@@ -50,10 +50,7 @@ export function WorkspaceChrome({
       {!isFullscreen && (
         <div
           className={cn(
-            'sidebar-shell-outer workspace-sidebar-shell relative z-20 shrink-0 overflow-hidden transition-[width] duration-175 motion-reduce:transition-none',
-            sidebarCollapsed
-              ? 'w-[var(--sidebar-collapsed-width)]'
-              : 'w-[var(--sidebar-expanded-width)]'
+            'sidebar-shell-outer workspace-sidebar-shell relative z-20 shrink-0 overflow-hidden transition-[width] duration-175 motion-reduce:transition-none w-[var(--sidebar-width)]'
           )}
           data-collapsed={sidebarCollapsed || undefined}
         >
