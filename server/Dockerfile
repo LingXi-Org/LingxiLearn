@@ -5,11 +5,15 @@ ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 FROM ${DOCKER_REGISTRY}/library/python:3.13-slim AS builder
 
 ARG PYPI_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+# Keep the build-tool bootstrap independent from the application dependency mirror.
+# Some mirrors intentionally do not sync uv wheels, which must not make the image
+# build fail before dependency resolution even starts.
+ARG UV_BOOTSTRAP_INDEX_URL=https://pypi.org/simple
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 COPY pyproject.toml README.md ./
 COPY lingxilearn ./lingxilearn
-RUN python -m pip install --no-cache-dir --index-url ${PYPI_INDEX_URL} uv \
+RUN python -m pip install --no-cache-dir --index-url ${UV_BOOTSTRAP_INDEX_URL} uv \
  && uv venv \
  && uv pip install --no-cache --index-url ${PYPI_INDEX_URL} .
 
