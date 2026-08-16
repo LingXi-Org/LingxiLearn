@@ -523,7 +523,7 @@ export const api = {
         attachments,
         resource_refs: context.resourceRefs ?? [],
         skill_ids: context.skillIds ?? [],
-        idempotency_key: context.idempotencyKey ?? idempotencyKey(`message:${taskId}`),
+        idempotency_key: context.idempotencyKey ?? idempotencyKey('agent-task:create'),
       }),
     }),
 
