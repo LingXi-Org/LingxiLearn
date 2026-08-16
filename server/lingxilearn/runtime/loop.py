@@ -360,7 +360,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 requested.add("content.deck")
             if any(
                 word in str(latest_message.get("message") or "")
-                for word in ("解释", "回答", "为什么")
+                for word in ("解释", "回答", "为什么", "什么是", "是什么", "介绍", "定义")
             ):
                 requested.add("dialog.answer")
             world = replace(

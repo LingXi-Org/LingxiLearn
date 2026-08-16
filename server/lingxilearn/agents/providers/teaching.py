@@ -14,7 +14,13 @@ import json
 import logging
 from typing import Any
 
-from lingxigraph import FilesystemSkillSource, HumanMessage, SkillRegistry, create_agent
+from lingxigraph import (
+    FilesystemSkillSource,
+    GraphRecursionError,
+    HumanMessage,
+    SkillRegistry,
+    create_agent,
+)
 
 from ...config import REPO_ROOT
 from ...kernel.policy import LeakGuard, check_leakage, fallback_hint
@@ -155,20 +161,31 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
         ),
         name="adaptive-pedagogy",
     )
-    parsed = (
-        extract_json(
-            message_text(
-                await invoke_agent(
-                    agent,
-                    HumanMessage(json.dumps(brief, ensure_ascii=False)),
-                    context.runtime,
-                    agent_name="adaptive_pedagogy",
-                    recursion_limit=10,
+    try:
+        parsed = (
+            extract_json(
+                message_text(
+                    await invoke_agent(
+                        agent,
+                        HumanMessage(json.dumps(brief, ensure_ascii=False)),
+                        context.runtime,
+                        agent_name="adaptive_pedagogy",
+                        recursion_limit=4,
+                    )
                 )
             )
+            or {}
         )
-        or {}
-    )
+    except GraphRecursionError:
+        # Strategy selection must never turn an otherwise useful turn into a
+        # graph failure. A concise deterministic explanation is preferable to
+        # another long tool loop when the specialist reaches its recursion cap.
+        topic = str(context.goal.topic or context.task.capability).strip()
+        parsed = {
+            "text": f"先抓住{topic}的核心概念，再根据你的反馈逐步深入。",
+            "strategy": "explain",
+            "next_step": "",
+        }
 
     # The skill's rich contract nests the learner-facing message in
     # ``student_response``; the compact provider prompt uses top-level text.
