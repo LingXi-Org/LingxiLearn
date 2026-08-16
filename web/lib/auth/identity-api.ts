@@ -65,7 +65,7 @@ let refreshPromise: Promise<{ ok: boolean; expiresAt?: string | null }> | null =
 /**
  * All browser identity requests intentionally stay on the LingxiLearn origin.
  * Next/FastAPI rewrites `/auth/*` and `/api/v1/*` to the private BFF, allowing
- * the host-only `__Host-lingxi_session` cookie to be set and sent normally.
+ * the host-only `lingxi_session` cookie to be set and sent normally.
  * `NEXT_PUBLIC_API_BASE` is retained only as a deprecated deployment variable;
  * using it here would recreate the cross-subdomain cookie failure this client
  * is designed to prevent.

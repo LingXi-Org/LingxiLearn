@@ -25,27 +25,6 @@ from .service import Service
 
 logger = logging.getLogger(__name__)
 
-_LEGACY_SESSION_COOKIE = "lingxi_session"
-_LEGACY_COOKIE_EXPIRES = "Thu, 01 Jan 1970 00:00:00 GMT"
-
-
-def _clear_legacy_session_cookie(request: Request) -> str | None:
-    """Delete the pre-BFF Domain cookie after the canonical auth handoff.
-
-    The new session is a host-only ``__Host-lingxi_session`` cookie. Clearing
-    both the host and old parent-domain variants prevents browsers from sending
-    two same-named sessions during the migration window. Never emit a
-    ``lingxilearn.cn`` Domain attribute for local/test hosts.
-    """
-
-    hostname = (request.url.hostname or "").lower().rstrip(".")
-    if hostname != "lingxilearn.cn" and not hostname.endswith(".lingxilearn.cn"):
-        return None
-    return (
-        f"{_LEGACY_SESSION_COOKIE}=; Max-Age=0; Expires={_LEGACY_COOKIE_EXPIRES}; "
-        "Path=/; Domain=.lingxilearn.cn; Secure; HttpOnly; SameSite=Lax"
-    )
-
 
 def _dev_identity_response(settings: Settings, request: Request, upstream_path: str) -> Response:
     """Serve the small identity surface used by the local web shell.
@@ -204,9 +183,6 @@ def create_app() -> FastAPI:
         # attributes and are not collapsed into one invalid cookie string.
         for cookie in upstream_response.headers.get_list("set-cookie"):
             response.headers.append("set-cookie", cookie)
-        if upstream_path in {"/auth/login", "/auth/register", "/auth/callback", "/auth/logout"}:
-            if legacy_cookie := _clear_legacy_session_cookie(request):
-                response.headers.append("set-cookie", legacy_cookie)
         return response
 
     @app.api_route(

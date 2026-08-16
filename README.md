@@ -145,11 +145,25 @@ LingxiGraph StateGraph
 
 ## 数据与信任边界
 
-- 登录、注册和会话由 `LingxiIdentity` BFF 处理；浏览器只持有主域 host-only 的 HttpOnly `__Host-lingxi_session` Cookie，不在本地保存 OIDC/Bearer Token。`/auth/*` 和 `/api/v1/*` 始终通过 LingxiLearn 同源代理。
+- 登录、注册和会话由 `LingxiIdentity` BFF 处理；浏览器只持有 host-only 的 HttpOnly `lingxi_session` Cookie，不在本地保存 OIDC/Bearer Token。`/auth/*` 和 `/api/v1/*` 始终通过 LingxiLearn 同源代理。
 - 服务端使用身份服务返回的主体映射查找内部学习者，不接受客户端自报的 `learner_id`。
 - 原始抓包字节、完整工具输出、数据库原始记录和身份信息不会作为默认教学上下文直接外发给模型。
 - 课程资料由课程包声明来源；学习记录来自学习者在本服务中的操作、作答和任务交互。具体来源见 [DATA_SOURCES.md](DATA_SOURCES.md)。
 - LingxiLearn 用于学习辅导与形成性反馈，不替代教师、学校、考试或其他专业教育判断。
+
+### 跨仓库部署前置（LingxiIdentity）
+
+将 LingxiLearn 与 LingxiIdentity 部署到 `lingxilearn.cn` 前，两个仓库的 BFF 配置必须保持一致。Identity BFF 使用以下生产值：
+
+```dotenv
+BFF_PUBLIC_URL=https://lingxilearn.cn
+BFF_WEB_PUBLIC_URL=https://lingxilearn.cn
+SESSION_COOKIE_NAME=lingxi_session
+SESSION_COOKIE_DOMAIN=
+SESSION_COOKIE_SECURE=true
+```
+
+Logto 应用的 redirect URI 必须登记为 `https://lingxilearn.cn/auth/callback`。`SESSION_COOKIE_DOMAIN` 留空，使 `lingxi_session` 保持 host-only；浏览器登录、回调和后续 `/auth/*` 请求都应停留在 LingxiLearn 同源入口。LingxiLearn API 侧的 `LINGXILEARN_IDENTITY_BFF_URL` 使用 Identity BFF 的私网或服务地址，不要把浏览器 API 基址改成身份子域名。
 
 ## 运行方式
 

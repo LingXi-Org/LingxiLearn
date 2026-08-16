@@ -145,11 +145,25 @@ The model is not the sole authority for learning outcomes. Grading, misconceptio
 
 ## Data and trust boundaries
 
-- Login, registration, and sessions are handled by the `LingxiIdentity` BFF. The browser holds only the host-only HttpOnly `__Host-lingxi_session` Cookie; `/auth/*` and `/api/v1/*` stay on the LingxiLearn origin and no OIDC/Bearer Tokens are persisted locally.
+- Login, registration, and sessions are handled by the `LingxiIdentity` BFF. The browser holds only the host-only HttpOnly `lingxi_session` Cookie; `/auth/*` and `/api/v1/*` stay on the LingxiLearn origin and no OIDC/Bearer Tokens are persisted locally.
 - The server resolves an internal learner mapping from the identity subject returned by the identity service; clients cannot submit an asserted `learner_id`.
 - Raw packet bytes, complete tool output, raw database records, and identity information are not sent directly as default teaching context to a model.
 - Course materials declare their sources; learning records come from activity, answers, and task interactions in the service. See [DATA_SOURCES.md](DATA_SOURCES.md) for source details.
 - LingxiLearn provides learning support and formative feedback. It does not replace a teacher, school, examination, or other professional educational judgment.
+
+### Cross-repository deployment prerequisites (LingxiIdentity)
+
+Before deploying LingxiLearn and LingxiIdentity for `lingxilearn.cn`, keep the BFF settings in both repositories aligned. The Identity BFF should use these production values:
+
+```dotenv
+BFF_PUBLIC_URL=https://lingxilearn.cn
+BFF_WEB_PUBLIC_URL=https://lingxilearn.cn
+SESSION_COOKIE_NAME=lingxi_session
+SESSION_COOKIE_DOMAIN=
+SESSION_COOKIE_SECURE=true
+```
+
+Register `https://lingxilearn.cn/auth/callback` as the Logto application redirect URI. Leave `SESSION_COOKIE_DOMAIN` empty so `lingxi_session` remains host-only; browser login, callback, and subsequent `/auth/*` requests must stay on the LingxiLearn same-origin entry point. On the LingxiLearn API side, set `LINGXILEARN_IDENTITY_BFF_URL` to the Identity BFF's private/service address rather than changing the browser API base to an identity subdomain.
 
 ## Running locally
 

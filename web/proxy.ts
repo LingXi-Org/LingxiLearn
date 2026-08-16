@@ -9,20 +9,11 @@ import { isNonCanonicalSimHost } from './lib/core/utils/urls'
 
 const logger = createLogger('Proxy')
 
-/** The only production browser session is the host-only BFF cookie. */
-export const BFF_SESSION_COOKIE = '__Host-lingxi_session'
-/**
- * Read during the short migration window so an existing user can complete one
- * request and receive the new host-only cookie. New responses must never write
- * this legacy Domain cookie again.
- */
-export const LEGACY_BFF_SESSION_COOKIE = 'lingxi_session'
+/** The production browser session is the host-only BFF cookie. */
+export const BFF_SESSION_COOKIE = 'lingxi_session'
 
 function hasBffSession(request: NextRequest): boolean {
-  return Boolean(
-    request.cookies.get(BFF_SESSION_COOKIE)?.value ||
-      request.cookies.get(LEGACY_BFF_SESSION_COOKIE)?.value
-  )
+  return Boolean(request.cookies.get(BFF_SESSION_COOKIE)?.value)
 }
 
 export interface CorsPolicy {
