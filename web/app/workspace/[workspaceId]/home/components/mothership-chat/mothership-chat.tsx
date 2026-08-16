@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { cn } from '@sim/emcn'
 import { defaultRangeExtractor, type Range, useVirtualizer } from '@tanstack/react-virtual'
+import type { MothershipResourceType } from '@/lib/copilot/resources/types'
 import { SMOOTH_CHASE_RATE } from '@/lib/core/utils/smooth-bottom-chase'
 import { MessageActions } from '@/app/workspace/[workspaceId]/components'
 import { ChatMessageAttachments } from '@/app/workspace/[workspaceId]/home/components/chat-message-attachments'
@@ -21,7 +22,10 @@ import {
   MessageContent,
   type MessagePhase,
 } from '@/app/workspace/[workspaceId]/home/components/message-content'
-import { parseQuestionAnswerMessage } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
+import {
+  parseQuestionAnswerMessage,
+  type TypedQuestionAnswer,
+} from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
 import {
   type CredentialSubmissionPayload,
   credentialTagHasVisibleCard,
@@ -62,6 +66,9 @@ interface MothershipChatProps {
     contexts?: ChatContext[]
   ) => void
   onStopGeneration: () => void
+  /** Answers a typed blocking interaction; `true` means the structured API
+   * accepted it, so the card must not also send a chat message. */
+  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   messageQueue: QueuedMessage[]
   editingQueuedId: string | null
   dispatchingHeadId: string | null
@@ -85,6 +92,9 @@ interface MothershipChatProps {
   animateInput?: boolean
   onInputAnimationEnd?: () => void
   className?: string
+  /** Resource types this chat cannot consume; hidden from the input's menus
+   * (the Lingxi context closure, issue #18 §13). */
+  excludedResourceTypes?: ReadonlySet<MothershipResourceType>
 }
 
 /**
@@ -196,6 +206,9 @@ interface AssistantMessageRowProps {
   credentialAbandoned?: boolean
   rowClassName: string
   onOptionSelect?: (id: string) => void
+  /** Submits a question card through the typed interaction API; `true` means
+   * it was consumed there and no chat message is sent (issue #18 §10.5). */
+  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   onAnimatingChange?: (animating: boolean) => void
 }
 
@@ -209,6 +222,7 @@ const AssistantMessageRow = memo(function AssistantMessageRow({
   credentialAbandoned,
   rowClassName,
   onOptionSelect,
+  onQuestionSubmit,
   onAnimatingChange,
 }: AssistantMessageRowProps) {
   const { canEdit } = useUserPermissionsContext()
@@ -275,6 +289,7 @@ const AssistantMessageRow = memo(function AssistantMessageRow({
         credentialSubmission={credentialSubmission}
         credentialAbandoned={credentialAbandoned}
         onOptionSelect={onOptionSelect}
+        onQuestionSubmit={onQuestionSubmit}
         onQuestionDismiss={handleQuestionDismiss}
         onPhaseChange={setPhase}
         actions={
@@ -299,6 +314,7 @@ export function MothershipChat({
   isLoading = false,
   onSubmit,
   onStopGeneration,
+  onQuestionSubmit,
   messageQueue,
   editingQueuedId,
   dispatchingHeadId,
@@ -317,6 +333,7 @@ export function MothershipChat({
   animateInput = false,
   onInputAnimationEnd,
   className,
+  excludedResourceTypes,
 }: MothershipChatProps) {
   const styles = LAYOUT_STYLES[layout]
   const isStreamActive = isSending || isReconnecting
@@ -640,9 +657,20 @@ export function MothershipChat({
   useEffect(() => {
     onSubmitRef.current = onSubmit
   }, [onSubmit])
+  const onQuestionSubmitRef = useRef(onQuestionSubmit)
+  useEffect(() => {
+    onQuestionSubmitRef.current = onQuestionSubmit
+  }, [onQuestionSubmit])
   const stableOnOptionSelect = useCallback((id: string) => {
     onSubmitRef.current(id)
   }, [])
+  // A typed interaction answers through its own API. Returning false here
+  // (no handler, or the card is not a typed interaction) lets the card fall
+  // back to the formatted chat message.
+  const stableOnQuestionSubmit = useCallback(
+    (answers: TypedQuestionAnswer[]) => onQuestionSubmitRef.current?.(answers) ?? false,
+    []
+  )
 
   const handleSendQueuedHead = useCallback(() => {
     const topMessage = messageQueueRef.current[0]
@@ -734,11 +762,14 @@ export function MothershipChat({
                         isStreaming={isStreamActive && isLast}
                         isLast={isLast}
                         precedingUserContent={precedingUserContentByIndex[index]}
-                        questionAnswers={interactionPairing.answersByIndex[index]}
+                        questionAnswers={
+                          interactionPairing.answersByIndex[index] ?? msg.questionAnswers
+                        }
                         credentialSubmission={interactionPairing.credentialSubmissionByIndex[index]}
                         credentialAbandoned={interactionPairing.credentialAbandonedByIndex[index]}
                         rowClassName={cn(styles.assistantRow, styles.rowGap)}
                         onOptionSelect={isLast ? stableOnOptionSelect : undefined}
+                        onQuestionSubmit={isLast ? stableOnQuestionSubmit : undefined}
                         onAnimatingChange={isLast ? setLastRowAnimating : undefined}
                       />
                     )}
@@ -772,6 +803,7 @@ export function MothershipChat({
               onSendQueuedHead={handleSendQueuedHead}
               onEditQueuedTail={handleEditQueuedTail}
               draftScopeKey={draftScopeKey}
+              excludedResourceTypes={excludedResourceTypes}
             />
           </div>
         </div>

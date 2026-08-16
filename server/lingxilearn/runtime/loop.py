@@ -44,6 +44,11 @@ from .completion import CompletionContext, StoreArtifactProbe, evaluate
 from .contracts import Cost, DoneCondition, OrchestrationPlan, PlannedTask, TaskOutcome
 from .dispatch import DispatchDeps, Dispatcher
 from .guardrails import Budget, apply_hold_policy, check_plan, check_replan, degrade_message
+from .interactions import (
+    InteractionSpec,
+    opaque_interrupt_payload,
+)
+from .run_context import new_interaction_id
 from .state_updater import StateUpdater
 from .trace import DecisionRecord, DecisionTracer, summarise_profile
 
@@ -56,6 +61,33 @@ DEFAULT_DELIVERY_ORDER = ("lesson-intro", "visual", "lecture-deck", "quiz")
 
 def _append(left: list[Any], right: list[Any]) -> list[Any]:
     return [*left, *right]
+
+
+def _interaction_answer_summary(value: Mapping[str, Any], pending: Any) -> str:
+    """A learner-readable summary of a structured interaction answer."""
+
+    questions = []
+    if isinstance(pending, dict):
+        request = pending.get("request")
+        if isinstance(request, Mapping):
+            questions = list(request.get("questions") or [])
+    labels: dict[str, str] = {
+        str(option.get("id")): str(option.get("label") or option.get("id") or "")
+        for question in questions
+        if isinstance(question, Mapping)
+        for option in question.get("options") or []
+        if isinstance(option, Mapping)
+    }
+    parts: list[str] = []
+    for answer in value.get("answers") or []:
+        if not isinstance(answer, Mapping):
+            continue
+        selected = [labels.get(str(item), str(item)) for item in answer.get("selectedOptionIds") or []]
+        text = str(answer.get("text") or "").strip()
+        chosen = "、".join([*selected, text] if text else selected)
+        if chosen:
+            parts.append(chosen)
+    return "学习者选择了：" + "；".join(parts) if parts else "学习者已回答澄清问题。"
 
 
 class LoopState(TypedDict, total=False):
@@ -75,6 +107,8 @@ class LoopState(TypedDict, total=False):
     last_decision_id: str
     replanning: bool
     user_message: dict[str, Any]
+    pending_interaction: dict[str, Any] | None
+    """Durable interaction awaiting an answer; drives the typed interrupt."""
     finished_reason: str
     background_pending: bool
 
@@ -95,6 +129,7 @@ class LoopDeps:
         registry: Any = None,
         pack: Any = None,
         execution_id: str = "",
+        turn_id: str = "",
         emit: Any = None,
         confirmed_actions: frozenset[str] = frozenset(),
         prior_results: Mapping[str, Any] | None = None,
@@ -112,6 +147,7 @@ class LoopDeps:
         self.registry = registry
         self.pack = pack
         self.execution_id = execution_id
+        self.turn_id = turn_id
         self.emit = emit
         self.confirmed_actions = confirmed_actions
         self.prior_results = dict(prior_results or {})
@@ -242,6 +278,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             registry=deps.registry,
             pack=deps.pack,
             emit=deps.emit,
+            execution_id=deps.execution_id,
+            turn_id=deps.turn_id,
         )
     )
     dispatcher.seed_results(deps.prior_results)
@@ -586,6 +624,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         if deps.repository is not None and produced.tasks:
             turn = await deps.repository.latest_turn(deps.task_id)
             if turn is not None:
+                dispatcher.bind_turn(str(turn["id"]))
+            if turn is not None:
                 candidate_by_id = {
                     item.candidate_id: item for item in produced.candidates_considered
                 }
@@ -762,6 +802,53 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         if produced.negotiation:
             awaiting = True
 
+        # Structured HITL (issue #18 §10): a blocking interaction is persisted
+        # durably and announced as an event; the checkpoint stores only the
+        # opaque interaction id.  Prose negotiation remains the legacy path.
+        pending_interaction: dict[str, Any] | None = None
+        if awaiting and isinstance(produced.interaction, dict):
+            try:
+                spec = InteractionSpec.model_validate(dict(produced.interaction))
+            except Exception:  # noqa: BLE001 - degrade to the legacy text path
+                spec = None
+            if spec is not None and spec.blocking:
+                interaction_id = new_interaction_id()
+                spec = spec.model_copy(update={"interaction_id": interaction_id})
+                request_payload = spec.public_request()
+                turn = (
+                    await deps.repository.latest_turn(deps.task_id)
+                    if deps.repository is not None
+                    else None
+                )
+                if deps.repository is not None:
+                    try:
+                        await deps.repository.create_interaction(
+                            interaction_id=interaction_id,
+                            task_id=deps.task_id,
+                            turn_id=str(turn["id"]) if turn else None,
+                            execution_id=deps.execution_id or None,
+                            request_payload=request_payload,
+                            purpose=spec.purpose,
+                            presentation=spec.presentation,
+                            blocking=spec.blocking,
+                            reason_code=spec.reason_code,
+                        )
+                    except Exception:  # noqa: BLE001 - interaction must not fail the run
+                        logger.exception("failed to persist interaction")
+                if deps.emit is not None:
+                    deps.emit(
+                        "interaction.requested",
+                        {
+                            "interaction_id": interaction_id,
+                            "turn_id": str(turn["id"]) if turn else "",
+                            **request_payload,
+                        },
+                    )
+                pending_interaction = {
+                    "interaction_id": interaction_id,
+                    "request": request_payload,
+                }
+
         status = (
             RuntimeStatus.WAITING_FOR_USER
             if awaiting
@@ -796,6 +883,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             "step": step,
             "messages": messages,
             "replanning": False,
+            "pending_interaction": pending_interaction,
         }
 
     async def dispatch(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
@@ -1183,15 +1271,47 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     async def await_user(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:
         if checkpointer is None:
             return {"runtime_status": str(RuntimeStatus.WAITING_FOR_USER)}
-        payload = interrupt(
-            {
-                "kind": "user_message",
-                "task_id": deps.task_id,
-                "messages": list(state.get("messages") or []),
-                "plan": state.get("plan") or {},
-            }
-        )
+        pending = state.get("pending_interaction")
+        if isinstance(pending, dict) and pending.get("interaction_id"):
+            # Typed interrupt (issue #18 §10.3): the checkpoint carries the
+            # opaque interaction identity only — the full structured request
+            # is durable in agent_interactions, never in graph state.
+            payload = interrupt(opaque_interrupt_payload(str(pending["interaction_id"])))
+        else:
+            payload = interrupt(
+                {
+                    "kind": "user_message",
+                    "task_id": deps.task_id,
+                    "messages": list(state.get("messages") or []),
+                    "plan": state.get("plan") or {},
+                }
+            )
         value = payload if isinstance(payload, dict) else {"message": str(payload)}
+        if value.get("kind") == "interaction_answer":
+            # Continuation of the same turn: providers see a compact summary
+            # plus the structured answers; the graph re-plans without
+            # re-interpreting the original utterance.
+            summary = _interaction_answer_summary(value, pending)
+            dispatcher.retarget(
+                user_message={
+                    "message": summary,
+                    "kind": "interaction_answer",
+                    "interaction_id": str(value.get("interaction_id") or ""),
+                    "answers": list(value.get("answers") or []),
+                }
+            )
+            await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)
+            return {
+                "user_message": {
+                    "message": summary,
+                    "kind": "interaction_answer",
+                    "interaction_id": str(value.get("interaction_id") or ""),
+                    "answers": list(value.get("answers") or []),
+                },
+                "utterance": "",
+                "runtime_status": str(RuntimeStatus.PLANNING),
+                "pending_interaction": None,
+            }
         dispatcher.retarget(user_message=value)
         # interrupt() resumes here from a persisted WAITING_FOR_USER state.
         await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.PLANNING)
@@ -1199,6 +1319,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             "user_message": value,
             "utterance": str(value.get("message") or ""),
             "runtime_status": str(RuntimeStatus.PLANNING),
+            "pending_interaction": None,
         }
 
     def route(state: LoopState) -> str:
@@ -1292,6 +1413,7 @@ def initial_state(
         last_decision_id="",
         replanning=False,
         user_message={"message": utterance} if utterance.strip() else {},
+        pending_interaction=None,
         finished_reason="",
         background_pending=False,
     )

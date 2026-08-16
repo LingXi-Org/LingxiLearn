@@ -7,6 +7,7 @@ on:
       - 'server/lingxilearn/**'
       - 'server/migrations/**'
       - 'server/tests/**'
+      - 'contracts/fixtures/**'
       - 'server/pyproject.toml'
       - 'server/uv.lock'
       - '.github/workflows/lingxi-chat.yml'
@@ -17,6 +18,7 @@ on:
       - 'server/lingxilearn/**'
       - 'server/migrations/**'
       - 'server/tests/**'
+      - 'contracts/fixtures/**'
       - 'server/pyproject.toml'
       - 'server/uv.lock'
       - '.github/workflows/lingxi-chat.yml'
@@ -62,11 +64,21 @@ jobs:
           app/workspace/[workspaceId]/home/components/message-content/components/agent-group/tool-call-item.test.tsx
           app/workspace/[workspaceId]/home/components/message-content/components/agent-group/tool-call-item.tsx
           app/workspace/[workspaceId]/home/components/message-content/message-content.tsx
+          app/workspace/[workspaceId]/home/components/message-content/components/question/question.tsx
+          app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers.ts
+          app/workspace/[workspaceId]/home/components/mothership-chat/mothership-chat.tsx
+          app/workspace/[workspaceId]/home/hooks/use-chat.ts
           app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts
+          app/workspace/[workspaceId]/home/home.tsx
           app/workspace/[workspaceId]/home/types.ts
           lib/lingxi/chat-types.ts
+          lib/lingxi/generated/mothership-stream-v1.test.ts
+          lib/lingxi/generated/mothership-stream-v1.ts
           lib/lingxi/lingxi-graph-adapter.test.ts
           lib/lingxi/lingxi-graph-adapter.ts
+          lib/lingxi/stream/turn-model.test.ts
+          lib/lingxi/stream/turn-model.ts
+          lib/lingxi/supported-contexts.ts
           lib/lingxi/turn-state.test.ts
           lib/lingxi/turn-state.ts
           stores/mothership-queue/store.test.ts
@@ -75,7 +87,7 @@ jobs:
           vitest.config.ts
 
   backend:
-    name: Lingxi create-task idempotency
+    name: Lingxi backend protocol & lifecycle
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -94,3 +106,16 @@ jobs:
 
       - name: Run create-task idempotency regression
         run: uv run --extra dev pytest -q tests/test_agent_tasks.py -k create_agent_task_idempotency
+
+      - name: Run Mothership V1 protocol & lifecycle tests
+        run: >-
+          uv run --extra dev pytest -q
+          tests/test_mothership_stream_v1.py
+          tests/test_public_projection.py
+          tests/test_interactions.py
+          tests/test_interaction_continuation.py
+          tests/test_agent_runs_lifecycle.py
+          tests/test_parallel_dispatch.py
+          tests/test_artifact_resource_versioning.py
+          tests/test_sqlite_schema_upgrade.py
+          tests/test_thread_and_graph.py

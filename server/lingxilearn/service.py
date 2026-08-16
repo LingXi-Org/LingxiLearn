@@ -66,6 +66,8 @@ from .runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
 from .runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from .runtime.loop import LoopDeps, build_loop
 from .runtime.loop import initial_state as initial_loop_state
+from .runtime.interactions import parse_answers
+from .runtime.public_projection import PublicProjector
 from .runtime.schedules import next_schedule_time, validate_schedule
 from .runtime.sim_semantics import (
     PrimitiveCatalog,
@@ -306,6 +308,44 @@ def _trace_agent(metadata: Any, default_agent: str = "coordinator") -> str:
     return default_agent
 
 
+def _project_public_events(
+    projector: PublicProjector,
+    events: list[dict[str, Any]],
+    *,
+    execution_id: str,
+) -> list[dict[str, Any]]:
+    """Project a V0 persistence buffer into Lingxi Mothership Stream V1 rows.
+
+    The projector sanitizes every payload (denylist + per-tool projection), so
+    it may safely consume raw tool events that never reach the V0 rows.  The
+    ``seq`` placeholders are rewritten by the repository when the durable task
+    sequence is assigned, keeping envelope seq == row sequence.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for event in events:
+        try:
+            for envelope in projector.consume(event):
+                rows.append(
+                    {
+                        "kind": f"v1.{envelope['type']}",
+                        "agent": "",
+                        "payload": envelope,
+                        "execution_id": execution_id,
+                        "runtime": {},
+                        "protocol_version": 1,
+                        "turn_id": (envelope.get("stream") or {}).get("turnId") or None,
+                        "agent_run_id": (envelope.get("scope") or {}).get("agentRunId")
+                        or None,
+                        "skill_run_id": (envelope.get("scope") or {}).get("skillRunId")
+                        or None,
+                    }
+                )
+        except Exception:  # noqa: BLE001 - projection must never fail the run
+            logger.exception("public projection failed for %s", event.get("kind"))
+    return rows
+
+
 def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]]:
     """Convert one native LingxiGraph message envelope into Agent Task events."""
     if not isinstance(value, (tuple, list)) or not value:
@@ -480,6 +520,9 @@ class Service:
         self._hold_sweep_locks = self._board_locks
         self._hold_sweep_pending: set[str] = set()
         self._conversation_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        # Publishing an interaction outbox row is idempotent across processes;
+        # this lock only keeps one process from doing the same work twice.
+        self._interaction_publish_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._conversation_queue: defaultdict[str, asyncio.Queue[dict[str, Any]]] = defaultdict(
             asyncio.Queue
         )
@@ -562,6 +605,11 @@ class Service:
         # atomic claim in _run_agent_task makes this safe across replicas.
         for task in await self.repo.queued_agent_tasks():
             self._spawn(self._drive_agent_task(task["id"], task["learner_id"], task["prompt"]))
+        # An interaction answer commits its continuation command before the
+        # resume runs.  A command still unconsumed means the resume never
+        # finished; replay it rather than leaving the thread paused forever
+        # (issue #18 §10.4).
+        await self._recover_interaction_continuations()
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
             len(self.packs),
@@ -597,6 +645,7 @@ class Service:
         learner_id: str,
         task_id: str,
         execution_id: str = "",
+        turn_id: str = "",
         emit: Any = None,
         confirmed_actions: frozenset[str] = frozenset(),
         prior_results: dict[str, Any] | None = None,
@@ -623,6 +672,7 @@ class Service:
                 registry=self.registry,
                 pack=pack,
                 execution_id=execution_id,
+                turn_id=turn_id,
                 emit=emit,
                 confirmed_actions=confirmed_actions,
                 prior_results=prior_results,
@@ -944,6 +994,7 @@ class Service:
         return {
             "id": record.id,
             "status": record.status,
+            "threadStatus": str(getattr(record, "thread_status", "") or "open"),
             "prompt": record.prompt,
             "title": record.title or "",
             "is_pinned": bool(record.is_pinned),
@@ -1379,9 +1430,36 @@ class Service:
                                 WorkspaceFile.path == path,
                             )
                         )
-                        if existing is not None:
-                            continue
                         raw = source.read_bytes()
+                        content_hash = hashlib.sha256(raw).hexdigest()
+                        if existing is not None:
+                            # A task id is a long-lived thread: a later turn can
+                            # regenerate the same artifact kind.  Keep the stable
+                            # resource identity but refresh its backing version,
+                            # so "产物已完成" never opens the previous turn's copy
+                            # (issue #18 §12.2).
+                            metadata = dict(existing.metadata_payload or {})
+                            if metadata.get("contentHash") == content_hash:
+                                continue
+                            storage_key = f"{learner_id}/{secrets.token_urlsafe(24)}"
+                            target_root = self.settings.var_dir / "workspaces" / learner_id
+                            target_root.mkdir(parents=True, exist_ok=True)
+                            (target_root / storage_key.split("/", 1)[1]).write_bytes(raw)
+                            metadata.update(
+                                {
+                                    "source": "lingxigraph",
+                                    "taskId": task_key,
+                                    "taskTitle": title,
+                                    "readOnly": True,
+                                    "contentHash": content_hash,
+                                    "generation": int(metadata.get("generation") or 1) + 1,
+                                }
+                            )
+                            existing.storage_key = storage_key
+                            existing.size = len(raw)
+                            existing.metadata_payload = metadata
+                            projected += 1
+                            continue
                         storage_key = f"{learner_id}/{secrets.token_urlsafe(24)}"
                         target_root = self.settings.var_dir / "workspaces" / learner_id
                         target_root.mkdir(parents=True, exist_ok=True)
@@ -1402,6 +1480,8 @@ class Service:
                                     "taskId": task_key,
                                     "taskTitle": title,
                                     "readOnly": True,
+                                    "contentHash": content_hash,
+                                    "generation": 1,
                                 },
                             )
                         )
@@ -1419,7 +1499,7 @@ class Service:
         for work in await self.repo.list_work(task_id):
             if work.get("status") not in {"succeeded", "failed", "cancelled", "blocked"}:
                 await self.repo.cancel_work(task_id=task_id, work_id=str(work["id"]))
-        await self.repo.set_agent_task_status(task_id, "cancelled")
+        await self.repo.set_agent_task_status(task_id, "cancelled", thread_status="cancelled")
         runners = [
             runner
             for runner in self._agent_runners.get(task_id, set())
@@ -1596,6 +1676,51 @@ class Service:
             "payloadDigest": payload_digest,
         }
 
+    async def _project_task_artifact_resource(
+        self, learner_id: str, task_id: str, artifact_kind: str
+    ) -> dict[str, Any] | None:
+        """Resolve one artifact to its stable WorkspaceFile resource identity.
+
+        Runs the idempotent workspace projection first, then returns the
+        descriptor the V1 ``resource.upsert`` event should carry.  Unknown
+        artifact kinds and not-yet-written files return None — the projector
+        then falls back to the synthetic identity.
+        """
+
+        filenames = {
+            "lesson-intro": "lesson-intro.html",
+            "lecture-deck": "lecture.html",
+            "visual": "visual-explainer.html",
+        }
+        filename = filenames.get(artifact_kind)
+        if not filename:
+            return None
+        try:
+            await self.project_agent_artifacts(learner_id, task_id)
+            async with self.db.session() as session:
+                workspace = await session.scalar(
+                    select(Workspace).where(Workspace.learner_id == learner_id)
+                )
+                if workspace is None:
+                    return None
+                row = await session.scalar(
+                    select(WorkspaceFile).where(
+                        WorkspaceFile.workspace_id == workspace.id,
+                        WorkspaceFile.path == f"学习产物/{task_id}/{filename}",
+                    )
+                )
+                if row is None:
+                    return None
+                return {
+                    "id": row.id,
+                    "title": row.name,
+                    "path": row.path,
+                    "artifact_kind": artifact_kind,
+                }
+        except Exception:  # noqa: BLE001 - projection must not fail the run
+            logger.exception("artifact resource projection failed: %s/%s", task_id, artifact_kind)
+            return None
+
     async def _artifact_snapshot(self, record: Any) -> dict[str, Any]:
         """The artifacts this task actually produced, read from disk.
 
@@ -1633,7 +1758,16 @@ class Service:
         attachments: list[dict[str, Any]] | None = None,
         learner_id: str | None = None,
         idempotency_key: str | None = None,
-    ) -> None:
+    ) -> dict[str, Any] | None:
+        """Accept one learner message and route it by thread state.
+
+        Under the long-lived thread model (issue #18 §4.2) a message while the
+        graph waits resumes the current turn; a message while a turn is still
+        running becomes an interjection in that turn; a message on an idle
+        thread — even after an earlier turn completed or failed — starts a new
+        turn instead of dead-ending on a legacy terminal status.
+        """
+
         record = await (
             self.repo.get_agent_task_for_learner(task_id, learner_id)
             if learner_id
@@ -1643,7 +1777,10 @@ class Service:
             raise KeyError(f"unknown agent task: {task_id}")
         if not message.strip():
             raise ValueError("message must not be empty")
+        if str(getattr(record, "thread_status", "") or "open") == "cancelled":
+            raise ValueError("thread is cancelled")
         attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
+        command = None
         if idempotency_key:
             command = await self.repo.append_command(
                 task_id=task_id,
@@ -1659,8 +1796,27 @@ class Service:
                     "attachments": attachment_refs,
                 }:
                     raise ValueError("idempotency_key_reused")
-                return
-        if record.status != "awaiting_user":
+                return {"turnId": str(command.get("turn_id") or ""), "created": False}
+        if record.status == "awaiting_user":
+            # Continuation of the paused turn: resume the original checkpoint.
+            self._spawn(
+                self._drive_agent_task(
+                    task_id,
+                    record.learner_id,
+                    "",
+                    resume={
+                        "message": message,
+                        "kind": "chat",
+                        "attachments": attachment_refs,
+                    },
+                )
+            )
+            return {
+                "turnId": str((command or {}).get("turn_id") or ""),
+                "created": True,
+            }
+        if record.status in {"queued", "running"}:
+            # Mid-turn interjection: the running graph drains it this round.
             item = {
                 "message": message.strip(),
                 "attachments": attachment_refs,
@@ -1669,54 +1825,298 @@ class Service:
             await self.runtime_state.push_interjection(task_id, item)
             await self._conversation_queue[task_id].put(item)
             self._spawn(self._serve_conversation(task_id, record.learner_id))
-            return
-        self._spawn(
-            self._drive_agent_task(
-                task_id,
-                record.learner_id,
-                "",
-                resume={"message": message, "kind": "chat", "attachments": attachment_refs},
-            )
-        )
+            return {
+                "turnId": str((command or {}).get("turn_id") or ""),
+                "created": True,
+            }
+        # Idle thread (previous turn delivered/failed): queue a brand-new turn.
+        item = {
+            "message": message.strip(),
+            "attachments": attachment_refs,
+            "received_at": datetime.now(UTC).isoformat(),
+        }
+        await self._conversation_queue[task_id].put(item)
+        self._spawn(self._serve_conversation(task_id, record.learner_id))
+        return {
+            "turnId": str((command or {}).get("turn_id") or ""),
+            "created": True,
+        }
 
-    async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
-        """Drain queued learner inputs through the normal turn coordinator."""
+    async def answer_agent_interaction(
+        self,
+        task_id: str,
+        interaction_id: str,
+        *,
+        answers: list[dict[str, Any]],
+        idempotency_key: str,
+        learner_id: str,
+    ) -> dict[str, Any]:
+        """Resolve one blocking interaction and resume the paused turn.
+
+        The answer stays within the current turn (issue #18 §10.4): the
+        original checkpoint resumes via a continuation command; no new turn or
+        thread is created, and prior AgentRuns/interactions stay in history.
+        """
+
+        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        if record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        interaction = await self.repo.get_interaction(interaction_id, task_id=task_id)
+        if interaction is None:
+            raise KeyError(f"unknown interaction: {interaction_id}")
+        validated = parse_answers(answers)
+        payload_answers = [answer.model_dump(mode="json", by_alias=True) for answer in validated]
+        # One atomic step: persist the answer, resolve the interaction and
+        # enqueue the durable continuation command.  Nothing below can leave
+        # the thread resolved-but-never-resumed (issue #18 §10.4).
+        claim = await self.repo.claim_interaction_answer(
+            interaction_id=interaction_id,
+            task_id=task_id,
+            answers=payload_answers,
+            idempotency_key=idempotency_key or f"{interaction_id}:answer",
+        )
+        outcome = str(claim.get("outcome") or "")
+        if outcome == "not_found":
+            raise KeyError(f"unknown interaction: {interaction_id}")
+        if outcome == "conflict":
+            raise ValueError("idempotency_key_reused")
+        if outcome == "invalid":
+            status = str(claim.get("status") or "")
+            if status == "non_blocking":
+                raise ValueError("non-blocking suggestions are answered by a new message")
+            raise ValueError(f"interaction is {status}")
+        if outcome == "already_resolved":
+            # A real UI retry after a failed publish arrives with a *new*
+            # idempotency key, so it lands here rather than on ``duplicate``.
+            # The interaction is durably resolved, so this call must still
+            # repair: publish the public fact and make sure the continuation
+            # actually runs.  Both steps are idempotent, and the durable run
+            # claim stops a second resume (issue #18 §10.6).
+            await self._publish_interaction_outbox(task_id)
+            self._spawn(self._drain_interaction_continuations(task_id, learner_id))
+            return {"status": "already_resolved", "interactionId": interaction_id}
+        if outcome == "duplicate":
+            # A retry of the accepted answer: the continuation is already
+            # durable, so report the original outcome without a second resume.
+            # The retry still repairs a publish the original attempt may have
+            # died before completing.
+            await self._publish_interaction_outbox(task_id)
+            return {"status": "accepted", "interactionId": interaction_id}
+
+        await self._publish_interaction_outbox(task_id)
+
+        resume = {
+            "kind": "interaction_answer",
+            "interaction_id": interaction_id,
+            "answers": payload_answers,
+        }
+        # The spawn is only the fast path: the command ledger already holds the
+        # continuation, so a process death here is recovered at startup.
+        self._spawn(self._drive_agent_task(task_id, learner_id, "", resume=resume))
+        return {"status": "accepted", "interactionId": interaction_id}
+
+    async def _publish_interaction_outbox(self, task_id: str) -> int:
+        """Publish committed interaction facts into the replay log.
+
+        ``claim_interaction_answer`` commits the answer, the pending→resolved
+        transition and this outbox row in one transaction, so the public event
+        can never contradict the durable state: either both exist, or the
+        pending row is still here to be published.  Publishing is idempotent —
+        an event already in the log only marks its row — so a crash between the
+        append and the mark cannot duplicate the fact, and any later answer
+        retry, drain or restart repairs a publish that never finished
+        (issue #18 §10.6).
+        """
+
+        published = 0
+        # The lock only spares one process from redundant work; correctness
+        # comes from the repository claiming the outbox row and writing its
+        # events in one transaction, so two replicas cannot both publish.
+        async with self._interaction_publish_locks[task_id]:
+            rows = [
+                row
+                for row in await self.repo.pending_outbox(task_id=task_id)
+                if row.get("kind") == "interaction.resolved"
+            ]
+            if not rows:
+                return 0
+            for row in rows:
+                payload = dict(row.get("payload") or {})
+                interaction_id = str(payload.get("interaction_id") or "")
+                if not interaction_id:
+                    await self.repo.mark_outbox_published(str(row["id"]))
+                    continue
+                execution_id = str(payload.get("execution_id") or "")
+                resolved_payload = {
+                    "interaction_id": interaction_id,
+                    "answers": list(payload.get("answers") or []),
+                }
+                projector = PublicProjector(
+                    chat_id=task_id,
+                    execution_id=execution_id,
+                    turn_id=str(payload.get("turn_id") or ""),
+                    request_id=execution_id,
+                )
+                v1_rows = _project_public_events(
+                    projector,
+                    [{"kind": "interaction.resolved", "agent": "", "payload": resolved_payload}],
+                    execution_id=execution_id,
+                )
+                if await self.repo.publish_outbox_agent_events(
+                    outbox_id=str(row["id"]),
+                    task_id=task_id,
+                    events=[
+                        {
+                            "kind": "interaction.resolved",
+                            "agent": "",
+                            "payload": resolved_payload,
+                            "execution_id": execution_id or None,
+                            "runtime": {},
+                        },
+                        *v1_rows,
+                    ],
+                ):
+                    published += 1
+            if published:
+                self._notify_agent(task_id)
+        return published
+
+    async def _drain_interaction_continuations(self, task_id: str, learner_id: str) -> int:
+        """Resume answered interactions whose fast-path resume could not claim.
+
+        An answer can be accepted while the previous execution is still
+        running: the continuation command is durable at that point, but
+        ``claim_agent_task`` refuses a running thread, so that first resume
+        attempt returns without doing anything.  The finishing execution calls
+        this the moment it becomes claimable again, so a learner who answers
+        quickly is not left waiting for a process restart (issue #18 §10.4).
+
+        The command ledger is the coordination point: each pass re-reads the
+        pending commands, and a resume that runs to a durable outcome consumes
+        its own command, so a concurrent drain cannot replay it.
+        """
+
+        drained = 0
         async with self._conversation_locks[task_id]:
-            queue = self._conversation_queue[task_id]
-            while not queue.empty():
-                item = await queue.get()
-                # `agent_message` is also the interjection path used by the
-                # composer while a graph turn is still running. Do not let a
-                # second coordinator consume the local queue, observe the
-                # running row, and silently drop the message when its claim
-                # fails. Wait for the durable turn to pause before resuming.
-                while True:
-                    record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
-                    if record is None:
-                        return
-                    if record.status in {"queued", "awaiting_user"}:
-                        break
-                    if record.status in {
-                        "handed_off",
-                        "completed",
-                        "partial",
-                        "failed",
-                        "timed_out",
-                        "budget_exceeded",
-                        "cancelled",
-                    }:
-                        return
-                    await asyncio.sleep(0.2)
-                await self._drive_agent_task(
+            while True:
+                pending = [
+                    command
+                    for command in await self.repo.pending_commands(task_id)
+                    if command.get("kind") == "interaction_answer"
+                ]
+                if not pending:
+                    return drained
+                record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                if record is None:
+                    return drained
+                if str(getattr(record, "thread_status", "") or "open") == "cancelled":
+                    return drained
+                if record.status in {"queued", "running"}:
+                    # A live turn owns the thread; whoever finishes it drains.
+                    return drained
+                payload = dict(pending[0].get("payload") or {})
+                interaction_id = str(payload.get("interaction_id") or "")
+                if not interaction_id:
+                    await self.repo.consume_command(str(pending[0]["id"]))
+                    continue
+                owned = await self._drive_agent_task(
                     task_id,
                     learner_id,
                     "",
                     resume={
-                        "message": str(item.get("message") or ""),
-                        "kind": "chat",
-                        "attachments": item.get("attachments") or [],
+                        "kind": "interaction_answer",
+                        "interaction_id": interaction_id,
+                        "answers": list(payload.get("answers") or []),
                     },
                 )
+                if not owned:
+                    # Another worker (the answer's own fast path, or a drain in
+                    # another replica) won the durable claim and is executing
+                    # this continuation.  Consuming its command here would let
+                    # a crash on the winning side lose the answer entirely, so
+                    # ownership — not arrival — decides who may consume.
+                    return drained
+                drained += 1
+                # This call owned the run, so it may close the ledger entry:
+                # a resume that reached a durable outcome already consumed it,
+                # and consuming here covers the failed turn so one continuation
+                # is never replayed in a loop.
+                await self.repo.consume_command(str(pending[0]["id"]))
+
+    async def _recover_interaction_continuations(self) -> int:
+        """Replay answered-but-unresumed interactions after a restart."""
+
+        recovered = 0
+        # A publish that never finished is repaired first: the interaction is
+        # durably resolved, so the replay log must say so before the recap is
+        # rebuilt (issue #18 §10.6).
+        for row in await self.repo.pending_outbox():
+            if row.get("kind") == "interaction.resolved":
+                await self._publish_interaction_outbox(str(row["task_id"]))
+        for command in await self.repo.pending_interaction_continuations():
+            payload = dict(command.get("payload") or {})
+            interaction_id = str(payload.get("interaction_id") or "")
+            if not interaction_id:
+                continue
+            self._spawn(
+                self._drive_agent_task(
+                    str(command["task_id"]),
+                    str(command.get("learner_id") or ""),
+                    "",
+                    resume={
+                        "kind": "interaction_answer",
+                        "interaction_id": interaction_id,
+                        "answers": list(payload.get("answers") or []),
+                    },
+                )
+            )
+            recovered += 1
+        return recovered
+
+    async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
+        """Drain queued learner inputs through the normal turn coordinator.
+
+        A queued message waits while a graph turn is executing, then either
+        resumes the paused checkpoint (``awaiting_user``) or starts a new turn
+        on the same long-lived thread.  A finished turn never ends the thread
+        (issue #18 §4.1) — only a cancelled thread stops draining the queue.
+        """
+
+        async with self._conversation_locks[task_id]:
+            queue = self._conversation_queue[task_id]
+            while not queue.empty():
+                item = await queue.get()
+                while True:
+                    record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                    if record is None:
+                        return
+                    if str(getattr(record, "thread_status", "") or "open") == "cancelled":
+                        return
+                    if record.status in {"queued", "running"}:
+                        await asyncio.sleep(0.2)
+                        continue
+                    break
+                if record.status == "awaiting_user":
+                    await self._drive_agent_task(
+                        task_id,
+                        learner_id,
+                        "",
+                        resume={
+                            "message": str(item.get("message") or ""),
+                            "kind": "chat",
+                            "attachments": item.get("attachments") or [],
+                        },
+                    )
+                else:
+                    # New turn on the same thread: fresh graph invocation with
+                    # the message as the utterance, reusing the checkpoint
+                    # history under the same thread_id.
+                    await self._drive_agent_task(
+                        task_id,
+                        learner_id,
+                        str(item.get("message") or ""),
+                        resume=None,
+                    )
 
     async def submit_agent_quiz(
         self,
@@ -1855,7 +2255,15 @@ class Service:
         resume: dict[str, Any] | None = None,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
-    ) -> None:
+    ) -> bool:
+        """Run one turn; returns whether *this* call owned the run.
+
+        False means another worker won the durable ``claim_agent_task`` (or the
+        thread was gone), so this caller executed nothing and must not act as
+        if it had — in particular it must not consume the command ledger entry
+        the winner is working from (issue #18 §10.4).
+        """
+
         # Keep the public task launcher cheap: queued tasks wait here instead
         # of all retaining graph state and provider response buffers at once.
         runner = asyncio.current_task()
@@ -1863,7 +2271,7 @@ class Service:
             self._agent_runners[task_id].add(runner)
         try:
             async with self._agent_slots:
-                await self._run_agent_task(
+                return await self._run_agent_task(
                     task_id,
                     learner_id,
                     prompt,
@@ -1888,15 +2296,17 @@ class Service:
         resume: dict[str, Any] | None = None,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
-    ) -> None:
+    ) -> bool:
+        """Execute one turn; returns whether this call claimed the thread."""
+
         self._hold_sweep_pending.discard(task_id)
         if self.agent_model is None:
             await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
             self._notify_agent(task_id)
-            return
+            return False
         record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
         if record is None:
-            return
+            return False
         if resume is not None and resume.get("message"):
             await self.repo.update_agent_task_output(
                 task_id,
@@ -1912,12 +2322,13 @@ class Service:
             )
         latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
         if latest is None or latest.status == "cancelled":
-            return
+            return False
         claimed = await self.repo.claim_agent_task(task_id, learner_id)
         if claimed is None:
             # Another API process (or the request that originally created the
-            # task) already owns this run.
-            return
+            # task) already owns this run.  The caller must treat this as "not
+            # mine": the winner owns the command ledger entry too.
+            return False
         record = claimed
         # Freeze the command set belonging to this turn.  Inputs arriving
         # while the graph is running belong to a later turn and must remain
@@ -1927,10 +2338,26 @@ class Service:
         }
         execution_id = f"exec-{uuid.uuid4().hex}"
         try:
+            # Bind this invocation to the canonical turn it executes.  A
+            # resume keeps the turn that paused; new messages claim the
+            # latest pending turn (issue #18 §4.3).
+            current_turn = await self.repo.latest_turn(task_id)
+            turn_id = str(current_turn["id"]) if current_turn else ""
+            turn_index = int(current_turn["turn_index"]) if current_turn else 0
+            # An interaction answer resumes the paused execution inside the
+            # same turn; link the new execution back to it (issue #18 §4.3).
+            resumes_execution_id: str | None = None
+            if resume is not None and resume.get("kind") == "interaction_answer":
+                prior = await self.repo.get_interaction(
+                    str(resume.get("interaction_id") or ""), task_id=task_id
+                )
+                resumes_execution_id = str((prior or {}).get("execution_id") or "") or None
             await self.repo.create_agent_execution(
                 execution_id=execution_id,
                 task_id=task_id,
                 learner_id=learner_id,
+                turn_id=turn_id or None,
+                resumes_execution_id=resumes_execution_id,
                 graph_version=record.graph_version,
                 trigger="resume"
                 if resume is not None
@@ -1942,6 +2369,12 @@ class Service:
                 execution_id=execution_id,
                 task_id=task_id,
                 graph_version=record.graph_version,
+            )
+            public_projector = PublicProjector(
+                chat_id=task_id,
+                execution_id=execution_id,
+                turn_id=turn_id,
+                request_id=execution_id,
             )
             start_runtime = {
                 "execution_id": execution_id,
@@ -1967,6 +2400,27 @@ class Service:
                         "payload": {"status": "running", "runtime": start_runtime},
                     }
                 )
+            turn_started = public_projector.turn_event(
+                "resumed" if resume is not None else "started",
+                turn_id=turn_id or task_id,
+                turn_index=turn_index,
+                user_text="" if resume is not None else str(prompt or ""),
+            )
+            if turn_started is not None:
+                start_events.append(
+                    {
+                        "kind": "v1.turn",
+                        "agent": "",
+                        "payload": turn_started,
+                        "execution_id": execution_id,
+                        "runtime": {},
+                        "protocol_version": 1,
+                        "turn_id": turn_id or None,
+                    }
+                )
+            # The thread is executing again; the legacy per-run status keeps
+            # its historical meaning for existing readers (issue #18 §4.1).
+            await self.repo.set_agent_thread_status(task_id, "running")
             await self.repo.append_agent_events(task_id, start_events)
         except Exception as exc:  # noqa: BLE001 - startup failures are user-visible
             logger.exception("agent task failed before graph start: %s", task_id)
@@ -1974,6 +2428,7 @@ class Service:
             await self.repo.set_agent_task_status(
                 task_id, "failed", f"启动失败：{type(exc).__name__}: {detail}"
             )
+            await self.repo.set_agent_thread_status(task_id, "open")
             await self.repo.append_agent_events(
                 task_id,
                 [
@@ -1988,7 +2443,7 @@ class Service:
                 ],
             )
             self._notify_agent(task_id)
-            return
+            return True
 
         response_composed = False
 
@@ -1998,12 +2453,31 @@ class Service:
                 return
             # The graph adapter can inspect provider-native messages for local
             # control flow, but this is the sole public persistence boundary.
-            # Never store private reasoning or tool payloads/arguments.
-            public_events = [
-                item
-                for item in events
-                if item.get("kind") not in {"reasoning.delta", "tool.call.delta", "tool.result"}
-            ]
+            # Raw reasoning and raw tool payloads/arguments stay private: they
+            # are dropped from the V0 rows and only their sanitized V1 shape
+            # (safeParams/safeResult, issue #18 §3.4/§9.3) is persisted.
+            private_kinds = {"reasoning.delta", "tool.call.delta", "tool.result"}
+            # An artifact that passed validation projects to a read-only
+            # WorkspaceFile immediately, so the resource identity exists the
+            # moment the learner sees "产物完成" (issue #18 §12.2).
+            for item in events:
+                if item.get("kind") != "artifact.ready":
+                    continue
+                artifact = str((item.get("payload") or {}).get("artifact") or "")
+                descriptor = await self._project_task_artifact_resource(
+                    learner_id, task_id, artifact
+                )
+                if descriptor is not None:
+                    payload = dict(item.get("payload") or {})
+                    payload["workspace_file_id"] = descriptor["id"]
+                    payload["workspace_file_title"] = descriptor["title"]
+                    item["payload"] = payload
+            v1_rows = _project_public_events(
+                public_projector,
+                events,
+                execution_id=execution_id,
+            )
+            public_events = [item for item in events if item.get("kind") not in private_kinds]
             composed: list[dict[str, Any]] = []
             for item in public_events:
                 if item.get("kind") == "agent.output":
@@ -2016,8 +2490,6 @@ class Service:
                     response_composed = True
                 composed.append(item)
             public_events = composed
-            if not public_events:
-                return
             current_workflow_state = projector.snapshot()["workflowState"]
             for item in public_events:
                 item.setdefault("execution_id", execution_id)
@@ -2027,7 +2499,11 @@ class Service:
                     **(item.get("payload") or {}),
                     "workflowState": current_workflow_state,
                 }
-            await self.repo.append_agent_events(task_id, public_events)
+            # Dual projection: V1 rows carry the canonical identity the next
+            # frontend stage consumes; V0 keeps serving today's UI unchanged.
+            await self.repo.append_agent_events(task_id, [*public_events, *v1_rows])
+            if not public_events and not v1_rows:
+                return
             await self.repo.update_agent_execution(
                 execution_id,
                 workflow_state=current_workflow_state,
@@ -2039,6 +2515,33 @@ class Service:
         async def persist_result(agent: str, value: dict[str, Any]) -> None:
             await self.repo.update_agent_task_output(task_id, agent, value)
             self._notify_agent(task_id)
+
+        async def emit_turn_terminal(status: str) -> None:
+            """Close the turn on the V1 stream; the thread itself stays open."""
+
+            envelope = public_projector.turn_event(
+                status, turn_id=turn_id or task_id, turn_index=turn_index
+            )
+            if envelope is None:
+                return
+            try:
+                await self.repo.append_agent_events(
+                    task_id,
+                    [
+                        {
+                            "kind": "v1.turn",
+                            "agent": "",
+                            "payload": envelope,
+                            "execution_id": execution_id,
+                            "runtime": {},
+                            "protocol_version": 1,
+                            "turn_id": turn_id or None,
+                        }
+                    ],
+                )
+                self._notify_agent(task_id)
+            except Exception:  # noqa: BLE001 - turn bookkeeping must not fail the run
+                logger.exception("failed to emit turn terminal event: %s", task_id)
 
         # One runtime for every task. There is no second topology to choose
         # between, and no graph_version branch to pick it with.
@@ -2070,6 +2573,7 @@ class Service:
                 learner_id=learner_id,
                 task_id=task_id,
                 execution_id=execution_id,
+                turn_id=turn_id,
                 emit=emit_runtime_event,
                 confirmed_actions=frozenset(
                     (session_state.get("plan") or {}).get("confirmed_actions") or ()
@@ -2099,7 +2603,7 @@ class Service:
             ):
                 current_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
                 if current_record is None:
-                    return
+                    return True
                 if current_record.status == "cancelled":
                     snapshot = projector.snapshot()
                     await self.repo.update_agent_execution(
@@ -2110,7 +2614,7 @@ class Service:
                         ended=True,
                     )
                     self._notify_agent(task_id)
-                    return
+                    return True
                 mode, event = streamed
                 force_flush = False
                 if mode == "messages":
@@ -2217,9 +2721,13 @@ class Service:
             )
             await persist_buffer(buffer)
             buffer.clear()
+            # A failed turn closes only the turn; the thread returns to open
+            # so the learner can keep talking (issue #18 §4.1).
             await self.repo.set_agent_task_status(
                 task_id, failure_status, f"运行失败：{type(exc).__name__}: {detail}"
             )
+            await self.repo.set_agent_thread_status(task_id, "cancelled" if failure_status == "cancelled" else "open")
+            await emit_turn_terminal("cancelled" if failure_status == "cancelled" else "failed")
             snapshot = projector.snapshot()
             workflow_state = dict(snapshot["workflowState"])
             metadata = dict(workflow_state.get("metadata") or {})
@@ -2234,20 +2742,29 @@ class Service:
                 ended=True,
             )
             self._notify_agent(task_id)
-            return
+            # A failed turn still releases the thread; an answer accepted while
+            # it was running must not wait for a restart (issue #18 §10.4).
+            self._spawn(self._drain_interaction_continuations(task_id, learner_id))
+            return True
 
         if buffer:
             await persist_buffer(buffer)
         if graph is None:  # pragma: no cover - the try/except above returns on failure
-            return
+            return True
         state = await graph.aget_state(config)
         values = dict(getattr(state, "values", None) or {})
         status = _agent_task_status(values, interrupted=bool(getattr(state, "interrupts", None)))
         errors = [str(item) for item in values.get("errors") or []]
         if status == "failed" and values.get("finished_reason"):
             errors.append(str(values["finished_reason"]))
+        thread_status = {"awaiting_user": "awaiting_user", "cancelled": "cancelled"}.get(
+            status, "open"
+        )
         await self.repo.set_agent_task_status(
-            task_id, "handed_off" if status == "handed_off" else status, "; ".join(errors)
+            task_id,
+            "handed_off" if status == "handed_off" else status,
+            "; ".join(errors),
+            thread_status=thread_status,
         )
         turn = await self.repo.latest_turn(task_id)
         if turn is not None:
@@ -2264,6 +2781,11 @@ class Service:
                 phase="evaluating" if turn_status == "active" else "delivered",
                 goal_status="satisfied" if status in {"completed", "handed_off"} else "open",
             )
+        await emit_turn_terminal(
+            {"awaiting_user": "awaiting_user", "cancelled": "cancelled"}.get(
+                status, "failed" if status == "failed" else "delivered"
+            )
+        )
         # A command remains pending while the turn is executing. It becomes
         # consumed only after the graph has produced a durable outcome, so a
         # crash cannot silently drop an input.
@@ -2289,6 +2811,10 @@ class Service:
         except Exception:  # noqa: BLE001 - projection must not fail the task
             logger.exception("failed to project task artifacts: %s", task_id)
         self._notify_agent(task_id)
+        # The thread is claimable again: pick up any interaction answer that
+        # was accepted while this execution still held it (issue #18 §10.4).
+        self._spawn(self._drain_interaction_continuations(task_id, learner_id))
+        return True
 
     async def _sweep_holds(self, task_id: str, learner_id: str) -> None:
         async with self._hold_sweep_locks[task_id]:

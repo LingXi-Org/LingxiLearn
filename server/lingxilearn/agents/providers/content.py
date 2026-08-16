@@ -158,7 +158,12 @@ def _lesson_intro_fallback(topic: str, objective: str) -> str:
     )
 
 
-@register("lesson_intro")
+@register(
+    "lesson_intro",
+    display_name="课程引入",
+    description="生成课程引入内容",
+    execution_kind="model",
+)
 async def lesson_intro(context: ProviderContext) -> ProviderResult:
     """Generate the course opening page (capability ``content.lesson_intro``)."""
 
@@ -283,7 +288,12 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("lecture_deck")
+@register(
+    "lecture_deck",
+    display_name="交互式讲义",
+    description="生成互动讲义课件",
+    execution_kind="model",
+)
 async def lecture_deck(context: ProviderContext) -> ProviderResult:
     """Generate the offline lecture deck (capability ``content.deck``)."""
 
@@ -455,7 +465,12 @@ async def lecture_deck(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("visual_explainer")
+@register(
+    "visual_explainer",
+    display_name="可视化讲解",
+    description="生成交互式可视化讲解",
+    execution_kind="model",
+)
 async def visual_explainer(context: ProviderContext) -> ProviderResult:
     """Generate the single-file interactive explainer (``content.visual``)."""
 

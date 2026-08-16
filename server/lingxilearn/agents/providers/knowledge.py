@@ -63,7 +63,12 @@ def _registry(name: str) -> SkillRegistry:
     return SkillRegistry((FilesystemSkillSource(REPO_ROOT / "skills" / name),))
 
 
-@register("prerequisite_analyzer")
+@register(
+    "prerequisite_analyzer",
+    display_name="先修分析",
+    description="分析知识点先修关系",
+    execution_kind="model",
+)
 async def prerequisite_analyzer(context: ProviderContext) -> ProviderResult:
     """Work out what the target rests on and what is missing (``graph.prerequisite``).
 
@@ -164,7 +169,12 @@ async def prerequisite_analyzer(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("review_scheduler")
+@register(
+    "review_scheduler",
+    display_name="复习安排",
+    description="安排复习计划",
+    execution_kind="model",
+)
 async def review_scheduler(context: ProviderContext) -> ProviderResult:
     """Rank what is due for retrieval practice (``review.schedule``).
 
@@ -243,7 +253,12 @@ def _review_reason(overdue_days: float, row: Mapping[str, Any], system: Mapping[
     return "，".join(parts)
 
 
-@register("learner_reflector")
+@register(
+    "learner_reflector",
+    display_name="学习反思",
+    description="总结学习者状态",
+    execution_kind="model",
+)
 async def learner_reflector(context: ProviderContext) -> ProviderResult:
     """Compress recent events into a cautious state proposal (``model.reflect``).
 
@@ -304,7 +319,12 @@ async def learner_reflector(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("curriculum_graph")
+@register(
+    "curriculum_graph",
+    display_name="知识图谱构建",
+    description="构建知识点结构",
+    execution_kind="model",
+)
 async def curriculum_graph(context: ProviderContext) -> ProviderResult:
     """Propose a curriculum graph patch without mutating graph storage."""
 

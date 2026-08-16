@@ -19,6 +19,11 @@ import {
   InteractionCardInputRow,
   InteractionCardRecap,
 } from '@/app/workspace/[workspaceId]/home/components/message-content/components/interaction-card'
+import {
+  answerLabelsFor,
+  collectTypedAnswers,
+  type TypedQuestionAnswer,
+} from '@/app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers'
 import type { QuestionItem } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
 
 /**
@@ -78,7 +83,12 @@ function RowCheckbox({ checked, disabled }: { checked: boolean; disabled?: boole
   )
 }
 
-type QuestionPhase = 'active' | 'answered' | 'dismissed'
+type QuestionPhase = 'active' | 'submitting' | 'answered' | 'dismissed'
+
+/** The submission is in flight when the owner answers asynchronously. */
+function isPromise(value: unknown): value is Promise<boolean> {
+  return typeof (value as { then?: unknown } | undefined)?.then === 'function'
+}
 
 interface QuestionDisplayProps {
   data: QuestionItem[]
@@ -92,6 +102,13 @@ interface QuestionDisplayProps {
   onSelect?: (message: string) => void
   /** Reports normalized answers to an existing assessment surface. */
   onAnswersSubmit?: (answers: string[]) => void
+  /**
+   * Reports the whole batch in option-id form. Returning `true` means the
+   * owner submitted it through the typed interaction API, and the formatted
+   * `onSelect` message is then not sent — a typed answer must never also
+   * arrive as an ordinary chat message.
+   */
+  onSubmitAnswers?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   /** Reports that the active card was dismissed so its message actions can return. */
   onDismiss?: () => void
   /** Whether the active card can be dismissed without answering. */
@@ -114,14 +131,20 @@ export function QuestionDisplay({
   answers: transcriptAnswers,
   onSelect,
   onAnswersSubmit,
+  onSubmitAnswers,
   onDismiss,
   dismissible = true,
 }: QuestionDisplayProps) {
   const freeTextInputRef = useRef<HTMLInputElement>(null)
   const freeTextCheckboxRef = useRef<HTMLButtonElement>(null)
-  const disabled = !onSelect && !onAnswersSubmit
   const [phase, setPhase] = useState<QuestionPhase>('active')
+  const [submitFailed, setSubmitFailed] = useState(false)
+  // A card mid-submit stays visible with its selections intact, but takes no
+  // further input until the answer is accepted or fails.
+  const disabled = (!onSelect && !onAnswersSubmit && !onSubmitAnswers) || phase === 'submitting'
   const [step, setStep] = useState(0)
+  // Selections are option ids, never labels: the id is the answer's identity
+  // and the label is only what the learner reads.
   const [selectedByStep, setSelectedByStep] = useState<string[][]>(() => data.map(() => []))
   const [customByStep, setCustomByStep] = useState<string[]>(() => data.map(() => ''))
   const [freeText, setFreeText] = useState('')
@@ -185,15 +208,47 @@ export function QuestionDisplay({
       setFreeText(prefill)
       return
     }
-    setPhase('answered')
     const answers = data.map((q, i) => answerFor(q, selections[i] ?? [], customFor(i, customs)))
-    onSelect?.(formatQuestionAnswerMessage(data, answers))
+    // A typed interaction owns the submission: the formatted message exists
+    // for display and legacy transports only.
+    const outcome = onSubmitAnswers?.(
+      collectTypedAnswers(
+        data,
+        selections,
+        data.map((_question, i) => customFor(i, customs))
+      )
+    )
+    if (isPromise(outcome)) {
+      // The typed path is in flight. The card must not collapse into its
+      // recap yet: if the API rejects the answer the interaction is still
+      // pending server-side, and the learner has to be able to retry.
+      setPhase('submitting')
+      setSubmitFailed(false)
+      void outcome.then(
+        (accepted) => {
+          if (!accepted) {
+            setPhase('active')
+            setSubmitFailed(true)
+            return
+          }
+          setPhase('answered')
+          onAnswersSubmit?.(answers)
+        },
+        () => {
+          setPhase('active')
+          setSubmitFailed(true)
+        }
+      )
+      return
+    }
+    setPhase('answered')
+    if (outcome !== true) onSelect?.(formatQuestionAnswerMessage(data, answers))
     onAnswersSubmit?.(answers)
   }
 
-  const handleSingleSelect = (label: string) => {
+  const handleSingleSelect = (optionId: string) => {
     const selections = [...selectedByStep]
-    selections[step] = [label]
+    selections[step] = [optionId]
     setSelectedByStep(selections)
     const customs = [...customByStep]
     customs[step] = ''
@@ -202,12 +257,12 @@ export function QuestionDisplay({
     finishStep(selections, customs)
   }
 
-  const handleMultiToggle = (label: string) => {
+  const handleMultiToggle = (optionId: string) => {
     const selections = [...selectedByStep]
     const current = selections[step] ?? []
-    selections[step] = current.includes(label)
-      ? current.filter((l) => l !== label)
-      : [...current, label]
+    selections[step] = current.includes(optionId)
+      ? current.filter((id) => id !== optionId)
+      : [...current, optionId]
     setSelectedByStep(selections)
   }
 
@@ -317,14 +372,14 @@ export function QuestionDisplay({
     >
       <div className='flex flex-col'>
         {options.map((option, i) => {
-          const isSelected = selected.includes(option.label)
+          const isSelected = selected.includes(option.id)
           return (
             <button
               key={option.id}
               type='button'
               disabled={disabled}
               onClick={() =>
-                isMulti ? handleMultiToggle(option.label) : handleSingleSelect(option.label)
+                isMulti ? handleMultiToggle(option.id) : handleSingleSelect(option.id)
               }
               className={cn(
                 INTERACTION_CARD_ROW_CLASSES,
@@ -430,6 +485,14 @@ export function QuestionDisplay({
             leading={<div className='flex size-[16px] flex-shrink-0 items-center justify-center' />}
           />
         )}
+        {submitFailed && (
+          // The interaction is still pending on the server, so the card stays
+          // answerable with its selections intact rather than collapsing into
+          // a recap the backend never recorded.
+          <p role='status' className='px-3 py-2 text-[var(--text-muted)] text-sm'>
+            回答没有提交成功，请再试一次。
+          </p>
+        )}
       </div>
     </InteractionCard>
   )
@@ -439,13 +502,10 @@ export function QuestionDisplay({
  * A step's combined answer: selected option labels in option order, with the
  * typed "Something else" entry appended last. single_select carries at most
  * one selection, so this collapses to the chosen label or the typed text.
+ * Selections arrive as option ids; the labels are looked up for display.
  */
 function answerFor(question: QuestionItem, selected: string[], custom: string): string {
-  const ordered = question.options
-    .map((option) => option.label)
-    .filter((label) => selected.includes(label))
-  const parts = custom.trim() ? [...ordered, custom.trim()] : ordered
-  return parts.join(', ')
+  return answerLabelsFor(question, selected, custom).join(', ')
 }
 
 /** Separates known multi-select labels for the recap without changing the wire answer. */

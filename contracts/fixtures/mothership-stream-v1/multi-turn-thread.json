@@ -1,0 +1,266 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "ts": "2026-08-16T12:26:58.439216+00:00",
+    "type": "turn",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "turnId": "turn_fixture_1",
+      "turnIndex": 0,
+      "status": "started",
+      "userText": "什么是量子叠加？"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "ts": "2026-08-16T12:26:58.439058+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "started",
+      "executionId": "exec_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 3,
+    "ts": "2026-08-16T12:26:58.439107+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_t1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "start",
+      "agentRunId": "ar_t1",
+      "providerId": "answer_user",
+      "displayName": "知识点答疑",
+      "executionKind": "model",
+      "capability": "dialog.answer",
+      "presentationRole": "primary"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "ts": "2026-08-16T12:26:58.439141+00:00",
+    "type": "text",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_t1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "channel": "assistant",
+      "text": "叠加态是第一轮的答案。",
+      "streamId": "task_fixture:turn_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 5,
+    "ts": "2026-08-16T12:26:58.439164+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_t1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "end",
+      "agentRunId": "ar_t1",
+      "status": "completed"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 6,
+    "ts": "2026-08-16T12:26:58.439187+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "completed",
+      "executionId": "exec_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 7,
+    "ts": "2026-08-16T12:26:58.439198+00:00",
+    "type": "complete",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "delivered"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 8,
+    "ts": "2026-08-16T12:26:58.439238+00:00",
+    "type": "turn",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "turnId": "turn_fixture_1",
+      "turnIndex": 0,
+      "status": "delivered"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 9,
+    "ts": "2026-08-16T12:26:58.439253+00:00",
+    "type": "turn",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "turnId": "turn_fixture_2",
+      "turnIndex": 1,
+      "status": "started",
+      "userText": "那测量之后为什么坍缩？"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 10,
+    "ts": "2026-08-16T12:26:58.439267+00:00",
+    "type": "turn",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "turnId": "turn_fixture_2",
+      "turnIndex": 1,
+      "status": "delivered"
+    }
+  }
+]

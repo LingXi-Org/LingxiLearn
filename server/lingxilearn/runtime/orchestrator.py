@@ -35,6 +35,7 @@ from .contracts import (
     PlannedTask,
 )
 from .guardrails import Budget
+from .interactions import InteractionSpec
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,10 @@ SYSTEM_PROMPT = """你是 LingxiLearn 的学习计划决策器。每一轮重新
 - 每个任务必须有 done_when，且必须可机器判定；「agent 跑完」不是完成条件。
 - 每个任务必须有 rationale，能直接展示给学习者，单条不超过 60 字。
 - 如果打算做的事和学习者字面要求不同（换了知识点，或忽略了明确请求），
-  必须写 negotiation 并置 awaits_user=true。
+  或者目标范围/知识点/路径存在会改变实际执行的不确定性，必须置 awaits_user=true，
+  并优先输出结构化 interaction（而不是 negotiation 文本）。
+- interaction.questions 每题 2–4 个选项，选项 id 用 o1/o2…，题 id 用 q1/q2…；
+  reason_code 用稳定英文码（如 goal_ambiguous / knowledge_point_unclear / path_choice / confirm_artifact_scope）。
 - 同一知识点的相关产物应在同一轮一起下发；彼此无真实数据依赖时 depends_on 必须为空。
 - 输出 holds（对已有产物 revise 或 close）和 delivery_order（学生学习顺序，不是生成顺序）。
 - 候选之间 utility 差距小于 0.05 时可以按连贯性选择；否则跟随打分。
@@ -69,8 +73,15 @@ reasoning 不超过 80 字，hypotheses 最多 2 条，scores.reason 不超过 2
  "tasks":[{"id":"t1","candidate_id":"candidate_...","capability":"...","knowledge_point_id":"...",
            "done_when":{"kind":"..."},"rationale":"...","depends_on":[]}],
  "goal_satisfied_when":{"kind":"..."},"awaits_user":false,"negotiation":null,
+ "interaction":null,
  "holds":[{"task_key":"step:task-id","action":"revise|close","instruction":"..."}],
- "delivery_order":["lesson-intro","visual","lecture-deck","quiz"]}"""
+ "delivery_order":["lesson-intro","visual","lecture-deck","quiz"]}
+
+awaits_user=true 且需要学习者澄清时，interaction 使用：
+{"purpose":"clarification","presentation":"question","blocking":true,"title":"...",
+ "prompt":"...","questions":[{"id":"q1","type":"single_select","prompt":"...",
+   "options":[{"id":"o1","label":"..."},{"id":"o2","label":"..."}],"allow_free_text":false}],
+ "reason_code":"goal_ambiguous","dismissible":false}"""
 
 
 def unavailable_plan(*, candidates: Sequence[CandidateAction]) -> OrchestrationPlan:
@@ -392,6 +403,15 @@ def _repair(
         for t in tasks
         if t.candidate_id in candidate_by_id
     )
+    # A structured interaction beats prose negotiation when the model emits
+    # one; malformed specs fall back to the legacy text path (issue #18 §10.2).
+    interaction_spec: dict[str, Any] | None = None
+    if isinstance(parsed.get("interaction"), Mapping):
+        try:
+            validated = InteractionSpec.model_validate(dict(parsed["interaction"]))
+            interaction_spec = validated.model_dump(mode="json", by_alias=True)
+        except Exception:  # noqa: BLE001 - model output; degrade, don't crash
+            logger.info("orchestrator emitted an invalid interaction; ignoring")
     try:
         return OrchestrationPlan(
             reasoning=str(parsed.get("reasoning") or ""),
@@ -402,6 +422,7 @@ def _repair(
             negotiation=(str(parsed.get("negotiation")).strip() or None)
             if parsed.get("negotiation")
             else None,
+            interaction=interaction_spec,
             candidates_considered=list(candidates),
             deviates_from_goal=deviating,
             holds=holds,

@@ -862,6 +862,46 @@ export function subscribeAgentEvents(
   return subscribeSse(`/agent-tasks/${taskId}/events`, onEvent, options)
 }
 
+/** Mothership Stream V1 history: durable envelopes only (issue #18). */
+export function agentTaskV1Events(taskId: string): Promise<{ events: AgentTaskEvent[] }> {
+  return request<{ events: AgentTaskEvent[] }>(
+    `/agent-tasks/${taskId}/events?format=json&protocol=v1`
+  )
+}
+
+/** Subscribe to the V1 envelope stream for one long-lived thread. */
+export function subscribeAgentV1Events(
+  taskId: string,
+  onEvent: (event: AgentTaskEvent) => void,
+  options: SseOptions = {}
+): () => void {
+  return subscribeSse(`/agent-tasks/${taskId}/events?protocol=v1`, onEvent, options)
+}
+
+/** Answer one blocking interaction through the structured API (issue #18 §10.4). */
+export function answerAgentInteraction(
+  taskId: string,
+  interactionId: string,
+  answers: Array<{
+    questionId: string
+    selectedOptionIds?: string[]
+    text?: string | null
+  }>,
+  explicitIdempotencyKey?: string
+): Promise<{ status: string; interactionId: string }> {
+  return request<{ status: string; interactionId: string }>(
+    `/agent-tasks/${taskId}/interactions/${encodeURIComponent(interactionId)}/answers`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        answers,
+        idempotency_key:
+          explicitIdempotencyKey ?? idempotencyKey(`interaction-answer:${interactionId}`),
+      }),
+    }
+  )
+}
+
 export const KNOWN_EVENT_KINDS = [
   'run.started',
   'run.ended',

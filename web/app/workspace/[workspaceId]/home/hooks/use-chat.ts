@@ -13,7 +13,6 @@ import { createLogger } from '@sim/logger'
 import { isTerminalToolName } from '@sim/terminal-protocol'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { sleep } from '@sim/utils/helpers'
-import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import { generateId, generateShortId } from '@sim/utils/id'
 import { isRecordLike } from '@sim/utils/object'
 import { backoffWithJitter } from '@sim/utils/retry'
@@ -98,10 +97,13 @@ import {
   PENDING_CHAT_KEY_PREFIX,
 } from '@/lib/desktop/chat-scope'
 import type { LingxiGraphChatAdapter } from '@/lib/lingxi/lingxi-graph-adapter'
+import type { LingxiV1ThreadModel } from '@/lib/lingxi/stream/turn-model'
 import type { LingxiTurnState } from '@/lib/lingxi/turn-state'
+import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import { sendMothershipMessage } from '@/lib/mothership/events'
 import { initTerminalTransport } from '@/lib/terminal/transport'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
+import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
 import { useFilePreviewController } from '@/app/workspace/[workspaceId]/home/hooks/preview'
 import {
   captureResourceActivityScope,
@@ -208,6 +210,13 @@ export interface UseChatReturn {
     contexts?: ChatContext[],
     options?: SendMessageOptions
   ) => Promise<void>
+  /**
+   * Answers the open blocking interaction through the typed API. Returns
+   * `true` when the structured submission was accepted, so the question card
+   * must not also send a formatted chat message (issue #18 §10.5). Absent on
+   * transports without typed interactions.
+   */
+  answerInteraction?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   stopGeneration: () => Promise<void>
   resources: MothershipResource[]
   activeResourceId: string | null
@@ -229,6 +238,8 @@ export interface UseChatReturn {
     events: AgentTaskEvent[]
     workflowState?: Record<string, unknown> | null
     turnState?: LingxiTurnState
+    /** Mothership Stream V1 thread model; null when only V0 history exists. */
+    v1Model?: LingxiV1ThreadModel | null
   }
   getCurrentRequestId: () => string | undefined
 }

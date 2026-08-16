@@ -27,6 +27,7 @@ from sqlalchemy import select
 from ..auth import get_principal
 from ..config import REPO_ROOT
 from ..learner import LearnerContext
+from ..runtime.execution_graph import build_execution_graph
 from ..service import Service, agent_task_create_payload_digest
 from ..state.capabilities import CAPABILITY_INFO
 from ..store.models import (
@@ -42,15 +43,6 @@ from ..store.models import (
 router = APIRouter(prefix="/api")
 
 TERMINAL = {"done", "failed", "cancelled"}
-AGENT_TERMINAL = {
-    "handed_off",
-    "completed",
-    "partial",
-    "failed",
-    "timed_out",
-    "budget_exceeded",
-    "cancelled",
-}
 
 
 def service_of(request: Request) -> Service:
@@ -477,6 +469,15 @@ class AgentMessage(BaseModel):
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
 
 
+class AgentInteractionAnswerRequest(BaseModel):
+    """Structured answers for one blocking interaction (issue #18 §10.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    answers: list[dict[str, Any]] = Field(min_length=1, max_length=20)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
+
+
 class QuizSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -638,7 +639,7 @@ async def post_agent_message(
         )
         if task_resources:
             await svc.update_agent_task(task_id, context.learner_id, resources=task_resources)
-        await svc.agent_message(
+        result = await svc.agent_message(
             task_id,
             body.message,
             attachments=body.attachments,
@@ -649,7 +650,40 @@ async def post_agent_message(
         raise not_found() from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"status": "accepted"}
+    return {
+        "status": "accepted",
+        "turnId": str((result or {}).get("turnId") or ""),
+    }
+
+
+@router.post("/agent-tasks/{task_id}/interactions/{interaction_id}/answers", status_code=202)
+async def answer_agent_interaction(
+    task_id: str,
+    interaction_id: str,
+    body: AgentInteractionAnswerRequest,
+    request: Request,
+    context: LearnerContext = Depends(current_learner_context),
+) -> dict[str, Any]:
+    """Answer a blocking interaction; the server resumes the paused checkpoint."""
+
+    try:
+        return await service_of(request).answer_agent_interaction(
+            task_id,
+            interaction_id,
+            answers=body.answers,
+            idempotency_key=body.idempotency_key or "",
+            learner_id=context.learner_id,
+        )
+    except KeyError as exc:
+        raise not_found() from exc
+    except ValueError as exc:
+        # Reusing a key with a different answer is a conflict, not a bad
+        # request — same semantics as the create-task idempotency contract.
+        detail = str(exc)
+        raise HTTPException(
+            status_code=409 if detail == "idempotency_key_reused" else 400,
+            detail=detail,
+        ) from exc
 
 
 @router.patch("/agent-tasks/{task_id}")
@@ -862,10 +896,19 @@ async def stream_agent_events(
     except KeyError as exc:
         raise not_found() from exc
 
+    # V1 clients (protocol=v1) read the versioned Mothership stream; everyone
+    # else keeps the historical V0 event vocabulary, unchanged.
+    protocol_version = 1 if request.query_params.get("protocol") == "v1" else 0
+
     # History hydration uses one atomic JSON snapshot so the client can render
     # the final graph state without replaying every old event as a new run.
     if request.query_params.get("format") == "json":
-        events = await svc.repo.agent_events_after_for_learner(task_id, context.learner_id, 0)
+        events = await svc.repo.agent_events_after_for_learner(
+            task_id,
+            context.learner_id,
+            0,
+            protocol_version=protocol_version,
+        )
         return Response(
             content=json.dumps({"events": events}, ensure_ascii=False, separators=(",", ":")),
             media_type="application/json",
@@ -885,7 +928,7 @@ async def stream_agent_events(
             if await request.is_disconnected():
                 return
             events = await svc.repo.agent_events_after_for_learner(
-                task_id, context.learner_id, cursor
+                task_id, context.learner_id, cursor, protocol_version=protocol_version
             )
             for event in events:
                 cursor = event["sequence"]
@@ -893,9 +936,12 @@ async def stream_agent_events(
                 yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
 
             current = await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
-            if current["status"] in AGENT_TERMINAL:
+            # The stream ends only when the *thread* is terminal, not when a
+            # single turn delivers — a long-lived chat keeps its SSE channel
+            # across turns (issue #18 §15.1).
+            if current.get("threadStatus") == "cancelled":
                 tail = await svc.repo.agent_events_after_for_learner(
-                    task_id, context.learner_id, cursor
+                    task_id, context.learner_id, cursor, protocol_version=protocol_version
                 )
                 for event in tail:
                     cursor = event["sequence"]
@@ -1113,7 +1159,12 @@ async def agent_task_runtime_graph(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    """Return the durable Sim-compatible runtime graph for this task."""
+    """Return the durable Sim-compatible runtime graph for this task.
+
+    ``executionGraph`` is the canonical V1 graph whose nodes are AgentRuns —
+    the same identities the chat renders (issue #18 §14).  ``workflowState``
+    remains the legacy heuristic projection for today's UI.
+    """
 
     svc = service_of(request)
     task = await svc.repo.get_agent_task_for_learner(task_id, context.learner_id)
@@ -1126,6 +1177,9 @@ async def agent_task_runtime_graph(
         else None
     )
     state = dict(execution.workflow_state or {}) if execution is not None else {}
+    runs = await svc.repo.agent_runs_for_task(task_id)
+    dependencies = await svc.repo.work_dependencies_for_task(task_id)
+    skill_runs = await svc.repo.skill_runs_for_task(task_id)
     return {
         "id": f"runtime-graph:{task_id}",
         "type": "runtime-graph",
@@ -1136,6 +1190,12 @@ async def agent_task_runtime_graph(
         if execution and execution.updated_at
         else None,
         "workflowState": state,
+        "executionGraph": build_execution_graph(
+            runs,
+            task_id=task_id,
+            work_dependencies=dependencies,
+            skill_runs=skill_runs,
+        ),
     }
 
 

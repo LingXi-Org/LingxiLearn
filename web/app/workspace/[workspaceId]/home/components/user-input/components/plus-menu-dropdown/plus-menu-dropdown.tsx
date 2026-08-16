@@ -57,11 +57,23 @@ interface PlusMenuDropdownProps {
   pendingCursorRef: React.MutableRefObject<number | null>
   /** When in mention mode the dropdown hides its search input and uses this query for filtering. */
   mentionQuery?: string
+  /** Resource types whose context kind this chat cannot consume (e.g. the
+   * Lingxi closure, issue #18 §13); hidden from both menus. */
+  excludedResourceTypes?: ReadonlySet<MothershipResourceType>
 }
 
 export const PlusMenuDropdown = React.memo(
   React.forwardRef<PlusMenuHandle, PlusMenuDropdownProps>(function PlusMenuDropdown(
-    { workspaceId, warm, onResourceSelect, onClose, textareaRef, pendingCursorRef, mentionQuery },
+    {
+      workspaceId,
+      warm,
+      onResourceSelect,
+      onClose,
+      textareaRef,
+      pendingCursorRef,
+      mentionQuery,
+      excludedResourceTypes,
+    },
     ref
   ) {
     const [open, setOpen] = useState(false)
@@ -89,6 +101,7 @@ export const PlusMenuDropdown = React.memo(
       isHydrating,
     } = useAvailableResources(workspaceId, {
       enabled: open || !!warm,
+      excludeTypes: excludedResourceTypes ? [...excludedResourceTypes] : undefined,
     })
 
     const doOpen = useCallback(
@@ -108,16 +121,25 @@ export const PlusMenuDropdown = React.memo(
 
     // The `+` browse menu hides non-attachable and mention-only resource types.
     // `@` mode exposes the full catalog and adds each live Browser/Terminal tab
-    // after its always-present whole-resource row.
+    // after its always-present whole-resource row. The mode closure
+    // (excludedResourceTypes) wins over both: a chip this chat cannot consume
+    // is never offered, in either menu.
     const visibleResources = useMemo(() => {
       if (isMention) {
-        return withDesktopTabMentions(availableResources, browserTabs, terminalTabs)
+        const mentionBrowserTabs = excludedResourceTypes?.has('browser')
+          ? EMPTY_BROWSER_TABS
+          : browserTabs
+        const mentionTerminalTabs = excludedResourceTypes?.has('terminal')
+          ? EMPTY_TERMINAL_TABS
+          : terminalTabs
+        return withDesktopTabMentions(availableResources, mentionBrowserTabs, mentionTerminalTabs)
       }
       const attachable = availableResources.filter(
-        ({ type }) => !NON_ATTACHABLE_RESOURCE_TYPES.has(type)
+        ({ type }) =>
+          !NON_ATTACHABLE_RESOURCE_TYPES.has(type) && !excludedResourceTypes?.has(type)
       )
       return attachable.filter(({ type }) => !MENTION_ONLY_RESOURCE_TYPES.has(type))
-    }, [availableResources, browserTabs, isMention, terminalTabs])
+    }, [availableResources, browserTabs, excludedResourceTypes, isMention, terminalTabs])
 
     const treeSections = useResourceTreeSections({
       groups: visibleResources,

@@ -25,6 +25,10 @@ AGENT_EVENT_KINDS: Final[frozenset[str]] = frozenset(
         "agent.output",
         "agent.output.delta",
         "assistant.delta",
+        # Canonical skill-run lifecycle emitted by the dispatcher (issue #18).
+        "skill.started",
+        "skill.completed",
+        "skill.failed",
         # Internal adapters may observe these, but the persistence/SSE
         # boundary strips them before publication.
         "reasoning.delta",
@@ -43,6 +47,9 @@ AGENT_EVENT_KINDS: Final[frozenset[str]] = frozenset(
         "node.retrying",
         "node.cached",
         "interrupt.raised",
+        # Structured HITL lifecycle (issue #18 §5.6).
+        "interaction.requested",
+        "interaction.resolved",
         "artifact.ready",
         "artifact.recovered",
         "delivery.queued",

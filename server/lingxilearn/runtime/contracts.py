@@ -196,6 +196,8 @@ class OrchestrationPlan(BaseModel):
     goal_satisfied_when: DoneCondition | None = None
     awaits_user: bool = False
     negotiation: str | None = None
+    interaction: dict[str, Any] | None = None
+    """Structured HITL request (InteractionSpec shape) instead of prose negotiation."""
     candidates_considered: list[CandidateAction] = Field(default_factory=list)
     deviates_from_goal: bool = False
     """Set when the top-ranked capability is not what the learner literally asked for."""

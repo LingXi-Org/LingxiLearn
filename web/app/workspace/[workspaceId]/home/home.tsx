@@ -20,6 +20,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { usePostHog } from 'posthog-js/react'
 import { LandingPromptStorage, MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
+import { LINGXI_EXCLUDED_RESOURCE_TYPES } from '@/lib/lingxi/supported-contexts'
 import {
   addMothershipContexts,
   MOTHERSHIP_SEND_MESSAGE_EVENT,
@@ -178,6 +179,11 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
 
   const wasSendingRef = useRef(false)
 
+  // Lingxi mode closes the context-chip vocabulary to what its backend can
+  // actually consume (issue #18 §13); Sim keeps the full catalog.
+  const excludedResourceTypes =
+    workspaceId === 'lingxi' ? LINGXI_EXCLUDED_RESOURCE_TYPES : undefined
+
   const { isPending: isChatHistoryPending } = useMothershipChatHistory(
     workspaceId === 'lingxi' ? undefined : chatId
   )
@@ -257,6 +263,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
     resolvedChatId,
     desktopScopeId,
     sendMessage,
+    answerInteraction,
     stopGeneration,
     resources,
     activeResourceId,
@@ -613,6 +620,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
                     onSubmit={handleSubmit}
                     isSending={isSending}
                     onStopGeneration={handleStopGeneration}
+                    excludedResourceTypes={excludedResourceTypes}
                   />
                 </ChatSurfaceProvider>
                 {/* Anchored out of flow so expanding/collapsing never shifts the centered input */}
@@ -634,6 +642,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
             isLoading={showChatSkeleton}
             onSubmit={handleSubmit}
             onStopGeneration={handleStopGeneration}
+            onQuestionSubmit={answerInteraction}
             messageQueue={messageQueue}
             editingQueuedId={editingQueuedId}
             dispatchingHeadId={dispatchingHeadId}
@@ -649,6 +658,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
             animateInput={isInputEntering}
             onInputAnimationEnd={isInputEntering ? () => setIsInputEntering(false) : undefined}
             initialScrollBlocked={resources.length > 0 && isResourceCollapsed}
+            excludedResourceTypes={excludedResourceTypes}
           />
         )}
       </div>

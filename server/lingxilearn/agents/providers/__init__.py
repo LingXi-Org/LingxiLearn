@@ -9,10 +9,13 @@ state.
 from __future__ import annotations
 
 from .base import (
+    AgentDescriptor,
     Provider,
     ProviderContext,
     ProviderError,
     ProviderResult,
+    descriptor,
+    descriptors,
     get,
     load_all,
     missing_providers,
@@ -21,10 +24,13 @@ from .base import (
 )
 
 __all__ = [
+    "AgentDescriptor",
     "Provider",
     "ProviderContext",
     "ProviderError",
     "ProviderResult",
+    "descriptor",
+    "descriptors",
     "get",
     "load_all",
     "missing_providers",

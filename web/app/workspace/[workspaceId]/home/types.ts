@@ -199,6 +199,9 @@ export interface ChatMessage {
   attachments?: ChatMessageAttachment[]
   contexts?: ChatMessageContext[]
   requestId?: string
+  /** Structured-interaction answers for this message's question card (V1
+   * recap); preferred over transcript pairing when present (issue #18 §10.6). */
+  questionAnswers?: string[]
 }
 
 export const SUBAGENT_LABELS: Record<string, string> = {
