@@ -628,7 +628,10 @@ class TrajectoryProjector:
             if category != "control" and primitive not in {"interpret_goal", "orchestrate", "observe", "dispatch"}:
                 continue
             start, end = self._span_times(span)
-            span_runtime = span.get("runtime") if isinstance(span.get("runtime"), Mapping) else {}
+            span_runtime_value = span.get("runtime")
+            span_runtime: Mapping[str, Any] = (
+                span_runtime_value if isinstance(span_runtime_value, Mapping) else {}
+            )
             raw_span_step = span_runtime.get("step")
             span_step = int(raw_span_step) if isinstance(raw_span_step, str) and raw_span_step.isdigit() else raw_span_step
             item_id = f"control:span:{span.get('id') or control_items + 1}"
@@ -866,8 +869,14 @@ class TrajectoryProjector:
                 "tool_call_id": span.get("toolCallId") or span.get("tool_call_id"),
                 "tokens": span.get("tokens"),
             }
-            runtime = span.get("runtime") if isinstance(span.get("runtime"), Mapping) else {}
-            span_metadata = span.get("metadata") if isinstance(span.get("metadata"), Mapping) else {}
+            runtime_value = span.get("runtime")
+            runtime: Mapping[str, Any] = (
+                runtime_value if isinstance(runtime_value, Mapping) else {}
+            )
+            span_metadata_value = span.get("metadata")
+            span_metadata: Mapping[str, Any] = (
+                span_metadata_value if isinstance(span_metadata_value, Mapping) else {}
+            )
             node = self._payload_node({**dict(span_metadata), **dict(span)}, runtime)
             parent = self._tasks.get(node, {}).get("item_id") if node else None
             if parent is None and self._tasks:
@@ -1149,7 +1158,7 @@ class TrajectoryProjector:
         self._project_actions_and_resources()
         self._project_task_resources()
         self._project_runtime_state_output()
-        lanes = [
+        lanes: list[dict[str, Any]] = [
             {"id": lane, "label": label, "items": sorted(self._items[lane], key=lambda item: (item["relativeStartMs"], item["id"]))}
             for lane, label in TRAJECTORY_LANES
         ]
