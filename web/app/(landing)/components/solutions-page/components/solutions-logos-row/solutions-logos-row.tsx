@@ -20,7 +20,7 @@ export function SolutionsLogosRow() {
   return (
     <section id='solutions-logos' aria-labelledby='solutions-logos-heading' className='relative'>
       <h2 id='solutions-logos-heading' className='sr-only'>
-        Companies building AI agents with Sim
+        Teams building with LingXi
       </h2>
       <div className='flex justify-center'>
         <Logos layout='row' />

@@ -24,7 +24,7 @@ export interface SolutionsHeroConfig {
   eyebrow?: string
   /**
    * The page's single `<h1>`. Per the constitution it should name the module and
-   * "Sim"/"AI workspace" (e.g. "Workflows - the visual builder in Sim, the AI workspace").
+   * "LingXi" and the concrete learning or product outcome for this route.
    */
   heading: string
   /** Supporting description beneath the heading, in the body color. */
@@ -34,7 +34,7 @@ export interface SolutionsHeroConfig {
   /** Optional secondary hero CTA; omitted pages keep the shared defaults. */
   secondaryCta?: SolutionsPillCta | null
   /**
-   * ~50-word sr-only atomic summary for AI citation (GEO). Names "Sim" explicitly
+   * ~50-word sr-only atomic summary for AI citation (GEO). Names LingXi explicitly
    * and states what the module is, who it's for, and what it does.
    */
   summary: string
@@ -52,7 +52,7 @@ export interface SolutionsCardConfig {
   title: string
   /**
    * Supporting description beneath the title, in the body color. Self-contained
-   * and names "Sim" - never "the platform" or a bare pronoun - so each card is an
+   * and names LingXi - never "the platform" or a bare pronoun - so each card is an
    * independently quotable answer block.
    */
   description: string
@@ -99,7 +99,7 @@ export interface SolutionsCardRowConfig {
   id: string
   /** The row's `<h2>` title, in the headline color - reads as an answer to a user question. */
   title: string
-  /** Supporting subtitle beneath the title, in the body color, naming "Sim". */
+  /** Supporting subtitle beneath the title, in the body color, naming LingXi. */
   subtitle: string
   /**
    * Optional second subtitle paragraph - a self-contained follow-on point that
@@ -143,6 +143,8 @@ export interface SolutionsPageConfig {
   offersFreeTier?: boolean
   /** Structured-data language for localized product pages. */
   language?: string
+  /** Controlled page family used to adapt shared shells without forking them. */
+  pageKind?: 'platform' | 'learning'
   /** Whether to render the shared ecosystem-logo row. Defaults to true. */
   showLogos?: boolean
   /** The hero (the page's only `<h1>`). */

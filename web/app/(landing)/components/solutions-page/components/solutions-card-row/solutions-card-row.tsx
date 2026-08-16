@@ -29,6 +29,7 @@ import type { SolutionsCardRowConfig } from '@/app/(landing)/components/solution
 
 interface SolutionsCardRowProps {
   row: SolutionsCardRowConfig
+  pageKind?: 'platform' | 'learning'
 }
 
 /** Maps a supported column count to its grid class; anything else falls back to three-up. */
@@ -38,7 +39,7 @@ const GRID_COLS: Record<number, string> = {
   4: 'grid-cols-4',
 }
 
-export function SolutionsCardRow({ row }: SolutionsCardRowProps) {
+export function SolutionsCardRow({ row, pageKind = 'platform' }: SolutionsCardRowProps) {
   const headingId = `solutions-row-${row.id}-heading`
   const gridCols = GRID_COLS[row.columns ?? row.cards.length] ?? GRID_COLS[3]
 
@@ -47,8 +48,9 @@ export function SolutionsCardRow({ row }: SolutionsCardRowProps) {
       id={`solutions-row-${row.id}`}
       aria-labelledby={headingId}
       className={cn('flex flex-col', SOLUTIONS_SPACING.cardRowHeaderToGrid)}
+      data-page-kind={pageKind}
     >
-      <SolutionsCardRowHeader row={row} headingId={headingId} />
+      <SolutionsCardRowHeader row={row} headingId={headingId} pageKind={pageKind} />
 
       <div
         className={cn(
@@ -63,6 +65,7 @@ export function SolutionsCardRow({ row }: SolutionsCardRowProps) {
             key={`${row.id}-${card.title}`}
             card={card}
             headingId={`solutions-row-${row.id}-card-${index}-heading`}
+            pageKind={pageKind}
             tabletSpan={row.cards.length === 3 && row.columns === undefined && index === 2}
           />
         ))}

@@ -1,14 +1,21 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { AgentIcon, BrainIcon, ChartBarIcon, StartIcon, TableIcon } from '@/components/icons'
 import { cn } from '@/components/ui-kit'
 import {
   HeroChatLoop,
+  type HeroChatLoopContent,
   type HeroChatPhase,
 } from '@/app/(landing)/components/hero/components/hero-chat-loop'
 import { HeroWorkflowStage } from '@/app/(landing)/components/hero/components/hero-platform-loop/hero-workflow-stage'
 import { SidebarHotspots } from '@/app/(landing)/components/hero/components/hero-platform-loop/sidebar-hotspots'
-import { STAGE_BLOCKS } from '@/app/(landing)/components/hero/components/hero-platform-loop/stage-data'
+import {
+  STAGE_BLOCKS,
+  STAGE_CANVAS,
+  STAGE_EDGES,
+} from '@/app/(landing)/components/hero/components/hero-platform-loop/stage-data'
+import type { BlockDef } from '@/app/(landing)/components/hero/components/hero-visual/workflow-data'
 
 /**
  * One pass of the synced loop, matching the REAL platform behavior: the chat
@@ -66,7 +73,54 @@ const CHROME_INTERIOR = { width: 1024, height: 721 } as const
  * Under `prefers-reduced-motion` the loop never starts: the finished exchange,
  * open stage, and fully-built workflow render statically.
  */
-export function HeroPlatformLoop() {
+export type HeroWorkflowIcon = 'agent' | 'brain' | 'chart' | 'start' | 'table'
+
+export type HeroWorkflowBlock = Omit<BlockDef, 'icon'> & {
+  /** Serializable icon key; the client loop resolves it to the source icon. */
+  icon: HeroWorkflowIcon
+}
+
+export interface HeroWorkflowDefinition {
+  /** Workflow blocks in the order they should appear during the build beat. */
+  blocks: readonly HeroWorkflowBlock[]
+  /** Source → target pairs rendered by the existing vertical edge layer. */
+  edges: ReadonlyArray<readonly [string, string]>
+  /** Design-space bounds used by the source stage scaler. */
+  canvas: { width: number; height: number }
+}
+
+const WORKFLOW_ICONS = {
+  agent: AgentIcon,
+  brain: BrainIcon,
+  chart: ChartBarIcon,
+  start: StartIcon,
+  table: TableIcon,
+} as const
+
+function resolveWorkflow(workflow?: HeroWorkflowDefinition) {
+  if (!workflow) {
+    return { blocks: STAGE_BLOCKS, edges: STAGE_EDGES, canvas: STAGE_CANVAS }
+  }
+
+  return {
+    blocks: workflow.blocks.map((block) => ({
+      ...block,
+      icon: WORKFLOW_ICONS[block.icon],
+    })),
+    edges: workflow.edges,
+    canvas: workflow.canvas,
+  }
+}
+
+interface HeroPlatformLoopProps {
+  /** Optional learning conversation; the source loop chrome and timing stay unchanged. */
+  chat?: HeroChatLoopContent
+  /** Optional per-page workflow; the source stage renders one or many blocks. */
+  workflow?: HeroWorkflowDefinition
+}
+
+export function HeroPlatformLoop({ chat, workflow }: HeroPlatformLoopProps = {}) {
+  const { blocks, edges, canvas } = useMemo(() => resolveWorkflow(workflow), [workflow])
   const regionRef = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<HeroChatPhase>('idle')
   const [stageOpen, setStageOpen] = useState(false)
@@ -104,7 +158,7 @@ export function HeroPlatformLoop() {
       setFading(false)
       setPhase('reply')
       setStageOpen(true)
-      setBuiltCount(STAGE_BLOCKS.length)
+      setBuiltCount(blocks.length)
     }
 
     const runCycle = () => {
@@ -117,7 +171,7 @@ export function HeroPlatformLoop() {
         setTimeout(() => setPhase('user'), PHASE_STARTS.user),
         setTimeout(() => setPhase('thinking'), PHASE_STARTS.thinking),
         setTimeout(() => setStageOpen(true), STAGE_OPEN_AT),
-        ...STAGE_BLOCKS.map((_, i) =>
+        ...blocks.map((_, i) =>
           setTimeout(() => setBuiltCount(i + 1), BUILD_START + i * BUILD_STEP)
         ),
         setTimeout(() => setPhase('reply'), REPLY_AT),
@@ -141,7 +195,7 @@ export function HeroPlatformLoop() {
       media.removeEventListener('change', syncMotionPreference)
       clearScheduled()
     }
-  }, [])
+  }, [blocks])
 
   return (
     <>
@@ -159,7 +213,7 @@ export function HeroPlatformLoop() {
           }}
         >
           <div className='pointer-events-none relative h-full min-w-0 flex-1'>
-            <HeroChatLoop phase={phase} fading={fading} />
+            <HeroChatLoop phase={phase} fading={fading} content={chat} />
           </div>
           <div
             className={cn(
@@ -167,7 +221,13 @@ export function HeroPlatformLoop() {
               stageOpen ? 'w-1/2 border-l' : 'w-0 min-w-0 border-l-0'
             )}
           >
-            <HeroWorkflowStage key={cycleId} builtCount={builtCount} />
+            <HeroWorkflowStage
+              key={cycleId}
+              builtCount={builtCount}
+              blocks={blocks}
+              edges={edges}
+              canvas={canvas}
+            />
           </div>
         </div>
       </div>

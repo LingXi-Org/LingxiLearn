@@ -1,0 +1,54 @@
+.stepQuestion,
+.stepAnswer,
+.stepSource {
+  animation: learning-dialogue-stamp-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.stepQuestion {
+  animation-delay: 0.35s;
+}
+
+.stepAnswer {
+  animation-delay: 0.85s;
+}
+
+.stepSource {
+  animation-delay: 1.35s;
+}
+
+.sourcePulse {
+  animation: learning-dialogue-source-pulse 6s ease-out 1.8s infinite;
+}
+
+@keyframes learning-dialogue-stamp-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes learning-dialogue-source-pulse {
+  0%,
+  20% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-secondary) 30%, transparent);
+  }
+  36% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--text-secondary) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-secondary) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepQuestion,
+  .stepAnswer,
+  .stepSource,
+  .sourcePulse {
+    animation: none;
+  }
+}

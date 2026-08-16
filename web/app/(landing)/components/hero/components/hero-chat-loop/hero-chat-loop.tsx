@@ -16,24 +16,34 @@ import {
 } from '@/components/ui-kit/icons'
 import { HERO_TOOLTIP_OFFSET } from '@/app/(landing)/components/hero/components/hero-platform-loop/sidebar-hotspots'
 
-/** The conversation the loop plays - mirrors the learning workspace demo. */
-const USER_MESSAGE = '为什么交叉熵可以衡量分类误差？'
-const REPLY_MESSAGE =
-  '我会先理解你的问题，检查当前掌握状态，再补充概率与信息量等前置概念，用可视化解释建立直观理解，最后检验理解并更新学习状态。'
-const REPLY_WORDS = Array.from(REPLY_MESSAGE)
+/** The default conversation keeps the homepage's learning workspace demo intact. */
+const DEFAULT_CONTENT = {
+  userMessage: '为什么交叉熵可以衡量分类误差？',
+  replyMessage:
+    '我会先理解你的问题，检查当前掌握状态，再补充概率与信息量等前置概念，用可视化解释建立直观理解，最后检验理解并更新学习状态。',
+  followUps: ['补充前置概念', '建立直观理解', '检验理解'],
+} as const
 /** Word-reveal cadence for the streamed reply. */
 const STREAM_WORD_MS = 55
-/** Follow-up suggestions shown once the reply completes, like the real chat. */
-const FOLLOW_UPS = ['补充前置概念', '建立直观理解', '检验理解'] as const
-
 /** Where the chat pane is within one loop pass. */
 export type HeroChatPhase = 'idle' | 'user' | 'thinking' | 'reply'
+
+export interface HeroChatLoopContent {
+  /** Student message shown in the first chat bubble. */
+  userMessage: string
+  /** Streamed learning response shown after the thinking beat. */
+  replyMessage: string
+  /** Three next actions shown after the response settles. */
+  followUps: readonly [string, string, string]
+}
 
 interface HeroChatLoopProps {
   /** Current phase, driven by the parent {@link HeroPlatformLoop} clock. */
   phase: HeroChatPhase
   /** True during the brief fade-out before the cycle restarts. */
   fading: boolean
+  /** Optional content override; chrome and motion remain the source implementation. */
+  content?: HeroChatLoopContent
 }
 
 /**
@@ -56,10 +66,11 @@ interface HeroChatLoopProps {
  * half width (stage open). Only the conversation fades on reset - the pane
  * and composer are persistent chrome.
  */
-export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
+export function HeroChatLoop({ phase, fading, content = DEFAULT_CONTENT }: HeroChatLoopProps) {
   const showUser = phase !== 'idle'
   const showThinking = phase === 'thinking'
   const showReply = phase === 'reply'
+  const replyWords = Array.from(content.replyMessage)
   const [revealedWords, setRevealedWords] = useState(0)
 
   // Stream the reply word by word while the phase holds on 'reply'; any other
@@ -79,9 +90,9 @@ export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
       const startedAt = performance.now()
       interval = setInterval(() => {
         const elapsed = performance.now() - startedAt
-        const n = Math.min(Math.floor(elapsed / STREAM_WORD_MS) + 1, REPLY_WORDS.length)
+        const n = Math.min(Math.floor(elapsed / STREAM_WORD_MS) + 1, replyWords.length)
         setRevealedWords(n)
-        if (n >= REPLY_WORDS.length && interval) clearInterval(interval)
+        if (n >= replyWords.length && interval) clearInterval(interval)
       }, STREAM_WORD_MS)
     }
 
@@ -92,7 +103,7 @@ export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
     const syncMotionPreference = () => {
       if (interval) clearInterval(interval)
       if (media.matches) {
-        setRevealedWords(REPLY_WORDS.length)
+        setRevealedWords(replyWords.length)
         return
       }
       stream()
@@ -104,9 +115,9 @@ export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
       media.removeEventListener('change', syncMotionPreference)
       if (interval) clearInterval(interval)
     }
-  }, [showReply])
+  }, [content.replyMessage, showReply])
 
-  const replyComplete = revealedWords >= REPLY_WORDS.length
+  const replyComplete = revealedWords >= replyWords.length
 
   return (
     <div className='flex h-full w-full flex-col bg-[var(--bg)]'>
@@ -122,7 +133,7 @@ export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
             showUser ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
           )}
         >
-          {USER_MESSAGE}
+          {content.userMessage}
         </div>
 
         {showThinking && (
@@ -136,7 +147,7 @@ export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
           )}
         >
           <p className='text-[15px] text-[var(--text-primary)] leading-[1.6]'>
-            {REPLY_WORDS.slice(0, revealedWords).join('')}
+            {replyWords.slice(0, revealedWords).join('')}
           </p>
           <div
             className={cn(
@@ -147,7 +158,7 @@ export function HeroChatLoop({ phase, fading }: HeroChatLoopProps) {
             <div className='flex flex-col'>
               <span className='text-[var(--text-body)] text-sm'>推荐后续操作</span>
               <div className='mt-1.5 flex flex-col'>
-                {FOLLOW_UPS.map((title, i) => (
+                {content.followUps.map((title, i) => (
                   <span
                     key={title}
                     className={cn(

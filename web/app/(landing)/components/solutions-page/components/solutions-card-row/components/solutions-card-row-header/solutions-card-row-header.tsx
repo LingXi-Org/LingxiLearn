@@ -14,11 +14,16 @@ interface SolutionsCardRowHeaderProps {
   row: SolutionsCardRowConfig
   /** Stable id wiring the `<h2>` into the page outline. */
   headingId: string
+  pageKind?: 'platform' | 'learning'
 }
 
-export function SolutionsCardRowHeader({ row, headingId }: SolutionsCardRowHeaderProps) {
+export function SolutionsCardRowHeader({
+  row,
+  headingId,
+  pageKind = 'platform',
+}: SolutionsCardRowHeaderProps) {
   return (
-    <div className='flex flex-col items-start gap-3 text-left'>
+    <div className='flex flex-col items-start gap-3 text-left' data-page-kind={pageKind}>
       <h2
         id={headingId}
         className='max-w-[540px] text-balance font-medium text-[22px] text-[var(--text-primary)] leading-[1.3] max-sm:text-[20px]'
