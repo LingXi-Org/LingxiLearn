@@ -52,7 +52,7 @@ SYSTEM_PROMPT = """你是 LingxiLearn 的学习计划决策器。每一轮重新
 规则：
 - 一轮最多 3 个任务。
 - 每个任务必须有 done_when，且必须可机器判定；「agent 跑完」不是完成条件。
-- 每个任务必须有 rationale，能直接展示给学习者。
+- 每个任务必须有 rationale，能直接展示给学习者，单条不超过 60 字。
 - 如果打算做的事和学习者字面要求不同（换了知识点，或忽略了明确请求），
   必须写 negotiation 并置 awaits_user=true。
 - 同一知识点的相关产物应在同一轮一起下发；彼此无真实数据依赖时 depends_on 必须为空。
@@ -62,6 +62,7 @@ SYSTEM_PROMPT = """你是 LingxiLearn 的学习计划决策器。每一轮重新
 done_when 可用类型：artifact_exists / artifact_valid / evidence_observed /
 profile_reaches / user_replied / quiz_graded / always / all_of / any_of。
 
+reasoning 不超过 80 字，hypotheses 最多 2 条，scores.reason 不超过 24 字；不要复述候选详情。
 只输出 JSON：
 {"reasoning":"...","hypotheses":["..."],
 "scores":[{"capability":"...","knowledge_point_id":"...","gain":0.0,"utility":0.0,"reason":"..."}],
@@ -460,7 +461,7 @@ async def plan(
                 "utility": item.utility,
                 "gain": item.gain,
                 "cost": item.cost,
-                "reason": item.reason,
+                "reason": item.reason[:96],
                 "skill_id": item.skill_id,
                 "candidate_id": item.candidate_id,
             }
