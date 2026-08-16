@@ -392,6 +392,18 @@ export interface WorkflowBlockViewProps {
   horizontalHandles: boolean
   shouldShowDefaultHandles: boolean
   /**
+   * Additional vertical connection ports. These are intentionally opt-in so
+   * the editor keeps its canonical left/right topology while read-only
+   * projections can expose a port only when an edge actually approaches from
+   * above or below.
+   */
+  verticalHandles?: {
+    sourceTop?: boolean
+    sourceBottom?: boolean
+    targetTop?: boolean
+    targetBottom?: boolean
+  }
+  /**
    * Predicted card height in px, from the deterministic-dimensions pass.
    *
    * Scales the side connection tabs so a short card never wears a tab nearly
@@ -480,6 +492,8 @@ export interface WorkflowBlockViewProps {
   hasErrorConnection?: boolean
   /** Whether this block's error output is switched on. */
   errorOutputEnabled?: boolean
+  /** Whether to render the editor-only On error row and switch. */
+  showErrorControls?: boolean
   /** Toggles the error output from the card's error row. */
   onToggleErrorOutput?: (enabled: boolean) => void
   /**
@@ -513,6 +527,7 @@ export function WorkflowBlockView({
   isIntegration = false,
   interactive = true,
   shouldShowDefaultHandles,
+  verticalHandles,
   blockHeight,
   hasContentBelowHeader,
   conditionRows,
@@ -550,6 +565,7 @@ export function WorkflowBlockView({
   sentence,
   hasErrorConnection = false,
   errorOutputEnabled = false,
+  showErrorControls = true,
   onToggleErrorOutput,
   highlightedHandles,
 }: WorkflowBlockViewProps) {
@@ -677,7 +693,11 @@ export function WorkflowBlockView({
   })
   /* Blocks that can emit an error always carry the row; `response` terminates
      the flow and has no error branch. */
-  const showErrorRow = shouldShowDefaultHandles && type !== 'response'
+  const showErrorRow = showErrorControls && shouldShowDefaultHandles && type !== 'response'
+  const showSourceTopHandle = Boolean(verticalHandles?.sourceTop)
+  const showSourceBottomHandle = Boolean(verticalHandles?.sourceBottom)
+  const showTargetTopHandle = Boolean(verticalHandles?.targetTop)
+  const showTargetBottomHandle = Boolean(verticalHandles?.targetBottom)
   /*
    * The error output is a real, draggable source whenever the toggle is on (a
    * connection forces the toggle on, so connected cards always have it). It
@@ -699,6 +719,10 @@ export function WorkflowBlockView({
        keeps stale handleBounds and drops the edge (error 008) until something
        else re-measures the node. */
     rendersErrorHandle,
+    showSourceTopHandle,
+    showSourceBottomHandle,
+    showTargetTopHandle,
+    showTargetBottomHandle,
     updateNodeInternals,
   ])
   const tabFill = (handleId: string) =>
@@ -776,6 +800,42 @@ export function WorkflowBlockView({
         color: tabFill(WORKFLOW_SOURCE_HANDLE_ID),
       })
     }
+    if (showTargetTopHandle) {
+      ports.push({
+        id: 'target-top',
+        side: 'top',
+        position: 'center',
+        plateau: mainTabLength('top'),
+        color: tabFill('target-top'),
+      })
+    }
+    if (showTargetBottomHandle) {
+      ports.push({
+        id: 'target-bottom',
+        side: 'bottom',
+        position: 'center',
+        plateau: mainTabLength('bottom'),
+        color: tabFill('target-bottom'),
+      })
+    }
+    if (showSourceTopHandle) {
+      ports.push({
+        id: 'source-top',
+        side: 'top',
+        position: 'center',
+        plateau: mainTabLength('top'),
+        color: tabFill('source-top'),
+      })
+    }
+    if (showSourceBottomHandle) {
+      ports.push({
+        id: 'source-bottom',
+        side: 'bottom',
+        position: 'center',
+        plateau: mainTabLength('bottom'),
+        color: tabFill('source-bottom'),
+      })
+    }
     if (showErrorRow && errorOutputEnabled) {
       ports.push(getErrorBorderPort(tabFill('error')))
     }
@@ -804,6 +864,10 @@ export function WorkflowBlockView({
     showActionMenu,
     showErrorRow,
     errorOutputEnabled,
+    showSourceTopHandle,
+    showSourceBottomHandle,
+    showTargetTopHandle,
+    showTargetBottomHandle,
     sideTabLength,
     type,
   ])
@@ -914,6 +978,48 @@ export function WorkflowBlockView({
             }}
             data-nodeid={id}
             data-handleid={WORKFLOW_TARGET_HANDLE_ID}
+            isConnectableStart={false}
+            isConnectableEnd={true}
+            isValidConnection={(connection) => {
+              if (connection.source === id) return false
+              return !wouldCreateConnectionCycle(connection.source!, connection.target!)
+            }}
+          />
+        )}
+
+        {showTargetTopHandle && (
+          <Handle
+            type='target'
+            position={Position.Top}
+            id='target-top'
+            className={getInvisibleHandleClasses('top')}
+            style={{
+              ...getHandleStyle('vertical'),
+              ...invisibleHandleSize('top', mainTabLength('top'), MAIN_HANDLE_HIT_LENGTH_PX),
+            }}
+            data-nodeid={id}
+            data-handleid='target-top'
+            isConnectableStart={false}
+            isConnectableEnd={true}
+            isValidConnection={(connection) => {
+              if (connection.source === id) return false
+              return !wouldCreateConnectionCycle(connection.source!, connection.target!)
+            }}
+          />
+        )}
+
+        {showTargetBottomHandle && (
+          <Handle
+            type='target'
+            position={Position.Bottom}
+            id='target-bottom'
+            className={getInvisibleHandleClasses('bottom')}
+            style={{
+              ...getHandleStyle('vertical'),
+              ...invisibleHandleSize('bottom', mainTabLength('bottom'), MAIN_HANDLE_HIT_LENGTH_PX),
+            }}
+            data-nodeid={id}
+            data-handleid='target-bottom'
             isConnectableStart={false}
             isConnectableEnd={true}
             isValidConnection={(connection) => {
@@ -1233,6 +1339,48 @@ export function WorkflowBlockView({
             }}
             data-nodeid={id}
             data-handleid={WORKFLOW_SOURCE_HANDLE_ID}
+            isConnectableStart={true}
+            isConnectableEnd={false}
+            isValidConnection={(connection) => {
+              if (connection.target === id) return false
+              return !wouldCreateConnectionCycle(connection.source!, connection.target!)
+            }}
+          />
+        )}
+
+        {showSourceTopHandle && (
+          <Handle
+            type='source'
+            position={Position.Top}
+            id='source-top'
+            className={getInvisibleHandleClasses('top')}
+            style={{
+              ...getHandleStyle('vertical'),
+              ...invisibleHandleSize('top', mainTabLength('top'), MAIN_HANDLE_HIT_LENGTH_PX),
+            }}
+            data-nodeid={id}
+            data-handleid='source-top'
+            isConnectableStart={true}
+            isConnectableEnd={false}
+            isValidConnection={(connection) => {
+              if (connection.target === id) return false
+              return !wouldCreateConnectionCycle(connection.source!, connection.target!)
+            }}
+          />
+        )}
+
+        {showSourceBottomHandle && (
+          <Handle
+            type='source'
+            position={Position.Bottom}
+            id='source-bottom'
+            className={getInvisibleHandleClasses('bottom')}
+            style={{
+              ...getHandleStyle('vertical'),
+              ...invisibleHandleSize('bottom', mainTabLength('bottom'), MAIN_HANDLE_HIT_LENGTH_PX),
+            }}
+            data-nodeid={id}
+            data-handleid='source-bottom'
             isConnectableStart={true}
             isConnectableEnd={false}
             isValidConnection={(connection) => {
