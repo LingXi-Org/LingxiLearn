@@ -37,6 +37,20 @@ from sqlalchemy import select
 from .agents.artifact_store import ArtifactError, ArtifactStore
 from .agents.contracts import quiz_public
 from .agents.model_runtime import EVENT_CHANNEL, model_roles
+
+# Control-plane and learner-facing graph nodes must answer without hidden
+# reasoning. Only detached artifact production benefits from a thinking pass;
+# it is allowed to spend that extra latency away from the interactive path.
+THINKING_MODEL_ROLES = frozenset(
+    {
+        "lesson_intro",
+        "lecture_deck",
+        "visual_explainer",
+        "quiz_generator",
+        "retrieval_practice",
+    }
+)
+
 from .agents.providers import load_all as load_providers
 from .agents.providers import missing_providers
 from .brains.base import TutorBrain
@@ -435,13 +449,7 @@ class Service:
                 "timeout": self.settings.agent_timeout,
                 # Keep one shared low-latency default so every current and
                 # future specialist avoids expensive hidden reasoning.
-                "default_options": {
-                    # Keep Agent tool loops responsive.  The UI still renders
-                    # provider reasoning when a provider sends it, but normal
-                    # orchestration requests do not spend tokens on CoT.
-                    "thinking": {"type": "disabled"},
-                    "reasoning_effort": "low",
-                },
+                "default_options": {"thinking": {"type": "disabled"}},
                 "cache_first": {
                     "enabled": self.settings.agent_cache_enabled,
                     "verify_mode": self.settings.agent_cache_verify_mode,
@@ -455,7 +463,19 @@ class Service:
             # added, leaving eleven roles resolving to None in production while
             # every test passed a fake model directly.
             self.agent_model = {
-                role: TracedOpenAICompatChatModel(self.settings.agent_model, **model_options)
+                role: TracedOpenAICompatChatModel(
+                    self.settings.agent_model,
+                    **{
+                        **model_options,
+                        "default_options": {
+                            "thinking": {
+                                "type": "enabled"
+                                if role in THINKING_MODEL_ROLES
+                                else "disabled"
+                            }
+                        },
+                    },
+                )
                 # One instance per role: each has a different immutable system
                 # prompt and tool catalog, and sharing one would break the
                 # provider's prompt-cache prefix.
