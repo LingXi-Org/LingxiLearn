@@ -250,18 +250,6 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 "agent.status",
                 {"text": "已收到你的学习目标，正在准备学习安排。", "phase": "interpret_goal"},
             )
-            # The first learner-facing acknowledgement must not wait for goal
-            # interpretation or any artifact provider.  In particular, a
-            # lesson/visual/deck provider may take minutes, while the learner
-            # should see that the companion is present immediately.
-            deps.emit(
-                "agent.output",
-                {
-                    "agent": "learning_companion",
-                    "message": "我先陪你开始：正在快速了解你的目标，稍后把最先能学的内容送到你面前。",
-                    "stream_id": f"{deps.task_id}:opening-companion",
-                },
-            )
         rows = await deps.runtime_state.profile_for(deps.learner_id)
         stack = await deps.runtime_state.goal_stack(deps.task_id)
         utterance = str(state.get("utterance") or "").strip()
@@ -326,7 +314,13 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         goal = Goal.from_dict(state.get("goal") or {})
         budget = Budget.from_dict(state.get("budget"))
         interjections = await deps.runtime_state.drain_interjections(deps.task_id)
-        latest_message = interjections[-1] if interjections else {}
+        latest_message = (
+            dict(interjections[-1])
+            if interjections
+            else dict(state.get("user_message") or {})
+        )
+        if not latest_message and str(state.get("utterance") or "").strip():
+            latest_message = {"message": str(state["utterance"])}
         if latest_message:
             dispatcher.retarget(user_message=latest_message)
         skills = await deps.runtime_state.list_skills(learner_id=deps.learner_id, enabled_only=True)
@@ -1097,7 +1091,7 @@ def initial_state(
         messages=[],
         last_decision_id="",
         replanning=False,
-        user_message={},
+        user_message={"message": utterance} if utterance.strip() else {},
         finished_reason="",
     )
 

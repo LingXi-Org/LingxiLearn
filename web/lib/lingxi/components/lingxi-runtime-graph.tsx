@@ -50,6 +50,7 @@ const runtimeNodeTypes = { lingxiRuntimeNode: RuntimeNode }
 const runtimeEdgeTypes = { lingxiRuntimeEdge: RuntimeEdge }
 const nativeCanvasClassName = [
   '[&_.react-flow__handle]:!z-[30]',
+  '[&_.react-flow__handle]:!pointer-events-none',
   '[&_.react-flow__pane]:select-none',
   '[&_.react-flow__selectionpane]:select-none',
   String.raw`[&_.react-flow\_\_selection]:!border-[var(--text-secondary)]`,

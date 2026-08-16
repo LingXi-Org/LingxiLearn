@@ -646,7 +646,17 @@ class Service:
         )
         await self.repo.append_agent_events(
             task_id,
-            [{"kind": "task.started", "agent": "coordinator", "payload": {"status": "queued"}}],
+            [
+                {"kind": "task.started", "agent": "coordinator", "payload": {"status": "queued"}},
+                {
+                    "kind": "agent.output",
+                    "agent": "learning_companion",
+                    "payload": {
+                        "message": "我先陪你开始：正在快速了解你的目标，稍后把最先能学的内容送到你面前。",
+                        "stream_id": f"{task_id}:opening-companion",
+                    },
+                },
+            ],
         )
         if self.agent_model is None:
             message = "DS_API_KEY is not configured"
