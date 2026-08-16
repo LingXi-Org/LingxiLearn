@@ -5,7 +5,12 @@ import pytest
 from lingxigraph import EventKind
 
 from lingxilearn.runtime.schedules import SchedulerWorker, next_schedule_time, validate_schedule
-from lingxilearn.runtime.sim_semantics import SimRunProjector, SimRuntimeError, visible_execution
+from lingxilearn.runtime.sim_semantics import (
+    SimRunProjector,
+    SimRuntimeError,
+    replay_sim_trace,
+    visible_execution,
+)
 
 
 def event(kind, *, node="lecture_hook", step=1, task_id="task-1", data=None):
@@ -119,6 +124,25 @@ def test_runtime_loop_nodes_are_registered():
             "await_user",
         }
     )
+
+
+def test_trace_replay_accepts_catalog_primitives_without_explicit_labels():
+    trace = replay_sim_trace(
+        [
+            {
+                "kind": "node.started",
+                "agent": "coordinator",
+                "payload": {"data": {}},
+                "runtime": {"node": "orchestrate", "step": 1, "task_id": "task-1"},
+                "ts": "2026-08-16T01:21:00+00:00",
+            }
+        ],
+        execution_id="exec-replay",
+        task_id="task-1",
+        graph_version="v1",
+        status="failed",
+    )
+    assert trace[0]["children"][0]["name"] == "orchestrate"
 
 
 @pytest.mark.parametrize(
