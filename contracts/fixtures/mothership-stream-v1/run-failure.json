@@ -1,0 +1,134 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "ts": "2026-08-16T11:29:00.587484+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "started",
+      "executionId": "exec_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "ts": "2026-08-16T11:29:00.587577+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_deck_fail",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "start",
+      "agentRunId": "ar_deck_fail",
+      "providerId": "lecture_deck",
+      "displayName": "交互式讲义",
+      "executionKind": "model",
+      "capability": "content.deck",
+      "presentationRole": "supporting"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 3,
+    "ts": "2026-08-16T11:29:00.587627+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_deck_fail",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "end",
+      "agentRunId": "ar_deck_fail",
+      "status": "failed"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "ts": "2026-08-16T11:29:00.587660+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "failed",
+      "executionId": "exec_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 5,
+    "ts": "2026-08-16T11:29:00.587677+00:00",
+    "type": "complete",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "failed"
+    }
+  }
+]

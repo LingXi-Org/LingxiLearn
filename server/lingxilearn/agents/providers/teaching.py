@@ -141,7 +141,12 @@ def _guarded(text: str, context: ProviderContext) -> tuple[str, bool]:
     return fallback_hint(step, level), True
 
 
-@register("adaptive_pedagogy")
+@register(
+    "adaptive_pedagogy",
+    display_name="自适应教学",
+    description="根据掌握情况选择讲法",
+    execution_kind="model",
+)
 async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
     """Choose and deliver the next teaching move (``teach.strategy``/``teach.explain``)."""
 
@@ -214,7 +219,12 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("answer_user")
+@register(
+    "answer_user",
+    display_name="知识点答疑",
+    description="回答学习者的直接提问",
+    execution_kind="model",
+)
 async def answer_user(context: ProviderContext) -> ProviderResult:
     """Answer a direct follow-up question (``dialog.answer``)."""
 
@@ -279,7 +289,12 @@ async def answer_user(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("negotiator")
+@register(
+    "negotiator",
+    display_name="学习目标协商",
+    description="澄清模糊的学习目标",
+    execution_kind="model",
+)
 async def negotiator(context: ProviderContext) -> ProviderResult:
     """Write the one sentence that precedes deviating from the request.
 
@@ -337,7 +352,12 @@ async def negotiator(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("learning_companion")
+@register(
+    "learning_companion",
+    display_name="学习陪伴",
+    description="即时学习对话",
+    execution_kind="model",
+)
 async def learning_companion(context: ProviderContext) -> ProviderResult:
     """Give a fast response while the main loop continues."""
     question = str(context.user_message.get("message") or "").strip()
@@ -405,7 +425,12 @@ async def learning_companion(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("probe_user")
+@register(
+    "probe_user",
+    display_name="理解检查",
+    description="向学习者确认理解",
+    execution_kind="model",
+)
 async def probe_user(context: ProviderContext) -> ProviderResult:
     brief = _learner_brief(context)
     if context.model is None:
@@ -441,7 +466,12 @@ async def probe_user(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("learner_interview")
+@register(
+    "learner_interview",
+    display_name="基础了解",
+    description="了解学习者已有基础",
+    execution_kind="model",
+)
 async def learner_interview(context: ProviderContext) -> ProviderResult:
     """Ask a couple of short baseline questions and persist self-report evidence."""
 

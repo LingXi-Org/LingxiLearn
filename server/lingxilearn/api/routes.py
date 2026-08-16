@@ -862,10 +862,19 @@ async def stream_agent_events(
     except KeyError as exc:
         raise not_found() from exc
 
+    # V1 clients (protocol=v1) read the versioned Mothership stream; everyone
+    # else keeps the historical V0 event vocabulary, unchanged.
+    protocol_version = 1 if request.query_params.get("protocol") == "v1" else 0
+
     # History hydration uses one atomic JSON snapshot so the client can render
     # the final graph state without replaying every old event as a new run.
     if request.query_params.get("format") == "json":
-        events = await svc.repo.agent_events_after_for_learner(task_id, context.learner_id, 0)
+        events = await svc.repo.agent_events_after_for_learner(
+            task_id,
+            context.learner_id,
+            0,
+            protocol_version=protocol_version,
+        )
         return Response(
             content=json.dumps({"events": events}, ensure_ascii=False, separators=(",", ":")),
             media_type="application/json",
@@ -885,7 +894,7 @@ async def stream_agent_events(
             if await request.is_disconnected():
                 return
             events = await svc.repo.agent_events_after_for_learner(
-                task_id, context.learner_id, cursor
+                task_id, context.learner_id, cursor, protocol_version=protocol_version
             )
             for event in events:
                 cursor = event["sequence"]
@@ -895,7 +904,7 @@ async def stream_agent_events(
             current = await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
             if current["status"] in AGENT_TERMINAL:
                 tail = await svc.repo.agent_events_after_for_learner(
-                    task_id, context.learner_id, cursor
+                    task_id, context.learner_id, cursor, protocol_version=protocol_version
                 )
                 for event in tail:
                     cursor = event["sequence"]

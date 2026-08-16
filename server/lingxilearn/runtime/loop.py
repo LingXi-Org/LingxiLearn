@@ -95,6 +95,7 @@ class LoopDeps:
         registry: Any = None,
         pack: Any = None,
         execution_id: str = "",
+        turn_id: str = "",
         emit: Any = None,
         confirmed_actions: frozenset[str] = frozenset(),
         prior_results: Mapping[str, Any] | None = None,
@@ -112,6 +113,7 @@ class LoopDeps:
         self.registry = registry
         self.pack = pack
         self.execution_id = execution_id
+        self.turn_id = turn_id
         self.emit = emit
         self.confirmed_actions = confirmed_actions
         self.prior_results = dict(prior_results or {})
@@ -242,6 +244,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             registry=deps.registry,
             pack=deps.pack,
             emit=deps.emit,
+            execution_id=deps.execution_id,
+            turn_id=deps.turn_id,
         )
     )
     dispatcher.seed_results(deps.prior_results)
@@ -530,6 +534,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         # repository retain the standalone graph contract.
         if deps.repository is not None and produced.tasks:
             turn = await deps.repository.latest_turn(deps.task_id)
+            if turn is not None:
+                dispatcher.bind_turn(str(turn["id"]))
             if turn is not None:
                 candidate_by_id = {
                     item.candidate_id: item for item in produced.candidates_considered

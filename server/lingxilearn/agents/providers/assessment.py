@@ -90,7 +90,12 @@ def _learner_state(context: ProviderContext) -> dict[str, Any]:
     }
 
 
-@register("quiz_generator")
+@register(
+    "quiz_generator",
+    display_name="知识检测",
+    description="生成检查理解的题目",
+    execution_kind="model",
+)
 async def quiz_generator(context: ProviderContext) -> ProviderResult:
     """Produce a diagnostic quiz over what has been taught (``assess.generate``)."""
 
@@ -155,7 +160,12 @@ async def quiz_generator(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("retrieval_practice")
+@register(
+    "retrieval_practice",
+    display_name="检索练习",
+    description="安排巩固记忆的练习",
+    execution_kind="model",
+)
 async def retrieval_practice(context: ProviderContext) -> ProviderResult:
     """Build one retrieval/transfer task from evidence (``assess.generate``).
 
@@ -209,7 +219,12 @@ async def retrieval_practice(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("deterministic_grader")
+@register(
+    "deterministic_grader",
+    display_name="自动判分",
+    description="规则判分，不调用模型",
+    execution_kind="deterministic",
+)
 async def deterministic_grader(context: ProviderContext) -> ProviderResult:
     """Grade a submitted attempt by rule and emit the evidence (``assess.grade``).
 
@@ -273,7 +288,12 @@ async def deterministic_grader(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("formative_assessor")
+@register(
+    "formative_assessor",
+    display_name="形成性评估",
+    description="评估当前掌握情况",
+    execution_kind="model",
+)
 async def formative_assessor(context: ProviderContext) -> ProviderResult:
     """Interpret graded evidence into misconception patterns (``assess.interpret``)."""
 

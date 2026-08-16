@@ -7,6 +7,7 @@ on:
       - 'server/lingxilearn/**'
       - 'server/migrations/**'
       - 'server/tests/**'
+      - 'contracts/fixtures/**'
       - 'server/pyproject.toml'
       - 'server/uv.lock'
       - '.github/workflows/lingxi-chat.yml'
@@ -17,6 +18,7 @@ on:
       - 'server/lingxilearn/**'
       - 'server/migrations/**'
       - 'server/tests/**'
+      - 'contracts/fixtures/**'
       - 'server/pyproject.toml'
       - 'server/uv.lock'
       - '.github/workflows/lingxi-chat.yml'
@@ -65,6 +67,8 @@ jobs:
           app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts
           app/workspace/[workspaceId]/home/types.ts
           lib/lingxi/chat-types.ts
+          lib/lingxi/generated/mothership-stream-v1.test.ts
+          lib/lingxi/generated/mothership-stream-v1.ts
           lib/lingxi/lingxi-graph-adapter.test.ts
           lib/lingxi/lingxi-graph-adapter.ts
           lib/lingxi/turn-state.test.ts
@@ -75,7 +79,7 @@ jobs:
           vitest.config.ts
 
   backend:
-    name: Lingxi create-task idempotency
+    name: Lingxi backend protocol & lifecycle
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -94,3 +98,12 @@ jobs:
 
       - name: Run create-task idempotency regression
         run: uv run --extra dev pytest -q tests/test_agent_tasks.py -k create_agent_task_idempotency
+
+      - name: Run Mothership V1 protocol & lifecycle tests
+        run: >-
+          uv run --extra dev pytest -q
+          tests/test_mothership_stream_v1.py
+          tests/test_public_projection.py
+          tests/test_interactions.py
+          tests/test_agent_runs_lifecycle.py
+          tests/test_parallel_dispatch.py

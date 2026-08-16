@@ -65,6 +65,7 @@ from .runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
 from .runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from .runtime.loop import LoopDeps, build_loop
 from .runtime.loop import initial_state as initial_loop_state
+from .runtime.public_projection import PublicProjector
 from .runtime.schedules import next_schedule_time, validate_schedule
 from .runtime.sim_semantics import (
     PrimitiveCatalog,
@@ -274,6 +275,44 @@ def _trace_agent(metadata: Any, default_agent: str = "coordinator") -> str:
         if value and str(value) not in _LOOP_NODES:
             return str(value)
     return default_agent
+
+
+def _project_public_events(
+    projector: PublicProjector,
+    events: list[dict[str, Any]],
+    *,
+    execution_id: str,
+) -> list[dict[str, Any]]:
+    """Project a V0 persistence buffer into Lingxi Mothership Stream V1 rows.
+
+    The projector sanitizes every payload (denylist + per-tool projection), so
+    it may safely consume raw tool events that never reach the V0 rows.  The
+    ``seq`` placeholders are rewritten by the repository when the durable task
+    sequence is assigned, keeping envelope seq == row sequence.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for event in events:
+        try:
+            for envelope in projector.consume(event):
+                rows.append(
+                    {
+                        "kind": f"v1.{envelope['type']}",
+                        "agent": "",
+                        "payload": envelope,
+                        "execution_id": execution_id,
+                        "runtime": {},
+                        "protocol_version": 1,
+                        "turn_id": (envelope.get("stream") or {}).get("turnId") or None,
+                        "agent_run_id": (envelope.get("scope") or {}).get("agentRunId")
+                        or None,
+                        "skill_run_id": (envelope.get("scope") or {}).get("skillRunId")
+                        or None,
+                    }
+                )
+        except Exception:  # noqa: BLE001 - projection must never fail the run
+            logger.exception("public projection failed for %s", event.get("kind"))
+    return rows
 
 
 def _message_trace_events(value: Any, default_agent: str) -> list[dict[str, Any]]:
@@ -567,6 +606,7 @@ class Service:
         learner_id: str,
         task_id: str,
         execution_id: str = "",
+        turn_id: str = "",
         emit: Any = None,
         confirmed_actions: frozenset[str] = frozenset(),
         prior_results: dict[str, Any] | None = None,
@@ -593,6 +633,7 @@ class Service:
                 registry=self.registry,
                 pack=pack,
                 execution_id=execution_id,
+                turn_id=turn_id,
                 emit=emit,
                 confirmed_actions=confirmed_actions,
                 prior_results=prior_results,
@@ -1744,10 +1785,16 @@ class Service:
         }
         execution_id = f"exec-{uuid.uuid4().hex}"
         try:
+            # Bind this invocation to the canonical turn it executes.  A
+            # resume keeps the turn that paused; new messages claim the
+            # latest pending turn (issue #18 §4.3).
+            current_turn = await self.repo.latest_turn(task_id)
+            turn_id = str(current_turn["id"]) if current_turn else ""
             await self.repo.create_agent_execution(
                 execution_id=execution_id,
                 task_id=task_id,
                 learner_id=learner_id,
+                turn_id=turn_id or None,
                 graph_version=record.graph_version,
                 trigger="resume"
                 if resume is not None
@@ -1759,6 +1806,12 @@ class Service:
                 execution_id=execution_id,
                 task_id=task_id,
                 graph_version=record.graph_version,
+            )
+            public_projector = PublicProjector(
+                chat_id=task_id,
+                execution_id=execution_id,
+                turn_id=turn_id,
+                request_id=execution_id,
             )
             start_runtime = {
                 "execution_id": execution_id,
@@ -1815,12 +1868,16 @@ class Service:
                 return
             # The graph adapter can inspect provider-native messages for local
             # control flow, but this is the sole public persistence boundary.
-            # Never store private reasoning or tool payloads/arguments.
-            public_events = [
-                item
-                for item in events
-                if item.get("kind") not in {"reasoning.delta", "tool.call.delta", "tool.result"}
-            ]
+            # Raw reasoning and raw tool payloads/arguments stay private: they
+            # are dropped from the V0 rows and only their sanitized V1 shape
+            # (safeParams/safeResult, issue #18 §3.4/§9.3) is persisted.
+            private_kinds = {"reasoning.delta", "tool.call.delta", "tool.result"}
+            v1_rows = _project_public_events(
+                public_projector,
+                events,
+                execution_id=execution_id,
+            )
+            public_events = [item for item in events if item.get("kind") not in private_kinds]
             composed: list[dict[str, Any]] = []
             for item in public_events:
                 if item.get("kind") == "agent.output":
@@ -1833,8 +1890,6 @@ class Service:
                     response_composed = True
                 composed.append(item)
             public_events = composed
-            if not public_events:
-                return
             current_workflow_state = projector.snapshot()["workflowState"]
             for item in public_events:
                 item.setdefault("execution_id", execution_id)
@@ -1844,7 +1899,11 @@ class Service:
                     **(item.get("payload") or {}),
                     "workflowState": current_workflow_state,
                 }
-            await self.repo.append_agent_events(task_id, public_events)
+            # Dual projection: V1 rows carry the canonical identity the next
+            # frontend stage consumes; V0 keeps serving today's UI unchanged.
+            await self.repo.append_agent_events(task_id, [*public_events, *v1_rows])
+            if not public_events and not v1_rows:
+                return
             await self.repo.update_agent_execution(
                 execution_id,
                 workflow_state=current_workflow_state,
@@ -1887,6 +1946,7 @@ class Service:
                 learner_id=learner_id,
                 task_id=task_id,
                 execution_id=execution_id,
+                turn_id=turn_id,
                 emit=emit_runtime_event,
                 confirmed_actions=frozenset(
                     (session_state.get("plan") or {}).get("confirmed_actions") or ()

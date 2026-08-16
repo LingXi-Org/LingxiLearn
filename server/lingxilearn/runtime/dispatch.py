@@ -21,9 +21,12 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..agents.model_runtime import EVENT_CHANNEL
 from ..agents.providers import ProviderContext, ProviderError, ProviderResult
+from ..agents.providers import descriptor as provider_descriptor
 from ..agents.providers import get as get_provider
 from ..agents.providers import load_all as load_providers
+from ..state.capabilities import info as capability_info
 from ..state.evidence import EvidenceRecord
 from ..state.session_state import Goal
 from ..store.runtime_state import RuntimeStateRepository
@@ -31,6 +34,7 @@ from .candidates import RegisteredSkill, candidate_id
 from .completion import CompletionContext, StoreArtifactProbe, evaluate
 from .contracts import PlannedTask, TaskOutcome
 from .guardrails import Budget
+from .run_context import RunContext, new_agent_run_id, new_skill_run_id, presentation_role_for
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,9 @@ class Resolution:
     cost: dict[str, Any] = field(default_factory=dict)
     status_line: str = ""
     candidate_id: str = ""
+    display_name: str = ""
+    skill_version: str = ""
+    skill_checksum: str = ""
 
 
 def resolve(
@@ -88,13 +95,17 @@ def resolve(
         )
     )
     chosen = matches[0]
+    metadata = chosen.get("metadata") or {}
     return Resolution(
         capability=capability,
         skill_id=str(chosen["skill_id"]),
         provider=str(chosen["provider"]),
         cost=dict(chosen.get("cost") or {}),
-        status_line=str((chosen.get("metadata") or {}).get("status_line") or "正在处理这一步…"),
+        status_line=str(metadata.get("status_line") or "正在处理这一步…"),
         candidate_id=selected_candidate_id,
+        display_name=str(chosen.get("display_name") or ""),
+        skill_version=str(chosen.get("version") or ""),
+        skill_checksum=str(chosen.get("checksum") or ""),
     )
 
 
@@ -117,6 +128,9 @@ class DispatchDeps:
     user_message: Mapping[str, Any] = field(default_factory=dict)
     shared_skills: tuple[str, ...] = ()
     emit: Any = None
+    execution_id: str = ""
+    """Canonical execution identity host; empty in standalone unit runs."""
+    turn_id: str = ""
 
 
 class _ProviderRuntime:
@@ -126,14 +140,24 @@ class _ProviderRuntime:
     emitted only their logical task id (``t1``/``t2``).  Those ids repeat after
     a replan, so the projector could attach a later model span to an older
     agent.  This transparent proxy keeps the provider API unchanged while
-    carrying the unique runtime node id on every event.
+    carrying the unique runtime node id — and now the canonical
+    ``agent_run_id``/``skill_run_id`` — on every event.
     """
 
-    def __init__(self, runtime: Any, *, task_id: str, node_id: str, step: int) -> None:
+    def __init__(
+        self,
+        runtime: Any,
+        *,
+        task_id: str,
+        node_id: str,
+        step: int,
+        run_context: RunContext | None = None,
+    ) -> None:
         self._runtime = runtime
         self._task_id = task_id
         self._node_id = node_id
         self._step = step
+        self._run_context = run_context
 
     def emit(self, channel: str, value: Any) -> Any:
         if isinstance(value, Mapping):
@@ -141,8 +165,28 @@ class _ProviderRuntime:
             payload.setdefault("task_id", self._task_id)
             payload.setdefault("node_id", self._node_id)
             payload.setdefault("step", self._step)
+            context = self._run_context
+            if context is not None:
+                if context.agent_run_id:
+                    payload.setdefault("agent_run_id", context.agent_run_id)
+                if context.skill_run_id:
+                    payload.setdefault("skill_run_id", context.skill_run_id)
+                if context.execution_id:
+                    payload.setdefault("execution_id", context.execution_id)
             value = payload
         return self._runtime.emit(channel, value)
+
+    def narrate(self, text: str, *, code: str = "") -> Any:
+        """Emit a learner-safe status line; identity is attached automatically.
+
+        Providers use this instead of hand-building status events so every
+        narration is scoped to the canonical agent/skill run (issue #18 §8.2).
+        """
+
+        return self.emit(
+            EVENT_CHANNEL,
+            {"type": "agent.status", "text": text, **({"code": code} if code else {})},
+        )
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._runtime, name)
@@ -202,6 +246,12 @@ class Dispatcher:
         if emit is not None:
             self._deps.emit = emit
 
+    def bind_turn(self, turn_id: str) -> None:
+        """Attach the canonical turn identity for AgentRun attribution."""
+
+        if turn_id:
+            self._deps.turn_id = turn_id
+
     def seed_results(self, results: Mapping[str, Any]) -> None:
         """Prime with results persisted by earlier rounds of the same task."""
 
@@ -225,16 +275,6 @@ class Dispatcher:
             task.inputs.get("__runtime_node_id")
             or work_id
             or f"{self._deps.task_id}:{task.inputs.get('__runtime_step') or 0}:{task.id}"
-        )
-        runtime = (
-            _ProviderRuntime(
-                self._deps.graph_runtime,
-                task_id=task.id,
-                node_id=node_id,
-                step=int(task.inputs.get("__runtime_step") or 0),
-            )
-            if self._deps.graph_runtime is not None
-            else None
         )
         claimed: dict[str, Any] | None = None
         if work_id and self._deps.repository is not None:
@@ -296,6 +336,76 @@ class Dispatcher:
                 detail=str(exc),
             )
 
+        # -- canonical AgentRun identity (issue #18) ---------------------------
+        # The dispatcher — not the provider — owns the agent lifecycle.  Each
+        # real invocation attempt gets a fresh agent_run_id, so a WorkItem
+        # retry can never reuse a previous attempt's identity.
+        provider_desc = provider_descriptor(resolution.provider)
+        role = presentation_role_for(
+            capability=task.capability,
+            capability_info=capability_info(task.capability),
+            critical_path=task.estimated_cost.critical_path,
+        )
+        agent_run_id = new_agent_run_id()
+        display_name = provider_desc.display_name if provider_desc else resolution.provider
+        execution_kind = provider_desc.execution_kind if provider_desc else "model"
+        run_context = RunContext(
+            task_id=self._deps.task_id,
+            execution_id=self._deps.execution_id,
+            turn_id=self._deps.turn_id,
+            agent_run_id=agent_run_id,
+            provider_id=resolution.provider,
+            capability=task.capability,
+            presentation_role=role,
+            stream_id=f"{self._deps.task_id}:{self._deps.turn_id or 'turn'}",
+        )
+        skill_run_id = new_skill_run_id()
+        skill_display_name = resolution.display_name or resolution.skill_id
+        if self._deps.repository is not None:
+            for persist in (
+                lambda: self._deps.repository.create_agent_run(
+                    agent_run_id=agent_run_id,
+                    task_id=self._deps.task_id,
+                    execution_id=self._deps.execution_id or self._deps.task_id,
+                    turn_id=self._deps.turn_id or None,
+                    work_item_id=work_id or None,
+                    provider_id=resolution.provider,
+                    agent_display_name=display_name,
+                    execution_kind=execution_kind,
+                    capability=task.capability,
+                    presentation_role=role,
+                    started=True,
+                    safe_metadata={"skill_id": resolution.skill_id},
+                ),
+                lambda: self._deps.repository.create_skill_run(
+                    skill_run_id=skill_run_id,
+                    agent_run_id=agent_run_id,
+                    task_id=self._deps.task_id,
+                    execution_id=self._deps.execution_id or self._deps.task_id,
+                    turn_id=self._deps.turn_id or None,
+                    skill_id=resolution.skill_id,
+                    display_name=skill_display_name,
+                    version=resolution.skill_version,
+                    checksum=resolution.skill_checksum,
+                ),
+            ):
+                try:
+                    await persist()
+                except Exception:  # noqa: BLE001 - identity rows must not fail the run
+                    logger.exception("failed to persist execution identity")
+
+        runtime = (
+            _ProviderRuntime(
+                self._deps.graph_runtime,
+                task_id=task.id,
+                node_id=node_id,
+                step=int(task.inputs.get("__runtime_step") or 0),
+                run_context=run_context,
+            )
+            if self._deps.graph_runtime is not None
+            else None
+        )
+
         if self._deps.emit is not None:
             if task.inputs.get("revision"):
                 self._deps.emit(
@@ -320,6 +430,35 @@ class Dispatcher:
                 },
             )
             self._deps.emit(
+                "agent.started",
+                {
+                    "agent": resolution.provider,
+                    "task_id": task.id,
+                    "node_id": node_id,
+                    "capability": task.capability,
+                    "provider": resolution.provider,
+                    "skill_id": resolution.skill_id,
+                    "agent_run_id": agent_run_id,
+                    "display_name": display_name,
+                    "execution_kind": execution_kind,
+                    "presentation_role": role,
+                },
+            )
+            self._deps.emit(
+                "skill.started",
+                {
+                    "agent": resolution.provider,
+                    "task_id": task.id,
+                    "node_id": node_id,
+                    "agent_run_id": agent_run_id,
+                    "skill_run_id": skill_run_id,
+                    "skill_id": resolution.skill_id,
+                    "display_name": skill_display_name,
+                    "version": resolution.skill_version,
+                    "checksum": resolution.skill_checksum,
+                },
+            )
+            self._deps.emit(
                 "agent.status",
                 {
                     "task_id": task.id,
@@ -327,6 +466,7 @@ class Dispatcher:
                     "capability": task.capability,
                     "provider": resolution.provider,
                     "skill_id": resolution.skill_id,
+                    "agent_run_id": agent_run_id,
                     "text": resolution.status_line,
                 },
             )
@@ -355,6 +495,9 @@ class Dispatcher:
                         "text": "这一步没有可用的执行者，我换个方式。",
                     },
                 )
+            await self._finish_identity(
+                agent_run_id, skill_run_id, agent_status="failed", skill_status="failed"
+            )
             return TaskOutcome(
                 task_id=task.id,
                 capability=task.capability,
@@ -381,6 +524,7 @@ class Dispatcher:
             shared_skills=self._deps.shared_skills,
             registry=self._deps.registry,
             pack=self._deps.pack,
+            run_context=run_context.with_skill_run(skill_run_id),
         )
 
         try:
@@ -391,6 +535,8 @@ class Dispatcher:
                 resolution=resolution,
                 node_id=node_id,
                 status="completed",
+                agent_run_id=agent_run_id,
+                skill_run_id=skill_run_id,
             )
         except asyncio.CancelledError:
             self._emit_agent_lifecycle(
@@ -400,6 +546,8 @@ class Dispatcher:
                 node_id=node_id,
                 status="cancelled",
                 detail="provider task cancelled",
+                agent_run_id=agent_run_id,
+                skill_run_id=skill_run_id,
             )
             raise
         except ProviderError as exc:
@@ -411,6 +559,8 @@ class Dispatcher:
                 node_id=node_id,
                 status="failed",
                 detail=str(exc),
+                agent_run_id=agent_run_id,
+                skill_run_id=skill_run_id,
             )
             if work_id and self._deps.repository is not None:
                 await self._deps.repository.finish_work(
@@ -419,6 +569,9 @@ class Dispatcher:
                     status="failed",
                     result={"safe_summary": str(exc), "error_code": "provider_error"},
                 )
+            await self._finish_identity(
+                agent_run_id, skill_run_id, agent_status="failed", skill_status="failed"
+            )
             return self._failed(task, resolution, str(exc), started, node_id=node_id)
         except Exception as exc:  # noqa: BLE001 - one provider must not end the run
             logger.exception("provider %s failed", resolution.provider)
@@ -429,6 +582,8 @@ class Dispatcher:
                 node_id=node_id,
                 status="failed",
                 detail=f"{type(exc).__name__}: {exc}",
+                agent_run_id=agent_run_id,
+                skill_run_id=skill_run_id,
             )
             if work_id and self._deps.repository is not None:
                 await self._deps.repository.finish_work(
@@ -440,6 +595,9 @@ class Dispatcher:
                         "error_code": "provider_failed",
                     },
                 )
+            await self._finish_identity(
+                agent_run_id, skill_run_id, agent_status="failed", skill_status="failed"
+            )
             return self._failed(
                 task,
                 resolution,
@@ -451,6 +609,9 @@ class Dispatcher:
             if heartbeat is not None:
                 await self._stop_heartbeat(heartbeat)
 
+        await self._finish_identity(
+            agent_run_id, skill_run_id, agent_status="completed", skill_status="completed"
+        )
         evidence_ids = await self._persist(result)
         satisfied, detail = await self._check_done(task, result, evidence_ids)
         if work_id and self._deps.repository is not None:
@@ -539,21 +700,52 @@ class Dispatcher:
         node_id: str,
         status: str,
         detail: str = "",
+        agent_run_id: str = "",
+        skill_run_id: str = "",
     ) -> None:
-        if self._deps.emit is None:
+        if self._deps.emit is not None:
+            payload: dict[str, Any] = {
+                "agent": resolution.provider,
+                "task_id": task.id,
+                "node_id": node_id,
+                "capability": task.capability,
+                "provider": resolution.provider,
+                "skill_id": resolution.skill_id,
+                "status": status,
+            }
+            if agent_run_id:
+                payload["agent_run_id"] = agent_run_id
+            if detail:
+                payload["detail"] = detail
+            self._deps.emit(kind, payload)
+            if skill_run_id:
+                self._deps.emit(
+                    "skill.completed" if status == "completed" else "skill.failed",
+                    {
+                        "agent": resolution.provider,
+                        "task_id": task.id,
+                        "node_id": node_id,
+                        "agent_run_id": agent_run_id,
+                        "skill_run_id": skill_run_id,
+                        "skill_id": resolution.skill_id,
+                        "status": status,
+                    },
+                )
+
+    async def _finish_identity(
+        self, agent_run_id: str, skill_run_id: str, *, agent_status: str, skill_status: str
+    ) -> None:
+        """Close the durable identity rows; projection must never fail the run."""
+
+        if self._deps.repository is None:
             return
-        payload: dict[str, Any] = {
-            "agent": resolution.provider,
-            "task_id": task.id,
-            "node_id": node_id,
-            "capability": task.capability,
-            "provider": resolution.provider,
-            "skill_id": resolution.skill_id,
-            "status": status,
-        }
-        if detail:
-            payload["detail"] = detail
-        self._deps.emit(kind, payload)
+        try:
+            await self._deps.repository.update_agent_run(
+                agent_run_id, status=agent_status, ended=True
+            )
+            await self._deps.repository.update_skill_run(skill_run_id, status=skill_status)
+        except Exception:  # noqa: BLE001
+            logger.exception("failed to finalise execution identity")
 
     def _failed(
         self,

@@ -27,6 +27,9 @@ from .runtime_tables import project_runtime_events
 __all__ = ["Database", "Repository"]
 from .models import (
     AgentExecution,
+    AgentInteraction,
+    AgentInteractionAnswer,
+    AgentRun,
     AgentSchedule,
     AgentScheduleRun,
     AgentTask,
@@ -43,6 +46,7 @@ from .models import (
     ReportRecord,
     RunEvent,
     Session,
+    SkillRun,
     TransactionalOutbox,
     WorkDependency,
     WorkItem,
@@ -396,6 +400,9 @@ class Repository:
         trigger: str = "agent-task",
         schedule_id: str | None = None,
         scheduled_for: Any | None = None,
+        turn_id: str | None = None,
+        parent_execution_id: str | None = None,
+        resumes_execution_id: str | None = None,
     ) -> None:
         async with self.db.session() as s:
             s.add(
@@ -403,6 +410,9 @@ class Repository:
                     id=execution_id,
                     task_id=task_id,
                     learner_id=learner_id,
+                    turn_id=turn_id,
+                    parent_execution_id=parent_execution_id,
+                    resumes_execution_id=resumes_execution_id,
                     graph_version=graph_version,
                     trigger=trigger,
                     schedule_id=schedule_id,
@@ -961,6 +971,17 @@ class Repository:
                         event.get("runtime") or (event.get("payload") or {}).get("runtime") or {}
                     )
                     payload = event.get("payload") or {}
+                    if int(event.get("protocol_version") or 0) == 1:
+                        # Keep the V1 envelope seq equal to the durable row
+                        # sequence so Last-Event-ID reconnect works uniformly
+                        # across protocols (issue #18 §15.2).
+                        if isinstance(payload, dict):
+                            payload = dict(payload)
+                            payload["seq"] = sequence
+                            stream = payload.get("stream")
+                            if isinstance(stream, dict) and not stream.get("executionId"):
+                                stream["executionId"] = event.get("execution_id")
+                                payload["stream"] = stream
                     s.add(
                         AgentTaskEvent(
                             task_id=task_id,
@@ -970,6 +991,10 @@ class Repository:
                             payload=payload,
                             execution_id=event.get("execution_id"),
                             runtime=runtime,
+                            protocol_version=int(event.get("protocol_version") or 0),
+                            turn_id=event.get("turn_id"),
+                            agent_run_id=event.get("agent_run_id"),
+                            skill_run_id=event.get("skill_run_id"),
                         )
                     )
                     runtime_records.append(
@@ -1010,25 +1035,7 @@ class Repository:
                     .limit(limit)
                 )
             ).scalars()
-            return [
-                {
-                    "sequence": r.sequence,
-                    "kind": r.kind,
-                    "agent": r.agent,
-                    "payload": r.payload,
-                    "execution_id": r.execution_id or (r.runtime or {}).get("execution_id"),
-                    "run_id": (r.runtime or {}).get("run_id"),
-                    "step": (r.runtime or {}).get("step"),
-                    "node": (r.runtime or {}).get("node"),
-                    "task_id": (r.runtime or {}).get("task_id"),
-                    "namespace": (r.runtime or {}).get("namespace"),
-                    "checkpoint_id": (r.runtime or {}).get("checkpoint_id"),
-                    "span_id": (r.runtime or {}).get("span_id"),
-                    "runtime": r.runtime or {},
-                    "ts": r.created_at.isoformat() if r.created_at else None,
-                }
-                for r in rows
-            ]
+            return [_agent_event_dict(r) for r in rows]
 
     async def agent_event_count_for_execution(self, execution_id: str) -> int:
         async with self.db.session() as s:
@@ -1055,55 +1062,287 @@ class Repository:
                     .limit(limit)
                 )
             ).scalars().all()
-            return [
-                {
-                    "sequence": row.sequence,
-                    "kind": row.kind,
-                    "agent": row.agent,
-                    "payload": row.payload or {},
-                    "execution_id": row.execution_id,
-                    "runtime": row.runtime or {},
-                    "ts": row.created_at.isoformat() if row.created_at else None,
-                }
-                for row in rows
-            ]
+            return [_agent_event_dict(row) for row in rows]
 
     async def agent_events_after_for_learner(
-        self, task_id: str, learner_id: str, after: int = 0, limit: int = 500
+        self,
+        task_id: str,
+        learner_id: str,
+        after: int = 0,
+        limit: int = 500,
+        *,
+        protocol_version: int | None = None,
     ) -> list[dict[str, Any]]:
         async with self.db.session() as s:
-            rows = (
-                await s.execute(
-                    select(AgentTaskEvent)
-                    .join(AgentTask, AgentTask.id == AgentTaskEvent.task_id)
-                    .where(
-                        AgentTaskEvent.task_id == task_id,
-                        AgentTask.learner_id == learner_id,
-                        AgentTaskEvent.sequence > after,
-                    )
-                    .order_by(AgentTaskEvent.sequence)
-                    .limit(limit)
+            stmt = (
+                select(AgentTaskEvent)
+                .join(AgentTask, AgentTask.id == AgentTaskEvent.task_id)
+                .where(
+                    AgentTaskEvent.task_id == task_id,
+                    AgentTask.learner_id == learner_id,
+                    AgentTaskEvent.sequence > after,
                 )
+            )
+            if protocol_version is not None:
+                stmt = stmt.where(AgentTaskEvent.protocol_version == protocol_version)
+            rows = (
+                await s.execute(stmt.order_by(AgentTaskEvent.sequence).limit(limit))
             ).scalars()
-            return [
-                {
-                    "sequence": r.sequence,
-                    "kind": r.kind,
-                    "agent": r.agent,
-                    "payload": r.payload,
-                    "execution_id": r.execution_id or (r.runtime or {}).get("execution_id"),
-                    "run_id": (r.runtime or {}).get("run_id"),
-                    "step": (r.runtime or {}).get("step"),
-                    "node": (r.runtime or {}).get("node"),
-                    "task_id": (r.runtime or {}).get("task_id"),
-                    "namespace": (r.runtime or {}).get("namespace"),
-                    "checkpoint_id": (r.runtime or {}).get("checkpoint_id"),
-                    "span_id": (r.runtime or {}).get("span_id"),
-                    "runtime": r.runtime or {},
-                    "ts": r.created_at.isoformat() if r.created_at else None,
+            return [_agent_event_dict(r) for r in rows]
+
+    # -- Mothership V1: AgentRun / SkillRun / Interaction ------------------
+
+    async def create_agent_run(
+        self,
+        *,
+        agent_run_id: str,
+        task_id: str,
+        execution_id: str,
+        provider_id: str,
+        turn_id: str | None = None,
+        work_item_id: str | None = None,
+        parent_agent_run_id: str | None = None,
+        agent_display_name: str = "",
+        execution_kind: str = "model",
+        capability: str = "",
+        presentation_role: str = "supporting",
+        status: str = "queued",
+        started: bool = False,
+        start_sequence: int | None = None,
+        safe_metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        async with self.db.session() as s:
+            row = AgentRun(
+                id=agent_run_id,
+                task_id=task_id,
+                turn_id=turn_id,
+                execution_id=execution_id,
+                work_item_id=work_item_id,
+                parent_agent_run_id=parent_agent_run_id,
+                provider_id=provider_id,
+                agent_display_name=agent_display_name,
+                execution_kind=execution_kind,
+                capability=capability,
+                presentation_role=presentation_role,
+                status="running" if started else status,
+                started_at=utcnow() if started else None,
+                start_sequence=start_sequence,
+                safe_metadata=dict(safe_metadata or {}),
+            )
+            s.add(row)
+            await s.commit()
+            return _agent_run_dict(row)
+
+    async def update_agent_run(
+        self,
+        agent_run_id: str,
+        *,
+        status: str | None = None,
+        ended: bool = False,
+        end_sequence: int | None = None,
+    ) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.get(AgentRun, agent_run_id)
+            if row is None:
+                return None
+            if status is not None:
+                row.status = status
+            if end_sequence is not None:
+                row.end_sequence = end_sequence
+            if ended:
+                row.ended_at = utcnow()
+            row.updated_at = utcnow()
+            await s.commit()
+            return _agent_run_dict(row)
+
+    async def agent_run(self, agent_run_id: str) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.get(AgentRun, agent_run_id)
+            return _agent_run_dict(row) if row is not None else None
+
+    async def agent_runs_for_execution(self, execution_id: str) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.scalars(
+                    select(AgentRun)
+                    .where(AgentRun.execution_id == execution_id)
+                    .order_by(AgentRun.start_sequence, AgentRun.created_at)
+                )
+            ).all()
+            return [_agent_run_dict(row) for row in rows]
+
+    async def agent_runs_for_task(self, task_id: str) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.scalars(
+                    select(AgentRun)
+                    .where(AgentRun.task_id == task_id)
+                    .order_by(AgentRun.created_at)
+                )
+            ).all()
+            return [_agent_run_dict(row) for row in rows]
+
+    async def create_skill_run(
+        self,
+        *,
+        skill_run_id: str,
+        agent_run_id: str,
+        task_id: str,
+        execution_id: str,
+        skill_id: str,
+        turn_id: str | None = None,
+        display_name: str = "",
+        version: str = "",
+        checksum: str = "",
+    ) -> dict[str, Any]:
+        async with self.db.session() as s:
+            row = SkillRun(
+                id=skill_run_id,
+                agent_run_id=agent_run_id,
+                task_id=task_id,
+                turn_id=turn_id,
+                execution_id=execution_id,
+                skill_id=skill_id,
+                display_name=display_name,
+                version=version,
+                checksum=checksum,
+                status="running",
+                started_at=utcnow(),
+            )
+            s.add(row)
+            await s.commit()
+            return _skill_run_dict(row)
+
+    async def update_skill_run(
+        self, skill_run_id: str, *, status: str, ended: bool = True
+    ) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.get(SkillRun, skill_run_id)
+            if row is None:
+                return None
+            row.status = status
+            if ended:
+                row.ended_at = utcnow()
+            row.updated_at = utcnow()
+            await s.commit()
+            return _skill_run_dict(row)
+
+    async def skill_runs_for_task(self, task_id: str) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.scalars(
+                    select(SkillRun).where(SkillRun.task_id == task_id).order_by(SkillRun.created_at)
+                )
+            ).all()
+            return [_skill_run_dict(row) for row in rows]
+
+    async def create_interaction(
+        self,
+        *,
+        interaction_id: str,
+        task_id: str,
+        request_payload: dict[str, Any],
+        turn_id: str | None = None,
+        execution_id: str | None = None,
+        agent_run_id: str | None = None,
+        purpose: str = "clarification",
+        presentation: str = "question",
+        blocking: bool = True,
+        reason_code: str = "",
+    ) -> dict[str, Any]:
+        async with self.db.session() as s:
+            row = AgentInteraction(
+                id=interaction_id,
+                task_id=task_id,
+                turn_id=turn_id,
+                execution_id=execution_id,
+                agent_run_id=agent_run_id,
+                purpose=purpose,
+                presentation=presentation,
+                blocking=blocking,
+                request_payload=dict(request_payload),
+                status="pending",
+                reason_code=reason_code,
+            )
+            s.add(row)
+            await s.commit()
+            return _interaction_dict(row)
+
+    async def get_interaction(
+        self, interaction_id: str, *, task_id: str | None = None
+    ) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            stmt = select(AgentInteraction).where(AgentInteraction.id == interaction_id)
+            if task_id is not None:
+                stmt = stmt.where(AgentInteraction.task_id == task_id)
+            row = await s.scalar(stmt)
+            return _interaction_dict(row) if row is not None else None
+
+    async def resolve_interaction(self, interaction_id: str) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.get(AgentInteraction, interaction_id)
+            if row is None:
+                return None
+            row.status = "resolved"
+            row.resolved_at = utcnow()
+            await s.commit()
+            return _interaction_dict(row)
+
+    async def save_interaction_answer(
+        self,
+        *,
+        interaction_id: str,
+        answers: list[dict[str, Any]],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Persist one idempotent structured answer; a retried key returns the original."""
+
+        async with self.db.session() as s:
+            existing = await s.scalar(
+                select(AgentInteractionAnswer).where(
+                    AgentInteractionAnswer.interaction_id == interaction_id,
+                    AgentInteractionAnswer.idempotency_key == idempotency_key,
+                )
+            )
+            if existing is not None:
+                return {
+                    "answers": list(existing.answers or []),
+                    "created": False,
                 }
-                for r in rows
-            ]
+            row = AgentInteractionAnswer(
+                interaction_id=interaction_id,
+                answers=list(answers),
+                idempotency_key=idempotency_key,
+            )
+            s.add(row)
+            try:
+                await s.commit()
+            except IntegrityError:
+                await s.rollback()
+                existing = await s.scalar(
+                    select(AgentInteractionAnswer).where(
+                        AgentInteractionAnswer.interaction_id == interaction_id,
+                        AgentInteractionAnswer.idempotency_key == idempotency_key,
+                    )
+                )
+                if existing is not None:
+                    return {"answers": list(existing.answers or []), "created": False}
+                raise
+            return {"answers": list(answers), "created": True}
+
+    async def pending_interactions(self, task_id: str) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.scalars(
+                    select(AgentInteraction)
+                    .where(
+                        AgentInteraction.task_id == task_id,
+                        AgentInteraction.status == "pending",
+                    )
+                    .order_by(AgentInteraction.created_at)
+                )
+            ).all()
+            return [_interaction_dict(row) for row in rows]
 
     # -- V2 coordinator / work ledger -----------------------------------
 
@@ -2129,6 +2368,89 @@ def _command_dict(row: CommandInbox) -> dict[str, Any]:
         "idempotency_key": row.idempotency_key,
         "payload": dict(row.payload or {}),
         "consumed_at": row.consumed_at.isoformat() if row.consumed_at else None,
+    }
+
+
+def _agent_event_dict(row: AgentTaskEvent) -> dict[str, Any]:
+    runtime = row.runtime or {}
+    return {
+        "sequence": row.sequence,
+        "kind": row.kind,
+        "agent": row.agent,
+        "payload": row.payload,
+        "execution_id": row.execution_id or runtime.get("execution_id"),
+        "run_id": runtime.get("run_id"),
+        "step": runtime.get("step"),
+        "node": runtime.get("node"),
+        "task_id": runtime.get("task_id"),
+        "namespace": runtime.get("namespace"),
+        "checkpoint_id": runtime.get("checkpoint_id"),
+        "span_id": runtime.get("span_id"),
+        "runtime": runtime,
+        "protocol_version": int(row.protocol_version or 0),
+        "turn_id": row.turn_id,
+        "agent_run_id": row.agent_run_id,
+        "skill_run_id": row.skill_run_id,
+        "ts": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def _agent_run_dict(row: AgentRun) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "task_id": row.task_id,
+        "turn_id": row.turn_id,
+        "execution_id": row.execution_id,
+        "work_item_id": row.work_item_id,
+        "parent_agent_run_id": row.parent_agent_run_id,
+        "provider_id": row.provider_id,
+        "agent_display_name": row.agent_display_name,
+        "execution_kind": row.execution_kind,
+        "capability": row.capability,
+        "presentation_role": row.presentation_role,
+        "status": row.status,
+        "started_at": row.started_at.isoformat() if row.started_at else None,
+        "ended_at": row.ended_at.isoformat() if row.ended_at else None,
+        "start_sequence": row.start_sequence,
+        "end_sequence": row.end_sequence,
+        "metadata": dict(row.safe_metadata or {}),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def _skill_run_dict(row: SkillRun) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "agent_run_id": row.agent_run_id,
+        "task_id": row.task_id,
+        "turn_id": row.turn_id,
+        "execution_id": row.execution_id,
+        "skill_id": row.skill_id,
+        "display_name": row.display_name,
+        "version": row.version,
+        "checksum": row.checksum,
+        "status": row.status,
+        "started_at": row.started_at.isoformat() if row.started_at else None,
+        "ended_at": row.ended_at.isoformat() if row.ended_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def _interaction_dict(row: AgentInteraction) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "task_id": row.task_id,
+        "turn_id": row.turn_id,
+        "execution_id": row.execution_id,
+        "agent_run_id": row.agent_run_id,
+        "purpose": row.purpose,
+        "presentation": row.presentation,
+        "blocking": bool(row.blocking),
+        "request_payload": dict(row.request_payload or {}),
+        "status": row.status,
+        "reason_code": row.reason_code,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
     }
 
 

@@ -34,7 +34,12 @@ FORGE_PROMPT = """你是能力起草 Agent。编排器报告了一个能力缺�
  "capability_gap":"...","reason":"..."}"""
 
 
-@register("skill_forge")
+@register(
+    "skill_forge",
+    display_name="技能锻造",
+    description="为学习者定制新技能",
+    execution_kind="model",
+)
 async def skill_forge(context: ProviderContext) -> ProviderResult:
     """Draft a skill for an unserved capability (``meta.author_skill``).
 
@@ -116,7 +121,12 @@ async def skill_forge(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("skill_eval")
+@register(
+    "skill_eval",
+    display_name="技能评估",
+    description="评估技能质量",
+    execution_kind="model",
+)
 async def skill_eval(context: ProviderContext) -> ProviderResult:
     """Evaluate a skill against the harness (``meta.evaluate``).
 

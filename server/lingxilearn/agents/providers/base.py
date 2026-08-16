@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from ...runtime.contracts import PlannedTask
 from ...state.evidence import EvidenceRecord
@@ -29,6 +29,32 @@ logger = logging.getLogger(__name__)
 
 class ProviderError(RuntimeError):
     """A provider could not produce its result. The loop degrades, not crashes."""
+
+
+@dataclass(frozen=True, slots=True)
+class AgentDescriptor:
+    """Stable, learner-facing metadata for one provider.
+
+    The backend — not the frontend — is the authority for what an agent is
+    called when it runs.  ``display_name`` flows into AgentRun rows and the
+    Mothership V1 span events so the left chat and the right runtime graph
+    never disagree about a name.
+    """
+
+    provider_id: str
+    display_name: str
+    description: str = ""
+    execution_kind: Literal["model", "deterministic"] = "model"
+    icon_key: str = "agent"
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "provider_id": self.provider_id,
+            "display_name": self.display_name,
+            "description": self.description,
+            "execution_kind": self.execution_kind,
+            "icon_key": self.icon_key,
+        }
 
 
 @dataclass(slots=True)
@@ -59,6 +85,8 @@ class ProviderContext:
     registry: Any = None
     """Tool registry, for providers that run deterministic course-pack tools."""
     pack: Any = None
+    run_context: Any = None
+    """Canonical execution identity (agent_run_id/skill_run_id); set by the dispatcher."""
 
     @property
     def knowledge_point_id(self) -> str:
@@ -96,15 +124,37 @@ class ProviderResult:
 Provider = Callable[[ProviderContext], Awaitable[ProviderResult]]
 
 _PROVIDERS: dict[str, Provider] = {}
+_DESCRIPTORS: dict[str, AgentDescriptor] = {}
 
 
-def register(name: str) -> Callable[[Provider], Provider]:
-    """Register a provider implementation under the name skills refer to."""
+def register(
+    name: str,
+    *,
+    display_name: str = "",
+    description: str = "",
+    execution_kind: Literal["model", "deterministic"] = "model",
+    icon_key: str = "agent",
+) -> Callable[[Provider], Provider]:
+    """Register a provider implementation under the name skills refer to.
+
+    ``display_name`` is the learner-facing agent name; it becomes the authority
+    for AgentGroup labels instead of frontend constants.  Providers registered
+    without one keep a humanized fallback of their id.
+    """
+
+    descriptor = AgentDescriptor(
+        provider_id=name,
+        display_name=display_name or name.replace("_", " ").strip(),
+        description=description,
+        execution_kind=execution_kind,
+        icon_key=icon_key,
+    )
 
     def decorate(func: Provider) -> Provider:
         if name in _PROVIDERS:
             raise ValueError(f"provider already registered: {name}")
         _PROVIDERS[name] = func
+        _DESCRIPTORS[name] = descriptor
         return func
 
     return decorate
@@ -112,6 +162,16 @@ def register(name: str) -> Callable[[Provider], Provider]:
 
 def get(name: str) -> Provider | None:
     return _PROVIDERS.get(name)
+
+
+def descriptor(name: str) -> AgentDescriptor | None:
+    """The learner-facing descriptor for a provider, or None if unregistered."""
+
+    return _DESCRIPTORS.get(name)
+
+
+def descriptors() -> dict[str, AgentDescriptor]:
+    return dict(_DESCRIPTORS)
 
 
 def names() -> tuple[str, ...]:
@@ -151,10 +211,13 @@ def missing_providers(skills: Sequence[Mapping[str, Any]]) -> list[str]:
 
 
 __all__ = [
+    "AgentDescriptor",
     "Provider",
     "ProviderContext",
     "ProviderError",
     "ProviderResult",
+    "descriptor",
+    "descriptors",
     "get",
     "load_all",
     "missing_providers",

@@ -1,0 +1,52 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "ts": "2026-08-16T11:29:00.586876+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "started",
+      "executionId": "exec_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "ts": "2026-08-16T11:29:00.586940+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "checkpoint_pause",
+      "executionId": "exec_fixture_1"
+    }
+  }
+]

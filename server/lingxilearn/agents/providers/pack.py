@@ -48,7 +48,12 @@ def _public_item(item: Any) -> dict[str, Any]:
     }
 
 
-@register("pack_probe")
+@register(
+    "pack_probe",
+    display_name="实验探查",
+    description="检查实验环境状态",
+    execution_kind="deterministic",
+)
 async def pack_probe(context: ProviderContext) -> ProviderResult:
     """Serve or grade a course-pack probe (``assess.generate``/``assess.grade``).
 
@@ -125,7 +130,12 @@ async def pack_probe(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("pack_investigate")
+@register(
+    "pack_investigate",
+    display_name="实验排查",
+    description="排查实验环境问题",
+    execution_kind="deterministic",
+)
 async def pack_investigate(context: ProviderContext) -> ProviderResult:
     """Run the step's declared tools over real artifacts (``tool.investigate``).
 
@@ -190,7 +200,12 @@ async def pack_investigate(context: ProviderContext) -> ProviderResult:
     )
 
 
-@register("pack_report")
+@register(
+    "pack_report",
+    display_name="实验报告",
+    description="汇总实验结果",
+    execution_kind="deterministic",
+)
 async def pack_report(context: ProviderContext) -> ProviderResult:
     """Summarise the goal from the profile diff and the ledger (``meta.report``).
 

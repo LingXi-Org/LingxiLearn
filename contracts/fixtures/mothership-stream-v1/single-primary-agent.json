@@ -1,0 +1,309 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "ts": "2026-08-16T11:29:00.583749+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "started",
+      "executionId": "exec_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "ts": "2026-08-16T11:29:00.584292+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_answer1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "start",
+      "agentRunId": "ar_answer1",
+      "providerId": "answer_user",
+      "displayName": "知识点答疑",
+      "executionKind": "model",
+      "capability": "dialog.answer",
+      "presentationRole": "primary"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 3,
+    "ts": "2026-08-16T11:29:00.584388+00:00",
+    "type": "tool",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_answer1",
+      "parentAgentRunId": "",
+      "skillRunId": "sr_qa1"
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "toolCallId": "sr_qa1",
+      "toolKind": "skill",
+      "toolName": "lingxi.skill",
+      "displayTitle": "知识点答疑",
+      "status": "executing",
+      "safeParams": {
+        "skillId": "knowledge-qa",
+        "version": "1.0.0"
+      }
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "ts": "2026-08-16T11:29:00.584565+00:00",
+    "type": "text",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_answer1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "channel": "narration",
+      "text": "正在检索你提供的资料…",
+      "source": "agent"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 5,
+    "ts": "2026-08-16T11:29:00.584627+00:00",
+    "type": "tool",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_answer1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "toolCallId": "call_web1",
+      "toolKind": "tool",
+      "toolName": "web_search",
+      "displayTitle": "检索资料",
+      "status": "generating",
+      "safeParams": {
+        "query": "量子叠加"
+      }
+    }
+  },
+  {
+    "v": 1,
+    "seq": 6,
+    "ts": "2026-08-16T11:29:00.584669+00:00",
+    "type": "tool",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_answer1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "toolCallId": "call_web1",
+      "toolKind": "tool",
+      "toolName": "web_search",
+      "displayTitle": "检索资料",
+      "status": "success",
+      "safeResult": {
+        "bytes": 18,
+        "ok": true
+      }
+    }
+  },
+  {
+    "v": 1,
+    "seq": 7,
+    "ts": "2026-08-16T11:29:00.584697+00:00",
+    "type": "tool",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_answer1",
+      "parentAgentRunId": "",
+      "skillRunId": "sr_qa1"
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "toolCallId": "sr_qa1",
+      "toolKind": "skill",
+      "toolName": "lingxi.skill",
+      "displayTitle": "",
+      "status": "success"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 8,
+    "ts": "2026-08-16T11:29:00.584719+00:00",
+    "type": "text",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_answer1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "channel": "assistant",
+      "text": "量子叠加是指一个量子系统可以同时处于多个状态的线性组合。",
+      "streamId": "task_fixture:turn_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 9,
+    "ts": "2026-08-16T11:29:00.584741+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "ar_answer1",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "end",
+      "agentRunId": "ar_answer1",
+      "status": "completed"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 10,
+    "ts": "2026-08-16T11:29:00.585037+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "completed",
+      "executionId": "exec_fixture_1"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 11,
+    "ts": "2026-08-16T11:29:00.585061+00:00",
+    "type": "complete",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_1",
+      "streamId": "exec_fixture_1"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_1",
+      "runId": "exec_fixture_1"
+    },
+    "payload": {
+      "status": "delivered"
+    }
+  }
+]
