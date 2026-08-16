@@ -385,6 +385,8 @@ export interface WorkflowBlockViewProps {
   iconBgColor: string
   /** Whether the header tag should use the provider's integration colour. */
   isIntegration?: boolean
+  /** Disables pointer-following border/connection interaction on read-only canvases. */
+  interactive?: boolean
 
   /** Handle orientation and topology, resolved by the container. */
   horizontalHandles: boolean
@@ -509,6 +511,7 @@ export function WorkflowBlockView({
   Icon,
   iconBgColor,
   isIntegration = false,
+  interactive = true,
   shouldShowDefaultHandles,
   blockHeight,
   hasContentBelowHeader,
@@ -556,7 +559,7 @@ export function WorkflowBlockView({
     () => reactFlowStore.getState().connectionNodeId,
     [reactFlowStore]
   )
-  const supportsCursorHandle = type !== 'response'
+  const supportsCursorHandle = interactive && type !== 'response'
   const cursorSourceHandleRef = useRef<HTMLDivElement>(null)
   const cursorSourceHandleKeyRef = useRef<string | null>(null)
   const [cursorSourceHandle, setCursorSourceHandle] = useState<WorkflowCursorSourceHandle | null>(
@@ -839,7 +842,9 @@ export function WorkflowBlockView({
         onClick={onSelect}
         onKeyDown={(event) => handleKeyboardActivation(event, onSelect)}
         className={cn(
-          'workflow-drag-handle relative z-[20] w-[250px] cursor-grab select-none rounded-2xl [&:active]:cursor-grabbing'
+          'workflow-drag-handle relative z-[20] w-[250px] select-none rounded-2xl',
+          interactive && 'cursor-grab [&:active]:cursor-grabbing',
+          !interactive && 'cursor-default'
         )}
         /* The card is sized by its own content, floored at the shortest
            silhouette the border can paint — below that the perimeter has no
@@ -853,8 +858,9 @@ export function WorkflowBlockView({
       >
         <WorkflowBlockBorder
           nodeId={id}
-          getConnectionNodeId={getConnectionNodeId}
+          getConnectionNodeId={interactive ? getConnectionNodeId : undefined}
           ports={borderPorts}
+          cursorSwellEnabled={interactive}
           hasRing={hasRing || isExecutionHighlighted}
           ringStyles={
             isExecutionHighlighted ? 'ring-[1.5px] ring-[var(--text-secondary)]' : ringStyles

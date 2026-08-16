@@ -102,6 +102,7 @@ function RuntimeNode({ id, data }: NodeProps<RuntimeNodeData>) {
       isExecutionHighlighted={active}
       Icon={runtimeIcon(block)}
       iconBgColor='var(--text-primary)'
+      interactive={false}
       horizontalHandles
       shouldShowDefaultHandles
       blockHeight={block.height}
