@@ -127,6 +127,7 @@ describe('LingxiGraph chat adapter', () => {
     expect(scheduleBlock?.toolCall?.status).toBe('awaiting_approval')
     expect(scheduleBlock?.toolCall?.params?.cron).toBe('0 9 * * 1')
     expect(interruptBlock?.toolCall?.status).toBe('interrupted')
+    expect(interruptBlock?.toolCall?.userPrompt).toBe('请确认是否继续。')
   })
 
   it('projects only explicit answer output into the learner transcript', () => {

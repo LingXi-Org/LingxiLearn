@@ -11,17 +11,20 @@ import {
   projectLingxiGraphEvents,
 } from '@/lib/lingxi/lingxi-graph-adapter'
 import {
-  type AgentTaskEvent,
-  type AgentTaskSnapshot,
-  isAgentTaskActive,
-} from '@/lib/lingxi/types'
+  type LingxiTurnState,
+  reconcileLingxiTurnState,
+  reduceLingxiTurnState,
+  turnStateFromTask,
+} from '@/lib/lingxi/turn-state'
+import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
+import type { QueuedMothershipMessage } from '@/stores/mothership-queue/types'
 import type { ChatContext } from '@/stores/panel'
 import type {
   ChatMessage,
   ChatMessageAttachment,
   FileAttachmentForApi,
   GenericResourceData,
-  QueuedMessage,
 } from '../types'
 import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './use-chat'
 
@@ -55,7 +58,9 @@ function contextSuffix(contexts?: ChatContext[]): string {
       return selectionText ? `${label}:\n${selectionText}` : label
     })
     .filter(Boolean)
-  return entries.length > 0 ? `\n\n[Context]\n${entries.map((entry) => `- ${entry}`).join('\n')}` : ''
+  return entries.length > 0
+    ? `\n\n[Context]\n${entries.map((entry) => `- ${entry}`).join('\n')}`
+    : ''
 }
 
 function requestMessage(content: string, contexts?: ChatContext[]): string {
@@ -190,12 +195,28 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
   const hasDeliveryGate = (task.delivery?.queue ?? []).length > 0
   const artifactResources = entries
     .filter(({ key }) => {
-      const artifact = key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key
+      const artifact =
+        key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key
       return Boolean(task.artifacts[key]?.available) && (!hasDeliveryGate || unlocked.has(artifact))
     })
     .sort((left, right) => {
       const order = task.delivery?.order ?? []
-      return order.indexOf(left.key === 'lesson_intro' ? 'lesson-intro' : left.key === 'lecture_deck' ? 'lecture-deck' : left.key) - order.indexOf(right.key === 'lesson_intro' ? 'lesson-intro' : right.key === 'lecture_deck' ? 'lecture-deck' : right.key)
+      return (
+        order.indexOf(
+          left.key === 'lesson_intro'
+            ? 'lesson-intro'
+            : left.key === 'lecture_deck'
+              ? 'lecture-deck'
+              : left.key
+        ) -
+        order.indexOf(
+          right.key === 'lesson_intro'
+            ? 'lesson-intro'
+            : right.key === 'lecture_deck'
+              ? 'lecture-deck'
+              : right.key
+        )
+      )
     })
     .map(({ key, title, path }) => ({
       type: 'file' as const,
@@ -204,6 +225,17 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
       path,
     }))
   return [graphResource, ...artifactResources]
+}
+
+const EMPTY_LINGXI_QUEUE: QueuedMothershipMessage[] = []
+
+function generateLingxiId(prefix: string): string {
+  const uuid = globalThis.crypto?.randomUUID?.()
+  return `${prefix}:${uuid ?? `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`}`
+}
+
+function lingxiIdempotencyKey(messageId: string, revision = ''): string {
+  return `lingxi-message:${messageId}${revision ? `:${revision}` : ''}`
 }
 
 export function useLingxiGraphChat(
@@ -232,10 +264,9 @@ export function useLingxiGraphChat(
   const [error, setError] = useState<string | null>(null)
   const [locallyStopped, setLocallyStopped] = useState(false)
   const [subscriptionEpoch, setSubscriptionEpoch] = useState(0)
-  /** LingxiGraph keeps one durable task but the composer may accept FIFO turns. */
-  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([])
-  const [editingQueuedId, setEditingQueuedId] = useState<string | null>(null)
+  const [turnState, setTurnState] = useState<LingxiTurnState>('idle')
   const [dispatchingHeadId, setDispatchingHeadId] = useState<string | null>(null)
+  const pendingQueueKey = useMemo(() => `lingxi:pending:${workspaceId}`, [workspaceId])
   const [activeResourceIdState, setActiveResourceIdState] = useState<string | null>(
     options?.initialActiveResourceId ?? null
   )
@@ -248,17 +279,36 @@ export function useLingxiGraphChat(
   const messagesRef = useRef<ChatMessage[]>([])
   const requestIdRef = useRef<string | undefined>(initialChatId)
   const resolvedChatIdRef = useRef<string | undefined>(initialChatId)
-  const activeTurnRef = useRef(false)
-  const queueRef = useRef<QueuedMessage[]>([])
+  const queueKeyRef = useRef(initialChatId ?? pendingQueueKey)
+  const turnStateRef = useRef<LingxiTurnState>('idle')
+  const optimisticActiveRef = useRef(false)
+  const dispatchingHeadIdRef = useRef<string | null>(null)
   const drainQueueRef = useRef<() => Promise<void>>(async () => {})
+
+  const queueKey = resolvedChatId ?? pendingQueueKey
+  queueKeyRef.current = queueKey
+  const messageQueue = useMothershipQueueStore(
+    (state) => state.queues[queueKey] ?? EMPTY_LINGXI_QUEUE
+  )
+  const editingQueuedId = useMothershipQueueStore((state) => state.editing[queueKey] ?? null)
+  const enqueueQueuedMessage = useMothershipQueueStore((state) => state.enqueue)
+  const replaceQueuedMessage = useMothershipQueueStore((state) => state.replaceAt)
+  const removeQueuedMessage = useMothershipQueueStore((state) => state.remove)
+  const setQueuedEditing = useMothershipQueueStore((state) => state.setEditing)
+  const migrateQueuedMessages = useMothershipQueueStore((state) => state.migrate)
+
+  const applyTurnState = useCallback((next: LingxiTurnState) => {
+    const previous = turnStateRef.current
+    turnStateRef.current = next
+    setTurnState(next)
+    if (next === 'awaiting_user' && previous !== 'awaiting_user') {
+      queueMicrotask(() => void drainQueueRef.current())
+    }
+  }, [])
 
   useEffect(() => {
     resolvedChatIdRef.current = resolvedChatId
   }, [resolvedChatId])
-
-  useEffect(() => {
-    queueRef.current = messageQueue
-  }, [messageQueue])
 
   const effectiveActiveResourceId = options?.activeResourceState
     ? activeResourceId
@@ -273,17 +323,19 @@ export function useLingxiGraphChat(
 
   useEffect(() => {
     setResolvedChatId(initialChatId)
+    resolvedChatIdRef.current = initialChatId
+    requestIdRef.current = initialChatId
     setTask(null)
     setWorkflowState(null)
     setEvents([])
     setLocalUsers([])
     setError(null)
     setLocallyStopped(false)
-    setMessageQueue([])
-    setEditingQueuedId(null)
+    optimisticActiveRef.current = false
+    applyTurnState('idle')
+    dispatchingHeadIdRef.current = null
     setDispatchingHeadId(null)
-    activeTurnRef.current = false
-  }, [initialChatId])
+  }, [applyTurnState, initialChatId])
 
   useEffect(() => {
     const currentAdapter = adapterRef.current
@@ -300,6 +352,8 @@ export function useLingxiGraphChat(
 
     const appendEvent = (event: AgentTaskEvent) => {
       if (cancelled) return
+      const eventState = reduceLingxiTurnState(turnStateRef.current, event)
+      applyTurnState(eventState)
       setEvents((current) => {
         if (current.some((candidate) => candidate.sequence === event.sequence)) return current
         return [...current, event].sort((a, b) => a.sequence - b.sequence)
@@ -310,21 +364,33 @@ export function useLingxiGraphChat(
       if (eventWorkflowState) setWorkflowState(eventWorkflowState)
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
-        if (artifact) onResourceEventRef.current?.(artifactResourceId(taskId, artifact), 'artifact.ready')
+        if (artifact)
+          onResourceEventRef.current?.(artifactResourceId(taskId, artifact), 'artifact.ready')
         void currentAdapter
           .loadTask(taskId)
           .then((refreshed) => {
-            if (!cancelled) setTask(refreshed)
+            if (!cancelled) {
+              setTask(refreshed)
+              if (!optimisticActiveRef.current) {
+                applyTurnState(reconcileLingxiTurnState(refreshed, [event]))
+              }
+            }
           })
           .catch(() => {})
       }
       if (event.kind === 'delivery.unlocked') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
-        if (artifact) onResourceEventRef.current?.(artifactResourceId(taskId, artifact), 'delivery.unlocked')
+        if (artifact)
+          onResourceEventRef.current?.(artifactResourceId(taskId, artifact), 'delivery.unlocked')
         void currentAdapter
           .loadTask(taskId)
           .then((refreshed) => {
-            if (!cancelled) setTask(refreshed)
+            if (!cancelled) {
+              setTask(refreshed)
+              if (!optimisticActiveRef.current) {
+                applyTurnState(reconcileLingxiTurnState(refreshed, [event]))
+              }
+            }
           })
           .catch(() => {})
       }
@@ -335,17 +401,19 @@ export function useLingxiGraphChat(
         const loaded = await currentAdapter.loadTask(taskId)
         if (cancelled) return
         setTask(loaded)
-        // A send increments the subscription epoch before the worker has
-        // necessarily flipped the persisted task row from terminal/awaiting to
-        // running. Preserve that local in-flight turn until the SSE end hook
-        // observes the authoritative status.
-        activeTurnRef.current = activeTurnRef.current || isAgentTaskActive(loaded)
+        // A send can win the race with the worker's first status update. Keep
+        // the optimistic active turn until an event or snapshot catches up.
+        if (!optimisticActiveRef.current) applyTurnState(turnStateFromTask(loaded))
         // Hydrate the durable event log in one state update.  Replaying old
         // SSE frames one-by-one makes a historical chat look like it has just
         // started running again and retriggers graph animations.
         const historyEvents = await currentAdapter.loadEvents(taskId)
         if (cancelled) return
-        setEvents(historyEvents.sort((left, right) => left.sequence - right.sequence))
+        const orderedHistory = historyEvents.sort((left, right) => left.sequence - right.sequence)
+        setEvents(orderedHistory)
+        if (!optimisticActiveRef.current) {
+          applyTurnState(reconcileLingxiTurnState(loaded, orderedHistory))
+        }
         void api
           .runtimeGraph(taskId)
           .then((graph) => {
@@ -372,13 +440,16 @@ export function useLingxiGraphChat(
               const refreshed = await currentAdapter.loadTask(taskId)
               if (!cancelled) {
                 setTask(refreshed)
-                activeTurnRef.current = isAgentTaskActive(refreshed)
+                optimisticActiveRef.current = false
+                applyTurnState(turnStateFromTask(refreshed))
                 void api
                   .runtimeGraph(taskId)
                   .then((graph) => setWorkflowState(graph.workflowState))
                   .catch(() => {})
                 onStreamEndRef.current?.(taskId, messagesRef.current)
-                if (!isAgentTaskActive(refreshed)) void drainQueueRef.current()
+                if (turnStateFromTask(refreshed) === 'awaiting_user') {
+                  void drainQueueRef.current()
+                }
               }
             } finally {
               if (!cancelled) setIsReconnecting(false)
@@ -397,7 +468,7 @@ export function useLingxiGraphChat(
       unsubscribeRef.current?.()
       unsubscribeRef.current = null
     }
-  }, [locallyStopped, resolvedChatId, subscriptionEpoch])
+  }, [applyTurnState, locallyStopped, resolvedChatId, subscriptionEpoch])
 
   const projection = useMemo(
     () =>
@@ -407,7 +478,11 @@ export function useLingxiGraphChat(
     [events, task]
   )
   const resources = useMemo(() => artifactResources(task), [task])
-  const assistantStreaming = Boolean(task && isAgentTaskActive(task) && !locallyStopped)
+  // This is the same state used by the queue dispatcher and composer. The
+  // task snapshot alone cannot represent a paused turn while its SSE stays
+  // open, and an optimistic active flag alone cannot represent a terminal
+  // task after reconnect.
+  const assistantStreaming = turnState === 'active' && !locallyStopped
   const messages = useMemo(() => {
     if (!task) return localUsers.length > 0 ? localUsers : []
     const currentProjection = projection ?? projectLingxiGraphEvents(task, events)
@@ -435,7 +510,8 @@ export function useLingxiGraphChat(
       message: string,
       fileAttachments?: FileAttachmentForApi[],
       contexts?: ChatContext[],
-      userMessageId = `lingxi-user:${Date.now()}`
+      userMessageId = generateLingxiId('lingxi-user'),
+      explicitIdempotencyKey?: string
     ): Promise<boolean> => {
       const currentAdapter = adapterRef.current
       const content = message.trim()
@@ -443,22 +519,27 @@ export function useLingxiGraphChat(
 
       const prompt = requestMessage(content, contexts)
       const attachments = attachmentRefs(fileAttachments)
-      const context = contextOptions(contexts)
-      activeTurnRef.current = true
+      const idempotencyKey = explicitIdempotencyKey ?? lingxiIdempotencyKey(userMessageId)
+      const context = { ...contextOptions(contexts), idempotencyKey }
+      const previousTurnState = turnStateRef.current
+      optimisticActiveRef.current = true
+      applyTurnState('active')
       setIsSending(true)
       setError(null)
       setLocallyStopped(false)
       setSubscriptionEpoch((current) => current + 1)
-      setLocalUsers((current) => [
-        ...current,
-        userMessage(userMessageId, content, contexts, fileAttachments),
-      ])
+      setLocalUsers((current) =>
+        current.some((candidate) => candidate.id === userMessageId)
+          ? current
+          : [...current, userMessage(userMessageId, content, contexts, fileAttachments)]
+      )
 
       try {
         let taskId = resolvedChatIdRef.current
         if (!taskId) {
           const created = await currentAdapter.createTask(prompt, attachments, context)
           taskId = created.id
+          migrateQueuedMessages(pendingQueueKey, taskId)
           resolvedChatIdRef.current = taskId
           requestIdRef.current = taskId
           setResolvedChatId(taskId)
@@ -472,40 +553,68 @@ export function useLingxiGraphChat(
         }
         return true
       } catch (cause) {
-        activeTurnRef.current = false
+        optimisticActiveRef.current = false
+        applyTurnState(previousTurnState)
         setError(cause instanceof Error ? cause.message : String(cause))
         return false
       } finally {
         setIsSending(false)
       }
     },
-    [router, workspaceId]
+    [applyTurnState, migrateQueuedMessages, pendingQueueKey, router, workspaceId]
   )
 
   const dispatchQueuedMessage = useCallback(
-    async (message: QueuedMessage): Promise<boolean> => {
-      setDispatchingHeadId(message.id)
-      setMessageQueue((current) => current.filter((candidate) => candidate.id !== message.id))
-      const sent = await sendDirect(
-        message.content,
-        message.fileAttachments,
-        message.contexts,
-        message.id
-      )
-      if (!sent) {
-        setMessageQueue((current) => [message, ...current.filter((item) => item.id !== message.id)])
+    async (message: QueuedMothershipMessage): Promise<boolean> => {
+      const dispatchKey = queueKeyRef.current
+      const liveMessage =
+        useMothershipQueueStore
+          .getState()
+          .queues[dispatchKey]?.find((candidate) => candidate.id === message.id) ?? message
+      if (!liveMessage || dispatchingHeadIdRef.current) return false
+      dispatchingHeadIdRef.current = liveMessage.id
+      setDispatchingHeadId(liveMessage.id)
+      try {
+        const sent = await sendDirect(
+          liveMessage.content,
+          liveMessage.fileAttachments,
+          liveMessage.contexts,
+          liveMessage.id,
+          liveMessage.idempotencyKey ?? lingxiIdempotencyKey(liveMessage.id)
+        )
+        // Remove only after the server accepted the command. If the response
+        // is lost after commit, the item stays persisted and the same key is
+        // retried, so the backend command ledger makes it exactly-once.
+        if (sent) {
+          const currentQueues = useMothershipQueueStore.getState().queues
+          for (const [chatKey, queue] of Object.entries(currentQueues)) {
+            if (queue.some((candidate) => candidate.id === liveMessage.id)) {
+              removeQueuedMessage(chatKey, liveMessage.id)
+            }
+          }
+        }
+        return sent
+      } finally {
+        dispatchingHeadIdRef.current = null
+        setDispatchingHeadId(null)
       }
-      setDispatchingHeadId(null)
-      return sent
     },
-    [sendDirect]
+    [removeQueuedMessage, sendDirect]
   )
 
   const drainQueue = useCallback(async () => {
-    if (activeTurnRef.current || dispatchingHeadId || queueRef.current.length === 0) return
-    const next = queueRef.current[0]
-    if (next) await dispatchQueuedMessage(next)
-  }, [dispatchQueuedMessage, dispatchingHeadId])
+    if (dispatchingHeadIdRef.current) return
+    // A native interrupt is a resumable learner turn. An SSE stream remains
+    // open in this state, so queue draining must be triggered by the event or
+    // snapshot transition rather than by stream end.
+    if (!['idle', 'awaiting_user'].includes(turnStateRef.current)) return
+    const dispatchKey = queueKeyRef.current
+    const state = useMothershipQueueStore.getState()
+    const queue = state.queues[dispatchKey] ?? EMPTY_LINGXI_QUEUE
+    const next = queue[0]
+    if (!next || state.editing[dispatchKey] === next.id) return
+    await dispatchQueuedMessage(next)
+  }, [dispatchQueuedMessage])
   drainQueueRef.current = drainQueue
 
   const sendMessage = useCallback(
@@ -518,48 +627,52 @@ export function useLingxiGraphChat(
       const content = message.trim()
       if (!content && !(fileAttachments && fileAttachments.length > 0)) return
 
-      const currentEditId = editingQueuedId
+      const dispatchKey = queueKeyRef.current
+      const queueState = useMothershipQueueStore.getState()
+      const currentEditId = queueState.editing[dispatchKey]
       if (currentEditId) {
-        const edited: QueuedMessage = {
-          id: currentEditId,
+        if (dispatchingHeadIdRef.current === currentEditId) return
+        replaceQueuedMessage(dispatchKey, currentEditId, {
           content: content || 'Analyze the attached file(s).',
           fileAttachments,
           contexts,
-        }
-        setEditingQueuedId(null)
-        setMessageQueue((current) => current.filter((item) => item.id !== currentEditId))
-        if (activeTurnRef.current) {
-          setMessageQueue((current) => [...current, edited])
-          return
-        }
-        await sendDirect(
-          edited.content,
-          edited.fileAttachments,
-          edited.contexts,
-          edited.id
-        )
+          idempotencyKey: lingxiIdempotencyKey(currentEditId, generateLingxiId('edit')),
+        })
+        // `replaceAt` deliberately keeps the original index. Editing the
+        // head pauses dispatch until submit completes; editing a later entry
+        // never jumps it ahead of earlier queued learner messages.
+        setQueuedEditing(dispatchKey, null)
+        void drainQueueRef.current()
         return
       }
 
-      if (activeTurnRef.current) {
-        const queued: QueuedMessage = {
-          id: `lingxi-queued:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-          content: content || 'Analyze the attached file(s).',
-          fileAttachments,
-          contexts,
-        }
-        setMessageQueue((current) => [...current, queued])
+      const queuedId = generateLingxiId('lingxi-queued')
+      const queued: QueuedMothershipMessage = {
+        id: queuedId,
+        content: content || 'Analyze the attached file(s).',
+        fileAttachments,
+        contexts,
+        idempotencyKey: lingxiIdempotencyKey(queuedId),
+      }
+      const queue = queueState.queues[dispatchKey] ?? EMPTY_LINGXI_QUEUE
+      if (turnStateRef.current === 'active' || queue.length > 0 || dispatchingHeadIdRef.current) {
+        enqueueQueuedMessage(dispatchKey, queued)
         return
       }
 
-      await sendDirect(content || 'Analyze the attached file(s).', fileAttachments, contexts)
+      // Persist even the first idle send until the POST is accepted. This is
+      // the same response-loss boundary as a queued interjection and leaves a
+      // stable idempotency key available after a remount.
+      enqueueQueuedMessage(dispatchKey, queued)
+      void drainQueueRef.current()
     },
-    [editingQueuedId, sendDirect]
+    [enqueueQueuedMessage, replaceQueuedMessage, setQueuedEditing]
   )
 
   const stopGeneration = useCallback(async () => {
     setLocallyStopped(true)
-    activeTurnRef.current = false
+    optimisticActiveRef.current = false
+    applyTurnState('terminal')
     const taskId = resolvedChatIdRef.current
     const currentAdapter = adapterRef.current
     if (!taskId || !currentAdapter || currentAdapter.kind !== 'lingxigraph') return
@@ -567,10 +680,11 @@ export function useLingxiGraphChat(
       await currentAdapter.cancelTask(taskId)
       const refreshed = await currentAdapter.loadTask(taskId)
       setTask(refreshed)
+      applyTurnState(turnStateFromTask(refreshed))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
-  }, [])
+  }, [applyTurnState])
 
   const addResource = useCallback((_resource: MothershipResource) => true, [])
   const removeResource = useCallback(
@@ -580,31 +694,48 @@ export function useLingxiGraphChat(
     [effectiveActiveResourceId, setEffectiveActiveResourceId]
   )
   const reorderResources = useCallback((_next: MothershipResource[]) => {}, [])
-  const removeFromQueue = useCallback((id: string) => {
-    setMessageQueue((current) => current.filter((message) => message.id !== id))
-    if (editingQueuedId === id) setEditingQueuedId(null)
-  }, [editingQueuedId])
+  const removeFromQueue = useCallback(
+    (id: string) => {
+      const dispatchKey = queueKeyRef.current
+      removeQueuedMessage(dispatchKey, id)
+      if (useMothershipQueueStore.getState().editing[dispatchKey] === id) {
+        setQueuedEditing(dispatchKey, null)
+      }
+    },
+    [removeQueuedMessage, setQueuedEditing]
+  )
 
   const sendNow = useCallback(
     async (id: string) => {
-      const message = queueRef.current.find((candidate) => candidate.id === id)
-      if (!message || dispatchingHeadId) return
-      if (activeTurnRef.current) await stopGeneration()
+      const dispatchKey = queueKeyRef.current
+      const message = useMothershipQueueStore
+        .getState()
+        .queues[dispatchKey]?.find((candidate) => candidate.id === id)
+      // Send now is an interjection/resume command. It must never cancel the
+      // durable task: cancellation is reserved for the explicit Stop action.
+      if (!message || dispatchingHeadIdRef.current) return
       await dispatchQueuedMessage(message)
     },
-    [dispatchQueuedMessage, dispatchingHeadId, stopGeneration]
+    [dispatchQueuedMessage]
   )
 
-  const editQueuedMessage = useCallback((id: string): QueuedMessage | undefined => {
-    const message = queueRef.current.find((candidate) => candidate.id === id)
-    if (!message) return undefined
-    setEditingQueuedId(id)
-    return message
-  }, [])
+  const editQueuedMessage = useCallback(
+    (id: string): QueuedMothershipMessage | undefined => {
+      if (dispatchingHeadIdRef.current === id) return undefined
+      const dispatchKey = queueKeyRef.current
+      const message = useMothershipQueueStore
+        .getState()
+        .queues[dispatchKey]?.find((candidate) => candidate.id === id)
+      if (!message) return undefined
+      setQueuedEditing(dispatchKey, id)
+      return message
+    },
+    [setQueuedEditing]
+  )
 
   const cancelQueueEdit = useCallback(() => {
-    setEditingQueuedId(null)
-  }, [])
+    setQueuedEditing(queueKeyRef.current, null)
+  }, [setQueuedEditing])
 
   return {
     messages,
@@ -630,7 +761,7 @@ export function useLingxiGraphChat(
     dispatchingHeadId,
     previewSession: null as FilePreviewSession | null,
     genericResourceData: null as GenericResourceData | null,
-    lingxiRuntime: { task, events, workflowState },
+    lingxiRuntime: { task, events, workflowState, turnState },
     getCurrentRequestId: () => requestIdRef.current,
   }
 }

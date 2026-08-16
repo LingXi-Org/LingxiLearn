@@ -1,0 +1,67 @@
+name: Lingxi chat checks
+
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'server/lingxilearn/**'
+      - '.github/workflows/lingxi-chat.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'server/lingxilearn/**'
+      - '.github/workflows/lingxi-chat.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: lingxi-chat-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Lingxi frontend contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run Lingxi chat tests
+        run: bun run test:chat
+
+      - name: Type-check frontend contracts
+        run: bun run type-check
+
+      - name: Check Lingxi frontend changes
+        run: >-
+          bunx biome check
+          app/workspace/[workspaceId]/components/message-actions/message-actions.tsx
+          app/workspace/[workspaceId]/home/components/message-content/components/agent-group/agent-group.tsx
+          app/workspace/[workspaceId]/home/components/message-content/components/agent-group/tool-call-item.test.tsx
+          app/workspace/[workspaceId]/home/components/message-content/components/agent-group/tool-call-item.tsx
+          app/workspace/[workspaceId]/home/components/message-content/message-content.tsx
+          app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts
+          app/workspace/[workspaceId]/home/types.ts
+          lib/lingxi/chat-types.ts
+          lib/lingxi/lingxi-graph-adapter.test.ts
+          lib/lingxi/lingxi-graph-adapter.ts
+          lib/lingxi/turn-state.test.ts
+          lib/lingxi/turn-state.ts
+          stores/mothership-queue/store.test.ts
+          stores/mothership-queue/store.ts
+          stores/mothership-queue/types.ts
+          vitest.config.ts

@@ -232,6 +232,7 @@ function toToolData(tc: NonNullable<ContentBlock['toolCall']>): ToolCallData {
     params: tc.params,
     result: tc.result,
     streamingArgs: tc.streamingArgs,
+    userPrompt: tc.userPrompt,
     startedAt: tc.startedAtMs,
   }
 }

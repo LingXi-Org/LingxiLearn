@@ -9,6 +9,8 @@ export interface QueuedSendHandoffSeed {
 }
 
 export type QueuedMothershipMessage = QueuedMessage & {
+  /** Stable key reused when a request is retried after a response loss. */
+  idempotencyKey?: string
   queuedSendHandoff?: QueuedSendHandoffSeed
   /**
    * Message id of a prior attempt at this send that an unmount cleanup
@@ -21,7 +23,13 @@ export type QueuedMothershipMessage = QueuedMessage & {
 }
 
 // Mutable fields an in-place edit overwrites; id and index are preserved by `replaceAt`.
-export type QueuedMessageEditPatch = Pick<QueuedMessage, 'content' | 'fileAttachments' | 'contexts'>
+export type QueuedMessageEditPatch = Pick<
+  QueuedMessage,
+  'content' | 'fileAttachments' | 'contexts'
+> & {
+  /** Editing is a new server command, so it must not reuse the old key. */
+  idempotencyKey?: string
+}
 
 export interface MothershipQueueState {
   queues: Record<string, QueuedMothershipMessage[]>

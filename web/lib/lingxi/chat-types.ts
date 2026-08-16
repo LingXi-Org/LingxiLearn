@@ -34,6 +34,8 @@ export interface ToolCallInfo {
   integrationDescription?: string
   /** JSON argument bytes received before the call is complete. */
   streamingArgs?: string
+  /** Durable learner-facing prompt for a native graph interrupt. */
+  userPrompt?: string
   startedAtMs?: number
 }
 

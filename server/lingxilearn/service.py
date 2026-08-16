@@ -1425,6 +1425,28 @@ class Service:
             queue = self._conversation_queue[task_id]
             while not queue.empty():
                 item = await queue.get()
+                # `agent_message` is also the interjection path used by the
+                # composer while a graph turn is still running. Do not let a
+                # second coordinator consume the local queue, observe the
+                # running row, and silently drop the message when its claim
+                # fails. Wait for the durable turn to pause before resuming.
+                while True:
+                    record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                    if record is None:
+                        return
+                    if record.status in {"queued", "awaiting_user"}:
+                        break
+                    if record.status in {
+                        "handed_off",
+                        "completed",
+                        "partial",
+                        "failed",
+                        "timed_out",
+                        "budget_exceeded",
+                        "cancelled",
+                    }:
+                        return
+                    await asyncio.sleep(0.2)
                 await self._drive_agent_task(
                     task_id,
                     learner_id,

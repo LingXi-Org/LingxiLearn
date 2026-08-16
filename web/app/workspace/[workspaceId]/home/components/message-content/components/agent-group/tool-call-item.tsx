@@ -42,6 +42,8 @@ interface ToolCallItemProps {
   params?: Record<string, unknown>
   result?: ToolCallData['result']
   streamingArgs?: string
+  /** Durable prompt emitted by a native graph interrupt. */
+  userPrompt?: string
   /** Required for a gated row: the permission decision is posted against it. */
   toolCallId?: string
   /** When the call started, used to count down a running `wait`. */
@@ -119,6 +121,7 @@ export function ToolCallItem({
   params,
   result,
   streamingArgs,
+  userPrompt,
   toolCallId,
   startedAt,
 }: ToolCallItemProps) {
@@ -231,6 +234,20 @@ export function ToolCallItem({
             },
           ]}
         />
+      </div>
+    )
+  }
+
+  if (status === 'interrupted' && userPrompt) {
+    return (
+      <div className='flex flex-col gap-1.5 pl-6 text-[13px]'>
+        <span className='text-[var(--text-secondary)]'>{title}</span>
+        <div className='rounded-[8px] border border-[var(--border-default)] bg-[var(--surface-secondary)] px-3 py-2'>
+          <p className='whitespace-pre-wrap text-[var(--text-body)]'>{userPrompt}</p>
+          <p className='mt-1 text-[12px] text-[var(--text-muted)]'>
+            请在输入框回复以继续当前任务。
+          </p>
+        </div>
       </div>
     )
   }

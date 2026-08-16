@@ -22,6 +22,8 @@ export interface LingxiGraphProjection {
 export interface LingxiTaskContextOptions {
   resourceRefs?: Array<Record<string, unknown>>
   skillIds?: string[]
+  /** Stable across retries of one learner message. */
+  idempotencyKey?: string
 }
 
 export interface LingxiGraphSubscriptionOptions {
@@ -179,6 +181,42 @@ function safeArgs(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
+const INTERRUPT_TEXT_KEYS = ['prompt', 'question', 'message', 'text', 'description', 'detail']
+
+/**
+ * Interrupt payloads are control-plane data, so `safeArgs` deliberately
+ * redacts their prompt field. This separate extractor only accepts the
+ * durable learner-facing message and keeps it bounded; it never exposes a
+ * generic model argument or reasoning payload.
+ */
+function interruptPrompt(value: unknown, depth = 0): string | undefined {
+  if (depth > 5 || value === undefined || value === null) return undefined
+  if (typeof value === 'string') {
+    const text = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim()
+    return text ? text.slice(0, 1000) : undefined
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = interruptPrompt(item, depth + 1)
+      if (found) return found
+    }
+    return undefined
+  }
+  const record = asRecord(value)
+  for (const key of INTERRUPT_TEXT_KEYS) {
+    const found = interruptPrompt(record[key], depth + 1)
+    if (found) return found
+  }
+  for (const key of ['interrupts', 'value', 'messages', 'data']) {
+    const found = interruptPrompt(record[key], depth + 1)
+    if (found) return found
+  }
+  if (stringValue(record.kind).toLowerCase() === 'user_message') {
+    return '请回复以继续当前学习任务。'
+  }
+  return undefined
+}
+
 function safePayloadSummary(value: unknown): string {
   if (value === undefined || value === null) return '没有返回公开结果详情。'
   if (typeof value === 'string') return `已返回结果（${value.length} 个字符）。`
@@ -248,7 +286,11 @@ function eventParentSpanId(event: AgentTaskEvent): string {
 
 function normalizeToolStatus(value: unknown, fallback: ToolCallStatus): ToolCallStatus {
   const status = stringValue(value).toLowerCase()
-  if (['awaiting_approval', 'awaiting-approval', 'pending_approval', 'pending-approval'].includes(status)) {
+  if (
+    ['awaiting_approval', 'awaiting-approval', 'pending_approval', 'pending-approval'].includes(
+      status
+    )
+  ) {
     return 'awaiting_approval'
   }
   if (['cancelled', 'canceled'].includes(status)) return 'cancelled'
@@ -318,6 +360,7 @@ interface ToolRun {
   parentSpanId?: string
   params?: Record<string, unknown>
   streamingArgs?: string
+  userPrompt?: string
   firstSequence: number
   startedAt?: number
   status: ToolCallStatus
@@ -434,6 +477,7 @@ function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
           parentSpanId: run?.parentSpanId ?? current?.parentSpanId,
           params: args ?? current?.params,
           streamingArgs,
+          userPrompt: current?.userPrompt,
           firstSequence: current?.firstSequence ?? event.sequence,
           startedAt:
             current?.startedAt ?? (event.ts ? Date.parse(event.ts) || undefined : undefined),
@@ -457,6 +501,7 @@ function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
         parentSpanId: run?.parentSpanId ?? current?.parentSpanId,
         params: current?.params ?? safeArgs(payload.arguments),
         streamingArgs: current?.streamingArgs,
+        userPrompt: current?.userPrompt,
         firstSequence: current?.firstSequence ?? event.sequence,
         startedAt: current?.startedAt ?? (event.ts ? Date.parse(event.ts) || undefined : undefined),
         status: failed ? 'error' : normalizeToolStatus(payload.status, 'success'),
@@ -494,9 +539,14 @@ function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
       const rejected = ['cancelled', 'canceled', 'denied', 'deny', 'rejected', 'skip'].includes(
         decision
       )
-      const approved = ['allow', 'allow_chat', 'always_allow', 'approve', 'approved', 'success'].includes(
-        decision
-      )
+      const approved = [
+        'allow',
+        'allow_chat',
+        'always_allow',
+        'approve',
+        'approved',
+        'success',
+      ].includes(decision)
       tools.set(id, {
         id,
         name: current?.name || 'schedule.propose',
@@ -505,6 +555,7 @@ function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
         parentSpanId: current?.parentSpanId,
         params: current?.params,
         streamingArgs: current?.streamingArgs,
+        userPrompt: current?.userPrompt,
         firstSequence: current?.firstSequence ?? event.sequence,
         startedAt: current?.startedAt,
         status: rejected ? 'rejected' : approved ? 'success' : 'awaiting_approval',
@@ -521,11 +572,16 @@ function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
       const current = tools.get(id)
       tools.set(id, {
         id,
-        name: stringValue(payload.toolName) || stringValue(payload.tool_name) || current?.name || 'await_user',
+        name:
+          stringValue(payload.toolName) ||
+          stringValue(payload.tool_name) ||
+          current?.name ||
+          'await_user',
         agent: agent ?? current?.agent,
         spanId: run?.spanId ?? current?.spanId,
         parentSpanId: run?.parentSpanId ?? current?.parentSpanId,
         params: current?.params ?? safeArgs(payload),
+        userPrompt: interruptPrompt(payload),
         firstSequence: current?.firstSequence ?? event.sequence,
         startedAt: current?.startedAt ?? (event.ts ? Date.parse(event.ts) || undefined : undefined),
         // Native graph interrupts resume through the learner's next message,
@@ -586,7 +642,19 @@ function reduceReasoningSteps(
       }
       continue
     }
-    if (!currentPlan || !['node.started', 'node.retrying', 'node.held', 'node.revising', 'node.appeared', 'node.completed', 'node.failed'].includes(event.kind)) continue
+    if (
+      !currentPlan ||
+      ![
+        'node.started',
+        'node.retrying',
+        'node.held',
+        'node.revising',
+        'node.appeared',
+        'node.completed',
+        'node.failed',
+      ].includes(event.kind)
+    )
+      continue
     {
       const taskId = stringValue(payload.task_id)
       if (!taskId) continue
@@ -600,7 +668,9 @@ function reduceReasoningSteps(
         reasoningStep(
           id,
           existing.title,
-          event.kind === 'node.retrying' || event.kind === 'node.revising' || event.kind === 'node.held'
+          event.kind === 'node.retrying' ||
+            event.kind === 'node.revising' ||
+            event.kind === 'node.held'
             ? '正在根据新的学习证据重试。'
             : stringValue(payload.detail) || existing.summary,
           event.kind === 'node.failed'
@@ -642,6 +712,7 @@ function toolInfo(tool: ToolRun): ToolCallInfo {
     calledBy: tool.agent,
     result: tool.result,
     streamingArgs: tool.streamingArgs,
+    userPrompt: tool.userPrompt,
     startedAtMs: tool.startedAt,
   }
 }
@@ -759,9 +830,7 @@ export function projectLingxiGraphEvents(
           ? eventToolCalls(event).map((call, index) => toolCallId(event, call, index))
           : event.kind === 'tool.result'
             ? [resultToolCallId(event)]
-            : [
-                eventControlToolId(event),
-              ]
+            : [eventControlToolId(event)]
       for (const id of related) {
         if (emittedTools.has(id)) continue
         const tool = tools.find((candidate) => candidate.id === id)
@@ -800,15 +869,29 @@ export function projectLingxiGraphEvents(
       continue
     }
 
-    if (event.kind === 'assistant.delta' || event.kind === 'agent.output' || event.kind === 'agent.output.delta') {
+    if (
+      event.kind === 'assistant.delta' ||
+      event.kind === 'agent.output' ||
+      event.kind === 'agent.output.delta'
+    ) {
       const text = eventText(event)
       if (!text) continue
+      // The coordinator's assistant lane is an explicit learner-facing
+      // output in the native runtime. Private reasoning remains on the
+      // separate reasoning.delta lane and is never projected.
+      if (event.kind === 'assistant.delta' && event.agent === 'coordinator') {
+        assistantText += `${assistantText ? '\n\n' : ''}${text}`
+        blocks.push({ type: 'text', content: text, timestamp: event.sequence })
+        continue
+      }
       const learnerFacingOutput =
         event.kind === 'agent.output' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
       const deltaOutput =
-        event.kind === 'agent.output.delta' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
+        event.kind === 'agent.output.delta' &&
+        LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
       if (deltaOutput) {
-        const streamId = stringValue(eventPayload(event).stream_id) || String(event.agent ?? 'learner')
+        const streamId =
+          stringValue(eventPayload(event).stream_id) || String(event.agent ?? 'learner')
         const existingIndex = streamedOutputBlocks.get(streamId)
         if (existingIndex === undefined) {
           streamedOutputBlocks.set(streamId, blocks.length)
@@ -839,7 +922,14 @@ export function projectLingxiGraphEvents(
         blocks.push({ type: 'text', content: summary, timestamp: event.sequence })
       }
     } else if (
-      ['task.failed', 'task.cancelled', 'run.failed', 'run.cancelled', 'run.timed_out', 'run.budget_exceeded'].includes(event.kind) &&
+      [
+        'task.failed',
+        'task.cancelled',
+        'run.failed',
+        'run.cancelled',
+        'run.timed_out',
+        'run.budget_exceeded',
+      ].includes(event.kind) &&
       !assistantText
     ) {
       assistantText =

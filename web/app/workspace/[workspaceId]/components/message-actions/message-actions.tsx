@@ -162,7 +162,7 @@ export const MessageActions = memo(function MessageActions({
         useFolderStore.getState().clearChatSelection()
         router.push(`/workspace/${params.workspaceId}/chat/${result.id}`)
       } catch {
-        toast.error('Failed to fork learning task')
+        toast.error('Failed to restart learning task')
       } finally {
         setIsLingxiForking(false)
       }
@@ -196,6 +196,7 @@ export const MessageActions = memo(function MessageActions({
     ? Boolean(requestId)
     : Boolean(chatId && messageId && !isLiveAssistantMessageId(messageId))
   const isForking = isLingxi ? isLingxiForking : forkChat.isPending
+  const forkLabel = isLingxi ? 'Restart from original prompt' : 'Fork in new chat'
   if (!hasContent && !canSubmitFeedback && !canFork) return null
 
   return (
@@ -253,7 +254,7 @@ export const MessageActions = memo(function MessageActions({
             <Tooltip.Trigger asChild>
               <button
                 type='button'
-                aria-label='Fork in new chat'
+                aria-label={forkLabel}
                 onClick={handleFork}
                 disabled={isForking}
                 className={cn(BUTTON_CLASS, isForking && 'cursor-not-allowed opacity-50')}
@@ -261,7 +262,7 @@ export const MessageActions = memo(function MessageActions({
                 <Split className={cn(ICON_CLASS, 'rotate-90')} />
               </button>
             </Tooltip.Trigger>
-            <Tooltip.Content side='top'>Fork in new chat</Tooltip.Content>
+            <Tooltip.Content side='top'>{forkLabel}</Tooltip.Content>
           </Tooltip.Root>
         )}
       </div>
