@@ -124,6 +124,42 @@ async def test_confirmation_requires_exact_digest_and_reject_releases_work(state
 
 
 @pytest.mark.asyncio
+async def test_create_work_plan_flushes_items_before_dependencies(state_db) -> None:
+    database, _, learner_id = state_db
+    from lingxilearn.store.db import Repository
+
+    repo = Repository(database)
+    task_id = f"dependency-task-{uuid4().hex}"
+    await repo.create_agent_task(
+        id=task_id,
+        learner_id=learner_id,
+        prompt="测试依赖持久化顺序",
+        graph_version="test@v2",
+        status="awaiting_user",
+    )
+    await repo.append_command(
+        task_id=task_id,
+        kind="message",
+        payload={"message": "执行"},
+        idempotency_key="dependency-message",
+    )
+    turn = await repo.latest_turn(task_id)
+    assert turn is not None
+    plan = await repo.create_work_plan(
+        task_id=task_id,
+        turn_id=str(turn["id"]),
+        expected_revision=0,
+        items=[
+            {"id": "dependency-work-a", "work_key": "a", "candidate_id": "candidate-a", "capability": "answer_question"},
+            {"id": "dependency-work-b", "work_key": "b", "candidate_id": "candidate-b", "capability": "assess.generate"},
+        ],
+        dependencies=[("dependency-work-b", "dependency-work-a")],
+    )
+    assert plan is not None
+    assert {item["id"] for item in plan["work_items"]} == {"dependency-work-a", "dependency-work-b"}
+
+
+@pytest.mark.asyncio
 async def test_evidence_projection_cursor_continues_after_first_500(state_db) -> None:
     _, runtime, learner_id = state_db
     from lingxilearn.runtime.state_updater import StateUpdater

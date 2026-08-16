@@ -1416,6 +1416,11 @@ class Repository:
                             },
                         )
                     )
+            # Flush the newly-created work items before inserting dependency
+            # rows. PostgreSQL enforces both dependency foreign keys at the
+            # statement boundary, and these independent ORM objects do not
+            # otherwise guarantee insert ordering.
+            await s.flush()
             turn.revision = revision
             for work_id, dependency_id in dependencies:
                 s.add(WorkDependency(work_id=work_id, depends_on_id=dependency_id))
