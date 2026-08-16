@@ -250,6 +250,17 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 "agent.status",
                 {"text": "已收到你的学习目标，正在准备学习安排。", "phase": "interpret_goal"},
             )
+            # Keep the learner-facing opening on the normal model-driven graph
+            # path; this is only a status acknowledgement, not a routing fast
+            # path or a replacement for the companion model.
+            deps.emit(
+                "agent.output",
+                {
+                    "agent": "learning_companion",
+                    "message": "我先陪你开始：正在快速了解你的目标，稍后把最先能学的内容送到你面前。",
+                    "stream_id": f"{deps.task_id}:opening-companion",
+                },
+            )
         rows = await deps.runtime_state.profile_for(deps.learner_id)
         stack = await deps.runtime_state.goal_stack(deps.task_id)
         utterance = str(state.get("utterance") or "").strip()
@@ -360,7 +371,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 requested.add("content.deck")
             if any(
                 word in str(latest_message.get("message") or "")
-                for word in ("解释", "回答", "为什么", "什么是", "是什么", "介绍", "定义")
+                for word in ("解释", "回答", "为什么")
             ):
                 requested.add("dialog.answer")
             world = replace(

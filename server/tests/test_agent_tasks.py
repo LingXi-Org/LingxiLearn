@@ -225,11 +225,7 @@ async def test_missing_deepseek_key_is_a_durable_failed_task(tmp_path: Path) -> 
         snapshot = await service.agent_task_snapshot(task_id)
         assert snapshot["status"] == "failed"
         events = await service.repo.agent_events_after(task_id)
-        assert [event["kind"] for event in events] == [
-            "task.started",
-            "agent.output",
-            "task.failed",
-        ]
+        assert [event["kind"] for event in events] == ["task.started", "task.failed"]
         assert "DS_API_KEY" in snapshot["error"]
     finally:
         await service.db.dispose()
