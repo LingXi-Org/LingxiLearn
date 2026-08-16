@@ -250,6 +250,32 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     # acknowledgements. Unit callers may omit it and get a local
     # lock, preserving the loop's standalone contract.
     board_lock = deps.board_lock or asyncio.Lock()
+    open_rounds: set[int] = set()
+    closed_rounds: set[int] = set()
+
+    def close_round(
+        *,
+        step: int,
+        decision_id: str = "",
+        status: str = "",
+        outcomes: Sequence[Mapping[str, Any]] = (),
+        **payload: Any,
+    ) -> None:
+        """Emit one terminal round event, even for non-happy-path exits."""
+
+        if deps.emit is None or step not in open_rounds or step in closed_rounds:
+            return
+        closed_rounds.add(step)
+        deps.emit(
+            "round.completed",
+            {
+                "step": step,
+                "decision_id": decision_id or None,
+                "outcomes": [dict(item) for item in outcomes],
+                "runtime_status": status or None,
+                **payload,
+            },
+        )
 
     async def interpret_goal(state: LoopState, runtime: Runtime[Any]) -> dict[str, Any]:
         if deps.emit is not None:
@@ -344,11 +370,32 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         skills = await deps.runtime_state.list_skills(learner_id=deps.learner_id, enabled_only=True)
         dispatcher.retarget(goal=goal, skills=skills)
 
+        # Reserve the stable decision step before invoking the planner.  The
+        # lifecycle event therefore covers model planning latency as well as
+        # dispatch/evaluation latency.
+        step = await deps.tracer.next_step()
+        open_rounds.add(step)
+        turn_id = ""
+        if deps.repository is not None:
+            current_turn = await deps.repository.latest_turn(deps.task_id)
+            turn_id = str(current_turn.get("id") or "") if current_turn else ""
+        if deps.emit is not None:
+            deps.emit(
+                "round.started",
+                {
+                    "step": step,
+                    "turn_id": turn_id or None,
+                    "replanning": bool(state.get("replanning")),
+                    "previous_decision_id": state.get("last_decision_id") or None,
+                },
+            )
+
         if state.get("replanning"):
             blocked = check_replan(budget)
             if blocked is not None:
                 await deps.runtime_state.save_budget(deps.task_id, budget.to_dict())
                 await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+                close_round(step=step, status=str(RuntimeStatus.FAILED), detail=blocked.detail)
                 return {
                     "runtime_status": str(RuntimeStatus.FAILED),
                     "finished_reason": blocked.detail,
@@ -384,16 +431,25 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             world = replace(
                 world, requested_capabilities=frozenset(requested), awaiting_user_reply=True
             )
-        produced = await orchestrator.plan(
-            goal=goal,
-            world=world,
-            skills=skills,
-            budget=budget,
-            model=deps.model,
-            runtime=runtime,
-            user_message=latest_message,
-            board=board,
-        )
+        try:
+            produced = await orchestrator.plan(
+                goal=goal,
+                world=world,
+                skills=skills,
+                budget=budget,
+                model=deps.model,
+                runtime=runtime,
+                user_message=latest_message,
+                board=board,
+            )
+        except Exception as exc:  # lifecycle must close when planning fails
+            close_round(
+                step=step,
+                status=str(RuntimeStatus.FAILED),
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
         produced.holds = apply_hold_policy(
             produced.holds,
             board,
@@ -524,7 +580,6 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                     {"text": degrade_message(verdict.findings), "phase": "guardrail"},
                 )
 
-        step = await deps.tracer.next_step()
         # When running under the service, mirror the validated plan into the
         # durable ledger before any provider starts. Unit callers without a
         # repository retain the standalone graph contract.
@@ -601,6 +656,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 if durable is not None and durable.get("budget_exceeded"):
                     message = "本轮预计资源需求超过剩余预算，已停止启动新工作。"
                     await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+                    close_round(step=step, status=str(RuntimeStatus.FAILED), detail=message)
                     return {
                         "runtime_status": str(RuntimeStatus.FAILED),
                         "finished_reason": message,
@@ -687,6 +743,12 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 deps.task_id, persisted_plan, budget=budget.to_dict()
             )
             await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+            close_round(
+                step=step,
+                decision_id=str(stored["id"]),
+                status=str(RuntimeStatus.FAILED),
+                detail=message,
+            )
             return {
                 "runtime_status": str(RuntimeStatus.FAILED),
                 "finished_reason": message,
@@ -710,6 +772,14 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         messages = [produced.negotiation] if produced.negotiation else []
         if not verdict.allowed_tasks and verdict.findings and not awaiting:
             messages.append(degrade_message(verdict.findings))
+
+        if awaiting:
+            close_round(
+                step=step,
+                decision_id=str(stored["id"]),
+                status=str(RuntimeStatus.WAITING_FOR_USER),
+                outcomes=(),
+            )
 
         persisted_plan = {
             **produced.to_dict(),
@@ -960,9 +1030,13 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         """Did the round achieve the goal, or does the next one differ?"""
 
         status = str(state.get("runtime_status"))
+        round_step = int(state.get("step") or 0)
+        decision_id = str(state.get("last_decision_id") or "")
         if status in {str(RuntimeStatus.FAILED), str(RuntimeStatus.COMPLETED)}:
+            close_round(step=round_step, decision_id=decision_id, status=status)
             return {}
         if status == str(RuntimeStatus.WAITING_FOR_USER):
+            close_round(step=round_step, decision_id=decision_id, status=status)
             return {}
 
         goal = Goal.from_dict(state.get("goal") or {})
@@ -1007,11 +1081,25 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             remaining = stack.current()
             if remaining is None:
                 await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.COMPLETED)
+                close_round(
+                    step=round_step,
+                    decision_id=decision_id,
+                    status=str(RuntimeStatus.COMPLETED),
+                    outcomes=[item.to_dict() for item in outcomes],
+                    result="goal_satisfied",
+                )
                 return {
                     "runtime_status": str(RuntimeStatus.COMPLETED),
                     "finished_reason": "目标已达成",
                 }
             await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.REPLANNING)
+            close_round(
+                step=round_step,
+                decision_id=decision_id,
+                status=str(RuntimeStatus.REPLANNING),
+                outcomes=[item.to_dict() for item in outcomes],
+                result="goal_satisfied",
+            )
             return {
                 "runtime_status": str(RuntimeStatus.REPLANNING),
                 "goal": remaining.to_dict(),
@@ -1026,6 +1114,13 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             await deps.runtime_state.set_runtime_status(
                 deps.task_id, RuntimeStatus.WAITING_FOR_USER
             )
+            close_round(
+                step=round_step,
+                decision_id=decision_id,
+                status=str(RuntimeStatus.WAITING_FOR_USER),
+                outcomes=[item.to_dict() for item in outcomes],
+                result="turn_complete",
+            )
             return {
                 "runtime_status": str(RuntimeStatus.WAITING_FOR_USER),
                 "messages": [],
@@ -1037,6 +1132,13 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         if bool(state.get("background_pending")):
             await deps.runtime_state.set_runtime_status(
                 deps.task_id, RuntimeStatus.WAITING_FOR_USER
+            )
+            close_round(
+                step=round_step,
+                decision_id=decision_id,
+                status=str(RuntimeStatus.WAITING_FOR_USER),
+                outcomes=[item.to_dict() for item in outcomes],
+                result="background_pending",
             )
             return {
                 "runtime_status": str(RuntimeStatus.WAITING_FOR_USER),
@@ -1051,6 +1153,13 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         ):
             message = "本轮没有产生新的学习结果，已暂停自动编排，请换一种说法或继续补充要求。"
             await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.FAILED)
+            close_round(
+                step=round_step,
+                decision_id=decision_id,
+                status=str(RuntimeStatus.FAILED),
+                outcomes=[item.to_dict() for item in outcomes],
+                result="no_progress",
+            )
             return {
                 "runtime_status": str(RuntimeStatus.FAILED),
                 "finished_reason": message,
@@ -1062,6 +1171,13 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         # changed. That is the replan the acceptance criteria want visible.
         logger.debug("replanning: %d/%d tasks unsatisfied", len(unfinished), len(outcomes))
         await deps.runtime_state.set_runtime_status(deps.task_id, RuntimeStatus.REPLANNING)
+        close_round(
+            step=round_step,
+            decision_id=decision_id,
+            status=str(RuntimeStatus.REPLANNING),
+            outcomes=[item.to_dict() for item in outcomes],
+            result="replan",
+        )
         return {"runtime_status": str(RuntimeStatus.REPLANNING), "replanning": True}
 
     async def await_user(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:

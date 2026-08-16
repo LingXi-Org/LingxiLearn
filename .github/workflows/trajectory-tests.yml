@@ -1,0 +1,35 @@
+name: Trajectory tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: trajectory-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  trajectory-utils:
+    name: Web trajectory utilities
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./web
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install web dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run trajectory utility tests
+        run: bun run test:trajectory

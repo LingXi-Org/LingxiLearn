@@ -1040,7 +1040,11 @@ class Repository:
             return int(count or 0)
 
     async def agent_events_for_execution(
-        self, execution_id: str, learner_id: str, limit: int = 5000
+        self,
+        execution_id: str,
+        learner_id: str,
+        limit: int = 5000,
+        after: int = 0,
     ) -> list[dict[str, Any]]:
         async with self.db.session() as s:
             rows = (
@@ -1050,6 +1054,7 @@ class Repository:
                     .where(
                         AgentTaskEvent.execution_id == execution_id,
                         AgentTask.learner_id == learner_id,
+                        AgentTaskEvent.sequence > max(0, int(after or 0)),
                     )
                     .order_by(AgentTaskEvent.sequence)
                     .limit(limit)
