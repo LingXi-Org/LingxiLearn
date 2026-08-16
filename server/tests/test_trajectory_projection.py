@@ -313,3 +313,41 @@ async def test_execution_snapshot_event_reader_pages_past_5000_without_truncatin
     assert status["truncated"] is False
     assert status["complete"] is True
     assert repo.calls == [0, 5000]
+
+
+def test_truncated_event_read_marks_only_uncertain_trajectory_tail_inferred() -> None:
+    trajectory = {
+        "lanes": [
+            {
+                "id": "run",
+                "items": [{"id": "run:1", "precision": "exact"}],
+            },
+            {
+                "id": "action",
+                "items": [
+                    {
+                        "id": "action:before",
+                        "startTime": "2026-08-16T00:00:00.100000+00:00",
+                        "precision": "exact",
+                    },
+                    {
+                        "id": "action:after",
+                        "startTime": "2026-08-16T00:00:00.900000+00:00",
+                        "precision": "exact",
+                    },
+                ],
+            },
+        ]
+    }
+    Service._annotate_truncated_trajectory(
+        trajectory,
+        {
+            "truncated": True,
+            "complete": False,
+            "truncatedAfter": "2026-08-16T00:00:00.800000+00:00",
+        },
+    )
+    before, after = trajectory["lanes"][1]["items"]
+    assert before["precision"] == "exact"
+    assert after["precision"] == "inferred"
+    assert after["metadata"]["eventLogTruncated"] is True
