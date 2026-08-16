@@ -17,6 +17,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -118,6 +119,35 @@ class DispatchDeps:
     emit: Any = None
 
 
+class _ProviderRuntime:
+    """Add execution identity to provider-side trace events.
+
+    Providers share the graph runtime with the dispatcher and historically
+    emitted only their logical task id (``t1``/``t2``).  Those ids repeat after
+    a replan, so the projector could attach a later model span to an older
+    agent.  This transparent proxy keeps the provider API unchanged while
+    carrying the unique runtime node id on every event.
+    """
+
+    def __init__(self, runtime: Any, *, task_id: str, node_id: str, step: int) -> None:
+        self._runtime = runtime
+        self._task_id = task_id
+        self._node_id = node_id
+        self._step = step
+
+    def emit(self, channel: str, value: Any) -> Any:
+        if isinstance(value, Mapping):
+            payload = dict(value)
+            payload.setdefault("task_id", self._task_id)
+            payload.setdefault("node_id", self._node_id)
+            payload.setdefault("step", self._step)
+            value = payload
+        return self._runtime.emit(channel, value)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._runtime, name)
+
+
 class Dispatcher:
     """Runs planned tasks and reports whether they actually finished."""
 
@@ -155,6 +185,11 @@ class Dispatcher:
 
         if goal is not None:
             self._deps.goal = goal
+            if not self._deps.user_message and goal.raw_utterance:
+                # Initial prompts live on the goal rather than in an
+                # interjection.  Conversational providers still need the
+                # original learner text in their context.
+                self._deps.user_message = {"message": goal.raw_utterance}
         if skills is not None:
             self._deps.skills = list(skills)
         if user_message is not None:
@@ -186,6 +221,21 @@ class Dispatcher:
 
         started = time.monotonic()
         work_id = str(task.inputs.get("__work_item_id") or "")
+        node_id = str(
+            task.inputs.get("__runtime_node_id")
+            or work_id
+            or f"{self._deps.task_id}:{task.inputs.get('__runtime_step') or 0}:{task.id}"
+        )
+        runtime = (
+            _ProviderRuntime(
+                self._deps.graph_runtime,
+                task_id=task.id,
+                node_id=node_id,
+                step=int(task.inputs.get("__runtime_step") or 0),
+            )
+            if self._deps.graph_runtime is not None
+            else None
+        )
         claimed: dict[str, Any] | None = None
         if work_id and self._deps.repository is not None:
             claimed = await self._deps.repository.claim_work_item(
@@ -196,6 +246,7 @@ class Dispatcher:
                 return TaskOutcome(
                     task_id=task.id,
                     capability=task.capability,
+                    node_id=node_id,
                     status="blocked",
                     detail="work item is not claimable or its dependencies have not succeeded",
                 )
@@ -219,7 +270,7 @@ class Dispatcher:
             )
         except NoProvider as exc:
             if heartbeat is not None:
-                heartbeat.cancel()
+                await self._stop_heartbeat(heartbeat)
             if work_id and self._deps.repository is not None:
                 await self._deps.repository.finish_work(
                     work_id=work_id,
@@ -232,6 +283,7 @@ class Dispatcher:
                     "agent.status",
                     {
                         "task_id": task.id,
+                        "node_id": node_id,
                         "capability": task.capability,
                         "text": "这一步没有可用的执行者，我换个方式。",
                     },
@@ -239,6 +291,7 @@ class Dispatcher:
             return TaskOutcome(
                 task_id=task.id,
                 capability=task.capability,
+                node_id=node_id,
                 status="blocked",
                 detail=str(exc),
             )
@@ -249,6 +302,7 @@ class Dispatcher:
                     "node.revising",
                     {
                         "task_id": task.id,
+                        "node_id": node_id,
                         "capability": task.capability,
                         "provider": resolution.provider,
                         "skill_id": resolution.skill_id,
@@ -259,6 +313,7 @@ class Dispatcher:
                 "node.started",
                 {
                     "task_id": task.id,
+                    "node_id": node_id,
                     "capability": task.capability,
                     "provider": resolution.provider,
                     "skill_id": resolution.skill_id,
@@ -268,6 +323,7 @@ class Dispatcher:
                 "agent.status",
                 {
                     "task_id": task.id,
+                    "node_id": node_id,
                     "capability": task.capability,
                     "provider": resolution.provider,
                     "skill_id": resolution.skill_id,
@@ -278,7 +334,7 @@ class Dispatcher:
         provider = get_provider(resolution.provider)
         if provider is None:
             if heartbeat is not None:
-                heartbeat.cancel()
+                await self._stop_heartbeat(heartbeat)
             if work_id and self._deps.repository is not None:
                 await self._deps.repository.finish_work(
                     work_id=work_id,
@@ -294,6 +350,7 @@ class Dispatcher:
                     "agent.status",
                     {
                         "task_id": task.id,
+                        "node_id": node_id,
                         "capability": task.capability,
                         "text": "这一步没有可用的执行者，我换个方式。",
                     },
@@ -301,6 +358,7 @@ class Dispatcher:
             return TaskOutcome(
                 task_id=task.id,
                 capability=task.capability,
+                node_id=node_id,
                 skill_id=resolution.skill_id,
                 provider=resolution.provider,
                 status="blocked",
@@ -315,7 +373,7 @@ class Dispatcher:
             model=self._deps.model,
             settings=self._deps.settings,
             artifacts=self._deps.artifacts,
-            runtime=self._deps.graph_runtime,
+            runtime=runtime,
             profile=profile,
             prior_results=dict(self._results),
             user_message=dict(self._deps.user_message),
@@ -327,8 +385,33 @@ class Dispatcher:
 
         try:
             result = await provider(context)
+            self._emit_agent_lifecycle(
+                "agent.completed",
+                task=task,
+                resolution=resolution,
+                node_id=node_id,
+                status="completed",
+            )
+        except asyncio.CancelledError:
+            self._emit_agent_lifecycle(
+                "agent.failed",
+                task=task,
+                resolution=resolution,
+                node_id=node_id,
+                status="cancelled",
+                detail="provider task cancelled",
+            )
+            raise
         except ProviderError as exc:
             logger.info("provider %s declined: %s", resolution.provider, exc)
+            self._emit_agent_lifecycle(
+                "agent.failed",
+                task=task,
+                resolution=resolution,
+                node_id=node_id,
+                status="failed",
+                detail=str(exc),
+            )
             if work_id and self._deps.repository is not None:
                 await self._deps.repository.finish_work(
                     work_id=work_id,
@@ -336,9 +419,17 @@ class Dispatcher:
                     status="failed",
                     result={"safe_summary": str(exc), "error_code": "provider_error"},
                 )
-            return self._failed(task, resolution, str(exc), started)
+            return self._failed(task, resolution, str(exc), started, node_id=node_id)
         except Exception as exc:  # noqa: BLE001 - one provider must not end the run
             logger.exception("provider %s failed", resolution.provider)
+            self._emit_agent_lifecycle(
+                "agent.failed",
+                task=task,
+                resolution=resolution,
+                node_id=node_id,
+                status="failed",
+                detail=f"{type(exc).__name__}: {exc}",
+            )
             if work_id and self._deps.repository is not None:
                 await self._deps.repository.finish_work(
                     work_id=work_id,
@@ -349,10 +440,16 @@ class Dispatcher:
                         "error_code": "provider_failed",
                     },
                 )
-            return self._failed(task, resolution, f"{type(exc).__name__}: {exc}", started)
+            return self._failed(
+                task,
+                resolution,
+                f"{type(exc).__name__}: {exc}",
+                started,
+                node_id=node_id,
+            )
         finally:
             if heartbeat is not None:
-                heartbeat.cancel()
+                await self._stop_heartbeat(heartbeat)
 
         evidence_ids = await self._persist(result)
         satisfied, detail = await self._check_done(task, result, evidence_ids)
@@ -397,6 +494,7 @@ class Dispatcher:
                 "node.held",
                 {
                     "task_id": task.id,
+                    "node_id": node_id,
                     "capability": task.capability,
                     "provider": resolution.provider,
                     "skill_id": resolution.skill_id,
@@ -408,6 +506,7 @@ class Dispatcher:
         return TaskOutcome(
             task_id=task.id,
             capability=task.capability,
+            node_id=node_id,
             provider=resolution.provider,
             skill_id=resolution.skill_id,
             status="completed" if satisfied else "incomplete",
@@ -425,14 +524,52 @@ class Dispatcher:
 
     # -- internals -----------------------------------------------------------
 
+    @staticmethod
+    async def _stop_heartbeat(heartbeat: asyncio.Task[None]) -> None:
+        heartbeat.cancel()
+        with suppress(asyncio.CancelledError):
+            await heartbeat
+
+    def _emit_agent_lifecycle(
+        self,
+        kind: str,
+        *,
+        task: PlannedTask,
+        resolution: Resolution,
+        node_id: str,
+        status: str,
+        detail: str = "",
+    ) -> None:
+        if self._deps.emit is None:
+            return
+        payload: dict[str, Any] = {
+            "agent": resolution.provider,
+            "task_id": task.id,
+            "node_id": node_id,
+            "capability": task.capability,
+            "provider": resolution.provider,
+            "skill_id": resolution.skill_id,
+            "status": status,
+        }
+        if detail:
+            payload["detail"] = detail
+        self._deps.emit(kind, payload)
+
     def _failed(
-        self, task: PlannedTask, resolution: Resolution, detail: str, started: float
+        self,
+        task: PlannedTask,
+        resolution: Resolution,
+        detail: str,
+        started: float,
+        *,
+        node_id: str,
     ) -> TaskOutcome:
         if self._deps.emit is not None:
             self._deps.emit(
                 "agent.status",
                 {
                     "task_id": task.id,
+                    "node_id": node_id,
                     "capability": task.capability,
                     "text": "这一步遇到问题，我会保留已完成的部分。",
                 },
@@ -440,6 +577,7 @@ class Dispatcher:
         return TaskOutcome(
             task_id=task.id,
             capability=task.capability,
+            node_id=node_id,
             provider=resolution.provider,
             skill_id=resolution.skill_id,
             status="failed",

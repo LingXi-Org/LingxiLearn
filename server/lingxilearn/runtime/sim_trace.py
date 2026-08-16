@@ -403,7 +403,13 @@ class SimTraceProjector:
         block_id: str = "",
     ) -> dict[str, Any]:
         safe_agent = str(agent or "coordinator")
-        task_key = str((payload or {}).get("task_id") or "")
+        logical_task_key = str((payload or {}).get("task_id") or "")
+        task_key = str(
+            (payload or {}).get("node_id")
+            or (payload or {}).get("work_item_id")
+            or logical_task_key
+            or ""
+        )
         if task_key:
             existing = self._active_tasks.get(task_key)
             if existing is not None and existing.get("status") == "running":
@@ -431,6 +437,8 @@ class SimTraceProjector:
             capability=(payload or {}).get("capability"),
             skillId=(payload or {}).get("skill_id"),
             taskId=task_key or None,
+            logicalTaskId=logical_task_key or None,
+            nodeId=task_key or None,
             runtime=_json_safe(dict(runtime or {})),
         )
         self._active_agents.setdefault(safe_agent, []).append(span)
@@ -446,7 +454,12 @@ class SimTraceProjector:
         timestamp: Any,
         failed: bool = False,
     ) -> dict[str, Any] | None:
-        task_key = str((payload or {}).get("task_id") or "")
+        task_key = str(
+            (payload or {}).get("node_id")
+            or (payload or {}).get("work_item_id")
+            or (payload or {}).get("task_id")
+            or ""
+        )
         span = self._active_tasks.get(task_key) if task_key else None
         span = span or self._find_agent(agent)
         if span is None:
@@ -481,6 +494,11 @@ class SimTraceProjector:
         if task_key:
             self._active_tasks.pop(task_key, None)
         return span
+
+    @staticmethod
+    def _model_key(agent: str, payload: Mapping[str, Any]) -> str:
+        node_id = str(payload.get("node_id") or payload.get("work_item_id") or "")
+        return f"{agent}:{node_id}" if node_id else agent
 
     # -- native graph events --------------------------------------------
 
@@ -896,6 +914,7 @@ class SimTraceProjector:
             return
 
         if kind == "model.started":
+            model_key = self._model_key(agent, safe_payload)
             parent = self._ensure_agent(
                 agent,
                 payload=safe_payload,
@@ -913,7 +932,7 @@ class SimTraceProjector:
                 model=safe_payload.get("model"),
                 runtime=_json_safe(safe_runtime),
             )
-            self._active_models.setdefault(agent, []).append(span)
+            self._active_models.setdefault(model_key, []).append(span)
             self._event(
                 span,
                 kind,
@@ -924,10 +943,11 @@ class SimTraceProjector:
             )
             return
 
+        model_key = self._model_key(agent, safe_payload)
         model_span = next(
             (
                 span
-                for span in reversed(self._active_models.get(agent, []))
+                for span in reversed(self._active_models.get(model_key, []))
                 if span.get("status") == "running"
             ),
             None,

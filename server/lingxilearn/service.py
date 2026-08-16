@@ -401,6 +401,7 @@ class Service:
         self._waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._agent_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._tasks: set[asyncio.Task[Any]] = set()
+        self._agent_runners: defaultdict[str, set[asyncio.Task[Any]]] = defaultdict(set)
         self._workspace_projection_lock = asyncio.Lock()
         self._agent_slots = asyncio.Semaphore(max(1, self.settings.agent_concurrency))
         self._board_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -497,8 +498,11 @@ class Service:
         )
 
     async def shutdown(self) -> None:
-        for task in list(self._tasks):
+        tasks = list(self._tasks)
+        for task in tasks:
             task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         if self.brain is not None:
             await self.brain.aclose()
         for model in (self.agent_model or {}).values():
@@ -1156,8 +1160,22 @@ class Service:
             if work.get("status") not in {"succeeded", "failed", "cancelled", "blocked"}:
                 await self.repo.cancel_work(task_id=task_id, work_id=str(work["id"]))
         await self.repo.set_agent_task_status(task_id, "cancelled")
+        runners = [
+            runner
+            for runner in self._agent_runners.get(task_id, set())
+            if runner is not asyncio.current_task() and not runner.done()
+        ]
+        for runner in runners:
+            runner.cancel()
+        if runners:
+            await asyncio.gather(*runners, return_exceptions=True)
         if record.current_execution_id:
-            execution = await self.repo.get_agent_execution(record.current_execution_id, learner_id)
+            latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            execution_id = str(
+                (latest.current_execution_id if latest else None)
+                or record.current_execution_id
+            )
+            execution = await self.repo.get_agent_execution(execution_id, learner_id)
             if execution is not None:
                 state = dict(execution.workflow_state or {})
                 metadata = dict(state.get("metadata") or {})
@@ -1558,15 +1576,26 @@ class Service:
     ) -> None:
         # Keep the public task launcher cheap: queued tasks wait here instead
         # of all retaining graph state and provider response buffers at once.
-        async with self._agent_slots:
-            await self._run_agent_task(
-                task_id,
-                learner_id,
-                prompt,
-                resume=resume,
-                schedule_id=schedule_id,
-                scheduled_for=scheduled_for,
-            )
+        runner = asyncio.current_task()
+        if runner is not None:
+            self._agent_runners[task_id].add(runner)
+        try:
+            async with self._agent_slots:
+                await self._run_agent_task(
+                    task_id,
+                    learner_id,
+                    prompt,
+                    resume=resume,
+                    schedule_id=schedule_id,
+                    scheduled_for=scheduled_for,
+                )
+        finally:
+            if runner is not None:
+                runners = self._agent_runners.get(task_id)
+                if runners is not None:
+                    runners.discard(runner)
+                    if not runners:
+                        self._agent_runners.pop(task_id, None)
 
     async def _run_agent_task(
         self,
@@ -1696,6 +1725,10 @@ class Service:
             composed: list[dict[str, Any]] = []
             for item in public_events:
                 if item.get("kind") == "agent.output":
+                    stream_id = str((item.get("payload") or {}).get("stream_id") or "")
+                    if stream_id.endswith(":opening-companion"):
+                        composed.append(item)
+                        continue
                     if response_composed:
                         continue
                     response_composed = True
@@ -1879,11 +1912,14 @@ class Service:
                 if isinstance(exc, GraphTimeoutError)
                 else "budget_exceeded"
                 if isinstance(exc, BudgetExceededError)
+                else "cancelled"
+                if isinstance(exc, GraphCancelledError)
                 else "failed"
             )
             failure_kind = {
                 "timed_out": "run.timed_out",
                 "budget_exceeded": "run.budget_exceeded",
+                "cancelled": "run.cancelled",
                 "failed": "run.failed",
             }[failure_status]
             buffer.append(

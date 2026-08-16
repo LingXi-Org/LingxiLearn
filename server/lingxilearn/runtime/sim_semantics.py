@@ -404,7 +404,13 @@ class SimRunProjector:
         return block_id, block
 
     def _ensure_planned_block(self, payload: dict[str, Any]) -> str | None:
-        plan_task_id = str(payload.get("task_id") or payload.get("node_id") or "")
+        plan_task_id = str(
+            payload.get("node_id")
+            or payload.get("work_item_id")
+            or payload.get("task_id")
+            or ""
+        )
+        logical_task_id = str(payload.get("task_id") or "")
         step = int(payload.get("step") or 0)
         primitive_name = str(payload.get("capability") or payload.get("node") or "coordinator")
         execution = visible_execution(primitive_name)
@@ -434,6 +440,7 @@ class SimRunProjector:
                 "executionId": self.execution_id,
                 "step": step,
                 "planTaskId": plan_task_id,
+                "logicalTaskId": logical_task_id or None,
                 "knowledgePointId": payload.get("knowledge_point_id"),
                 "rationale": payload.get("rationale"),
                 "doneWhen": payload.get("done_when"),
@@ -481,7 +488,12 @@ class SimRunProjector:
                     )
 
     def _update_planned_execution(self, payload: dict[str, Any], *, status: str) -> str | None:
-        task_id = str(payload.get("task_id") or payload.get("node_id") or "")
+        task_id = str(
+            payload.get("node_id")
+            or payload.get("work_item_id")
+            or payload.get("task_id")
+            or ""
+        )
         block_id = self._planned_blocks.get(task_id)
         if block_id is None:
             execution = visible_execution(
@@ -500,7 +512,10 @@ class SimRunProjector:
                     and item.get("executionState") in {"queued", "pending", "running"}
                 ]
                 if candidates:
-                    block_id = str(candidates[0]["id"])
+                    # A repeated logical task id can have several queued
+                    # revisions.  The newest queued block is the safest
+                    # fallback when an external event has no node id.
+                    block_id = str(candidates[-1]["id"])
         if block_id is None:
             return None
         block = self.blocks[block_id]

@@ -46,10 +46,19 @@ class DecisionRecord:
     decision_id: str = ""
 
     def selected(self) -> dict[str, Any]:
+        runtime_ids = {
+            task.id: str(
+                task.inputs.get("__runtime_node_id")
+                or task.inputs.get("__work_item_id")
+                or f"{self.step}:{task.id}"
+            )
+            for task in self.plan.tasks
+        }
         return {
             "tasks": [
                 {
                     "id": task.id,
+                    "node_id": runtime_ids[task.id],
                     "candidate_id": task.candidate_id,
                     "capability": task.capability,
                     "knowledge_point_id": task.knowledge_point_id,
@@ -155,6 +164,14 @@ class DecisionTracer:
         self._last_id = record.decision_id
 
         self._project("decision.recorded", stored)
+        runtime_ids = {
+            task.id: str(
+                task.inputs.get("__runtime_node_id")
+                or task.inputs.get("__work_item_id")
+                or f"{self._execution_id or self._task_id}:{record.step}:{task.id}"
+            )
+            for task in record.plan.tasks
+        }
         for task in record.plan.tasks:
             # One node per planned task: the runtime graph grows as decisions
             # are made rather than being drawn in advance.
@@ -163,10 +180,11 @@ class DecisionTracer:
                 {
                     "decision_id": record.decision_id,
                     "step": record.step,
-                    "node_id": f"{record.step}:{task.id}",
+                    "node_id": runtime_ids[task.id],
+                    "work_item_id": task.inputs.get("__work_item_id") or "",
                     "task_id": task.id,
                     "capability": task.capability,
-                    "depends_on": list(task.depends_on),
+                    "depends_on": [runtime_ids.get(item, item) for item in task.depends_on],
                     "knowledge_point_id": task.knowledge_point_id,
                     "rationale": task.rationale,
                     "done_when": task.done_when.describe(),
@@ -183,9 +201,10 @@ class DecisionTracer:
                     "tasks": [
                         {
                             "id": task.id,
+                            "node_id": runtime_ids[task.id],
                             "capability": task.capability,
                             "rationale": task.rationale,
-                            "depends_on": list(task.depends_on),
+                            "depends_on": [runtime_ids.get(item, item) for item in task.depends_on],
                         }
                         for task in record.plan.tasks
                     ],
@@ -200,9 +219,10 @@ class DecisionTracer:
                     "tasks": [
                         {
                             "id": task.id,
+                            "node_id": runtime_ids[task.id],
                             "capability": task.capability,
                             "rationale": task.rationale,
-                            "depends_on": list(task.depends_on),
+                            "depends_on": [runtime_ids.get(item, item) for item in task.depends_on],
                         }
                         for task in record.plan.tasks
                     ],

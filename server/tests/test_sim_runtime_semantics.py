@@ -109,6 +109,43 @@ def test_planned_capabilities_become_semantic_nodes_and_hidden_tasks_collapse_to
     assert state["edges"][0]["data"]["label"] == "Lingxi Runtime"
 
 
+def test_replanned_logical_task_ids_keep_distinct_runtime_blocks():
+    projector = SimRunProjector("exec-replan", "task-1", "v1")
+    projector.consume_runtime_event(
+        "node.appeared",
+        {
+            "task_id": "t1",
+            "node_id": "exec-replan:1:t1",
+            "step": 1,
+            "capability": "content.lesson_intro",
+        },
+    )
+    projector.consume_runtime_event(
+        "node.appeared",
+        {
+            "task_id": "t1",
+            "node_id": "exec-replan:2:t1",
+            "step": 2,
+            "capability": "content.deck",
+        },
+    )
+    projector.consume_runtime_event(
+        "node.started",
+        {
+            "task_id": "t1",
+            "node_id": "exec-replan:2:t1",
+            "step": 2,
+            "capability": "content.deck",
+            "provider": "lecture_deck",
+        },
+    )
+
+    blocks = projector.snapshot()["workflowState"]["blocks"]
+    assert set(blocks) == {"plan:1:exec-replan:1:t1", "plan:2:exec-replan:2:t1"}
+    assert blocks["plan:1:exec-replan:1:t1"]["executionState"] == "queued"
+    assert blocks["plan:2:exec-replan:2:t1"]["executionState"] == "running"
+
+
 def test_runtime_loop_nodes_are_registered():
     from lingxilearn.runtime.sim_semantics import PrimitiveCatalog
 

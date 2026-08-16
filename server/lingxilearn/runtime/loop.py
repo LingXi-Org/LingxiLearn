@@ -39,7 +39,7 @@ from ..state.session_state import (
 )
 from ..store.runtime_state import RuntimeStateRepository
 from . import goal_interpreter, orchestrator
-from .candidates import WorldState
+from .candidates import WorldState, is_direct_question, requests_heavy_artifact
 from .completion import CompletionContext, StoreArtifactProbe, evaluate
 from .contracts import Cost, DoneCondition, OrchestrationPlan, PlannedTask, TaskOutcome
 from .dispatch import DispatchDeps, Dispatcher
@@ -70,6 +70,7 @@ class LoopState(TypedDict, total=False):
     plan: dict[str, Any]
     budget: dict[str, Any]
     outcomes: Annotated[list[dict[str, Any]], _append]
+    round_outcomes: list[dict[str, Any]]
     messages: Annotated[list[str], _append]
     last_decision_id: str
     replanning: bool
@@ -166,6 +167,10 @@ async def _world(
 
     artifacts = frozenset(dispatcher.produced_artifacts if dispatcher else deps.prior_artifacts)
     results = dispatcher.results if dispatcher else deps.prior_results
+    direct_question = is_direct_question(goal) and not requests_heavy_artifact(goal)
+    open_questions = len(target_row.get("my_questions") or []) if target_row else 0
+    if direct_question:
+        open_questions = max(open_questions, 1)
     return (
         WorldState(
             target=target,
@@ -176,13 +181,15 @@ async def _world(
                 for row in rows
                 if float((row.get("system") or {}).get("review_priority") or 0.0) >= 0.6
             ),
-            requested_capabilities=frozenset(),
+            requested_capabilities=(frozenset({"dialog.answer"}) if direct_question else frozenset()),
             artifacts=artifacts,
             has_open_quiz="quiz" in artifacts and "grading" not in results,
             has_ungraded_submission=bool(results.get("pending_submission")),
-            open_questions=len(target_row.get("my_questions") or []) if target_row else 0,
+            open_questions=open_questions,
             goal_type=goal.goal_type,
             interview_completed="learner_interview" in results,
+            direct_question=direct_question,
+            allow_heavy_artifacts=requests_heavy_artifact(goal),
         ),
         by_id,
     )
@@ -617,6 +624,31 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                             ]
                         }
                     )
+        # Logical task ids are intentionally reusable across plan revisions.
+        # Attach an execution identity before the plan is traced or dispatched
+        # so a later ``t1`` can never overwrite an earlier ``t1`` in the graph.
+        if produced.tasks:
+            runtime_prefix = deps.execution_id or deps.task_id
+            produced = produced.model_copy(
+                update={
+                    "tasks": [
+                        task.model_copy(
+                            update={
+                                "inputs": {
+                                    **task.inputs,
+                                    "__runtime_node_id": str(
+                                        task.inputs.get("__runtime_node_id")
+                                        or task.inputs.get("__work_item_id")
+                                        or f"{runtime_prefix}:{step}:{task.id}"
+                                    ),
+                                    "__runtime_step": step,
+                                }
+                            }
+                        )
+                        for task in produced.tasks
+                    ]
+                }
+            )
         record = DecisionRecord(
             step=step,
             goal=goal,
@@ -860,6 +892,15 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                         else "node.failed",
                         {
                             "task_id": outcome.task_id,
+                            "node_id": outcome.node_id
+                            or next(
+                                (
+                                    str(item.inputs.get("__runtime_node_id") or "")
+                                    for item in produced.tasks
+                                    if item.id == outcome.task_id
+                                ),
+                                "",
+                            ),
                             "capability": outcome.capability,
                             "provider": outcome.provider,
                             "status": outcome.status,
@@ -881,6 +922,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         return {
             "runtime_status": str(RuntimeStatus.OBSERVING),
             "outcomes": [item.to_dict() for item in outcomes],
+            "round_outcomes": [item.to_dict() for item in outcomes],
             "budget": budget.to_dict(),
             "messages": messages,
             "background_pending": background_pending,
@@ -924,7 +966,15 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             return {}
 
         goal = Goal.from_dict(state.get("goal") or {})
-        outcomes = [TaskOutcome.model_validate(item) for item in state.get("outcomes") or []]
+        raw_round_outcomes = state.get("round_outcomes")
+        outcomes = [
+            TaskOutcome.model_validate(item)
+            for item in (
+                raw_round_outcomes
+                if raw_round_outcomes is not None
+                else state.get("outcomes") or []
+            )
+        ]
         unfinished = [item for item in outcomes if not item.satisfied]
 
         plan_payload = dict(state.get("plan") or {})
@@ -966,6 +1016,20 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 "runtime_status": str(RuntimeStatus.REPLANNING),
                 "goal": remaining.to_dict(),
                 "replanning": True,
+            }
+
+        # A conversational result completes this interaction even when the
+        # long-lived learning goal is intentionally kept open for the next
+        # learner message.  Without this boundary the accumulated outcomes
+        # made the loop replan the same question over and over.
+        if any(item.satisfied and info(item.capability).turn_complete for item in outcomes):
+            await deps.runtime_state.set_runtime_status(
+                deps.task_id, RuntimeStatus.WAITING_FOR_USER
+            )
+            return {
+                "runtime_status": str(RuntimeStatus.WAITING_FOR_USER),
+                "messages": [],
+                "replanning": False,
             }
 
         # A graph turn with detached work remains waiting only when the
@@ -1076,7 +1140,15 @@ async def _finalise_trace(
 ) -> None:
     """Attach the after-profile and the task outcomes to this round's decision."""
 
-    outcomes = [TaskOutcome.model_validate(item) for item in state.get("outcomes") or []]
+    raw_round_outcomes = state.get("round_outcomes")
+    outcomes = [
+        TaskOutcome.model_validate(item)
+        for item in (
+            raw_round_outcomes
+            if raw_round_outcomes is not None
+            else state.get("outcomes") or []
+        )
+    ]
     await deps.runtime_state.update_decision_outcome(
         decision_id,
         {
@@ -1099,11 +1171,13 @@ def initial_state(
         plan={},
         budget=dict(budget),
         outcomes=[],
+        round_outcomes=[],
         messages=[],
         last_decision_id="",
         replanning=False,
         user_message={"message": utterance} if utterance.strip() else {},
         finished_reason="",
+        background_pending=False,
     )
 
 

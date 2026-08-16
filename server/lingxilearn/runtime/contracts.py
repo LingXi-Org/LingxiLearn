@@ -252,6 +252,8 @@ class TaskOutcome(BaseModel):
 
     task_id: str
     capability: str
+    node_id: str = ""
+    """Unique execution identity; ``task_id`` remains the logical plan id."""
     provider: str = ""
     skill_id: str = ""
     status: Literal["completed", "incomplete", "failed", "skipped", "blocked"] = "completed"

@@ -254,6 +254,12 @@ async def answer_user(context: ProviderContext) -> ProviderResult:
     text = str(parsed.get("text") or "").strip()
     if not text:
         raise ProviderError("knowledge-qa returned no answer text")
+    await _emit_learner_output(
+        context.runtime,
+        "answer_user",
+        text,
+        f"{context.task_id}:answer_user:{context.task.id}",
+    )
 
     return ProviderResult(
         learner_message=text,
