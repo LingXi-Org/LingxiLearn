@@ -145,7 +145,7 @@ The model is not the sole authority for learning outcomes. Grading, misconceptio
 
 ## Data and trust boundaries
 
-- Login, registration, and sessions are handled by the `LingxiIdentity` BFF. The browser holds only the HttpOnly `lingxi_session` Cookie and does not persist OIDC/Bearer Tokens locally.
+- Login, registration, and sessions are handled by the `LingxiIdentity` BFF. The browser holds only the host-only HttpOnly `__Host-lingxi_session` Cookie; `/auth/*` and `/api/v1/*` stay on the LingxiLearn origin and no OIDC/Bearer Tokens are persisted locally.
 - The server resolves an internal learner mapping from the identity subject returned by the identity service; clients cannot submit an asserted `learner_id`.
 - Raw packet bytes, complete tool output, raw database records, and identity information are not sent directly as default teaching context to a model.
 - Course materials declare their sources; learning records come from activity, answers, and task interactions in the service. See [DATA_SOURCES.md](DATA_SOURCES.md) for source details.

@@ -1,5 +1,4 @@
 import { createLogger } from '@sim/logger'
-import { getSessionCookie } from 'better-auth/cookies'
 import { type NextRequest, NextResponse } from 'next/server'
 import { sendToProfound } from './lib/analytics/profound'
 import { getEnv } from './lib/core/config/env'
@@ -9,6 +8,22 @@ import { getClientIp } from './lib/core/utils/request'
 import { isNonCanonicalSimHost } from './lib/core/utils/urls'
 
 const logger = createLogger('Proxy')
+
+/** The only production browser session is the host-only BFF cookie. */
+export const BFF_SESSION_COOKIE = '__Host-lingxi_session'
+/**
+ * Read during the short migration window so an existing user can complete one
+ * request and receive the new host-only cookie. New responses must never write
+ * this legacy Domain cookie again.
+ */
+export const LEGACY_BFF_SESSION_COOKIE = 'lingxi_session'
+
+function hasBffSession(request: NextRequest): boolean {
+  return Boolean(
+    request.cookies.get(BFF_SESSION_COOKIE)?.value ||
+      request.cookies.get(LEGACY_BFF_SESSION_COOKIE)?.value
+  )
+}
 
 export interface CorsPolicy {
   origin: string
@@ -249,9 +264,7 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  const sessionCookie = getSessionCookie(request)
-  const hasBffSession = Boolean(request.cookies.get('lingxi_session')?.value)
-  const hasActiveSession = isAuthDisabled || isMockAuthEnabled || hasBffSession || !!sessionCookie
+  const hasActiveSession = isAuthDisabled || isMockAuthEnabled || hasBffSession(request)
 
   const redirect = handleRootPathRedirects(request, hasActiveSession)
   if (redirect) return track(request, redirect)
@@ -338,6 +351,7 @@ export const config = {
     '/workspace/:path*', // New workspace routes
     '/login',
     '/signup',
+    '/auth/:path*', // Same-origin LingxiIdentity BFF callback and Experience routes
     '/invite/:path*', // Match invitation routes
     '/api/:path*', // Runtime CORS
     // Catch-all for other pages, excluding static assets and public directories

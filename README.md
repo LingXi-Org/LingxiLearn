@@ -145,7 +145,7 @@ LingxiGraph StateGraph
 
 ## 数据与信任边界
 
-- 登录、注册和会话由 `LingxiIdentity` BFF 处理；浏览器只持有 HttpOnly `lingxi_session` Cookie，不在本地保存 OIDC/Bearer Token。
+- 登录、注册和会话由 `LingxiIdentity` BFF 处理；浏览器只持有主域 host-only 的 HttpOnly `__Host-lingxi_session` Cookie，不在本地保存 OIDC/Bearer Token。`/auth/*` 和 `/api/v1/*` 始终通过 LingxiLearn 同源代理。
 - 服务端使用身份服务返回的主体映射查找内部学习者，不接受客户端自报的 `learner_id`。
 - 原始抓包字节、完整工具输出、数据库原始记录和身份信息不会作为默认教学上下文直接外发给模型。
 - 课程资料由课程包声明来源；学习记录来自学习者在本服务中的操作、作答和任务交互。具体来源见 [DATA_SOURCES.md](DATA_SOURCES.md)。

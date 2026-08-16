@@ -62,12 +62,16 @@ let csrfToken: string | null = null
 let csrfPromise: Promise<string> | null = null
 let refreshPromise: Promise<{ ok: boolean; expiresAt?: string | null }> | null = null
 
-const configuredBase = process.env.NEXT_PUBLIC_API_BASE?.trim().replace(/\/$/, '')
-const defaultBase = ''
-
+/**
+ * All browser identity requests intentionally stay on the LingxiLearn origin.
+ * Next/FastAPI rewrites `/auth/*` and `/api/v1/*` to the private BFF, allowing
+ * the host-only `__Host-lingxi_session` cookie to be set and sent normally.
+ * `NEXT_PUBLIC_API_BASE` is retained only as a deprecated deployment variable;
+ * using it here would recreate the cross-subdomain cookie failure this client
+ * is designed to prevent.
+ */
 function identityUrl(path: string): string {
-  const base = configuredBase || defaultBase
-  return base ? `${base}${path}` : path
+  return path
 }
 
 function safeNextPath(value: string): string {
