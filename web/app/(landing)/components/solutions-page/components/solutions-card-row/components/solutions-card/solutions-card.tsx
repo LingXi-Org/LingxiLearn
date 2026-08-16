@@ -44,9 +44,15 @@ interface SolutionsCardProps {
    * relax their column caps to match. No effect at `lg`+ or below `sm`.
    */
   tabletSpan?: boolean
+  pageKind?: 'platform' | 'learning'
 }
 
-export function SolutionsCard({ card, headingId, tabletSpan = false }: SolutionsCardProps) {
+export function SolutionsCard({
+  card,
+  headingId,
+  tabletSpan = false,
+  pageKind = 'platform',
+}: SolutionsCardProps) {
   const featureTileTone = SOLUTIONS_FEATURE_TILE_TONE[card.featureTileTone ?? 'light']
   const featureTileDescription =
     card.featureTileDescriptionTone === 'soft' && card.featureTileTone === 'dark'
@@ -68,8 +74,11 @@ export function SolutionsCard({ card, headingId, tabletSpan = false }: Solutions
           featureTileTone.surface,
           SOLUTIONS_VISUAL.featureTileScale,
           SOLUTIONS_VISUAL.featureTileMinHeight,
+          pageKind === 'learning' &&
+            'rounded-xl border border-[var(--border-1)] shadow-[var(--shadow-card)]',
           wide && 'sm:max-lg:min-h-[360px]'
         )}
+        data-page-kind={pageKind}
       >
         <div
           className={cn(
@@ -107,6 +116,8 @@ export function SolutionsCard({ card, headingId, tabletSpan = false }: Solutions
             aria-hidden='true'
             className={cn(
               '-mr-8 -mb-8 max-lg:-mr-6 max-lg:-mb-6 mt-8 min-h-[240px] w-[calc(100%+2rem)] flex-1 max-lg:w-[calc(100%+1.5rem)]',
+              pageKind === 'learning' &&
+                'rounded-lg border border-[var(--border-1)] bg-[var(--surface-2)]',
               wide && 'sm:max-lg:mt-0 sm:max-lg:w-auto sm:max-lg:min-w-0'
             )}
           >

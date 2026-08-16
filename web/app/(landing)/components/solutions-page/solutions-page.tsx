@@ -44,6 +44,8 @@ interface SolutionsPageProps {
 }
 
 export function SolutionsPage({ config }: SolutionsPageProps) {
+  const pageKind = config.pageKind ?? 'platform'
+
   return (
     <>
       <SolutionsStructuredData config={config} />
@@ -56,13 +58,15 @@ export function SolutionsPage({ config }: SolutionsPageProps) {
             'flex flex-col',
             LANDING_CONTENT_WIDTH,
             SOLUTIONS_SPACING.sectionRhythm,
-            SOLUTIONS_SPACING.gutter
+            SOLUTIONS_SPACING.gutter,
+            pageKind === 'learning' && 'isolate'
           )}
+          data-page-kind={pageKind}
         >
-          <SolutionsHero hero={config.hero} />
+          <SolutionsHero hero={config.hero} pageKind={pageKind} />
           {config.showLogos !== false ? <SolutionsLogosRow /> : null}
           {config.rows.map((row) => (
-            <SolutionsCardRow key={row.id} row={row} />
+            <SolutionsCardRow key={row.id} row={row} pageKind={pageKind} />
           ))}
         </div>
 

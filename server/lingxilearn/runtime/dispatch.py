@@ -348,6 +348,25 @@ class Dispatcher:
                     status="blocked",
                     detail="work item is not claimable or its dependencies have not succeeded",
                 )
+            if self._deps.emit is not None:
+                # ``node.appeared`` is the queued boundary and ``node.started``
+                # is emitted below after capability/provider resolution.  The
+                # claim marker makes queue wait and dispatch overhead
+                # measurable without introducing duplicate work lifecycle
+                # events.
+                self._deps.emit(
+                    "work.claimed",
+                    {
+                        "work_item_id": work_id,
+                        "node_id": node_id,
+                        "task_id": task.id,
+                        "logical_task_id": task.id,
+                        "attempt": int(claimed.get("attempts") or claimed.get("attempt") or 1),
+                        "capability": task.capability,
+                        "turn_id": claimed.get("turn_id"),
+                        "step": int(task.inputs.get("__runtime_step") or 0),
+                    },
+                )
         owner = f"dispatcher:{self._deps.task_id}"
         heartbeat: asyncio.Task[None] | None = None
         if work_id and self._deps.repository is not None:

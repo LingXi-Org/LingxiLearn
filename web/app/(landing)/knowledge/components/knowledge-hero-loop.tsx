@@ -14,6 +14,7 @@ import {
 import { cn } from '@/components/ui-kit'
 import { ArrowUpDown, Database, ListFilter, Plus, Search } from '@/components/ui-kit/icons'
 import { HeroLoopShell } from '@/app/(landing)/components/shared/hero-loop-shell'
+import type { EnterpriseSidebarLocale } from '@/app/(landing)/enterprise/components/enterprise-platform-loop/enterprise-sidebar'
 import { RESET_FADE_MS } from '@/app/(landing)/hooks/use-design-scale'
 import { useMotionSafeCycle } from '@/app/(landing)/hooks/use-motion-safe-cycle'
 
@@ -49,6 +50,33 @@ interface KnowledgeBaseRow {
   connectors: readonly React.ComponentType<{ className?: string }>[]
   /** Created cell text. */
   created: string
+}
+
+export interface KnowledgeHeroRowPatch {
+  name?: string
+  documents?: string
+  documentsSynced?: string
+  tokens?: string
+  tokensSynced?: string
+  created?: string
+  connectors?: readonly React.ComponentType<{ className?: string }>[]
+}
+
+export interface KnowledgeHeroContent {
+  workspaceName?: string
+  sidebarLocale?: EnterpriseSidebarLocale
+  brandIconSrc?: string
+  chats?: readonly string[]
+  workflows?: readonly string[]
+  title?: string
+  createLabel?: string
+  searchPlaceholder?: string
+  filterLabel?: string
+  sortLabel?: string
+  headers?: readonly [string, string, string, string, string]
+  syncingLabel?: string
+  updatedLabel?: string
+  rows?: readonly KnowledgeHeroRowPatch[]
 }
 
 /**
@@ -111,6 +139,17 @@ const SYNCED_HOLD_MS = 3400
 /** Column headers matching the real Knowledge Base table. */
 const COL_HEADERS = ['Name', 'Documents', 'Tokens', 'Connectors', 'Created'] as const
 
+function getRows(content?: KnowledgeHeroContent): readonly KnowledgeBaseRow[] {
+  return BASE_ROWS.map((row, index) => {
+    const patch = content?.rows?.[index]
+    return {
+      ...row,
+      ...patch,
+      connectors: patch?.connectors ?? row.connectors,
+    }
+  })
+}
+
 /** The sync beat's lifecycle inside one cycle. */
 type SyncPhase = 'idle' | 'syncing' | 'synced'
 
@@ -130,7 +169,20 @@ type SyncPhase = 'idle' | 'syncing' | 'synced'
  * `aria-hidden` frame. Under `prefers-reduced-motion` the loop never starts:
  * the fully-populated, synced table renders statically.
  */
-export function KnowledgeHeroLoop() {
+export function KnowledgeHeroLoop({ content }: { content?: KnowledgeHeroContent } = {}) {
+  const rows = getRows(content)
+  const workspaceName = content?.workspaceName ?? 'LingXi'
+  const sidebarLocale = content?.sidebarLocale ?? 'en'
+  const chats = content?.chats ?? SIDEBAR_CHATS
+  const workflows = content?.workflows ?? SIDEBAR_WORKFLOWS
+  const headers = content?.headers ?? COL_HEADERS
+  const title = content?.title ?? '知识库'
+  const createLabel = content?.createLabel ?? 'New base'
+  const searchPlaceholder = content?.searchPlaceholder ?? 'Search knowledge bases...'
+  const filterLabel = content?.filterLabel ?? 'Filter'
+  const sortLabel = content?.sortLabel ?? 'Sort'
+  const syncingLabel = content?.syncingLabel ?? 'Syncing'
+  const updatedLabel = content?.updatedLabel ?? '已更新'
   const [visibleRows, setVisibleRows] = useState(0)
   const [syncPhase, setSyncPhase] = useState<SyncPhase>('idle')
   const [fading, setFading] = useState(false)
@@ -140,11 +192,11 @@ export function KnowledgeHeroLoop() {
       setFading(false)
       setVisibleRows(0)
       setSyncPhase('idle')
-      const syncAt = IDLE_HOLD_MS + (BASE_ROWS.length - 1) * ROW_STEP_MS + SYNC_AFTER_MS
+      const syncAt = IDLE_HOLD_MS + (rows.length - 1) * ROW_STEP_MS + SYNC_AFTER_MS
       const totalMs = syncAt + SYNC_MS + SYNCED_HOLD_MS
       return {
         timers: [
-          ...BASE_ROWS.map((_, i) =>
+          ...rows.map((_, i) =>
             setTimeout(() => setVisibleRows(i + 1), IDLE_HOLD_MS + i * ROW_STEP_MS)
           ),
           setTimeout(() => setSyncPhase('syncing'), syncAt),
@@ -156,13 +208,20 @@ export function KnowledgeHeroLoop() {
     },
     showFinished: () => {
       setFading(false)
-      setVisibleRows(BASE_ROWS.length)
+      setVisibleRows(rows.length)
       setSyncPhase('synced')
     },
   })
 
   return (
-    <HeroLoopShell chats={SIDEBAR_CHATS} workflows={SIDEBAR_WORKFLOWS} activeNav='Knowledge base'>
+    <HeroLoopShell
+      workspaceName={workspaceName}
+      brandIconSrc={content?.brandIconSrc}
+      locale={sidebarLocale}
+      chats={chats}
+      workflows={workflows}
+      activeNav='Knowledge base'
+    >
       <div className='h-full w-full overflow-hidden rounded-[6px] border border-[var(--border)] bg-[var(--bg)]'>
         <div
           className={cn(
@@ -173,29 +232,27 @@ export function KnowledgeHeroLoop() {
           <div className='flex h-[44px] flex-shrink-0 items-center justify-between border-[var(--border)] border-b px-6'>
             <div className='flex items-center gap-3'>
               <Database className='size-[14px] text-[var(--text-icon)]' />
-              <span className='font-medium text-[var(--text-body)] text-sm'>知识库</span>
+              <span className='font-medium text-[var(--text-body)] text-sm'>{title}</span>
             </div>
             <div className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
               <Plus className='mr-1.5 size-[14px] text-[var(--text-icon)]' />
-              New base
+              {createLabel}
             </div>
           </div>
 
           <div className='flex flex-shrink-0 items-center justify-between border-[var(--border)] border-b px-6 py-2.5'>
             <div className='flex items-center gap-2.5'>
               <Search className='size-[14px] flex-shrink-0 text-[var(--text-icon)]' />
-              <span className='text-[var(--text-subtle)] text-caption'>
-                Search knowledge bases...
-              </span>
+              <span className='text-[var(--text-subtle)] text-caption'>{searchPlaceholder}</span>
             </div>
             <div className='flex items-center gap-1.5'>
               <div className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
                 <ListFilter className='mr-1.5 size-[14px] text-[var(--text-icon)]' />
-                Filter
+                {filterLabel}
               </div>
               <div className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
                 <ArrowUpDown className='mr-1.5 size-[14px] text-[var(--text-icon)]' />
-                Sort
+                {sortLabel}
               </div>
             </div>
           </div>
@@ -211,7 +268,7 @@ export function KnowledgeHeroLoop() {
               </colgroup>
               <thead className='border-[var(--border)] border-b'>
                 <tr>
-                  {COL_HEADERS.map((header) => (
+                  {headers.map((header) => (
                     <th
                       key={header}
                       className='h-10 px-6 py-1.5 text-left align-middle text-[var(--text-muted)] text-caption'
@@ -222,7 +279,7 @@ export function KnowledgeHeroLoop() {
                 </tr>
               </thead>
               <tbody>
-                {BASE_ROWS.map((row, index) => {
+                {rows.map((row, index) => {
                   const isSyncRow = index === 0
                   const synced = isSyncRow && syncPhase === 'synced'
                   return (
@@ -257,11 +314,13 @@ export function KnowledgeHeroLoop() {
                           {isSyncRow && syncPhase === 'syncing' && (
                             <span className='flex items-center gap-1.5 text-[var(--text-muted)] text-caption'>
                               <span className='size-1.5 animate-pulse rounded-full bg-[var(--text-secondary)] motion-reduce:animate-none' />
-                              Syncing
+                              {syncingLabel}
                             </span>
                           )}
                           {synced && (
-                            <span className='text-[var(--text-muted)] text-caption'>已更新</span>
+                            <span className='text-[var(--text-muted)] text-caption'>
+                              {updatedLabel}
+                            </span>
                           )}
                         </span>
                       </td>

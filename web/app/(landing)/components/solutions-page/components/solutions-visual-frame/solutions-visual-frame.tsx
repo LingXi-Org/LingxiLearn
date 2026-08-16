@@ -18,16 +18,22 @@ import { SOLUTIONS_VISUAL } from '@/app/(landing)/components/solutions-page/cons
 interface SolutionsVisualFrameProps {
   /** The page-supplied visual island or static panel. Fills the frame; owns no chrome. */
   children: ReactNode
+  pageKind?: 'platform' | 'learning'
 }
 
-export function SolutionsVisualFrame({ children }: SolutionsVisualFrameProps) {
+export function SolutionsVisualFrame({
+  children,
+  pageKind = 'platform',
+}: SolutionsVisualFrameProps) {
   return (
     <div
       aria-hidden='true'
       className={cn(
-        'w-full overflow-hidden rounded-lg border border-[var(--border-1)] bg-[var(--surface-2)]',
+        'w-full overflow-hidden border border-[var(--border-1)] bg-[var(--surface-2)]',
+        pageKind === 'learning' ? 'rounded-xl shadow-[var(--shadow-card)]' : 'rounded-lg',
         SOLUTIONS_VISUAL.heroAspect
       )}
+      data-page-kind={pageKind}
     >
       <div className='h-full w-full'>{children}</div>
     </div>

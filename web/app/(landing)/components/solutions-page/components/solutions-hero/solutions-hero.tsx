@@ -36,13 +36,19 @@ import type { SolutionsHeroConfig } from '@/app/(landing)/components/solutions-p
 
 interface SolutionsHeroProps {
   hero: SolutionsHeroConfig
+  pageKind?: 'platform' | 'learning'
   /** Header stack alignment. Defaults to the original left-aligned layout. */
   align?: 'left' | 'center'
   /** Visual treatment for the top hero. Defaults to the original solutions layout. */
   variant?: 'solutions' | 'home'
 }
 
-export function SolutionsHero({ hero, align = 'left', variant = 'solutions' }: SolutionsHeroProps) {
+export function SolutionsHero({
+  hero,
+  align = 'left',
+  variant = 'solutions',
+  pageKind = 'platform',
+}: SolutionsHeroProps) {
   const centered = align === 'center'
   const homeVariant = variant === 'home'
 
@@ -86,8 +92,10 @@ export function SolutionsHero({ hero, align = 'left', variant = 'solutions' }: S
       className={cn(
         'flex flex-col',
         SOLUTIONS_SPACING.heroTopPadding,
-        SOLUTIONS_SPACING.heroToVisual
+        SOLUTIONS_SPACING.heroToVisual,
+        pageKind === 'learning' && 'relative'
       )}
+      data-page-kind={pageKind}
     >
       <p className='sr-only'>{hero.summary}</p>
 
@@ -121,7 +129,7 @@ export function SolutionsHero({ hero, align = 'left', variant = 'solutions' }: S
         </div>
       </div>
 
-      <SolutionsVisualFrame>{hero.visual}</SolutionsVisualFrame>
+      <SolutionsVisualFrame pageKind={pageKind}>{hero.visual}</SolutionsVisualFrame>
     </section>
   )
 }
