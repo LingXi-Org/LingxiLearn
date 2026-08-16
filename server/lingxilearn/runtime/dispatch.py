@@ -16,8 +16,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Mapping, Sequence
-from contextlib import suppress
+from collections.abc import AsyncIterator, Mapping, Sequence
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -152,12 +152,20 @@ class _ProviderRuntime:
         node_id: str,
         step: int,
         run_context: RunContext | None = None,
+        owner: Dispatcher | None = None,
     ) -> None:
         self._runtime = runtime
         self._task_id = task_id
         self._node_id = node_id
         self._step = step
         self._run_context = run_context
+        self._owner = owner
+
+    @property
+    def run_context(self) -> RunContext | None:
+        """The canonical identity every event from this proxy carries."""
+
+        return self._run_context
 
     def emit(self, channel: str, value: Any) -> Any:
         if isinstance(value, Mapping):
@@ -187,6 +195,56 @@ class _ProviderRuntime:
             EVENT_CHANNEL,
             {"type": "agent.status", "text": text, **({"code": code} if code else {})},
         )
+
+    @asynccontextmanager
+    async def delegate(
+        self,
+        provider_id: str,
+        *,
+        display_name: str = "",
+        capability: str = "",
+        execution_kind: str = "model",
+    ) -> AsyncIterator[_ProviderRuntime]:
+        """Run a real child actor under this AgentRun.
+
+        A provider that hands part of its work to a second, distinct agent
+        wraps that call in this context manager.  The child gets its own
+        durable AgentRun carrying ``parent_agent_run_id``, so the nested
+        AgentGroup on the left and the delegation edge on the right come from
+        the same fact rather than from a name lookup (issue #18 §4.4).
+        """
+
+        parent = self._run_context
+        if parent is None or self._owner is None:
+            # Standalone unit runs without dispatcher identity: keep the
+            # provider working, but never invent a child identity.
+            yield self
+            return
+        child = parent.delegate(provider_id=provider_id, capability=capability)
+        runtime = _ProviderRuntime(
+            self._runtime,
+            task_id=self._task_id,
+            node_id=self._node_id,
+            step=self._step,
+            run_context=child,
+            owner=self._owner,
+        )
+        await self._owner.open_delegate(
+            child, display_name=display_name or provider_id, execution_kind=execution_kind
+        )
+        status = "completed"
+        try:
+            yield runtime
+        except asyncio.CancelledError:
+            status = "cancelled"
+            await self._owner.close_delegate(child, status=status, shielded=True)
+            raise
+        except BaseException:
+            status = "failed"
+            await self._owner.close_delegate(child, status=status)
+            raise
+        else:
+            await self._owner.close_delegate(child, status=status)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._runtime, name)
@@ -401,6 +459,7 @@ class Dispatcher:
                 node_id=node_id,
                 step=int(task.inputs.get("__runtime_step") or 0),
                 run_context=run_context,
+                owner=self,
             )
             if self._deps.graph_runtime is not None
             else None
@@ -548,6 +607,17 @@ class Dispatcher:
                 detail="provider task cancelled",
                 agent_run_id=agent_run_id,
                 skill_run_id=skill_run_id,
+            )
+            # Stop must close the durable rows too: an AgentRun/SkillRun left
+            # at ``running`` would contradict the cancelled event stream after
+            # a refresh (issue #18 §4.4).  Shielded so the in-flight
+            # cancellation cannot abort the finalisation itself.
+            await self._finish_identity(
+                agent_run_id,
+                skill_run_id,
+                agent_status="cancelled",
+                skill_status="cancelled",
+                shielded=True,
             )
             raise
         except ProviderError as exc:
@@ -732,18 +802,112 @@ class Dispatcher:
                     },
                 )
 
-    async def _finish_identity(
-        self, agent_run_id: str, skill_run_id: str, *, agent_status: str, skill_status: str
+    # -- delegation (issue #18 §4.4) ----------------------------------------
+
+    async def open_delegate(
+        self, child: RunContext, *, display_name: str, execution_kind: str
     ) -> None:
-        """Close the durable identity rows; projection must never fail the run."""
+        """Persist and announce a child AgentRun the parent delegates to."""
+
+        if self._deps.repository is not None:
+            try:
+                await self._deps.repository.create_agent_run(
+                    agent_run_id=child.agent_run_id,
+                    task_id=self._deps.task_id,
+                    execution_id=child.execution_id or self._deps.task_id,
+                    turn_id=child.turn_id or None,
+                    parent_agent_run_id=child.parent_agent_run_id or None,
+                    provider_id=child.provider_id,
+                    agent_display_name=display_name,
+                    execution_kind=execution_kind,
+                    capability=child.capability,
+                    presentation_role=child.presentation_role,
+                    started=True,
+                )
+            except Exception:  # noqa: BLE001 - identity rows must not fail the run
+                logger.exception("failed to persist delegated agent run")
+        if self._deps.emit is not None:
+            self._deps.emit(
+                "agent.started",
+                {
+                    "agent": child.provider_id,
+                    "provider": child.provider_id,
+                    "capability": child.capability,
+                    "agent_run_id": child.agent_run_id,
+                    "parent_agent_run_id": child.parent_agent_run_id,
+                    "display_name": display_name,
+                    "execution_kind": execution_kind,
+                    "presentation_role": child.presentation_role,
+                },
+            )
+
+    async def close_delegate(
+        self, child: RunContext, *, status: str, shielded: bool = False
+    ) -> None:
+        if self._deps.emit is not None:
+            self._deps.emit(
+                "agent.completed" if status == "completed" else "agent.failed",
+                {
+                    "agent": child.provider_id,
+                    "provider": child.provider_id,
+                    "capability": child.capability,
+                    "agent_run_id": child.agent_run_id,
+                    "parent_agent_run_id": child.parent_agent_run_id,
+                    "status": status,
+                },
+            )
+        if self._deps.repository is None:
+            return
+
+        async def finalise() -> None:
+            await self._deps.repository.update_agent_run(
+                child.agent_run_id, status=status, ended=True
+            )
+
+        try:
+            if shielded:
+                await asyncio.shield(asyncio.ensure_future(finalise()))
+            else:
+                await finalise()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            logger.exception("failed to finalise delegated agent run")
+
+    async def _finish_identity(
+        self,
+        agent_run_id: str,
+        skill_run_id: str,
+        *,
+        agent_status: str,
+        skill_status: str,
+        shielded: bool = False,
+    ) -> None:
+        """Close the durable identity rows; projection must never fail the run.
+
+        ``shielded`` is used on the cancellation path, where the enclosing task
+        is already being cancelled and a bare ``await`` would be interrupted
+        before the rows are written.
+        """
 
         if self._deps.repository is None:
             return
-        try:
+
+        async def finalise() -> None:
             await self._deps.repository.update_agent_run(
                 agent_run_id, status=agent_status, ended=True
             )
             await self._deps.repository.update_skill_run(skill_run_id, status=skill_status)
+
+        try:
+            if shielded:
+                await asyncio.shield(asyncio.ensure_future(finalise()))
+            else:
+                await finalise()
+        except asyncio.CancelledError:
+            # The shield itself was cancelled; the inner write keeps running to
+            # completion in its own task.  Never swallow the cancellation.
+            raise
         except Exception:  # noqa: BLE001
             logger.exception("failed to finalise execution identity")
 

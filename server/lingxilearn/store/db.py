@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 # compatibility DDL explicit and small: production PostgreSQL still uses the
 # normal Alembic chain, while a local SQLite restart upgrades the existing
 # file in place without discarding learner data.
-_SQLITE_SCHEMA_HEAD = "0017_agent_task_create_idempotency"
+_SQLITE_SCHEMA_HEAD = "0018_mothership_protocol_v1"
 _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "agent_tasks": {
         "create_idempotency_key": "VARCHAR(192)",
@@ -88,10 +88,23 @@ _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
         "user_messages": "JSON NOT NULL DEFAULT '[]'",
         "current_execution_id": "VARCHAR(128)",
         "latest_execution_id": "VARCHAR(128)",
+        # 0018: the long-lived thread status alongside the legacy one-shot one.
+        "thread_status": "VARCHAR(24) NOT NULL DEFAULT 'open'",
     },
     "agent_task_events": {
         "execution_id": "VARCHAR(128)",
         "runtime": "JSON NOT NULL DEFAULT '{}'",
+        # 0018: protocol version + canonical identity on the event log.
+        "protocol_version": "INTEGER NOT NULL DEFAULT 0",
+        "turn_id": "VARCHAR(128)",
+        "agent_run_id": "VARCHAR(128)",
+        "skill_run_id": "VARCHAR(160)",
+    },
+    "agent_executions": {
+        # 0018: link an execution to its turn and to the execution it resumes.
+        "turn_id": "VARCHAR(128)",
+        "parent_execution_id": "VARCHAR(128)",
+        "resumes_execution_id": "VARCHAR(128)",
     },
     "workspace_knowledge_tags": {
         "tag_slot": "VARCHAR(32) NOT NULL DEFAULT ''",
@@ -1362,6 +1375,173 @@ class Repository:
                 raise
             return {"answers": list(answers), "created": True}
 
+    async def claim_interaction_answer(
+        self,
+        *,
+        interaction_id: str,
+        task_id: str,
+        answers: list[dict[str, Any]],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Resolve one blocking interaction and enqueue its continuation atomically.
+
+        The answer, the pending→resolved transition and the durable
+        continuation command commit together, so a crash between them is
+        impossible: either the thread is still waiting for an answer, or a
+        replayable command exists to resume the original checkpoint.  The
+        continuation belongs to the interaction's own turn — answering never
+        opens a new one (issue #18 §10.4).
+
+        Outcomes: ``accepted`` (this call resolved it), ``duplicate`` (same
+        idempotency key and payload — returns the original), ``conflict``
+        (same key, different payload), ``already_resolved`` (another answer
+        won), ``not_found``, ``invalid``.
+        """
+
+        async with self.db.session() as s:
+            # Serialise concurrent answers for this thread; two different keys
+            # must not both observe a pending interaction.
+            task = await s.scalar(
+                select(AgentTask).where(AgentTask.id == task_id).with_for_update()
+            )
+            if task is None:
+                return {"outcome": "not_found"}
+            interaction = await s.scalar(
+                select(AgentInteraction)
+                .where(
+                    AgentInteraction.id == interaction_id,
+                    AgentInteraction.task_id == task_id,
+                )
+                .with_for_update()
+            )
+            if interaction is None:
+                return {"outcome": "not_found"}
+            existing_answer = await s.scalar(
+                select(AgentInteractionAnswer).where(
+                    AgentInteractionAnswer.interaction_id == interaction_id,
+                    AgentInteractionAnswer.idempotency_key == idempotency_key,
+                )
+            )
+            if existing_answer is not None:
+                if list(existing_answer.answers or []) != list(answers):
+                    return {"outcome": "conflict"}
+                command = await s.scalar(
+                    select(CommandInbox).where(
+                        CommandInbox.task_id == task_id,
+                        CommandInbox.idempotency_key
+                        == _interaction_command_key(interaction_id, idempotency_key),
+                    )
+                )
+                return {
+                    "outcome": "duplicate",
+                    "answers": list(existing_answer.answers or []),
+                    "command": _command_dict(command) if command is not None else None,
+                    "interaction": _interaction_dict(interaction),
+                }
+            if interaction.status == "resolved":
+                return {"outcome": "already_resolved", "interaction": _interaction_dict(interaction)}
+            if interaction.status != "pending":
+                return {"outcome": "invalid", "status": interaction.status}
+            if not interaction.blocking:
+                return {"outcome": "invalid", "status": "non_blocking"}
+
+            sequence = (
+                int(
+                    await s.scalar(
+                        select(func.coalesce(func.max(CommandInbox.sequence), 0)).where(
+                            CommandInbox.task_id == task_id
+                        )
+                    )
+                    or 0
+                )
+                + 1
+            )
+            # The continuation belongs to the turn that paused.  Older
+            # interactions predating turn linkage fall back to the newest turn
+            # so the command ledger's foreign key stays valid.
+            turn_id = str(interaction.turn_id or "")
+            if not turn_id:
+                turn_id = str(
+                    await s.scalar(
+                        select(AgentTurn.id)
+                        .where(AgentTurn.task_id == task_id)
+                        .order_by(AgentTurn.turn_index.desc())
+                        .limit(1)
+                    )
+                    or ""
+                )
+            if not turn_id:
+                return {"outcome": "invalid", "status": "no_turn"}
+            # The pending→resolved transition is the election: a conditional
+            # UPDATE is atomic on both PostgreSQL and SQLite, so two concurrent
+            # answers cannot both observe a pending interaction and both
+            # resume the same checkpoint.
+            elected = await s.execute(
+                update(AgentInteraction)
+                .where(
+                    AgentInteraction.id == interaction_id,
+                    AgentInteraction.status == "pending",
+                )
+                .values(status="resolved", resolved_at=utcnow())
+            )
+            if not int(getattr(elected, "rowcount", 0) or 0):
+                await s.rollback()
+                return {"outcome": "already_resolved"}
+            answer_row = AgentInteractionAnswer(
+                interaction_id=interaction_id,
+                answers=list(answers),
+                idempotency_key=idempotency_key,
+            )
+            command = CommandInbox(
+                id=f"cmd_{uuid4().hex}",
+                task_id=task_id,
+                turn_id=turn_id,
+                sequence=sequence,
+                kind="interaction_answer",
+                idempotency_key=_interaction_command_key(interaction_id, idempotency_key),
+                payload={
+                    "interaction_id": interaction_id,
+                    "answers": list(answers),
+                },
+            )
+            s.add_all([answer_row, command])
+            try:
+                await s.commit()
+            except IntegrityError:
+                await s.rollback()
+                return {"outcome": "already_resolved"}
+            return {
+                "outcome": "accepted",
+                "answers": list(answers),
+                "command": _command_dict(command),
+            }
+
+    async def pending_interaction_continuations(self) -> list[dict[str, Any]]:
+        """Continuation commands whose resume never ran (crash recovery).
+
+        A durable command that is still unconsumed means the answer committed
+        but its checkpoint resume did not complete; startup replays it instead
+        of leaving the thread waiting forever.
+        """
+
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(CommandInbox, AgentTask.learner_id)
+                    .join(AgentTask, AgentTask.id == CommandInbox.task_id)
+                    .where(
+                        CommandInbox.kind == "interaction_answer",
+                        CommandInbox.consumed_at.is_(None),
+                        AgentTask.deleted_at.is_(None),
+                    )
+                    .order_by(CommandInbox.created_at)
+                )
+            ).all()
+            return [
+                {**_command_dict(command), "learner_id": learner_id}
+                for command, learner_id in rows
+            ]
+
     async def pending_interactions(self, task_id: str) -> list[dict[str, Any]]:
         async with self.db.session() as s:
             rows = (
@@ -2388,6 +2568,16 @@ def _quiz_submission_dict(row: QuizSubmission) -> dict[str, Any]:
         "handoff_reason": row.handoff_reason,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
+
+
+def _interaction_command_key(interaction_id: str, idempotency_key: str) -> str:
+    """Command-ledger key for one interaction answer.
+
+    Namespaced by interaction so a learner's own idempotency key cannot
+    collide with a message command's key on the same task.
+    """
+
+    return f"interaction:{interaction_id}:{idempotency_key}"
 
 
 def _command_dict(row: CommandInbox) -> dict[str, Any]:

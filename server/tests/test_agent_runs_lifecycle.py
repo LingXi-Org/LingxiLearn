@@ -8,12 +8,23 @@ identity instead of inventing their own.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
-from lingxilearn.agents.providers import ProviderContext, ProviderResult, descriptor, register
+import pytest
+
+from lingxilearn.agents.providers import (
+    ProviderContext,
+    ProviderError,
+    ProviderResult,
+    descriptor,
+    register,
+)
 from lingxilearn.runtime.contracts import Cost, DoneCondition, PlannedTask
 from lingxilearn.runtime.dispatch import DispatchDeps, Dispatcher
+from lingxilearn.runtime.execution_graph import build_execution_graph
 from lingxilearn.runtime.guardrails import Budget
+from lingxilearn.runtime.public_projection import PublicProjector
 from lingxilearn.runtime.run_context import (
     RunContext,
     new_agent_run_id,
@@ -45,6 +56,28 @@ SKILLS = [
         "display_name": "可视化讲解",
         "version": "2.0.0",
         "checksum": "sha256:cafe",
+    },
+    {
+        "skill_id": "cancel-probe",
+        "capabilities": ["dialog.probe"],
+        "provider": "test_cancelled",
+        "cost": {"latency_weight": 0.1},
+        "preconditions": {},
+        "enabled": True,
+        "display_name": "取消探针",
+        "version": "1.0.0",
+        "checksum": "sha256:c0ffee",
+    },
+    {
+        "skill_id": "delegating-skill",
+        "capabilities": ["dialog.interview"],
+        "provider": "test_delegator",
+        "cost": {"latency_weight": 0.1},
+        "preconditions": {},
+        "enabled": True,
+        "display_name": "委派技能",
+        "version": "1.0.0",
+        "checksum": "sha256:beef",
     },
 ]
 
@@ -85,7 +118,11 @@ class FakeRuntime:
 
 # Registered at import so every dispatcher test can resolve them; ids are
 # unique to this module so they cannot collide with real providers.
-PROVIDER_IDENTITY: dict[str, list[dict[str, Any]]] = {"answer": [], "visual": []}
+PROVIDER_IDENTITY: dict[str, list[dict[str, Any]]] = {
+    "answer": [],
+    "visual": [],
+    "delegate_child": [],
+}
 
 
 @register("test_answerer", display_name="知识点答疑", execution_kind="model")
@@ -102,6 +139,29 @@ async def _test_visualizer(context: ProviderContext) -> ProviderResult:
     assert context.run_context is not None
     PROVIDER_IDENTITY["visual"].append(dict(context.run_context.identity_fields()))
     return ProviderResult(status="completed", artifacts=["visual"])
+
+
+@register("test_cancelled", display_name="取消探针", execution_kind="model")
+async def _test_cancelled(context: ProviderContext) -> ProviderResult:
+    raise asyncio.CancelledError
+
+
+@register("test_delegate_child", display_name="子讲解体", execution_kind="model")
+async def _test_delegate_child(context: ProviderContext) -> ProviderResult:  # pragma: no cover
+    raise ProviderError("child providers are invoked through delegation, not resolution")
+
+
+@register("test_delegator", display_name="委派智能体", execution_kind="model")
+async def _test_delegator(context: ProviderContext) -> ProviderResult:
+    assert context.runtime is not None
+    async with context.runtime.delegate(
+        "test_delegate_child", display_name="子讲解体", capability="content.visual"
+    ) as child:
+        PROVIDER_IDENTITY["delegate_child"].append(
+            dict(child.run_context.identity_fields())  # type: ignore[union-attr]
+        )
+        child.narrate("正在生成配套讲解…")
+    return ProviderResult(status="completed", learner_message="已完成委派")
 
 
 def _task(capability: str, *, critical_path: bool = True) -> PlannedTask:
@@ -261,6 +321,119 @@ async def test_provider_runtime_stamps_identity_on_every_event() -> None:
     assert narration["text"] == "正在根据你的掌握情况选择讲法…"
     assert narration["code"] == "adaptive.select"
     assert narration["agent_run_id"] == "ar_stamp"
+
+
+async def test_cancellation_closes_durable_identity_rows() -> None:
+    """Stop must leave AgentRun/SkillRun cancelled, not stuck at running.
+
+    The event stream already says cancelled; a durable row still at ``running``
+    would contradict it after a refresh (issue #18 §4.4).
+    """
+
+    repo = FakeRepo()
+    emitted: list[tuple[str, dict[str, Any]]] = []
+
+    def emit(kind: str, payload: dict[str, Any]) -> None:
+        emitted.append((kind, payload))
+
+    deps = _deps(repo, runtime=FakeRuntime())
+    deps.emit = emit
+    dispatcher = Dispatcher(deps)
+
+    with pytest.raises(asyncio.CancelledError):
+        await dispatcher.run(
+            _task("dialog.probe"), profile={}, budget=Budget.from_dict({})
+        )
+
+    assert len(repo.agent_runs) == 1
+    assert repo.agent_runs[0]["status"] == "cancelled"
+    assert repo.agent_runs[0]["ended"] is True
+    assert len(repo.skill_runs) == 1
+    assert repo.skill_runs[0]["status"] == "cancelled"
+
+    agent_failed = next(payload for kind, payload in emitted if kind == "agent.failed")
+    skill_failed = next(payload for kind, payload in emitted if kind == "skill.failed")
+    assert agent_failed["status"] == "cancelled"
+    assert skill_failed["status"] == "cancelled"
+
+    # The whole chain reads cancelled on the public stream too.
+    projector = PublicProjector(chat_id="task_1", execution_id="exec_1", turn_id="turn_1")
+    envelopes: list[dict[str, Any]] = []
+    for kind, payload in emitted:
+        envelopes.extend(
+            projector.consume({"kind": kind, "agent": str(payload.get("agent") or ""), "payload": payload})
+        )
+    span_end = [e for e in envelopes if e["type"] == "span" and e["payload"].get("event") == "end"]
+    assert span_end and span_end[0]["payload"]["status"] == "cancelled"
+    skill_tool = [
+        e
+        for e in envelopes
+        if e["type"] == "tool" and e["payload"]["toolKind"] == "skill" and e["payload"]["status"] != "executing"
+    ]
+    assert skill_tool and skill_tool[0]["payload"]["status"] == "cancelled"
+
+
+async def test_delegated_child_run_carries_real_parent_identity() -> None:
+    """A provider handing work to a second actor produces a nested AgentRun."""
+
+    repo = FakeRepo()
+    emitted: list[tuple[str, dict[str, Any]]] = []
+
+    def emit(kind: str, payload: dict[str, Any]) -> None:
+        emitted.append((kind, payload))
+
+    deps = _deps(repo, runtime=FakeRuntime())
+    deps.emit = emit
+    dispatcher = Dispatcher(deps)
+    outcome = await dispatcher.run(
+        _task("dialog.interview"), profile={}, budget=Budget.from_dict({})
+    )
+    assert outcome.status == "completed"
+
+    assert len(repo.agent_runs) == 2
+    parent, child = repo.agent_runs[0], repo.agent_runs[1]
+    assert child["parent_agent_run_id"] == parent["agent_run_id"]
+    assert child["provider_id"] == "test_delegate_child"
+    assert child["status"] == "completed"
+
+    # The provider's child emits are stamped with the child's identity, and the
+    # projector turns that into a nested span — no name lookup involved.
+    child_identity = PROVIDER_IDENTITY["delegate_child"][-1]
+    assert child_identity["agent_run_id"] == child["agent_run_id"]
+
+    projector = PublicProjector(chat_id="task_1", execution_id="exec_1", turn_id="turn_1")
+    envelopes: list[dict[str, Any]] = []
+    for kind, payload in emitted:
+        envelopes.extend(
+            projector.consume({"kind": kind, "agent": str(payload.get("agent") or ""), "payload": payload})
+        )
+    starts = [e for e in envelopes if e["type"] == "span" and e["payload"].get("event") == "start"]
+    assert len(starts) == 2
+    nested = next(e for e in starts if e["payload"]["agentRunId"] == child["agent_run_id"])
+    assert nested["payload"]["parentAgentRunId"] == parent["agent_run_id"]
+
+    graph = build_execution_graph(
+        [
+            {
+                "id": row["agent_run_id"],
+                "task_id": "task_1",
+                "turn_id": "turn_1",
+                "execution_id": "exec_1",
+                "parent_agent_run_id": row.get("parent_agent_run_id"),
+                "provider_id": row["provider_id"],
+                "agent_display_name": row["agent_display_name"],
+                "execution_kind": row["execution_kind"],
+                "capability": row["capability"],
+                "status": row.get("status") or "running",
+                "work_item_id": None,
+            }
+            for row in repo.agent_runs
+        ],
+        task_id="task_1",
+    )
+    assert {edge["kind"] for edge in graph["edges"]} == {"agent-delegation"}
+    assert graph["edges"][0]["source"] == parent["agent_run_id"]
+    assert graph["edges"][0]["target"] == child["agent_run_id"]
 
 
 def test_provider_descriptors_are_registered_with_display_names() -> None:

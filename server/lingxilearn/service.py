@@ -572,6 +572,11 @@ class Service:
         # atomic claim in _run_agent_task makes this safe across replicas.
         for task in await self.repo.queued_agent_tasks():
             self._spawn(self._drive_agent_task(task["id"], task["learner_id"], task["prompt"]))
+        # An interaction answer commits its continuation command before the
+        # resume runs.  A command still unconsumed means the resume never
+        # finished; replay it rather than leaving the thread paused forever
+        # (issue #18 §10.4).
+        await self._recover_interaction_continuations()
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
             len(self.packs),
@@ -1239,9 +1244,36 @@ class Service:
                                 WorkspaceFile.path == path,
                             )
                         )
-                        if existing is not None:
-                            continue
                         raw = source.read_bytes()
+                        content_hash = hashlib.sha256(raw).hexdigest()
+                        if existing is not None:
+                            # A task id is a long-lived thread: a later turn can
+                            # regenerate the same artifact kind.  Keep the stable
+                            # resource identity but refresh its backing version,
+                            # so "产物已完成" never opens the previous turn's copy
+                            # (issue #18 §12.2).
+                            metadata = dict(existing.metadata_payload or {})
+                            if metadata.get("contentHash") == content_hash:
+                                continue
+                            storage_key = f"{learner_id}/{secrets.token_urlsafe(24)}"
+                            target_root = self.settings.var_dir / "workspaces" / learner_id
+                            target_root.mkdir(parents=True, exist_ok=True)
+                            (target_root / storage_key.split("/", 1)[1]).write_bytes(raw)
+                            metadata.update(
+                                {
+                                    "source": "lingxigraph",
+                                    "taskId": task_key,
+                                    "taskTitle": title,
+                                    "readOnly": True,
+                                    "contentHash": content_hash,
+                                    "generation": int(metadata.get("generation") or 1) + 1,
+                                }
+                            )
+                            existing.storage_key = storage_key
+                            existing.size = len(raw)
+                            existing.metadata_payload = metadata
+                            projected += 1
+                            continue
                         storage_key = f"{learner_id}/{secrets.token_urlsafe(24)}"
                         target_root = self.settings.var_dir / "workspaces" / learner_id
                         target_root.mkdir(parents=True, exist_ok=True)
@@ -1262,6 +1294,8 @@ class Service:
                                     "taskId": task_key,
                                     "taskTitle": title,
                                     "readOnly": True,
+                                    "contentHash": content_hash,
+                                    "generation": 1,
                                 },
                             )
                         )
@@ -1644,20 +1678,33 @@ class Service:
         interaction = await self.repo.get_interaction(interaction_id, task_id=task_id)
         if interaction is None:
             raise KeyError(f"unknown interaction: {interaction_id}")
-        if interaction.get("status") == "resolved":
-            # Idempotent replay of an already-answered interaction.
-            return {"status": "already_resolved", "interactionId": interaction_id}
-        if interaction.get("status") != "pending":
-            raise ValueError(f"interaction is {interaction.get('status')}")
-        if not interaction.get("blocking"):
-            raise ValueError("non-blocking suggestions are answered by a new message")
         validated = parse_answers(answers)
-        await self.repo.save_interaction_answer(
+        payload_answers = [answer.model_dump(mode="json", by_alias=True) for answer in validated]
+        # One atomic step: persist the answer, resolve the interaction and
+        # enqueue the durable continuation command.  Nothing below can leave
+        # the thread resolved-but-never-resumed (issue #18 §10.4).
+        claim = await self.repo.claim_interaction_answer(
             interaction_id=interaction_id,
-            answers=[answer.model_dump(mode="json", by_alias=True) for answer in validated],
+            task_id=task_id,
+            answers=payload_answers,
             idempotency_key=idempotency_key or f"{interaction_id}:answer",
         )
-        await self.repo.resolve_interaction(interaction_id)
+        outcome = str(claim.get("outcome") or "")
+        if outcome == "not_found":
+            raise KeyError(f"unknown interaction: {interaction_id}")
+        if outcome == "conflict":
+            raise ValueError("idempotency_key_reused")
+        if outcome == "invalid":
+            status = str(claim.get("status") or "")
+            if status == "non_blocking":
+                raise ValueError("non-blocking suggestions are answered by a new message")
+            raise ValueError(f"interaction is {status}")
+        if outcome == "already_resolved":
+            return {"status": "already_resolved", "interactionId": interaction_id}
+        if outcome == "duplicate":
+            # A retry of the accepted answer: the continuation is already
+            # durable, so report the original outcome without a second resume.
+            return {"status": "accepted", "interactionId": interaction_id}
 
         execution_id = str(interaction.get("execution_id") or "")
         projector = PublicProjector(
@@ -1668,7 +1715,7 @@ class Service:
         )
         resolved_payload = {
             "interaction_id": interaction_id,
-            "answers": [answer.model_dump(mode="json", by_alias=True) for answer in validated],
+            "answers": payload_answers,
         }
         v1_rows = _project_public_events(
             projector,
@@ -1693,10 +1740,36 @@ class Service:
         resume = {
             "kind": "interaction_answer",
             "interaction_id": interaction_id,
-            "answers": [answer.model_dump(mode="json", by_alias=True) for answer in validated],
+            "answers": payload_answers,
         }
+        # The spawn is only the fast path: the command ledger already holds the
+        # continuation, so a process death here is recovered at startup.
         self._spawn(self._drive_agent_task(task_id, learner_id, "", resume=resume))
         return {"status": "accepted", "interactionId": interaction_id}
+
+    async def _recover_interaction_continuations(self) -> int:
+        """Replay answered-but-unresumed interactions after a restart."""
+
+        recovered = 0
+        for command in await self.repo.pending_interaction_continuations():
+            payload = dict(command.get("payload") or {})
+            interaction_id = str(payload.get("interaction_id") or "")
+            if not interaction_id:
+                continue
+            self._spawn(
+                self._drive_agent_task(
+                    str(command["task_id"]),
+                    str(command.get("learner_id") or ""),
+                    "",
+                    resume={
+                        "kind": "interaction_answer",
+                        "interaction_id": interaction_id,
+                        "answers": list(payload.get("answers") or []),
+                    },
+                )
+            )
+            recovered += 1
+        return recovered
 
     async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
         """Drain queued learner inputs through the normal turn coordinator.

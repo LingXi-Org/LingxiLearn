@@ -1,6 +1,22 @@
 ---
 name: product-page-component-rewriter
 description: 在 LingxiLearn 项目中开发或改写产品主页及附属介绍页，只复用和改写现有 React/Next.js 组件，完成文案替换、指定组件替换/改写和静态资源替换指导；当用户通过浏览器控制台选中元素、提供页面元素或要求定位某个产品页组件时使用。
+license: MIT
+metadata:
+  author: LingXi-Org
+  version: 1.0.0
+  display-name: 产品页组件改写
+  display-description: 面向仓库贡献者的产品页改写指引，不参与学习编排。
+  output-language: zh-CN
+  execution-mode: authoring
+  phase: shared
+  critical-path: false
+  learner-facing: false
+  state-write-mode: none
+  parallel-safe: true
+  latency-class: batch
+  provider: 
+  ownership: shared
 ---
 
 # 产品页组件改写
