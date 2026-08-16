@@ -313,7 +313,12 @@ export function isAgentTaskTerminal(task: AgentTaskSnapshot | null | undefined):
 }
 
 export function isAgentTaskActive(task: AgentTaskSnapshot | null | undefined): boolean {
-  return Boolean(task && !isAgentTaskTerminal(task) && task.turnStatus !== 'awaiting_user')
+  return Boolean(
+    task &&
+      !isAgentTaskTerminal(task) &&
+      task.status !== 'awaiting_user' &&
+      task.turnStatus !== 'awaiting_user'
+  )
 }
 
 export interface SimExecutionSnapshot {

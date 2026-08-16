@@ -11,6 +11,26 @@ vi.mock('@/components/ui', () => ({
   ShimmerText: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }))
 
+vi.mock('@/blocks/registry', () => ({
+  getAllBlocks: vi.fn(() => []),
+  getBlockByToolName: vi.fn(() => undefined),
+}))
+
+vi.mock('../special-tags', () => ({
+  BrowserTakeoverQuestion: ({
+    answer,
+    reason,
+  }: {
+    answer: string
+    reason: string
+  }) => <div>{reason}{answer}</div>,
+  CredentialDisplay: () => null,
+}))
+
+vi.mock('./tool-permission-card', () => ({
+  ToolPermissionCard: () => null,
+}))
+
 describe('ToolCallItem', () => {
   it.each(['executing', 'success', 'error', 'cancelled'] as const)(
     'renders the %s tool row without an icon',
@@ -79,6 +99,20 @@ describe('ToolCallItem', () => {
 
     expect(markup).toContain('Sign in to Notion.')
     expect(markup).toContain('Continue')
+  })
+
+  it('renders a durable graph interrupt prompt as a learner question', () => {
+    const markup = renderToStaticMarkup(
+      <ToolCallItem
+        toolName='await_user'
+        displayTitle='Waiting for your answer'
+        status='interrupted'
+        userPrompt='请确认是否继续。'
+      />
+    )
+
+    expect(markup).toContain('请确认是否继续。')
+    expect(markup).toContain('请在输入框回复以继续当前任务。')
   })
 
   it('renders the owning integration icon for a resolved integration operation', () => {

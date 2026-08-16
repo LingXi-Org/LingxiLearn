@@ -38,6 +38,14 @@ interface RuntimeGraphProps {
 interface RuntimeNodeData {
   block: RuntimeBlockState
   workflowRunning: boolean
+  verticalHandles: RuntimeVerticalHandles
+}
+
+interface RuntimeVerticalHandles {
+  sourceTop?: boolean
+  sourceBottom?: boolean
+  targetTop?: boolean
+  targetBottom?: boolean
 }
 
 interface RuntimeEdgeData {
@@ -48,11 +56,66 @@ interface RuntimeEdgeData {
 
 const runtimeNodeTypes = { lingxiRuntimeNode: RuntimeNode }
 const runtimeEdgeTypes = { lingxiRuntimeEdge: RuntimeEdge }
+
+interface RuntimeEdgeOrientation {
+  sourcePosition: Position
+  targetPosition: Position
+  sourceHandle: string
+  targetHandle: string
+  sourceSide?: 'top' | 'bottom'
+  targetSide?: 'top' | 'bottom'
+}
+
+function runtimeEdgeOrientation(
+  source: RuntimeBlockState | undefined,
+  target: RuntimeBlockState | undefined
+): RuntimeEdgeOrientation {
+  const sourcePosition = source?.position ?? { x: 0, y: 0 }
+  const targetPosition = target?.position ?? sourcePosition
+  const dx = targetPosition.x - sourcePosition.x
+  const dy = targetPosition.y - sourcePosition.y
+
+  if (Math.abs(dy) > Math.abs(dx)) {
+    if (dy >= 0) {
+      return {
+        sourcePosition: Position.Bottom,
+        targetPosition: Position.Top,
+        sourceHandle: 'source-bottom',
+        targetHandle: 'target-top',
+        sourceSide: 'bottom',
+        targetSide: 'top',
+      }
+    }
+    return {
+      sourcePosition: Position.Top,
+      targetPosition: Position.Bottom,
+      sourceHandle: 'source-top',
+      targetHandle: 'target-bottom',
+      sourceSide: 'top',
+      targetSide: 'bottom',
+    }
+  }
+
+  if (dx < 0) {
+    return {
+      sourcePosition: Position.Left,
+      targetPosition: Position.Right,
+      sourceHandle: 'source',
+      targetHandle: 'target',
+    }
+  }
+  return {
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    sourceHandle: 'source',
+    targetHandle: 'target',
+  }
+}
+
 const nativeCanvasClassName = [
-  '[&_.react-flow__handle]:!z-[30]',
-  '[&_.react-flow__handle]:!pointer-events-none',
-  '[&_.react-flow__handle]:!invisible',
-  '[&_.react-flow__handle]:!hidden',
+  String.raw`[&_.react-flow\_\_handle]:!z-[30]`,
+  String.raw`[&_.react-flow\_\_handle]:!pointer-events-none`,
+  String.raw`[&_.react-flow\_\_handle]:!invisible`,
   '[&_.workflow-drag-handle]:!pointer-events-none',
   '[&_.react-flow__pane]:select-none',
   '[&_.react-flow__selectionpane]:select-none',
@@ -78,7 +141,7 @@ function runtimeRows(block: RuntimeBlockState): ReactNode {
 }
 
 function RuntimeNode({ id, data }: NodeProps<RuntimeNodeData>) {
-  const { block, workflowRunning } = data
+  const { block, workflowRunning, verticalHandles } = data
   const active = block.executionState === 'running' || block.executionState === 'retrying'
   const pending = block.executionState === 'queued' || block.executionState === 'pending'
   // Router V2 is a real Sim block type, but its native view reserves source
@@ -102,8 +165,10 @@ function RuntimeNode({ id, data }: NodeProps<RuntimeNodeData>) {
       isExecutionHighlighted={active}
       Icon={runtimeIcon(block)}
       iconBgColor='var(--text-primary)'
+      interactive={false}
       horizontalHandles
       shouldShowDefaultHandles
+      verticalHandles={verticalHandles}
       blockHeight={block.height}
       hasContentBelowHeader={block.runtimeRows.length > 0}
       conditionRows={[]}
@@ -114,6 +179,7 @@ function RuntimeNode({ id, data }: NodeProps<RuntimeNodeData>) {
       typeLabel={runtimeTypeLabel(block)}
       hasErrorConnection={false}
       errorOutputEnabled={false}
+      showErrorControls={false}
     />
   )
 }
@@ -178,6 +244,26 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
       ])
     ) as Record<string, RuntimeBlockState>
   }, [layout.blocks, layout.success, projection.blocks])
+  const verticalHandles = useMemo(() => {
+    const handles: Record<string, RuntimeVerticalHandles> = {}
+    for (const edge of projection.edges) {
+      const orientation = runtimeEdgeOrientation(
+        laidOutBlocks[edge.source],
+        laidOutBlocks[edge.target]
+      )
+      if (!orientation.sourceSide && !orientation.targetSide) continue
+
+      const sourceHandles = handles[edge.source] ?? {}
+      const targetHandles = handles[edge.target] ?? {}
+      handles[edge.source] = sourceHandles
+      handles[edge.target] = targetHandles
+      if (orientation.sourceSide === 'top') sourceHandles.sourceTop = true
+      if (orientation.sourceSide === 'bottom') sourceHandles.sourceBottom = true
+      if (orientation.targetSide === 'top') targetHandles.targetTop = true
+      if (orientation.targetSide === 'bottom') targetHandles.targetBottom = true
+    }
+    return handles
+  }, [laidOutBlocks, projection.edges])
   const nodes = useMemo<Node<RuntimeNodeData>[]>(
     () =>
       Object.values(laidOutBlocks).map((block) => ({
@@ -186,20 +272,29 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
         position: block.position,
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
-        data: { block, workflowRunning: projection.running },
+        data: {
+          block,
+          workflowRunning: projection.running,
+          verticalHandles: verticalHandles[block.id] ?? {},
+        },
         draggable: false,
         selectable: false,
       })),
-    [laidOutBlocks, projection.running]
+    [laidOutBlocks, projection.running, verticalHandles]
   )
   const edges = useMemo(
     () =>
       projection.edges.map((edge) => {
         const source = laidOutBlocks[edge.source]
         const target = laidOutBlocks[edge.target]
+        const orientation = runtimeEdgeOrientation(source, target)
         return {
           ...edge,
           type: 'lingxiRuntimeEdge',
+          sourceHandle: orientation.sourceHandle,
+          targetHandle: orientation.targetHandle,
+          sourcePosition: orientation.sourcePosition,
+          targetPosition: orientation.targetPosition,
           data: {
             ...(edge.data ?? {}),
             runStatus: runtimeEdgeStatus(source, target, edge.data?.status),

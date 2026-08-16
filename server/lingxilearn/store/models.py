@@ -98,9 +98,21 @@ class AgentTask(Base):
     """A one-shot intent-routing task and its specialist outputs."""
 
     __tablename__ = "agent_tasks"
+    __table_args__ = (
+        Index(
+            "uq_agent_tasks_learner_create_key",
+            "learner_id",
+            "create_idempotency_key",
+            unique=True,
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
+    create_idempotency_key: Mapped[str | None] = mapped_column(
+        String(192), nullable=True
+    )
+    create_payload_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     prompt: Mapped[str] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text, default="")
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, index=True)

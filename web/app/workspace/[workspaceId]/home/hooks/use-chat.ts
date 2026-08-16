@@ -98,6 +98,7 @@ import {
   PENDING_CHAT_KEY_PREFIX,
 } from '@/lib/desktop/chat-scope'
 import type { LingxiGraphChatAdapter } from '@/lib/lingxi/lingxi-graph-adapter'
+import type { LingxiTurnState } from '@/lib/lingxi/turn-state'
 import { sendMothershipMessage } from '@/lib/mothership/events'
 import { initTerminalTransport } from '@/lib/terminal/transport'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
@@ -227,6 +228,7 @@ export interface UseChatReturn {
     task: AgentTaskSnapshot | null
     events: AgentTaskEvent[]
     workflowState?: Record<string, unknown> | null
+    turnState?: LingxiTurnState
   }
   getCurrentRequestId: () => string | undefined
 }
