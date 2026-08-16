@@ -497,7 +497,9 @@ export interface LingxiV1SubmittedAnswer {
 export interface LingxiV1InteractionAnswerRequest {
   interactionId: string
   answers: Array<{ questionId: string; selectedOptionIds: string[]; text: string | null }>
-  /** Labels for the optimistic user bubble; display only. */
+  /** The chosen option labels, for surfaces that announce the answer. The
+   * chat itself renders the answered card's recap and never adds a user
+   * bubble, so live and rebuilt transcripts stay identical. */
   labels: string[]
 }
 

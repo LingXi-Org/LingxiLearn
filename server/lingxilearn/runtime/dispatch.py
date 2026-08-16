@@ -18,7 +18,7 @@ import logging
 import time
 from collections.abc import AsyncIterator, Mapping, Sequence
 from contextlib import asynccontextmanager, suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from ..agents.model_runtime import EVENT_CHANNEL
@@ -245,6 +245,46 @@ class _ProviderRuntime:
             raise
         else:
             await self._owner.close_delegate(child, status=status)
+
+    async def delegate_to(
+        self,
+        provider_id: str,
+        context: ProviderContext,
+        *,
+        capability: str = "",
+        task: PlannedTask | None = None,
+    ) -> ProviderResult:
+        """Run a second real provider as a child of this AgentRun.
+
+        This is the execution entry point behind :meth:`delegate`: the child
+        provider is resolved from the same registry the dispatcher uses, runs
+        under its own canonical identity, and its events are stamped with the
+        child ``agent_run_id`` — so a nested AgentGroup and a delegation edge
+        describe an execution that really happened (issue #18 §4.4).
+
+        No shipped provider delegates today; this is the supported way for one
+        to start, and the identity it produces is already durable.
+        """
+
+        if self._owner is None or self._run_context is None:
+            raise ProviderError("delegation requires a dispatcher-owned run context")
+        provider = get_provider(provider_id)
+        if provider is None:
+            raise ProviderError(f"provider is not implemented: {provider_id}")
+        descriptor = provider_descriptor(provider_id)
+        async with self.delegate(
+            provider_id,
+            display_name=descriptor.display_name if descriptor else provider_id,
+            capability=capability,
+            execution_kind=descriptor.execution_kind if descriptor else "model",
+        ) as child_runtime:
+            child_context = replace(
+                context,
+                task=task or context.task,
+                runtime=child_runtime,
+                run_context=child_runtime.run_context,
+            )
+            return await provider(child_context)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._runtime, name)

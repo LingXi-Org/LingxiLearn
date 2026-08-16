@@ -83,7 +83,12 @@ function RowCheckbox({ checked, disabled }: { checked: boolean; disabled?: boole
   )
 }
 
-type QuestionPhase = 'active' | 'answered' | 'dismissed'
+type QuestionPhase = 'active' | 'submitting' | 'answered' | 'dismissed'
+
+/** The submission is in flight when the owner answers asynchronously. */
+function isPromise(value: unknown): value is Promise<boolean> {
+  return typeof (value as { then?: unknown } | undefined)?.then === 'function'
+}
 
 interface QuestionDisplayProps {
   data: QuestionItem[]
@@ -103,7 +108,7 @@ interface QuestionDisplayProps {
    * `onSelect` message is then not sent — a typed answer must never also
    * arrive as an ordinary chat message.
    */
-  onSubmitAnswers?: (answers: TypedQuestionAnswer[]) => boolean
+  onSubmitAnswers?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   /** Reports that the active card was dismissed so its message actions can return. */
   onDismiss?: () => void
   /** Whether the active card can be dismissed without answering. */
@@ -132,8 +137,11 @@ export function QuestionDisplay({
 }: QuestionDisplayProps) {
   const freeTextInputRef = useRef<HTMLInputElement>(null)
   const freeTextCheckboxRef = useRef<HTMLButtonElement>(null)
-  const disabled = !onSelect && !onAnswersSubmit && !onSubmitAnswers
   const [phase, setPhase] = useState<QuestionPhase>('active')
+  const [submitFailed, setSubmitFailed] = useState(false)
+  // A card mid-submit stays visible with its selections intact, but takes no
+  // further input until the answer is accepted or fails.
+  const disabled = (!onSelect && !onAnswersSubmit && !onSubmitAnswers) || phase === 'submitting'
   const [step, setStep] = useState(0)
   // Selections are option ids, never labels: the id is the answer's identity
   // and the label is only what the learner reads.
@@ -200,19 +208,41 @@ export function QuestionDisplay({
       setFreeText(prefill)
       return
     }
-    setPhase('answered')
     const answers = data.map((q, i) => answerFor(q, selections[i] ?? [], customFor(i, customs)))
     // A typed interaction owns the submission: the formatted message exists
     // for display and legacy transports only.
-    const handled =
-      onSubmitAnswers?.(
-        collectTypedAnswers(
-          data,
-          selections,
-          data.map((_question, i) => customFor(i, customs))
-        )
-      ) === true
-    if (!handled) onSelect?.(formatQuestionAnswerMessage(data, answers))
+    const outcome = onSubmitAnswers?.(
+      collectTypedAnswers(
+        data,
+        selections,
+        data.map((_question, i) => customFor(i, customs))
+      )
+    )
+    if (isPromise(outcome)) {
+      // The typed path is in flight. The card must not collapse into its
+      // recap yet: if the API rejects the answer the interaction is still
+      // pending server-side, and the learner has to be able to retry.
+      setPhase('submitting')
+      setSubmitFailed(false)
+      void outcome.then(
+        (accepted) => {
+          if (!accepted) {
+            setPhase('active')
+            setSubmitFailed(true)
+            return
+          }
+          setPhase('answered')
+          onAnswersSubmit?.(answers)
+        },
+        () => {
+          setPhase('active')
+          setSubmitFailed(true)
+        }
+      )
+      return
+    }
+    setPhase('answered')
+    if (outcome !== true) onSelect?.(formatQuestionAnswerMessage(data, answers))
     onAnswersSubmit?.(answers)
   }
 
@@ -454,6 +484,14 @@ export function QuestionDisplay({
             onClick={submitMultiStep}
             leading={<div className='flex size-[16px] flex-shrink-0 items-center justify-center' />}
           />
+        )}
+        {submitFailed && (
+          // The interaction is still pending on the server, so the card stays
+          // answerable with its selections intact rather than collapsing into
+          // a recap the backend never recorded.
+          <p role='status' className='px-3 py-2 text-[var(--text-muted)] text-sm'>
+            回答没有提交成功，请再试一次。
+          </p>
         )}
       </div>
     </InteractionCard>

@@ -147,21 +147,27 @@ async def _test_cancelled(context: ProviderContext) -> ProviderResult:
 
 
 @register("test_delegate_child", display_name="子讲解体", execution_kind="model")
-async def _test_delegate_child(context: ProviderContext) -> ProviderResult:  # pragma: no cover
-    raise ProviderError("child providers are invoked through delegation, not resolution")
+async def _test_delegate_child(context: ProviderContext) -> ProviderResult:
+    assert context.run_context is not None
+    PROVIDER_IDENTITY["delegate_child"].append(dict(context.run_context.identity_fields()))
+    assert context.runtime is not None
+    context.runtime.narrate("正在生成配套讲解…")
+    return ProviderResult(status="completed", data={"child": True}, detail="子讲解完成")
 
 
 @register("test_delegator", display_name="委派智能体", execution_kind="model")
 async def _test_delegator(context: ProviderContext) -> ProviderResult:
+    """Hands part of its work to a second real provider (issue #18 §4.4)."""
+
     assert context.runtime is not None
-    async with context.runtime.delegate(
-        "test_delegate_child", display_name="子讲解体", capability="content.visual"
-    ) as child:
-        PROVIDER_IDENTITY["delegate_child"].append(
-            dict(child.run_context.identity_fields())  # type: ignore[union-attr]
-        )
-        child.narrate("正在生成配套讲解…")
-    return ProviderResult(status="completed", learner_message="已完成委派")
+    child = await context.runtime.delegate_to(
+        "test_delegate_child", context, capability="content.visual"
+    )
+    return ProviderResult(
+        status="completed",
+        learner_message="已完成委派",
+        data={"child_detail": child.detail},
+    )
 
 
 def _task(capability: str, *, critical_path: bool = True) -> PlannedTask:
@@ -374,7 +380,12 @@ async def test_cancellation_closes_durable_identity_rows() -> None:
 
 
 async def test_delegated_child_run_carries_real_parent_identity() -> None:
-    """A provider handing work to a second actor produces a nested AgentRun."""
+    """A provider that really invokes a second provider nests its AgentRun.
+
+    The child is resolved from the same registry the dispatcher uses and runs
+    under its own canonical identity, so the nested AgentGroup on the left and
+    the delegation edge on the right describe an execution that happened.
+    """
 
     repo = FakeRepo()
     emitted: list[tuple[str, dict[str, Any]]] = []
@@ -389,6 +400,7 @@ async def test_delegated_child_run_carries_real_parent_identity() -> None:
         _task("dialog.interview"), profile={}, budget=Budget.from_dict({})
     )
     assert outcome.status == "completed"
+    assert PROVIDER_IDENTITY["delegate_child"], "the child provider must actually run"
 
     assert len(repo.agent_runs) == 2
     parent, child = repo.agent_runs[0], repo.agent_runs[1]

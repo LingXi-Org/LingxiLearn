@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -351,3 +352,102 @@ def test_truncated_event_read_marks_only_uncertain_trajectory_tail_inferred() ->
     assert before["precision"] == "exact"
     assert after["precision"] == "inferred"
     assert after["metadata"]["eventLogTruncated"] is True
+
+
+# -- publication boundary (issue #18 §5.4/§20) --------------------------------
+
+RAW_MODEL_JSON = (
+    '{"answer": "正确选项是 B", "confidence": 0.91, "reasoning": "先排除 A"'
+)
+
+
+def _raw_stream_projection() -> dict[str, Any]:
+    """A run whose provider streamed raw model text before publishing output."""
+
+    return build_trajectory_projection(
+        {
+            "id": "exec-raw",
+            "started_at": "2026-08-16T00:00:00+00:00",
+            "ended_at": "2026-08-16T00:00:02+00:00",
+            "status": "completed",
+        },
+        [
+            {
+                "kind": "assistant.delta",
+                "agent": "answer_user",
+                "ts": "2026-08-16T00:00:00.400000+00:00",
+                "payload": {"delta": RAW_MODEL_JSON, "stream_id": "s1"},
+            },
+            {
+                "kind": "assistant.delta",
+                "agent": "answer_user",
+                "ts": "2026-08-16T00:00:00.600000+00:00",
+                "payload": {"delta": '}', "stream_id": "s1"},
+            },
+            {
+                "kind": "agent.output.delta",
+                "agent": "answer_user",
+                "ts": "2026-08-16T00:00:01+00:00",
+                "payload": {"delta": "先想想两个态叠加", "stream_id": "s2"},
+            },
+            {
+                "kind": "agent.output",
+                "agent": "answer_user",
+                "ts": "2026-08-16T00:00:01.500000+00:00",
+                "payload": {"message": "先想想两个态叠加意味着什么。", "stream_id": "s2"},
+            },
+        ],
+    )
+
+
+def test_raw_model_stream_keeps_its_timing_but_never_its_text() -> None:
+    projection = _raw_stream_projection()
+    output_items = projection["lanes"][7]["items"]
+    raw = [item for item in output_items if item["id"].startswith("output:assistant.delta")]
+
+    # The item still exists: time-to-first-output must stay measurable.
+    assert raw, "the raw stream must remain visible as timing"
+    assert raw[0]["metadata"]["events"] == 2
+    assert raw[0]["metadata"]["chars"] == len(RAW_MODEL_JSON) + 1
+    assert "delta" not in raw[0]["metadata"]
+
+    serialized = json.dumps(projection, ensure_ascii=False)
+    assert RAW_MODEL_JSON not in serialized
+    assert "正确选项是 B" not in serialized
+    assert "先排除 A" not in serialized
+
+    # The provider's own published lane is what the learner already saw.
+    settled = [item for item in output_items if item["kind"] == "agent.output"]
+    assert settled and settled[0]["metadata"]["message"] == "先想想两个态叠加意味着什么。"
+    streamed = [item for item in output_items if item["id"].startswith("output:agent.output.delta")]
+    assert streamed and "delta" not in streamed[0]["metadata"]
+
+
+def test_private_payload_keys_never_reach_item_metadata() -> None:
+    projection = build_trajectory_projection(
+        {
+            "id": "exec-private",
+            "started_at": "2026-08-16T00:00:00+00:00",
+            "ended_at": "2026-08-16T00:00:01+00:00",
+            "status": "completed",
+        },
+        [
+            {
+                "kind": "decision.recorded",
+                "ts": "2026-08-16T00:00:00.500000+00:00",
+                "payload": {
+                    "decision_id": "d1",
+                    "capability": "dialog.answer",
+                    "hypotheses": ["学习者其实想要解题训练"],
+                    "plan": {"tiers": [["t1"]]},
+                    "api_key": "sk-should-never-appear",
+                    "nested": {"reasoning": "隐藏推理"},
+                },
+            }
+        ],
+    )
+    serialized = json.dumps(projection, ensure_ascii=False)
+    assert "sk-should-never-appear" not in serialized
+    assert "隐藏推理" not in serialized
+    assert "学习者其实想要解题训练" not in serialized
+    assert "dialog.answer" in serialized, "safe identity fields still project"

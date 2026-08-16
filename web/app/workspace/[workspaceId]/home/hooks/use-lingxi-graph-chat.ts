@@ -775,48 +775,53 @@ export function useLingxiGraphChat(
    * The question card reports option ids, never a formatted string, so
    * single-select, multi-select and free-text answers all reach the backend as
    * `{interactionId, answers:[{questionId, selectedOptionIds, text}]}`
-   * (issue #18 §10.5).  Returning `false` means this card is not a typed V1
-   * interaction and the caller may fall back to an ordinary message.
+   * (issue #18 §10.5).  A synchronous `false` means this card is not a typed
+   * V1 interaction and the caller may fall back to an ordinary message; a
+   * promise means the typed path owns it, and it resolves false when the
+   * server rejected the answer so the card can stay answerable.
+   *
+   * The answer is a continuation of the current turn, not a new user message:
+   * the resolved interaction renders as the card's own recap, so no local user
+   * bubble is created — one would duplicate the recap live and vanish on
+   * refresh (issue #18 §10.6).
    */
   const answerInteraction = useCallback(
-    (submitted: TypedQuestionAnswer[]): boolean => {
+    (submitted: TypedQuestionAnswer[]): boolean | Promise<boolean> => {
       const taskId = resolvedChatIdRef.current
       const model = v1ModelRef.current
       if (!taskId || !model) return false
       const request = buildInteractionAnswerRequest(model, submitted)
       if (!request) return false
-      const { interactionId, answers, labels } = request
+      const { interactionId, answers } = request
 
-      const userMessageId = generateLingxiId('lingxi-user')
+      const answerId = generateLingxiId('lingxi-interaction-answer')
       const previousTurnState = turnStateRef.current
       optimisticActiveRef.current = true
       applyTurnState('active')
       setIsSending(true)
       setError(null)
-      setLocalUsers((current) =>
-        current.some((candidate) => candidate.id === userMessageId)
-          ? current
-          : [...current, userMessage(userMessageId, labels.join('、'))]
-      )
 
-      void (async () => {
+      return (async () => {
         try {
           await answerAgentInteraction(
             taskId,
             interactionId,
             answers,
-            lingxiIdempotencyKey(userMessageId)
+            lingxiIdempotencyKey(answerId)
           )
-          onRequestStartedRef.current?.({ requestId: taskId, userMessageId })
+          onRequestStartedRef.current?.({ requestId: taskId, userMessageId: answerId })
+          return true
         } catch (cause) {
+          // The interaction is still pending server-side; hand the card back
+          // its active state so the learner can retry.
           optimisticActiveRef.current = false
           applyTurnState(previousTurnState)
           setError(cause instanceof Error ? cause.message : String(cause))
+          return false
         } finally {
           setIsSending(false)
         }
       })()
-      return true
     },
     [applyTurnState]
   )

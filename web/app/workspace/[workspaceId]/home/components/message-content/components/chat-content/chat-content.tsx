@@ -407,7 +407,7 @@ interface ChatContentProps {
   onOptionSelect?: (id: string) => void
   /** Submits the question card in option-id form; `true` means a typed
    * interaction consumed it and no chat message is sent (issue #18 §10.5). */
-  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean
+  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   onQuestionDismiss?: () => void
   onWorkspaceResourceSelect?: (resource: WorkspaceResourceRef) => void
   onRevealStateChange?: (isRevealing: boolean) => void

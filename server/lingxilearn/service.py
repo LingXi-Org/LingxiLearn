@@ -1930,6 +1930,60 @@ class Service:
         self._spawn(self._drive_agent_task(task_id, learner_id, "", resume=resume))
         return {"status": "accepted", "interactionId": interaction_id}
 
+    async def _drain_interaction_continuations(self, task_id: str, learner_id: str) -> int:
+        """Resume answered interactions whose fast-path resume could not claim.
+
+        An answer can be accepted while the previous execution is still
+        running: the continuation command is durable at that point, but
+        ``claim_agent_task`` refuses a running thread, so that first resume
+        attempt returns without doing anything.  The finishing execution calls
+        this the moment it becomes claimable again, so a learner who answers
+        quickly is not left waiting for a process restart (issue #18 §10.4).
+
+        The command ledger is the coordination point: each pass re-reads the
+        pending commands, and a resume that runs to a durable outcome consumes
+        its own command, so a concurrent drain cannot replay it.
+        """
+
+        drained = 0
+        async with self._conversation_locks[task_id]:
+            while True:
+                pending = [
+                    command
+                    for command in await self.repo.pending_commands(task_id)
+                    if command.get("kind") == "interaction_answer"
+                ]
+                if not pending:
+                    return drained
+                record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                if record is None:
+                    return drained
+                if str(getattr(record, "thread_status", "") or "open") == "cancelled":
+                    return drained
+                if record.status in {"queued", "running"}:
+                    # A live turn owns the thread; whoever finishes it drains.
+                    return drained
+                payload = dict(pending[0].get("payload") or {})
+                interaction_id = str(payload.get("interaction_id") or "")
+                if not interaction_id:
+                    await self.repo.consume_command(str(pending[0]["id"]))
+                    continue
+                await self._drive_agent_task(
+                    task_id,
+                    learner_id,
+                    "",
+                    resume={
+                        "kind": "interaction_answer",
+                        "interaction_id": interaction_id,
+                        "answers": list(payload.get("answers") or []),
+                    },
+                )
+                drained += 1
+                # A resume that reached a durable outcome already consumed its
+                # own command; consuming it here covers the failed turn, so one
+                # continuation is never replayed in a loop.
+                await self.repo.consume_command(str(pending[0]["id"]))
+
     async def _recover_interaction_continuations(self) -> int:
         """Replay answered-but-unresumed interactions after a restart."""
 
@@ -2612,6 +2666,9 @@ class Service:
                 ended=True,
             )
             self._notify_agent(task_id)
+            # A failed turn still releases the thread; an answer accepted while
+            # it was running must not wait for a restart (issue #18 §10.4).
+            self._spawn(self._drain_interaction_continuations(task_id, learner_id))
             return
 
         if buffer:
@@ -2678,6 +2735,9 @@ class Service:
         except Exception:  # noqa: BLE001 - projection must not fail the task
             logger.exception("failed to project task artifacts: %s", task_id)
         self._notify_agent(task_id)
+        # The thread is claimable again: pick up any interaction answer that
+        # was accepted while this execution still held it (issue #18 §10.4).
+        self._spawn(self._drain_interaction_continuations(task_id, learner_id))
 
     async def _sweep_holds(self, task_id: str, learner_id: str) -> None:
         async with self._hold_sweep_locks[task_id]:

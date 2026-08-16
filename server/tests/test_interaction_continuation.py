@@ -159,6 +159,110 @@ async def test_crash_between_commit_and_resume_is_recovered(paused_thread) -> No
     assert replayed == []
 
 
+async def test_answer_during_a_running_turn_resumes_without_a_restart(paused_thread) -> None:
+    """The fast-path resume cannot claim a running thread; the drain must.
+
+    A learner can answer through SSE before the current execution has fully
+    settled.  The continuation is durable at that moment, but
+    ``claim_agent_task`` refuses a running thread, so the first resume attempt
+    does nothing.  The finishing execution has to pick it up — waiting for a
+    process restart would strand the thread.
+    """
+
+    service, task_id, learner_id, interaction_id, _turn = paused_thread
+    resumes: list[dict[str, Any]] = []
+    started: list[asyncio.Task[Any]] = []
+
+    def spawn(coro: Any) -> None:
+        started.append(asyncio.ensure_future(coro))
+
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> None:
+        # The real claim refuses a running thread; model exactly that.
+        record = await service.repo.get_agent_task_for_learner(task, learner)
+        if record is not None and record.status == "running":
+            return
+        resumes.append(dict(kwargs.get("resume") or {}))
+
+    service._spawn = spawn  # type: ignore[method-assign]
+    service._drive_agent_task = drive  # type: ignore[method-assign]
+
+    # The previous execution is still running when the answer arrives.
+    await service.repo.set_agent_task_status(task_id, "running", thread_status="running")
+    result = await service.answer_agent_interaction(
+        task_id,
+        interaction_id,
+        answers=ANSWERS,
+        idempotency_key="ans-race",
+        learner_id=learner_id,
+    )
+    await asyncio.gather(*started)
+    assert result["status"] == "accepted"
+    assert resumes == [], "a running thread cannot be claimed by the fast path"
+    pending = [
+        command
+        for command in await service.repo.pending_commands(task_id)
+        if command["kind"] == "interaction_answer"
+    ]
+    assert len(pending) == 1, "the continuation stays durable"
+
+    # The execution finishes and releases the thread.
+    started.clear()
+    await service.repo.set_agent_task_status(task_id, "completed", thread_status="open")
+    drained = await service._drain_interaction_continuations(task_id, learner_id)
+    await asyncio.gather(*started)
+
+    assert drained == 1
+    assert resumes == [
+        {
+            "kind": "interaction_answer",
+            "interaction_id": interaction_id,
+            "answers": ANSWERS,
+        }
+    ]
+    remaining = [
+        command
+        for command in await service.repo.pending_commands(task_id)
+        if command["kind"] == "interaction_answer"
+    ]
+    assert remaining == [], "a drained continuation is consumed exactly once"
+
+    # A second drain is a no-op rather than a replay.
+    assert await service._drain_interaction_continuations(task_id, learner_id) == 0
+    assert len(resumes) == 1
+
+
+async def test_drain_defers_while_another_turn_owns_the_thread(paused_thread) -> None:
+    service, task_id, learner_id, interaction_id, _turn = paused_thread
+    resumes: list[dict[str, Any]] = []
+
+    def spawn(coro: Any) -> None:
+        coro.close()
+
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> None:
+        resumes.append(dict(kwargs.get("resume") or {}))
+
+    service._spawn = spawn  # type: ignore[method-assign]
+    service._drive_agent_task = drive  # type: ignore[method-assign]
+
+    await service.answer_agent_interaction(
+        task_id,
+        interaction_id,
+        answers=ANSWERS,
+        idempotency_key="ans-defer",
+        learner_id=learner_id,
+    )
+    await service.repo.set_agent_task_status(task_id, "running", thread_status="running")
+
+    assert await service._drain_interaction_continuations(task_id, learner_id) == 0
+    assert resumes == [], "the live turn's own tail drains it"
+    pending = [
+        command
+        for command in await service.repo.pending_commands(task_id)
+        if command["kind"] == "interaction_answer"
+    ]
+    assert len(pending) == 1
+
+
 async def test_concurrent_answers_produce_exactly_one_continuation(paused_thread) -> None:
     service, task_id, learner_id, interaction_id, _turn = paused_thread
 

@@ -68,7 +68,7 @@ interface MothershipChatProps {
   onStopGeneration: () => void
   /** Answers a typed blocking interaction; `true` means the structured API
    * accepted it, so the card must not also send a chat message. */
-  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean
+  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   messageQueue: QueuedMessage[]
   editingQueuedId: string | null
   dispatchingHeadId: string | null
@@ -208,7 +208,7 @@ interface AssistantMessageRowProps {
   onOptionSelect?: (id: string) => void
   /** Submits a question card through the typed interaction API; `true` means
    * it was consumed there and no chat message is sent (issue #18 §10.5). */
-  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean
+  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   onAnimatingChange?: (animating: boolean) => void
 }
 
@@ -668,7 +668,7 @@ export function MothershipChat({
   // (no handler, or the card is not a typed interaction) lets the card fall
   // back to the formatted chat message.
   const stableOnQuestionSubmit = useCallback(
-    (answers: TypedQuestionAnswer[]) => onQuestionSubmitRef.current?.(answers) === true,
+    (answers: TypedQuestionAnswer[]) => onQuestionSubmitRef.current?.(answers) ?? false,
     []
   )
 

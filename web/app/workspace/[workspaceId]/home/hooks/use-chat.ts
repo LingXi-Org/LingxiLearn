@@ -216,7 +216,7 @@ export interface UseChatReturn {
    * must not also send a formatted chat message (issue #18 §10.5). Absent on
    * transports without typed interactions.
    */
-  answerInteraction?: (answers: TypedQuestionAnswer[]) => boolean
+  answerInteraction?: (answers: TypedQuestionAnswer[]) => boolean | Promise<boolean>
   stopGeneration: () => Promise<void>
   resources: MothershipResource[]
   activeResourceId: string | null

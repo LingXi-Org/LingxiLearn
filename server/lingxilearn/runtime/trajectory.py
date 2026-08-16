@@ -78,6 +78,40 @@ _OUTPUT_KINDS = {
     "artifact.recovered",
 }
 _STATE_KINDS = {"decision.recorded", "profile.updated", "state.updated"}
+# The provider's raw model stream. It is emitted before the provider parses,
+# validates and safety-checks its output, so its text is never publishable —
+# the Logs UI renders item metadata verbatim, which would re-expose through the
+# audit surface exactly what the public chat protocol refuses to publish
+# (issue #18 §5.4/§20). Its timing is kept; its content is not.
+_RAW_MODEL_STREAM_KINDS = {"assistant.delta"}
+# Streamed text is a partial fragment in every case, so no delta's content
+# reaches the projection; the item carries how much was streamed instead.
+_CONTENT_KEYS = {"delta", "text", "content", "chunk"}
+# Second line of defence over whatever a payload happens to carry, mirroring
+# the public V1 denylist: the primary rule is that items build their metadata
+# explicitly.
+_PRIVATE_METADATA_KEYS = {
+    "reasoning",
+    "reasoning_content",
+    "reasoningContent",
+    "thinking",
+    "hypotheses",
+    "candidates_considered",
+    "candidatesConsidered",
+    "plan",
+    "messages",
+    "checkpoint",
+    "api_key",
+    "apiKey",
+    "token",
+    "password",
+    "authorization",
+    "secret",
+    "html",
+    "body",
+    "arguments",
+    "raw",
+}
 _RUNTIME_KINDS = {
     "node.appeared",
     "work.claimed",
@@ -129,6 +163,33 @@ def _json(value: Any) -> Any:
         except Exception:  # noqa: BLE001 - projection is best effort
             pass
     return str(value)
+
+
+def _safe_metadata(value: Any) -> Any:
+    """Drop private keys anywhere in an item's metadata.
+
+    The Logs UI renders metadata verbatim (the semantic trajectory turns it
+    into a span's Input tab), so this audit surface has the same publication
+    boundary as the public chat protocol. Items build their metadata
+    explicitly; this is the backstop that keeps a future payload field from
+    silently riding along.
+    """
+
+    if isinstance(value, Mapping):
+        return {
+            str(key): _safe_metadata(item)
+            for key, item in value.items()
+            if str(key) not in _PRIVATE_METADATA_KEYS
+        }
+    if isinstance(value, (list, tuple, set)):
+        return [_safe_metadata(item) for item in value]
+    return value
+
+
+def _stream_chars(payload: Mapping[str, Any]) -> int:
+    """How much text a streamed fragment carried, for size stats without content."""
+
+    return sum(len(str(payload.get(key) or "")) for key in _CONTENT_KEYS)
 
 
 def _time(value: Any, fallback: datetime | None = None) -> datetime:
@@ -335,7 +396,9 @@ class TrajectoryProjector:
             if value not in (None, "", [], {}):
                 item[key] = _json(value)
         if metadata:
-            item["metadata"] = _json(dict(metadata))
+            safe = _safe_metadata(metadata)
+            if safe:
+                item["metadata"] = _json(safe)
         self._items[lane].append(item)
         return item
 
@@ -1065,13 +1128,11 @@ class TrajectoryProjector:
                         start=start,
                         end=end,
                         precision="exact",
-                        metadata={
-                            "stream_id": stream_key,
-                            "events": len(values),
-                            "agent": values[-1][2] or None,
-                            "runtime": values[-1][3],
-                            **dict(values[-1][1]),
-                        },
+                        metadata=self._output_metadata(
+                            kind,
+                            stream_key=stream_key,
+                            values=values,
+                        ),
                     )
                     candidate = (start, stream_key, values[0][1], values[0][2], values[0][3])
                     if first_output is None or candidate[0] < first_output[0]:
@@ -1092,6 +1153,40 @@ class TrajectoryProjector:
                     "runtime": runtime,
                 },
             )
+
+    @staticmethod
+    def _output_metadata(
+        kind: str,
+        *,
+        stream_key: str,
+        values: Sequence[tuple[datetime, Mapping[str, Any], str, Mapping[str, Any], Mapping[str, Any]]],
+    ) -> dict[str, Any]:
+        """Identity, timing and size for one output group — never raw text.
+
+        ``assistant.delta`` is the provider's unparsed model stream: the item
+        exists so time-to-first-output stays measurable, but its content is not
+        published (issue #18 §5.4).  Streamed fragments of any kind contribute
+        only their size, and the settled ``agent.output`` message — the lane a
+        provider publishes after its own validation — is the one text that
+        stays.
+        """
+
+        _when, payload, agent, runtime, _event = values[-1]
+        metadata: dict[str, Any] = {
+            "stream_id": stream_key,
+            "events": len(values),
+            "agent": agent or None,
+            "runtime": runtime,
+            "chars": sum(_stream_chars(item[1]) for item in values),
+        }
+        if kind in _RAW_MODEL_STREAM_KINDS:
+            return metadata
+        for key, item in payload.items():
+            name = str(key)
+            if name in _CONTENT_KEYS or name in metadata:
+                continue
+            metadata[name] = item
+        return metadata
 
     def _project_task_resources(self) -> None:
         for node_id, row in self._tasks.items():
