@@ -1886,6 +1886,14 @@ class Service:
                 raise ValueError("non-blocking suggestions are answered by a new message")
             raise ValueError(f"interaction is {status}")
         if outcome == "already_resolved":
+            # A real UI retry after a failed publish arrives with a *new*
+            # idempotency key, so it lands here rather than on ``duplicate``.
+            # The interaction is durably resolved, so this call must still
+            # repair: publish the public fact and make sure the continuation
+            # actually runs.  Both steps are idempotent, and the durable run
+            # claim stops a second resume (issue #18 §10.6).
+            await self._publish_interaction_outbox(task_id)
+            self._spawn(self._drain_interaction_continuations(task_id, learner_id))
             return {"status": "already_resolved", "interactionId": interaction_id}
         if outcome == "duplicate":
             # A retry of the accepted answer: the continuation is already
@@ -1921,6 +1929,9 @@ class Service:
         """
 
         published = 0
+        # The lock only spares one process from redundant work; correctness
+        # comes from the repository claiming the outbox row and writing its
+        # events in one transaction, so two replicas cannot both publish.
         async with self._interaction_publish_locks[task_id]:
             rows = [
                 row
@@ -1929,14 +1940,10 @@ class Service:
             ]
             if not rows:
                 return 0
-            already = await self.repo.resolved_interaction_event_ids(task_id)
             for row in rows:
                 payload = dict(row.get("payload") or {})
                 interaction_id = str(payload.get("interaction_id") or "")
                 if not interaction_id:
-                    await self.repo.mark_outbox_published(str(row["id"]))
-                    continue
-                if interaction_id in already:
                     await self.repo.mark_outbox_published(str(row["id"]))
                     continue
                 execution_id = str(payload.get("execution_id") or "")
@@ -1955,9 +1962,10 @@ class Service:
                     [{"kind": "interaction.resolved", "agent": "", "payload": resolved_payload}],
                     execution_id=execution_id,
                 )
-                await self.repo.append_agent_events(
-                    task_id,
-                    [
+                if await self.repo.publish_outbox_agent_events(
+                    outbox_id=str(row["id"]),
+                    task_id=task_id,
+                    events=[
                         {
                             "kind": "interaction.resolved",
                             "agent": "",
@@ -1967,10 +1975,8 @@ class Service:
                         },
                         *v1_rows,
                     ],
-                )
-                already.add(interaction_id)
-                await self.repo.mark_outbox_published(str(row["id"]))
-                published += 1
+                ):
+                    published += 1
             if published:
                 self._notify_agent(task_id)
         return published

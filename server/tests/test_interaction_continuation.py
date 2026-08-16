@@ -396,6 +396,137 @@ async def test_resolved_event_publishes_from_the_outbox_and_repairs(paused_threa
     assert len([event for event in events if event["kind"] == "interaction.resolved"]) == 1
 
 
+async def test_ui_retry_with_a_new_key_repairs_and_resumes(paused_thread) -> None:
+    """The real retry path: a new idempotency key, no restart.
+
+    A failed publish fails the HTTP request, the card returns to active, and
+    the learner clicks again — which mints a *new* key, so the repository
+    answers ``already_resolved`` rather than ``duplicate``.  That branch must
+    still publish the public fact and run the continuation, or the thread sits
+    resolved-but-silent until someone restarts the process.
+    """
+
+    service, task_id, learner_id, interaction_id, _turn = paused_thread
+    resumed: list[dict[str, Any]] = []
+    started: list[asyncio.Task[Any]] = []
+
+    def spawn(coro: Any) -> None:
+        started.append(asyncio.ensure_future(coro))
+
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
+        resumed.append(dict(kwargs.get("resume") or {}))
+        return True
+
+    service._spawn = spawn  # type: ignore[method-assign]
+    service._drive_agent_task = drive  # type: ignore[method-assign]
+
+    published = service._publish_interaction_outbox
+
+    async def crash(_task_id: str) -> int:
+        raise RuntimeError("publish failed; the HTTP request fails too")
+
+    service._publish_interaction_outbox = crash  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError):
+        await service.answer_agent_interaction(
+            task_id,
+            interaction_id,
+            answers=ANSWERS,
+            idempotency_key="lingxi-interaction-answer:first",
+            learner_id=learner_id,
+        )
+    await asyncio.gather(*started)
+    started.clear()
+    assert resumed == [], "the failed attempt never reached the resume"
+
+    # The learner clicks again: a different key, same durable interaction.
+    service._publish_interaction_outbox = published  # type: ignore[method-assign]
+    result = await service.answer_agent_interaction(
+        task_id,
+        interaction_id,
+        answers=ANSWERS,
+        idempotency_key="lingxi-interaction-answer:second",
+        learner_id=learner_id,
+    )
+    await asyncio.gather(*started)
+    assert result["status"] == "already_resolved"
+
+    events = await service.repo.agent_events_after(task_id)
+    resolved = [event for event in events if event["kind"] == "interaction.resolved"]
+    assert len(resolved) == 1, "the retry repaired the missing public fact exactly once"
+    assert await service.repo.pending_outbox(task_id=task_id) == []
+
+    assert len(resumed) == 1, "the durable continuation ran, exactly once"
+    assert resumed[0]["interaction_id"] == interaction_id
+    remaining = [
+        command
+        for command in await service.repo.pending_commands(task_id)
+        if command["kind"] == "interaction_answer"
+    ]
+    assert remaining == []
+
+
+async def test_two_publishers_write_the_resolved_fact_exactly_once(paused_thread) -> None:
+    """Two replicas sharing one database may not both publish.
+
+    The publisher used to read "does this event exist?" and then append —
+    check-then-act, which two processes can both pass.  Claiming the outbox row
+    and appending in one transaction is what makes it exactly-once.
+    """
+
+    service, task_id, learner_id, interaction_id, _turn = paused_thread
+
+    def spawn(coro: Any) -> None:
+        coro.close()
+
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
+        return True
+
+    service._spawn = spawn  # type: ignore[method-assign]
+    service._drive_agent_task = drive  # type: ignore[method-assign]
+
+    async def crash(_task_id: str) -> int:
+        raise RuntimeError("publish deferred to the racing replicas")
+
+    published = service._publish_interaction_outbox
+    service._publish_interaction_outbox = crash  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError):
+        await service.answer_agent_interaction(
+            task_id,
+            interaction_id,
+            answers=ANSWERS,
+            idempotency_key="ans-multi",
+            learner_id=learner_id,
+        )
+    service._publish_interaction_outbox = published  # type: ignore[method-assign]
+
+    # A second process: its own Service/Repository over the same database, so
+    # it shares no in-process lock with the first.
+    replica = Service(service.settings)
+    replica._spawn = spawn  # type: ignore[method-assign]
+    replica._drive_agent_task = drive  # type: ignore[method-assign]
+    try:
+        first, second = await asyncio.gather(
+            service._publish_interaction_outbox(task_id),
+            replica._publish_interaction_outbox(task_id),
+        )
+    finally:
+        await replica.db.dispose()
+
+    assert sorted((first, second)) == [0, 1], "exactly one replica published"
+
+    events = await service.repo.agent_events_after(task_id)
+    v0_resolved = [event for event in events if event["kind"] == "interaction.resolved"]
+    v1_resolved = [
+        event
+        for event in events
+        if int(event.get("protocol_version") or 0) == 1
+        and event["payload"].get("type") == "interaction"
+    ]
+    assert len(v0_resolved) == 1
+    assert len(v1_resolved) == 1
+    assert await service.repo.pending_outbox(task_id=task_id) == []
+
+
 async def test_startup_recovery_repairs_an_unpublished_resolution(paused_thread) -> None:
     service, task_id, learner_id, interaction_id, _turn = paused_thread
     started: list[asyncio.Task[Any]] = []

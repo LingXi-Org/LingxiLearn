@@ -809,15 +809,22 @@ class Dispatcher:
         task: PlannedTask,
         profile: Mapping[str, Mapping[str, Any]],
     ) -> ProviderResult:
-        """Execute a delegated capability through the normal dispatch chain.
+        """Execute a delegated capability through the dispatcher's resolution.
 
-        Delegation delegates *a capability*, not a provider implementation:
-        resolution runs the same ``capability → enabled skill → provider`` chain
-        as any other unit of work, so the child is bound to a real registry row
+        Delegation delegates *a capability*, not a provider implementation: it
+        runs the same ``capability → enabled skill → provider`` resolution as
+        any other unit of work, so the child is bound to a real registry row
         (version/checksum included) and cannot reach a disabled or unregistered
-        skill.  It shares the parent's WorkItem lease, budget and completion
-        evaluation, because it is part of the parent's planned work rather than
-        a new item in the Work Ledger.
+        skill.
+
+        What it deliberately does **not** re-run is the orchestration plane:
+        candidate generation, precondition/eligibility gating and the Work
+        Ledger entry belong to the parent's planned task, whose lease, budget
+        and ``done_when`` the child shares.  A child therefore inherits the
+        parent's eligibility rather than proving its own — acceptable while
+        delegation is provider-initiated inside one planned task, and the thing
+        to revisit before any capability is delegated across guardrail
+        boundaries (issue #18 §4.4).
         """
 
         resolution = resolve(

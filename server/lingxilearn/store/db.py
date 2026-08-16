@@ -966,6 +966,74 @@ class Repository:
                 for row in rows
             ]
 
+    @staticmethod
+    async def _write_agent_event_rows(
+        s: AsyncSession, task: AgentTask, task_id: str, events: list[dict[str, Any]]
+    ) -> int:
+        """Allocate sequences and write event rows inside an open transaction.
+
+        Shared by the ordinary append and the outbox publisher so both produce
+        identical rows and identical V1 envelope sequencing.
+        """
+
+        highest = (
+            await s.execute(
+                select(func.max(AgentTaskEvent.sequence)).where(AgentTaskEvent.task_id == task_id)
+            )
+        ).scalar() or 0
+        runtime_records: list[dict[str, Any]] = []
+        for offset, event in enumerate(events, start=1):
+            sequence = highest + offset
+            runtime = event.get("runtime") or (event.get("payload") or {}).get("runtime") or {}
+            payload = event.get("payload") or {}
+            if int(event.get("protocol_version") or 0) == 1:
+                # Keep the V1 envelope seq equal to the durable row
+                # sequence so Last-Event-ID reconnect works uniformly
+                # across protocols (issue #18 §15.2).
+                if isinstance(payload, dict):
+                    payload = dict(payload)
+                    payload["seq"] = sequence
+                    stream = payload.get("stream")
+                    if isinstance(stream, dict) and not stream.get("executionId"):
+                        stream["executionId"] = event.get("execution_id")
+                        payload["stream"] = stream
+            s.add(
+                AgentTaskEvent(
+                    task_id=task_id,
+                    sequence=sequence,
+                    kind=str(event.get("kind", "")),
+                    agent=str(event.get("agent", "")),
+                    payload=payload,
+                    execution_id=event.get("execution_id"),
+                    runtime=runtime,
+                    protocol_version=int(event.get("protocol_version") or 0),
+                    turn_id=event.get("turn_id"),
+                    agent_run_id=event.get("agent_run_id"),
+                    skill_run_id=event.get("skill_run_id"),
+                )
+            )
+            runtime_records.append(
+                {
+                    "record_key": f"task:{task_id}:{sequence}",
+                    "task_id": task_id,
+                    "sequence": sequence,
+                    "kind": str(event.get("kind", "")),
+                    "agent": str(event.get("agent", "")),
+                    "payload": payload,
+                    "execution_id": event.get("execution_id"),
+                    "runtime": runtime,
+                }
+            )
+        await project_runtime_events(
+            s,
+            learner_id=task.learner_id,
+            records=runtime_records,
+            workspace=await s.scalar(
+                select(Workspace).where(Workspace.learner_id == task.learner_id)
+            ),
+        )
+        return highest + len(events)
+
     async def append_agent_events(self, task_id: str, events: list[dict[str, Any]]) -> int:
         if not events:
             async with self.db.session() as s:
@@ -989,68 +1057,47 @@ class Repository:
                 task = await s.get(AgentTask, task_id, with_for_update=True)
                 if task is None:
                     raise KeyError(f"unknown agent task: {task_id}")
-                highest = (
-                    await s.execute(
-                        select(func.max(AgentTaskEvent.sequence)).where(
-                            AgentTaskEvent.task_id == task_id
-                        )
-                    )
-                ).scalar() or 0
-                runtime_records: list[dict[str, Any]] = []
-                for offset, event in enumerate(events, start=1):
-                    sequence = highest + offset
-                    runtime = (
-                        event.get("runtime") or (event.get("payload") or {}).get("runtime") or {}
-                    )
-                    payload = event.get("payload") or {}
-                    if int(event.get("protocol_version") or 0) == 1:
-                        # Keep the V1 envelope seq equal to the durable row
-                        # sequence so Last-Event-ID reconnect works uniformly
-                        # across protocols (issue #18 §15.2).
-                        if isinstance(payload, dict):
-                            payload = dict(payload)
-                            payload["seq"] = sequence
-                            stream = payload.get("stream")
-                            if isinstance(stream, dict) and not stream.get("executionId"):
-                                stream["executionId"] = event.get("execution_id")
-                                payload["stream"] = stream
-                    s.add(
-                        AgentTaskEvent(
-                            task_id=task_id,
-                            sequence=sequence,
-                            kind=str(event.get("kind", "")),
-                            agent=str(event.get("agent", "")),
-                            payload=payload,
-                            execution_id=event.get("execution_id"),
-                            runtime=runtime,
-                            protocol_version=int(event.get("protocol_version") or 0),
-                            turn_id=event.get("turn_id"),
-                            agent_run_id=event.get("agent_run_id"),
-                            skill_run_id=event.get("skill_run_id"),
-                        )
-                    )
-                    runtime_records.append(
-                        {
-                            "record_key": f"task:{task_id}:{sequence}",
-                            "task_id": task_id,
-                            "sequence": sequence,
-                            "kind": str(event.get("kind", "")),
-                            "agent": str(event.get("agent", "")),
-                            "payload": payload,
-                            "execution_id": event.get("execution_id"),
-                            "runtime": runtime,
-                        }
-                    )
-                await project_runtime_events(
-                    s,
-                    learner_id=task.learner_id,
-                    records=runtime_records,
-                    workspace=await s.scalar(
-                        select(Workspace).where(Workspace.learner_id == task.learner_id)
-                    ),
-                )
+                total = await self._write_agent_event_rows(s, task, task_id, events)
                 await s.commit()
-                return highest + len(events)
+                return total
+
+    async def publish_outbox_agent_events(
+        self, *, outbox_id: str, task_id: str, events: list[dict[str, Any]]
+    ) -> bool:
+        """Claim one outbox row and write its events in a single transaction.
+
+        Publishing is exactly-once across processes because the claim and the
+        append commit together: a second publisher's conditional update matches
+        no row and it writes nothing, and a publisher that dies mid-transaction
+        leaves the row unclaimed for the next one.  No "does this event already
+        exist?" read is involved — that check-then-act is precisely what two
+        replicas can both pass (issue #18 §10.6).
+        """
+
+        task_record = await self.get_agent_task(task_id)
+        if task_record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        await self.ensure_workspace(task_record.learner_id)
+        async with self.db.agent_event_lock(task_id):
+            async with self.db.session() as s:
+                claimed = await s.execute(
+                    update(TransactionalOutbox)
+                    .where(
+                        TransactionalOutbox.id == outbox_id,
+                        TransactionalOutbox.published_at.is_(None),
+                    )
+                    .values(published_at=utcnow())
+                )
+                if not int(getattr(claimed, "rowcount", 0) or 0):
+                    await s.rollback()
+                    return False
+                task = await s.get(AgentTask, task_id, with_for_update=True)
+                if task is None:
+                    await s.rollback()
+                    raise KeyError(f"unknown agent task: {task_id}")
+                await self._write_agent_event_rows(s, task, task_id, events)
+                await s.commit()
+                return True
 
     async def agent_events_after(
         self, task_id: str, after: int = 0, limit: int = 500
@@ -1575,30 +1622,6 @@ class Repository:
             )
             await s.commit()
             return bool(getattr(result, "rowcount", 0))
-
-    async def resolved_interaction_event_ids(self, task_id: str) -> set[str]:
-        """Interaction ids that already have a public ``resolved`` row.
-
-        Publishing checks this first, so a crash between appending the event
-        and marking the outbox row cannot produce a duplicate on replay.
-        """
-
-        async with self.db.session() as s:
-            rows = (
-                await s.scalars(
-                    select(AgentTaskEvent.payload).where(
-                        AgentTaskEvent.task_id == task_id,
-                        AgentTaskEvent.kind == "interaction.resolved",
-                    )
-                )
-            ).all()
-            found: set[str] = set()
-            for payload in rows:
-                if isinstance(payload, dict):
-                    value = str(payload.get("interaction_id") or "")
-                    if value:
-                        found.add(value)
-            return found
 
     async def pending_interaction_continuations(self) -> list[dict[str, Any]]:
         """Continuation commands whose resume never ran (crash recovery).
