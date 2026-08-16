@@ -188,7 +188,7 @@ function buildSemanticModel(trajectory: ApiTrajectory, fallbackDurationMs: numbe
     id: string
   }> = []
   const seenIds = new Set<string>()
-  const lanes = TRAJECTORY_LANES.map(({ id, label }) => {
+  const lanes: TrajectoryLane[] = TRAJECTORY_LANES.map(({ id, label }) => {
     const source = trajectory.lanes.find((lane) => lane.id === id)
     ;(source?.items ?? []).forEach((item, index) => {
       const start = parseTimestamp(item.startTime) ?? clockStart + Math.max(0, item.relativeStartMs)

@@ -17,6 +17,7 @@
     "lint:check": "biome check .",
     "format": "biome format --write .",
     "format:check": "biome format .",
+    "test:trajectory": "vitest run \"app/workspace/[workspaceId]/logs/components/trajectory/trajectory-utils.test.ts\"",
     "check": "bun run type-check && bun run lint:check",
     "prepare": "node -e \"if (process.env.CI) process.exit(0)\""
   },

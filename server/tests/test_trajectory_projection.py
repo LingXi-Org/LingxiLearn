@@ -1,7 +1,11 @@
 from datetime import UTC, datetime
+from typing import Any
+
+import pytest
 
 from lingxilearn.api.workspace_routes import _utc_datetime
 from lingxilearn.runtime.trajectory import TRAJECTORY_LANES, build_trajectory_projection
+from lingxilearn.service import Service
 
 
 def test_projection_uses_execution_clock_and_eight_lanes() -> None:
@@ -183,3 +187,129 @@ def test_sqlite_naive_running_timestamp_is_safe_for_aware_duration_math() -> Non
     now = _utc_datetime(datetime(2026, 8, 16, 0, 0, 1, tzinfo=UTC))
     assert started is not None and now is not None
     assert int((now - started).total_seconds() * 1000) == 1000
+
+
+def test_concurrent_same_model_ttft_uses_event_identity_and_delta_only_payloads() -> None:
+    """Production deltas carry no model name, so identity must do the join."""
+
+    projection = build_trajectory_projection(
+        {
+            "id": "exec-concurrent-models",
+            "started_at": "2026-08-16T00:00:00+00:00",
+            "ended_at": "2026-08-16T00:00:01+00:00",
+            "status": "completed",
+        },
+        [
+            {
+                "kind": "assistant.delta",
+                "agent": "lesson_intro",
+                "runtime": {
+                    "span_id": "model-a",
+                    "node": "provider",
+                    "work_item_id": "work-a",
+                },
+                "ts": "2026-08-16T00:00:00.250000+00:00",
+                "payload": {"delta": "A"},
+            },
+            {
+                "kind": "assistant.delta",
+                "agent": "lesson_intro",
+                "runtime": {"node": "provider", "work_item_id": "work-b"},
+                "ts": "2026-08-16T00:00:00.350000+00:00",
+                "payload": {"delta": "B"},
+            },
+        ],
+        [
+            {
+                "id": "agent-a",
+                "type": "agent",
+                "agent": "lesson_intro",
+                "node": "provider",
+                "runtime": {"work_item_id": "work-a"},
+                "startTime": "2026-08-16T00:00:00.100000+00:00",
+                "endTime": "2026-08-16T00:00:00.800000+00:00",
+                "children": [
+                    {
+                        "id": "model-a",
+                        "type": "model",
+                        "model": "same-model",
+                        "runtime": {
+                            "span_id": "model-a",
+                            "node": "provider",
+                            "work_item_id": "work-a",
+                        },
+                        "startTime": "2026-08-16T00:00:00.200000+00:00",
+                        "endTime": "2026-08-16T00:00:00.600000+00:00",
+                    }
+                ],
+            },
+            {
+                "id": "agent-b",
+                "type": "agent",
+                "agent": "lesson_intro",
+                "node": "provider",
+                "runtime": {"work_item_id": "work-b"},
+                "startTime": "2026-08-16T00:00:00.100000+00:00",
+                "endTime": "2026-08-16T00:00:00.800000+00:00",
+                "children": [
+                    {
+                        "id": "model-b",
+                        "type": "model",
+                        "model": "same-model",
+                        "runtime": {"node": "provider", "work_item_id": "work-b"},
+                        "startTime": "2026-08-16T00:00:00.200000+00:00",
+                        "endTime": "2026-08-16T00:00:00.700000+00:00",
+                    }
+                ],
+            },
+        ],
+    )
+
+    ttft = [
+        item
+        for item in projection["lanes"][6]["items"]
+        if item["kind"] == "model.ttft"
+    ]
+    assert {item["parentId"] for item in ttft} == {"action:model-a", "action:model-b"}
+    by_parent = {item["parentId"]: item for item in ttft}
+    assert by_parent["action:model-a"]["durationMs"] == 50
+    assert by_parent["action:model-b"]["durationMs"] == 150
+    assert by_parent["action:model-a"]["metadata"]["agent"] == "lesson_intro"
+    assert by_parent["action:model-b"]["metadata"]["runtime"]["work_item_id"] == "work-b"
+
+
+@pytest.mark.asyncio
+async def test_execution_snapshot_event_reader_pages_past_5000_without_truncating() -> None:
+    class PagedRepo:
+        def __init__(self) -> None:
+            self.events = [
+                {
+                    "sequence": sequence,
+                    "kind": "checkpoint.saved",
+                    "payload": {"sequence": sequence},
+                    "runtime": {},
+                    "ts": f"2026-08-16T00:00:{sequence // 1000:02d}.{sequence % 1000:03d}+00:00",
+                }
+                for sequence in range(1, 5002)
+            ]
+            self.calls: list[int] = []
+
+        async def agent_event_count_for_execution(self, _execution_id: str) -> int:
+            return len(self.events)
+
+        async def agent_events_for_execution(
+            self, _execution_id: str, _learner_id: str, *, limit: int, after: int
+        ) -> list[dict[str, Any]]:
+            self.calls.append(after)
+            return self.events[after : after + limit]
+
+    repo = PagedRepo()
+    service = Service.__new__(Service)
+    service.repo = repo
+
+    records, status = await service._agent_events_for_execution_snapshot("exec", "learner")
+
+    assert len(records) == 5001
+    assert status["truncated"] is False
+    assert status["complete"] is True
+    assert repo.calls == [0, 5000]

@@ -22,6 +22,7 @@ import mimetypes
 import secrets
 import uuid
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,9 @@ FLUSH_EVERY = 6
 AGENT_FLUSH_EVERY = 4
 """Batch size for persisting projections mid-run — small enough to feel live."""
 
+AGENT_EVENT_PAGE_SIZE = 5000
+"""Maximum number of durable events loaded per execution snapshot page."""
+
 
 def _utc_datetime(value: datetime | None) -> datetime | None:
     """Normalize SQLite's naive timezone columns before arithmetic."""
@@ -97,6 +101,22 @@ def _utc_datetime(value: datetime | None) -> datetime | None:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def _event_timestamp(value: Any) -> datetime | None:
+    """Parse a durable event timestamp for truncation-boundary annotations."""
+
+    if isinstance(value, datetime):
+        return _utc_datetime(value)
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, UTC)
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return _utc_datetime(parsed)
+    return None
 
 
 class _ProviderEventRuntime:
@@ -978,6 +998,149 @@ class Service:
             artifacts.append("quiz")
         return results, tuple(dict.fromkeys(artifacts))
 
+    async def _agent_events_for_execution_snapshot(
+        self, execution_id: str, learner_id: str
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Read an execution's event log to completion, page by sequence.
+
+        ``agent_events_for_execution`` historically defaulted to 5,000 rows.
+        A one-shot call made long runs look complete while silently dropping
+        their tail.  Keep paging until the repository reports a short page or
+        the durable count is satisfied, and return an explicit read status if
+        a legacy repository cannot page or makes no progress.
+        """
+
+        expected_count: int | None = None
+        count_reader = getattr(self.repo, "agent_event_count_for_execution", None)
+        if callable(count_reader):
+            try:
+                expected_count = max(0, int(await count_reader(execution_id)))
+            except Exception:  # noqa: BLE001 - snapshot remains useful without a count index
+                expected_count = None
+
+        records: list[dict[str, Any]] = []
+        seen_sequences: set[int] = set()
+        cursor = 0
+        truncated = False
+        legacy_reader = False
+        pages = 0
+
+        while True:
+            pages += 1
+            try:
+                page = await self.repo.agent_events_for_execution(
+                    execution_id,
+                    learner_id,
+                    limit=AGENT_EVENT_PAGE_SIZE,
+                    after=cursor,
+                )
+            except TypeError:
+                # Keep compatibility with an older repository implementation,
+                # but never treat its 5,000-row result as complete when there
+                # is no cursor support for a follow-up page.
+                legacy_reader = True
+                if cursor:
+                    truncated = True
+                    break
+                page = await self.repo.agent_events_for_execution(execution_id, learner_id)
+
+            if not isinstance(page, list):
+                page = list(page or ())
+            if not page:
+                if expected_count is not None and len(records) < expected_count:
+                    truncated = True
+                break
+
+            new_page: list[dict[str, Any]] = []
+            page_sequences: list[int] = []
+            for raw in page:
+                if not isinstance(raw, dict):
+                    continue
+                item = dict(raw)
+                raw_sequence = item.get("sequence")
+                try:
+                    sequence = int(raw_sequence) if raw_sequence is not None else None
+                except (TypeError, ValueError):
+                    sequence = None
+                if sequence is None:
+                    new_page.append(item)
+                    continue
+                if sequence <= cursor or sequence in seen_sequences:
+                    continue
+                seen_sequences.add(sequence)
+                page_sequences.append(sequence)
+                new_page.append(item)
+
+            if not new_page:
+                # A repository that ignores ``after`` would otherwise loop
+                # forever and silently return only the first page.
+                truncated = True
+                break
+
+            records.extend(new_page)
+            next_cursor = max(page_sequences, default=cursor)
+            if expected_count is not None and len(records) >= expected_count:
+                break
+            if len(page) < AGENT_EVENT_PAGE_SIZE:
+                if expected_count is None or len(records) >= expected_count:
+                    break
+                truncated = True
+                break
+            if next_cursor <= cursor:
+                # Sequence-less full pages cannot be paged safely.  Mark the
+                # affected tail inferred instead of claiming a full replay.
+                truncated = True
+                break
+            cursor = next_cursor
+            if legacy_reader:
+                truncated = True
+                break
+
+        complete = not truncated and (
+            expected_count is None or len(records) >= expected_count
+        )
+        if expected_count is not None and len(records) < expected_count:
+            truncated = True
+            complete = False
+        boundary = None
+        if records:
+            boundary = records[-1].get("ts") or records[-1].get("created_at")
+        status = {
+            "truncated": bool(truncated),
+            "complete": bool(complete),
+            "loaded": len(records),
+            "expected": expected_count,
+            "pages": pages,
+            "pageSize": AGENT_EVENT_PAGE_SIZE,
+            "truncatedAfter": boundary if truncated else None,
+        }
+        return records, status
+
+    @staticmethod
+    def _annotate_truncated_trajectory(
+        trajectory: dict[str, Any],
+        event_read: Mapping[str, Any],
+    ) -> None:
+        """Mark only the uncertain tail as inferred when event paging stops."""
+
+        trajectory["eventLog"] = dict(event_read)
+        if not event_read.get("truncated"):
+            return
+        boundary = _event_timestamp(event_read.get("truncatedAfter"))
+        for lane in trajectory.get("lanes") or []:
+            if not isinstance(lane, dict):
+                continue
+            for item in lane.get("items") or []:
+                if not isinstance(item, dict) or lane.get("id") == "run":
+                    continue
+                start = _event_timestamp(item.get("startTime"))
+                if boundary is not None and start is not None and start < boundary:
+                    continue
+                item["precision"] = "inferred"
+                metadata = item.setdefault("metadata", {})
+                if isinstance(metadata, dict):
+                    metadata["eventLogTruncated"] = True
+
     async def agent_execution_snapshot(self, execution_id: str, learner_id: str) -> dict[str, Any]:
         row = await self.repo.get_agent_execution(execution_id, learner_id)
         if row is None:
@@ -985,7 +1148,9 @@ class Service:
         started = _utc_datetime(row.started_at)
         ended = _utc_datetime(row.ended_at)
         duration = int((ended - started).total_seconds() * 1000) if ended and started else None
-        records = await self.repo.agent_events_for_execution(execution_id, learner_id)
+        records, event_read = await self._agent_events_for_execution_snapshot(
+            execution_id, learner_id
+        )
         trace = replay_sim_trace(
             records,
             execution_id=row.id,
@@ -1002,6 +1167,7 @@ class Service:
             records,
             trace,
         )
+        self._annotate_truncated_trajectory(trajectory, event_read)
         return {
             "executionId": row.id,
             "workflowId": "lingxi-agent",
@@ -1013,6 +1179,7 @@ class Service:
             "workflowState": row.workflow_state or {},
             "traceSpans": trace,
             "trajectory": trajectory,
+            "eventLog": event_read,
             "executionMetadata": {
                 "trigger": row.trigger,
                 "startedAt": started.isoformat() if started else None,
