@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import inspect
+import json
 import logging
 import mimetypes
 import secrets
@@ -33,6 +35,7 @@ from lingxigraph.errors import (
     GraphTimeoutError,
 )
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from .agents.artifact_store import ArtifactError, ArtifactStore
 from .agents.contracts import quiz_public
@@ -198,6 +201,45 @@ def _normalize_attachment_refs(
             }
         )
     return refs[:10]
+
+
+def agent_task_create_payload_digest(
+    *,
+    prompt: str,
+    attachments: list[dict[str, Any]] | None = None,
+    resource_refs: list[dict[str, Any]] | None = None,
+    skill_ids: list[str] | None = None,
+    resources: list[dict[str, Any]] | None = None,
+) -> str:
+    """Build a stable digest for the request that creates an agent task.
+
+    The REST route hashes the learner-facing resource references and skill ids
+    before resolving them. Direct service callers can instead provide the
+    already-resolved resources. Either form is stored next to the create key so
+    a retry can be compared without starting another graph.
+    """
+
+    payload = {
+        "version": 1,
+        "prompt": " ".join(prompt.strip().split()),
+        "attachments": attachments or [],
+        "resource_refs": resource_refs if resource_refs is not None else resources or [],
+        "skill_ids": skill_ids or [],
+    }
+    encoded = json.dumps(
+        _json_safe(payload),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _agent_task_create_result(record: Any) -> dict[str, Any]:
+    result = {"id": record.id, "status": record.status}
+    if record.error:
+        result["error"] = record.error
+    return result
 
 
 def _prompt_with_attachments(prompt: str, attachments: list[dict[str, Any]]) -> str:
@@ -638,30 +680,65 @@ class Service:
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
         graph_version: str = f"{LOOP_GRAPH_NAME}@{LOOP_GRAPH_VERSION}",
+        idempotency_key: str | None = None,
+        create_payload_digest: str | None = None,
     ) -> dict[str, Any]:
         normalized = " ".join(prompt.strip().split())
         if not normalized:
             raise ValueError("prompt must not be empty")
         if len(normalized) > 4000:
             raise ValueError("prompt is too long")
+        if idempotency_key is not None and not 1 <= len(idempotency_key) <= 192:
+            raise ValueError("idempotency_key must be between 1 and 192 characters")
         attachment_refs = _normalize_attachment_refs(attachments, learner_id)
-        await self.repo.ensure_learner(learner_id)
-        await self.repo.create_agent_task(
-            id=task_id,
-            learner_id=learner_id,
+        payload_digest = create_payload_digest or agent_task_create_payload_digest(
             prompt=normalized,
-            graph_version=graph_version,
-            status="queued",
+            attachments=attachment_refs,
             resources=resources or [],
-            intent={},
-            lecture_result={},
-            deck_result={},
-            quiz_result={},
-            adaptive_result={},
-            handoff_result={},
-            user_messages=[],
-            visual_result={},
         )
+        await self.repo.ensure_learner(learner_id)
+        if idempotency_key:
+            existing = await self.repo.get_agent_task_by_create_idempotency_key(
+                learner_id, idempotency_key
+            )
+            if existing is not None:
+                if existing.create_payload_digest != payload_digest:
+                    raise ValueError("idempotency_key_reused")
+                return _agent_task_create_result(existing)
+
+        try:
+            await self.repo.create_agent_task(
+                id=task_id,
+                learner_id=learner_id,
+                create_idempotency_key=idempotency_key,
+                create_payload_digest=payload_digest if idempotency_key else None,
+                prompt=normalized,
+                graph_version=graph_version,
+                status="queued",
+                resources=resources or [],
+                intent={},
+                lecture_result={},
+                deck_result={},
+                quiz_result={},
+                adaptive_result={},
+                handoff_result={},
+                user_messages=[],
+                visual_result={},
+            )
+        except IntegrityError:
+            # Two API replicas can pass the lookup above concurrently. The
+            # unique learner/key index elects one creator; the loser returns
+            # the committed task instead of spawning a second graph.
+            if not idempotency_key:
+                raise
+            existing = await self.repo.get_agent_task_by_create_idempotency_key(
+                learner_id, idempotency_key
+            )
+            if existing is None:
+                raise
+            if existing.create_payload_digest != payload_digest:
+                raise ValueError("idempotency_key_reused") from None
+            return _agent_task_create_result(existing)
         await self.repo.append_command(
             task_id=task_id,
             kind="initial_prompt",

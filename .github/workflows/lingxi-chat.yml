@@ -5,12 +5,20 @@ on:
     paths:
       - 'web/**'
       - 'server/lingxilearn/**'
+      - 'server/migrations/**'
+      - 'server/tests/**'
+      - 'server/pyproject.toml'
+      - 'server/uv.lock'
       - '.github/workflows/lingxi-chat.yml'
   push:
     branches: [main]
     paths:
       - 'web/**'
       - 'server/lingxilearn/**'
+      - 'server/migrations/**'
+      - 'server/tests/**'
+      - 'server/pyproject.toml'
+      - 'server/uv.lock'
       - '.github/workflows/lingxi-chat.yml'
   workflow_dispatch:
 
@@ -65,3 +73,24 @@ jobs:
           stores/mothership-queue/store.ts
           stores/mothership-queue/types.ts
           vitest.config.ts
+
+  backend:
+    name: Lingxi create-task idempotency
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install backend dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Run create-task idempotency regression
+        run: uv run --extra dev pytest -q tests/test_agent_tasks.py -k create_agent_task_idempotency

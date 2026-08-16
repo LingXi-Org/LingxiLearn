@@ -232,6 +232,69 @@ async def test_missing_deepseek_key_is_a_durable_failed_task(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_create_agent_task_idempotency_is_durable_and_conflict_safe(tmp_path: Path) -> None:
+    suffix = uuid4().hex
+    settings = Settings(
+        _env_file="",
+        database_url=f"sqlite+aiosqlite:///./var/agent-create-idempotency-{suffix}.sqlite3",
+        agent_task_dir=tmp_path,
+    )
+    service = Service(settings)
+    await service.db.create_all()
+    spawned: list[Any] = []
+
+    def capture_spawn(coro: Any) -> None:
+        spawned.append(coro)
+        coro.close()
+
+    service.agent_model = {"coordinator": object()}
+    service._spawn = capture_spawn  # type: ignore[method-assign]
+    key = f"lingxi-create:{suffix}"
+    try:
+        first, second = await asyncio.gather(
+            service.create_agent_task(
+                task_id=f"create-first-{suffix}",
+                learner_id="create-test",
+                prompt="解释 TCP 重传",
+                resources=[{"type": "file", "id": "file-1"}],
+                idempotency_key=key,
+            ),
+            service.create_agent_task(
+                task_id=f"create-second-{suffix}",
+                learner_id="create-test",
+                prompt="解释 TCP 重传",
+                resources=[{"type": "file", "id": "file-1"}],
+                idempotency_key=key,
+            ),
+        )
+
+        assert first["status"] == second["status"] == "queued"
+        assert first["id"] == second["id"]
+        assert first["id"] in {
+            f"create-first-{suffix}",
+            f"create-second-{suffix}",
+        }
+        assert second == first
+        assert len(await service.repo.list_agent_tasks("create-test")) == 1
+        assert len(spawned) == 1
+        events = await service.repo.agent_events_after(first["id"])
+        assert [event["kind"] for event in events] == ["task.started"]
+
+        with pytest.raises(ValueError, match="idempotency_key_reused"):
+            await service.create_agent_task(
+                task_id=f"create-conflict-{suffix}",
+                learner_id="create-test",
+                prompt="解释 TCP 拥塞控制",
+                resources=[{"type": "file", "id": "file-1"}],
+                idempotency_key=key,
+            )
+        assert len(await service.repo.list_agent_tasks("create-test")) == 1
+        assert len(spawned) == 1
+    finally:
+        await service.db.dispose()
+
+
+@pytest.mark.asyncio
 async def test_agent_task_claim_is_atomic(tmp_path: Path) -> None:
     suffix = uuid4().hex
     settings = Settings(
