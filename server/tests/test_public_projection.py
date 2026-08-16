@@ -109,6 +109,13 @@ def test_status_lines_become_scoped_narration() -> None:
 
 def test_agent_output_becomes_assistant_text() -> None:
     p = _projector()
+    p.consume(
+        {
+            "kind": "agent.started",
+            "agent": "answer_user",
+            "payload": {"agent_run_id": "ar_p", "presentation_role": "primary"},
+        }
+    )
     events = p.consume(
         {
             "kind": "agent.output",
@@ -119,6 +126,149 @@ def test_agent_output_becomes_assistant_text() -> None:
     assert events[0]["payload"]["channel"] == "assistant"
     assert events[0]["payload"]["text"] == "答案正文"
     assert events[0]["payload"]["streamId"] == "s1"
+
+
+def test_only_primary_agent_writes_top_level_chat_content() -> None:
+    """Supporting/background output narrates in its own AgentGroup (§6.2)."""
+
+    p = _projector()
+    p.consume(
+        {
+            "kind": "agent.started",
+            "agent": "answer_user",
+            "payload": {"agent_run_id": "ar_primary", "presentation_role": "primary"},
+        }
+    )
+    p.consume(
+        {
+            "kind": "agent.started",
+            "agent": "visual_explainer",
+            "payload": {"agent_run_id": "ar_support", "presentation_role": "supporting"},
+        }
+    )
+    primary = p.consume(
+        {
+            "kind": "agent.output",
+            "agent": "answer_user",
+            "payload": {"message": "叠加态是…", "stream_id": "s1"},
+        }
+    )
+    assert primary[0]["payload"]["channel"] == "assistant"
+    assert primary[0]["scope"]["agentRunId"] == "ar_primary"
+
+    supporting = p.consume(
+        {
+            "kind": "agent.output",
+            "agent": "visual_explainer",
+            "payload": {"message": "可视化已生成。", "stream_id": "s2"},
+        }
+    )
+    assert supporting[0]["payload"]["channel"] == "narration"
+    assert supporting[0]["scope"]["agentRunId"] == "ar_support"
+    assert supporting[0]["payload"]["text"] == "可视化已生成。"
+
+    # A supporting run's partial deltas never reach a top-level buffer.
+    assert (
+        p.consume(
+            {
+                "kind": "agent.output.delta",
+                "agent": "visual_explainer",
+                "payload": {"delta": "半句", "stream_id": "s2"},
+            }
+        )
+        == []
+    )
+    deltas = p.consume(
+        {
+            "kind": "agent.output.delta",
+            "agent": "answer_user",
+            "payload": {"delta": "叠加", "stream_id": "s1"},
+        }
+    )
+    assert deltas[0]["payload"]["channel"] == "assistant"
+    assert deltas[0]["payload"]["delta"] == "叠加"
+
+
+def test_raw_assistant_delta_never_reaches_the_learner() -> None:
+    """The provider's raw model stream is not a public lane (§5.4).
+
+    Structured providers parse, validate and safety-check that stream before
+    publishing ``agent.output*``; publishing it directly would send partial
+    JSON and unvalidated content to the browser.
+    """
+
+    p = _projector()
+    p.consume(
+        {
+            "kind": "agent.started",
+            "agent": "answer_user",
+            "payload": {"agent_run_id": "ar_primary", "presentation_role": "primary"},
+        }
+    )
+    raw = p.consume(
+        {
+            "kind": "assistant.delta",
+            "agent": "answer_user",
+            "payload": {"delta": '{"answer": "泄题：正确选项是 B", "confid'},
+        }
+    )
+    assert raw == []
+
+    published = p.consume(
+        {
+            "kind": "agent.output",
+            "agent": "answer_user",
+            "payload": {"message": "先想想两个态叠加意味着什么。", "stream_id": "s1"},
+        }
+    )
+    assert [e["payload"]["channel"] for e in published] == ["assistant"]
+    assert published[0]["payload"]["text"] == "先想想两个态叠加意味着什么。"
+
+
+def test_system_acknowledgement_stays_top_level_without_an_agent() -> None:
+    p = _projector()
+    events = p.consume(
+        {
+            "kind": "agent.output",
+            "agent": "learning_companion",
+            "payload": {"message": "我先陪你开始…", "stream_id": "t:opening-companion"},
+        }
+    )
+    assert events[0]["payload"]["channel"] == "assistant"
+    assert events[0]["payload"]["source"] == "system"
+    assert events[0]["scope"]["agentRunId"] == ""
+
+
+def test_cancelled_skill_run_keeps_cancelled_semantics() -> None:
+    p = _projector()
+    p.consume(
+        {
+            "kind": "skill.started",
+            "agent": "answer_user",
+            "payload": {
+                "skill_run_id": "sr_1",
+                "agent_run_id": "ar_1",
+                "skill_id": "knowledge-qa",
+                "display_name": "知识点答疑",
+            },
+        }
+    )
+    cancelled = p.consume(
+        {
+            "kind": "skill.failed",
+            "agent": "answer_user",
+            "payload": {"skill_run_id": "sr_1", "agent_run_id": "ar_1", "status": "cancelled"},
+        }
+    )
+    assert cancelled[0]["payload"]["status"] == "cancelled"
+    failed = p.consume(
+        {
+            "kind": "skill.failed",
+            "agent": "answer_user",
+            "payload": {"skill_run_id": "sr_1", "agent_run_id": "ar_1", "status": "failed"},
+        }
+    )
+    assert failed[0]["payload"]["status"] == "error"
 
 
 def test_tool_events_are_sanitized() -> None:

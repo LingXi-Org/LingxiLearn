@@ -28,6 +28,7 @@ export function SolutionsStructuredData({ config }: SolutionsStructuredDataProps
     seoDescription,
     offersFreeTier = true,
     language = 'en-US',
+    pageKind = 'platform',
     hero,
     rows,
   } = config
@@ -54,16 +55,17 @@ export function SolutionsStructuredData({ config }: SolutionsStructuredDataProps
         '@type': 'BreadcrumbList',
         '@id': `${url}#breadcrumb`,
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'Home', item: SITE_URL },
+          { '@type': 'ListItem', position: 1, name: 'LingXi', item: SITE_URL },
           { '@type': 'ListItem', position: 2, name: module, item: url },
         ],
       },
       {
         '@type': 'WebApplication',
         '@id': `${url}#application`,
-        name: `Sim ${module}`,
+        name: `LingXi ${module}`,
         description: hero.summary,
-        applicationCategory: 'BusinessApplication',
+        applicationCategory:
+          pageKind === 'learning' ? 'EducationalApplication' : 'BusinessApplication',
         operatingSystem: 'Web',
         url,
         featureList,

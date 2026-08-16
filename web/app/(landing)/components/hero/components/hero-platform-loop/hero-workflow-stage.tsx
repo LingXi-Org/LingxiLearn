@@ -24,7 +24,7 @@ interface HeroWorkflowStageProps {
   /** How many of the stage's blocks (in build order) are on canvas. */
   builtCount: number
   /** Blocks to stage, in build order. Defaults to the homepage's lead flow. */
-  blocks?: BlockDef[]
+  blocks?: readonly BlockDef[]
   /** Source → target pairs among {@link blocks}. Defaults with them. */
   edges?: ReadonlyArray<readonly [string, string]>
   /** Design-space bounding box of the block layout. Defaults with them. */

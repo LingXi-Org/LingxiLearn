@@ -77,6 +77,10 @@ class PublicProjector:
         # from dispatcher-emitted lifecycle events carrying real identity.
         self._agent_runs: dict[str, str] = {}
         self._open_spans: set[str] = set()
+        # AgentRun id -> presentation role, learned from dispatcher span
+        # starts.  Only a ``primary`` run may write the top-level ChatContent
+        # (issue #18 §6.2); everyone else narrates inside its own AgentGroup.
+        self._roles: dict[str, str] = {}
         self._terminated = False
 
     # -- public API ---------------------------------------------------------
@@ -228,6 +232,8 @@ class PublicProjector:
         self._open_spans.add(agent_run_id)
         if agent:
             self._agent_runs[agent] = agent_run_id
+        role = str(payload.get("presentation_role") or "supporting")
+        self._roles[agent_run_id] = role
         scope = EventScope(agent_run_id=agent_run_id)
         return [
             self._emit(
@@ -242,7 +248,12 @@ class PublicProjector:
                     ),
                     "executionKind": str(payload.get("execution_kind") or "model"),
                     "capability": str(payload.get("capability") or ""),
-                    "presentationRole": str(payload.get("presentation_role") or "supporting"),
+                    "presentationRole": role,
+                    **(
+                        {"parentAgentRunId": str(payload["parent_agent_run_id"])}
+                        if payload.get("parent_agent_run_id")
+                        else {}
+                    ),
                 },
                 scope=scope,
             )
@@ -372,7 +383,10 @@ class PublicProjector:
         return self._end_skill(payload, "success")
 
     def _on_skill_failed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
-        return self._end_skill(payload, "error")
+        # A cancelled SkillRun is not an error: keep the real status so Stop
+        # renders a cancelled ToolCallItem (issue #18 §5.5).
+        status = "cancelled" if str(payload.get("status") or "") == "cancelled" else "error"
+        return self._end_skill(payload, status)
 
     def _end_skill(self, payload: dict[str, Any], status: str) -> list[LingxiMothershipEventV1]:
         skill_run_id = str(payload.get("skill_run_id") or "")
@@ -410,47 +424,67 @@ class PublicProjector:
             )
         ]
 
+    def _text_channel_for(self, agent_run_id: str) -> str:
+        """Which public lane an agent's learner-safe text belongs in.
+
+        Only a ``primary`` AgentRun owns the top-level ChatContent; supporting
+        and background runs narrate inside their own AgentGroup (issue #18
+        §6.2).  An unknown run has no proven primary role, so it narrates too.
+        """
+
+        if not agent_run_id:
+            # Host-level acknowledgement with no execution actor behind it: a
+            # system ChatContent, which never claims an agent identity.
+            return "system"
+        return "assistant" if self._roles.get(agent_run_id) == "primary" else "narration"
+
+    def _agent_text(
+        self, payload: dict[str, Any], agent: str, *, text: str, delta: str
+    ) -> list[LingxiMothershipEventV1]:
+        agent_run_id = str(payload.get("agent_run_id") or "") or self._agent_runs.get(agent, "")
+        stream_id = str(payload.get("stream_id") or "")
+        scope = EventScope(agent_run_id=agent_run_id) if agent_run_id else EventScope()
+        channel = self._text_channel_for(agent_run_id)
+        if channel == "narration":
+            # Narration is not streamed into a top-level buffer; only complete
+            # learner-safe statements render as NarrationText.
+            if not text:
+                return []
+            return [
+                self._emit(
+                    "text",
+                    {"channel": "narration", "text": text, "source": "agent"},
+                    scope=scope,
+                )
+            ]
+        body: dict[str, Any] = {"channel": "assistant", "streamId": stream_id}
+        if channel == "system":
+            body["source"] = "system"
+        if text:
+            body["text"] = text
+        else:
+            body["delta"] = delta
+        return [self._emit("text", body, scope=scope)]
+
     def _on_agent_output(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
         message = str(payload.get("message") or "")
         if not message:
             return []
-        agent_run_id = str(payload.get("agent_run_id") or "") or self._agent_runs.get(agent, "")
-        stream_id = str(payload.get("stream_id") or "")
-        scope = EventScope(agent_run_id=agent_run_id) if agent_run_id else EventScope()
-        return [
-            self._emit(
-                "text",
-                {
-                    "channel": "assistant",
-                    "text": message,
-                    "streamId": stream_id,
-                },
-                scope=scope,
-            )
-        ]
+        return self._agent_text(payload, agent, text=message, delta="")
 
     def _on_agent_output_delta(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
         delta = str(payload.get("delta") or "")
         if not delta:
             return []
-        agent_run_id = str(payload.get("agent_run_id") or "") or self._agent_runs.get(agent, "")
-        stream_id = str(payload.get("stream_id") or "")
-        scope = EventScope(agent_run_id=agent_run_id) if agent_run_id else EventScope()
-        return [
-            self._emit(
-                "text",
-                {"channel": "assistant", "delta": delta, "streamId": stream_id},
-                scope=scope,
-            )
-        ]
+        return self._agent_text(payload, agent, text="", delta=delta)
 
     def _on_assistant_delta(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
-        delta = str(payload.get("delta") or "")
-        if not delta:
-            return []
-        agent_run_id = str(payload.get("agent_run_id") or "") or self._agent_runs.get(agent, "")
-        scope = EventScope(agent_run_id=agent_run_id) if agent_run_id else EventScope()
-        return [self._emit("text", {"channel": "assistant", "delta": delta}, scope=scope)]
+        # The raw provider message stream is NOT learner-facing: structured
+        # providers still parse it, validate the output contract and run their
+        # safety checks before publishing through ``agent.output*``.  Letting
+        # it through here would publish partial JSON and unvalidated model
+        # output straight to the browser (issue #18 §5.4).
+        return []
 
     # -- tools -------------------------------------------------------------------
 

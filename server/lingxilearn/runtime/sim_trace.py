@@ -496,9 +496,48 @@ class SimTraceProjector:
         return span
 
     @staticmethod
-    def _model_key(agent: str, payload: Mapping[str, Any]) -> str:
-        node_id = str(payload.get("node_id") or payload.get("work_item_id") or "")
-        return f"{agent}:{node_id}" if node_id else agent
+    def _model_key(
+        agent: str,
+        payload: Mapping[str, Any],
+        runtime: Mapping[str, Any] | None = None,
+    ) -> str:
+        """Keep concurrent same-model calls in separate active buckets."""
+
+        runtime = runtime or {}
+        node_id = str(
+            payload.get("node_id")
+            or payload.get("nodeId")
+            or runtime.get("node_id")
+            or runtime.get("nodeId")
+            or runtime.get("node")
+            or ""
+        )
+        work_item = str(
+            payload.get("work_item_id")
+            or payload.get("workItemId")
+            or runtime.get("work_item_id")
+            or runtime.get("workItemId")
+            or payload.get("task_id")
+            or payload.get("taskId")
+            or runtime.get("task_id")
+            or runtime.get("taskId")
+            or ""
+        )
+        if node_id or work_item:
+            return f"{agent}:node:{node_id}:work:{work_item}"
+        # A graph runtime span can surround an entire dispatch fan-out, so it
+        # is not a work identity when the event already carries node/work
+        # metadata.  Use it only as the last stable fallback.
+        span_id = str(
+            payload.get("span_id")
+            or payload.get("spanId")
+            or runtime.get("span_id")
+            or runtime.get("spanId")
+            or ""
+        )
+        if span_id:
+            return f"{agent}:span:{span_id}"
+        return agent
 
     # -- native graph events --------------------------------------------
 
@@ -914,7 +953,7 @@ class SimTraceProjector:
             return
 
         if kind == "model.started":
-            model_key = self._model_key(agent, safe_payload)
+            model_key = self._model_key(agent, safe_payload, safe_runtime)
             parent = self._ensure_agent(
                 agent,
                 payload=safe_payload,
@@ -930,6 +969,14 @@ class SimTraceProjector:
                 fallback_category="model",
                 provider=safe_payload.get("provider"),
                 model=safe_payload.get("model"),
+                agent=agent,
+                node=(safe_payload.get("node") or safe_runtime.get("node")),
+                workItemId=(
+                    safe_payload.get("work_item_id")
+                    or safe_payload.get("workItemId")
+                    or safe_runtime.get("work_item_id")
+                    or safe_runtime.get("workItemId")
+                ),
                 runtime=_json_safe(safe_runtime),
             )
             self._active_models.setdefault(model_key, []).append(span)
@@ -943,7 +990,7 @@ class SimTraceProjector:
             )
             return
 
-        model_key = self._model_key(agent, safe_payload)
+        model_key = self._model_key(agent, safe_payload, safe_runtime)
         model_span = next(
             (
                 span

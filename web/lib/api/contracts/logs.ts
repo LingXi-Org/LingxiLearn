@@ -247,11 +247,68 @@ export const runtimeEventSchema = z.object({
   createdAt: z.string().nullable().optional(),
 })
 
+/** Versioned semantic trajectory projection used by the Logs timing overview. */
+export const trajectoryLaneIdSchema = z.enum([
+  'run',
+  'control',
+  'task',
+  'action',
+  'runtime',
+  'state',
+  'resource',
+  'output',
+])
+
+export const trajectoryItemSchema = z.object({
+  id: z.string(),
+  lane: trajectoryLaneIdSchema,
+  kind: z.string(),
+  label: z.string(),
+  status: z.string().optional(),
+  startTime: z.string(),
+  endTime: z.string().optional(),
+  relativeStartMs: z.number(),
+  durationMs: z.number(),
+  parentId: z.string().optional(),
+  decisionId: z.string().optional(),
+  roundStep: z.number().optional(),
+  turnId: z.string().optional(),
+  workItemId: z.string().optional(),
+  spanId: z.string().optional(),
+  attempt: z.number().optional(),
+  precision: z.enum(['exact', 'inferred']),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+})
+
+export type TrajectoryItem = z.output<typeof trajectoryItemSchema>
+
+export const trajectoryLaneSchema = z.object({
+  id: trajectoryLaneIdSchema,
+  label: z.string(),
+  items: z.array(trajectoryItemSchema),
+})
+
+export const trajectorySchema = z.object({
+  version: z.string(),
+  executionId: z.string(),
+  clock: z.object({
+    startedAt: z.string(),
+    endedAt: z.string().nullable().optional(),
+    durationMs: z.number(),
+  }),
+  lanes: z.array(trajectoryLaneSchema),
+  relations: z.array(z.record(z.string(), z.unknown())).optional(),
+  summary: z.record(z.string(), z.unknown()).optional(),
+})
+
+export type Trajectory = z.output<typeof trajectorySchema>
+
 const executionDataDetailSchema = z
   .object({
     totalDuration: z.number().nullable().optional(),
     enhanced: z.literal(true).optional(),
     traceSpans: traceSpansSchema.optional(),
+    trajectory: trajectorySchema.optional(),
     runtimeEvents: z.array(runtimeEventSchema).optional(),
     blockExecutions: z.array(blockExecutionSchema).optional(),
     finalOutput: z.unknown().optional(),
@@ -343,6 +400,7 @@ export const executionSnapshotDataSchema = z.object({
   workflowId: z.string().nullable(),
   workflowState: z.record(z.string(), z.unknown()).nullable(),
   traceSpans: z.array(z.record(z.string(), z.unknown())).optional(),
+  trajectory: trajectorySchema.optional(),
   status: z.string().optional(),
   taskId: z.string().optional(),
   graphVersion: z.string().optional(),

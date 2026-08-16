@@ -263,6 +263,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
     resolvedChatId,
     desktopScopeId,
     sendMessage,
+    answerInteraction,
     stopGeneration,
     resources,
     activeResourceId,
@@ -641,6 +642,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
             isLoading={showChatSkeleton}
             onSubmit={handleSubmit}
             onStopGeneration={handleStopGeneration}
+            onQuestionSubmit={answerInteraction}
             messageQueue={messageQueue}
             editingQueuedId={editingQueuedId}
             dispatchingHeadId={dispatchingHeadId}

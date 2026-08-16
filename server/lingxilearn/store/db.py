@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 # compatibility DDL explicit and small: production PostgreSQL still uses the
 # normal Alembic chain, while a local SQLite restart upgrades the existing
 # file in place without discarding learner data.
-_SQLITE_SCHEMA_HEAD = "0017_agent_task_create_idempotency"
+_SQLITE_SCHEMA_HEAD = "0018_mothership_protocol_v1"
 _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "agent_tasks": {
         "create_idempotency_key": "VARCHAR(192)",
@@ -88,10 +88,23 @@ _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
         "user_messages": "JSON NOT NULL DEFAULT '[]'",
         "current_execution_id": "VARCHAR(128)",
         "latest_execution_id": "VARCHAR(128)",
+        # 0018: the long-lived thread status alongside the legacy one-shot one.
+        "thread_status": "VARCHAR(24) NOT NULL DEFAULT 'open'",
     },
     "agent_task_events": {
         "execution_id": "VARCHAR(128)",
         "runtime": "JSON NOT NULL DEFAULT '{}'",
+        # 0018: protocol version + canonical identity on the event log.
+        "protocol_version": "INTEGER NOT NULL DEFAULT 0",
+        "turn_id": "VARCHAR(128)",
+        "agent_run_id": "VARCHAR(128)",
+        "skill_run_id": "VARCHAR(160)",
+    },
+    "agent_executions": {
+        # 0018: link an execution to its turn and to the execution it resumes.
+        "turn_id": "VARCHAR(128)",
+        "parent_execution_id": "VARCHAR(128)",
+        "resumes_execution_id": "VARCHAR(128)",
     },
     "workspace_knowledge_tags": {
         "tag_slot": "VARCHAR(32) NOT NULL DEFAULT ''",
@@ -953,6 +966,74 @@ class Repository:
                 for row in rows
             ]
 
+    @staticmethod
+    async def _write_agent_event_rows(
+        s: AsyncSession, task: AgentTask, task_id: str, events: list[dict[str, Any]]
+    ) -> int:
+        """Allocate sequences and write event rows inside an open transaction.
+
+        Shared by the ordinary append and the outbox publisher so both produce
+        identical rows and identical V1 envelope sequencing.
+        """
+
+        highest = (
+            await s.execute(
+                select(func.max(AgentTaskEvent.sequence)).where(AgentTaskEvent.task_id == task_id)
+            )
+        ).scalar() or 0
+        runtime_records: list[dict[str, Any]] = []
+        for offset, event in enumerate(events, start=1):
+            sequence = highest + offset
+            runtime = event.get("runtime") or (event.get("payload") or {}).get("runtime") or {}
+            payload = event.get("payload") or {}
+            if int(event.get("protocol_version") or 0) == 1:
+                # Keep the V1 envelope seq equal to the durable row
+                # sequence so Last-Event-ID reconnect works uniformly
+                # across protocols (issue #18 §15.2).
+                if isinstance(payload, dict):
+                    payload = dict(payload)
+                    payload["seq"] = sequence
+                    stream = payload.get("stream")
+                    if isinstance(stream, dict) and not stream.get("executionId"):
+                        stream["executionId"] = event.get("execution_id")
+                        payload["stream"] = stream
+            s.add(
+                AgentTaskEvent(
+                    task_id=task_id,
+                    sequence=sequence,
+                    kind=str(event.get("kind", "")),
+                    agent=str(event.get("agent", "")),
+                    payload=payload,
+                    execution_id=event.get("execution_id"),
+                    runtime=runtime,
+                    protocol_version=int(event.get("protocol_version") or 0),
+                    turn_id=event.get("turn_id"),
+                    agent_run_id=event.get("agent_run_id"),
+                    skill_run_id=event.get("skill_run_id"),
+                )
+            )
+            runtime_records.append(
+                {
+                    "record_key": f"task:{task_id}:{sequence}",
+                    "task_id": task_id,
+                    "sequence": sequence,
+                    "kind": str(event.get("kind", "")),
+                    "agent": str(event.get("agent", "")),
+                    "payload": payload,
+                    "execution_id": event.get("execution_id"),
+                    "runtime": runtime,
+                }
+            )
+        await project_runtime_events(
+            s,
+            learner_id=task.learner_id,
+            records=runtime_records,
+            workspace=await s.scalar(
+                select(Workspace).where(Workspace.learner_id == task.learner_id)
+            ),
+        )
+        return highest + len(events)
+
     async def append_agent_events(self, task_id: str, events: list[dict[str, Any]]) -> int:
         if not events:
             async with self.db.session() as s:
@@ -976,68 +1057,47 @@ class Repository:
                 task = await s.get(AgentTask, task_id, with_for_update=True)
                 if task is None:
                     raise KeyError(f"unknown agent task: {task_id}")
-                highest = (
-                    await s.execute(
-                        select(func.max(AgentTaskEvent.sequence)).where(
-                            AgentTaskEvent.task_id == task_id
-                        )
-                    )
-                ).scalar() or 0
-                runtime_records: list[dict[str, Any]] = []
-                for offset, event in enumerate(events, start=1):
-                    sequence = highest + offset
-                    runtime = (
-                        event.get("runtime") or (event.get("payload") or {}).get("runtime") or {}
-                    )
-                    payload = event.get("payload") or {}
-                    if int(event.get("protocol_version") or 0) == 1:
-                        # Keep the V1 envelope seq equal to the durable row
-                        # sequence so Last-Event-ID reconnect works uniformly
-                        # across protocols (issue #18 §15.2).
-                        if isinstance(payload, dict):
-                            payload = dict(payload)
-                            payload["seq"] = sequence
-                            stream = payload.get("stream")
-                            if isinstance(stream, dict) and not stream.get("executionId"):
-                                stream["executionId"] = event.get("execution_id")
-                                payload["stream"] = stream
-                    s.add(
-                        AgentTaskEvent(
-                            task_id=task_id,
-                            sequence=sequence,
-                            kind=str(event.get("kind", "")),
-                            agent=str(event.get("agent", "")),
-                            payload=payload,
-                            execution_id=event.get("execution_id"),
-                            runtime=runtime,
-                            protocol_version=int(event.get("protocol_version") or 0),
-                            turn_id=event.get("turn_id"),
-                            agent_run_id=event.get("agent_run_id"),
-                            skill_run_id=event.get("skill_run_id"),
-                        )
-                    )
-                    runtime_records.append(
-                        {
-                            "record_key": f"task:{task_id}:{sequence}",
-                            "task_id": task_id,
-                            "sequence": sequence,
-                            "kind": str(event.get("kind", "")),
-                            "agent": str(event.get("agent", "")),
-                            "payload": payload,
-                            "execution_id": event.get("execution_id"),
-                            "runtime": runtime,
-                        }
-                    )
-                await project_runtime_events(
-                    s,
-                    learner_id=task.learner_id,
-                    records=runtime_records,
-                    workspace=await s.scalar(
-                        select(Workspace).where(Workspace.learner_id == task.learner_id)
-                    ),
-                )
+                total = await self._write_agent_event_rows(s, task, task_id, events)
                 await s.commit()
-                return highest + len(events)
+                return total
+
+    async def publish_outbox_agent_events(
+        self, *, outbox_id: str, task_id: str, events: list[dict[str, Any]]
+    ) -> bool:
+        """Claim one outbox row and write its events in a single transaction.
+
+        Publishing is exactly-once across processes because the claim and the
+        append commit together: a second publisher's conditional update matches
+        no row and it writes nothing, and a publisher that dies mid-transaction
+        leaves the row unclaimed for the next one.  No "does this event already
+        exist?" read is involved — that check-then-act is precisely what two
+        replicas can both pass (issue #18 §10.6).
+        """
+
+        task_record = await self.get_agent_task(task_id)
+        if task_record is None:
+            raise KeyError(f"unknown agent task: {task_id}")
+        await self.ensure_workspace(task_record.learner_id)
+        async with self.db.agent_event_lock(task_id):
+            async with self.db.session() as s:
+                claimed = await s.execute(
+                    update(TransactionalOutbox)
+                    .where(
+                        TransactionalOutbox.id == outbox_id,
+                        TransactionalOutbox.published_at.is_(None),
+                    )
+                    .values(published_at=utcnow())
+                )
+                if not int(getattr(claimed, "rowcount", 0) or 0):
+                    await s.rollback()
+                    return False
+                task = await s.get(AgentTask, task_id, with_for_update=True)
+                if task is None:
+                    await s.rollback()
+                    raise KeyError(f"unknown agent task: {task_id}")
+                await self._write_agent_event_rows(s, task, task_id, events)
+                await s.commit()
+                return True
 
     async def agent_events_after(
         self, task_id: str, after: int = 0, limit: int = 500
@@ -1066,7 +1126,11 @@ class Repository:
             return int(count or 0)
 
     async def agent_events_for_execution(
-        self, execution_id: str, learner_id: str, limit: int = 5000
+        self,
+        execution_id: str,
+        learner_id: str,
+        limit: int = 5000,
+        after: int = 0,
     ) -> list[dict[str, Any]]:
         async with self.db.session() as s:
             rows = (
@@ -1076,6 +1140,7 @@ class Repository:
                     .where(
                         AgentTaskEvent.execution_id == execution_id,
                         AgentTask.learner_id == learner_id,
+                        AgentTaskEvent.sequence > max(0, int(after or 0)),
                     )
                     .order_by(AgentTaskEvent.sequence)
                     .limit(limit)
@@ -1361,6 +1426,228 @@ class Repository:
                     return {"answers": list(existing.answers or []), "created": False}
                 raise
             return {"answers": list(answers), "created": True}
+
+    async def claim_interaction_answer(
+        self,
+        *,
+        interaction_id: str,
+        task_id: str,
+        answers: list[dict[str, Any]],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Resolve one blocking interaction and enqueue its continuation atomically.
+
+        The answer, the pending→resolved transition and the durable
+        continuation command commit together, so a crash between them is
+        impossible: either the thread is still waiting for an answer, or a
+        replayable command exists to resume the original checkpoint.  The
+        continuation belongs to the interaction's own turn — answering never
+        opens a new one (issue #18 §10.4).
+
+        Outcomes: ``accepted`` (this call resolved it), ``duplicate`` (same
+        idempotency key and payload — returns the original), ``conflict``
+        (same key, different payload), ``already_resolved`` (another answer
+        won), ``not_found``, ``invalid``.
+        """
+
+        async with self.db.session() as s:
+            # Serialise concurrent answers for this thread; two different keys
+            # must not both observe a pending interaction.
+            task = await s.scalar(
+                select(AgentTask).where(AgentTask.id == task_id).with_for_update()
+            )
+            if task is None:
+                return {"outcome": "not_found"}
+            interaction = await s.scalar(
+                select(AgentInteraction)
+                .where(
+                    AgentInteraction.id == interaction_id,
+                    AgentInteraction.task_id == task_id,
+                )
+                .with_for_update()
+            )
+            if interaction is None:
+                return {"outcome": "not_found"}
+            existing_answer = await s.scalar(
+                select(AgentInteractionAnswer).where(
+                    AgentInteractionAnswer.interaction_id == interaction_id,
+                    AgentInteractionAnswer.idempotency_key == idempotency_key,
+                )
+            )
+            if existing_answer is not None:
+                if list(existing_answer.answers or []) != list(answers):
+                    return {"outcome": "conflict"}
+                command = await s.scalar(
+                    select(CommandInbox).where(
+                        CommandInbox.task_id == task_id,
+                        CommandInbox.idempotency_key
+                        == _interaction_command_key(interaction_id, idempotency_key),
+                    )
+                )
+                return {
+                    "outcome": "duplicate",
+                    "answers": list(existing_answer.answers or []),
+                    "command": _command_dict(command) if command is not None else None,
+                    "interaction": _interaction_dict(interaction),
+                }
+            if interaction.status == "resolved":
+                return {"outcome": "already_resolved", "interaction": _interaction_dict(interaction)}
+            if interaction.status != "pending":
+                return {"outcome": "invalid", "status": interaction.status}
+            if not interaction.blocking:
+                return {"outcome": "invalid", "status": "non_blocking"}
+
+            sequence = (
+                int(
+                    await s.scalar(
+                        select(func.coalesce(func.max(CommandInbox.sequence), 0)).where(
+                            CommandInbox.task_id == task_id
+                        )
+                    )
+                    or 0
+                )
+                + 1
+            )
+            # The continuation belongs to the turn that paused.  Older
+            # interactions predating turn linkage fall back to the newest turn
+            # so the command ledger's foreign key stays valid.
+            turn_id = str(interaction.turn_id or "")
+            if not turn_id:
+                turn_id = str(
+                    await s.scalar(
+                        select(AgentTurn.id)
+                        .where(AgentTurn.task_id == task_id)
+                        .order_by(AgentTurn.turn_index.desc())
+                        .limit(1)
+                    )
+                    or ""
+                )
+            if not turn_id:
+                return {"outcome": "invalid", "status": "no_turn"}
+            # The pending→resolved transition is the election: a conditional
+            # UPDATE is atomic on both PostgreSQL and SQLite, so two concurrent
+            # answers cannot both observe a pending interaction and both
+            # resume the same checkpoint.
+            elected = await s.execute(
+                update(AgentInteraction)
+                .where(
+                    AgentInteraction.id == interaction_id,
+                    AgentInteraction.status == "pending",
+                )
+                .values(status="resolved", resolved_at=utcnow())
+            )
+            if not int(getattr(elected, "rowcount", 0) or 0):
+                await s.rollback()
+                return {"outcome": "already_resolved"}
+            answer_row = AgentInteractionAnswer(
+                interaction_id=interaction_id,
+                answers=list(answers),
+                idempotency_key=idempotency_key,
+            )
+            # The public ``interaction.resolved`` fact commits with the
+            # transition that produced it.  Appending it afterwards would let a
+            # crash leave an interaction durably resolved while the replay log
+            # still says the card is pending — the recap would disappear on
+            # refresh (issue #18 §10.6).  The outbox row is the durable intent;
+            # the service publishes it into the event log and marks it, and any
+            # later replay repairs a missed publish.
+            outbox = TransactionalOutbox(
+                id=f"outbox_{uuid4().hex}",
+                event_key=interaction_resolved_event_key(interaction_id),
+                task_id=task_id,
+                turn_id=turn_id,
+                kind="interaction.resolved",
+                safe_payload={
+                    "interaction_id": interaction_id,
+                    "execution_id": str(interaction.execution_id or ""),
+                    "turn_id": turn_id,
+                    "answers": list(answers),
+                },
+            )
+            command = CommandInbox(
+                id=f"cmd_{uuid4().hex}",
+                task_id=task_id,
+                turn_id=turn_id,
+                sequence=sequence,
+                kind="interaction_answer",
+                idempotency_key=_interaction_command_key(interaction_id, idempotency_key),
+                payload={
+                    "interaction_id": interaction_id,
+                    "answers": list(answers),
+                },
+            )
+            s.add_all([answer_row, command, outbox])
+            try:
+                await s.commit()
+            except IntegrityError:
+                await s.rollback()
+                return {"outcome": "already_resolved"}
+            return {
+                "outcome": "accepted",
+                "answers": list(answers),
+                "command": _command_dict(command),
+            }
+
+    async def pending_outbox(self, *, task_id: str | None = None) -> list[dict[str, Any]]:
+        """Durable facts committed with their transaction but not yet published."""
+
+        async with self.db.session() as s:
+            stmt = select(TransactionalOutbox).where(TransactionalOutbox.published_at.is_(None))
+            if task_id is not None:
+                stmt = stmt.where(TransactionalOutbox.task_id == task_id)
+            rows = (await s.scalars(stmt.order_by(TransactionalOutbox.created_at))).all()
+            return [
+                {
+                    "id": row.id,
+                    "event_key": row.event_key,
+                    "task_id": row.task_id,
+                    "turn_id": row.turn_id,
+                    "kind": row.kind,
+                    "payload": dict(row.safe_payload or {}),
+                }
+                for row in rows
+            ]
+
+    async def mark_outbox_published(self, outbox_id: str) -> bool:
+        """Mark one outbox row published; only the first caller gets True."""
+
+        async with self.db.session() as s:
+            result = await s.execute(
+                update(TransactionalOutbox)
+                .where(
+                    TransactionalOutbox.id == outbox_id,
+                    TransactionalOutbox.published_at.is_(None),
+                )
+                .values(published_at=utcnow())
+            )
+            await s.commit()
+            return bool(getattr(result, "rowcount", 0))
+
+    async def pending_interaction_continuations(self) -> list[dict[str, Any]]:
+        """Continuation commands whose resume never ran (crash recovery).
+
+        A durable command that is still unconsumed means the answer committed
+        but its checkpoint resume did not complete; startup replays it instead
+        of leaving the thread waiting forever.
+        """
+
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(CommandInbox, AgentTask.learner_id)
+                    .join(AgentTask, AgentTask.id == CommandInbox.task_id)
+                    .where(
+                        CommandInbox.kind == "interaction_answer",
+                        CommandInbox.consumed_at.is_(None),
+                        AgentTask.deleted_at.is_(None),
+                    )
+                    .order_by(CommandInbox.created_at)
+                )
+            ).all()
+            return [
+                {**_command_dict(command), "learner_id": learner_id}
+                for command, learner_id in rows
+            ]
 
     async def pending_interactions(self, task_id: str) -> list[dict[str, Any]]:
         async with self.db.session() as s:
@@ -2388,6 +2675,26 @@ def _quiz_submission_dict(row: QuizSubmission) -> dict[str, Any]:
         "handoff_reason": row.handoff_reason,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
+
+
+def interaction_resolved_event_key(interaction_id: str) -> str:
+    """Outbox key for one interaction's public ``resolved`` fact.
+
+    Unique per interaction, so a retried answer can only ever repair the same
+    row — never publish a second resolved event.
+    """
+
+    return f"interaction:{interaction_id}:resolved"
+
+
+def _interaction_command_key(interaction_id: str, idempotency_key: str) -> str:
+    """Command-ledger key for one interaction answer.
+
+    Namespaced by interaction so a learner's own idempotency key cannot
+    collide with a message command's key on the same task.
+    """
+
+    return f"interaction:{interaction_id}:{idempotency_key}"
 
 
 def _command_dict(row: CommandInbox) -> dict[str, Any]:

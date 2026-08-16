@@ -24,6 +24,7 @@ import mimetypes
 import secrets
 import uuid
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -74,6 +75,7 @@ from .runtime.sim_semantics import (
     replay_sim_trace,
     sim_trace_total_tokens,
 )
+from .runtime.trajectory import build_trajectory_projection
 from .state.session_state import Goal, GoalKind, RuntimeStatus, new_budget
 from .state.skill_catalog import discover as discover_skill_manifests
 from .store.db import Database, Repository
@@ -92,6 +94,34 @@ logger = logging.getLogger(__name__)
 FLUSH_EVERY = 6
 AGENT_FLUSH_EVERY = 4
 """Batch size for persisting projections mid-run — small enough to feel live."""
+
+AGENT_EVENT_PAGE_SIZE = 5000
+"""Maximum number of durable events loaded per execution snapshot page."""
+
+
+def _utc_datetime(value: datetime | None) -> datetime | None:
+    """Normalize SQLite's naive timezone columns before arithmetic."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _event_timestamp(value: Any) -> datetime | None:
+    """Parse a durable event timestamp for truncation-boundary annotations."""
+
+    if isinstance(value, datetime):
+        return _utc_datetime(value)
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, UTC)
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return _utc_datetime(parsed)
+    return None
 
 
 class _ProviderEventRuntime:
@@ -490,6 +520,9 @@ class Service:
         self._hold_sweep_locks = self._board_locks
         self._hold_sweep_pending: set[str] = set()
         self._conversation_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        # Publishing an interaction outbox row is idempotent across processes;
+        # this lock only keeps one process from doing the same work twice.
+        self._interaction_publish_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._conversation_queue: defaultdict[str, asyncio.Queue[dict[str, Any]]] = defaultdict(
             asyncio.Queue
         )
@@ -572,6 +605,11 @@ class Service:
         # atomic claim in _run_agent_task makes this safe across replicas.
         for task in await self.repo.queued_agent_tasks():
             self._spawn(self._drive_agent_task(task["id"], task["learner_id"], task["prompt"]))
+        # An interaction answer commits its continuation command before the
+        # resume runs.  A command still unconsumed means the resume never
+        # finished; replay it rather than leaving the thread paused forever
+        # (issue #18 §10.4).
+        await self._recover_interaction_continuations()
         logger.info(
             "LingxiLearn ready: %d pack(s), %d knowledge chunks, brain=%s",
             len(self.packs),
@@ -1088,14 +1126,159 @@ class Service:
             artifacts.append("quiz")
         return results, tuple(dict.fromkeys(artifacts))
 
+    async def _agent_events_for_execution_snapshot(
+        self, execution_id: str, learner_id: str
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Read an execution's event log to completion, page by sequence.
+
+        ``agent_events_for_execution`` historically defaulted to 5,000 rows.
+        A one-shot call made long runs look complete while silently dropping
+        their tail.  Keep paging until the repository reports a short page or
+        the durable count is satisfied, and return an explicit read status if
+        a legacy repository cannot page or makes no progress.
+        """
+
+        expected_count: int | None = None
+        count_reader = getattr(self.repo, "agent_event_count_for_execution", None)
+        if callable(count_reader):
+            try:
+                expected_count = max(0, int(await count_reader(execution_id)))
+            except Exception:  # noqa: BLE001 - snapshot remains useful without a count index
+                expected_count = None
+
+        records: list[dict[str, Any]] = []
+        seen_sequences: set[int] = set()
+        cursor = 0
+        truncated = False
+        legacy_reader = False
+        pages = 0
+
+        while True:
+            pages += 1
+            try:
+                page = await self.repo.agent_events_for_execution(
+                    execution_id,
+                    learner_id,
+                    limit=AGENT_EVENT_PAGE_SIZE,
+                    after=cursor,
+                )
+            except TypeError:
+                # Keep compatibility with an older repository implementation,
+                # but never treat its 5,000-row result as complete when there
+                # is no cursor support for a follow-up page.
+                legacy_reader = True
+                if cursor:
+                    truncated = True
+                    break
+                page = await self.repo.agent_events_for_execution(execution_id, learner_id)
+
+            if not isinstance(page, list):
+                page = list(page or ())
+            if not page:
+                if expected_count is not None and len(records) < expected_count:
+                    truncated = True
+                break
+
+            new_page: list[dict[str, Any]] = []
+            page_sequences: list[int] = []
+            for raw in page:
+                if not isinstance(raw, dict):
+                    continue
+                item = dict(raw)
+                raw_sequence = item.get("sequence")
+                try:
+                    sequence = int(raw_sequence) if raw_sequence is not None else None
+                except (TypeError, ValueError):
+                    sequence = None
+                if sequence is None:
+                    new_page.append(item)
+                    continue
+                if sequence <= cursor or sequence in seen_sequences:
+                    continue
+                seen_sequences.add(sequence)
+                page_sequences.append(sequence)
+                new_page.append(item)
+
+            if not new_page:
+                # A repository that ignores ``after`` would otherwise loop
+                # forever and silently return only the first page.
+                truncated = True
+                break
+
+            records.extend(new_page)
+            next_cursor = max(page_sequences, default=cursor)
+            if expected_count is not None and len(records) >= expected_count:
+                break
+            if len(page) < AGENT_EVENT_PAGE_SIZE:
+                if expected_count is None or len(records) >= expected_count:
+                    break
+                truncated = True
+                break
+            if next_cursor <= cursor:
+                # Sequence-less full pages cannot be paged safely.  Mark the
+                # affected tail inferred instead of claiming a full replay.
+                truncated = True
+                break
+            cursor = next_cursor
+            if legacy_reader:
+                truncated = True
+                break
+
+        complete = not truncated and (
+            expected_count is None or len(records) >= expected_count
+        )
+        if expected_count is not None and len(records) < expected_count:
+            truncated = True
+            complete = False
+        boundary = None
+        if records:
+            boundary = records[-1].get("ts") or records[-1].get("created_at")
+        status = {
+            "truncated": bool(truncated),
+            "complete": bool(complete),
+            "loaded": len(records),
+            "expected": expected_count,
+            "pages": pages,
+            "pageSize": AGENT_EVENT_PAGE_SIZE,
+            "truncatedAfter": boundary if truncated else None,
+        }
+        return records, status
+
+    @staticmethod
+    def _annotate_truncated_trajectory(
+        trajectory: dict[str, Any],
+        event_read: Mapping[str, Any],
+    ) -> None:
+        """Mark only the uncertain tail as inferred when event paging stops."""
+
+        trajectory["eventLog"] = dict(event_read)
+        if not event_read.get("truncated"):
+            return
+        boundary = _event_timestamp(event_read.get("truncatedAfter"))
+        for lane in trajectory.get("lanes") or []:
+            if not isinstance(lane, dict):
+                continue
+            for item in lane.get("items") or []:
+                if not isinstance(item, dict) or lane.get("id") == "run":
+                    continue
+                start = _event_timestamp(item.get("startTime"))
+                if boundary is not None and start is not None and start < boundary:
+                    continue
+                item["precision"] = "inferred"
+                metadata = item.setdefault("metadata", {})
+                if isinstance(metadata, dict):
+                    metadata["eventLogTruncated"] = True
+
     async def agent_execution_snapshot(self, execution_id: str, learner_id: str) -> dict[str, Any]:
         row = await self.repo.get_agent_execution(execution_id, learner_id)
         if row is None:
             raise KeyError(f"unknown execution: {execution_id}")
-        started = row.started_at
-        ended = row.ended_at
+        started = _utc_datetime(row.started_at)
+        ended = _utc_datetime(row.ended_at)
         duration = int((ended - started).total_seconds() * 1000) if ended and started else None
-        records = await self.repo.agent_events_for_execution(execution_id, learner_id)
+        records, event_read = await self._agent_events_for_execution_snapshot(
+            execution_id, learner_id
+        )
         trace = replay_sim_trace(
             records,
             execution_id=row.id,
@@ -1107,6 +1290,12 @@ class Service:
         )
         if len(trace) <= 1 and row.trace_spans:
             trace = row.trace_spans
+        trajectory = build_trajectory_projection(
+            row,
+            records,
+            trace,
+        )
+        self._annotate_truncated_trajectory(trajectory, event_read)
         return {
             "executionId": row.id,
             "workflowId": "lingxi-agent",
@@ -1117,6 +1306,8 @@ class Service:
             "projectionVersion": (row.workflow_state or {}).get("version", "sim-runtime.v1"),
             "workflowState": row.workflow_state or {},
             "traceSpans": trace,
+            "trajectory": trajectory,
+            "eventLog": event_read,
             "executionMetadata": {
                 "trigger": row.trigger,
                 "startedAt": started.isoformat() if started else None,
@@ -1239,9 +1430,36 @@ class Service:
                                 WorkspaceFile.path == path,
                             )
                         )
-                        if existing is not None:
-                            continue
                         raw = source.read_bytes()
+                        content_hash = hashlib.sha256(raw).hexdigest()
+                        if existing is not None:
+                            # A task id is a long-lived thread: a later turn can
+                            # regenerate the same artifact kind.  Keep the stable
+                            # resource identity but refresh its backing version,
+                            # so "产物已完成" never opens the previous turn's copy
+                            # (issue #18 §12.2).
+                            metadata = dict(existing.metadata_payload or {})
+                            if metadata.get("contentHash") == content_hash:
+                                continue
+                            storage_key = f"{learner_id}/{secrets.token_urlsafe(24)}"
+                            target_root = self.settings.var_dir / "workspaces" / learner_id
+                            target_root.mkdir(parents=True, exist_ok=True)
+                            (target_root / storage_key.split("/", 1)[1]).write_bytes(raw)
+                            metadata.update(
+                                {
+                                    "source": "lingxigraph",
+                                    "taskId": task_key,
+                                    "taskTitle": title,
+                                    "readOnly": True,
+                                    "contentHash": content_hash,
+                                    "generation": int(metadata.get("generation") or 1) + 1,
+                                }
+                            )
+                            existing.storage_key = storage_key
+                            existing.size = len(raw)
+                            existing.metadata_payload = metadata
+                            projected += 1
+                            continue
                         storage_key = f"{learner_id}/{secrets.token_urlsafe(24)}"
                         target_root = self.settings.var_dir / "workspaces" / learner_id
                         target_root.mkdir(parents=True, exist_ok=True)
@@ -1262,6 +1480,8 @@ class Service:
                                     "taskId": task_key,
                                     "taskTitle": title,
                                     "readOnly": True,
+                                    "contentHash": content_hash,
+                                    "generation": 1,
                                 },
                             )
                         )
@@ -1644,59 +1864,214 @@ class Service:
         interaction = await self.repo.get_interaction(interaction_id, task_id=task_id)
         if interaction is None:
             raise KeyError(f"unknown interaction: {interaction_id}")
-        if interaction.get("status") == "resolved":
-            # Idempotent replay of an already-answered interaction.
-            return {"status": "already_resolved", "interactionId": interaction_id}
-        if interaction.get("status") != "pending":
-            raise ValueError(f"interaction is {interaction.get('status')}")
-        if not interaction.get("blocking"):
-            raise ValueError("non-blocking suggestions are answered by a new message")
         validated = parse_answers(answers)
-        await self.repo.save_interaction_answer(
+        payload_answers = [answer.model_dump(mode="json", by_alias=True) for answer in validated]
+        # One atomic step: persist the answer, resolve the interaction and
+        # enqueue the durable continuation command.  Nothing below can leave
+        # the thread resolved-but-never-resumed (issue #18 §10.4).
+        claim = await self.repo.claim_interaction_answer(
             interaction_id=interaction_id,
-            answers=[answer.model_dump(mode="json", by_alias=True) for answer in validated],
+            task_id=task_id,
+            answers=payload_answers,
             idempotency_key=idempotency_key or f"{interaction_id}:answer",
         )
-        await self.repo.resolve_interaction(interaction_id)
+        outcome = str(claim.get("outcome") or "")
+        if outcome == "not_found":
+            raise KeyError(f"unknown interaction: {interaction_id}")
+        if outcome == "conflict":
+            raise ValueError("idempotency_key_reused")
+        if outcome == "invalid":
+            status = str(claim.get("status") or "")
+            if status == "non_blocking":
+                raise ValueError("non-blocking suggestions are answered by a new message")
+            raise ValueError(f"interaction is {status}")
+        if outcome == "already_resolved":
+            # A real UI retry after a failed publish arrives with a *new*
+            # idempotency key, so it lands here rather than on ``duplicate``.
+            # The interaction is durably resolved, so this call must still
+            # repair: publish the public fact and make sure the continuation
+            # actually runs.  Both steps are idempotent, and the durable run
+            # claim stops a second resume (issue #18 §10.6).
+            await self._publish_interaction_outbox(task_id)
+            self._spawn(self._drain_interaction_continuations(task_id, learner_id))
+            return {"status": "already_resolved", "interactionId": interaction_id}
+        if outcome == "duplicate":
+            # A retry of the accepted answer: the continuation is already
+            # durable, so report the original outcome without a second resume.
+            # The retry still repairs a publish the original attempt may have
+            # died before completing.
+            await self._publish_interaction_outbox(task_id)
+            return {"status": "accepted", "interactionId": interaction_id}
 
-        execution_id = str(interaction.get("execution_id") or "")
-        projector = PublicProjector(
-            chat_id=task_id,
-            execution_id=execution_id,
-            turn_id=str(interaction.get("turn_id") or ""),
-            request_id=execution_id,
-        )
-        resolved_payload = {
-            "interaction_id": interaction_id,
-            "answers": [answer.model_dump(mode="json", by_alias=True) for answer in validated],
-        }
-        v1_rows = _project_public_events(
-            projector,
-            [{"kind": "interaction.resolved", "agent": "", "payload": resolved_payload}],
-            execution_id=execution_id,
-        )
-        await self.repo.append_agent_events(
-            task_id,
-            [
-                {
-                    "kind": "interaction.resolved",
-                    "agent": "",
-                    "payload": resolved_payload,
-                    "execution_id": execution_id or None,
-                    "runtime": {},
-                },
-                *v1_rows,
-            ],
-        )
-        self._notify_agent(task_id)
+        await self._publish_interaction_outbox(task_id)
 
         resume = {
             "kind": "interaction_answer",
             "interaction_id": interaction_id,
-            "answers": [answer.model_dump(mode="json", by_alias=True) for answer in validated],
+            "answers": payload_answers,
         }
+        # The spawn is only the fast path: the command ledger already holds the
+        # continuation, so a process death here is recovered at startup.
         self._spawn(self._drive_agent_task(task_id, learner_id, "", resume=resume))
         return {"status": "accepted", "interactionId": interaction_id}
+
+    async def _publish_interaction_outbox(self, task_id: str) -> int:
+        """Publish committed interaction facts into the replay log.
+
+        ``claim_interaction_answer`` commits the answer, the pending→resolved
+        transition and this outbox row in one transaction, so the public event
+        can never contradict the durable state: either both exist, or the
+        pending row is still here to be published.  Publishing is idempotent —
+        an event already in the log only marks its row — so a crash between the
+        append and the mark cannot duplicate the fact, and any later answer
+        retry, drain or restart repairs a publish that never finished
+        (issue #18 §10.6).
+        """
+
+        published = 0
+        # The lock only spares one process from redundant work; correctness
+        # comes from the repository claiming the outbox row and writing its
+        # events in one transaction, so two replicas cannot both publish.
+        async with self._interaction_publish_locks[task_id]:
+            rows = [
+                row
+                for row in await self.repo.pending_outbox(task_id=task_id)
+                if row.get("kind") == "interaction.resolved"
+            ]
+            if not rows:
+                return 0
+            for row in rows:
+                payload = dict(row.get("payload") or {})
+                interaction_id = str(payload.get("interaction_id") or "")
+                if not interaction_id:
+                    await self.repo.mark_outbox_published(str(row["id"]))
+                    continue
+                execution_id = str(payload.get("execution_id") or "")
+                resolved_payload = {
+                    "interaction_id": interaction_id,
+                    "answers": list(payload.get("answers") or []),
+                }
+                projector = PublicProjector(
+                    chat_id=task_id,
+                    execution_id=execution_id,
+                    turn_id=str(payload.get("turn_id") or ""),
+                    request_id=execution_id,
+                )
+                v1_rows = _project_public_events(
+                    projector,
+                    [{"kind": "interaction.resolved", "agent": "", "payload": resolved_payload}],
+                    execution_id=execution_id,
+                )
+                if await self.repo.publish_outbox_agent_events(
+                    outbox_id=str(row["id"]),
+                    task_id=task_id,
+                    events=[
+                        {
+                            "kind": "interaction.resolved",
+                            "agent": "",
+                            "payload": resolved_payload,
+                            "execution_id": execution_id or None,
+                            "runtime": {},
+                        },
+                        *v1_rows,
+                    ],
+                ):
+                    published += 1
+            if published:
+                self._notify_agent(task_id)
+        return published
+
+    async def _drain_interaction_continuations(self, task_id: str, learner_id: str) -> int:
+        """Resume answered interactions whose fast-path resume could not claim.
+
+        An answer can be accepted while the previous execution is still
+        running: the continuation command is durable at that point, but
+        ``claim_agent_task`` refuses a running thread, so that first resume
+        attempt returns without doing anything.  The finishing execution calls
+        this the moment it becomes claimable again, so a learner who answers
+        quickly is not left waiting for a process restart (issue #18 §10.4).
+
+        The command ledger is the coordination point: each pass re-reads the
+        pending commands, and a resume that runs to a durable outcome consumes
+        its own command, so a concurrent drain cannot replay it.
+        """
+
+        drained = 0
+        async with self._conversation_locks[task_id]:
+            while True:
+                pending = [
+                    command
+                    for command in await self.repo.pending_commands(task_id)
+                    if command.get("kind") == "interaction_answer"
+                ]
+                if not pending:
+                    return drained
+                record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                if record is None:
+                    return drained
+                if str(getattr(record, "thread_status", "") or "open") == "cancelled":
+                    return drained
+                if record.status in {"queued", "running"}:
+                    # A live turn owns the thread; whoever finishes it drains.
+                    return drained
+                payload = dict(pending[0].get("payload") or {})
+                interaction_id = str(payload.get("interaction_id") or "")
+                if not interaction_id:
+                    await self.repo.consume_command(str(pending[0]["id"]))
+                    continue
+                owned = await self._drive_agent_task(
+                    task_id,
+                    learner_id,
+                    "",
+                    resume={
+                        "kind": "interaction_answer",
+                        "interaction_id": interaction_id,
+                        "answers": list(payload.get("answers") or []),
+                    },
+                )
+                if not owned:
+                    # Another worker (the answer's own fast path, or a drain in
+                    # another replica) won the durable claim and is executing
+                    # this continuation.  Consuming its command here would let
+                    # a crash on the winning side lose the answer entirely, so
+                    # ownership — not arrival — decides who may consume.
+                    return drained
+                drained += 1
+                # This call owned the run, so it may close the ledger entry:
+                # a resume that reached a durable outcome already consumed it,
+                # and consuming here covers the failed turn so one continuation
+                # is never replayed in a loop.
+                await self.repo.consume_command(str(pending[0]["id"]))
+
+    async def _recover_interaction_continuations(self) -> int:
+        """Replay answered-but-unresumed interactions after a restart."""
+
+        recovered = 0
+        # A publish that never finished is repaired first: the interaction is
+        # durably resolved, so the replay log must say so before the recap is
+        # rebuilt (issue #18 §10.6).
+        for row in await self.repo.pending_outbox():
+            if row.get("kind") == "interaction.resolved":
+                await self._publish_interaction_outbox(str(row["task_id"]))
+        for command in await self.repo.pending_interaction_continuations():
+            payload = dict(command.get("payload") or {})
+            interaction_id = str(payload.get("interaction_id") or "")
+            if not interaction_id:
+                continue
+            self._spawn(
+                self._drive_agent_task(
+                    str(command["task_id"]),
+                    str(command.get("learner_id") or ""),
+                    "",
+                    resume={
+                        "kind": "interaction_answer",
+                        "interaction_id": interaction_id,
+                        "answers": list(payload.get("answers") or []),
+                    },
+                )
+            )
+            recovered += 1
+        return recovered
 
     async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
         """Drain queued learner inputs through the normal turn coordinator.
@@ -1880,7 +2255,15 @@ class Service:
         resume: dict[str, Any] | None = None,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
-    ) -> None:
+    ) -> bool:
+        """Run one turn; returns whether *this* call owned the run.
+
+        False means another worker won the durable ``claim_agent_task`` (or the
+        thread was gone), so this caller executed nothing and must not act as
+        if it had — in particular it must not consume the command ledger entry
+        the winner is working from (issue #18 §10.4).
+        """
+
         # Keep the public task launcher cheap: queued tasks wait here instead
         # of all retaining graph state and provider response buffers at once.
         runner = asyncio.current_task()
@@ -1888,7 +2271,7 @@ class Service:
             self._agent_runners[task_id].add(runner)
         try:
             async with self._agent_slots:
-                await self._run_agent_task(
+                return await self._run_agent_task(
                     task_id,
                     learner_id,
                     prompt,
@@ -1913,15 +2296,17 @@ class Service:
         resume: dict[str, Any] | None = None,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
-    ) -> None:
+    ) -> bool:
+        """Execute one turn; returns whether this call claimed the thread."""
+
         self._hold_sweep_pending.discard(task_id)
         if self.agent_model is None:
             await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
             self._notify_agent(task_id)
-            return
+            return False
         record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
         if record is None:
-            return
+            return False
         if resume is not None and resume.get("message"):
             await self.repo.update_agent_task_output(
                 task_id,
@@ -1937,12 +2322,13 @@ class Service:
             )
         latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
         if latest is None or latest.status == "cancelled":
-            return
+            return False
         claimed = await self.repo.claim_agent_task(task_id, learner_id)
         if claimed is None:
             # Another API process (or the request that originally created the
-            # task) already owns this run.
-            return
+            # task) already owns this run.  The caller must treat this as "not
+            # mine": the winner owns the command ledger entry too.
+            return False
         record = claimed
         # Freeze the command set belonging to this turn.  Inputs arriving
         # while the graph is running belong to a later turn and must remain
@@ -2057,7 +2443,7 @@ class Service:
                 ],
             )
             self._notify_agent(task_id)
-            return
+            return True
 
         response_composed = False
 
@@ -2217,7 +2603,7 @@ class Service:
             ):
                 current_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
                 if current_record is None:
-                    return
+                    return True
                 if current_record.status == "cancelled":
                     snapshot = projector.snapshot()
                     await self.repo.update_agent_execution(
@@ -2228,7 +2614,7 @@ class Service:
                         ended=True,
                     )
                     self._notify_agent(task_id)
-                    return
+                    return True
                 mode, event = streamed
                 force_flush = False
                 if mode == "messages":
@@ -2356,12 +2742,15 @@ class Service:
                 ended=True,
             )
             self._notify_agent(task_id)
-            return
+            # A failed turn still releases the thread; an answer accepted while
+            # it was running must not wait for a restart (issue #18 §10.4).
+            self._spawn(self._drain_interaction_continuations(task_id, learner_id))
+            return True
 
         if buffer:
             await persist_buffer(buffer)
         if graph is None:  # pragma: no cover - the try/except above returns on failure
-            return
+            return True
         state = await graph.aget_state(config)
         values = dict(getattr(state, "values", None) or {})
         status = _agent_task_status(values, interrupted=bool(getattr(state, "interrupts", None)))
@@ -2422,6 +2811,10 @@ class Service:
         except Exception:  # noqa: BLE001 - projection must not fail the task
             logger.exception("failed to project task artifacts: %s", task_id)
         self._notify_agent(task_id)
+        # The thread is claimable again: pick up any interaction answer that
+        # was accepted while this execution still held it (issue #18 §10.4).
+        self._spawn(self._drain_interaction_continuations(task_id, learner_id))
+        return True
 
     async def _sweep_holds(self, task_id: str, learner_id: str) -> None:
         async with self._hold_sweep_locks[task_id]:

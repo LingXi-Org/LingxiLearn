@@ -288,3 +288,32 @@ def test_multi_turn_fixture_carries_user_text_per_turn() -> None:
         "turn_fixture_1",
         "turn_fixture_2",
     }
+
+
+def test_primary_and_supporting_fixture_keeps_one_top_level_voice() -> None:
+    """Only the primary AgentRun writes ChatContent (issue #18 §6.2).
+
+    The same fixture also pins the safety boundary: a raw provider
+    ``assistant.delta`` produces no public text at all.
+    """
+
+    envelopes = json.loads(
+        (FIXTURE_DIR / "primary-and-supporting.json").read_text(encoding="utf-8")
+    )
+    roles = {
+        e["payload"]["agentRunId"]: e["payload"]["presentationRole"]
+        for e in envelopes
+        if e["type"] == "span" and e["payload"]["event"] == "start"
+    }
+    assert roles == {"ar_answer": "primary", "ar_visual": "supporting"}
+
+    texts = [e for e in envelopes if e["type"] == "text"]
+    assistant = [e for e in texts if e["payload"]["channel"] == "assistant"]
+    assert assistant, "the primary agent must own the top-level response"
+    assert {e["scope"]["agentRunId"] for e in assistant} == {"ar_answer"}
+    supporting = [e for e in texts if e["scope"]["agentRunId"] == "ar_visual"]
+    assert supporting and all(e["payload"]["channel"] == "narration" for e in supporting)
+
+    body = json.dumps(envelopes, ensure_ascii=False)
+    assert "未校验的原始模型输出" not in body, "raw assistant.delta must never be published"
+    assert "learner_message" not in body

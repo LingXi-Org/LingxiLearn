@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import {
   EnterpriseSidebar,
+  type EnterpriseSidebarLocale,
   type EnterpriseSidebarProps,
 } from '@/app/(landing)/enterprise/components/enterprise-platform-loop/enterprise-sidebar'
 import { DESIGN, useDesignScale } from '@/app/(landing)/hooks/use-design-scale'
@@ -10,6 +11,10 @@ import { DESIGN, useDesignScale } from '@/app/(landing)/hooks/use-design-scale'
 interface HeroLoopShellProps {
   /** Workspace name in the sidebar header chip. */
   workspaceName?: string
+  /** Brand mark in the workspace header. */
+  brandIconSrc?: string
+  /** Visible sidebar copy locale. */
+  locale?: EnterpriseSidebarLocale
   /** Recent-chat entries in the sidebar - four fill the design height. */
   chats: readonly string[]
   /** Deployed-workflow entries in the sidebar - five fill the design height. */
@@ -30,6 +35,8 @@ interface HeroLoopShellProps {
  */
 export function HeroLoopShell({
   workspaceName = 'Brightwave',
+  brandIconSrc,
+  locale = 'en',
   chats,
   workflows,
   activeNav,
@@ -49,6 +56,8 @@ export function HeroLoopShell({
       >
         <EnterpriseSidebar
           workspaceName={workspaceName}
+          brandIconSrc={brandIconSrc}
+          locale={locale}
           chats={chats}
           workflows={workflows}
           activeNav={activeNav}

@@ -45,6 +45,8 @@ class RunContext:
     execution_id: str = ""
     turn_id: str = ""
     agent_run_id: str = ""
+    parent_agent_run_id: str = ""
+    """Set only on a delegated child run (issue #18 §14.3 delegation edges)."""
     skill_run_id: str = ""
     provider_id: str = ""
     capability: str = ""
@@ -70,6 +72,31 @@ class RunContext:
 
     def with_skill_run(self, skill_run_id: str) -> RunContext:
         return replace(self, skill_run_id=skill_run_id)
+
+    def delegate(
+        self,
+        *,
+        provider_id: str,
+        capability: str = "",
+        presentation_role: str = "supporting",
+    ) -> RunContext:
+        """Identity for a child actor this run delegates real work to.
+
+        The child is a first-class AgentRun with its own id whose
+        ``parent_agent_run_id`` points back here, so the chat renders a nested
+        AgentGroup and the runtime graph draws a delegation edge from the same
+        fact (issue #18 §4.4/§14.3).
+        """
+
+        return replace(
+            self,
+            agent_run_id=new_agent_run_id(),
+            parent_agent_run_id=self.agent_run_id,
+            skill_run_id="",
+            provider_id=provider_id,
+            capability=capability or self.capability,
+            presentation_role=presentation_role,
+        )
 
     def identity_fields(self) -> dict[str, Any]:
         """The identity every emitted event must carry."""

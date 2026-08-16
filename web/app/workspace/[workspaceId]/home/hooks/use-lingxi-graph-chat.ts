@@ -18,6 +18,7 @@ import {
   projectLingxiGraphEvents,
 } from '@/lib/lingxi/lingxi-graph-adapter'
 import {
+  buildInteractionAnswerRequest,
   buildV1ThreadModel,
   decodeInteractionOptionId,
   emptyV1ThreadModel,
@@ -32,6 +33,7 @@ import {
   turnStateFromTask,
 } from '@/lib/lingxi/turn-state'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers'
 import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
 import type { QueuedMothershipMessage } from '@/stores/mothership-queue/types'
 import type { ChatContext } from '@/stores/panel'
@@ -767,6 +769,63 @@ export function useLingxiGraphChat(
     [applyTurnState, migrateQueuedMessages, pendingQueueKey, router, workspaceId]
   )
 
+  /**
+   * Answer the open blocking interaction through the structured API.
+   *
+   * The question card reports option ids, never a formatted string, so
+   * single-select, multi-select and free-text answers all reach the backend as
+   * `{interactionId, answers:[{questionId, selectedOptionIds, text}]}`
+   * (issue #18 §10.5).  A synchronous `false` means this card is not a typed
+   * V1 interaction and the caller may fall back to an ordinary message; a
+   * promise means the typed path owns it, and it resolves false when the
+   * server rejected the answer so the card can stay answerable.
+   *
+   * The answer is a continuation of the current turn, not a new user message:
+   * the resolved interaction renders as the card's own recap, so no local user
+   * bubble is created — one would duplicate the recap live and vanish on
+   * refresh (issue #18 §10.6).
+   */
+  const answerInteraction = useCallback(
+    (submitted: TypedQuestionAnswer[]): boolean | Promise<boolean> => {
+      const taskId = resolvedChatIdRef.current
+      const model = v1ModelRef.current
+      if (!taskId || !model) return false
+      const request = buildInteractionAnswerRequest(model, submitted)
+      if (!request) return false
+      const { interactionId, answers } = request
+
+      const answerId = generateLingxiId('lingxi-interaction-answer')
+      const previousTurnState = turnStateRef.current
+      optimisticActiveRef.current = true
+      applyTurnState('active')
+      setIsSending(true)
+      setError(null)
+
+      return (async () => {
+        try {
+          await answerAgentInteraction(
+            taskId,
+            interactionId,
+            answers,
+            lingxiIdempotencyKey(answerId)
+          )
+          onRequestStartedRef.current?.({ requestId: taskId, userMessageId: answerId })
+          return true
+        } catch (cause) {
+          // The interaction is still pending server-side; hand the card back
+          // its active state so the learner can retry.
+          optimisticActiveRef.current = false
+          applyTurnState(previousTurnState)
+          setError(cause instanceof Error ? cause.message : String(cause))
+          return false
+        } finally {
+          setIsSending(false)
+        }
+      })()
+    },
+    [applyTurnState]
+  )
+
   const dispatchQueuedMessage = useCallback(
     async (message: QueuedMothershipMessage): Promise<boolean> => {
       const dispatchKey = queueKeyRef.current
@@ -948,6 +1007,7 @@ export function useLingxiGraphChat(
     resolvedChatId,
     desktopScopeId: `lingxi:${resolvedChatId ?? 'pending'}`,
     sendMessage,
+    answerInteraction,
     stopGeneration,
     resources,
     activeResourceId: effectiveActiveResourceId,

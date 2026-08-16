@@ -1,40 +1,35 @@
-import { Suspense } from 'react'
-import type { Metadata } from 'next'
+import { redirect } from 'next/navigation'
 import type { SearchParams } from 'nuqs/server'
 import { isRegistrationDisabled } from '@/lib/core/config/env-flags'
 import { validateCallbackUrl } from '@/lib/core/security/input-validation'
-import { resolveAuthRedirect } from '@/app/(auth)/auth-redirect'
-import SignupLoading from '@/app/(auth)/signup/loading'
 import { RegistrationDisabled } from '@/app/(auth)/signup/registration-disabled'
-import { signupSearchParamsCache } from '@/app/(auth)/signup/search-params'
-import { AuthEntry } from '@/app/(auth)/components/auth-entry'
 
-export const metadata: Metadata = { title: '注册' }
 export const dynamic = 'force-dynamic'
+
+const DEFAULT_AUTH_CALLBACK = '/workspace/lingxi/home/'
+
+function firstString(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
 
 export default async function SignupPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>
 }) {
+  const params = await searchParams
+  const rawCallback =
+    firstString(params.redirect) ??
+    firstString(params.callbackUrl) ??
+    firstString(params.callbackURL)
+  const validCallback = rawCallback && validateCallbackUrl(rawCallback) ? rawCallback : null
+  const isInviteFlow =
+    firstString(params.invite_flow) === 'true' || Boolean(validCallback?.startsWith('/invite/'))
+
   if (isRegistrationDisabled) {
-    const { redirect, callbackUrl, inviteFlow } = await signupSearchParamsCache.parse(searchParams)
-    const { rawCallbackUrl, isInviteFlow } = resolveAuthRedirect({
-      redirect,
-      callbackUrl,
-      inviteFlow,
-    })
-    return (
-      <RegistrationDisabled
-        callbackUrl={validateCallbackUrl(rawCallbackUrl) ? rawCallbackUrl : null}
-        isInviteFlow={isInviteFlow}
-      />
-    )
+    return <RegistrationDisabled callbackUrl={validCallback} isInviteFlow={isInviteFlow} />
   }
 
-  return (
-    <Suspense fallback={<SignupLoading />}>
-      <AuthEntry kind='register' />
-    </Suspense>
-  )
+  const nextPath = validCallback ?? DEFAULT_AUTH_CALLBACK
+  redirect(`/auth/register?next_path=${encodeURIComponent(nextPath)}`)
 }

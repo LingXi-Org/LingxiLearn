@@ -182,6 +182,76 @@ def test_trace_replay_accepts_catalog_primitives_without_explicit_labels():
     assert trace[0]["children"][0]["name"] == "orchestrate"
 
 
+def test_trace_replay_keeps_concurrent_same_model_events_in_their_runtime_bucket():
+    records = [
+        {
+            "kind": "model.started",
+            "agent": "lesson_intro",
+            "payload": {"model": "same-model"},
+            "runtime": {"span_id": "native-a", "node": "provider", "work_item_id": "work-a"},
+            "ts": "2026-08-16T01:00:00.100000+00:00",
+        },
+        {
+            "kind": "model.started",
+            "agent": "lesson_intro",
+            "payload": {"model": "same-model"},
+            "runtime": {"span_id": "native-b", "node": "provider", "work_item_id": "work-b"},
+            "ts": "2026-08-16T01:00:00.150000+00:00",
+        },
+        {
+            "kind": "assistant.delta",
+            "agent": "lesson_intro",
+            "payload": {"delta": "A"},
+            "runtime": {"span_id": "native-a", "node": "provider", "work_item_id": "work-a"},
+            "ts": "2026-08-16T01:00:00.200000+00:00",
+        },
+        {
+            "kind": "assistant.delta",
+            "agent": "lesson_intro",
+            "payload": {"delta": "B"},
+            "runtime": {"span_id": "native-b", "node": "provider", "work_item_id": "work-b"},
+            "ts": "2026-08-16T01:00:00.250000+00:00",
+        },
+        {
+            "kind": "model.completed",
+            "agent": "lesson_intro",
+            "payload": {"model": "same-model"},
+            "runtime": {"span_id": "native-a", "node": "provider", "work_item_id": "work-a"},
+            "ts": "2026-08-16T01:00:00.500000+00:00",
+        },
+        {
+            "kind": "model.completed",
+            "agent": "lesson_intro",
+            "payload": {"model": "same-model"},
+            "runtime": {"span_id": "native-b", "node": "provider", "work_item_id": "work-b"},
+            "ts": "2026-08-16T01:00:00.550000+00:00",
+        },
+    ]
+    trace = replay_sim_trace(
+        records,
+        execution_id="exec-concurrent-models",
+        task_id="task-1",
+        graph_version="v1",
+        status="completed",
+        started_at="2026-08-16T01:00:00+00:00",
+        ended_at="2026-08-16T01:00:01+00:00",
+    )
+    model_spans = [
+        span
+        for agent in trace[0]["children"]
+        for span in agent.get("children") or []
+        if span.get("type") == "model"
+    ]
+    assert [
+        next(
+            event["runtime"]["span_id"]
+            for event in span["events"]
+            if event["kind"] == "model.completed"
+        )
+        for span in model_spans
+    ] == ["native-a", "native-b"]
+
+
 @pytest.mark.parametrize(
     ("alias", "label"),
     [

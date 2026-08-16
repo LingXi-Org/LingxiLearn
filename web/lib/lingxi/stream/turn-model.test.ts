@@ -5,11 +5,17 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LingxiMothershipEventV1 } from '@/lib/lingxi/generated/mothership-stream-v1'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { decodeLingxiMothershipEvent } from '@/lib/lingxi/generated/mothership-stream-v1'
+import { collectTypedAnswers } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers'
 import {
+  buildInteractionAnswerRequest,
   buildV1ThreadModel,
   decodeInteractionOptionId,
   encodeInteractionOptionId,
   interactionAnswerLabels,
+  pendingInteraction,
   visibleAgentRunIds,
 } from '@/lib/lingxi/stream/turn-model'
 
@@ -215,5 +221,161 @@ describe('left/right identity parity (issue #18 §14.5)', () => {
     const model = buildV1ThreadModel('t1', envelopes)
     const graphNodeIds = new Set(['ar_a', 'ar_b'])
     expect(visibleAgentRunIds(model)).toEqual(graphNodeIds)
+  })
+})
+
+describe('typed interaction answers', () => {
+  const QUESTION_ENVELOPES = [
+    envelope(1, 'turn', { turnId: 'turn_1', turnIndex: 0, status: 'started', userText: '帮我准备量子力学' }),
+    envelope(2, 'interaction', {
+      interactionId: 'it_1',
+      purpose: 'clarification',
+      presentation: 'question',
+      blocking: true,
+      prompt: '你想先学哪个方向？',
+      reasonCode: 'goal_ambiguous',
+      questions: [
+        {
+          id: 'q1',
+          type: 'single_select',
+          prompt: '学习目标偏向？',
+          options: [
+            { id: 'o1', label: '概念理解' },
+            { id: 'o2', label: '解题训练' },
+          ],
+          allowFreeText: true,
+        },
+        {
+          id: 'q2',
+          type: 'multi_select',
+          prompt: '想覆盖哪些主题？',
+          options: [
+            { id: 'a', label: '叠加' },
+            { id: 'b', label: '纠缠' },
+          ],
+          allowFreeText: true,
+        },
+      ],
+    }),
+  ]
+
+  /** The card the learner sees, as SpecialTags renders it from the turn. */
+  const CARD_QUESTIONS = [
+    {
+      type: 'single_select' as const,
+      prompt: '学习目标偏向？',
+      options: [
+        { id: encodeInteractionOptionId('it_1', 'q1', 'o1'), label: '概念理解' },
+        { id: encodeInteractionOptionId('it_1', 'q1', 'o2'), label: '解题训练' },
+      ],
+    },
+    {
+      type: 'multi_select' as const,
+      prompt: '想覆盖哪些主题？',
+      options: [
+        { id: encodeInteractionOptionId('it_1', 'q2', 'a'), label: '叠加' },
+        { id: encodeInteractionOptionId('it_1', 'q2', 'b'), label: '纠缠' },
+      ],
+    },
+  ]
+
+  it('finds the open blocking interaction', () => {
+    const model = buildV1ThreadModel('t1', QUESTION_ENVELOPES)
+    expect(pendingInteraction(model)?.interactionId).toBe('it_1')
+    expect(model.turns[0].status).toBe('awaiting_user')
+  })
+
+  it('submits single-select and multi-select answers as real option ids', () => {
+    const model = buildV1ThreadModel('t1', QUESTION_ENVELOPES)
+    // What the card reports after clicking 解题训练, then 叠加 + 纠缠.
+    const submitted = collectTypedAnswers(
+      CARD_QUESTIONS,
+      [
+        [encodeInteractionOptionId('it_1', 'q1', 'o2')],
+        [
+          encodeInteractionOptionId('it_1', 'q2', 'b'),
+          encodeInteractionOptionId('it_1', 'q2', 'a'),
+        ],
+      ],
+      ['', '']
+    )
+    const request = buildInteractionAnswerRequest(model, submitted)
+    expect(request).toEqual({
+      interactionId: 'it_1',
+      answers: [
+        { questionId: 'q1', selectedOptionIds: ['o2'], text: null },
+        // Option order, not click order.
+        { questionId: 'q2', selectedOptionIds: ['a', 'b'], text: null },
+      ],
+      labels: ['解题训练', '叠加', '纠缠'],
+    })
+  })
+
+  it('submits free text with no selected option', () => {
+    const model = buildV1ThreadModel('t1', QUESTION_ENVELOPES)
+    const submitted = collectTypedAnswers(CARD_QUESTIONS, [[], []], ['先讲讲背景', ''])
+    expect(buildInteractionAnswerRequest(model, submitted)).toEqual({
+      interactionId: 'it_1',
+      answers: [{ questionId: 'q1', selectedOptionIds: [], text: '先讲讲背景' }],
+      labels: ['先讲讲背景'],
+    })
+  })
+
+  it('returns null when no typed interaction is open, so the caller sends a message', () => {
+    const answered = buildV1ThreadModel('t1', [
+      ...QUESTION_ENVELOPES,
+      envelope(3, 'interaction', {
+        interactionId: 'it_1',
+        answers: [{ questionId: 'q1', selectedOptionIds: ['o2'] }],
+      }),
+    ])
+    const submitted = collectTypedAnswers(CARD_QUESTIONS, [[], []], ['随便聊聊', ''])
+    expect(buildInteractionAnswerRequest(answered, submitted)).toBeNull()
+    expect(buildInteractionAnswerRequest(buildV1ThreadModel('t1', []), submitted)).toBeNull()
+  })
+
+  it('ignores an empty submission', () => {
+    const model = buildV1ThreadModel('t1', QUESTION_ENVELOPES)
+    expect(buildInteractionAnswerRequest(model, [])).toBeNull()
+    expect(
+      buildInteractionAnswerRequest(model, collectTypedAnswers(CARD_QUESTIONS, [[], []], ['', '']))
+    ).toBeNull()
+  })
+})
+
+describe('primary vs supporting transcript routing', () => {
+  it('renders only the primary agent in the turn body, supporting inside its span', () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      '..',
+      'contracts',
+      'fixtures',
+      'mothership-stream-v1',
+      'primary-and-supporting.json'
+    )
+    const raw = JSON.parse(readFileSync(fixturePath, 'utf-8')) as unknown[]
+    const events = raw.map((item) => decodeLingxiMothershipEvent(item)!)
+    const model = buildV1ThreadModel('task_fixture', events)
+
+    expect(model.turns).toHaveLength(1)
+    const turn = model.turns[0]
+    expect(turn.assistantText).toContain('叠加态是指一个量子系统')
+    // The supporting agent's own words belong to its AgentGroup, not the
+    // top-level ChatContent (issue #18 §6.2).
+    expect(turn.assistantText).not.toContain('可视化已生成')
+
+    const narrationBlocks = turn.blocks.filter((block) => block.type === 'subagent_text')
+    expect(narrationBlocks.map((block) => block.spanId)).toEqual(['ar_visual', 'ar_visual'])
+    expect(narrationBlocks.map((block) => block.content)).toEqual([
+      '正在生成交互式可视化…',
+      '可视化已生成，稍后在右侧查看。',
+    ])
+
+    expect([...visibleAgentRunIds(model)]).toEqual(['ar_answer', 'ar_visual'])
+    expect(turn.resources.map((resource) => resource.id)).toEqual(['file_fixture_visual'])
+    expect(turn.status).toBe('delivered')
   })
 })

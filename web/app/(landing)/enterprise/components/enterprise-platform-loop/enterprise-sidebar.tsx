@@ -27,6 +27,45 @@ const WORKSPACE_NAV = [
   { label: 'Logs', icon: Library },
 ] as const
 
+export type EnterpriseSidebarLocale = 'en' | 'zh-CN'
+
+const SIDEBAR_LABELS = {
+  en: {
+    newChat: 'New chat',
+    search: 'Search',
+    integrations: 'Integrations',
+    chats: 'Chats',
+    workspace: 'Workspace',
+    workflows: 'Workflows',
+    help: 'Help',
+    settings: 'Settings',
+    workspaceNav: {
+      Tables: 'Tables',
+      Files: 'Files',
+      'Knowledge base': 'Knowledge base',
+      'Scheduled tasks': 'Scheduled tasks',
+      Logs: 'Logs',
+    },
+  },
+  'zh-CN': {
+    newChat: '新对话',
+    search: '搜索',
+    integrations: '集成',
+    chats: '对话',
+    workspace: '工作区',
+    workflows: '工作流',
+    help: '帮助',
+    settings: '设置',
+    workspaceNav: {
+      Tables: '表格',
+      Files: '文件',
+      'Knowledge base': '知识库',
+      'Scheduled tasks': '定时任务',
+      Logs: '日志',
+    },
+  },
+} as const
+
 interface IconRowProps {
   icon: React.ComponentType<{ className?: string }>
   label: string
@@ -75,6 +114,10 @@ function SectionLabel({ label, actions }: { label: string; actions?: boolean }) 
 export interface EnterpriseSidebarProps {
   /** Workspace name in the header chip. Defaults to the enterprise workspace. */
   workspaceName?: string
+  /** Brand mark in the workspace header. Defaults to the source enterprise mark. */
+  brandIconSrc?: string
+  /** Visible sidebar copy locale. Defaults to the source English copy. */
+  locale?: EnterpriseSidebarLocale
   /** Recent-chat entries - four fill the design height. Defaults enterprise. */
   chats?: readonly string[]
   /** Deployed-workflow entries - five fill the design height. Defaults enterprise. */
@@ -102,10 +145,14 @@ export interface EnterpriseSidebarProps {
  */
 export const EnterpriseSidebar = memo(function EnterpriseSidebar({
   workspaceName = 'Brightwave',
+  brandIconSrc = '/landing/rivian-logo.svg',
+  locale = 'en',
   chats = SIDEBAR_CHATS,
   workflows = SIDEBAR_WORKFLOWS,
   activeNav,
 }: EnterpriseSidebarProps = {}) {
+  const labels = SIDEBAR_LABELS[locale]
+
   return (
     <div className='flex h-full w-[249px] flex-shrink-0 flex-col bg-[var(--surface-1)] pt-3'>
       {/* Workspace header, matching the real product's WorkspaceHeader chip
@@ -115,11 +162,10 @@ export const EnterpriseSidebar = memo(function EnterpriseSidebar({
           row, panel toggle right-aligned outside it. */}
       <div className='flex flex-shrink-0 items-center justify-between px-2'>
         <div className='mx-0.5 flex h-[30px] min-w-0 items-center gap-2 rounded-lg px-2'>
-          {/* The exact Brightwave mark the homepage capture seeds
-              (`readme-tour-capture` sets `logoUrl: '/landing/rivian-logo.svg'`),
-              so both platform previews show the same company logo. */}
+          {/* The source mark remains the default; branded pages inject their
+              canonical product mark without changing the sidebar geometry. */}
           <Image
-            src='/landing/rivian-logo.svg'
+            src={brandIconSrc}
             alt=''
             width={16}
             height={16}
@@ -132,13 +178,13 @@ export const EnterpriseSidebar = memo(function EnterpriseSidebar({
       </div>
 
       <div className='mt-2.5 flex flex-shrink-0 flex-col gap-0.5 px-2'>
-        <IconRow icon={Home} label='New chat' active={!activeNav} />
-        <IconRow icon={Search} label='Search' />
-        <IconRow icon={Integration} label='Integrations' />
+        <IconRow icon={Home} label={labels.newChat} active={!activeNav} />
+        <IconRow icon={Search} label={labels.search} />
+        <IconRow icon={Integration} label={labels.integrations} />
       </div>
 
       <div className='mt-3.5 flex flex-shrink-0 flex-col'>
-        <SectionLabel label='Chats' />
+        <SectionLabel label={labels.chats} />
         <div className='flex flex-col gap-0.5 px-2'>
           {chats.map((chat) => (
             <TextRow key={chat} label={chat} />
@@ -147,13 +193,13 @@ export const EnterpriseSidebar = memo(function EnterpriseSidebar({
       </div>
 
       <div className='mt-3.5 flex flex-shrink-0 flex-col'>
-        <SectionLabel label='Workspace' />
+        <SectionLabel label={labels.workspace} />
         <div className='flex flex-col gap-0.5 px-2'>
           {WORKSPACE_NAV.map((item) => (
             <IconRow
               key={item.label}
               icon={item.icon}
-              label={item.label}
+              label={labels.workspaceNav[item.label]}
               active={item.label === activeNav}
             />
           ))}
@@ -161,7 +207,7 @@ export const EnterpriseSidebar = memo(function EnterpriseSidebar({
       </div>
 
       <div className='flex min-h-0 flex-1 flex-col overflow-hidden pt-3.5'>
-        <SectionLabel label='Workflows' actions />
+        <SectionLabel label={labels.workflows} actions />
         <div className='flex flex-col gap-0.5 px-2'>
           {workflows.map((workflow) => (
             <TextRow key={workflow} label={workflow} />
@@ -170,8 +216,8 @@ export const EnterpriseSidebar = memo(function EnterpriseSidebar({
       </div>
 
       <div className='flex flex-shrink-0 flex-col gap-0.5 px-2 pt-[9px] pb-2'>
-        <IconRow icon={HelpCircle} label='Help' />
-        <IconRow icon={Settings} label='Settings' />
+        <IconRow icon={HelpCircle} label={labels.help} />
+        <IconRow icon={Settings} label={labels.settings} />
       </div>
     </div>
   )

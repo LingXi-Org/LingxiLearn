@@ -1,0 +1,22 @@
+.sealPulse {
+  animation: learning-boundary-seal-pulse 6s ease-out infinite;
+}
+
+@keyframes learning-boundary-seal-pulse {
+  0%,
+  20% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-secondary) 30%, transparent);
+  }
+  36% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--text-secondary) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-secondary) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sealPulse {
+    animation: none;
+  }
+}

@@ -12,6 +12,7 @@ import {
   Workflow,
 } from '@/components/ui-kit/icons'
 import { HeroLoopShell } from '@/app/(landing)/components/shared/hero-loop-shell'
+import type { EnterpriseSidebarLocale } from '@/app/(landing)/enterprise/components/enterprise-platform-loop/enterprise-sidebar'
 import { RESET_FADE_MS } from '@/app/(landing)/hooks/use-design-scale'
 import { useMotionSafeCycle } from '@/app/(landing)/hooks/use-motion-safe-cycle'
 
@@ -34,13 +35,42 @@ const SIDEBAR_WORKFLOWS = [
 
 type LogStatus = 'completed' | 'error' | 'running'
 
-interface LogRowData {
+export interface LogRowData {
   workflowName: string
   date: string
   status: LogStatus
   cost: string
   triggerLabel: string
   duration: string
+}
+
+export interface LogsHeroLiveRow {
+  workflowName: string
+  date: string
+  triggerLabel: string
+  runningCost: string
+  runningDuration: string
+  completedCost: string
+  completedDuration: string
+}
+
+export interface LogsHeroContent {
+  workspaceName?: string
+  sidebarLocale?: EnterpriseSidebarLocale
+  brandIconSrc?: string
+  chats?: readonly string[]
+  workflows?: readonly string[]
+  title?: string
+  exportLabel?: string
+  primaryTab?: string
+  secondaryTab?: string
+  searchPlaceholder?: string
+  filterLabel?: string
+  sortLabel?: string
+  headers?: readonly [string, string, string, string, string, string]
+  statusLabels?: Partial<Record<LogStatus, string>>
+  liveRow?: Partial<LogsHeroLiveRow>
+  historyRows?: readonly LogRowData[]
 }
 
 type BadgeVariant = BadgeProps['variant']
@@ -190,10 +220,11 @@ type LiveState = 'hidden' | 'running' | 'completed'
 interface LogsTableRowProps {
   row: LogRowData
   visible: boolean
+  statusLabels: Record<LogStatus, string>
 }
 
 /** One settled history row - fades in on its scheduled beat. */
-function LogsTableRow({ row, visible }: LogsTableRowProps) {
+function LogsTableRow({ row, visible, statusLabels }: LogsTableRowProps) {
   return (
     <tr
       className={cn(
@@ -212,7 +243,7 @@ function LogsTableRow({ row, visible }: LogsTableRowProps) {
       <td className='px-6 align-middle text-[var(--text-secondary)] text-caption'>{row.date}</td>
       <td className='px-6 align-middle'>
         <Badge variant={STATUS_VARIANT[row.status]} size='sm' dot>
-          {STATUS_LABELS[row.status]}
+          {statusLabels[row.status]}
         </Badge>
       </td>
       <td className='px-6 align-middle text-[var(--text-secondary)] text-caption'>{row.cost}</td>
@@ -246,7 +277,22 @@ function LogsTableRow({ row, visible }: LogsTableRowProps) {
  * Everything is `pointer-events-none` decorative, matching the hero's
  * `aria-hidden` frame.
  */
-export function LogsHeroLoop() {
+export function LogsHeroLoop({ content }: { content?: LogsHeroContent } = {}) {
+  const workspaceName = content?.workspaceName ?? 'LingXi'
+  const sidebarLocale = content?.sidebarLocale ?? 'en'
+  const chats = content?.chats ?? SIDEBAR_CHATS
+  const workflows = content?.workflows ?? SIDEBAR_WORKFLOWS
+  const title = content?.title ?? '日志'
+  const exportLabel = content?.exportLabel ?? 'Export'
+  const primaryTab = content?.primaryTab ?? 'Logs'
+  const secondaryTab = content?.secondaryTab ?? 'Dashboard'
+  const searchPlaceholder = content?.searchPlaceholder ?? '搜索日志…'
+  const filterLabel = content?.filterLabel ?? 'Filter'
+  const sortLabel = content?.sortLabel ?? 'Sort'
+  const headers = content?.headers ?? COL_HEADERS
+  const statusLabels = { ...STATUS_LABELS, ...content?.statusLabels }
+  const liveRow = { ...LIVE_ROW, ...content?.liveRow }
+  const historyRows = content?.historyRows ?? HISTORY_ROWS
   const [historyCount, setHistoryCount] = useState(0)
   const [liveState, setLiveState] = useState<LiveState>('hidden')
   const [fading, setFading] = useState(false)
@@ -261,7 +307,7 @@ export function LogsHeroLoop() {
       const totalMs = LIVE_COMPLETE_MS + COMPLETED_HOLD_MS
       return {
         timers: [
-          ...HISTORY_ROWS.map((_, i) =>
+          ...historyRows.map((_, i) =>
             setTimeout(() => setHistoryCount(i + 1), HISTORY_START_MS + i * HISTORY_STEP_MS)
           ),
           setTimeout(() => setLiveState('running'), LIVE_APPEAR_MS),
@@ -273,7 +319,7 @@ export function LogsHeroLoop() {
     },
     showFinished: () => {
       setFading(false)
-      setHistoryCount(HISTORY_ROWS.length)
+      setHistoryCount(historyRows.length)
       setLiveState('completed')
     },
   })
@@ -281,7 +327,14 @@ export function LogsHeroLoop() {
   const liveCompleted = liveState === 'completed'
 
   return (
-    <HeroLoopShell chats={SIDEBAR_CHATS} workflows={SIDEBAR_WORKFLOWS} activeNav='Logs'>
+    <HeroLoopShell
+      workspaceName={workspaceName}
+      brandIconSrc={content?.brandIconSrc}
+      locale={sidebarLocale}
+      chats={chats}
+      workflows={workflows}
+      activeNav='Logs'
+    >
       <div className='h-full w-full overflow-hidden rounded-[6px] border border-[var(--border)] bg-[var(--bg)]'>
         <div
           key={cycleId}
@@ -294,18 +347,18 @@ export function LogsHeroLoop() {
             <div className='flex w-full items-center justify-between'>
               <div className='flex items-center gap-3'>
                 <Library className='size-[14px] text-[var(--text-icon)]' />
-                <span className='font-medium text-[var(--text-body)] text-sm'>日志</span>
+                <span className='font-medium text-[var(--text-body)] text-sm'>{title}</span>
               </div>
               <div className='flex items-center gap-1'>
                 <span className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
                   <Download className='mr-1.5 size-[14px] text-[var(--text-icon)]' />
-                  Export
+                  {exportLabel}
                 </span>
                 <span className='rounded-md bg-[var(--surface-active)] px-2 py-1 text-[var(--text-body)] text-caption'>
-                  Logs
+                  {primaryTab}
                 </span>
                 <span className='rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
-                  Dashboard
+                  {secondaryTab}
                 </span>
               </div>
             </div>
@@ -315,16 +368,18 @@ export function LogsHeroLoop() {
             <div className='flex items-center justify-between'>
               <div className='flex flex-1 items-center gap-2.5'>
                 <Search className='size-[14px] flex-shrink-0 text-[var(--text-icon)]' />
-                <span className='flex-1 text-[var(--text-muted)] text-caption'>搜索日志…</span>
+                <span className='flex-1 text-[var(--text-muted)] text-caption'>
+                  {searchPlaceholder}
+                </span>
               </div>
               <div className='flex items-center gap-1.5'>
                 <span className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
                   <ListFilter className='mr-1.5 size-[14px] text-[var(--text-icon)]' />
-                  Filter
+                  {filterLabel}
                 </span>
                 <span className='flex items-center rounded-md px-2 py-1 text-[var(--text-secondary)] text-caption'>
                   <ArrowUpDown className='mr-1.5 size-[14px] text-[var(--text-icon)]' />
-                  Sort
+                  {sortLabel}
                 </span>
               </div>
             </div>
@@ -339,7 +394,7 @@ export function LogsHeroLoop() {
               </colgroup>
               <thead className='border-[var(--border)] border-b'>
                 <tr>
-                  {COL_HEADERS.map((label) => (
+                  {headers.map((label) => (
                     <th
                       key={label}
                       className='h-10 px-6 py-1.5 text-left align-middle text-[var(--text-muted)] text-caption'
@@ -360,35 +415,36 @@ export function LogsHeroLoop() {
                     <div className='flex items-center gap-2'>
                       <Workflow className='size-[14px] flex-shrink-0 text-[var(--text-icon)]' />
                       <span className='min-w-0 truncate font-medium text-[var(--text-primary)] text-caption'>
-                        {LIVE_ROW.workflowName}
+                        {liveRow.workflowName}
                       </span>
                     </div>
                   </td>
                   <td className='px-6 align-middle text-[var(--text-secondary)] text-caption'>
-                    {LIVE_ROW.date}
+                    {liveRow.date}
                   </td>
                   <td className='px-6 align-middle'>
                     <Badge variant={liveCompleted ? 'gray-secondary' : 'gray'} size='sm' dot>
-                      {liveCompleted ? 'Completed' : 'Running'}
+                      {liveCompleted ? statusLabels.completed : statusLabels.running}
                     </Badge>
                   </td>
                   <td className='px-6 align-middle text-[var(--text-secondary)] text-caption'>
-                    {liveCompleted ? LIVE_ROW.completedCost : LIVE_ROW.runningCost}
+                    {liveCompleted ? liveRow.completedCost : liveRow.runningCost}
                   </td>
                   <td className='px-6 align-middle'>
                     <Badge variant='gray-secondary' size='sm'>
-                      {LIVE_ROW.triggerLabel}
+                      {liveRow.triggerLabel}
                     </Badge>
                   </td>
                   <td className='px-6 align-middle text-[var(--text-secondary)] text-caption'>
-                    {liveCompleted ? LIVE_ROW.completedDuration : LIVE_ROW.runningDuration}
+                    {liveCompleted ? liveRow.completedDuration : liveRow.runningDuration}
                   </td>
                 </tr>
-                {HISTORY_ROWS.map((row, index) => (
+                {historyRows.map((row, index) => (
                   <LogsTableRow
                     key={`${row.workflowName}-${row.date}`}
                     row={row}
                     visible={index < historyCount}
+                    statusLabels={statusLabels}
                   />
                 ))}
               </tbody>
