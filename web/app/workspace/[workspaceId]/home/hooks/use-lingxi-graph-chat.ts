@@ -7,11 +7,12 @@ import type { FilePreviewSession } from '@/lib/copilot/request/session/file-prev
 import type { MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
 import {
   agentTaskV1Events,
-  api,
   answerAgentInteraction,
-  subscribeAgentV1Events,
+  api,
   type LingxiAttachmentRef,
+  subscribeAgentV1Events,
 } from '@/lib/lingxi/api'
+import { decodeLingxiMothershipEvent } from '@/lib/lingxi/generated/mothership-stream-v1'
 import {
   type LingxiGraphChatAdapter,
   projectLingxiGraphEvents,
@@ -21,8 +22,8 @@ import {
   decodeInteractionOptionId,
   emptyV1ThreadModel,
   interactionAnswerLabels,
-  reduceV1Event,
   type LingxiV1ThreadModel,
+  reduceV1Event,
 } from '@/lib/lingxi/stream/turn-model'
 import {
   type LingxiTurnState,
@@ -31,7 +32,6 @@ import {
   turnStateFromTask,
 } from '@/lib/lingxi/turn-state'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
-import { decodeLingxiMothershipEvent } from '@/lib/lingxi/generated/mothership-stream-v1'
 import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
 import type { QueuedMothershipMessage } from '@/stores/mothership-queue/types'
 import type { ChatContext } from '@/stores/panel'
@@ -248,10 +248,13 @@ const EMPTY_LINGXI_QUEUE: QueuedMothershipMessage[] = []
  * Reduce the authoritative V1 turn/run statuses into the hook's turn state.
  * The V0 event reducer remains the fallback for tasks without V1 history.
  */
-function reduceV1TurnState(current: LingxiTurnState, envelope: {
-  type: string
-  payload: Record<string, unknown>
-}): LingxiTurnState {
+function reduceV1TurnState(
+  current: LingxiTurnState,
+  envelope: {
+    type: string
+    payload: Record<string, unknown>
+  }
+): LingxiTurnState {
   const status = typeof envelope.payload.status === 'string' ? envelope.payload.status : ''
   switch (envelope.type) {
     case 'turn':
@@ -547,11 +550,9 @@ export function useLingxiGraphChat(
         // open across turns on the long-lived thread (issue #18 §15.1), so
         // per-send resubscription is unnecessary but harmless.
         if (v1ModelRef.current) {
-          unsubscribeV1Ref.current = subscribeAgentV1Events(
-            taskId,
-            applyV1Event,
-            { from: v1ModelRef.current.lastSeq }
-          )
+          unsubscribeV1Ref.current = subscribeAgentV1Events(taskId, applyV1Event, {
+            from: v1ModelRef.current.lastSeq,
+          })
         } else {
           // A chat created before V1 may still emit V1 envelopes once a new
           // turn runs; watch for them and switch over on first arrival.
@@ -602,7 +603,9 @@ export function useLingxiGraphChat(
         .filter((text) => text.length > 0)
       const unclaimedLocals = localUsers.filter(
         (local) =>
-          !claimedTexts.some((text) => text === local.content.trim() || text.startsWith(local.content.trim()))
+          !claimedTexts.some(
+            (text) => text === local.content.trim() || text.startsWith(local.content.trim())
+          )
       )
       const lastTurn = v1Model.turns[v1Model.turns.length - 1]
       const turnMessages: ChatMessage[] = []
