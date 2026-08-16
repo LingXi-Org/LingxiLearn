@@ -69,6 +69,7 @@ from .runtime.sim_semantics import (
     replay_sim_trace,
     sim_trace_total_tokens,
 )
+from .runtime.trajectory import build_trajectory_projection
 from .state.session_state import Goal, GoalKind, RuntimeStatus, new_budget
 from .state.skill_catalog import discover as discover_skill_manifests
 from .store.db import Database, Repository
@@ -987,6 +988,11 @@ class Service:
         )
         if len(trace) <= 1 and row.trace_spans:
             trace = row.trace_spans
+        trajectory = build_trajectory_projection(
+            row,
+            records,
+            trace,
+        )
         return {
             "executionId": row.id,
             "workflowId": "lingxi-agent",
@@ -997,6 +1003,7 @@ class Service:
             "projectionVersion": (row.workflow_state or {}).get("version", "sim-runtime.v1"),
             "workflowState": row.workflow_state or {},
             "traceSpans": trace,
+            "trajectory": trajectory,
             "executionMetadata": {
                 "trigger": row.trigger,
                 "startedAt": started.isoformat() if started else None,

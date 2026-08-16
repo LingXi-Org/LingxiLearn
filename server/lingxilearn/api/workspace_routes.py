@@ -33,6 +33,7 @@ from sqlalchemy import delete, desc, false, func, or_, select, update
 
 from ..learner import LearnerContext
 from ..store.models import (
+    AgentExecution,
     AgentTask,
     AgentTaskEvent,
     KnowledgeBase,
@@ -4243,6 +4244,24 @@ async def list_logs(
             .scalars()
             .all()
         )
+    execution_ids = [str(task.latest_execution_id) for task in tasks if task.latest_execution_id]
+    executions: dict[str, AgentExecution] = {}
+    if execution_ids:
+        async with service_of(request).db.session() as session:
+            executions = {
+                row.id: row
+                for row in (
+                    await session.execute(
+                        select(AgentExecution).where(
+                            AgentExecution.id.in_(execution_ids),
+                            AgentExecution.learner_id == context.learner_id,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            }
+
     logs = [
         {
             "id": task.id,
@@ -4257,9 +4276,27 @@ async def list_logs(
             "status": "completed"
             if task.status in {"completed", "partial", "handed_off"}
             else task.status,
-            "duration": "0",
+            "duration": str(
+                max(
+                    0,
+                    int(
+                        (
+                            (execution.ended_at or utcnow()) - execution.started_at
+                        ).total_seconds()
+                        * 1000
+                    ),
+                )
+                if (execution := executions.get(str(task.latest_execution_id))) is not None
+                else 0
+            ),
             "trigger": "agent-task",
-            "createdAt": task.created_at.isoformat() if task.created_at else "",
+            "createdAt": (
+                execution.started_at.isoformat()
+                if execution is not None and execution.started_at
+                else task.created_at.isoformat()
+                if task.created_at
+                else ""
+            ),
             "workflow": {"id": "lingxi-agent", "name": "LingxiGraph · Sim runtime"},
             "jobTitle": task.title or None,
             "cost": {"total": 0},
@@ -4299,15 +4336,37 @@ async def log_stats(
             )
             or 0
         )
-    now = datetime.now(UTC).isoformat()
+        executions = list(
+            (
+                await session.execute(
+                    select(AgentExecution)
+                    .where(AgentExecution.learner_id == context.learner_id)
+                    .order_by(AgentExecution.started_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    now_dt = datetime.now(UTC)
+    durations = [
+        max(0, int(((row.ended_at or now_dt) - row.started_at).total_seconds() * 1000))
+        for row in executions
+        if row.started_at
+    ]
+    starts = [row.started_at for row in executions if row.started_at]
+    ends = [row.ended_at or now_dt for row in executions if row.started_at]
+    now = now_dt.isoformat()
     return {
         "workflows": [],
         "aggregateSegments": [],
         "totalRuns": int(total),
         "totalErrors": int(failed),
-        "avgLatency": 0,
-        "timeBounds": {"start": now, "end": now},
-        "segmentMs": 0,
+        "avgLatency": int(sum(durations) / len(durations)) if durations else 0,
+        "timeBounds": {
+            "start": min(starts).isoformat() if starts else now,
+            "end": max(ends).isoformat() if ends else now,
+        },
+        "segmentMs": max(durations) if durations else 0,
     }
 
 
@@ -4414,6 +4473,7 @@ async def log_by_execution(
             "totalDuration": metadata.get("totalDurationMs"),
             "enhanced": True,
             "traceSpans": snapshot["traceSpans"],
+            "trajectory": snapshot.get("trajectory"),
             "runtimeEvents": [
                 {
                     "sequence": event.sequence,
@@ -4511,7 +4571,7 @@ async def log_detail(
         "executionOrigin": None,
         "level": "error" if task.status == "failed" else "info",
         "status": task.status,
-        "duration": "0",
+        "duration": str((task_snapshot or {}).get("executionMetadata", {}).get("totalDurationMs") or 0),
         "trigger": "agent-task",
         "createdAt": started_at,
         "workflow": {"id": "lingxi-agent", "name": "LingxiGraph · Sim runtime"},
@@ -4527,6 +4587,7 @@ async def log_detail(
             "totalDuration": 0,
             "enhanced": True,
             "traceSpans": (task_snapshot or {}).get("traceSpans") or [],
+            "trajectory": (task_snapshot or {}).get("trajectory"),
             "runtimeEvents": [
                 {
                     "sequence": event.sequence,

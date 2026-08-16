@@ -94,6 +94,47 @@ describe('buildTrajectoryModel', () => {
     expect(model.entries[1]).toMatchObject({ depth: 1, offsetMs: 100, durationMs: 120 })
     expect(model.entries[1].span).toMatchObject({ type: 'tool', name: 'fetch' })
   })
+
+  it('keeps the eight semantic lanes on one execution clock', () => {
+    const model = buildTrajectoryModel([], 1_000, {
+      version: 'lingxi-trajectory.v1',
+      executionId: 'exec-1',
+      clock: { startedAt: START, endedAt: '2026-08-15T08:00:01.000Z', durationMs: 1_000 },
+      lanes: [
+        { id: 'run', label: 'RUN', items: [] },
+        {
+          id: 'task',
+          label: 'CAPABILITY TASK',
+          items: [
+            {
+              id: 'task-1',
+              lane: 'task',
+              kind: 'capability.task',
+              label: 'Search',
+              startTime: '2026-08-15T08:00:00.200Z',
+              endTime: '2026-08-15T08:00:00.500Z',
+              relativeStartMs: 200,
+              durationMs: 300,
+              precision: 'exact',
+            },
+          ],
+        },
+      ],
+    } as never)
+
+    expect(model.lanes.map((lane) => lane.id)).toEqual([
+      'run',
+      'control',
+      'task',
+      'action',
+      'runtime',
+      'state',
+      'resource',
+      'output',
+    ])
+    expect(model.lanes[2].entries[0]).toMatchObject({ offsetMs: 200, durationMs: 300 })
+    expect(model.source).toBe('trajectory')
+  })
 })
 
 describe('trajectory summaries and filtering', () => {

@@ -1,4 +1,22 @@
-import type { LogTraceSpan } from '@/lib/api/contracts/logs'
+import type { LogTraceSpan, Trajectory as ApiTrajectory, TrajectoryItem } from '@/lib/api/contracts/logs'
+
+export const TRAJECTORY_LANES = [
+  { id: 'run', label: 'RUN' },
+  { id: 'control', label: 'CONTROL ROUND' },
+  { id: 'task', label: 'CAPABILITY TASK' },
+  { id: 'action', label: 'ACTION' },
+  { id: 'runtime', label: 'RUNTIME' },
+  { id: 'state', label: 'STATE' },
+  { id: 'resource', label: 'RESOURCE' },
+  { id: 'output', label: 'OUTPUT' },
+] as const
+export type TrajectoryLaneId = (typeof TRAJECTORY_LANES)[number]['id']
+
+export interface TrajectoryLane {
+  id: TrajectoryLaneId
+  label: string
+  entries: TrajectoryEntry[]
+}
 
 export interface TrajectoryEntry {
   id: string
@@ -12,6 +30,9 @@ export interface TrajectoryEntry {
   endMs: number
   durationMs: number
   offsetMs: number
+  lane: TrajectoryLaneId
+  precision: 'exact' | 'inferred'
+  item?: TrajectoryItem
 }
 
 export interface TrajectoryModel {
@@ -20,6 +41,9 @@ export interface TrajectoryModel {
   runEndMs: number
   totalDurationMs: number
   maxDepth: number
+  lanes: TrajectoryLane[]
+  clockStartedAt?: string
+  source: 'trajectory' | 'legacy'
 }
 
 export interface TrajectorySummary {
@@ -28,6 +52,9 @@ export interface TrajectorySummary {
   toolCount: number
   failureCount: number
   tokenCount: number
+  roundCount?: number
+  taskCount?: number
+  actionCount?: number
 }
 
 interface VisibleEntryOptions {
@@ -103,6 +130,82 @@ function resolveDuration(span: LogTraceSpan, startMs: number): number {
   return end !== null ? Math.max(0, end - startMs) : 0
 }
 
+function laneForSpan(span: LogTraceSpan): TrajectoryLaneId {
+  const value = `${span.type ?? ''} ${(span as unknown as Record<string, unknown>).category ?? ''}`.toLowerCase()
+  if (value.includes('workflow') || value.includes('run')) return 'run'
+  if (value.includes('decision') || value.includes('control') || value.includes('agent')) return 'control'
+  if (value.includes('runtime')) return 'runtime'
+  if (value.includes('state')) return 'state'
+  if (value.includes('resource')) return 'resource'
+  if (value.includes('output')) return 'output'
+  return 'action'
+}
+
+function laneForItem(item: TrajectoryItem): TrajectoryLaneId {
+  return TRAJECTORY_LANES.some((lane) => lane.id === item.lane)
+    ? item.lane
+    : 'action'
+}
+
+function itemToSpan(item: TrajectoryItem): LogTraceSpan {
+  const metadata = item.metadata ?? {}
+  return {
+    id: item.id,
+    name: item.label,
+    type: item.kind,
+    status: item.status,
+    startTime: item.startTime,
+    endTime: item.endTime,
+    durationMs: item.durationMs,
+    relativeStartMs: item.relativeStartMs,
+    input: metadata,
+    ...(item.spanId ? { spanId: item.spanId } : {}),
+  } as LogTraceSpan
+}
+
+function buildSemanticModel(trajectory: ApiTrajectory, fallbackDurationMs: number): TrajectoryModel {
+  const clockStart = parseTimestamp(trajectory.clock.startedAt) ?? 0
+  const duration = Math.max(0, trajectory.clock.durationMs, fallbackDurationMs)
+  const lanes = TRAJECTORY_LANES.map(({ id, label }) => {
+    const source = trajectory.lanes.find((lane) => lane.id === id)
+    const entries = (source?.items ?? []).map((item, index) => {
+      const start = parseTimestamp(item.startTime) ?? clockStart + Math.max(0, item.relativeStartMs)
+      const itemDuration = Math.max(0, item.durationMs)
+      const end = Math.max(start + itemDuration, parseTimestamp(item.endTime) ?? start)
+      const path = [index + 1]
+      const span = itemToSpan(item)
+      return {
+        id: `${item.id}::${id}:${index + 1}`,
+        sourceId: item.id,
+        span,
+        depth: 0,
+        path,
+        parentId: item.parentId ?? null,
+        parentIds: item.parentId ? [item.parentId] : [],
+        startMs: start,
+        endMs: end,
+        durationMs: Math.max(itemDuration, end - start),
+        offsetMs: Math.max(0, start - clockStart),
+        lane: laneForItem(item),
+        precision: item.precision,
+        item,
+      } satisfies TrajectoryEntry
+    })
+    return { id, label, entries }
+  })
+  const entries = lanes.flatMap((lane) => lane.entries)
+  return {
+    entries,
+    runStartMs: clockStart,
+    runEndMs: clockStart + duration,
+    totalDurationMs: duration,
+    maxDepth: entries.length ? 1 : 0,
+    lanes,
+    clockStartedAt: trajectory.clock.startedAt,
+    source: 'trajectory',
+  }
+}
+
 /**
  * Converts recursive execution spans into a stable, depth-first event ledger.
  * Absolute timestamps, relative offsets, and legacy records are normalized onto
@@ -110,15 +213,20 @@ function resolveDuration(span: LogTraceSpan, startMs: number): number {
  */
 export function buildTrajectoryModel(
   spans: LogTraceSpan[] | undefined,
-  fallbackDurationMs = 0
+  fallbackDurationMs = 0,
+  trajectory?: ApiTrajectory
 ): TrajectoryModel {
+  if (trajectory) return buildSemanticModel(trajectory, fallbackDurationMs)
   if (!spans?.length) {
+    const lanes = TRAJECTORY_LANES.map(({ id, label }) => ({ id, label, entries: [] }))
     return {
       entries: [],
       runStartMs: 0,
       runEndMs: 0,
       totalDurationMs: Math.max(0, fallbackDurationMs),
       maxDepth: 0,
+      lanes,
+      source: 'legacy',
     }
   }
 
@@ -161,6 +269,8 @@ export function buildTrajectoryModel(
         endMs,
         durationMs: Math.max(durationMs, endMs - startMs),
         offsetMs: 0,
+        lane: laneForSpan(span),
+        precision: 'inferred',
       })
 
       const children = getTrajectoryChildren(span)
@@ -184,15 +294,24 @@ export function buildTrajectoryModel(
   const totalDurationMs = Math.max(0, fallbackDurationMs, tracedRunEnd - normalizedRunStart)
   const runEndMs = normalizedRunStart + totalDurationMs
 
+  const normalizedEntries = entries.map((entry) => ({
+    ...entry,
+    offsetMs: Math.max(0, entry.startMs - normalizedRunStart),
+  }))
+  const lanes = TRAJECTORY_LANES.map(({ id, label }) => ({
+    id,
+    label,
+    entries: normalizedEntries.filter((entry) => entry.lane === id),
+  }))
+
   return {
-    entries: entries.map((entry) => ({
-      ...entry,
-      offsetMs: Math.max(0, entry.startMs - normalizedRunStart),
-    })),
+    entries: normalizedEntries,
     runStartMs: normalizedRunStart,
     runEndMs,
     totalDurationMs,
     maxDepth: entries.reduce((deepest, entry) => Math.max(deepest, entry.depth + 1), 0),
+    lanes,
+    source: 'legacy',
   }
 }
 
@@ -225,13 +344,19 @@ export function summarizeTrajectory(model: TrajectoryModel): TrajectorySummary {
   const errorAncestorIds = new Set(errorEntries.flatMap((entry) => entry.parentIds))
   const failureCount = errorEntries.filter((entry) => !errorAncestorIds.has(entry.id)).length
 
-  return {
+  const summary: TrajectorySummary = {
     spanCount: entries.length,
     maxDepth: model.maxDepth,
     toolCount: entries.filter((entry) => entry.span.type.toLowerCase() === 'tool').length,
     failureCount,
     tokenCount,
   }
+  if (model.source === 'trajectory') {
+    summary.roundCount = model.lanes.find((lane) => lane.id === 'control')?.entries.length ?? 0
+    summary.taskCount = model.lanes.find((lane) => lane.id === 'task')?.entries.length ?? 0
+    summary.actionCount = model.lanes.find((lane) => lane.id === 'action')?.entries.length ?? 0
+  }
+  return summary
 }
 
 function searchValue(value: unknown): string {

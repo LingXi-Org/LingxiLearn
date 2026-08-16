@@ -139,9 +139,9 @@ function StatCard({ label, value }: { label: string; value: string }) {
 function TrajectorySummaryCards({ model }: { model: TrajectoryModel }) {
   const summary = useMemo(() => summarizeTrajectory(model), [model])
   const cards = [
-    { label: 'Levels', value: String(summary.maxDepth) },
-    { label: 'Spans', value: String(summary.spanCount) },
-    { label: 'Tools', value: String(summary.toolCount) },
+    { label: 'Rounds', value: String(summary.roundCount ?? model.lanes.find((lane) => lane.id === 'control')?.entries.length ?? 0) },
+    { label: 'Tasks', value: String(summary.taskCount ?? model.lanes.find((lane) => lane.id === 'task')?.entries.length ?? 0) },
+    { label: 'Actions', value: String(summary.actionCount ?? model.lanes.find((lane) => lane.id === 'action')?.entries.length ?? summary.spanCount) },
     { label: 'Failures', value: String(summary.failureCount) },
     { label: 'Tokens', value: summary.tokenCount.toLocaleString() },
     { label: 'Duration', value: formatMs(model.totalDurationMs) },
@@ -216,10 +216,6 @@ function TrajectoryTimeline({
   selectedId: string | null
   onSelect: (entry: TrajectoryEntry) => void
 }) {
-  const levels = Array.from({ length: model.maxDepth }, (_, depth) =>
-    model.entries.filter((entry) => entry.depth === depth)
-  )
-
   return (
     <section className='rounded-md border border-[var(--border)] bg-[var(--surface-1)]'>
       <div className='flex items-center justify-between border-[var(--border)] border-b px-3.5 py-2.5'>
@@ -227,17 +223,17 @@ function TrajectoryTimeline({
           <Clock className='size-[14px] flex-shrink-0 text-[var(--text-icon)]' />
           <span className='truncate text-[var(--text-primary)] text-sm'>Timing overview</span>
           <span className='hidden text-[var(--text-tertiary)] text-caption sm:inline'>
-            Every level shares one execution clock
+            All lanes share one execution clock
           </span>
         </div>
       </div>
       <div className='overflow-x-auto px-3.5 pt-3 pb-2.5'>
         <div className='min-w-[640px]'>
           <div className='rounded-md border border-[var(--border)] bg-[var(--surface-2)] py-1.5'>
-            {levels.map((entries, depth) => (
-              <div key={depth} className='flex h-7 items-center'>
-                <span className='w-14 flex-shrink-0 pr-2 text-right text-[var(--text-muted)] text-[10px] uppercase tracking-[0.06em]'>
-                  {depth === 0 ? 'Input' : depth === 1 ? 'Model' : 'Tools'}
+            {model.lanes.map((lane) => (
+              <div key={lane.id} className='flex h-7 items-center'>
+                <span className='w-32 flex-shrink-0 pr-2 text-right text-[var(--text-muted)] text-[10px] uppercase tracking-[0.04em]'>
+                  {lane.label}
                 </span>
                 <div
                   className='relative mr-2 h-full min-w-0 flex-1 border-[var(--border)] border-l'
@@ -247,7 +243,7 @@ function TrajectoryTimeline({
                     backgroundSize: '20% 100%',
                   }}
                 >
-                  {entries.map((entry) => (
+                  {lane.entries.map((entry) => (
                     <TimelineBar
                       key={entry.id}
                       entry={entry}
@@ -260,7 +256,7 @@ function TrajectoryTimeline({
               </div>
             ))}
           </div>
-          <div className='mt-1.5 flex items-center justify-between pl-14 text-[var(--text-muted)] text-xs tabular-nums'>
+          <div className='mt-1.5 flex items-center justify-between pl-32 text-[var(--text-muted)] text-xs tabular-nums'>
             <span>0 ms</span>
             <span>{formatOffset(model.totalDurationMs / 2)}</span>
             <span>{formatOffset(model.totalDurationMs)}</span>
@@ -344,7 +340,7 @@ function TrajectoryLedger({
       <table className='w-full min-w-[680px] table-fixed border-collapse'>
         <thead className='sticky top-0 z-[1] bg-[var(--surface-2)]'>
           <tr className='border-[var(--border)] border-b text-left text-[var(--text-muted)] text-xs'>
-            <th className='w-[84px] px-3 py-2'>Level</th>
+            <th className='w-[124px] px-3 py-2'>Lane</th>
             <th className='px-2 py-2'>Stage</th>
             <th className='w-[112px] px-2 py-2'>Type</th>
             <th className='w-[92px] px-2 py-2 text-right'>Start</th>
@@ -548,7 +544,7 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
         <div className='min-w-0 flex-1'>
           <h3 className='truncate text-[var(--text-primary)] text-sm'>{getSpanName(span)}</h3>
           <div className='mt-0.5 text-[var(--text-tertiary)] text-caption'>
-            Level {entry.depth + 1} · {entry.path.join('.')}
+            {entry.lane.toUpperCase()} · {entry.precision}
           </div>
         </div>
         <Badge variant={statusVariant} size='sm' className='flex-shrink-0 capitalize'>
@@ -593,7 +589,7 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
         <p className='mt-3 text-[var(--text-error)] text-sm'>{span.errorMessage}</p>
       ) : activeTab === 'overview' ? (
         <p className='mt-3 text-[var(--text-secondary)] text-sm'>
-          {span.type} stage at level {entry.depth + 1} of the execution pipeline.
+          {span.type} stage in the {entry.lane.toUpperCase()} lane ({entry.precision} timing).
         </p>
       ) : null}
 
@@ -842,12 +838,13 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
   })
   const detail = detailQuery.data
   const traceSpans = detail?.executionData?.traceSpans
+  const trajectory = detail?.executionData?.trajectory
   const fallbackDuration = parseDuration({
     duration: detail?.duration ?? selectedSummary?.duration ?? undefined,
   })
   const model = useMemo(
-    () => buildTrajectoryModel(traceSpans, fallbackDuration ?? 0),
-    [traceSpans, fallbackDuration]
+    () => buildTrajectoryModel(traceSpans, fallbackDuration ?? 0, trajectory),
+    [traceSpans, fallbackDuration, trajectory]
   )
   const runOptions = useMemo(
     () => logs.map((log) => ({ value: log.id, label: getRunLabel(log) })),
