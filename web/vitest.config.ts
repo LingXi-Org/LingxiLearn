@@ -29,12 +29,36 @@ export default defineConfig({
     tsconfigPaths: true,
     alias: [
       {
+        find: '@sim/testing',
+        replacement: path.resolve(__dirname, 'packages/testing/src/index.ts'),
+      },
+      {
+        find: '@sim/utils',
+        replacement: path.resolve(__dirname, 'packages/utils/src'),
+      },
+      {
         find: '@sim/db',
-        replacement: path.resolve(__dirname, '../../packages/db'),
+        replacement: path.resolve(__dirname, 'packages/db'),
       },
       {
         find: '@sim/logger',
-        replacement: path.resolve(__dirname, '../../packages/logger/src'),
+        replacement: path.resolve(__dirname, 'packages/logger/src'),
+      },
+      {
+        find: '@sim/emcn',
+        replacement: path.resolve(__dirname, 'packages/emcn/src'),
+      },
+      {
+        find: '@sim/desktop-bridge',
+        replacement: path.resolve(__dirname, 'packages/desktop-bridge/src/index.ts'),
+      },
+      {
+        find: /^@sim\/workflow-types\/(.*)$/,
+        replacement: `${path.resolve(__dirname, 'packages/workflow-types/src')}/$1`,
+      },
+      {
+        find: /^@sim\/security\/(.*)$/,
+        replacement: `${path.resolve(__dirname, 'packages/security/src')}/$1`,
       },
       {
         find: '@/stores/console/store',

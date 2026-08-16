@@ -27,7 +27,7 @@ from sqlalchemy import select
 from ..auth import get_principal
 from ..config import REPO_ROOT
 from ..learner import LearnerContext
-from ..service import Service
+from ..service import Service, agent_task_create_payload_digest
 from ..state.capabilities import CAPABILITY_INFO
 from ..store.models import (
     AgentTask,
@@ -446,6 +446,7 @@ class CreateAgentTask(BaseModel):
     attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
     resource_refs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     skill_ids: list[str] = Field(default_factory=list, max_length=50)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
 
 
 class AgentTaskMetadataPatch(BaseModel):
@@ -560,6 +561,23 @@ async def create_agent_task(
 ) -> dict[str, Any]:
     svc = service_of(request)
     task_id = f"t-{uuid.uuid4().hex[:20]}"
+    payload_digest = agent_task_create_payload_digest(
+        prompt=body.prompt,
+        attachments=body.attachments,
+        resource_refs=body.resource_refs,
+        skill_ids=body.skill_ids,
+    )
+    if body.idempotency_key:
+        existing = await svc.repo.get_agent_task_by_create_idempotency_key(
+            context.learner_id, body.idempotency_key
+        )
+        if existing is not None:
+            if existing.create_payload_digest != payload_digest:
+                raise HTTPException(status_code=409, detail="idempotency_key_reused")
+            result = {"id": existing.id, "status": existing.status}
+            if existing.error:
+                result["error"] = existing.error
+            return result
     try:
         task_resources = await _validated_task_context(
             request, context, body.resource_refs, body.skill_ids
@@ -570,9 +588,15 @@ async def create_agent_task(
             prompt=body.prompt,
             attachments=body.attachments,
             resources=task_resources,
+            idempotency_key=body.idempotency_key,
+            create_payload_digest=payload_digest,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        detail = str(exc)
+        raise HTTPException(
+            status_code=409 if detail == "idempotency_key_reused" else 400,
+            detail=detail,
+        ) from exc
     return created
 
 

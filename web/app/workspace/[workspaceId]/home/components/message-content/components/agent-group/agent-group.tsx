@@ -43,10 +43,15 @@ interface AgentGroupProps {
   isLaneOpen?: boolean
 }
 
-/** True when any row in this group (or a nested one) is waiting on a permission decision. */
+/** True when any row in this group (or a nested one) needs learner input. */
 function hasAwaitingApproval(items: AgentGroupItem[]): boolean {
   return items.some((item) => {
-    if (item.type === 'tool') return item.data.status === ToolCallStatus.awaiting_approval
+    if (item.type === 'tool') {
+      return (
+        item.data.status === ToolCallStatus.awaiting_approval ||
+        (item.data.status === ToolCallStatus.interrupted && Boolean(item.data.userPrompt))
+      )
+    }
     // Text rows carry no tool calls, so only nested groups need recursing into.
     return item.type === 'agent_group' ? hasAwaitingApproval(item.group.items) : false
   })
@@ -206,6 +211,7 @@ export function AgentGroup({
                         params={item.data.params}
                         result={item.data.result}
                         streamingArgs={item.data.streamingArgs}
+                        userPrompt={item.data.userPrompt}
                         startedAt={item.data.startedAt}
                       />
                     )

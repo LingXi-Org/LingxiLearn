@@ -22,6 +22,8 @@ export interface LingxiGraphProjection {
 export interface LingxiTaskContextOptions {
   resourceRefs?: Array<Record<string, unknown>>
   skillIds?: string[]
+  /** Stable across retries of one learner message. */
+  idempotencyKey?: string
 }
 
 export interface LingxiGraphSubscriptionOptions {
@@ -81,6 +83,7 @@ const CONTROL_PLANE_AGENTS = new Set([
 ])
 
 const LEARNER_FACING_OUTPUT_AGENTS = new Set([
+  'answer_user',
   'learning_companion',
   'learner_interview',
 ])
@@ -108,6 +111,9 @@ const TOOL_LABELS: Record<string, string> = {
   stage_artifact_files: '准备学习产物',
   read_staged_artifact: '读取学习产物',
   list_staged_artifacts: '列出学习产物',
+  'schedule.propose': '安排复习计划',
+  'schedule.revoke': '撤销复习计划',
+  await_user: '等待你的确认',
 }
 
 const TERMINAL_AGENT_EVENTS = new Set(['agent.completed', 'agent.failed'])
@@ -175,6 +181,42 @@ function safeArgs(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
+const INTERRUPT_TEXT_KEYS = ['prompt', 'question', 'message', 'text', 'description', 'detail']
+
+/**
+ * Interrupt payloads are control-plane data, so `safeArgs` deliberately
+ * redacts their prompt field. This separate extractor only accepts the
+ * durable learner-facing message and keeps it bounded; it never exposes a
+ * generic model argument or reasoning payload.
+ */
+function interruptPrompt(value: unknown, depth = 0): string | undefined {
+  if (depth > 5 || value === undefined || value === null) return undefined
+  if (typeof value === 'string') {
+    const text = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim()
+    return text ? text.slice(0, 1000) : undefined
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = interruptPrompt(item, depth + 1)
+      if (found) return found
+    }
+    return undefined
+  }
+  const record = asRecord(value)
+  for (const key of INTERRUPT_TEXT_KEYS) {
+    const found = interruptPrompt(record[key], depth + 1)
+    if (found) return found
+  }
+  for (const key of ['interrupts', 'value', 'messages', 'data']) {
+    const found = interruptPrompt(record[key], depth + 1)
+    if (found) return found
+  }
+  if (stringValue(record.kind).toLowerCase() === 'user_message') {
+    return '请回复以继续当前学习任务。'
+  }
+  return undefined
+}
+
 function safePayloadSummary(value: unknown): string {
   if (value === undefined || value === null) return '没有返回公开结果详情。'
   if (typeof value === 'string') return `已返回结果（${value.length} 个字符）。`
@@ -187,7 +229,13 @@ function eventPayload(event: AgentTaskEvent): Record<string, unknown> {
 
 function eventText(event: AgentTaskEvent): string {
   const payload = eventPayload(event)
-  return stringValue(payload.delta) || stringValue(payload.message) || stringValue(payload.text)
+  return (
+    stringValue(payload.delta) ||
+    stringValue(payload.message) ||
+    stringValue(payload.text) ||
+    stringValue(payload.description) ||
+    stringValue(payload.detail)
+  )
 }
 
 function eventToolCalls(event: AgentTaskEvent): Array<Record<string, unknown>> {
@@ -196,15 +244,72 @@ function eventToolCalls(event: AgentTaskEvent): Array<Record<string, unknown>> {
     ? payload.calls
     : Array.isArray(payload.chunks)
       ? payload.chunks
-      : []
+      : payload.name ||
+          payload.tool_name ||
+          payload.toolName ||
+          payload.tool_call_id ||
+          payload.toolCallId
+        ? [payload]
+        : []
   return calls.map(asRecord)
+}
+
+/**
+ * Runtime envelopes have existed in a few shapes while LingxiGraph moved from
+ * the legacy event stream to the durable runtime. Keep the renderer keyed by
+ * the native span when one is present, and only synthesize an id as a fallback.
+ */
+function eventSpanId(event: AgentTaskEvent): string | undefined {
+  const payload = eventPayload(event)
+  const runtime = asRecord(event.runtime)
+  return (
+    stringValue(event.span_id) ||
+    stringValue(payload.span_id) ||
+    stringValue(payload.spanId) ||
+    stringValue(runtime.span_id) ||
+    stringValue(runtime.spanId) ||
+    undefined
+  )
+}
+
+function eventParentSpanId(event: AgentTaskEvent): string {
+  const payload = eventPayload(event)
+  const runtime = asRecord(event.runtime)
+  return (
+    stringValue(payload.parent_span_id) ||
+    stringValue(payload.parentSpanId) ||
+    stringValue(runtime.parent_span_id) ||
+    stringValue(runtime.parentSpanId) ||
+    'main'
+  )
+}
+
+function normalizeToolStatus(value: unknown, fallback: ToolCallStatus): ToolCallStatus {
+  const status = stringValue(value).toLowerCase()
+  if (
+    ['awaiting_approval', 'awaiting-approval', 'pending_approval', 'pending-approval'].includes(
+      status
+    )
+  ) {
+    return 'awaiting_approval'
+  }
+  if (['cancelled', 'canceled'].includes(status)) return 'cancelled'
+  if (['skipped', 'skip'].includes(status)) return 'skipped'
+  if (['rejected', 'denied'].includes(status)) return 'rejected'
+  if (['interrupted', 'interrupt'].includes(status)) return 'interrupted'
+  if (['error', 'failed', 'failure'].includes(status)) return 'error'
+  if (['success', 'completed', 'complete', 'ok'].includes(status)) return 'success'
+  if (['executing', 'running', 'started', 'pending'].includes(status)) return 'executing'
+  return fallback
 }
 
 function toolCallId(event: AgentTaskEvent, call: Record<string, unknown>, index = 0): string {
   return (
     stringValue(call.id) ||
     stringValue(call.tool_call_id) ||
+    stringValue(call.toolCallId) ||
     stringValue(eventPayload(event).tool_call_id) ||
+    stringValue(eventPayload(event).toolCallId) ||
     `lingxi-tool:${event.sequence}:${index}`
   )
 }
@@ -218,9 +323,27 @@ function resultToolCallId(event: AgentTaskEvent): string {
   )
 }
 
+function eventControlToolId(event: AgentTaskEvent): string {
+  const payload = eventPayload(event)
+  const fallback =
+    event.kind === 'schedule.proposed'
+      ? `lingxi-schedule:${event.sequence}`
+      : event.kind === 'interrupt.raised'
+        ? `lingxi-interrupt:${event.sequence}`
+        : `lingxi-control:${event.sequence}`
+  return (
+    stringValue(payload.toolCallId) ||
+    stringValue(payload.tool_call_id) ||
+    stringValue(payload.proposalId) ||
+    stringValue(payload.id) ||
+    fallback
+  )
+}
+
 interface AgentRun {
   agent: string
   spanId: string
+  parentSpanId: string
   skillCallId: string
   startSequence: number
   startedAt?: number
@@ -234,7 +357,10 @@ interface ToolRun {
   name: string
   agent?: string
   spanId?: string
+  parentSpanId?: string
   params?: Record<string, unknown>
+  streamingArgs?: string
+  userPrompt?: string
   firstSequence: number
   startedAt?: number
   status: ToolCallStatus
@@ -249,34 +375,56 @@ function eventAgent(event: AgentTaskEvent): string | undefined {
 function reduceAgentRuns(events: AgentTaskEvent[]): AgentRun[] {
   const runs: AgentRun[] = []
   const active = new Map<string, AgentRun>()
+  const activeByAgent = new Map<string, AgentRun[]>()
+
+  const removeActive = (run: AgentRun) => {
+    active.delete(run.spanId)
+    const siblings = activeByAgent.get(run.agent) ?? []
+    activeByAgent.set(
+      run.agent,
+      siblings.filter((candidate) => candidate.spanId !== run.spanId)
+    )
+  }
+
+  const findActive = (agent: string, event: AgentTaskEvent): AgentRun | undefined => {
+    const explicitSpanId = eventSpanId(event)
+    if (explicitSpanId) return active.get(explicitSpanId)
+    const siblings = activeByAgent.get(agent) ?? []
+    return [...siblings].reverse().find((candidate) => candidate.startSequence <= event.sequence)
+  }
+
   for (const event of events) {
     const agent = eventAgent(event)
     if (!agent) continue
-    if (event.kind === 'agent.started' || !active.has(agent)) {
-      if (event.kind === 'agent.started' || !active.has(agent)) {
-        const run: AgentRun = {
-          agent,
-          spanId: `lingxi-agent:${agent}:${event.sequence}`,
-          skillCallId: `lingxi-skill:${agent}:${event.sequence}`,
-          startSequence: event.sequence,
-          startedAt: event.ts ? Date.parse(event.ts) || undefined : undefined,
-          status: 'executing',
-          skillId: stringValue(eventPayload(event).skill) || undefined,
-        }
-        runs.push(run)
-        active.set(agent, run)
+    const explicitSpanId = eventSpanId(event)
+    let run = findActive(agent, event)
+    if (!run) {
+      const spanId = explicitSpanId || `lingxi-agent:${agent}:${event.sequence}`
+      run = {
+        agent,
+        spanId,
+        parentSpanId: eventParentSpanId(event),
+        skillCallId:
+          stringValue(eventPayload(event).tool_call_id) ||
+          stringValue(eventPayload(event).toolCallId) ||
+          `lingxi-skill:${agent}:${event.sequence}`,
+        startSequence: event.sequence,
+        startedAt: event.ts ? Date.parse(event.ts) || undefined : undefined,
+        status: 'executing',
+        skillId: stringValue(eventPayload(event).skill) || undefined,
       }
+      runs.push(run)
+      active.set(run.spanId, run)
+      activeByAgent.set(agent, [...(activeByAgent.get(agent) ?? []), run])
     }
-    const run = active.get(agent)
-    if (!run) continue
     if (event.kind === 'agent.completed') {
       run.status = 'success'
       run.endSequence = event.sequence
-      active.delete(agent)
+      removeActive(run)
     } else if (event.kind === 'agent.failed') {
       run.status = 'error'
       run.endSequence = event.sequence
-      active.delete(agent)
+      removeActive(run)
     }
   }
   return runs
@@ -284,9 +432,29 @@ function reduceAgentRuns(events: AgentTaskEvent[]): AgentRun[] {
 
 function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
   const tools = new Map<string, ToolRun>()
-  const runFor = (agent: string | undefined, sequence: number): AgentRun | undefined => {
+  const runFor = (
+    agent: string | undefined,
+    sequence: number,
+    spanId?: string
+  ): AgentRun | undefined => {
     if (!agent) return undefined
-    return [...runs].reverse().find((run) => run.agent === agent && run.startSequence <= sequence)
+    if (spanId) {
+      const explicit = runs.find(
+        (run) =>
+          run.spanId === spanId &&
+          run.startSequence <= sequence &&
+          (!run.endSequence || run.endSequence >= sequence)
+      )
+      if (explicit) return explicit
+    }
+    return [...runs]
+      .reverse()
+      .find(
+        (run) =>
+          run.agent === agent &&
+          run.startSequence <= sequence &&
+          (!run.endSequence || run.endSequence >= sequence)
+      )
   }
 
   for (const event of events) {
@@ -294,29 +462,33 @@ function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
     if (event.kind === 'tool.call.delta') {
       for (const [index, call] of eventToolCalls(event).entries()) {
         const id = toolCallId(event, call, index)
-        const run = runFor(agent, event.sequence)
+        const run = runFor(agent, event.sequence, eventSpanId(event))
         const current = tools.get(id)
         const args = safeArgs(call.args ?? call.arguments)
+        const streamingArgs =
+          typeof (call.args ?? call.arguments) === 'string'
+            ? String(call.args ?? call.arguments)
+            : current?.streamingArgs
         tools.set(id, {
           id,
           name: stringValue(call.name) || current?.name || 'tool',
           agent: agent ?? current?.agent,
           spanId: run?.spanId ?? current?.spanId,
+          parentSpanId: run?.parentSpanId ?? current?.parentSpanId,
           params: args ?? current?.params,
+          streamingArgs,
+          userPrompt: current?.userPrompt,
           firstSequence: current?.firstSequence ?? event.sequence,
           startedAt:
             current?.startedAt ?? (event.ts ? Date.parse(event.ts) || undefined : undefined),
-          status:
-            current?.status === 'success' || current?.status === 'error'
-              ? current.status
-              : 'executing',
+          status: normalizeToolStatus(call.status ?? call.phase, current?.status ?? 'executing'),
           result: current?.result,
         })
       }
     } else if (event.kind === 'tool.result') {
       const payload = eventPayload(event)
       const id = resultToolCallId(event)
-      const run = runFor(agent, event.sequence)
+      const run = runFor(agent, event.sequence, eventSpanId(event))
       const current = tools.get(id)
       const failed = ['error', 'failed', 'failure'].includes(
         stringValue(payload.status).toLowerCase()
@@ -326,15 +498,96 @@ function reduceToolRuns(events: AgentTaskEvent[], runs: AgentRun[]): ToolRun[] {
         name: stringValue(payload.name) || current?.name || 'tool',
         agent: agent ?? current?.agent,
         spanId: run?.spanId ?? current?.spanId,
+        parentSpanId: run?.parentSpanId ?? current?.parentSpanId,
         params: current?.params ?? safeArgs(payload.arguments),
+        streamingArgs: current?.streamingArgs,
+        userPrompt: current?.userPrompt,
         firstSequence: current?.firstSequence ?? event.sequence,
         startedAt: current?.startedAt ?? (event.ts ? Date.parse(event.ts) || undefined : undefined),
-        status: failed ? 'error' : 'success',
+        status: failed ? 'error' : normalizeToolStatus(payload.status, 'success'),
         result: {
           success: !failed,
           output: safePayloadSummary(payload.output ?? payload.content ?? payload.result),
-        error: failed ? stringValue(payload.error) || '工具执行失败。' : undefined,
+          error: failed ? stringValue(payload.error) || '工具执行失败。' : undefined,
         },
+      })
+    } else if (event.kind === 'schedule.proposed') {
+      const payload = eventPayload(event)
+      const id =
+        stringValue(payload.toolCallId) ||
+        stringValue(payload.tool_call_id) ||
+        stringValue(payload.proposalId) ||
+        `lingxi-schedule:${event.sequence}`
+      tools.set(id, {
+        id,
+        name: stringValue(payload.toolName) || 'schedule.propose',
+        params: safeArgs(payload),
+        firstSequence: event.sequence,
+        startedAt: event.ts ? Date.parse(event.ts) || undefined : undefined,
+        status: 'awaiting_approval',
+        result: undefined,
+      })
+    } else if (event.kind === 'schedule.permission') {
+      const payload = eventPayload(event)
+      const id =
+        stringValue(payload.toolCallId) ||
+        stringValue(payload.tool_call_id) ||
+        stringValue(payload.proposalId)
+      if (!id) continue
+      const current = tools.get(id)
+      const decision = stringValue(payload.decision).toLowerCase()
+      const rejected = ['cancelled', 'canceled', 'denied', 'deny', 'rejected', 'skip'].includes(
+        decision
+      )
+      const approved = [
+        'allow',
+        'allow_chat',
+        'always_allow',
+        'approve',
+        'approved',
+        'success',
+      ].includes(decision)
+      tools.set(id, {
+        id,
+        name: current?.name || 'schedule.propose',
+        agent: current?.agent,
+        spanId: current?.spanId,
+        parentSpanId: current?.parentSpanId,
+        params: current?.params,
+        streamingArgs: current?.streamingArgs,
+        userPrompt: current?.userPrompt,
+        firstSequence: current?.firstSequence ?? event.sequence,
+        startedAt: current?.startedAt,
+        status: rejected ? 'rejected' : approved ? 'success' : 'awaiting_approval',
+        result: current?.result,
+      })
+    } else if (event.kind === 'interrupt.raised') {
+      const payload = eventPayload(event)
+      const id =
+        stringValue(payload.toolCallId) ||
+        stringValue(payload.tool_call_id) ||
+        stringValue(payload.id) ||
+        `lingxi-interrupt:${event.sequence}`
+      const run = runFor(agent, event.sequence, eventSpanId(event))
+      const current = tools.get(id)
+      tools.set(id, {
+        id,
+        name:
+          stringValue(payload.toolName) ||
+          stringValue(payload.tool_name) ||
+          current?.name ||
+          'await_user',
+        agent: agent ?? current?.agent,
+        spanId: run?.spanId ?? current?.spanId,
+        parentSpanId: run?.parentSpanId ?? current?.parentSpanId,
+        params: current?.params ?? safeArgs(payload),
+        userPrompt: interruptPrompt(payload),
+        firstSequence: current?.firstSequence ?? event.sequence,
+        startedAt: current?.startedAt ?? (event.ts ? Date.parse(event.ts) || undefined : undefined),
+        // Native graph interrupts resume through the learner's next message,
+        // not through the schedule permission endpoint used by approval cards.
+        status: 'interrupted',
+        result: current?.result,
       })
     }
   }
@@ -389,7 +642,19 @@ function reduceReasoningSteps(
       }
       continue
     }
-    if (!currentPlan || !['node.started', 'node.retrying', 'node.held', 'node.revising', 'node.appeared', 'node.completed', 'node.failed'].includes(event.kind)) continue
+    if (
+      !currentPlan ||
+      ![
+        'node.started',
+        'node.retrying',
+        'node.held',
+        'node.revising',
+        'node.appeared',
+        'node.completed',
+        'node.failed',
+      ].includes(event.kind)
+    )
+      continue
     {
       const taskId = stringValue(payload.task_id)
       if (!taskId) continue
@@ -403,7 +668,9 @@ function reduceReasoningSteps(
         reasoningStep(
           id,
           existing.title,
-          event.kind === 'node.retrying' || event.kind === 'node.revising' || event.kind === 'node.held'
+          event.kind === 'node.retrying' ||
+            event.kind === 'node.revising' ||
+            event.kind === 'node.held'
             ? '正在根据新的学习证据重试。'
             : stringValue(payload.detail) || existing.summary,
           event.kind === 'node.failed'
@@ -444,6 +711,8 @@ function toolInfo(tool: ToolRun): ToolCallInfo {
     params: tool.params,
     calledBy: tool.agent,
     result: tool.result,
+    streamingArgs: tool.streamingArgs,
+    userPrompt: tool.userPrompt,
     startedAtMs: tool.startedAt,
   }
 }
@@ -514,6 +783,7 @@ export function projectLingxiGraphEvents(
           .find(
             (candidate) =>
               candidate.agent === agent &&
+              (!eventSpanId(event) || candidate.spanId === eventSpanId(event)) &&
               candidate.startSequence <= event.sequence &&
               (!candidate.endSequence || candidate.endSequence >= event.sequence)
           )
@@ -525,14 +795,14 @@ export function projectLingxiGraphEvents(
         content: run.agent,
         subagent: run.agent,
         spanId: run.spanId,
-        parentSpanId: 'main',
+        parentSpanId: run.parentSpanId,
         timestamp: run.startSequence,
       })
       blocks.push({
         type: 'tool_call',
         toolCall: skillToolInfo(run),
         spanId: run.spanId,
-        parentSpanId: 'main',
+        parentSpanId: run.parentSpanId,
         timestamp: run.startSequence,
       })
     }
@@ -542,17 +812,25 @@ export function projectLingxiGraphEvents(
         content: run.agent,
         subagent: run.agent,
         spanId: run.spanId,
-        parentSpanId: 'main',
+        parentSpanId: run.parentSpanId,
         timestamp: event.sequence,
         endedAt: event.sequence,
       })
     }
 
-    if (event.kind === 'tool.call.delta' || event.kind === 'tool.result') {
+    if (
+      event.kind === 'tool.call.delta' ||
+      event.kind === 'tool.result' ||
+      event.kind === 'schedule.proposed' ||
+      event.kind === 'schedule.permission' ||
+      event.kind === 'interrupt.raised'
+    ) {
       const related =
         event.kind === 'tool.call.delta'
           ? eventToolCalls(event).map((call, index) => toolCallId(event, call, index))
-          : [resultToolCallId(event)]
+          : event.kind === 'tool.result'
+            ? [resultToolCallId(event)]
+            : [eventControlToolId(event)]
       for (const id of related) {
         if (emittedTools.has(id)) continue
         const tool = tools.find((candidate) => candidate.id === id)
@@ -562,22 +840,58 @@ export function projectLingxiGraphEvents(
           type: 'tool_call',
           toolCall: toolInfo(tool),
           spanId: tool.spanId,
-          parentSpanId: 'main',
+          parentSpanId: tool.parentSpanId ?? 'main',
           timestamp: tool.firstSequence,
         })
       }
       continue
     }
 
-    if (event.kind === 'assistant.delta' || event.kind === 'agent.output' || event.kind === 'agent.output.delta') {
+    // `agent.status` is an explicitly safe narration lane. It is not model
+    // reasoning, so it can be shown inside the owning AgentGroup without
+    // exposing the private reasoning stream.
+    if (event.kind === 'agent.status') {
+      const text = eventText(event)
+      if (text) {
+        blocks.push(
+          run
+            ? {
+                type: 'subagent_text',
+                content: text,
+                subagent: run.agent,
+                spanId: run.spanId,
+                parentSpanId: run.parentSpanId,
+                timestamp: event.sequence,
+              }
+            : { type: 'text', content: text, timestamp: event.sequence }
+        )
+      }
+      continue
+    }
+
+    if (
+      event.kind === 'assistant.delta' ||
+      event.kind === 'agent.output' ||
+      event.kind === 'agent.output.delta'
+    ) {
       const text = eventText(event)
       if (!text) continue
+      // The coordinator's assistant lane is an explicit learner-facing
+      // output in the native runtime. Private reasoning remains on the
+      // separate reasoning.delta lane and is never projected.
+      if (event.kind === 'assistant.delta' && event.agent === 'coordinator') {
+        assistantText += `${assistantText ? '\n\n' : ''}${text}`
+        blocks.push({ type: 'text', content: text, timestamp: event.sequence })
+        continue
+      }
       const learnerFacingOutput =
         event.kind === 'agent.output' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
       const deltaOutput =
-        event.kind === 'agent.output.delta' && LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
+        event.kind === 'agent.output.delta' &&
+        LEARNER_FACING_OUTPUT_AGENTS.has(String(event.agent ?? ''))
       if (deltaOutput) {
-        const streamId = stringValue(eventPayload(event).stream_id) || String(event.agent ?? 'learner')
+        const streamId =
+          stringValue(eventPayload(event).stream_id) || String(event.agent ?? 'learner')
         const existingIndex = streamedOutputBlocks.get(streamId)
         if (existingIndex === undefined) {
           streamedOutputBlocks.set(streamId, blocks.length)
@@ -608,7 +922,14 @@ export function projectLingxiGraphEvents(
         blocks.push({ type: 'text', content: summary, timestamp: event.sequence })
       }
     } else if (
-      ['task.failed', 'task.cancelled', 'run.failed', 'run.cancelled', 'run.timed_out', 'run.budget_exceeded'].includes(event.kind) &&
+      [
+        'task.failed',
+        'task.cancelled',
+        'run.failed',
+        'run.cancelled',
+        'run.timed_out',
+        'run.budget_exceeded',
+      ].includes(event.kind) &&
       !assistantText
     ) {
       assistantText =
