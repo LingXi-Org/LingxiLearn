@@ -1497,6 +1497,26 @@ class Repository:
                 answers=list(answers),
                 idempotency_key=idempotency_key,
             )
+            # The public ``interaction.resolved`` fact commits with the
+            # transition that produced it.  Appending it afterwards would let a
+            # crash leave an interaction durably resolved while the replay log
+            # still says the card is pending — the recap would disappear on
+            # refresh (issue #18 §10.6).  The outbox row is the durable intent;
+            # the service publishes it into the event log and marks it, and any
+            # later replay repairs a missed publish.
+            outbox = TransactionalOutbox(
+                id=f"outbox_{uuid4().hex}",
+                event_key=interaction_resolved_event_key(interaction_id),
+                task_id=task_id,
+                turn_id=turn_id,
+                kind="interaction.resolved",
+                safe_payload={
+                    "interaction_id": interaction_id,
+                    "execution_id": str(interaction.execution_id or ""),
+                    "turn_id": turn_id,
+                    "answers": list(answers),
+                },
+            )
             command = CommandInbox(
                 id=f"cmd_{uuid4().hex}",
                 task_id=task_id,
@@ -1509,7 +1529,7 @@ class Repository:
                     "answers": list(answers),
                 },
             )
-            s.add_all([answer_row, command])
+            s.add_all([answer_row, command, outbox])
             try:
                 await s.commit()
             except IntegrityError:
@@ -1520,6 +1540,65 @@ class Repository:
                 "answers": list(answers),
                 "command": _command_dict(command),
             }
+
+    async def pending_outbox(self, *, task_id: str | None = None) -> list[dict[str, Any]]:
+        """Durable facts committed with their transaction but not yet published."""
+
+        async with self.db.session() as s:
+            stmt = select(TransactionalOutbox).where(TransactionalOutbox.published_at.is_(None))
+            if task_id is not None:
+                stmt = stmt.where(TransactionalOutbox.task_id == task_id)
+            rows = (await s.scalars(stmt.order_by(TransactionalOutbox.created_at))).all()
+            return [
+                {
+                    "id": row.id,
+                    "event_key": row.event_key,
+                    "task_id": row.task_id,
+                    "turn_id": row.turn_id,
+                    "kind": row.kind,
+                    "payload": dict(row.safe_payload or {}),
+                }
+                for row in rows
+            ]
+
+    async def mark_outbox_published(self, outbox_id: str) -> bool:
+        """Mark one outbox row published; only the first caller gets True."""
+
+        async with self.db.session() as s:
+            result = await s.execute(
+                update(TransactionalOutbox)
+                .where(
+                    TransactionalOutbox.id == outbox_id,
+                    TransactionalOutbox.published_at.is_(None),
+                )
+                .values(published_at=utcnow())
+            )
+            await s.commit()
+            return bool(getattr(result, "rowcount", 0))
+
+    async def resolved_interaction_event_ids(self, task_id: str) -> set[str]:
+        """Interaction ids that already have a public ``resolved`` row.
+
+        Publishing checks this first, so a crash between appending the event
+        and marking the outbox row cannot produce a duplicate on replay.
+        """
+
+        async with self.db.session() as s:
+            rows = (
+                await s.scalars(
+                    select(AgentTaskEvent.payload).where(
+                        AgentTaskEvent.task_id == task_id,
+                        AgentTaskEvent.kind == "interaction.resolved",
+                    )
+                )
+            ).all()
+            found: set[str] = set()
+            for payload in rows:
+                if isinstance(payload, dict):
+                    value = str(payload.get("interaction_id") or "")
+                    if value:
+                        found.add(value)
+            return found
 
     async def pending_interaction_continuations(self) -> list[dict[str, Any]]:
         """Continuation commands whose resume never ran (crash recovery).
@@ -2573,6 +2652,16 @@ def _quiz_submission_dict(row: QuizSubmission) -> dict[str, Any]:
         "handoff_reason": row.handoff_reason,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
+
+
+def interaction_resolved_event_key(interaction_id: str) -> str:
+    """Outbox key for one interaction's public ``resolved`` fact.
+
+    Unique per interaction, so a retried answer can only ever repair the same
+    row — never publish a second resolved event.
+    """
+
+    return f"interaction:{interaction_id}:resolved"
 
 
 def _interaction_command_key(interaction_id: str, idempotency_key: str) -> str:

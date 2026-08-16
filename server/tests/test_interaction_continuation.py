@@ -129,8 +129,9 @@ async def test_crash_between_commit_and_resume_is_recovered(paused_thread) -> No
     def spawn(coro: Any) -> None:
         started.append(asyncio.ensure_future(coro))
 
-    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> None:
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
         replayed.append((task, dict(kwargs.get("resume") or {})))
+        return True
 
     service._spawn = spawn  # type: ignore[method-assign]
     service._drive_agent_task = drive  # type: ignore[method-assign]
@@ -176,12 +177,14 @@ async def test_answer_during_a_running_turn_resumes_without_a_restart(paused_thr
     def spawn(coro: Any) -> None:
         started.append(asyncio.ensure_future(coro))
 
-    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> None:
-        # The real claim refuses a running thread; model exactly that.
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
+        # The real claim refuses a running thread; model exactly that, and
+        # report ownership the way _run_agent_task now does.
         record = await service.repo.get_agent_task_for_learner(task, learner)
         if record is not None and record.status == "running":
-            return
+            return False
         resumes.append(dict(kwargs.get("resume") or {}))
+        return True
 
     service._spawn = spawn  # type: ignore[method-assign]
     service._drive_agent_task = drive  # type: ignore[method-assign]
@@ -238,8 +241,9 @@ async def test_drain_defers_while_another_turn_owns_the_thread(paused_thread) ->
     def spawn(coro: Any) -> None:
         coro.close()
 
-    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> None:
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
         resumes.append(dict(kwargs.get("resume") or {}))
+        return True
 
     service._spawn = spawn  # type: ignore[method-assign]
     service._drive_agent_task = drive  # type: ignore[method-assign]
@@ -261,6 +265,172 @@ async def test_drain_defers_while_another_turn_owns_the_thread(paused_thread) ->
         if command["kind"] == "interaction_answer"
     ]
     assert len(pending) == 1
+
+
+async def test_a_losing_worker_never_consumes_the_continuation(paused_thread) -> None:
+    """Only the worker that won the durable claim may close the ledger entry.
+
+    The answer's fast path does not take the process-local drain lock, and
+    another replica has a different lock entirely, so two workers can both hold
+    the same pending continuation.  If the loser consumed it, a crash on the
+    winning side would lose the answer with nothing left for startup recovery
+    to replay: ownership of the run, not arrival, decides who may consume.
+    """
+
+    service, task_id, learner_id, interaction_id, _turn = paused_thread
+    owned = False
+    attempts: list[dict[str, Any]] = []
+
+    def spawn(coro: Any) -> None:
+        coro.close()
+
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
+        # False is exactly what _run_agent_task returns when another worker
+        # won claim_agent_task: nothing was executed here.
+        attempts.append(dict(kwargs.get("resume") or {}))
+        return owned
+
+    service._spawn = spawn  # type: ignore[method-assign]
+    service._drive_agent_task = drive  # type: ignore[method-assign]
+
+    await service.answer_agent_interaction(
+        task_id,
+        interaction_id,
+        answers=ANSWERS,
+        idempotency_key="ans-own",
+        learner_id=learner_id,
+    )
+
+    assert await service._drain_interaction_continuations(task_id, learner_id) == 0
+    assert len(attempts) == 1
+    pending = [
+        command
+        for command in await service.repo.pending_commands(task_id)
+        if command["kind"] == "interaction_answer"
+    ]
+    assert len(pending) == 1, "a losing worker must not consume the winner's command"
+
+    # The winner's own attempt closes it.
+    owned = True
+    assert await service._drain_interaction_continuations(task_id, learner_id) == 1
+    remaining = [
+        command
+        for command in await service.repo.pending_commands(task_id)
+        if command["kind"] == "interaction_answer"
+    ]
+    assert remaining == [], "the owner closes the ledger entry when its run returns"
+
+
+async def test_resolved_event_publishes_from_the_outbox_and_repairs(paused_thread) -> None:
+    """The public resolved fact commits with the transition that produced it.
+
+    A crash between the transaction and the publish leaves a durable outbox
+    row; the retry (or a restart) must repair it, or a refreshed transcript
+    would show a pending card for an interaction the database calls resolved.
+    """
+
+    service, task_id, learner_id, interaction_id, _turn = paused_thread
+
+    def spawn(coro: Any) -> None:
+        coro.close()
+
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
+        return True
+
+    service._spawn = spawn  # type: ignore[method-assign]
+    service._drive_agent_task = drive  # type: ignore[method-assign]
+
+    # Crash between claim_interaction_answer() and the publish.
+    published = service._publish_interaction_outbox
+
+    async def crash(_task_id: str) -> int:
+        raise RuntimeError("process died before publishing")
+
+    service._publish_interaction_outbox = crash  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError):
+        await service.answer_agent_interaction(
+            task_id,
+            interaction_id,
+            answers=ANSWERS,
+            idempotency_key="ans-crash",
+            learner_id=learner_id,
+        )
+
+    # Durable state says resolved; the replay log does not yet.
+    interaction = await service.repo.get_interaction(interaction_id, task_id=task_id)
+    assert interaction is not None and interaction["status"] == "resolved"
+    events = await service.repo.agent_events_after(task_id)
+    assert not [event for event in events if event["kind"] == "interaction.resolved"]
+    outbox = await service.repo.pending_outbox(task_id=task_id)
+    assert [row["event_key"] for row in outbox] == [f"interaction:{interaction_id}:resolved"]
+
+    # The retry repairs it: same key, same payload, so the answer is the
+    # original one and the missing public event is published.
+    service._publish_interaction_outbox = published  # type: ignore[method-assign]
+    result = await service.answer_agent_interaction(
+        task_id,
+        interaction_id,
+        answers=ANSWERS,
+        idempotency_key="ans-crash",
+        learner_id=learner_id,
+    )
+    assert result["status"] == "accepted"
+
+    events = await service.repo.agent_events_after(task_id)
+    resolved = [event for event in events if event["kind"] == "interaction.resolved"]
+    assert len(resolved) == 1
+    assert resolved[0]["payload"]["interaction_id"] == interaction_id
+    assert resolved[0]["payload"]["answers"] == ANSWERS
+    v1_resolved = [
+        event
+        for event in events
+        if int(event.get("protocol_version") or 0) == 1
+        and event["payload"].get("type") == "interaction"
+    ]
+    assert v1_resolved, "the V1 stream carries the resolved fact for the recap"
+    assert await service.repo.pending_outbox(task_id=task_id) == []
+
+    # Publishing again is a no-op: the fact exists exactly once.
+    assert await service._publish_interaction_outbox(task_id) == 0
+    events = await service.repo.agent_events_after(task_id)
+    assert len([event for event in events if event["kind"] == "interaction.resolved"]) == 1
+
+
+async def test_startup_recovery_repairs_an_unpublished_resolution(paused_thread) -> None:
+    service, task_id, learner_id, interaction_id, _turn = paused_thread
+    started: list[asyncio.Task[Any]] = []
+
+    def spawn(coro: Any) -> None:
+        started.append(asyncio.ensure_future(coro))
+
+    async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
+        return True
+
+    service._spawn = spawn  # type: ignore[method-assign]
+    service._drive_agent_task = drive  # type: ignore[method-assign]
+
+    async def crash(_task_id: str) -> int:
+        raise RuntimeError("process died before publishing")
+
+    published = service._publish_interaction_outbox
+    service._publish_interaction_outbox = crash  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError):
+        await service.answer_agent_interaction(
+            task_id,
+            interaction_id,
+            answers=ANSWERS,
+            idempotency_key="ans-restart",
+            learner_id=learner_id,
+        )
+    service._publish_interaction_outbox = published  # type: ignore[method-assign]
+
+    assert await service._recover_interaction_continuations() == 1
+    await asyncio.gather(*started)
+
+    events = await service.repo.agent_events_after(task_id)
+    resolved = [event for event in events if event["kind"] == "interaction.resolved"]
+    assert len(resolved) == 1, "restart repairs the missing public fact"
+    assert await service.repo.pending_outbox(task_id=task_id) == []
 
 
 async def test_concurrent_answers_produce_exactly_one_continuation(paused_thread) -> None:

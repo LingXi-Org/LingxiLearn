@@ -16,8 +16,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator, Mapping, Sequence
-from contextlib import asynccontextmanager, suppress
+from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -110,6 +110,17 @@ def resolve(
 
 
 @dataclass(slots=True)
+class _PreparedExecution:
+    """One opened execution: identity, durable rows and its runtime proxy."""
+
+    resolution: Resolution
+    run_context: RunContext
+    skill_run_id: str
+    runtime: Any
+    node_id: str
+
+
+@dataclass(slots=True)
 class DispatchDeps:
     """Everything dispatch needs that is not part of the plan."""
 
@@ -196,95 +207,32 @@ class _ProviderRuntime:
             {"type": "agent.status", "text": text, **({"code": code} if code else {})},
         )
 
-    @asynccontextmanager
     async def delegate(
         self,
-        provider_id: str,
-        *,
-        display_name: str = "",
-        capability: str = "",
-        execution_kind: str = "model",
-    ) -> AsyncIterator[_ProviderRuntime]:
-        """Run a real child actor under this AgentRun.
-
-        A provider that hands part of its work to a second, distinct agent
-        wraps that call in this context manager.  The child gets its own
-        durable AgentRun carrying ``parent_agent_run_id``, so the nested
-        AgentGroup on the left and the delegation edge on the right come from
-        the same fact rather than from a name lookup (issue #18 §4.4).
-        """
-
-        parent = self._run_context
-        if parent is None or self._owner is None:
-            # Standalone unit runs without dispatcher identity: keep the
-            # provider working, but never invent a child identity.
-            yield self
-            return
-        child = parent.delegate(provider_id=provider_id, capability=capability)
-        runtime = _ProviderRuntime(
-            self._runtime,
-            task_id=self._task_id,
-            node_id=self._node_id,
-            step=self._step,
-            run_context=child,
-            owner=self._owner,
-        )
-        await self._owner.open_delegate(
-            child, display_name=display_name or provider_id, execution_kind=execution_kind
-        )
-        status = "completed"
-        try:
-            yield runtime
-        except asyncio.CancelledError:
-            status = "cancelled"
-            await self._owner.close_delegate(child, status=status, shielded=True)
-            raise
-        except BaseException:
-            status = "failed"
-            await self._owner.close_delegate(child, status=status)
-            raise
-        else:
-            await self._owner.close_delegate(child, status=status)
-
-    async def delegate_to(
-        self,
-        provider_id: str,
+        capability: str,
         context: ProviderContext,
         *,
-        capability: str = "",
         task: PlannedTask | None = None,
     ) -> ProviderResult:
-        """Run a second real provider as a child of this AgentRun.
+        """Delegate a capability to a second agent under this AgentRun.
 
-        This is the execution entry point behind :meth:`delegate`: the child
-        provider is resolved from the same registry the dispatcher uses, runs
-        under its own canonical identity, and its events are stamped with the
-        child ``agent_run_id`` — so a nested AgentGroup and a delegation edge
-        describe an execution that really happened (issue #18 §4.4).
-
-        No shipped provider delegates today; this is the supported way for one
-        to start, and the identity it produces is already durable.
+        This is the only delegation door, and it runs the same
+        ``capability → enabled skill → provider`` chain as every other unit of
+        work — never a direct call into a provider implementation.  The child
+        therefore gets its own AgentRun *and* SkillRun (bound to the resolved
+        skill's version and checksum), its own narration, and the Skill
+        ToolCallItem lifecycle on the public stream, nested under this run via
+        ``parent_agent_run_id`` (issue #18 §4.4/§4.6).
         """
 
         if self._owner is None or self._run_context is None:
             raise ProviderError("delegation requires a dispatcher-owned run context")
-        provider = get_provider(provider_id)
-        if provider is None:
-            raise ProviderError(f"provider is not implemented: {provider_id}")
-        descriptor = provider_descriptor(provider_id)
-        async with self.delegate(
-            provider_id,
-            display_name=descriptor.display_name if descriptor else provider_id,
+        return await self._owner.run_child(
+            parent=self._run_context,
             capability=capability,
-            execution_kind=descriptor.execution_kind if descriptor else "model",
-        ) as child_runtime:
-            child_context = replace(
-                context,
-                task=task or context.task,
-                runtime=child_runtime,
-                run_context=child_runtime.run_context,
-            )
-            return await provider(child_context)
+            task=task or context.task,
+            profile=context.profile,
+        )
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._runtime, name)
@@ -457,137 +405,17 @@ class Dispatcher:
         # The dispatcher — not the provider — owns the agent lifecycle.  Each
         # real invocation attempt gets a fresh agent_run_id, so a WorkItem
         # retry can never reuse a previous attempt's identity.
-        provider_desc = provider_descriptor(resolution.provider)
-        role = presentation_role_for(
-            capability=task.capability,
-            capability_info=capability_info(task.capability),
-            critical_path=task.estimated_cost.critical_path,
+        prepared = await self._begin_execution(
+            task,
+            resolution=resolution,
+            node_id=node_id,
+            work_id=work_id,
+            emit_node_events=True,
         )
-        agent_run_id = new_agent_run_id()
-        display_name = provider_desc.display_name if provider_desc else resolution.provider
-        execution_kind = provider_desc.execution_kind if provider_desc else "model"
-        run_context = RunContext(
-            task_id=self._deps.task_id,
-            execution_id=self._deps.execution_id,
-            turn_id=self._deps.turn_id,
-            agent_run_id=agent_run_id,
-            provider_id=resolution.provider,
-            capability=task.capability,
-            presentation_role=role,
-            stream_id=f"{self._deps.task_id}:{self._deps.turn_id or 'turn'}",
-        )
-        skill_run_id = new_skill_run_id()
-        skill_display_name = resolution.display_name or resolution.skill_id
-        if self._deps.repository is not None:
-            for persist in (
-                lambda: self._deps.repository.create_agent_run(
-                    agent_run_id=agent_run_id,
-                    task_id=self._deps.task_id,
-                    execution_id=self._deps.execution_id or self._deps.task_id,
-                    turn_id=self._deps.turn_id or None,
-                    work_item_id=work_id or None,
-                    provider_id=resolution.provider,
-                    agent_display_name=display_name,
-                    execution_kind=execution_kind,
-                    capability=task.capability,
-                    presentation_role=role,
-                    started=True,
-                    safe_metadata={"skill_id": resolution.skill_id},
-                ),
-                lambda: self._deps.repository.create_skill_run(
-                    skill_run_id=skill_run_id,
-                    agent_run_id=agent_run_id,
-                    task_id=self._deps.task_id,
-                    execution_id=self._deps.execution_id or self._deps.task_id,
-                    turn_id=self._deps.turn_id or None,
-                    skill_id=resolution.skill_id,
-                    display_name=skill_display_name,
-                    version=resolution.skill_version,
-                    checksum=resolution.skill_checksum,
-                ),
-            ):
-                try:
-                    await persist()
-                except Exception:  # noqa: BLE001 - identity rows must not fail the run
-                    logger.exception("failed to persist execution identity")
-
-        runtime = (
-            _ProviderRuntime(
-                self._deps.graph_runtime,
-                task_id=task.id,
-                node_id=node_id,
-                step=int(task.inputs.get("__runtime_step") or 0),
-                run_context=run_context,
-                owner=self,
-            )
-            if self._deps.graph_runtime is not None
-            else None
-        )
-
-        if self._deps.emit is not None:
-            if task.inputs.get("revision"):
-                self._deps.emit(
-                    "node.revising",
-                    {
-                        "task_id": task.id,
-                        "node_id": node_id,
-                        "capability": task.capability,
-                        "provider": resolution.provider,
-                        "skill_id": resolution.skill_id,
-                        "revising": True,
-                    },
-                )
-            self._deps.emit(
-                "node.started",
-                {
-                    "task_id": task.id,
-                    "node_id": node_id,
-                    "capability": task.capability,
-                    "provider": resolution.provider,
-                    "skill_id": resolution.skill_id,
-                },
-            )
-            self._deps.emit(
-                "agent.started",
-                {
-                    "agent": resolution.provider,
-                    "task_id": task.id,
-                    "node_id": node_id,
-                    "capability": task.capability,
-                    "provider": resolution.provider,
-                    "skill_id": resolution.skill_id,
-                    "agent_run_id": agent_run_id,
-                    "display_name": display_name,
-                    "execution_kind": execution_kind,
-                    "presentation_role": role,
-                },
-            )
-            self._deps.emit(
-                "skill.started",
-                {
-                    "agent": resolution.provider,
-                    "task_id": task.id,
-                    "node_id": node_id,
-                    "agent_run_id": agent_run_id,
-                    "skill_run_id": skill_run_id,
-                    "skill_id": resolution.skill_id,
-                    "display_name": skill_display_name,
-                    "version": resolution.skill_version,
-                    "checksum": resolution.skill_checksum,
-                },
-            )
-            self._deps.emit(
-                "agent.status",
-                {
-                    "task_id": task.id,
-                    "node_id": node_id,
-                    "capability": task.capability,
-                    "provider": resolution.provider,
-                    "skill_id": resolution.skill_id,
-                    "agent_run_id": agent_run_id,
-                    "text": resolution.status_line,
-                },
-            )
+        agent_run_id = prepared.run_context.agent_run_id
+        skill_run_id = prepared.skill_run_id
+        run_context = prepared.run_context
+        runtime = prepared.runtime
 
         provider = get_provider(resolution.provider)
         if provider is None:
@@ -626,71 +454,11 @@ class Dispatcher:
                 detail=f"provider is not implemented: {resolution.provider}",
             )
 
-        context = ProviderContext(
-            goal=self._deps.goal,
-            task=task,
-            learner_id=self._deps.learner_id,
-            task_id=self._deps.task_id,
-            model=self._deps.model,
-            settings=self._deps.settings,
-            artifacts=self._deps.artifacts,
-            runtime=runtime,
-            profile=profile,
-            prior_results=dict(self._results),
-            user_message=dict(self._deps.user_message),
-            skill_id=resolution.skill_id,
-            shared_skills=self._deps.shared_skills,
-            registry=self._deps.registry,
-            pack=self._deps.pack,
-            run_context=run_context.with_skill_run(skill_run_id),
-        )
-
         try:
-            result = await provider(context)
-            self._emit_agent_lifecycle(
-                "agent.completed",
-                task=task,
-                resolution=resolution,
-                node_id=node_id,
-                status="completed",
-                agent_run_id=agent_run_id,
-                skill_run_id=skill_run_id,
-            )
+            result = await self._invoke_provider(provider, task, prepared, profile=profile)
         except asyncio.CancelledError:
-            self._emit_agent_lifecycle(
-                "agent.failed",
-                task=task,
-                resolution=resolution,
-                node_id=node_id,
-                status="cancelled",
-                detail="provider task cancelled",
-                agent_run_id=agent_run_id,
-                skill_run_id=skill_run_id,
-            )
-            # Stop must close the durable rows too: an AgentRun/SkillRun left
-            # at ``running`` would contradict the cancelled event stream after
-            # a refresh (issue #18 §4.4).  Shielded so the in-flight
-            # cancellation cannot abort the finalisation itself.
-            await self._finish_identity(
-                agent_run_id,
-                skill_run_id,
-                agent_status="cancelled",
-                skill_status="cancelled",
-                shielded=True,
-            )
             raise
         except ProviderError as exc:
-            logger.info("provider %s declined: %s", resolution.provider, exc)
-            self._emit_agent_lifecycle(
-                "agent.failed",
-                task=task,
-                resolution=resolution,
-                node_id=node_id,
-                status="failed",
-                detail=str(exc),
-                agent_run_id=agent_run_id,
-                skill_run_id=skill_run_id,
-            )
             if work_id and self._deps.repository is not None:
                 await self._deps.repository.finish_work(
                     work_id=work_id,
@@ -698,22 +466,8 @@ class Dispatcher:
                     status="failed",
                     result={"safe_summary": str(exc), "error_code": "provider_error"},
                 )
-            await self._finish_identity(
-                agent_run_id, skill_run_id, agent_status="failed", skill_status="failed"
-            )
             return self._failed(task, resolution, str(exc), started, node_id=node_id)
         except Exception as exc:  # noqa: BLE001 - one provider must not end the run
-            logger.exception("provider %s failed", resolution.provider)
-            self._emit_agent_lifecycle(
-                "agent.failed",
-                task=task,
-                resolution=resolution,
-                node_id=node_id,
-                status="failed",
-                detail=f"{type(exc).__name__}: {exc}",
-                agent_run_id=agent_run_id,
-                skill_run_id=skill_run_id,
-            )
             if work_id and self._deps.repository is not None:
                 await self._deps.repository.finish_work(
                     work_id=work_id,
@@ -724,9 +478,6 @@ class Dispatcher:
                         "error_code": "provider_failed",
                     },
                 )
-            await self._finish_identity(
-                agent_run_id, skill_run_id, agent_status="failed", skill_status="failed"
-            )
             return self._failed(
                 task,
                 resolution,
@@ -738,9 +489,6 @@ class Dispatcher:
             if heartbeat is not None:
                 await self._stop_heartbeat(heartbeat)
 
-        await self._finish_identity(
-            agent_run_id, skill_run_id, agent_status="completed", skill_status="completed"
-        )
         evidence_ids = await self._persist(result)
         satisfied, detail = await self._check_done(task, result, evidence_ids)
         if work_id and self._deps.repository is not None:
@@ -861,77 +609,331 @@ class Dispatcher:
                     },
                 )
 
-    # -- delegation (issue #18 §4.4) ----------------------------------------
+    # -- the shared execution primitive (issue #18 §4.4/§4.6) ----------------
 
-    async def open_delegate(
-        self, child: RunContext, *, display_name: str, execution_kind: str
-    ) -> None:
-        """Persist and announce a child AgentRun the parent delegates to."""
+    async def _begin_execution(
+        self,
+        task: PlannedTask,
+        *,
+        resolution: Resolution,
+        node_id: str,
+        work_id: str = "",
+        parent: RunContext | None = None,
+        emit_node_events: bool = False,
+    ) -> _PreparedExecution:
+        """Open one execution: canonical identity, durable rows, lifecycle events.
 
+        Both a planned task and a delegated child come through here, so a child
+        is not a second, thinner code path: it gets its own AgentRun *and*
+        SkillRun bound to the resolved skill's version/checksum, the same
+        narration, and the same ToolCallItem lifecycle on the public stream.
+        ``parent`` is what makes the child nested; everything else is identical.
+        """
+
+        provider_desc = provider_descriptor(resolution.provider)
+        role = presentation_role_for(
+            capability=task.capability,
+            capability_info=capability_info(task.capability),
+            critical_path=task.estimated_cost.critical_path,
+        )
+        display_name = provider_desc.display_name if provider_desc else resolution.provider
+        execution_kind = provider_desc.execution_kind if provider_desc else "model"
+        base = RunContext(
+            task_id=self._deps.task_id,
+            execution_id=self._deps.execution_id,
+            turn_id=self._deps.turn_id,
+            agent_run_id=new_agent_run_id(),
+            provider_id=resolution.provider,
+            capability=task.capability,
+            presentation_role=role,
+            stream_id=f"{self._deps.task_id}:{self._deps.turn_id or 'turn'}",
+        )
+        run_context = (
+            replace(base, parent_agent_run_id=parent.agent_run_id) if parent is not None else base
+        )
+        agent_run_id = run_context.agent_run_id
+        skill_run_id = new_skill_run_id()
+        skill_display_name = resolution.display_name or resolution.skill_id
         if self._deps.repository is not None:
-            try:
-                await self._deps.repository.create_agent_run(
-                    agent_run_id=child.agent_run_id,
+            for persist in (
+                lambda: self._deps.repository.create_agent_run(
+                    agent_run_id=agent_run_id,
                     task_id=self._deps.task_id,
-                    execution_id=child.execution_id or self._deps.task_id,
-                    turn_id=child.turn_id or None,
-                    parent_agent_run_id=child.parent_agent_run_id or None,
-                    provider_id=child.provider_id,
+                    execution_id=self._deps.execution_id or self._deps.task_id,
+                    turn_id=self._deps.turn_id or None,
+                    work_item_id=work_id or None,
+                    parent_agent_run_id=run_context.parent_agent_run_id or None,
+                    provider_id=resolution.provider,
                     agent_display_name=display_name,
                     execution_kind=execution_kind,
-                    capability=child.capability,
-                    presentation_role=child.presentation_role,
+                    capability=task.capability,
+                    presentation_role=role,
                     started=True,
-                )
-            except Exception:  # noqa: BLE001 - identity rows must not fail the run
-                logger.exception("failed to persist delegated agent run")
+                    safe_metadata={"skill_id": resolution.skill_id},
+                ),
+                lambda: self._deps.repository.create_skill_run(
+                    skill_run_id=skill_run_id,
+                    agent_run_id=agent_run_id,
+                    task_id=self._deps.task_id,
+                    execution_id=self._deps.execution_id or self._deps.task_id,
+                    turn_id=self._deps.turn_id or None,
+                    skill_id=resolution.skill_id,
+                    display_name=skill_display_name,
+                    version=resolution.skill_version,
+                    checksum=resolution.skill_checksum,
+                ),
+            ):
+                try:
+                    await persist()
+                except Exception:  # noqa: BLE001 - identity rows must not fail the run
+                    logger.exception("failed to persist execution identity")
+
+        runtime = (
+            _ProviderRuntime(
+                self._deps.graph_runtime,
+                task_id=task.id,
+                node_id=node_id,
+                step=int(task.inputs.get("__runtime_step") or 0),
+                run_context=run_context,
+                owner=self,
+            )
+            if self._deps.graph_runtime is not None
+            else None
+        )
+
         if self._deps.emit is not None:
+            if emit_node_events:
+                # Runtime-lane bookkeeping belongs to the planned task; a
+                # delegated child is an actor inside it, not a second node.
+                if task.inputs.get("revision"):
+                    self._deps.emit(
+                        "node.revising",
+                        {
+                            "task_id": task.id,
+                            "node_id": node_id,
+                            "capability": task.capability,
+                            "provider": resolution.provider,
+                            "skill_id": resolution.skill_id,
+                            "revising": True,
+                        },
+                    )
+                self._deps.emit(
+                    "node.started",
+                    {
+                        "task_id": task.id,
+                        "node_id": node_id,
+                        "capability": task.capability,
+                        "provider": resolution.provider,
+                        "skill_id": resolution.skill_id,
+                    },
+                )
             self._deps.emit(
                 "agent.started",
                 {
-                    "agent": child.provider_id,
-                    "provider": child.provider_id,
-                    "capability": child.capability,
-                    "agent_run_id": child.agent_run_id,
-                    "parent_agent_run_id": child.parent_agent_run_id,
+                    "agent": resolution.provider,
+                    "task_id": task.id,
+                    "node_id": node_id,
+                    "capability": task.capability,
+                    "provider": resolution.provider,
+                    "skill_id": resolution.skill_id,
+                    "agent_run_id": agent_run_id,
+                    "parent_agent_run_id": run_context.parent_agent_run_id,
                     "display_name": display_name,
                     "execution_kind": execution_kind,
-                    "presentation_role": child.presentation_role,
+                    "presentation_role": role,
                 },
             )
-
-    async def close_delegate(
-        self, child: RunContext, *, status: str, shielded: bool = False
-    ) -> None:
-        if self._deps.emit is not None:
             self._deps.emit(
-                "agent.completed" if status == "completed" else "agent.failed",
+                "skill.started",
                 {
-                    "agent": child.provider_id,
-                    "provider": child.provider_id,
-                    "capability": child.capability,
-                    "agent_run_id": child.agent_run_id,
-                    "parent_agent_run_id": child.parent_agent_run_id,
-                    "status": status,
+                    "agent": resolution.provider,
+                    "task_id": task.id,
+                    "node_id": node_id,
+                    "agent_run_id": agent_run_id,
+                    "skill_run_id": skill_run_id,
+                    "skill_id": resolution.skill_id,
+                    "display_name": skill_display_name,
+                    "version": resolution.skill_version,
+                    "checksum": resolution.skill_checksum,
                 },
             )
-        if self._deps.repository is None:
-            return
-
-        async def finalise() -> None:
-            await self._deps.repository.update_agent_run(
-                child.agent_run_id, status=status, ended=True
+            self._deps.emit(
+                "agent.status",
+                {
+                    "task_id": task.id,
+                    "node_id": node_id,
+                    "capability": task.capability,
+                    "provider": resolution.provider,
+                    "skill_id": resolution.skill_id,
+                    "agent_run_id": agent_run_id,
+                    "text": resolution.status_line,
+                },
             )
+        return _PreparedExecution(
+            resolution=resolution,
+            run_context=run_context,
+            skill_run_id=skill_run_id,
+            runtime=runtime,
+            node_id=node_id,
+        )
 
+    def _provider_context(
+        self, task: PlannedTask, prepared: _PreparedExecution, *, profile: Mapping[str, Mapping[str, Any]]
+    ) -> ProviderContext:
+        return ProviderContext(
+            goal=self._deps.goal,
+            task=task,
+            learner_id=self._deps.learner_id,
+            task_id=self._deps.task_id,
+            model=self._deps.model,
+            settings=self._deps.settings,
+            artifacts=self._deps.artifacts,
+            runtime=prepared.runtime,
+            profile=profile,
+            prior_results=dict(self._results),
+            user_message=dict(self._deps.user_message),
+            skill_id=prepared.resolution.skill_id,
+            shared_skills=self._deps.shared_skills,
+            registry=self._deps.registry,
+            pack=self._deps.pack,
+            run_context=prepared.run_context.with_skill_run(prepared.skill_run_id),
+        )
+
+    # -- delegation (issue #18 §4.4) ----------------------------------------
+
+    async def run_child(
+        self,
+        *,
+        parent: RunContext,
+        capability: str,
+        task: PlannedTask,
+        profile: Mapping[str, Mapping[str, Any]],
+    ) -> ProviderResult:
+        """Execute a delegated capability through the normal dispatch chain.
+
+        Delegation delegates *a capability*, not a provider implementation:
+        resolution runs the same ``capability → enabled skill → provider`` chain
+        as any other unit of work, so the child is bound to a real registry row
+        (version/checksum included) and cannot reach a disabled or unregistered
+        skill.  It shares the parent's WorkItem lease, budget and completion
+        evaluation, because it is part of the parent's planned work rather than
+        a new item in the Work Ledger.
+        """
+
+        resolution = resolve(
+            capability,
+            self._deps.skills,
+            knowledge_point_id=task.knowledge_point_id,
+        )
+        provider = get_provider(resolution.provider)
+        if provider is None:
+            raise ProviderError(f"provider is not implemented: {resolution.provider}")
+        # A Pydantic model: copy rather than dataclasses.replace, and carry the
+        # delegated capability so the child's AgentRun/graph node reports what
+        # it actually ran — never the parent's capability.
+        child_task = (
+            task
+            if task.capability == capability
+            else task.model_copy(update={"capability": capability})
+        )
+        prepared = await self._begin_execution(
+            child_task, resolution=resolution, node_id=f"{task.id}:{capability}", parent=parent
+        )
+        result = await self._invoke_provider(
+            provider, child_task, prepared, profile=profile
+        )
+        await self._persist(result)
+        return result
+
+    async def _invoke_provider(
+        self,
+        provider: Any,
+        task: PlannedTask,
+        prepared: _PreparedExecution,
+        *,
+        profile: Mapping[str, Mapping[str, Any]],
+    ) -> ProviderResult:
+        """Call one provider and close its identity, whatever the outcome.
+
+        Callers keep their own bookkeeping (work ledger, task outcome); this
+        owns the lifecycle events and the durable AgentRun/SkillRun closure so
+        the two can never disagree.
+        """
+
+        resolution = prepared.resolution
+        agent_run_id = prepared.run_context.agent_run_id
+        skill_run_id = prepared.skill_run_id
+        context = self._provider_context(task, prepared, profile=profile)
         try:
-            if shielded:
-                await asyncio.shield(asyncio.ensure_future(finalise()))
-            else:
-                await finalise()
+            result = await provider(context)
         except asyncio.CancelledError:
+            self._emit_agent_lifecycle(
+                "agent.failed",
+                task=task,
+                resolution=resolution,
+                node_id=prepared.node_id,
+                status="cancelled",
+                detail="provider task cancelled",
+                agent_run_id=agent_run_id,
+                skill_run_id=skill_run_id,
+            )
+            # Stop must close the durable rows too: an AgentRun/SkillRun left
+            # at ``running`` would contradict the cancelled event stream after
+            # a refresh (issue #18 §4.4).  Shielded so the in-flight
+            # cancellation cannot abort the finalisation itself.
+            await self._finish_identity(
+                agent_run_id,
+                skill_run_id,
+                agent_status="cancelled",
+                skill_status="cancelled",
+                shielded=True,
+            )
             raise
-        except Exception:  # noqa: BLE001
-            logger.exception("failed to finalise delegated agent run")
+        except ProviderError as exc:
+            logger.info("provider %s declined: %s", resolution.provider, exc)
+            self._emit_agent_lifecycle(
+                "agent.failed",
+                task=task,
+                resolution=resolution,
+                node_id=prepared.node_id,
+                status="failed",
+                detail=str(exc),
+                agent_run_id=agent_run_id,
+                skill_run_id=skill_run_id,
+            )
+            await self._finish_identity(
+                agent_run_id, skill_run_id, agent_status="failed", skill_status="failed"
+            )
+            raise
+        except Exception as exc:  # noqa: BLE001 - one provider must not end the run
+            logger.exception("provider %s failed", resolution.provider)
+            self._emit_agent_lifecycle(
+                "agent.failed",
+                task=task,
+                resolution=resolution,
+                node_id=prepared.node_id,
+                status="failed",
+                detail=f"{type(exc).__name__}: {exc}",
+                agent_run_id=agent_run_id,
+                skill_run_id=skill_run_id,
+            )
+            await self._finish_identity(
+                agent_run_id, skill_run_id, agent_status="failed", skill_status="failed"
+            )
+            raise
+        self._emit_agent_lifecycle(
+            "agent.completed",
+            task=task,
+            resolution=resolution,
+            node_id=prepared.node_id,
+            status="completed",
+            agent_run_id=agent_run_id,
+            skill_run_id=skill_run_id,
+        )
+        await self._finish_identity(
+            agent_run_id, skill_run_id, agent_status="completed", skill_status="completed"
+        )
+        return result
 
     async def _finish_identity(
         self,

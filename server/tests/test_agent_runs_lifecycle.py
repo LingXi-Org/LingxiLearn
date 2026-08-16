@@ -69,6 +69,17 @@ SKILLS = [
         "checksum": "sha256:c0ffee",
     },
     {
+        "skill_id": "child-explainer",
+        "capabilities": ["content.deck"],
+        "provider": "test_delegate_child",
+        "cost": {"latency_weight": 0.2},
+        "preconditions": {},
+        "enabled": True,
+        "display_name": "子讲解技能",
+        "version": "3.1.0",
+        "checksum": "sha256:child",
+    },
+    {
         "skill_id": "delegating-skill",
         "capabilities": ["dialog.interview"],
         "provider": "test_delegator",
@@ -160,9 +171,7 @@ async def _test_delegator(context: ProviderContext) -> ProviderResult:
     """Hands part of its work to a second real provider (issue #18 §4.4)."""
 
     assert context.runtime is not None
-    child = await context.runtime.delegate_to(
-        "test_delegate_child", context, capability="content.visual"
-    )
+    child = await context.runtime.delegate("content.deck", context)
     return ProviderResult(
         status="completed",
         learner_message="已完成委派",
@@ -380,11 +389,13 @@ async def test_cancellation_closes_durable_identity_rows() -> None:
 
 
 async def test_delegated_child_run_carries_real_parent_identity() -> None:
-    """A provider that really invokes a second provider nests its AgentRun.
+    """Delegation runs a capability through the normal dispatch chain.
 
-    The child is resolved from the same registry the dispatcher uses and runs
-    under its own canonical identity, so the nested AgentGroup on the left and
-    the delegation edge on the right describe an execution that happened.
+    The child is resolved ``capability → enabled skill → provider`` like any
+    other unit of work, so it gets its own AgentRun *and* SkillRun bound to the
+    resolved skill's version/checksum, reports the capability it actually ran,
+    and produces the Skill ToolCallItem lifecycle on the public stream — nested
+    under the parent through ``parent_agent_run_id``.
     """
 
     repo = FakeRepo()
@@ -407,6 +418,21 @@ async def test_delegated_child_run_carries_real_parent_identity() -> None:
     assert child["parent_agent_run_id"] == parent["agent_run_id"]
     assert child["provider_id"] == "test_delegate_child"
     assert child["status"] == "completed"
+    # The delegated capability, not the parent's, is what the child reports.
+    assert parent["capability"] == "dialog.interview"
+    assert child["capability"] == "content.deck"
+
+    # The child went through skill resolution, so it has its own SkillRun bound
+    # to the registry row's version and checksum.
+    assert len(repo.skill_runs) == 2
+    child_skill = next(
+        row for row in repo.skill_runs if row["agent_run_id"] == child["agent_run_id"]
+    )
+    assert child_skill["skill_id"] == "child-explainer"
+    assert child_skill["display_name"] == "子讲解技能"
+    assert child_skill["version"] == "3.1.0"
+    assert child_skill["checksum"] == "sha256:child"
+    assert child_skill["status"] == "completed"
 
     # The provider's child emits are stamped with the child's identity, and the
     # projector turns that into a nested span — no name lookup involved.
@@ -423,6 +449,23 @@ async def test_delegated_child_run_carries_real_parent_identity() -> None:
     assert len(starts) == 2
     nested = next(e for e in starts if e["payload"]["agentRunId"] == child["agent_run_id"])
     assert nested["payload"]["parentAgentRunId"] == parent["agent_run_id"]
+    assert nested["payload"]["capability"] == "content.deck"
+
+    # The child's skill renders as a ToolCallItem inside its own AgentGroup.
+    child_tools = [
+        e
+        for e in envelopes
+        if e["type"] == "tool"
+        and e["payload"]["toolKind"] == "skill"
+        and e["scope"]["agentRunId"] == child["agent_run_id"]
+    ]
+    assert [e["payload"]["status"] for e in child_tools] == ["executing", "success"]
+    assert child_tools[0]["payload"]["displayTitle"] == "子讲解技能"
+    assert child_tools[0]["payload"]["safeParams"] == {
+        "skillId": "child-explainer",
+        "version": "3.1.0",
+    }
+    assert child_tools[0]["scope"]["skillRunId"] == child_skill["skill_run_id"]
 
     graph = build_execution_graph(
         [
