@@ -211,6 +211,32 @@ def test_heavy_artifacts_cost_more_than_their_latency() -> None:
     assert produced["content.deck"].cost > produced["graph.prerequisite"].cost
 
 
+def test_direct_question_blocks_heavy_artifacts_and_prerequisite_work() -> None:
+    goal = Goal(
+        goal_type="learn",
+        topic="拉格朗日定理",
+        knowledge_points=("lagrange-theorem",),
+        raw_utterance="什么是拉格朗日定理？",
+    )
+    world = WorldState(
+        target=ProfileView.unseen("lagrange-theorem", "拉格朗日定理"),
+        requested_capabilities=frozenset({"dialog.answer"}),
+        open_questions=1,
+        direct_question=True,
+        allow_heavy_artifacts=False,
+        now=NOW,
+    )
+
+    produced = {item.capability: item for item in generate(goal=goal, world=world, skills=REGISTRY)}
+
+    assert produced["dialog.answer"].eligible
+    assert not produced["graph.prerequisite"].eligible
+    assert produced["graph.prerequisite"].blocked_by == "直接问答无需额外分析"
+    for capability in ("content.lesson_intro", "content.deck", "content.visual"):
+        assert not produced[capability].eligible
+        assert produced[capability].blocked_by == "未收到明确的产物请求"
+
+
 def test_a_due_review_outranks_starting_new_material() -> None:
     world = WorldState(
         target=ProfileView(

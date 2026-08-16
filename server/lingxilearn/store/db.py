@@ -66,9 +66,11 @@ logger = logging.getLogger(__name__)
 # compatibility DDL explicit and small: production PostgreSQL still uses the
 # normal Alembic chain, while a local SQLite restart upgrades the existing
 # file in place without discarding learner data.
-_SQLITE_SCHEMA_HEAD = "0016_orchestration_v2_ledger"
+_SQLITE_SCHEMA_HEAD = "0017_agent_task_create_idempotency"
 _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "agent_tasks": {
+        "create_idempotency_key": "VARCHAR(192)",
+        "create_payload_digest": "VARCHAR(64)",
         "title": "TEXT NOT NULL DEFAULT ''",
         "is_pinned": "BOOLEAN NOT NULL DEFAULT 0",
         "is_unread": "BOOLEAN NOT NULL DEFAULT 0",
@@ -365,6 +367,24 @@ class Repository:
         async with self.db.session() as s:
             s.add(AgentTask(**fields))
             await s.commit()
+
+    async def get_agent_task_by_create_idempotency_key(
+        self, learner_id: str, idempotency_key: str
+    ) -> AgentTask | None:
+        """Find the durable task created by one learner request key.
+
+        The lookup intentionally includes archived tasks. Reusing a create key
+        must never create a new task merely because the original task was later
+        deleted from the active list.
+        """
+
+        async with self.db.session() as s:
+            return await s.scalar(
+                select(AgentTask).where(
+                    AgentTask.learner_id == learner_id,
+                    AgentTask.create_idempotency_key == idempotency_key,
+                )
+            )
 
     async def create_agent_execution(
         self,
@@ -1020,7 +1040,11 @@ class Repository:
             return int(count or 0)
 
     async def agent_events_for_execution(
-        self, execution_id: str, learner_id: str, limit: int = 5000
+        self,
+        execution_id: str,
+        learner_id: str,
+        limit: int = 5000,
+        after: int = 0,
     ) -> list[dict[str, Any]]:
         async with self.db.session() as s:
             rows = (
@@ -1030,6 +1054,7 @@ class Repository:
                     .where(
                         AgentTaskEvent.execution_id == execution_id,
                         AgentTask.learner_id == learner_id,
+                        AgentTaskEvent.sequence > max(0, int(after or 0)),
                     )
                     .order_by(AgentTaskEvent.sequence)
                     .limit(limit)

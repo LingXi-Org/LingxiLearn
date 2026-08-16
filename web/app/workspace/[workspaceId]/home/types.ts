@@ -72,6 +72,8 @@ export interface ToolCallData {
   params?: Record<string, unknown>
   result?: ToolCallResult
   streamingArgs?: string
+  /** Durable learner-facing prompt for a native graph interrupt. */
+  userPrompt?: string
   /** When execution started, for rows whose label changes as it runs. */
   startedAt?: number
 }
@@ -87,6 +89,8 @@ export interface ToolCallInfo {
   calledBy?: string
   result?: ToolCallResult
   streamingArgs?: string
+  /** Durable learner-facing prompt for a native graph interrupt. */
+  userPrompt?: string
   /**
    * Wall-clock the call opened. Carried separately from the block `timestamp`,
    * which falls back to a wire seq and so cannot be read as a clock.

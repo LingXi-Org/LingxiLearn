@@ -54,8 +54,8 @@ export function useSession(): SessionHookResult {
   }
 }
 
-type AuthRedirectOptions = { callbackURL?: unknown; callbackUrl?: unknown }
-type SocialSignInOptions = AuthRedirectOptions & {
+export type AuthRedirectOptions = { callbackURL?: unknown; callbackUrl?: unknown }
+export type SocialAuthOptions = AuthRedirectOptions & {
   provider: 'github' | 'google' | 'microsoft'
 }
 
@@ -64,7 +64,7 @@ type SocialSignInOptions = AuthRedirectOptions & {
  * than returning a session from JavaScript. Callers must not treat that
  * navigation as an already completed login and start a second navigation.
  */
-type AuthRedirectResult = {
+export type AuthRedirectResult = {
   data: SimSession | null
   error: null
   redirectStarted: true
@@ -81,17 +81,57 @@ function isSafeCallbackPath(value: unknown): value is string {
   )
 }
 
-/**
- * Better Auth places callbackURL in the credential payload for email flows,
- * while social callers put it in the options object. The LingxiIdentity
- * adapter accepts both shapes so the native Sim forms keep their redirect.
- */
 function callbackPath(...sources: Array<AuthRedirectOptions | undefined>): string {
   for (const source of sources) {
     const value = source?.callbackURL ?? source?.callbackUrl
     if (isSafeCallbackPath(value)) return value
   }
   return DEFAULT_AUTH_CALLBACK
+}
+
+/**
+ * Start the browser-owned LingxiIdentity Experience login flow.
+ *
+ * Authentication is deliberately a top-level navigation. LingxiLearn never
+ * posts credentials or receives an access/refresh token in JavaScript; the
+ * BFF owns OIDC state, PKCE, the callback exchange, and the HttpOnly session.
+ */
+export async function startLogin(
+  options: AuthRedirectOptions = {}
+): Promise<AuthRedirectResult> {
+  const nextPath = callbackPath(options)
+  if (isMockAuthEnabled) {
+    window.location.assign(nextPath)
+    return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
+  }
+  window.location.assign(identityApi.authUrl('login', nextPath))
+  return { data: null, error: null, redirectStarted: true }
+}
+
+/** Start the browser-owned LingxiIdentity Experience registration flow. */
+export async function startRegistration(
+  options: AuthRedirectOptions = {}
+): Promise<AuthRedirectResult> {
+  const nextPath = callbackPath(options)
+  if (isMockAuthEnabled) {
+    window.location.assign(nextPath)
+    return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
+  }
+  window.location.assign(identityApi.authUrl('register', nextPath))
+  return { data: null, error: null, redirectStarted: true }
+}
+
+/** Start a social provider through the same BFF + Logto Experience flow. */
+export async function startSocialLogin(
+  options: SocialAuthOptions
+): Promise<AuthRedirectResult> {
+  const nextPath = callbackPath(options)
+  if (isMockAuthEnabled) {
+    window.location.assign(nextPath)
+    return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
+  }
+  window.location.assign(identityApi.authUrl('login', nextPath, options.provider))
+  return { data: null, error: null, redirectStarted: true }
 }
 
 export const client = {
@@ -104,37 +144,12 @@ export const client = {
       return { data: null, error: null }
     }
   },
-  signIn: {
-    email: async (credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
-      const nextPath = callbackPath(credentials, options)
-      if (isMockAuthEnabled) {
-        window.location.assign(nextPath)
-        return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
-      }
-      window.location.assign(identityApi.authUrl('login', nextPath))
-      return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
-    },
-    social: async (options: SocialSignInOptions) => {
-      const nextPath = callbackPath(options)
-      if (isMockAuthEnabled) {
-        window.location.assign(nextPath)
-        return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
-      }
-      window.location.assign(identityApi.authUrl('login', nextPath, options.provider))
-      return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
-    },
-  },
-  signUp: {
-    email: async (credentials: Record<string, unknown>, options?: AuthRedirectOptions) => {
-      const nextPath = callbackPath(credentials, options)
-      if (isMockAuthEnabled) {
-        window.location.assign(nextPath)
-        return { data: toSimSession(MOCK_IDENTITY_ME), error: null, redirectStarted: true }
-      }
-      window.location.assign(identityApi.authUrl('register', nextPath))
-      return { data: null, error: null, redirectStarted: true } satisfies AuthRedirectResult
-    },
-  },
+  // Keep the compatibility client object for the many non-auth query modules,
+  // but expose only verb-first navigation methods. There is intentionally no
+  // `signIn.email`/`signUp.email`: LingxiLearn does not own credentials.
+  startLogin,
+  startRegistration,
+  startSocialLogin,
   // These namespaces keep the direct Sim query modules type-compatible while
   // their organization/admin capabilities are migrated to Lingxi APIs.
   organization: {

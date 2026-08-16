@@ -27,6 +27,50 @@ from .contracts import CandidateAction, Cost
 MIN_UTILITY = 0.05
 """Below this an action is not worth a turn; it stays in the trace as ineligible."""
 
+_QUESTION_HINTS = (
+    "什么是",
+    "怎么",
+    "为何",
+    "为什么",
+    "如何",
+    "能否",
+    "是否",
+    "？",
+    "?",
+)
+_ARTIFACT_HINTS = (
+    "图解",
+    "图片",
+    "示意图",
+    "图表",
+    "画图",
+    "一张图",
+    "可视化",
+    "课件",
+    "幻灯片",
+    "讲义",
+    "网页",
+    "演示",
+)
+
+
+def is_direct_question(goal: Goal) -> bool:
+    """Recognise a turn that can be satisfied by one conversational answer."""
+
+    text = " ".join((goal.raw_utterance, goal.topic)).strip().casefold()
+    return goal.goal_type.casefold() in {"ask", "question"} or any(
+        marker.casefold() in text for marker in _QUESTION_HINTS
+    )
+
+
+def requests_heavy_artifact(goal: Goal) -> bool:
+    """Return whether the learner explicitly asked for a material/artifact."""
+
+    if goal.goal_type.casefold() in {"content", "artifact", "report", "visualize", "deck"}:
+        return True
+    text = " ".join((goal.raw_utterance, *goal.constraints)).strip()
+    return any(marker in text for marker in _ARTIFACT_HINTS)
+
 
 @dataclass(frozen=True, slots=True)
 class WorldState:
@@ -49,6 +93,10 @@ class WorldState:
     open_questions: int = 0
     goal_type: str = "learn"
     interview_completed: bool = False
+    direct_question: bool = False
+    """True when this turn should prefer a single conversational response."""
+    allow_heavy_artifacts: bool = True
+    """Heavy artifacts are opt-in for interactive turns."""
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def enriched(self, view: ProfileView, *, is_target: bool) -> ProfileView:
@@ -152,6 +200,21 @@ def _precondition_block(
         return "技能未启用"
     if not skill.provider:
         return "没有可执行的 provider"
+
+    capability_info = info(capability)
+    if not world.allow_heavy_artifacts and (
+        capability_info.heavy_artifact or bool(skill.cost.get("heavy_artifact"))
+    ):
+        return "未收到明确的产物请求"
+    if world.direct_question:
+        if capability is Capability.GRAPH_PREREQUISITE:
+            return "直接问答无需额外分析"
+        if capability not in {
+            Capability.DIALOG_ANSWER,
+            Capability.DIALOG_CONVERSE,
+            Capability.TEACH_EXPLAIN,
+        }:
+            return "直接问答优先"
 
     match capability:
         case Capability.ASSESS_GRADE:
@@ -326,4 +389,6 @@ __all__ = [
     "deviates",
     "eligible_only",
     "generate",
+    "is_direct_question",
+    "requests_heavy_artifact",
 ]

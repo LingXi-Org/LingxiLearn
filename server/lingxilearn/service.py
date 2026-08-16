@@ -16,12 +16,15 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import inspect
+import json
 import logging
 import mimetypes
 import secrets
 import uuid
 from collections import defaultdict
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -33,10 +36,25 @@ from lingxigraph.errors import (
     GraphTimeoutError,
 )
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from .agents.artifact_store import ArtifactError, ArtifactStore
 from .agents.contracts import quiz_public
 from .agents.model_runtime import EVENT_CHANNEL, model_roles
+
+# Control-plane and learner-facing graph nodes must answer without hidden
+# reasoning. Only detached artifact production benefits from a thinking pass;
+# it is allowed to spend that extra latency away from the interactive path.
+THINKING_MODEL_ROLES = frozenset(
+    {
+        "lesson_intro",
+        "lecture_deck",
+        "visual_explainer",
+        "quiz_generator",
+        "retrieval_practice",
+    }
+)
+
 from .agents.providers import load_all as load_providers
 from .agents.providers import missing_providers
 from .brains.base import TutorBrain
@@ -55,6 +73,7 @@ from .runtime.sim_semantics import (
     replay_sim_trace,
     sim_trace_total_tokens,
 )
+from .runtime.trajectory import build_trajectory_projection
 from .state.session_state import Goal, GoalKind, RuntimeStatus, new_budget
 from .state.skill_catalog import discover as discover_skill_manifests
 from .store.db import Database, Repository
@@ -73,6 +92,34 @@ logger = logging.getLogger(__name__)
 FLUSH_EVERY = 6
 AGENT_FLUSH_EVERY = 4
 """Batch size for persisting projections mid-run — small enough to feel live."""
+
+AGENT_EVENT_PAGE_SIZE = 5000
+"""Maximum number of durable events loaded per execution snapshot page."""
+
+
+def _utc_datetime(value: datetime | None) -> datetime | None:
+    """Normalize SQLite's naive timezone columns before arithmetic."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _event_timestamp(value: Any) -> datetime | None:
+    """Parse a durable event timestamp for truncation-boundary annotations."""
+
+    if isinstance(value, datetime):
+        return _utc_datetime(value)
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, UTC)
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return _utc_datetime(parsed)
+    return None
 
 
 class _ProviderEventRuntime:
@@ -184,6 +231,45 @@ def _normalize_attachment_refs(
             }
         )
     return refs[:10]
+
+
+def agent_task_create_payload_digest(
+    *,
+    prompt: str,
+    attachments: list[dict[str, Any]] | None = None,
+    resource_refs: list[dict[str, Any]] | None = None,
+    skill_ids: list[str] | None = None,
+    resources: list[dict[str, Any]] | None = None,
+) -> str:
+    """Build a stable digest for the request that creates an agent task.
+
+    The REST route hashes the learner-facing resource references and skill ids
+    before resolving them. Direct service callers can instead provide the
+    already-resolved resources. Either form is stored next to the create key so
+    a retry can be compared without starting another graph.
+    """
+
+    payload = {
+        "version": 1,
+        "prompt": " ".join(prompt.strip().split()),
+        "attachments": attachments or [],
+        "resource_refs": resource_refs if resource_refs is not None else resources or [],
+        "skill_ids": skill_ids or [],
+    }
+    encoded = json.dumps(
+        _json_safe(payload),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _agent_task_create_result(record: Any) -> dict[str, Any]:
+    result = {"id": record.id, "status": record.status}
+    if record.error:
+        result["error"] = record.error
+    return result
 
 
 def _prompt_with_attachments(prompt: str, attachments: list[dict[str, Any]]) -> str:
@@ -387,6 +473,7 @@ class Service:
         self._waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._agent_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         self._tasks: set[asyncio.Task[Any]] = set()
+        self._agent_runners: defaultdict[str, set[asyncio.Task[Any]]] = defaultdict(set)
         self._workspace_projection_lock = asyncio.Lock()
         self._agent_slots = asyncio.Semaphore(max(1, self.settings.agent_concurrency))
         self._board_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -435,13 +522,7 @@ class Service:
                 "timeout": self.settings.agent_timeout,
                 # Keep one shared low-latency default so every current and
                 # future specialist avoids expensive hidden reasoning.
-                "default_options": {
-                    # Keep Agent tool loops responsive.  The UI still renders
-                    # provider reasoning when a provider sends it, but normal
-                    # orchestration requests do not spend tokens on CoT.
-                    "thinking": {"type": "disabled"},
-                    "reasoning_effort": "low",
-                },
+                "default_options": {"thinking": {"type": "disabled"}},
                 "cache_first": {
                     "enabled": self.settings.agent_cache_enabled,
                     "verify_mode": self.settings.agent_cache_verify_mode,
@@ -455,7 +536,19 @@ class Service:
             # added, leaving eleven roles resolving to None in production while
             # every test passed a fake model directly.
             self.agent_model = {
-                role: TracedOpenAICompatChatModel(self.settings.agent_model, **model_options)
+                role: TracedOpenAICompatChatModel(
+                    self.settings.agent_model,
+                    **{
+                        **model_options,
+                        "default_options": {
+                            "thinking": {
+                                "type": "enabled"
+                                if role in THINKING_MODEL_ROLES
+                                else "disabled"
+                            }
+                        },
+                    },
+                )
                 # One instance per role: each has a different immutable system
                 # prompt and tool catalog, and sharing one would break the
                 # provider's prompt-cache prefix.
@@ -477,8 +570,11 @@ class Service:
         )
 
     async def shutdown(self) -> None:
-        for task in list(self._tasks):
+        tasks = list(self._tasks)
+        for task in tasks:
             task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         if self.brain is not None:
             await self.brain.aclose()
         for model in (self.agent_model or {}).values():
@@ -614,30 +710,65 @@ class Service:
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
         graph_version: str = f"{LOOP_GRAPH_NAME}@{LOOP_GRAPH_VERSION}",
+        idempotency_key: str | None = None,
+        create_payload_digest: str | None = None,
     ) -> dict[str, Any]:
         normalized = " ".join(prompt.strip().split())
         if not normalized:
             raise ValueError("prompt must not be empty")
         if len(normalized) > 4000:
             raise ValueError("prompt is too long")
+        if idempotency_key is not None and not 1 <= len(idempotency_key) <= 192:
+            raise ValueError("idempotency_key must be between 1 and 192 characters")
         attachment_refs = _normalize_attachment_refs(attachments, learner_id)
-        await self.repo.ensure_learner(learner_id)
-        await self.repo.create_agent_task(
-            id=task_id,
-            learner_id=learner_id,
+        payload_digest = create_payload_digest or agent_task_create_payload_digest(
             prompt=normalized,
-            graph_version=graph_version,
-            status="queued",
+            attachments=attachment_refs,
             resources=resources or [],
-            intent={},
-            lecture_result={},
-            deck_result={},
-            quiz_result={},
-            adaptive_result={},
-            handoff_result={},
-            user_messages=[],
-            visual_result={},
         )
+        await self.repo.ensure_learner(learner_id)
+        if idempotency_key:
+            existing = await self.repo.get_agent_task_by_create_idempotency_key(
+                learner_id, idempotency_key
+            )
+            if existing is not None:
+                if existing.create_payload_digest != payload_digest:
+                    raise ValueError("idempotency_key_reused")
+                return _agent_task_create_result(existing)
+
+        try:
+            await self.repo.create_agent_task(
+                id=task_id,
+                learner_id=learner_id,
+                create_idempotency_key=idempotency_key,
+                create_payload_digest=payload_digest if idempotency_key else None,
+                prompt=normalized,
+                graph_version=graph_version,
+                status="queued",
+                resources=resources or [],
+                intent={},
+                lecture_result={},
+                deck_result={},
+                quiz_result={},
+                adaptive_result={},
+                handoff_result={},
+                user_messages=[],
+                visual_result={},
+            )
+        except IntegrityError:
+            # Two API replicas can pass the lookup above concurrently. The
+            # unique learner/key index elects one creator; the loser returns
+            # the committed task instead of spawning a second graph.
+            if not idempotency_key:
+                raise
+            existing = await self.repo.get_agent_task_by_create_idempotency_key(
+                learner_id, idempotency_key
+            )
+            if existing is None:
+                raise
+            if existing.create_payload_digest != payload_digest:
+                raise ValueError("idempotency_key_reused") from None
+            return _agent_task_create_result(existing)
         await self.repo.append_command(
             task_id=task_id,
             kind="initial_prompt",
@@ -646,17 +777,7 @@ class Service:
         )
         await self.repo.append_agent_events(
             task_id,
-            [
-                {"kind": "task.started", "agent": "coordinator", "payload": {"status": "queued"}},
-                {
-                    "kind": "agent.output",
-                    "agent": "learning_companion",
-                    "payload": {
-                        "message": "我先陪你开始：正在快速了解你的目标，稍后把最先能学的内容送到你面前。",
-                        "stream_id": f"{task_id}:opening-companion",
-                    },
-                },
-            ],
+            [{"kind": "task.started", "agent": "coordinator", "payload": {"status": "queued"}}],
         )
         if self.agent_model is None:
             message = "DS_API_KEY is not configured"
@@ -954,14 +1075,159 @@ class Service:
             artifacts.append("quiz")
         return results, tuple(dict.fromkeys(artifacts))
 
+    async def _agent_events_for_execution_snapshot(
+        self, execution_id: str, learner_id: str
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Read an execution's event log to completion, page by sequence.
+
+        ``agent_events_for_execution`` historically defaulted to 5,000 rows.
+        A one-shot call made long runs look complete while silently dropping
+        their tail.  Keep paging until the repository reports a short page or
+        the durable count is satisfied, and return an explicit read status if
+        a legacy repository cannot page or makes no progress.
+        """
+
+        expected_count: int | None = None
+        count_reader = getattr(self.repo, "agent_event_count_for_execution", None)
+        if callable(count_reader):
+            try:
+                expected_count = max(0, int(await count_reader(execution_id)))
+            except Exception:  # noqa: BLE001 - snapshot remains useful without a count index
+                expected_count = None
+
+        records: list[dict[str, Any]] = []
+        seen_sequences: set[int] = set()
+        cursor = 0
+        truncated = False
+        legacy_reader = False
+        pages = 0
+
+        while True:
+            pages += 1
+            try:
+                page = await self.repo.agent_events_for_execution(
+                    execution_id,
+                    learner_id,
+                    limit=AGENT_EVENT_PAGE_SIZE,
+                    after=cursor,
+                )
+            except TypeError:
+                # Keep compatibility with an older repository implementation,
+                # but never treat its 5,000-row result as complete when there
+                # is no cursor support for a follow-up page.
+                legacy_reader = True
+                if cursor:
+                    truncated = True
+                    break
+                page = await self.repo.agent_events_for_execution(execution_id, learner_id)
+
+            if not isinstance(page, list):
+                page = list(page or ())
+            if not page:
+                if expected_count is not None and len(records) < expected_count:
+                    truncated = True
+                break
+
+            new_page: list[dict[str, Any]] = []
+            page_sequences: list[int] = []
+            for raw in page:
+                if not isinstance(raw, dict):
+                    continue
+                item = dict(raw)
+                raw_sequence = item.get("sequence")
+                try:
+                    sequence = int(raw_sequence) if raw_sequence is not None else None
+                except (TypeError, ValueError):
+                    sequence = None
+                if sequence is None:
+                    new_page.append(item)
+                    continue
+                if sequence <= cursor or sequence in seen_sequences:
+                    continue
+                seen_sequences.add(sequence)
+                page_sequences.append(sequence)
+                new_page.append(item)
+
+            if not new_page:
+                # A repository that ignores ``after`` would otherwise loop
+                # forever and silently return only the first page.
+                truncated = True
+                break
+
+            records.extend(new_page)
+            next_cursor = max(page_sequences, default=cursor)
+            if expected_count is not None and len(records) >= expected_count:
+                break
+            if len(page) < AGENT_EVENT_PAGE_SIZE:
+                if expected_count is None or len(records) >= expected_count:
+                    break
+                truncated = True
+                break
+            if next_cursor <= cursor:
+                # Sequence-less full pages cannot be paged safely.  Mark the
+                # affected tail inferred instead of claiming a full replay.
+                truncated = True
+                break
+            cursor = next_cursor
+            if legacy_reader:
+                truncated = True
+                break
+
+        complete = not truncated and (
+            expected_count is None or len(records) >= expected_count
+        )
+        if expected_count is not None and len(records) < expected_count:
+            truncated = True
+            complete = False
+        boundary = None
+        if records:
+            boundary = records[-1].get("ts") or records[-1].get("created_at")
+        status = {
+            "truncated": bool(truncated),
+            "complete": bool(complete),
+            "loaded": len(records),
+            "expected": expected_count,
+            "pages": pages,
+            "pageSize": AGENT_EVENT_PAGE_SIZE,
+            "truncatedAfter": boundary if truncated else None,
+        }
+        return records, status
+
+    @staticmethod
+    def _annotate_truncated_trajectory(
+        trajectory: dict[str, Any],
+        event_read: Mapping[str, Any],
+    ) -> None:
+        """Mark only the uncertain tail as inferred when event paging stops."""
+
+        trajectory["eventLog"] = dict(event_read)
+        if not event_read.get("truncated"):
+            return
+        boundary = _event_timestamp(event_read.get("truncatedAfter"))
+        for lane in trajectory.get("lanes") or []:
+            if not isinstance(lane, dict):
+                continue
+            for item in lane.get("items") or []:
+                if not isinstance(item, dict) or lane.get("id") == "run":
+                    continue
+                start = _event_timestamp(item.get("startTime"))
+                if boundary is not None and start is not None and start < boundary:
+                    continue
+                item["precision"] = "inferred"
+                metadata = item.setdefault("metadata", {})
+                if isinstance(metadata, dict):
+                    metadata["eventLogTruncated"] = True
+
     async def agent_execution_snapshot(self, execution_id: str, learner_id: str) -> dict[str, Any]:
         row = await self.repo.get_agent_execution(execution_id, learner_id)
         if row is None:
             raise KeyError(f"unknown execution: {execution_id}")
-        started = row.started_at
-        ended = row.ended_at
+        started = _utc_datetime(row.started_at)
+        ended = _utc_datetime(row.ended_at)
         duration = int((ended - started).total_seconds() * 1000) if ended and started else None
-        records = await self.repo.agent_events_for_execution(execution_id, learner_id)
+        records, event_read = await self._agent_events_for_execution_snapshot(
+            execution_id, learner_id
+        )
         trace = replay_sim_trace(
             records,
             execution_id=row.id,
@@ -973,6 +1239,12 @@ class Service:
         )
         if len(trace) <= 1 and row.trace_spans:
             trace = row.trace_spans
+        trajectory = build_trajectory_projection(
+            row,
+            records,
+            trace,
+        )
+        self._annotate_truncated_trajectory(trajectory, event_read)
         return {
             "executionId": row.id,
             "workflowId": "lingxi-agent",
@@ -983,6 +1255,8 @@ class Service:
             "projectionVersion": (row.workflow_state or {}).get("version", "sim-runtime.v1"),
             "workflowState": row.workflow_state or {},
             "traceSpans": trace,
+            "trajectory": trajectory,
+            "eventLog": event_read,
             "executionMetadata": {
                 "trigger": row.trigger,
                 "startedAt": started.isoformat() if started else None,
@@ -1146,8 +1420,22 @@ class Service:
             if work.get("status") not in {"succeeded", "failed", "cancelled", "blocked"}:
                 await self.repo.cancel_work(task_id=task_id, work_id=str(work["id"]))
         await self.repo.set_agent_task_status(task_id, "cancelled")
+        runners = [
+            runner
+            for runner in self._agent_runners.get(task_id, set())
+            if runner is not asyncio.current_task() and not runner.done()
+        ]
+        for runner in runners:
+            runner.cancel()
+        if runners:
+            await asyncio.gather(*runners, return_exceptions=True)
         if record.current_execution_id:
-            execution = await self.repo.get_agent_execution(record.current_execution_id, learner_id)
+            latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            execution_id = str(
+                (latest.current_execution_id if latest else None)
+                or record.current_execution_id
+            )
+            execution = await self.repo.get_agent_execution(execution_id, learner_id)
             if execution is not None:
                 state = dict(execution.workflow_state or {})
                 metadata = dict(state.get("metadata") or {})
@@ -1397,6 +1685,28 @@ class Service:
             queue = self._conversation_queue[task_id]
             while not queue.empty():
                 item = await queue.get()
+                # `agent_message` is also the interjection path used by the
+                # composer while a graph turn is still running. Do not let a
+                # second coordinator consume the local queue, observe the
+                # running row, and silently drop the message when its claim
+                # fails. Wait for the durable turn to pause before resuming.
+                while True:
+                    record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                    if record is None:
+                        return
+                    if record.status in {"queued", "awaiting_user"}:
+                        break
+                    if record.status in {
+                        "handed_off",
+                        "completed",
+                        "partial",
+                        "failed",
+                        "timed_out",
+                        "budget_exceeded",
+                        "cancelled",
+                    }:
+                        return
+                    await asyncio.sleep(0.2)
                 await self._drive_agent_task(
                     task_id,
                     learner_id,
@@ -1548,15 +1858,26 @@ class Service:
     ) -> None:
         # Keep the public task launcher cheap: queued tasks wait here instead
         # of all retaining graph state and provider response buffers at once.
-        async with self._agent_slots:
-            await self._run_agent_task(
-                task_id,
-                learner_id,
-                prompt,
-                resume=resume,
-                schedule_id=schedule_id,
-                scheduled_for=scheduled_for,
-            )
+        runner = asyncio.current_task()
+        if runner is not None:
+            self._agent_runners[task_id].add(runner)
+        try:
+            async with self._agent_slots:
+                await self._run_agent_task(
+                    task_id,
+                    learner_id,
+                    prompt,
+                    resume=resume,
+                    schedule_id=schedule_id,
+                    scheduled_for=scheduled_for,
+                )
+        finally:
+            if runner is not None:
+                runners = self._agent_runners.get(task_id)
+                if runners is not None:
+                    runners.discard(runner)
+                    if not runners:
+                        self._agent_runners.pop(task_id, None)
 
     async def _run_agent_task(
         self,
@@ -1686,6 +2007,10 @@ class Service:
             composed: list[dict[str, Any]] = []
             for item in public_events:
                 if item.get("kind") == "agent.output":
+                    stream_id = str((item.get("payload") or {}).get("stream_id") or "")
+                    if stream_id.endswith(":opening-companion"):
+                        composed.append(item)
+                        continue
                     if response_composed:
                         continue
                     response_composed = True
@@ -1869,11 +2194,14 @@ class Service:
                 if isinstance(exc, GraphTimeoutError)
                 else "budget_exceeded"
                 if isinstance(exc, BudgetExceededError)
+                else "cancelled"
+                if isinstance(exc, GraphCancelledError)
                 else "failed"
             )
             failure_kind = {
                 "timed_out": "run.timed_out",
                 "budget_exceeded": "run.budget_exceeded",
+                "cancelled": "run.cancelled",
                 "failed": "run.failed",
             }[failure_status]
             buffer.append(

@@ -403,7 +403,13 @@ class SimTraceProjector:
         block_id: str = "",
     ) -> dict[str, Any]:
         safe_agent = str(agent or "coordinator")
-        task_key = str((payload or {}).get("task_id") or "")
+        logical_task_key = str((payload or {}).get("task_id") or "")
+        task_key = str(
+            (payload or {}).get("node_id")
+            or (payload or {}).get("work_item_id")
+            or logical_task_key
+            or ""
+        )
         if task_key:
             existing = self._active_tasks.get(task_key)
             if existing is not None and existing.get("status") == "running":
@@ -431,6 +437,8 @@ class SimTraceProjector:
             capability=(payload or {}).get("capability"),
             skillId=(payload or {}).get("skill_id"),
             taskId=task_key or None,
+            logicalTaskId=logical_task_key or None,
+            nodeId=task_key or None,
             runtime=_json_safe(dict(runtime or {})),
         )
         self._active_agents.setdefault(safe_agent, []).append(span)
@@ -446,7 +454,12 @@ class SimTraceProjector:
         timestamp: Any,
         failed: bool = False,
     ) -> dict[str, Any] | None:
-        task_key = str((payload or {}).get("task_id") or "")
+        task_key = str(
+            (payload or {}).get("node_id")
+            or (payload or {}).get("work_item_id")
+            or (payload or {}).get("task_id")
+            or ""
+        )
         span = self._active_tasks.get(task_key) if task_key else None
         span = span or self._find_agent(agent)
         if span is None:
@@ -481,6 +494,50 @@ class SimTraceProjector:
         if task_key:
             self._active_tasks.pop(task_key, None)
         return span
+
+    @staticmethod
+    def _model_key(
+        agent: str,
+        payload: Mapping[str, Any],
+        runtime: Mapping[str, Any] | None = None,
+    ) -> str:
+        """Keep concurrent same-model calls in separate active buckets."""
+
+        runtime = runtime or {}
+        node_id = str(
+            payload.get("node_id")
+            or payload.get("nodeId")
+            or runtime.get("node_id")
+            or runtime.get("nodeId")
+            or runtime.get("node")
+            or ""
+        )
+        work_item = str(
+            payload.get("work_item_id")
+            or payload.get("workItemId")
+            or runtime.get("work_item_id")
+            or runtime.get("workItemId")
+            or payload.get("task_id")
+            or payload.get("taskId")
+            or runtime.get("task_id")
+            or runtime.get("taskId")
+            or ""
+        )
+        if node_id or work_item:
+            return f"{agent}:node:{node_id}:work:{work_item}"
+        # A graph runtime span can surround an entire dispatch fan-out, so it
+        # is not a work identity when the event already carries node/work
+        # metadata.  Use it only as the last stable fallback.
+        span_id = str(
+            payload.get("span_id")
+            or payload.get("spanId")
+            or runtime.get("span_id")
+            or runtime.get("spanId")
+            or ""
+        )
+        if span_id:
+            return f"{agent}:span:{span_id}"
+        return agent
 
     # -- native graph events --------------------------------------------
 
@@ -896,6 +953,7 @@ class SimTraceProjector:
             return
 
         if kind == "model.started":
+            model_key = self._model_key(agent, safe_payload, safe_runtime)
             parent = self._ensure_agent(
                 agent,
                 payload=safe_payload,
@@ -911,9 +969,17 @@ class SimTraceProjector:
                 fallback_category="model",
                 provider=safe_payload.get("provider"),
                 model=safe_payload.get("model"),
+                agent=agent,
+                node=(safe_payload.get("node") or safe_runtime.get("node")),
+                workItemId=(
+                    safe_payload.get("work_item_id")
+                    or safe_payload.get("workItemId")
+                    or safe_runtime.get("work_item_id")
+                    or safe_runtime.get("workItemId")
+                ),
                 runtime=_json_safe(safe_runtime),
             )
-            self._active_models.setdefault(agent, []).append(span)
+            self._active_models.setdefault(model_key, []).append(span)
             self._event(
                 span,
                 kind,
@@ -924,10 +990,11 @@ class SimTraceProjector:
             )
             return
 
+        model_key = self._model_key(agent, safe_payload, safe_runtime)
         model_span = next(
             (
                 span
-                for span in reversed(self._active_models.get(agent, []))
+                for span in reversed(self._active_models.get(model_key, []))
                 if span.get("status") == "running"
             ),
             None,

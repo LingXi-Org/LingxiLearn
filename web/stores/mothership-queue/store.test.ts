@@ -97,6 +97,23 @@ describe('useMothershipQueueStore', () => {
       expect(queue?.[1]?.content).toBe('edited-2')
     })
 
+    it('replaces the idempotency key when an edit becomes a new command', () => {
+      useMothershipQueueStore.getState().enqueue('chat-A', {
+        ...message('m1', 'original'),
+        idempotencyKey: 'key-original',
+      })
+      useMothershipQueueStore.getState().replaceAt('chat-A', 'm1', {
+        content: 'edited',
+        idempotencyKey: 'key-edited',
+      })
+
+      expect(useMothershipQueueStore.getState().queues['chat-A']?.[0]).toMatchObject({
+        id: 'm1',
+        content: 'edited',
+        idempotencyKey: 'key-edited',
+      })
+    })
+
     it('is a no-op when the id is no longer in the queue', () => {
       useMothershipQueueStore.getState().enqueue('chat-A', message('m1'))
       const before = useMothershipQueueStore.getState().queues['chat-A']

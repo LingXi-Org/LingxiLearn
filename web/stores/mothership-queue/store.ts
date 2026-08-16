@@ -112,6 +112,7 @@ export const useMothershipQueueStore = create<MothershipQueueState>()(
               content: patch.content,
               fileAttachments: patch.fileAttachments,
               contexts: patch.contexts,
+              ...(patch.idempotencyKey ? { idempotencyKey: patch.idempotencyKey } : {}),
             }
             return { queues: setQueueForChat(state.queues, chatKey, next) }
           }),

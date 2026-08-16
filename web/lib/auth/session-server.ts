@@ -2,11 +2,11 @@ import { headers } from 'next/headers'
 import { getInternalApiBaseUrl } from '@/lib/core/utils/urls'
 import type { IdentityMe } from './identity-api'
 
-const configuredApiBase = process.env.NEXT_PUBLIC_API_BASE?.trim().replace(/\/$/, '')
-
 function sessionUrl(): string {
-  const base = configuredApiBase || getInternalApiBaseUrl()
-  return `${base}/api/v1/me`
+  // NEXT_PUBLIC_API_BASE must remain empty in production. Server-side loaders
+  // use the private/internal origin while browser requests always use the
+  // same-origin rewrite in identity-api.ts.
+  return `${getInternalApiBaseUrl()}/api/v1/me`
 }
 
 /**

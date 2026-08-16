@@ -1,5 +1,5 @@
 {
-  "extends": "@sim/tsconfig/library.json",
+  "extends": "../tsconfig/library.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM"],
     "paths": {

@@ -206,7 +206,7 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
     configured = float(getattr(context.settings, "agent_lecture_timeout", 180.0))
     timeout = max(
         5.0,
-        min(90.0, configured - 15.0) if not revision else configured * 0.5,
+        min(45.0, configured - 15.0) if not revision else configured * 0.5,
     )
     warnings: list[str] = []
     published = False

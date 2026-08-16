@@ -68,6 +68,8 @@ class CapabilityInfo:
     """True when running it has effects outside the run; needs confirmation."""
     conversational: bool = False
     opening_conversation: bool = False
+    turn_complete: bool = False
+    """True when this capability's output can finish the current user turn."""
 
 
 CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
@@ -96,16 +98,23 @@ CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
         Capability.TEACH_STRATEGY, "选择教学策略", True, False, False
     ),
     Capability.TEACH_EXPLAIN: CapabilityInfo(
-        Capability.TEACH_EXPLAIN, "针对性讲解", True, False, False
+        Capability.TEACH_EXPLAIN, "针对性讲解", True, False, False, turn_complete=True
     ),
     Capability.DIALOG_ANSWER: CapabilityInfo(
-        Capability.DIALOG_ANSWER, "回答追问", True, False, False
+        Capability.DIALOG_ANSWER, "回答追问", True, False, False, turn_complete=True
     ),
     Capability.DIALOG_NEGOTIATE: CapabilityInfo(
         Capability.DIALOG_NEGOTIATE, "与学习者协商", True, False, False
     ),
     Capability.DIALOG_CONVERSE: CapabilityInfo(
-        Capability.DIALOG_CONVERSE, "回应你的消息", True, False, False, True
+        Capability.DIALOG_CONVERSE,
+        "回应你的消息",
+        True,
+        False,
+        False,
+        True,
+        False,
+        True,
     ),
     Capability.DIALOG_INTERVIEW: CapabilityInfo(
         Capability.DIALOG_INTERVIEW,
@@ -115,9 +124,10 @@ CAPABILITY_INFO: dict[Capability, CapabilityInfo] = {
         False,
         True,
         True,
+        True,
     ),
     Capability.DIALOG_PROBE: CapabilityInfo(
-        Capability.DIALOG_PROBE, "向你确认理解", True, False, False
+        Capability.DIALOG_PROBE, "向你确认理解", True, False, False, turn_complete=True
     ),
     Capability.PLAN_PRESENT: CapabilityInfo(
         Capability.PLAN_PRESENT, "更新执行计划", True, False, False
