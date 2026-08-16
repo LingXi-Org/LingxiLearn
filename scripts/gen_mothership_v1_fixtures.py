@@ -240,11 +240,65 @@ def run_failure() -> list[dict]:
     return _renumber(events, 1)
 
 
+def multi_turn_thread() -> list[dict]:
+    p = _projector()
+    events: list[dict] = []
+    feed = [
+        {"kind": "run.started", "agent": "coordinator", "payload": {}},
+        {
+            "kind": "agent.started",
+            "agent": "answer_user",
+            "payload": {
+                "agent_run_id": "ar_t1",
+                "provider": "answer_user",
+                "display_name": "知识点答疑",
+                "capability": "dialog.answer",
+                "presentation_role": "primary",
+            },
+        },
+        {
+            "kind": "agent.output",
+            "agent": "answer_user",
+            "payload": {
+                "agent_run_id": "ar_t1",
+                "stream_id": "task_fixture:turn_fixture_1",
+                "message": "叠加态是第一轮的答案。",
+            },
+        },
+        {
+            "kind": "agent.completed",
+            "agent": "answer_user",
+            "payload": {"agent_run_id": "ar_t1", "status": "completed"},
+        },
+        {"kind": "run.completed", "agent": "coordinator", "payload": {}},
+    ]
+    for item in feed:
+        events.extend(p.consume(item))
+    # Host-emitted turn events bracket the execution (issue #18 §5.2).
+    turn1_started = p.turn_event(
+        "started", turn_id="turn_fixture_1", turn_index=0, user_text="什么是量子叠加？"
+    )
+    turn1_delivered = p.turn_event("delivered", turn_id="turn_fixture_1", turn_index=0)
+    turn2_started = p.turn_event(
+        "started", turn_id="turn_fixture_2", turn_index=1, user_text="那测量之后为什么坍缩？"
+    )
+    turn2_delivered = p.turn_event("delivered", turn_id="turn_fixture_2", turn_index=1)
+    events = [
+        turn1_started,
+        *events,
+        turn1_delivered,
+        turn2_started,
+        turn2_delivered,
+    ]
+    return _renumber(events, 1)
+
+
 SCENARIOS = {
     "single-primary-agent.json": single_primary_agent,
     "parallel-siblings.json": parallel_siblings,
     "blocking-question-pause.json": blocking_question_pause,
     "run-failure.json": run_failure,
+    "multi-turn-thread.json": multi_turn_thread,
 }
 
 

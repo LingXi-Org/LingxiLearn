@@ -108,6 +108,20 @@ describe('mothership stream v1 contract fixtures', () => {
     expect(ends).toHaveLength(2)
   })
 
+  it('decodes a multi-turn thread with per-turn user text', () => {
+    const fixture = loadFixtures().find(({ name }) => name === 'multi-turn-thread.json')
+    const events = fixture?.events ?? []
+    const started = events.filter(
+      (event) =>
+        event.type === 'turn' && (event.payload as { status?: string }).status === 'started'
+    )
+    expect(started).toHaveLength(2)
+    expect((started[0].payload as { userText?: string }).userText).toBe('什么是量子叠加？')
+    expect((started[1].payload as { userText?: string }).userText).toBe('那测量之后为什么坍缩？')
+    // The thread stays open between turns: exactly one complete event.
+    expect(events.filter((event) => event.type === 'complete')).toHaveLength(1)
+  })
+
   it('never leaks checkpoint or plan state through the pause fixture', () => {
     const fixture = loadFixtures().find(({ name }) => name === 'blocking-question-pause.json')
     const pause = fixture?.events.find(

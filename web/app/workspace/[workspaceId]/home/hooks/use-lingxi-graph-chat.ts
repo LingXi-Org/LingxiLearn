@@ -5,11 +5,25 @@ import { useRouter } from 'next/navigation'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
 import type { FilePreviewSession } from '@/lib/copilot/request/session/file-preview-session-contract'
 import type { MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
-import { api, type LingxiAttachmentRef } from '@/lib/lingxi/api'
+import {
+  agentTaskV1Events,
+  api,
+  answerAgentInteraction,
+  subscribeAgentV1Events,
+  type LingxiAttachmentRef,
+} from '@/lib/lingxi/api'
 import {
   type LingxiGraphChatAdapter,
   projectLingxiGraphEvents,
 } from '@/lib/lingxi/lingxi-graph-adapter'
+import {
+  buildV1ThreadModel,
+  decodeInteractionOptionId,
+  emptyV1ThreadModel,
+  interactionAnswerLabels,
+  reduceV1Event,
+  type LingxiV1ThreadModel,
+} from '@/lib/lingxi/stream/turn-model'
 import {
   type LingxiTurnState,
   reconcileLingxiTurnState,
@@ -17,6 +31,7 @@ import {
   turnStateFromTask,
 } from '@/lib/lingxi/turn-state'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import { decodeLingxiMothershipEvent } from '@/lib/lingxi/generated/mothership-stream-v1'
 import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
 import type { QueuedMothershipMessage } from '@/stores/mothership-queue/types'
 import type { ChatContext } from '@/stores/panel'
@@ -229,6 +244,35 @@ function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[]
 
 const EMPTY_LINGXI_QUEUE: QueuedMothershipMessage[] = []
 
+/**
+ * Reduce the authoritative V1 turn/run statuses into the hook's turn state.
+ * The V0 event reducer remains the fallback for tasks without V1 history.
+ */
+function reduceV1TurnState(current: LingxiTurnState, envelope: {
+  type: string
+  payload: Record<string, unknown>
+}): LingxiTurnState {
+  const status = typeof envelope.payload.status === 'string' ? envelope.payload.status : ''
+  switch (envelope.type) {
+    case 'turn':
+      if (status === 'started' || status === 'resumed') return 'active'
+      if (status === 'awaiting_user') return 'awaiting_user'
+      if (status === 'delivered' || status === 'failed' || status === 'cancelled') {
+        return 'terminal'
+      }
+      return current
+    case 'run':
+      if (status === 'started' || status === 'resumed') return 'active'
+      if (status === 'checkpoint_pause') return 'awaiting_user'
+      return current
+    case 'span':
+    case 'tool':
+      return 'active'
+    default:
+      return current
+  }
+}
+
 function generateLingxiId(prefix: string): string {
   const uuid = globalThis.crypto?.randomUUID?.()
   return `${prefix}:${uuid ?? `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`}`
@@ -258,6 +302,7 @@ export function useLingxiGraphChat(
   const [task, setTask] = useState<AgentTaskSnapshot | null>(null)
   const [workflowState, setWorkflowState] = useState<Record<string, unknown> | null>(null)
   const [events, setEvents] = useState<AgentTaskEvent[]>([])
+  const [v1Model, setV1Model] = useState<LingxiV1ThreadModel | null>(null)
   const [localUsers, setLocalUsers] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
   const [isReconnecting, setIsReconnecting] = useState(false)
@@ -276,6 +321,8 @@ export function useLingxiGraphChat(
   const [activeResourceId, setActiveResourceId] =
     options?.activeResourceState ?? internalActiveResourceState
   const unsubscribeRef = useRef<(() => void) | null>(null)
+  const unsubscribeV1Ref = useRef<(() => void) | null>(null)
+  const v1ModelRef = useRef<LingxiV1ThreadModel | null>(null)
   const messagesRef = useRef<ChatMessage[]>([])
   const requestIdRef = useRef<string | undefined>(initialChatId)
   const resolvedChatIdRef = useRef<string | undefined>(initialChatId)
@@ -328,6 +375,8 @@ export function useLingxiGraphChat(
     setTask(null)
     setWorkflowState(null)
     setEvents([])
+    setV1Model(null)
+    v1ModelRef.current = null
     setLocalUsers([])
     setError(null)
     setLocallyStopped(false)
@@ -343,6 +392,8 @@ export function useLingxiGraphChat(
     if (!currentAdapter || currentAdapter.kind !== 'lingxigraph' || !taskId || locallyStopped) {
       unsubscribeRef.current?.()
       unsubscribeRef.current = null
+      unsubscribeV1Ref.current?.()
+      unsubscribeV1Ref.current = null
       return
     }
 
@@ -396,6 +447,26 @@ export function useLingxiGraphChat(
       }
     }
 
+    const applyV1Event = (row: AgentTaskEvent) => {
+      if (cancelled) return
+      const envelope = decodeLingxiMothershipEvent(row.payload)
+      if (!envelope) return
+      // The V1 turn/run statuses are authoritative when the protocol is
+      // available; the V0 reducer keeps serving tasks without V1 history.
+      applyTurnState(reduceV1TurnState(turnStateRef.current, envelope))
+      const model = v1ModelRef.current ?? emptyV1ThreadModel(taskId)
+      reduceV1Event(model, envelope)
+      v1ModelRef.current = model
+      setV1Model({ chatId: model.chatId, turns: model.turns, lastSeq: model.lastSeq })
+      if (envelope.type === 'resource') {
+        const resource = (envelope.payload as Record<string, unknown>).resource as
+          | Record<string, unknown>
+          | undefined
+        const id = typeof resource?.id === 'string' ? resource.id : ''
+        if (id) onResourceEventRef.current?.(id, 'artifact.ready')
+      }
+    }
+
     const start = async () => {
       try {
         const loaded = await currentAdapter.loadTask(taskId)
@@ -411,6 +482,22 @@ export function useLingxiGraphChat(
         if (cancelled) return
         const orderedHistory = historyEvents.sort((left, right) => left.sequence - right.sequence)
         setEvents(orderedHistory)
+        // V1 history hydration: one model build from durable envelopes, so a
+        // refreshed transcript is structurally identical to the live one
+        // (issue #18 §18.3).  Tasks without V1 rows keep the V0 projection.
+        try {
+          const v1History = await agentTaskV1Events(taskId)
+          if (!cancelled && v1History.events.length > 0) {
+            const model = buildV1ThreadModel(
+              taskId,
+              v1History.events.map((row) => decodeLingxiMothershipEvent(row.payload))
+            )
+            v1ModelRef.current = model
+            setV1Model(model)
+          }
+        } catch {
+          /* V1 unavailable — the V0 projection stays authoritative. */
+        }
         if (!optimisticActiveRef.current) {
           applyTurnState(reconcileLingxiTurnState(loaded, orderedHistory))
         }
@@ -456,6 +543,25 @@ export function useLingxiGraphChat(
             }
           },
         })
+        // The V1 envelope stream drives the per-turn transcript.  It stays
+        // open across turns on the long-lived thread (issue #18 §15.1), so
+        // per-send resubscription is unnecessary but harmless.
+        if (v1ModelRef.current) {
+          unsubscribeV1Ref.current = subscribeAgentV1Events(
+            taskId,
+            applyV1Event,
+            { from: v1ModelRef.current.lastSeq }
+          )
+        } else {
+          // A chat created before V1 may still emit V1 envelopes once a new
+          // turn runs; watch for them and switch over on first arrival.
+          unsubscribeV1Ref.current = subscribeAgentV1Events(taskId, (row) => {
+            if (!v1ModelRef.current) {
+              v1ModelRef.current = emptyV1ThreadModel(taskId)
+            }
+            applyV1Event(row)
+          })
+        }
       } catch (cause) {
         if (cancelled) return
         setIsReconnecting(false)
@@ -467,6 +573,8 @@ export function useLingxiGraphChat(
       cancelled = true
       unsubscribeRef.current?.()
       unsubscribeRef.current = null
+      unsubscribeV1Ref.current?.()
+      unsubscribeV1Ref.current = null
     }
   }, [applyTurnState, locallyStopped, resolvedChatId, subscriptionEpoch])
 
@@ -485,6 +593,43 @@ export function useLingxiGraphChat(
   const assistantStreaming = turnState === 'active' && !locallyStopped
   const messages = useMemo(() => {
     if (!task) return localUsers.length > 0 ? localUsers : []
+    // V1 transcript: every turn independently owns its user text, content
+    // blocks, interactions and AgentRuns (issue #18 §18.3).  Local user
+    // messages already claimed by a turn's userText are not duplicated.
+    if (v1Model && v1Model.turns.length > 0) {
+      const claimedTexts = v1Model.turns
+        .map((turn) => turn.userText.trim())
+        .filter((text) => text.length > 0)
+      const unclaimedLocals = localUsers.filter(
+        (local) =>
+          !claimedTexts.some((text) => text === local.content.trim() || text.startsWith(local.content.trim()))
+      )
+      const lastTurn = v1Model.turns[v1Model.turns.length - 1]
+      const turnMessages: ChatMessage[] = []
+      for (const turn of v1Model.turns) {
+        if (turn.userText.trim()) {
+          turnMessages.push(
+            userMessage(`lingxi-user:${task.id}:${turn.turnId}`, turn.userText.trim())
+          )
+        }
+        const isLastTurn = turn === lastTurn
+        const resolvedCard = turn.interactions.find((item) => item.status === 'resolved')
+        turnMessages.push({
+          id: `lingxi-assistant:${task.id}:${turn.turnId}`,
+          role: 'assistant',
+          content: turn.assistantText || (isLastTurn ? '正在连接学习图谱…' : ''),
+          contentBlocks: [
+            ...turn.blocks,
+            ...(locallyStopped && isLastTurn && turn.status === 'active'
+              ? [{ type: 'stopped' as const }]
+              : []),
+          ],
+          requestId: task.id,
+          ...(resolvedCard ? { questionAnswers: interactionAnswerLabels(resolvedCard) } : {}),
+        })
+      }
+      return [...turnMessages, ...unclaimedLocals]
+    }
     const currentProjection = projection ?? projectLingxiGraphEvents(task, events)
     const assistant: ChatMessage = {
       id: `lingxi-assistant:${task.id}`,
@@ -502,7 +647,7 @@ export function useLingxiGraphChat(
         : [userMessage(`lingxi-user:${task.id}`, task.prompt)]),
       assistant,
     ]
-  }, [events, localUsers, locallyStopped, projection, task])
+  }, [events, localUsers, locallyStopped, projection, task, v1Model])
   messagesRef.current = messages
 
   const sendDirect = useCallback(
@@ -516,6 +661,61 @@ export function useLingxiGraphChat(
       const currentAdapter = adapterRef.current
       const content = message.trim()
       if (!currentAdapter || currentAdapter.kind !== 'lingxigraph' || !content) return false
+
+      // A question-card option id carries its typed interaction identity
+      // (issue #18 §10.5): answer through the structured API instead of
+      // sending a formatted string the backend would have to guess at.
+      const existingTaskId = resolvedChatIdRef.current
+      const encoded = decodeInteractionOptionId(content)
+      if (encoded && existingTaskId) {
+        const model = v1ModelRef.current
+        let label = content
+        for (const turn of model?.turns ?? []) {
+          const card = turn.interactions.find(
+            (item) => item.interactionId === encoded.interactionId
+          )
+          const option = card?.questions
+            .find((question) => question.id === encoded.questionId)
+            ?.options.find((item) => item.id === encoded.optionId)
+          if (option) {
+            label = option.label
+            break
+          }
+        }
+        const previousTurnState = turnStateRef.current
+        optimisticActiveRef.current = true
+        applyTurnState('active')
+        setIsSending(true)
+        setError(null)
+        setLocalUsers((current) =>
+          current.some((candidate) => candidate.id === userMessageId)
+            ? current
+            : [...current, userMessage(userMessageId, label)]
+        )
+        try {
+          await answerAgentInteraction(
+            existingTaskId,
+            encoded.interactionId,
+            [
+              {
+                questionId: encoded.questionId,
+                selectedOptionIds: [encoded.optionId],
+                text: null,
+              },
+            ],
+            explicitIdempotencyKey ?? lingxiIdempotencyKey(userMessageId)
+          )
+          onRequestStartedRef.current?.({ requestId: existingTaskId, userMessageId })
+          return true
+        } catch (cause) {
+          optimisticActiveRef.current = false
+          applyTurnState(previousTurnState)
+          setError(cause instanceof Error ? cause.message : String(cause))
+          return false
+        } finally {
+          setIsSending(false)
+        }
+      }
 
       const prompt = requestMessage(content, contexts)
       const attachments = attachmentRefs(fileAttachments)
@@ -761,7 +961,7 @@ export function useLingxiGraphChat(
     dispatchingHeadId,
     previewSession: null as FilePreviewSession | null,
     genericResourceData: null as GenericResourceData | null,
-    lingxiRuntime: { task, events, workflowState, turnState },
+    lingxiRuntime: { task, events, workflowState, turnState, v1Model },
     getCurrentRequestId: () => requestIdRef.current,
   }
 }

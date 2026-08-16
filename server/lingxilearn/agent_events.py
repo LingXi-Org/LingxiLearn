@@ -47,6 +47,9 @@ AGENT_EVENT_KINDS: Final[frozenset[str]] = frozenset(
         "node.retrying",
         "node.cached",
         "interrupt.raised",
+        # Structured HITL lifecycle (issue #18 §5.6).
+        "interaction.requested",
+        "interaction.resolved",
         "artifact.ready",
         "artifact.recovered",
         "delivery.queued",

@@ -272,3 +272,19 @@ def test_single_primary_agent_fixture_shapes() -> None:
     assert assistant and assistant[-1]["payload"]["text"]
     narration = [e for e in envelopes if e["type"] == "text" and e["payload"]["channel"] == "narration"]
     assert narration and narration[0]["scope"]["agentRunId"] == "ar_answer1"
+
+
+def test_multi_turn_fixture_carries_user_text_per_turn() -> None:
+    envelopes = json.loads(
+        (FIXTURE_DIR / "multi-turn-thread.json").read_text(encoding="utf-8")
+    )
+    turn_events = [e for e in envelopes if e["type"] == "turn"]
+    started = [e for e in turn_events if e["payload"]["status"] == "started"]
+    assert len(started) == 2
+    assert started[0]["payload"]["userText"] == "什么是量子叠加？"
+    assert started[1]["payload"]["userText"] == "那测量之后为什么坍缩？"
+    delivered = [e for e in turn_events if e["payload"]["status"] == "delivered"]
+    assert {e["payload"]["turnId"] for e in delivered} == {
+        "turn_fixture_1",
+        "turn_fixture_2",
+    }

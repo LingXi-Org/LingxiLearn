@@ -152,6 +152,9 @@ class TurnPayload(V1Model):
     turn_id: str
     turn_index: int = Field(default=0, ge=0)
     status: TurnStatus
+    user_text: str = ""
+    """The learner's input for this turn; present on ``started`` events so a
+    refreshed transcript can rebuild the user bubbles without V0 history."""
 
 
 class TextPayload(V1Model):

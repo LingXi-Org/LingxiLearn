@@ -13,6 +13,7 @@ import type {
   PromptEditorInstance,
   PromptEditorKeyPolicy,
 } from '@/app/workspace/[workspaceId]/home/components/user-input/components/prompt-editor/use-prompt-editor'
+import type { MothershipResourceType } from '@/lib/copilot/resources/types'
 import { SkillsMenuDropdown } from '@/app/workspace/[workspaceId]/home/components/user-input/components/skills-menu-dropdown/skills-menu-dropdown'
 import {
   computeMentionHighlightRanges,
@@ -42,6 +43,9 @@ export interface PromptEditorProps extends PromptEditorKeyPolicy {
   className?: string
   /** Accessible label for the textarea. */
   'aria-label'?: string
+  /** Resource types this chat cannot consume; hidden from the menus
+   * (the Lingxi context closure, issue #18 §13). */
+  excludedResourceTypes?: ReadonlySet<MothershipResourceType>
 }
 
 /**
@@ -67,6 +71,7 @@ export function PromptEditor({
   readOnly = false,
   className,
   'aria-label': ariaLabel,
+  excludedResourceTypes,
   onSubmit,
   onArrowUpOnEmpty,
 }: PromptEditorProps) {
@@ -264,6 +269,7 @@ export function PromptEditor({
             textareaRef={editor.textareaRef}
             pendingCursorRef={editor.pendingCursorRef}
             mentionQuery={editor.mentionQuery ?? undefined}
+            excludedResourceTypes={excludedResourceTypes}
           />
           <SkillsMenuDropdown
             ref={editor.skillsMenuRef}

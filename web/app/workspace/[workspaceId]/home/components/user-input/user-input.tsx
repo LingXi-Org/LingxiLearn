@@ -40,6 +40,7 @@ import { mentionifyIntegrations } from '@/blocks/integration-matcher'
 import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 import { type SpeechToTextError, useSpeechToText } from '@/hooks/use-speech-to-text'
 import { useMothershipDraftsStore } from '@/stores/mothership-drafts/store'
+import type { MothershipResourceType } from '@/lib/copilot/resources/types'
 import type { ChatContext } from '@/stores/panel'
 
 export type { FileAttachmentForApi } from '@/app/workspace/[workspaceId]/home/types'
@@ -59,6 +60,9 @@ interface UserInputProps {
   isInitialView?: boolean
   onSendQueuedHead?: () => void
   onEditQueuedTail?: () => void
+  /** Resource types this chat cannot consume; hidden from the resource menus
+   * (the Lingxi context closure, issue #18 §13). */
+  excludedResourceTypes?: ReadonlySet<MothershipResourceType>
 }
 
 export interface UserInputHandle {
@@ -86,6 +90,7 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
     isInitialView = true,
     onSendQueuedHead,
     onEditQueuedTail,
+    excludedResourceTypes,
   },
   ref
 ) {
@@ -579,6 +584,7 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
         onSubmit={handleEnterSubmit}
         onArrowUpOnEmpty={handleArrowUpOnEmpty}
         className={cn('max-h-[200px]', isInitialView && 'min-h-[56px]')}
+        excludedResourceTypes={excludedResourceTypes}
       />
 
       <div className='flex items-center justify-between'>

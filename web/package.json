@@ -14,7 +14,7 @@
     "start": "next start --port 3000",
     "type-check": "tsc --noEmit -p tsconfig.frontend.json",
     "test:unit": "vitest run --config vitest.config.ts",
-    "test:chat": "vitest run --config vitest.config.ts lib/lingxi/api.test.ts lib/lingxi/lingxi-graph-adapter.test.ts lib/lingxi/turn-state.test.ts lib/lingxi/generated/mothership-stream-v1.test.ts app/workspace/[workspaceId]/home/components/message-content/components/agent-group/tool-call-item.test.tsx stores/mothership-queue/store.test.ts",
+    "test:chat": "vitest run --config vitest.config.ts lib/lingxi/api.test.ts lib/lingxi/lingxi-graph-adapter.test.ts lib/lingxi/turn-state.test.ts lib/lingxi/generated/mothership-stream-v1.test.ts lib/lingxi/stream/turn-model.test.ts app/workspace/[workspaceId]/home/components/message-content/components/agent-group/tool-call-item.test.tsx stores/mothership-queue/store.test.ts",
     "lint": "biome check --write --unsafe .",
     "lint:check": "biome check .",
     "format": "biome format --write .",

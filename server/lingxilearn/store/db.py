@@ -707,23 +707,41 @@ class Repository:
                 )
             )
 
-    async def set_agent_task_status(self, task_id: str, status: str, error: str = "") -> None:
+    async def set_agent_task_status(
+        self, task_id: str, status: str, error: str = "", *, thread_status: str | None = None
+    ) -> None:
         async with self.db.session() as s:
             row = await s.get(AgentTask, task_id)
             if row is None:
                 return
             row.status = status
             row.error = error
+            if thread_status is not None:
+                row.thread_status = thread_status
+            row.updated_at = utcnow()
+            await s.commit()
+
+    async def set_agent_thread_status(self, task_id: str, thread_status: str) -> None:
+        async with self.db.session() as s:
+            row = await s.get(AgentTask, task_id)
+            if row is None:
+                return
+            row.thread_status = thread_status
             row.updated_at = utcnow()
             await s.commit()
 
     async def claim_agent_task(self, task_id: str, learner_id: str) -> AgentTask | None:
-        """Atomically claim a queued or resumable task for one process.
+        """Atomically claim a runnable task for one process.
 
         Task execution is launched from an asyncio background task, so the
         database is the only coordination point shared by API replicas and a
         restarted process.  A conditional update prevents startup recovery,
         retries, and the original request from running the same task twice.
+
+        A task is claimable when it is queued, waiting on the learner, or —
+        under the long-lived thread model (issue #18 §4.1) — when the thread is
+        still open even though an earlier turn ended in a terminal legacy
+        status.  A running task is never claimable.
         """
 
         async with self.db.session() as s:
@@ -732,7 +750,8 @@ class Repository:
                 .where(
                     AgentTask.id == task_id,
                     AgentTask.learner_id == learner_id,
-                    AgentTask.status.in_(("queued", "awaiting_user")),
+                    AgentTask.thread_status.in_(("open", "awaiting_user", "running")),
+                    AgentTask.status.notin_(("running", "cancelled")),
                 )
                 .values(status="running", updated_at=utcnow())
             )
@@ -1181,6 +1200,19 @@ class Repository:
                 )
             ).all()
             return [_agent_run_dict(row) for row in rows]
+
+    async def work_dependencies_for_task(self, task_id: str) -> list[dict[str, Any]]:
+        """Work Ledger dependency edges for one task, for the execution graph."""
+
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(WorkDependency.work_id, WorkDependency.depends_on_id)
+                    .join(WorkItem, WorkItem.id == WorkDependency.work_id)
+                    .where(WorkItem.task_id == task_id)
+                )
+            ).all()
+            return [{"work_id": work_id, "depends_on_id": depends_on} for work_id, depends_on in rows]
 
     async def create_skill_run(
         self,

@@ -36,6 +36,7 @@ import {
   type UserInputHandle,
 } from '@/app/workspace/[workspaceId]/home/components/user-input'
 import { UserMessageContent } from '@/app/workspace/[workspaceId]/home/components/user-message-content'
+import type { MothershipResourceType } from '@/lib/copilot/resources/types'
 import type {
   ChatMessage,
   ChatMessageAttachment,
@@ -85,6 +86,9 @@ interface MothershipChatProps {
   animateInput?: boolean
   onInputAnimationEnd?: () => void
   className?: string
+  /** Resource types this chat cannot consume; hidden from the input's menus
+   * (the Lingxi context closure, issue #18 §13). */
+  excludedResourceTypes?: ReadonlySet<MothershipResourceType>
 }
 
 /**
@@ -317,6 +321,7 @@ export function MothershipChat({
   animateInput = false,
   onInputAnimationEnd,
   className,
+  excludedResourceTypes,
 }: MothershipChatProps) {
   const styles = LAYOUT_STYLES[layout]
   const isStreamActive = isSending || isReconnecting
@@ -734,7 +739,9 @@ export function MothershipChat({
                         isStreaming={isStreamActive && isLast}
                         isLast={isLast}
                         precedingUserContent={precedingUserContentByIndex[index]}
-                        questionAnswers={interactionPairing.answersByIndex[index]}
+                        questionAnswers={
+                          interactionPairing.answersByIndex[index] ?? msg.questionAnswers
+                        }
                         credentialSubmission={interactionPairing.credentialSubmissionByIndex[index]}
                         credentialAbandoned={interactionPairing.credentialAbandonedByIndex[index]}
                         rowClassName={cn(styles.assistantRow, styles.rowGap)}
@@ -772,6 +779,7 @@ export function MothershipChat({
               onSendQueuedHead={handleSendQueuedHead}
               onEditQueuedTail={handleEditQueuedTail}
               draftScopeKey={draftScopeKey}
+              excludedResourceTypes={excludedResourceTypes}
             />
           </div>
         </div>

@@ -118,6 +118,28 @@ class PublicProjector:
             out.append(envelope.model_dump(mode="json", by_alias=True))
         return out
 
+    # -- turn lifecycle (host-emitted, issue #18 §5.2) ------------------------
+
+    def turn_event(
+        self,
+        status: str,
+        *,
+        turn_id: str,
+        turn_index: int = 0,
+        user_text: str = "",
+    ) -> dict[str, Any] | None:
+        """Build a host-emitted turn envelope (started/delivered/failed/...)."""
+
+        body: dict[str, Any] = {"turnId": turn_id, "turnIndex": turn_index, "status": status}
+        if user_text:
+            body["userText"] = user_text
+        try:
+            envelope = self._emit("turn", body)
+        except Exception:  # noqa: BLE001 - projection must never fail the run
+            logger.exception("failed to build turn event")
+            return None
+        return envelope.model_dump(mode="json", by_alias=True)
+
     # -- lifecycle handlers ---------------------------------------------------
 
     def _on_run_started(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
@@ -254,6 +276,70 @@ class PublicProjector:
                     "status": status,
                 },
                 scope=EventScope(agent_run_id=agent_run_id),
+            )
+        ]
+
+    # -- interactions (issue #18 §5.6) ----------------------------------------
+
+    def _on_interaction_requested(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
+        interaction_id = str(payload.get("interaction_id") or payload.get("interactionId") or "")
+        if not interaction_id:
+            return []
+        body: dict[str, Any] = {
+            "interactionId": interaction_id,
+            "purpose": str(payload.get("purpose") or "clarification"),
+            "presentation": str(payload.get("presentation") or "question"),
+            "blocking": bool(payload.get("blocking", True)),
+        }
+        for source_key, target_key in (
+            ("title", "title"),
+            ("prompt", "prompt"),
+            ("reasonCode", "reasonCode"),
+        ):
+            if payload.get(source_key):
+                body[target_key] = str(payload[source_key])
+        questions = payload.get("questions")
+        if isinstance(questions, list):
+            clean_questions: list[dict[str, Any]] = []
+            for question in questions:
+                if not isinstance(question, dict):
+                    continue
+                clean_questions.append(
+                    {
+                        "id": str(question.get("id") or ""),
+                        "type": str(question.get("type") or "single_select"),
+                        "prompt": str(question.get("prompt") or ""),
+                        "options": [
+                            {"id": str(o.get("id") or ""), "label": str(o.get("label") or "")}
+                            for o in question.get("options") or []
+                            if isinstance(o, dict)
+                        ],
+                        "allowFreeText": bool(question.get("allowFreeText", False)),
+                    }
+                )
+            body["questions"] = clean_questions
+        if "dismissible" in payload:
+            body["dismissible"] = bool(payload.get("dismissible"))
+        return [self._emit("interaction", body)]
+
+    def _on_interaction_resolved(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
+        interaction_id = str(payload.get("interaction_id") or payload.get("interactionId") or "")
+        if not interaction_id:
+            return []
+        answers = payload.get("answers")
+        return [
+            self._emit(
+                "interaction",
+                {
+                    "interactionId": interaction_id,
+                    "answers": [a for a in answers if isinstance(a, dict)]
+                    if isinstance(answers, list)
+                    else [],
+                },
             )
         ]
 
@@ -435,7 +521,12 @@ class PublicProjector:
         if not artifact:
             return []
         agent_run_id = str(payload.get("agent_run_id") or "") or self._agent_runs.get(agent, "")
-        resource_id = f"artifact:{self._stream.chat_id}:{artifact}"
+        # The host resolves the artifact to a stable WorkspaceFile identity at
+        # emit time (issue #18 §12.2); the synthetic id is the fallback while
+        # no projection exists yet.
+        file_id = str(payload.get("workspace_file_id") or "")
+        resource_id = file_id or f"artifact:{self._stream.chat_id}:{artifact}"
+        title = str(payload.get("workspace_file_title") or artifact)
         return [
             self._emit(
                 "resource",
@@ -443,7 +534,7 @@ class PublicProjector:
                     "resource": {
                         "id": resource_id,
                         "type": "file",
-                        "title": artifact,
+                        "title": title,
                         "path": str(payload.get("relative_path") or ""),
                         "sourceAgentRunId": agent_run_id,
                         "artifactKind": artifact,
