@@ -797,7 +797,7 @@ class TrajectoryProjector:
     def _first_model_output_times(
         self,
         model_spans: Sequence[tuple[Mapping[str, Any], Mapping[str, Any] | None, datetime, datetime]],
-    ) -> dict[str, tuple[datetime, Mapping[str, Any], str, Mapping[str, Any]]]:
+    ) -> dict[int, tuple[datetime, Mapping[str, Any], str, Mapping[str, Any]]]:
         """Assign output events to model spans before calculating TTFT.
 
         Assignment is deliberately event-centric: one output event can belong
@@ -812,7 +812,7 @@ class TrajectoryProjector:
         for kind in ("assistant.delta", "agent.output.delta", "agent.output"):
             records.extend(self._events_by_kind.get(kind, ()))
         records.sort(key=lambda record: (record[0], str(record[4].get("sequence") or "")))
-        assigned: dict[str, tuple[datetime, Mapping[str, Any], str, Mapping[str, Any]]] = {}
+        assigned: dict[int, tuple[datetime, Mapping[str, Any], str, Mapping[str, Any]]] = {}
         for _index, (when, payload, agent, runtime, event) in enumerate(records):
             event_identity = self._event_identity(payload, agent, runtime, event)
             candidates: list[tuple[int, int, str]] = []
@@ -832,7 +832,8 @@ class TrajectoryProjector:
                 # invocations.  Leave the interval inferred instead of
                 # attaching the token to an arbitrary model span.
                 continue
-            _, span_index, span_key = min(best, key=lambda candidate: (candidate[1], candidate[2]))
+            _, span_index, _span_key = min(best, key=lambda candidate: (candidate[1], candidate[2]))
+            span_key = id(model_spans[span_index][0])
             current = assigned.get(span_key)
             if current is None or when < current[0]:
                 assigned[span_key] = (when, payload, agent, runtime)
@@ -923,8 +924,7 @@ class TrajectoryProjector:
                     metadata={"tokens": token_count, "input": span.get("tokens")},
                 )
             if action_kind == "model":
-                span_key = str(span.get("id") or action_id)
-                first_record = first_output_by_span.get(span_key)
+                first_record = first_output_by_span.get(id(span))
                 first = first_record[0] if first_record else None
                 if first and start <= first <= end:
                     first_payload = first_record[1] if first_record else {}
