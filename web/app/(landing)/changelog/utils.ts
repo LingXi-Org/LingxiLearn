@@ -11,7 +11,7 @@ export const RELEASES_PER_PAGE = 10
 
 /** Builds the GitHub Releases endpoint for a given 1-based page. */
 export function releasesEndpoint(page: number): string {
-  return `https://api.github.com/repos/simstudioai/sim/releases?per_page=${RELEASES_PER_PAGE}&page=${page}`
+  return `https://api.github.com/repos/LingXi-Org/LingxiGraph/releases?per_page=${RELEASES_PER_PAGE}&page=${page}`
 }
 
 /** Removes literal `&nbsp` artifacts from release bodies. */

@@ -24,7 +24,7 @@
  */
 import { compareVersions } from '@/lib/desktop/min-version'
 
-export const DESKTOP_RELEASE_REPO = 'simstudioai/sim'
+export const DESKTOP_RELEASE_REPO = 'LingXi-Org/LingxiGraph'
 
 export type DesktopUpdateChannel = 'dev' | 'staging' | 'latest'
 

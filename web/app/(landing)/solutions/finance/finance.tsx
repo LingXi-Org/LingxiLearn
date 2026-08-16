@@ -50,7 +50,6 @@ const FINANCE_CONFIG: SolutionsPageConfig = {
       id: 'close',
       title: 'Close the books faster.',
       subtitle: 'Sim agents handle the manual reconciliation work every cycle.',
-      cta: { label: 'See finance agents', href: '/signup' },
       cards: [
         {
           title: 'Reconcile accounts',
@@ -90,7 +89,6 @@ const FINANCE_CONFIG: SolutionsPageConfig = {
       id: 'control',
       title: 'Stay in control.',
       subtitle: 'Sim keeps a human in the loop and a record of every decision.',
-      cta: { label: 'Explore controls', href: '/signup' },
       cards: [
         {
           title: 'Route approvals',

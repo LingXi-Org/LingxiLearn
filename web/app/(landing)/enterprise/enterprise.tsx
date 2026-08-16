@@ -9,7 +9,6 @@ import {
 } from '@/app/(landing)/components/solutions-page/components'
 import { SOLUTIONS_SPACING } from '@/app/(landing)/components/solutions-page/constants'
 import type { SolutionsPageConfig } from '@/app/(landing)/components/solutions-page/types'
-import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
 import { EnterpriseFeatureGrid } from '@/app/(landing)/enterprise/components/enterprise-feature-grid'
 import { EnterprisePlatformLoop } from '@/app/(landing)/enterprise/components/enterprise-platform-loop'
 import {
@@ -83,7 +82,6 @@ const ENTERPRISE_CONFIG: SolutionsPageConfig = {
       title: 'Build, Deploy, and Manage Enterprise AI Agents',
       subtitle:
         'Sim takes enterprise AI agents from initial design to production in one workspace. Build visually or with code, validate changes, deploy approved versions, and monitor every run without connecting separate development and operations tools.',
-      cta: { label: 'Start building', href: SIGNUP_HREF },
       cards: [
         {
           title: 'Build visually or with code',
@@ -112,7 +110,6 @@ const ENTERPRISE_CONFIG: SolutionsPageConfig = {
       title: 'Governance and Security for Enterprise AI Agents',
       subtitle:
         'Control how enterprise AI agents access data, use tools, and take action. Sim provides SSO, permission groups, approval paths, configurable data retention, and append-only audit logs for every security-relevant change.',
-      cta: { label: 'See security', href: DEMO_HREF },
       cards: [
         {
           title: 'Control who can do what',
@@ -141,7 +138,6 @@ const ENTERPRISE_CONFIG: SolutionsPageConfig = {
       subtitle:
         'Enterprise workflow agents need controlled release processes. Test changes in staging, observe production runs, version every deployment, and restore a stable version if updates cause an issue.',
       note: 'Deploy Sim on your own infrastructure with Docker or Kubernetes when your organization requires greater control over its environment and data.',
-      cta: { label: 'Explore deployment', href: SIGNUP_HREF },
       cards: [
         {
           title: 'Stage before you ship',
@@ -165,7 +161,6 @@ const ENTERPRISE_CONFIG: SolutionsPageConfig = {
       title: 'Built for Enterprise Teams',
       subtitle:
         'IT, operations, and engineering teams share one Sim workspace, each with the controls their role needs.',
-      cta: { label: 'Talk to sales', href: DEMO_HREF },
       cards: [
         {
           title: 'IT and platform teams',

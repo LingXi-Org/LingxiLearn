@@ -3,7 +3,7 @@ import { CircleAlert } from '@/components/ui-kit/icons'
 import { FeatureGraphicShell } from '@/app/(landing)/enterprise/components/feature-graphics/feature-graphic-shell'
 import styles from './learning-feedback-graphic.module.css'
 
-const OUTLINE_INK = 'border-[color:color-mix(in_srgb,var(--text-muted-inverse)_45%,transparent)]'
+const OUTLINE_INK = 'border-[var(--border-1)]'
 
 export interface LearningFeedbackRow {
   label: string
@@ -29,16 +29,16 @@ export function LearningFeedbackGraphic({
       >
         <div
           className={cn(
-            'mt-1 flex items-center gap-2 rounded-[10px] border bg-[var(--text-primary)] py-1.5 pr-1.5 pl-2.5',
+            'mt-1 flex items-center gap-2 rounded-[10px] border bg-[var(--surface-1)] py-1.5 pr-1.5 pl-2.5',
             OUTLINE_INK,
             styles.runRow
           )}
         >
-          <CircleAlert className='size-[13px] text-[var(--text-inverse)]' />
-          <span className='font-medium text-[var(--text-inverse)] text-caption'>{title}</span>
+          <CircleAlert className='size-[13px] text-[var(--text-primary)]' />
+          <span className='font-medium text-[var(--text-primary)] text-caption'>{title}</span>
           <span
             className={cn(
-              'flex h-5 items-center rounded-md border px-1.5 font-medium text-[var(--text-muted-inverse)] text-caption',
+              'flex h-5 items-center rounded-md border px-1.5 font-medium text-[var(--text-muted)] text-caption',
               OUTLINE_INK
             )}
           >
@@ -48,7 +48,7 @@ export function LearningFeedbackGraphic({
 
         <span
           className={cn(
-            'relative mt-2 mb-2 min-h-4 w-px flex-1 overflow-hidden bg-[color:color-mix(in_srgb,var(--text-muted-inverse)_45%,transparent)]'
+            'relative mt-2 mb-2 min-h-4 w-px flex-1 overflow-hidden bg-[var(--border-1)]'
           )}
         >
           <span className={styles.sweep} />
@@ -56,7 +56,7 @@ export function LearningFeedbackGraphic({
 
         <div
           className={cn(
-            'relative w-full rounded-t-xl border border-b-0 bg-[var(--text-primary)]',
+            'relative w-full rounded-t-xl border border-b-0 bg-[var(--surface-1)]',
             OUTLINE_INK,
             styles.alertWindow
           )}
@@ -68,32 +68,32 @@ export function LearningFeedbackGraphic({
                 OUTLINE_INK
               )}
             >
-              <span className='size-2 rounded-full bg-[var(--text-inverse)]' />
+              <span className='size-2 rounded-full bg-[var(--text-primary)]' />
             </span>
-            <span className='min-w-0 flex-1 truncate font-medium text-[var(--text-inverse)] text-small'>
+            <span className='min-w-0 flex-1 truncate font-medium text-[var(--text-primary)] text-small'>
               反馈判断
             </span>
-            <span className='shrink-0 text-[var(--text-muted-inverse)] text-caption'>现在</span>
+            <span className='shrink-0 text-[var(--text-muted)] text-caption'>现在</span>
           </div>
           <div className='flex flex-col gap-2 px-3 pt-2.5 pb-3'>
             {rows.map((row, index) => (
               <div key={row.label} className='flex items-start gap-2'>
-                <span className='mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border border-[color:color-mix(in_srgb,var(--text-muted-inverse)_45%,transparent)] text-[10px] text-[var(--text-muted-inverse)]'>
+                <span className='mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border border-[var(--border-1)] text-[10px] text-[var(--text-muted)]'>
                   {index + 1}
                 </span>
                 <span className='min-w-0 flex-1'>
-                  <span className='block font-medium text-[var(--text-inverse)] text-caption'>
+                  <span className='block font-medium text-[var(--text-primary)] text-caption'>
                     {row.label}
                   </span>
                   {row.detail ? (
-                    <span className='mt-0.5 block text-[var(--text-muted-inverse)] text-caption'>
+                    <span className='mt-0.5 block text-[var(--text-muted)] text-caption'>
                       {row.detail}
                     </span>
                   ) : null}
                 </span>
               </div>
             ))}
-            <span className='mt-1 rounded-md border border-[color:color-mix(in_srgb,var(--text-muted-inverse)_45%,transparent)] px-2 py-1.5 text-center font-medium text-[var(--text-inverse)] text-caption'>
+            <span className='mt-1 rounded-md border border-[var(--border-1)] px-2 py-1.5 text-center font-medium text-[var(--text-primary)] text-caption'>
               {action}
             </span>
           </div>

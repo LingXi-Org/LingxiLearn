@@ -5,13 +5,13 @@ import Link from 'next/link'
 import { GithubOutlineIcon } from '@/components/icons'
 import { cn } from '@/components/ui-kit'
 import { Menu, X } from '@/components/ui-kit/icons'
+import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 import { NAV_MENUS } from '@/app/(landing)/components/navbar/components/nav-menu-chip'
 import {
   NAVBAR_GLASS_SURFACE,
   useNavbarFrost,
 } from '@/app/(landing)/components/navbar/components/navbar-shell'
 import { SIGNUP_HREF } from '@/app/(landing)/constants'
-import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 
 /**
  * Mobile navigation - the `< lg` counterpart to the desktop nav clusters.
@@ -125,8 +125,12 @@ export function MobileNav() {
             </div>
           ))}
 
+          <Link href='/contact' onClick={() => setOpen(false)} className={SHEET_ROW}>
+            灵犀团队
+          </Link>
+
           <a
-            href='https://github.com/simstudioai/sim'
+            href='https://github.com/LingXi-Org/LingxiGraph'
             target='_blank'
             rel='noopener noreferrer'
             onClick={() => setOpen(false)}

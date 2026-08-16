@@ -29,7 +29,7 @@ export const SIM_FEATURES: SimFeature[] = [
         asOf: '2026-07-02',
       },
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
         label: 'Sim codebase: workflow_deployment_version table',
         asOf: '2026-07-02',
       },
@@ -51,7 +51,7 @@ export const SIM_FEATURES: SimFeature[] = [
         asOf: '2026-07-02',
       },
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/api/workflows/[id]/executions/[executionId]/stream/route.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/api/workflows/[id]/executions/[executionId]/stream/route.ts',
         label: 'Sim codebase: stream reconnect/replay route',
         asOf: '2026-07-02',
       },
@@ -149,7 +149,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Paused runs persist their full execution state (ExecutionSnapshot) to the database, independent of any third-party durable-execution service. Resume happens via a public per-execution resume URL (API + UI), supporting sync, streaming, or async job-queue-dispatched resume; an approver opens a link (surfaced via the notification tool call) rather than needing product access.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/executor/execution/snapshot.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/executor/execution/snapshot.ts',
         label: 'Sim codebase: execution snapshot serializer',
         asOf: '2026-07-02',
       },
@@ -232,7 +232,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Usage governance supports both an org-level pooled cap (organization.orgUsageLimit) and individual per-member overrides (organizationMemberUsageLimit, keyed by org+user, with an auditable setBy field recording which admin set the limit).',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
         label: 'Sim codebase: orgUsageLimit / organizationMemberUsageLimit',
         asOf: '2026-07-02',
       },
@@ -295,7 +295,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Knowledge bases can sync documents from 51 external source connectors (including Google Drive, Notion, Confluence, SharePoint, S3, Slack, Salesforce, HubSpot, Jira, GitHub, Zendesk, and more). Sync is interval-based and recurring, not one-time import, via a syncIntervalMinutes/nextSyncAt schedule (default daily) polled by a cron endpoint every 5 minutes, with a per-run sync log (docs added/updated/deleted/failed) and stale-lock recovery. Manual on-demand re-sync is also supported. No push/webhook-driven re-sync (e.g. Drive change notifications) was found. The mechanism is polling-based.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/connectors/registry.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/connectors/registry.ts',
         label: 'Sim codebase: connector registry (51 connectors)',
         asOf: '2026-07-02',
       },
@@ -343,7 +343,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Column types are simple (no spreadsheet-style formula/computed-column engine); "enrichment" is LLM-driven per-row/per-column-group enrichment, not formulas.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
         label: 'Sim codebase: userTableDefinitions/userTableRows',
         asOf: '2026-07-02',
       },
@@ -363,7 +363,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Tables support per-row enrichment via LLM-backed "column groups". An enrichment run populates cells using an LLM given the row and column context, distinct from static spreadsheet formulas.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/copilot/tools/server/enrichment/enrichment-run.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/copilot/tools/server/enrichment/enrichment-run.ts',
         label: 'Sim codebase: table enrichment run',
         asOf: '2026-07-02',
       },
@@ -380,7 +380,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Files are stored in a genuinely shared, workspace-scoped store (not per-user), with nested folders and soft delete. A REST API (internal and public v1) covers upload/serve/manage. A File workflow block reads, writes, appends, fetches, compresses/decompresses, and manages sharing for files as workflow inputs or outputs.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
         label: 'Sim codebase: workspaceFile/workspaceFileFolder',
         asOf: '2026-07-02',
       },
@@ -415,7 +415,7 @@ export const SIM_FEATURES: SimFeature[] = [
       "A distinct in-memory virtual filesystem abstraction lets the Copilot agent browse workspace resources (workflows, tables, docs) as file-like paths/tools. It reads from the Files module and table data but is a separate concept from a user's actual file store.",
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/tree/main/apps/sim/lib/copilot/vfs/',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/tree/main/apps/sim/lib/copilot/vfs/',
         label: 'Sim codebase: copilot VFS',
         asOf: '2026-07-02',
       },
@@ -483,12 +483,12 @@ export const SIM_FEATURES: SimFeature[] = [
       'Before and after each Copilot AI edit to a workflow, a full canvas-state snapshot is saved server-side (keyed by user/workflow/chat/message) and can be restored via a revert endpoint or browsed via a checkpoint list. This is real server-side point-in-time restore, but scoped to Copilot-driven sessions. Manual drag-and-drop edits are not autosaved server-side.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
         label: 'Sim codebase: workflowCheckpoints table',
         asOf: '2026-07-02',
       },
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/api/copilot/checkpoints/revert/route.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/api/copilot/checkpoints/revert/route.ts',
         label: 'Sim codebase: checkpoint revert API',
         asOf: '2026-07-02',
       },
@@ -503,7 +503,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'A dedicated diff engine computes added/edited/deleted blocks and edges (plus field-level diffs) between the live workflow and a Copilot-proposed change, rendered with an accept/reject UI before the change is applied. This diff view is scoped to Copilot-proposed edits vs. the current baseline. There is no user-facing tool to diff two arbitrary past deployment versions against each other.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/workflows/diff/diff-engine.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/workflows/diff/diff-engine.ts',
         label: 'Sim codebase: WorkflowDiffEngine',
         asOf: '2026-07-02',
       },
@@ -518,7 +518,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Undo/redo for manual drag-and-drop editing is client-side only (localStorage-persisted, capped at 100 ops / 5 stacks per browser). It is not synced across devices or recoverable server-side. There is no autosave history timeline or arbitrary-version diff/compare tool for manual edits, and no per-workflow git-like branch/merge model (only the workspace-level fork/promote system, cataloged separately). Knowledge base documents have no version/history tracking at all.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/stores/undo-redo/store.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/stores/undo-redo/store.ts',
         label: 'Sim codebase: client-side undo/redo store',
         asOf: '2026-07-02',
       },
@@ -535,7 +535,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Sim ships real OpenTelemetry instrumentation (NodeSDK, batched OTLP trace/metric export, sampling) covering generative-AI, copilot, and tool-execution spans. This is aimed at product/ops-level observability (togglable by the user, and disableable via NEXT_TELEMETRY_DISABLED) rather than a customer-facing per-execution trace-waterfall UI inside the product. Block-level execution timing is tracked via start/end timestamps on execution logs, not an exposed span tree.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/instrumentation-node.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/instrumentation-node.ts',
         label: 'Sim codebase: OTel NodeSDK setup',
         asOf: '2026-07-02',
       },
@@ -580,7 +580,7 @@ export const SIM_FEATURES: SimFeature[] = [
       "Background job retries are explicitly disabled at the infrastructure layer (maxAttempts: 1) by design; durability instead comes from app-level bookkeeping. Scheduled executions track consecutive infrastructure-failure counts and auto-disable a schedule after a threshold, distinguishing infra failures from business-logic failures. There is no automatic block-level retry loop, no idempotency-key-based exactly-once block execution, no dead-letter queue for failed runs, and no 'replay a past execution with its original inputs' feature. The only checkpoint/resume path is the human-in-the-loop pause/resume mechanism (cataloged separately).",
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/trigger.config.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/trigger.config.ts',
         label: 'Sim codebase: retries.default.maxAttempts = 1',
         asOf: '2026-07-02',
       },
@@ -617,7 +617,7 @@ export const SIM_FEATURES: SimFeature[] = [
       "A dedicated Image Generator block supports OpenAI (GPT Image 1.5/1/1 Mini, DALL-E 3), Google Gemini 'Nano Banana' image models, and (via a Fal.ai multi-model proxy) Nano Banana 2/Pro, Seedream 4.5, FLUX 2 Pro, and Grok Imagine Image. Stability AI, Midjourney, Ideogram, and Recraft are not integrated.",
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/image_generator.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/image_generator.ts',
         label: 'Sim codebase: Image Generator V2 block',
         asOf: '2026-07-02',
       },
@@ -634,7 +634,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'Depth here (5+ first-party providers plus a multi-model proxy spanning a dozen more video models) is unusually broad for a workflow-automation platform. This is typically the domain of dedicated media-gen tools, not general automation builders.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/video_generator.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/video_generator.ts',
         label: 'Sim codebase: Video Generator V3 block',
         asOf: '2026-07-02',
       },
@@ -649,7 +649,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'A dedicated TTS block supports OpenAI TTS, Deepgram Aura, ElevenLabs, Cartesia Sonic, Google Cloud TTS, Azure TTS, and PlayHT. A separate dedicated ElevenLabs block additionally covers sound effects, speech-to-speech, and audio isolation.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/tts.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/tts.ts',
         label: 'Sim codebase: TTS block',
         asOf: '2026-07-02',
       },
@@ -664,7 +664,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'A dedicated STT block supports OpenAI Whisper, Deepgram (Nova 3/2/Whisper Large), ElevenLabs Scribe, AssemblyAI, and Google Gemini transcription variants.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/stt.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/stt.ts',
         label: 'Sim codebase: STT block',
         asOf: '2026-07-02',
       },
@@ -808,7 +808,7 @@ export const SIM_FEATURES: SimFeature[] = [
       "An A2A block lets a Sim workflow act as a client to any Agent-to-Agent-protocol-compliant external agent: send a message, get/cancel a task, and fetch the remote agent's Agent Card. This is distinct from MCP (tool-calling protocol). A2A is agent-to-agent messaging.",
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/a2a.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/a2a.ts',
         label: 'Sim codebase: A2A block',
         asOf: '2026-07-02',
       },
@@ -878,7 +878,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'An Agent block can only call tools the workflow author explicitly attached to it at build time. It cannot browse and choose from a broader pool (e.g. an MCP server\'s full tool catalog, or "every tool in the workspace") at inference time. Runtime MCP discovery exists but only refreshes the schema of an already-configured tool.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/executor/handlers/agent/agent-handler.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/executor/handlers/agent/agent-handler.ts',
         label: 'Sim codebase: agent tool resolution (pre-wired only)',
         asOf: '2026-07-02',
       },
@@ -893,7 +893,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'A failed or rate-limited LLM call is not automatically retried against a different model or provider; the error is thrown rather than retried with a fallback model.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/providers/index.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/providers/index.ts',
         label: 'Sim codebase: executeProviderRequest (no retry/fallback)',
         asOf: '2026-07-02',
       },
@@ -912,7 +912,7 @@ export const SIM_FEATURES: SimFeature[] = [
       'This capability is scoped to Copilot\'s own chat-assistant tool. It is not exposed as a configurable option in the workflow-builder Function block, so a workflow author cannot wire "generate a slide deck" into a reusable automation today, only ask Copilot for one interactively.',
     sources: [
       {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/copilot/tools/server/files/doc-compile.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/copilot/tools/server/files/doc-compile.ts',
         label: 'Sim codebase: Copilot doc-compile tool',
         asOf: '2026-07-02',
       },

@@ -51,7 +51,6 @@ const COMPLIANCE_CONFIG: SolutionsPageConfig = {
       id: 'evidence',
       title: 'Automate the evidence.',
       subtitle: 'Sim agents collect and check the proof so audits stop being fire drills.',
-      cta: { label: 'See compliance agents', href: '/signup' },
       cards: [
         {
           title: 'Collect evidence',
@@ -108,7 +107,6 @@ const COMPLIANCE_CONFIG: SolutionsPageConfig = {
       id: 'prove',
       title: 'Prove control.',
       subtitle: 'Sim turns continuous monitoring into a clean, defensible record.',
-      cta: { label: 'Explore reporting', href: '/signup' },
       cards: [
         {
           title: 'Review access',

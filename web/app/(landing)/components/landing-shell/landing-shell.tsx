@@ -42,7 +42,17 @@ export function LandingShell({ children }: LandingShellProps) {
       >
         跳转到主要内容
       </a>
-      <Navbar stars={stars} />
+      <Navbar
+        stars={stars}
+        announcement={
+          <aside
+            aria-label='赛事致谢'
+            className='border-[var(--border)] border-b bg-[var(--surface-2)] px-5 py-2 text-center text-[13px] text-[var(--text-body)] leading-[1.45] max-sm:text-[12px]'
+          >
+            感谢无界应用｜Boundless Agents 比赛为 LingXi 提供平台与展示机会。
+          </aside>
+        }
+      />
       {children}
       <Footer />
     </div>

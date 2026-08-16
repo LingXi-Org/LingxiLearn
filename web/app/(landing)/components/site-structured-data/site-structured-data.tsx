@@ -35,10 +35,9 @@ const SITE_JSON_LD = {
       image: { '@id': `${SITE_URL}#logo` },
       brand: { '@type': 'Brand', name: '灵犀智学' },
       sameAs: [
-        'https://x.com/simdotai',
-        'https://github.com/simstudioai/sim',
-        'https://www.linkedin.com/company/simstudioai/',
-        'https://join.slack.com/t/sim-ott9864/shared_invite/zt-43lp8tc5v-0qrrqHGBKUsvQlpoouH~TA',
+        'https://github.com/LingXi-Org',
+        'https://github.com/LingXi-Org/LingxiLearn',
+        'https://docs.lingxilearn.cn/docs/zh/',
       ],
       contactPoint: [
         {

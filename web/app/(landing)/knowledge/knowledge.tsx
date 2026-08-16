@@ -58,7 +58,6 @@ const KNOWLEDGE_CONFIG: SolutionsPageConfig = {
       title: 'Give AI agents memory of your data.',
       subtitle:
         'Sim turns your docs and sources into searchable memory every agent can read, so answers come from your data instead of guesswork.',
-      cta: { label: 'Explore Knowledge Base', href: '/signup' },
       cards: [
         {
           title: 'Sync your sources',
@@ -94,7 +93,6 @@ const KNOWLEDGE_CONFIG: SolutionsPageConfig = {
       title: 'Knowledge that stays fresh on its own.',
       subtitle:
         'Sim re-syncs your sources, processes every new document, and logs each update, so agent memory never drifts out of date.',
-      cta: { label: 'See how syncing works', href: '/signup' },
       cards: [
         {
           title: 'Fresh without the upkeep',

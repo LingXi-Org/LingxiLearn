@@ -259,6 +259,7 @@ export function ProfileCard({
                   priority
                   quality={72}
                   sizes='(max-width: 768px) 100vw, 490px'
+                  unoptimized
                 />
               ) : (
                 <div className='pc-avatar-placeholder' aria-label={`${name}头像占位`}>
@@ -276,7 +277,7 @@ export function ProfileCard({
                     )}
                   </div>
                   <div className='pc-user-text'>
-                    <div className='pc-handle'>@{handle}</div>
+                    <div className='pc-handle'>{handle}</div>
                     <div className='pc-status'>{status}</div>
                   </div>
                 </div>

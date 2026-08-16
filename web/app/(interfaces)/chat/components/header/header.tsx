@@ -49,7 +49,7 @@ export function ChatHeader({ chatConfig, starCount }: ChatHeaderProps) {
       {!brand.logoUrl && (
         <div className='flex items-center gap-4'>
           <a
-            href='https://github.com/simstudioai/sim'
+            href='https://github.com/LingXi-Org/LingxiGraph'
             target='_blank'
             rel='noopener noreferrer'
             className='flex items-center gap-2 text-[var(--text-muted)] transition-colors hover-hover:text-[var(--text-primary)]'

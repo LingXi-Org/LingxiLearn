@@ -15,6 +15,19 @@ const nextConfig: NextConfig = {
     turbopackFileSystemCacheForBuild: false,
     useTypeScriptCli: true,
   },
+  async headers() {
+    return [
+      {
+        source: '/landing/contact/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ]
+  },
   async rewrites() {
     const origin =
       process.env.LINGXILEARN_API_ORIGIN ||

@@ -3,7 +3,6 @@ import {
   IsoBuildIllustration,
   IsoIngestIllustration,
   IsoIntegrateIllustration,
-  IsoMonitorIllustration,
 } from '@/app/(landing)/components/mothership/components/iso-marks'
 
 /**
@@ -65,7 +64,7 @@ const AREAS: Area[] = [
   },
   {
     word: '成长',
-    Mark: IsoMonitorIllustration,
+    Mark: IsoIngestIllustration,
     size: 174,
     definition: '持续分析学习过程，根据反馈动态调整教学策略。',
   },
@@ -91,8 +90,12 @@ export function Mothership() {
       <ul className='mt-16 grid grid-cols-4 gap-8 max-sm:mt-8 max-sm:grid-cols-1 max-sm:gap-10 max-lg:mt-12 max-lg:grid-cols-2 max-lg:gap-x-8 max-lg:gap-y-12'>
         {AREAS.map(({ word, Mark, size, definition }) => (
           <li key={word} className='flex flex-col gap-[22px]'>
-            <div className='flex size-[148px] items-center justify-center'>
-              <Mark size={size} />
+            <div
+              data-export-widget='true'
+              data-export-title={word}
+              className='flex size-[148px] items-center justify-center'
+            >
+              <Mark size={size} className='translate-x-3 max-sm:translate-x-2' />
             </div>
             <div className='flex flex-col gap-2'>
               <h3 className='text-[var(--text-primary)] text-lg'>{word}</h3>

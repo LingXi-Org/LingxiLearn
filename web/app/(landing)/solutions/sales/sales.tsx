@@ -53,7 +53,6 @@ const SALES_CONFIG: SolutionsPageConfig = {
       id: 'pipeline',
       title: 'Fill the pipeline.',
       subtitle: 'Sim agents handle research, outreach, and follow-up around the clock.',
-      cta: { label: 'See sales agents', href: '/signup' },
       cards: [
         {
           title: 'Route inbound leads',
@@ -98,7 +97,6 @@ const SALES_CONFIG: SolutionsPageConfig = {
       id: 'crm',
       title: 'Keep the CRM true.',
       subtitle: 'Sim keeps records current so the forecast is built on real data.',
-      cta: { label: 'Explore CRM automation', href: '/signup' },
       cards: [
         {
           title: 'Update the CRM',

@@ -117,6 +117,68 @@ export const PRACTICE_HERO_WORKFLOW: HeroWorkflowDefinition = {
   canvas: { width: 560, height: 450 },
 }
 
+/** The four-stage teaching loop shown on the /learning overview page. */
+export const LOOP_HERO_WORKFLOW: HeroWorkflowDefinition = {
+  blocks: [
+    {
+      id: 'student-problem',
+      name: '真实学习问题',
+      icon: 'start',
+      bgColor: 'var(--text-muted)',
+      isTrigger: true,
+      rows: [
+        { title: '主题', value: '函数与导数复习' },
+        { title: '期限', value: '下周单元测验' },
+      ],
+      x: 155,
+      y: 34,
+    },
+    {
+      id: 'loop-diagnose',
+      name: '定位与学情诊断',
+      icon: 'brain',
+      bgColor: 'var(--text-secondary)',
+      rows: [
+        { title: '输入', value: '练习与测试记录' },
+        { title: '输出', value: '薄弱点与先修关系' },
+      ],
+      x: 155,
+      y: 208,
+    },
+    {
+      id: 'loop-teach',
+      name: '讲解与自适应练习',
+      icon: 'agent',
+      bgColor: 'var(--text-primary)',
+      rows: [
+        { title: '动作', value: '按掌握状态选择' },
+        { title: '反馈', value: '每次作答即时更新' },
+      ],
+      x: 155,
+      y: 382,
+    },
+    {
+      id: 'loop-verify',
+      name: '掌握验证与再评估',
+      icon: 'chart',
+      bgColor: 'var(--text-primary)',
+      isTerminal: true,
+      rows: [
+        { title: '形式', value: '同类题 + 迁移题' },
+        { title: '结果', value: '通过后进入下一阶段' },
+      ],
+      x: 155,
+      y: 556,
+    },
+  ],
+  edges: [
+    ['student-problem', 'loop-diagnose'],
+    ['loop-diagnose', 'loop-teach'],
+    ['loop-teach', 'loop-verify'],
+  ],
+  canvas: { width: 560, height: 720 },
+}
+
 /** A three-node resume flow for a working learner returning to a prior topic. */
 export const COMPANION_HERO_WORKFLOW: HeroWorkflowDefinition = {
   blocks: [

@@ -78,6 +78,8 @@ export function FeatureCard({
       </ChipTag>
       <div
         aria-hidden='true'
+        data-export-widget='true'
+        data-export-title={eyebrow}
         className={cn(
           'relative aspect-[3/2] overflow-hidden rounded-[4px] max-lg:order-1 max-lg:aspect-[4/3]',
           !backdropSrc && 'bg-[var(--surface-3)]',
