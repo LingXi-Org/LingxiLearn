@@ -172,9 +172,15 @@ def create_app() -> FastAPI:
             status_code=upstream_response.status_code,
             media_type=upstream_response.headers.get("content-type"),
         )
-        for header in ("location", "cache-control"):
+        # Preserve redirect and cache semantics from the BFF. In particular,
+        # the callback's Location must remain a browser navigation and must not
+        # be replaced by a JSON response from this proxy.
+        for header in ("location", "cache-control", "vary", "www-authenticate"):
             if value := upstream_response.headers.get(header):
                 response.headers[header] = value
+        # Starlette combines duplicate headers in some response paths; append
+        # each Set-Cookie value separately so state/session cookies retain their
+        # attributes and are not collapsed into one invalid cookie string.
         for cookie in upstream_response.headers.get_list("set-cookie"):
             response.headers.append("set-cookie", cookie)
         return response

@@ -5,7 +5,7 @@ import { Chip, cn } from '@sim/emcn'
 import { createLogger } from '@sim/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { GithubIcon, GoogleIcon, MicrosoftIcon } from '@/components/icons'
-import { client } from '@/lib/auth/auth-client'
+import { startSocialLogin } from '@/lib/auth/auth-client'
 import { AUTH_BUTTON_CLASS } from '@/app/(auth)/components/constants'
 
 const logger = createLogger('SocialLoginButtons')
@@ -36,7 +36,7 @@ export function SocialLoginButtons({
 
     setIsGithubLoading(true)
     try {
-      await client.signIn.social({ provider: 'github', callbackURL })
+      await startSocialLogin({ provider: 'github', callbackURL })
     } catch (err) {
       logger.error('GitHub 登录失败', { error: getErrorMessage(err) })
     } finally {
@@ -49,7 +49,7 @@ export function SocialLoginButtons({
 
     setIsGoogleLoading(true)
     try {
-      await client.signIn.social({ provider: 'google', callbackURL })
+      await startSocialLogin({ provider: 'google', callbackURL })
     } catch (err) {
       logger.error('Google 登录失败', { error: getErrorMessage(err) })
     } finally {
@@ -62,7 +62,7 @@ export function SocialLoginButtons({
 
     setIsMicrosoftLoading(true)
     try {
-      await client.signIn.social({ provider: 'microsoft', callbackURL })
+      await startSocialLogin({ provider: 'microsoft', callbackURL })
     } catch (err) {
       logger.error('Microsoft 登录失败', { error: getErrorMessage(err) })
     } finally {

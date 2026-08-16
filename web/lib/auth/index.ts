@@ -1,4 +1,14 @@
-export { client, signOut, useActiveOrganization, useSession, useSubscription } from './auth-client'
+export {
+  client,
+  signOut,
+  startLogin,
+  startRegistration,
+  startSocialLogin,
+  useActiveOrganization,
+  useSession,
+  useSubscription,
+} from './auth-client'
+export type { AuthRedirectOptions, AuthRedirectResult, SocialAuthOptions } from './auth-client'
 export type {
   IdentityMe,
   IdentityPrincipal,
