@@ -767,11 +767,6 @@ class TrajectoryProjector:
         event_identity: Mapping[str, set[str] | str],
         span_identity: Mapping[str, set[str] | str],
     ) -> int | None:
-        event_spans = event_identity.get("span_ids") or set()
-        span_spans = span_identity.get("span_ids") or set()
-        if event_spans and span_spans and set(event_spans) & set(span_spans):
-            return 0
-
         event_agents = event_identity.get("agents") or set()
         span_agents = span_identity.get("agents") or set()
         if event_agents and span_agents and set(event_agents) & set(span_agents):
@@ -782,9 +777,17 @@ class TrajectoryProjector:
             # Work-item identity is more specific than a shared provider node
             # when several calls from the same agent run concurrently.
             if event_work and span_work and set(event_work) & set(span_work):
-                return 1
+                return 0
             if event_nodes and span_nodes and set(event_nodes) & set(span_nodes):
-                return 2
+                return 1
+
+        # A graph runtime span can cover a whole dispatch fan-out.  Only use
+        # it after the work/node identity above, and let the caller reject an
+        # ambiguous shared-span match rather than choosing an arbitrary model.
+        event_spans = event_identity.get("span_ids") or set()
+        span_spans = span_identity.get("span_ids") or set()
+        if event_spans and span_spans and set(event_spans) & set(span_spans):
+            return 2
 
         event_streams = event_identity.get("stream_ids") or set()
         span_streams = span_identity.get("stream_ids") or set()

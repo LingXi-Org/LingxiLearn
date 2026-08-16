@@ -504,15 +504,6 @@ class SimTraceProjector:
         """Keep concurrent same-model calls in separate active buckets."""
 
         runtime = runtime or {}
-        span_id = str(
-            payload.get("span_id")
-            or payload.get("spanId")
-            or runtime.get("span_id")
-            or runtime.get("spanId")
-            or ""
-        )
-        if span_id:
-            return f"{agent}:span:{span_id}"
         node_id = str(
             payload.get("node_id")
             or payload.get("nodeId")
@@ -534,6 +525,18 @@ class SimTraceProjector:
         )
         if node_id or work_item:
             return f"{agent}:node:{node_id}:work:{work_item}"
+        # A graph runtime span can surround an entire dispatch fan-out, so it
+        # is not a work identity when the event already carries node/work
+        # metadata.  Use it only as the last stable fallback.
+        span_id = str(
+            payload.get("span_id")
+            or payload.get("spanId")
+            or runtime.get("span_id")
+            or runtime.get("spanId")
+            or ""
+        )
+        if span_id:
+            return f"{agent}:span:{span_id}"
         return agent
 
     # -- native graph events --------------------------------------------
