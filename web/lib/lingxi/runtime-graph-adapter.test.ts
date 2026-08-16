@@ -182,4 +182,17 @@ describe('Runtime Graph Sim projection', () => {
       true
     )
   })
+
+  test('uses metadata terminal as fallback for running state', () => {
+    expect(projectRuntimeGraph({ blocks: {}, metadata: { terminal: true } }).running).toBe(false)
+  })
+
+  test('uses Sim dimensions for runtime card heights', () => {
+    const projection = projectRuntimeGraph({
+      blocks: {
+        tutor: { name: 'Tutor', type: 'agent', data: { capability: 'answer_user' } },
+      },
+    })
+    expect(projection.blocks.tutor.height).toBe(104)
+  })
 })

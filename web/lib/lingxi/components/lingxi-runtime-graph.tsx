@@ -1,6 +1,6 @@
 'use client'
 
-import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   type EdgeProps,
   type Node,
@@ -135,11 +135,21 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
     () => projectRuntimeGraph(workflowState, events),
     [events, workflowState]
   )
-  const topologySignature = useMemo(
+  const layoutSignature = useMemo(
     () =>
       [
-        ...Object.keys(projection.blocks).sort(),
-        ...projection.edges.map((edge) => `${edge.id}:${edge.source}->${edge.target}`).sort(),
+        ...Object.values(projection.blocks)
+          .map(
+            (block) =>
+              `${block.id}:${block.type}:${block.height ?? ''}:${block.data.parentId ?? ''}`
+          )
+          .sort(),
+        ...projection.edges
+          .map(
+            (edge) =>
+              `${edge.id}:${edge.source}:${edge.sourceHandle ?? ''}->${edge.target}:${edge.targetHandle ?? ''}`
+          )
+          .sort(),
       ].join('|'),
     [projection.blocks, projection.edges]
   )
@@ -147,7 +157,7 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
     () => applyAutoLayout(projection.blocks, projection.edges),
     // Execution status changes must not recalculate or write positions.  The
     // native layout is recomputed only when the projected topology changes.
-    [topologySignature]
+    [layoutSignature]
   )
   const laidOutBlocks = useMemo(() => {
     const positioned = (layout.success ? layout.blocks : projection.blocks) as Record<
@@ -199,13 +209,16 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
     [laidOutBlocks, projection.edges, projection.running]
   )
 
+  const hasFittedView = useRef(false)
   useEffect(() => {
     if (!flowInstance || nodes.length === 0) return
+    if (hasFittedView.current) return
+    hasFittedView.current = true
     const frame = requestAnimationFrame(() => {
       void flowInstance.fitView({ padding: 0.15, minZoom: 0.1, maxZoom: 0.85, duration: 180 })
     })
     return () => cancelAnimationFrame(frame)
-  }, [flowInstance, nodes.length, topologySignature])
+  }, [flowInstance, nodes.length])
 
   if (!taskId) return <div className='p-6 text-sm text-[var(--text-muted)]'>暂无运行任务。</div>
   if (nodes.length === 0) {

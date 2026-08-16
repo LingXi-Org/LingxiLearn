@@ -1,3 +1,4 @@
+import { BLOCK_DIMENSIONS } from '@sim/workflow-renderer/dimensions'
 import type { BlockData, BlockState } from '@sim/workflow-types/workflow'
 import type { Edge } from 'reactflow'
 import type { AgentTaskEvent } from './types'
@@ -392,8 +393,14 @@ function blockStatus(block: RuntimeBlockState): RuntimeExecutionState {
 
 function blockHeight(rows: RuntimeRow[], source: RawRuntimeBlock): number {
   const stored = Number(source.height)
-  if (Number.isFinite(stored) && stored > 0) return stored
-  return Math.max(64, 64 + rows.length * 20)
+  const computed =
+    rows.length === 0
+      ? BLOCK_DIMENSIONS.MIN_PAINTED_HEIGHT
+      : BLOCK_DIMENSIONS.HEADER_HEIGHT +
+        BLOCK_DIMENSIONS.WORKFLOW_CONTENT_PADDING +
+        rows.length * BLOCK_DIMENSIONS.WORKFLOW_ROW_HEIGHT +
+        Math.max(0, rows.length - 1) * BLOCK_DIMENSIONS.WORKFLOW_CONTENT_GAP
+  return Number.isFinite(stored) && stored > 0 ? Math.max(stored, computed) : computed
 }
 
 function makeBlock(
@@ -725,7 +732,7 @@ export function projectRuntimeGraph(
   const explicitEdges = parsed.edges
   const runtimeEdges = buildControlAndDependencyEdges(blocks, explicitEdges)
   const metadata = asRecord(graph.metadata)
-  const running = !graph.terminal ?? metadata.terminal
+  const running = !(graph.terminal ?? metadata.terminal)
 
   return {
     blocks,
