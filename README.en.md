@@ -1,217 +1,281 @@
 <div align="center">
   <h1>LingxiLearn</h1>
   <p><strong>An AI learning workspace for individual learning tasks</strong></p>
-  <p>A continuous system for connecting course content, real tools, agent orchestration, and traceable learning evidence.</p>
+  <p><strong>Everything is a Skill. State decides next.</strong></p>
+  <p>Goals, learner state, specialist agents, visual artifacts, and verifiable evidence are coordinated in one continuous learning system.</p>
   <p>
     <a href="README.md">中文</a>
     ·
-    <a href="ARCHITECTURE.md">Architecture</a>
-    ·
     <a href="DATA_SOURCES.md">Data sources</a>
     ·
-    <a href="LICENSE">MIT License</a>
+    <a href="web/SIM_UPSTREAM.md">Frontend upstream</a>
+    ·
+    <a href="LICENSE">License</a>
   </p>
 </div>
 
 <table>
   <tr>
-    <td><strong>Product form</strong><br />Continuous task-based learning workspace</td>
-    <td><strong>Core runtime</strong><br /><code>LingxiGraph 2.2.0</code></td>
-    <td><strong>Identity boundary</strong><br /><code>LingxiIdentity</code> BFF</td>
-    <td><strong>Deployment</strong><br />Docker Compose</td>
+    <td><strong>Version</strong><br /><code>2.0.0</code></td>
+    <td><strong>Runtime</strong><br /><code>LingxiGraph 2.2.0</code></td>
+    <td><strong>Backend</strong><br />FastAPI · Python 3.13</td>
+    <td><strong>Frontend</strong><br />Next.js 16 · React 19</td>
   </tr>
 </table>
 
-## Positioning
+## What LingxiLearn is
 
-LingxiLearn is the application layer in the LingXi technology series. It turns learning tasks into executable, verifiable, and traceable workflows. The product boundary is not an open-ended chat surface; it is a complete task loop that receives learning intent, diagnoses the current state, invokes course knowledge and deterministic tools, guides the learner in stages, evaluates mastery, and produces durable evidence and reusable artifacts.
+LingxiLearn is not an LLM wrapped in a chat box. It turns a learner request into a **plannable, executable, observable, recoverable, and verifiable** learning task.
 
-Within the LingXi series, LingxiLearn is the orchestration layer between learning scenarios and shared technical capabilities:
+A learner states what they want to learn, ask, review, or practice. The system interprets that message as a testable goal, generates eligible capabilities from the current learner state, selects Skills and Providers, executes them, observes the outcome, updates state, and then decides again from the new state.
 
-<table>
-  <thead>
-    <tr>
-      <th>Component</th>
-      <th>Layer</th>
-      <th>Responsibility</th>
-      <th>How LingxiLearn uses it</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>LingxiIdentity</strong></td>
-      <td>Identity infrastructure</td>
-      <td>Authentication, sessions, and subject identity</td>
-      <td>Validates identity through the BFF and maintains a same-origin HttpOnly session</td>
-    </tr>
-    <tr>
-      <td><strong>LingxiGraph</strong></td>
-      <td>Agent runtime</td>
-      <td>State graphs, task orchestration, checkpoints, and runtime extensions</td>
-      <td>Hosts the domain-independent learning state machine and Agent Tasks</td>
-    </tr>
-    <tr>
-      <td><strong>LingxiSkills</strong></td>
-      <td>Capability catalogue</td>
-      <td>Discoverable task capabilities, course tools, and artifact types</td>
-      <td>Provides declarative entry points for imports, handouts, checks, and visual explanations</td>
-    </tr>
-    <tr>
-      <td><strong>LingxiLearn</strong></td>
-      <td>Scenario application layer</td>
-      <td>Learning domain models, course packs, evidence, and the workspace UI</td>
-      <td>Composes the shared capabilities into a runnable learning product</td>
-    </tr>
-  </tbody>
-</table>
-
-## Core loop
+There is no fixed intent-to-workflow routing table in the core runtime:
 
 ```text
-intake → diagnose → plan → investigate → coach → await_learner
-       → judge → advance → verify → report
+START → interpret_goal → orchestrate → dispatch → observe
+      → update_state → evaluate_goal
+
+evaluate_goal → orchestrate | await_user | END
+await_user    → orchestrate
 ```
 
-Every node may produce structured state, tool calls, evidence references, or artifact updates. A learner answer is not merely text waiting for a model score: it enters business logic for grading, misconception detection, mastery updates, and evidence accounting. Models primarily provide natural expression and prompt selection; course packs, domain tools, and server-side logic constrain the important decisions.
+**Skills define what the system can do. State decides what should happen now.**
 
-The first course pack focuses on computer networking, while the teaching kernel remains independent of DNS, TCP, and any single discipline. Adding a course primarily means adding a course pack, knowledge slices, misconception classes, and registered tools—not rewriting the state graph.
+## Product experience
 
-## Technical architecture
+| Direction | Implementation |
+| --- | --- |
+| **Visualization** | Turns abstract knowledge into lesson intros, decks, diagrams, interactive visuals, exercises, and other learner-facing artifacts. |
+| **Understanding** | Maintains goals, knowledge-point state, mastery, misconceptions, questions, and evidence as durable learning context rather than relying only on chat history. |
+| **Collaboration** | The orchestrator plans Capabilities; the runtime resolves them through the Skill Registry to concrete Skills and Providers. Independent tasks can share an execution tier when declared parallel-safe. |
+| **Growth** | Structured evidence is written back after execution and the next round is planned from the updated profile, closing the learn → feedback → update → re-plan loop. |
 
-<table>
-  <thead>
-    <tr>
-      <th>Area</th>
-      <th>Implementation</th>
-      <th>Boundary</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Web workspace</td>
-      <td>Next.js 16, React 19, TypeScript, Tailwind CSS</td>
-      <td>Same-origin pages, task conversation, event replay, and artifact rendering</td>
-    </tr>
-    <tr>
-      <td>Application API</td>
-      <td>FastAPI, Pydantic, Uvicorn</td>
-      <td>Identity-protected Agent Tasks, REST, fetch-SSE, and resource APIs</td>
-    </tr>
-    <tr>
-      <td>Learning data</td>
-      <td>SQLAlchemy Async, Alembic, PostgreSQL</td>
-      <td>Learner context, mastery, misconceptions, evidence, events, and reports</td>
-    </tr>
-    <tr>
-      <td>Agent runtime</td>
-      <td>LingxiGraph StateGraph, checkpoints, and Runtime</td>
-      <td>Task state, idempotent progression, resumable execution, and event projection</td>
-    </tr>
-    <tr>
-      <td>Content and tools</td>
-      <td>Declarative Course Packs, Tool Registry, and LingxiSkills</td>
-      <td>Knowledge sources, deterministic computation, course tasks, and generated artifacts</td>
-    </tr>
-  </tbody>
-</table>
+## LingxiHarness: the state-driven orchestration kernel
+
+The LingxiLearn control plane can be summarized as **LingxiHarness**. Agent names are not embedded in the topology. Execution is driven by a closed Capability vocabulary, Skill manifests, machine-checkable completion conditions, and learner state.
+
+```text
+Learner utterance
+      │
+      ▼
+Goal Interpreter
+  “What does the learner want?”
+      │
+      ▼
+World State / Candidate Generation
+  profile · evidence · goal · artifacts · cost
+      │
+      ▼
+Orchestrator
+  “What is most useful this round?”
+      │
+      ▼
+PlannedTask(capability, done_when, depends_on)
+      │
+      ▼
+Dispatcher
+  capability → skill → provider
+      │
+      ├── Agent Provider
+      ├── Deterministic Provider
+      └── Tool / Artifact Provider
+      │
+      ▼
+Observe → State Updater → Completion Evaluator
+      │
+      └──────────────► re-plan / await learner / finish
+```
+
+### Goal interpretation is not routing
+
+The Goal Interpreter only answers what the learner wants. It does not emit a route, agent, workflow, or next node. The Orchestrator recomputes the next action every round from the latest state.
+
+### Capabilities are a closed vocabulary
+
+The runtime can only plan registered capability tags such as:
+
+- `model.reflect`, `graph.build`, `graph.prerequisite`, `review.schedule`
+- `content.lesson_intro`, `content.deck`, `content.visual`
+- `teach.strategy`, `teach.explain`
+- `dialog.answer`, `dialog.converse`, `dialog.interview`, `dialog.probe`
+- `assess.generate`, `assess.grade`, `assess.interpret`
+- `tool.investigate`, `meta.report`, `meta.evaluate`, `meta.author_skill`
+
+Unknown tags are rejected rather than becoming implicit routes.
+
+### Everything is a Skill
+
+`skills/*/SKILL.md` files are the declarative source for the runtime Skill Registry. A manifest may define its capabilities, I/O contracts, preconditions, Provider, cost/latency class, parallel-safety, critical-path status, version, and checksum.
+
+The Orchestrator plans Capabilities instead of binding directly to an Agent. The Dispatcher resolves the concrete Skill and Provider from the registry, so adding a subject, skill, or provider does not require changing the main graph.
+
+### Completion is not “the agent returned”
+
+Every planned task carries a machine-checkable `done_when`. Supported conditions include `artifact_exists`, `artifact_valid`, `evidence_observed`, `profile_reaches`, `user_replied`, `quiz_graded`, `all_of`, and `any_of`.
+
+This prevents a provider from declaring success without producing the intended state change or artifact.
+
+### Shared state is the coordination protocol
+
+Agents coordinate through structured state rather than passing long prose messages between each other:
+
+| State | Purpose |
+| --- | --- |
+| `learning_profile` | durable learner × knowledge-point state |
+| `learning_evidence` | structured observations and learning evidence |
+| `session_state` | goal stack, runtime phase, budgets, waiting state |
+| `skill_registry` | skills, capabilities, providers, contracts, costs, preconditions |
+| `decision_trace` | candidate set, decision, outcome, and state changes per round |
+
+## System architecture
 
 ```text
 Browser
-  │ REST + fetch-SSE
-  ▼
-Next.js workspace ── LingxiIdentity BFF
   │
   ▼
-FastAPI Agent Task API ── LearnerService / SQLAlchemy ── PostgreSQL
+Next.js 16 / React 19 workspace
+  │ same-origin REST + replayable SSE
+  ▼
+FastAPI Agent Task API
+  ├── LingxiIdentity session validation
+  ├── Workspace / Files / Knowledge / Skills APIs
+  ├── Learner profile / Evidence / Artifact APIs
+  └── Runtime trace / execution graph projection
   │
   ▼
-LingxiGraph StateGraph
-  ├── Course Pack
-  ├── Tool Registry
-  └── safe event / artifact projection
+LingxiHarness V2
+  ├── Goal Interpreter
+  ├── Candidate Generator
+  ├── Orchestrator
+  ├── Guardrails
+  ├── Dispatcher
+  ├── Completion Evaluator
+  └── State Updater
+  │
+  ▼
+LingxiGraph 2.2.0
+  │
+  ├── Skills / Providers / Tools
+  ├── Course Packs
+  └── PostgreSQL + Artifact Store
 ```
 
-The browser reaches the learning API only through the adapter layer under `web/lib/lingxi/`. It receives stage summaries, tool metadata, events, and artifact references—not raw private reasoning or service credentials. In production, the static Next.js output and FastAPI API run in one lightweight application container while PostgreSQL remains a separate service.
+The browser receives learner-safe stages, status, tool metadata, artifact references, and a projected execution graph. Server credentials and private reasoning are not part of the frontend protocol.
 
-## Capability boundaries
+## Frontend workspace and Sim upstream
 
-- **Course-pack driven**: course content, knowledge slices, prompt ladders, misconception classes, and answer markers are declared in versioned course packs.
-- **Real artifact processing**: deterministic tools process pcaps, tables, knowledge bases, and course attachments into verifiable results rather than a single explanatory paragraph.
-- **Controlled model adapters**: `scripted`, OpenAI-compatible endpoints, and Coze are supported. `scripted` requires no model key and is suitable for local verification and reproducible evaluation.
-- **Traceable results**: task state, tool calls, evidence references, reports, and generated artifacts are linked through REST/SSE and persisted records.
-- **Recoverable failure**: task events can be replayed; when an external model is unavailable, the system can fall back to a deterministic path and expose that state explicitly.
+`web/` is the LingxiLearn product workspace. It retains the non-workflow source closure imported from **Sim v0.8.0 / commit `48c59c8a`**, including workspace chrome, task history, files, tables, knowledge bases, logs, Skills, account pages, and settings. LingxiLearn then connects those surfaces to its FastAPI service and LingxiGraph Agent Task transport.
 
-The model is not the sole authority for learning outcomes. Grading, misconception detection, mastery, evidence references, and anti-spoiler constraints are owned jointly by the course pack and server-side logic.
+LingxiLearn **does not run a Sim backend**. Native Workflow Editor/CRUD, deployment, connector management, and realtime collaboration are deliberately removed or disabled. The public `lingxi` workspace slug resolves to the authenticated learner's private workspace.
 
-## Data and trust boundaries
+See [`web/SIM_UPSTREAM.md`](web/SIM_UPSTREAM.md), [`web/LICENSE`](web/LICENSE), and [`web/NOTICE`](web/NOTICE) for the upstream boundary and license notices.
 
-- Login, registration, and sessions are handled by the `LingxiIdentity` BFF. The browser holds only the HttpOnly `lingxi_session` Cookie and does not persist OIDC/Bearer Tokens locally.
-- The server resolves an internal learner mapping from the identity subject returned by the identity service; clients cannot submit an asserted `learner_id`.
-- Raw packet bytes, complete tool output, raw database records, and identity information are not sent directly as default teaching context to a model.
-- Course materials declare their sources; learning records come from activity, answers, and task interactions in the service. See [DATA_SOURCES.md](DATA_SOURCES.md) for source details.
-- LingxiLearn provides learning support and formative feedback. It does not replace a teacher, school, examination, or other professional educational judgment.
+## Identity and data boundary
 
-## Running locally
+- Production validates the HttpOnly `lingxi_session` through the LingxiIdentity BFF; the browser does not need to persist a bearer token.
+- The server maps the authenticated subject to an internal learner instead of trusting a client-supplied `learner_id`.
+- Local development may explicitly enable `LINGXILEARN_INSECURE_DEV_AUTH=true`; production Compose forces the bypass off.
+- PostgreSQL is the persistent database in Compose deployments, and Alembic migrations complete before the API starts.
+- Private learner data, identity credentials, and server secrets are not exposed as default frontend or model context.
 
-### Development
+## Models and providers
+
+The repository currently exposes two configurable model layers:
+
+- Tutor Brain: `scripted | openai | coze`. `scripted` supports deterministic local/reproducible verification, `openai` uses an OpenAI-compatible endpoint, and `coze` uses a Coze Bot.
+- Agent Task Runtime: `LINGXILEARN_AGENT_MODEL`, `LINGXILEARN_AGENT_BASE_URL`, and `DS_API_KEY` configure the DeepSeek-compatible agent model.
+
+Models can participate in interpretation, planning, generation, and dialogue, while capability allow-lists, state writes, completion predicates, budgets, and critical guardrails remain host-code constraints.
+
+## Quick start
+
+### Requirements
+
+- Docker + Docker Compose
+- For host-side development: Python 3.13, `uv`, Bun 1.3.14+, Node.js 22.19+
+
+### Local Compose development
 
 ```bash
 cp .env.example .env
-# Set the database password and identity service configuration.
-docker compose -f docker-compose.dev.yml up --build
+# At minimum, change POSTGRES_PASSWORD
+
+make dev
+# or: docker compose -f docker-compose.dev.yml up --build
 ```
 
-The development frontend is available at `http://localhost:3000`; the API runs at `:8080` inside the Compose network.
+Default endpoints:
+
+- Web: `http://localhost:3000`
+- API: `http://localhost:8080`
+
+The development stack uses source bind mounts, Next dev server, Uvicorn reload, the explicit local auth bypass, and PostgreSQL.
 
 ### Production
 
 ```bash
 cp .env.example .env
-# Set database, identity BFF, and port configuration.
-# The production Compose file always pulls the latest main build.
-docker pull accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-api:latest
-docker pull accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-web:latest
-docker compose pull
-docker compose up -d
+# Configure POSTGRES_PASSWORD, LINGXILEARN_IDENTITY_BFF_URL, and model credentials
+
+make prod
 ```
 
-The default production entry point is `http://localhost:8080`. Production Compose directly uses `accel.way2api.fun/ghcr.io/lingxi-org/*:latest`, so `.env` version overrides cannot select an older image. Every push to `main` publishes a commit-versioned API/Web image and refreshes `latest`.
+The default production entrypoint is `http://localhost:8080`.
 
-<details>
-  <summary>Runtime modes</summary>
-
-| `LINGXILEARN_BRAIN` | Description |
-| --- | --- |
-| `scripted` | Deterministic engine; no model key required; reproducible results |
-| `openai` | OpenAI-compatible endpoint, including OpenAI, DeepSeek, Qwen, Moonshot, vLLM, or Ollama |
-| `coze` | Coze Bot integration |
-
-External models participate only in controlled expression and prompt selection. Core learning decisions remain in course logic and the learning data layer.
-</details>
-
-## Repository map
+Current production Compose topology:
 
 ```text
-packs/<course-pack>/       Course packs, knowledge slices, and misconceptions
-server/lingxilearn/        FastAPI, learning services, Agent Tasks, and data layer
-skills/                    LingxiSkills capability catalogue
-web/                       Next.js workspace and Lingxi API adapter layer
-ARCHITECTURE.md            Runtime topology and frontend/backend boundaries
-DATA_SOURCES.md            Course data and citation sources
+postgres
+api-var-init → migrate → api
+                     └→ scheduler
+web → api
 ```
 
-## Verification
+API and Web images are pulled from the configured accelerated GHCR path using `latest`; the production auth bypass is forced off.
+
+## Development and verification
 
 ```bash
-make test
-cd web
-bun run type-check
-bun run lint:check
-bun run build
+make setup   # install backend + frontend dependencies
+make test    # backend pytest suite
+make check   # frontend TypeScript + Biome checks
+
+cd web && bun run build
 ```
 
-Deployment details, environment variables, and boundary constraints are defined by the Compose files and the repository documentation: [ARCHITECTURE.md](ARCHITECTURE.md), [Terms of Service](<web/app/(landing)/terms/terms-content.tsx>), and [Privacy Policy](<web/app/(landing)/privacy/privacy-content.tsx>).
+## Repository layout
+
+```text
+LingxiLearn/
+├── server/
+│   └── lingxilearn/
+│       ├── runtime/        # V2 loop / orchestrator / dispatch / guardrails
+│       ├── state/          # capabilities / profile / evidence / skill registry
+│       ├── agents/         # providers / model runtime / artifact & skill runtime
+│       ├── api/            # FastAPI resource and Agent Task APIs
+│       └── store/          # persistence repositories
+├── skills/                 # SKILL.md capability catalogue
+├── packs/                  # declarative course packs and knowledge content
+├── web/                    # Next.js learning workspace
+├── docker-compose.dev.yml  # bind-mounted local development stack
+├── docker-compose.yml      # production web/api/scheduler/postgres stack
+├── DATA_SOURCES.md         # content and data provenance
+└── VERSION                 # project version
+```
+
+## Design principles
+
+> **Everything is a Skill. State decides next.**
+
+1. Keep the runtime graph stable; extend capabilities through data.
+2. Plan Capabilities instead of hard-coding Agents into the control graph.
+3. Prefer learner state and evidence over raw conversation history.
+4. Require verifiable completion predicates instead of model-declared success.
+5. Treat observability as part of the product: candidates, decisions, execution, and state changes should be traceable.
+6. Separate runtime mechanics from learner experience: surface capability execution without exposing internal control details.
 
 ## License
 
-This project is released under the [MIT License](LICENSE).
+Repository-root code is published under the MIT License in [`LICENSE`](LICENSE).
+
+`web/` also contains Sim-derived Apache-2.0 upstream code and retained notices. Those files remain subject to their original license and notice requirements; see [`web/LICENSE`](web/LICENSE), [`web/NOTICE`](web/NOTICE), and [`web/SIM_UPSTREAM.md`](web/SIM_UPSTREAM.md).
