@@ -5,9 +5,13 @@
 
 export const ToolCallStatus = {
   executing: 'executing',
+  awaiting_approval: 'awaiting_approval',
   success: 'success',
   error: 'error',
   cancelled: 'cancelled',
+  skipped: 'skipped',
+  rejected: 'rejected',
+  interrupted: 'interrupted',
 } as const
 
 export type ToolCallStatus = (typeof ToolCallStatus)[keyof typeof ToolCallStatus]
@@ -26,6 +30,10 @@ export interface ToolCallInfo {
   params?: Record<string, unknown>
   calledBy?: string
   result?: ToolCallResult
+  /** Model-authored phrase for an integration/tool gateway call. */
+  integrationDescription?: string
+  /** JSON argument bytes received before the call is complete. */
+  streamingArgs?: string
   startedAtMs?: number
 }
 
@@ -47,6 +55,8 @@ export type ContentBlockType =
   | 'subagent'
   | 'subagent_end'
   | 'subagent_text'
+  | 'subagent_thinking'
+  | 'options'
   | 'stopped'
 
 export interface ContentBlock {
@@ -55,8 +65,10 @@ export interface ContentBlock {
   subagent?: string
   toolCall?: ToolCallInfo
   reasoningStep?: ReasoningStep
+  options?: Array<{ id: string; label: string }>
   timestamp?: number
   endedAt?: number
+  parentToolCallId?: string
   spanId?: string
   parentSpanId?: string
 }

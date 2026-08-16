@@ -18,6 +18,7 @@ import {
 } from '@sim/emcn'
 import { useParams, useRouter } from 'next/navigation'
 import { isLiveAssistantMessageId } from '@/lib/copilot/chat/effective-transcript'
+import { api } from '@/lib/lingxi/api'
 import { useChatSurface } from '@/app/workspace/[workspaceId]/home/components/chat-surface-context'
 import { useSubmitCopilotFeedback } from '@/hooks/queries/copilot-feedback'
 import { useForkMothershipChat } from '@/hooks/queries/mothership-chats'
@@ -73,6 +74,8 @@ export const MessageActions = memo(function MessageActions({
   const requestIdTimeoutRef = useRef<number | null>(null)
   const submitFeedback = useSubmitCopilotFeedback()
   const forkChat = useForkMothershipChat(params.workspaceId)
+  const [isLingxiForking, setIsLingxiForking] = useState(false)
+  const isLingxi = params.workspaceId === 'lingxi'
 
   useEffect(() => {
     return () => {
@@ -151,6 +154,21 @@ export const MessageActions = memo(function MessageActions({
   }
 
   const handleFork = async () => {
+    if (isLingxi) {
+      if (!requestId || isLingxiForking) return
+      setIsLingxiForking(true)
+      try {
+        const result = await api.forkAgentTask(requestId)
+        useFolderStore.getState().clearChatSelection()
+        router.push(`/workspace/${params.workspaceId}/chat/${result.id}`)
+      } catch {
+        toast.error('Failed to fork learning task')
+      } finally {
+        setIsLingxiForking(false)
+      }
+      return
+    }
+
     if (!chatId || !messageId || forkChat.isPending) return
     try {
       const result = await forkChat.mutateAsync({ chatId, upToMessageId: messageId })
@@ -167,11 +185,17 @@ export const MessageActions = memo(function MessageActions({
   }
 
   const hasContent = Boolean(content)
-  const canSubmitFeedback = Boolean(chatId && userQuery)
+  // The legacy feedback route requires a UUID-backed Mothership chat. Native
+  // Lingxi task ids intentionally skip it until a task-native feedback store
+  // exists, instead of surfacing a button that can only fail validation.
+  const canSubmitFeedback = !isLingxi && Boolean(chatId && userQuery)
   // A live (just-streamed) assistant message carries a synthetic id that the
   // persisted transcript doesn't know — forking it would 400. The button
   // appears once the transcript refetch swaps in the persisted message id.
-  const canFork = Boolean(chatId && messageId && !isLiveAssistantMessageId(messageId))
+  const canFork = isLingxi
+    ? Boolean(requestId)
+    : Boolean(chatId && messageId && !isLiveAssistantMessageId(messageId))
+  const isForking = isLingxi ? isLingxiForking : forkChat.isPending
   if (!hasContent && !canSubmitFeedback && !canFork) return null
 
   return (
@@ -231,8 +255,8 @@ export const MessageActions = memo(function MessageActions({
                 type='button'
                 aria-label='Fork in new chat'
                 onClick={handleFork}
-                disabled={forkChat.isPending}
-                className={cn(BUTTON_CLASS, forkChat.isPending && 'cursor-not-allowed opacity-50')}
+                disabled={isForking}
+                className={cn(BUTTON_CLASS, isForking && 'cursor-not-allowed opacity-50')}
               >
                 <Split className={cn(ICON_CLASS, 'rotate-90')} />
               </button>

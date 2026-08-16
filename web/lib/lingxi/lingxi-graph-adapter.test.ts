@@ -35,7 +35,7 @@ function event(
   return { sequence, kind, agent, payload, ts: null }
 }
 
-describe('LingxiGraph Sim adapter', () => {
+describe('LingxiGraph chat adapter', () => {
   it('projects skills and tools into safe Sim blocks without exposing reasoning deltas', () => {
     const projection = projectLingxiGraphEvents(task, [
       event(1, 'task.started', 'coordinator', {}),
@@ -83,5 +83,65 @@ describe('LingxiGraph Sim adapter', () => {
     expect(toolCall?.toolCall?.status).toBe('success')
     expect(toolCall?.toolCall?.params?.content).toMatch(/^\[redacted/)
     expect(projection.assistantText).toBe('The lesson intro is ready.')
+  })
+
+  it('keeps native approval and safe runtime narration visible', () => {
+    const projection = projectLingxiGraphEvents(task, [
+      {
+        ...event(1, 'agent.started', 'lesson_intro', { skill: 'lesson-intro' }),
+        span_id: 'lesson-span-1',
+      },
+      {
+        ...event(2, 'agent.status', 'lesson_intro', { text: '正在整理课程引入。' }),
+        span_id: 'lesson-span-1',
+      },
+      {
+        ...event(3, 'schedule.proposed', 'coordinator', {
+          proposalId: 'proposal-1',
+          toolCallId: 'proposal-1',
+          toolName: 'schedule.propose',
+          cron: '0 9 * * 1',
+          timezone: 'Asia/Shanghai',
+        }),
+      },
+      {
+        ...event(4, 'interrupt.raised', 'coordinator', {
+          id: 'interrupt-1',
+          toolName: 'await_user',
+          prompt: '请确认是否继续。',
+        }),
+      },
+    ])
+
+    const statusBlock = projection.blocks.find(
+      (block) => block.type === 'subagent_text' && block.content === '正在整理课程引入。'
+    )
+    const scheduleBlock = projection.blocks.find(
+      (block) => block.toolCall?.id === 'proposal-1'
+    )
+    const interruptBlock = projection.blocks.find(
+      (block) => block.toolCall?.id === 'interrupt-1'
+    )
+
+    expect(statusBlock?.spanId).toBe('lesson-span-1')
+    expect(scheduleBlock?.toolCall?.status).toBe('awaiting_approval')
+    expect(scheduleBlock?.toolCall?.params?.cron).toBe('0 9 * * 1')
+    expect(interruptBlock?.toolCall?.status).toBe('interrupted')
+  })
+
+  it('projects only explicit answer output into the learner transcript', () => {
+    const projection = projectLingxiGraphEvents(task, [
+      event(1, 'agent.output', 'answer_user', {
+        message: '这是面向学习者的答疑结果。',
+      }),
+      event(2, 'agent.output', 'prerequisite_analyzer', {
+        message: '内部依赖分析，不应显示。',
+      }),
+    ])
+
+    expect(projection.assistantText).toBe('这是面向学习者的答疑结果。')
+    expect(projection.blocks.some((block) => block.content?.includes('内部依赖分析'))).toBe(
+      false
+    )
   })
 })

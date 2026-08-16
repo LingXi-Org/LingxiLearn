@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
 import type { FilePreviewSession } from '@/lib/copilot/request/session/file-preview-session-contract'
 import type { MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
 import { api, type LingxiAttachmentRef } from '@/lib/lingxi/api'
@@ -12,33 +13,56 @@ import {
 import {
   type AgentTaskEvent,
   type AgentTaskSnapshot,
-  isAgentTaskTerminal,
+  isAgentTaskActive,
 } from '@/lib/lingxi/types'
 import type { ChatContext } from '@/stores/panel'
 import type {
   ChatMessage,
+  ChatMessageAttachment,
   FileAttachmentForApi,
   GenericResourceData,
   QueuedMessage,
 } from '../types'
 import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './use-chat'
 
-function taskIsTerminal(task: AgentTaskSnapshot | null): boolean {
-  return isAgentTaskTerminal(task)
-}
-
-function userMessage(id: string, content: string, contexts?: ChatContext[]): ChatMessage {
+function userMessage(
+  id: string,
+  content: string,
+  contexts?: ChatContext[],
+  fileAttachments?: FileAttachmentForApi[]
+): ChatMessage {
   return {
     id,
     role: 'user',
     content,
-    contexts: contexts?.map(({ kind, label }) => ({ kind, label })),
+    contexts: contexts?.map((context) => ({ ...context })),
+    attachments: fileAttachments?.map<ChatMessageAttachment>((attachment) => ({
+      id: attachment.id,
+      filename: attachment.filename,
+      media_type: attachment.media_type,
+      size: attachment.size,
+      previewUrl: getMothershipAttachmentPreviewUrl(attachment),
+    })),
   }
 }
 
 function contextSuffix(contexts?: ChatContext[]): string {
-  const labels = contexts?.map((context) => context.label.trim()).filter(Boolean) ?? []
-  return labels.length > 0 ? `\n\n[Context: ${labels.join(', ')}]` : ''
+  const entries = (contexts ?? [])
+    .map((context) => {
+      const label = context.label.trim()
+      const selectionText =
+        'text' in context && typeof context.text === 'string' ? context.text.trim() : ''
+      return selectionText ? `${label}:\n${selectionText}` : label
+    })
+    .filter(Boolean)
+  return entries.length > 0 ? `\n\n[Context]\n${entries.map((entry) => `- ${entry}`).join('\n')}` : ''
+}
+
+function requestMessage(content: string, contexts?: ChatContext[]): string {
+  const normalized = content.trim()
+  const maxLength = 4000
+  if (normalized.length >= maxLength) return normalized.slice(0, maxLength)
+  return `${normalized}${contextSuffix(contexts).slice(0, maxLength - normalized.length)}`
 }
 
 function attachmentRefs(attachments?: FileAttachmentForApi[]): LingxiAttachmentRef[] {
@@ -75,18 +99,43 @@ function contextOptions(contexts?: ChatContext[]) {
   for (const context of contexts ?? []) {
     switch (context.kind) {
       case 'file':
+        resourceRefs.push({ type: 'file', id: context.fileId, label: context.label })
+        break
       case 'file_selection':
-        resourceRefs.push({ type: 'file', id: context.fileId })
+        resourceRefs.push({
+          type: 'file',
+          id: context.fileId,
+          label: context.label,
+          selection: {
+            text: context.text,
+            fileName: context.fileName,
+            ...(context.startLine !== undefined ? { startLine: context.startLine } : {}),
+            ...(context.endLine !== undefined ? { endLine: context.endLine } : {}),
+          },
+        })
         break
       case 'table':
+        resourceRefs.push({ type: 'table', id: context.tableId, label: context.label })
+        break
       case 'table_selection':
-        resourceRefs.push({ type: 'table', id: context.tableId })
+        resourceRefs.push({
+          type: 'table',
+          id: context.tableId,
+          label: context.label,
+          selection: {
+            tableName: context.tableName,
+            rowIds: context.rowIds,
+            ...(context.columnIds ? { columnIds: context.columnIds } : {}),
+          },
+        })
         break
       case 'knowledge':
-        if (context.knowledgeId) resourceRefs.push({ type: 'knowledge', id: context.knowledgeId })
+        if (context.knowledgeId) {
+          resourceRefs.push({ type: 'knowledge', id: context.knowledgeId, label: context.label })
+        }
         break
       case 'past_chat':
-        resourceRefs.push({ type: 'task', id: context.chatId })
+        resourceRefs.push({ type: 'task', id: context.chatId, label: context.label })
         break
       case 'skill':
         skillIds.push(context.skillId)
@@ -183,6 +232,10 @@ export function useLingxiGraphChat(
   const [error, setError] = useState<string | null>(null)
   const [locallyStopped, setLocallyStopped] = useState(false)
   const [subscriptionEpoch, setSubscriptionEpoch] = useState(0)
+  /** LingxiGraph keeps one durable task but the composer may accept FIFO turns. */
+  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([])
+  const [editingQueuedId, setEditingQueuedId] = useState<string | null>(null)
+  const [dispatchingHeadId, setDispatchingHeadId] = useState<string | null>(null)
   const [activeResourceIdState, setActiveResourceIdState] = useState<string | null>(
     options?.initialActiveResourceId ?? null
   )
@@ -194,6 +247,18 @@ export function useLingxiGraphChat(
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const messagesRef = useRef<ChatMessage[]>([])
   const requestIdRef = useRef<string | undefined>(initialChatId)
+  const resolvedChatIdRef = useRef<string | undefined>(initialChatId)
+  const activeTurnRef = useRef(false)
+  const queueRef = useRef<QueuedMessage[]>([])
+  const drainQueueRef = useRef<() => Promise<void>>(async () => {})
+
+  useEffect(() => {
+    resolvedChatIdRef.current = resolvedChatId
+  }, [resolvedChatId])
+
+  useEffect(() => {
+    queueRef.current = messageQueue
+  }, [messageQueue])
 
   const effectiveActiveResourceId = options?.activeResourceState
     ? activeResourceId
@@ -214,11 +279,15 @@ export function useLingxiGraphChat(
     setLocalUsers([])
     setError(null)
     setLocallyStopped(false)
+    setMessageQueue([])
+    setEditingQueuedId(null)
+    setDispatchingHeadId(null)
+    activeTurnRef.current = false
   }, [initialChatId])
 
   useEffect(() => {
     const currentAdapter = adapterRef.current
-    const taskId = resolvedChatId
+    const taskId = resolvedChatIdRef.current
     if (!currentAdapter || currentAdapter.kind !== 'lingxigraph' || !taskId || locallyStopped) {
       unsubscribeRef.current?.()
       unsubscribeRef.current = null
@@ -266,6 +335,11 @@ export function useLingxiGraphChat(
         const loaded = await currentAdapter.loadTask(taskId)
         if (cancelled) return
         setTask(loaded)
+        // A send increments the subscription epoch before the worker has
+        // necessarily flipped the persisted task row from terminal/awaiting to
+        // running. Preserve that local in-flight turn until the SSE end hook
+        // observes the authoritative status.
+        activeTurnRef.current = activeTurnRef.current || isAgentTaskActive(loaded)
         // Hydrate the durable event log in one state update.  Replaying old
         // SSE frames one-by-one makes a historical chat look like it has just
         // started running again and retriggers graph animations.
@@ -298,11 +372,13 @@ export function useLingxiGraphChat(
               const refreshed = await currentAdapter.loadTask(taskId)
               if (!cancelled) {
                 setTask(refreshed)
+                activeTurnRef.current = isAgentTaskActive(refreshed)
                 void api
                   .runtimeGraph(taskId)
                   .then((graph) => setWorkflowState(graph.workflowState))
                   .catch(() => {})
                 onStreamEndRef.current?.(taskId, messagesRef.current)
+                if (!isAgentTaskActive(refreshed)) void drainQueueRef.current()
               }
             } finally {
               if (!cancelled) setIsReconnecting(false)
@@ -331,7 +407,7 @@ export function useLingxiGraphChat(
     [events, task]
   )
   const resources = useMemo(() => artifactResources(task), [task])
-  const assistantStreaming = Boolean(task && !taskIsTerminal(task) && !locallyStopped)
+  const assistantStreaming = Boolean(task && isAgentTaskActive(task) && !locallyStopped)
   const messages = useMemo(() => {
     if (!task) return localUsers.length > 0 ? localUsers : []
     const currentProjection = projection ?? projectLingxiGraphEvents(task, events)
@@ -354,6 +430,84 @@ export function useLingxiGraphChat(
   }, [events, localUsers, locallyStopped, projection, task])
   messagesRef.current = messages
 
+  const sendDirect = useCallback(
+    async (
+      message: string,
+      fileAttachments?: FileAttachmentForApi[],
+      contexts?: ChatContext[],
+      userMessageId = `lingxi-user:${Date.now()}`
+    ): Promise<boolean> => {
+      const currentAdapter = adapterRef.current
+      const content = message.trim()
+      if (!currentAdapter || currentAdapter.kind !== 'lingxigraph' || !content) return false
+
+      const prompt = requestMessage(content, contexts)
+      const attachments = attachmentRefs(fileAttachments)
+      const context = contextOptions(contexts)
+      activeTurnRef.current = true
+      setIsSending(true)
+      setError(null)
+      setLocallyStopped(false)
+      setSubscriptionEpoch((current) => current + 1)
+      setLocalUsers((current) => [
+        ...current,
+        userMessage(userMessageId, content, contexts, fileAttachments),
+      ])
+
+      try {
+        let taskId = resolvedChatIdRef.current
+        if (!taskId) {
+          const created = await currentAdapter.createTask(prompt, attachments, context)
+          taskId = created.id
+          resolvedChatIdRef.current = taskId
+          requestIdRef.current = taskId
+          setResolvedChatId(taskId)
+          router.replace(`/workspace/${workspaceId}/chat/${taskId}`)
+          onRequestStartedRef.current?.({ requestId: taskId, userMessageId })
+          onResourceEventRef.current?.(`runtime-graph:${taskId}`)
+        } else {
+          requestIdRef.current = taskId
+          await currentAdapter.sendMessage(taskId, prompt, attachments, context)
+          onRequestStartedRef.current?.({ requestId: taskId, userMessageId })
+        }
+        return true
+      } catch (cause) {
+        activeTurnRef.current = false
+        setError(cause instanceof Error ? cause.message : String(cause))
+        return false
+      } finally {
+        setIsSending(false)
+      }
+    },
+    [router, workspaceId]
+  )
+
+  const dispatchQueuedMessage = useCallback(
+    async (message: QueuedMessage): Promise<boolean> => {
+      setDispatchingHeadId(message.id)
+      setMessageQueue((current) => current.filter((candidate) => candidate.id !== message.id))
+      const sent = await sendDirect(
+        message.content,
+        message.fileAttachments,
+        message.contexts,
+        message.id
+      )
+      if (!sent) {
+        setMessageQueue((current) => [message, ...current.filter((item) => item.id !== message.id)])
+      }
+      setDispatchingHeadId(null)
+      return sent
+    },
+    [sendDirect]
+  )
+
+  const drainQueue = useCallback(async () => {
+    if (activeTurnRef.current || dispatchingHeadId || queueRef.current.length === 0) return
+    const next = queueRef.current[0]
+    if (next) await dispatchQueuedMessage(next)
+  }, [dispatchQueuedMessage, dispatchingHeadId])
+  drainQueueRef.current = drainQueue
+
   const sendMessage = useCallback(
     async (
       message: string,
@@ -361,47 +515,52 @@ export function useLingxiGraphChat(
       contexts?: ChatContext[],
       _sendOptions?: SendMessageOptions
     ) => {
-      const currentAdapter = adapterRef.current
-      if (!currentAdapter || currentAdapter.kind !== 'lingxigraph') return
       const content = message.trim()
-      if (!content) return
-      const requestMessage = `${content}${contextSuffix(contexts)}`
-      const attachments = attachmentRefs(fileAttachments)
-      const context = contextOptions(contexts)
-      const userId = `lingxi-user:${Date.now()}`
-      setIsSending(true)
-      setError(null)
-      setLocallyStopped(false)
-      setSubscriptionEpoch((current) => current + 1)
-      setLocalUsers((current) => [...current, userMessage(userId, content, contexts)])
+      if (!content && !(fileAttachments && fileAttachments.length > 0)) return
 
-      try {
-        let taskId = resolvedChatId
-        if (!taskId) {
-          const created = await currentAdapter.createTask(requestMessage, attachments, context)
-          taskId = created.id
-          requestIdRef.current = taskId
-          setResolvedChatId(taskId)
-          router.replace(`/workspace/${workspaceId}/chat/${taskId}`)
-          onRequestStartedRef.current?.({ requestId: taskId, userMessageId: userId })
-          onResourceEventRef.current?.(`runtime-graph:${taskId}`)
-        } else {
-          requestIdRef.current = taskId
-          await currentAdapter.sendMessage(taskId, requestMessage, attachments, context)
-          onRequestStartedRef.current?.({ requestId: taskId, userMessageId: userId })
+      const currentEditId = editingQueuedId
+      if (currentEditId) {
+        const edited: QueuedMessage = {
+          id: currentEditId,
+          content: content || 'Analyze the attached file(s).',
+          fileAttachments,
+          contexts,
         }
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause))
-      } finally {
-        setIsSending(false)
+        setEditingQueuedId(null)
+        setMessageQueue((current) => current.filter((item) => item.id !== currentEditId))
+        if (activeTurnRef.current) {
+          setMessageQueue((current) => [...current, edited])
+          return
+        }
+        await sendDirect(
+          edited.content,
+          edited.fileAttachments,
+          edited.contexts,
+          edited.id
+        )
+        return
       }
+
+      if (activeTurnRef.current) {
+        const queued: QueuedMessage = {
+          id: `lingxi-queued:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+          content: content || 'Analyze the attached file(s).',
+          fileAttachments,
+          contexts,
+        }
+        setMessageQueue((current) => [...current, queued])
+        return
+      }
+
+      await sendDirect(content || 'Analyze the attached file(s).', fileAttachments, contexts)
     },
-    [resolvedChatId, router, workspaceId]
+    [editingQueuedId, sendDirect]
   )
 
   const stopGeneration = useCallback(async () => {
     setLocallyStopped(true)
-    const taskId = resolvedChatId
+    activeTurnRef.current = false
+    const taskId = resolvedChatIdRef.current
     const currentAdapter = adapterRef.current
     if (!taskId || !currentAdapter || currentAdapter.kind !== 'lingxigraph') return
     try {
@@ -411,7 +570,7 @@ export function useLingxiGraphChat(
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
-  }, [resolvedChatId])
+  }, [])
 
   const addResource = useCallback((_resource: MothershipResource) => true, [])
   const removeResource = useCallback(
@@ -421,9 +580,31 @@ export function useLingxiGraphChat(
     [effectiveActiveResourceId, setEffectiveActiveResourceId]
   )
   const reorderResources = useCallback((_next: MothershipResource[]) => {}, [])
-  const noQueuedMessages = useMemo<QueuedMessage[]>(() => [], [])
-  const noOp = useCallback(() => {}, [])
-  const noOpAsync = useCallback(async () => {}, [])
+  const removeFromQueue = useCallback((id: string) => {
+    setMessageQueue((current) => current.filter((message) => message.id !== id))
+    if (editingQueuedId === id) setEditingQueuedId(null)
+  }, [editingQueuedId])
+
+  const sendNow = useCallback(
+    async (id: string) => {
+      const message = queueRef.current.find((candidate) => candidate.id === id)
+      if (!message || dispatchingHeadId) return
+      if (activeTurnRef.current) await stopGeneration()
+      await dispatchQueuedMessage(message)
+    },
+    [dispatchQueuedMessage, dispatchingHeadId, stopGeneration]
+  )
+
+  const editQueuedMessage = useCallback((id: string): QueuedMessage | undefined => {
+    const message = queueRef.current.find((candidate) => candidate.id === id)
+    if (!message) return undefined
+    setEditingQueuedId(id)
+    return message
+  }, [])
+
+  const cancelQueueEdit = useCallback(() => {
+    setEditingQueuedId(null)
+  }, [])
 
   return {
     messages,
@@ -440,13 +621,13 @@ export function useLingxiGraphChat(
     addResource,
     removeResource,
     reorderResources,
-    messageQueue: noQueuedMessages,
-    removeFromQueue: noOp,
-    sendNow: noOpAsync,
-    editQueuedMessage: () => undefined,
-    cancelQueueEdit: noOp,
-    editingQueuedId: null,
-    dispatchingHeadId: null,
+    messageQueue,
+    removeFromQueue,
+    sendNow,
+    editQueuedMessage,
+    cancelQueueEdit,
+    editingQueuedId,
+    dispatchingHeadId,
     previewSession: null as FilePreviewSession | null,
     genericResourceData: null as GenericResourceData | null,
     lingxiRuntime: { task, events, workflowState },
