@@ -29,6 +29,7 @@ class Primitive:
     sim_type: str
     category: str
     idempotent: bool = False
+    label: str = ""
 
 
 @dataclass(frozen=True)
