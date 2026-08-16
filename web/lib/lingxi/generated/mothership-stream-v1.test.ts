@@ -136,6 +136,36 @@ describe('mothership stream v1 contract fixtures', () => {
     )
   })
 
+  it('keeps top-level ChatContent to the primary agent only', () => {
+    const fixture = loadFixtures().find(({ name }) => name === 'primary-and-supporting.json')
+    const events = fixture?.events ?? []
+    const roles = new Map(
+      events
+        .filter((event) => event.type === 'span' && isSpanStart(event.payload))
+        .map((event) => {
+          const payload = event.payload as { agentRunId: string; presentationRole?: string }
+          return [payload.agentRunId, payload.presentationRole]
+        })
+    )
+    expect(roles.get('ar_answer')).toBe('primary')
+    expect(roles.get('ar_visual')).toBe('supporting')
+
+    const texts = events.filter((event) => event.type === 'text')
+    const assistant = texts.filter(
+      (event) => (event.payload as { channel?: string }).channel === 'assistant'
+    )
+    expect(assistant.length).toBeGreaterThan(0)
+    expect(new Set(assistant.map((event) => event.scope.agentRunId))).toEqual(new Set(['ar_answer']))
+    const supporting = texts.filter((event) => event.scope.agentRunId === 'ar_visual')
+    expect(supporting.length).toBeGreaterThan(0)
+    expect(
+      supporting.every((event) => (event.payload as { channel?: string }).channel === 'narration')
+    ).toBe(true)
+
+    // The provider's raw model stream never becomes a public fact.
+    expect(JSON.stringify(events)).not.toContain('未校验的原始模型输出')
+  })
+
   it('rejects malformed envelopes instead of guessing', () => {
     expect(decodeLingxiMothershipEvent(null)).toBeNull()
     expect(decodeLingxiMothershipEvent('span')).toBeNull()

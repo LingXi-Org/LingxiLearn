@@ -192,9 +192,9 @@ function refreshAssistantText(turn: LingxiV1Turn): void {
     .map(([, value]) => value)
     .filter(Boolean)
   if (primary.length > 0) parts.push(primary.join(''))
-  const question = turn.streamText['__question__']
+  const question = turn.streamText.__question__
   if (question) parts.push(question)
-  const resources = turn.streamText['__resource__']
+  const resources = turn.streamText.__resource__
   if (resources) parts.push(resources)
   turn.assistantText = parts.filter(Boolean).join('\n\n')
 }
@@ -357,8 +357,8 @@ export function reduceV1Event(
         if (card.blocking) {
           turn.status = 'awaiting_user'
           const tag = questionTagFor(card)
-          if (tag && !turn.streamText['__question__']) {
-            turn.streamText['__question__'] = tag
+          if (tag && !turn.streamText.__question__) {
+            turn.streamText.__question__ = tag
             refreshAssistantText(turn)
           }
         }
@@ -394,9 +394,9 @@ export function reduceV1Event(
         turn.resources = [...turn.resources.filter((item) => item.id !== resource.id), resource]
         if (resource.type === 'file' && resource.id.startsWith('file_')) {
           const tag = `<workspace_resource type="file" id="${resource.id}" title="${resource.title}"></workspace_resource>`
-          const existing = str(turn.streamText['__resource__'] ?? '')
+          const existing = str(turn.streamText.__resource__ ?? '')
           if (!existing.includes(tag)) {
-            turn.streamText['__resource__'] = [existing, tag].filter(Boolean).join('\n')
+            turn.streamText.__resource__ = [existing, tag].filter(Boolean).join('\n')
             refreshAssistantText(turn)
           }
         }
@@ -485,6 +485,72 @@ export function interactionAnswerLabels(card: LingxiV1InteractionCard): string[]
     if (joined) labels.push(joined)
   }
   return labels
+}
+
+/** One question's answer as the card reports it: option ids, never labels. */
+export interface LingxiV1SubmittedAnswer {
+  questionIndex: number
+  selectedOptionIds: string[]
+  text: string
+}
+
+export interface LingxiV1InteractionAnswerRequest {
+  interactionId: string
+  answers: Array<{ questionId: string; selectedOptionIds: string[]; text: string | null }>
+  /** Labels for the optimistic user bubble; display only. */
+  labels: string[]
+}
+
+/** The thread's open blocking interaction, if it has one. */
+export function pendingInteraction(
+  model: LingxiV1ThreadModel
+): LingxiV1InteractionCard | undefined {
+  for (let index = model.turns.length - 1; index >= 0; index -= 1) {
+    const card = model.turns[index].interactions.find(
+      (item) => item.status === 'pending' && item.blocking
+    )
+    if (card) return card
+  }
+  return undefined
+}
+
+/**
+ * Turn a question card's submission into the typed interaction answer request
+ * (issue #18 §10.4).
+ *
+ * Option ids arriving from a rendered card are the encoded
+ * `interactionId|questionId|optionId` triples; they are decoded back to the
+ * real option identity here.  Returns null when this batch is not the open
+ * typed interaction, which is the caller's signal to fall back to an ordinary
+ * message rather than guess.
+ */
+export function buildInteractionAnswerRequest(
+  model: LingxiV1ThreadModel,
+  submitted: LingxiV1SubmittedAnswer[]
+): LingxiV1InteractionAnswerRequest | null {
+  if (submitted.length === 0) return null
+  const card = pendingInteraction(model)
+  if (!card || card.questions.length === 0) return null
+
+  const answers: LingxiV1InteractionAnswerRequest['answers'] = []
+  const labels: string[] = []
+  for (const item of submitted) {
+    const question = card.questions[item.questionIndex]
+    if (!question) continue
+    const optionIds: string[] = []
+    for (const encoded of item.selectedOptionIds) {
+      const optionId = decodeInteractionOptionId(encoded)?.optionId ?? encoded
+      optionIds.push(optionId)
+      const option = question.options.find((candidate) => candidate.id === optionId)
+      if (option) labels.push(option.label)
+    }
+    const text = item.text.trim()
+    if (text) labels.push(text)
+    if (optionIds.length === 0 && !text) continue
+    answers.push({ questionId: question.id, selectedOptionIds: optionIds, text: text || null })
+  }
+  if (answers.length === 0) return null
+  return { interactionId: card.interactionId, answers, labels }
 }
 
 export function buildV1ThreadModel(

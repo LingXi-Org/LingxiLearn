@@ -1,0 +1,381 @@
+[
+  {
+    "v": 1,
+    "seq": 1,
+    "ts": "2026-08-16T13:43:26.903374+00:00",
+    "type": "turn",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "turnId": "turn_fixture_1",
+      "turnIndex": 0,
+      "status": "started",
+      "userText": "讲清量子叠加，并给我一个可视化"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 2,
+    "ts": "2026-08-16T13:43:26.903498+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "status": "started",
+      "executionId": "exec_fixture_2"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 3,
+    "ts": "2026-08-16T13:43:26.903556+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_answer",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "start",
+      "agentRunId": "ar_answer",
+      "providerId": "answer_user",
+      "displayName": "知识点答疑",
+      "executionKind": "model",
+      "capability": "dialog.answer",
+      "presentationRole": "primary"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 4,
+    "ts": "2026-08-16T13:43:26.903626+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_visual",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "start",
+      "agentRunId": "ar_visual",
+      "providerId": "visual_explainer",
+      "displayName": "可视化讲解",
+      "executionKind": "model",
+      "capability": "content.visual",
+      "presentationRole": "supporting"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 5,
+    "ts": "2026-08-16T13:43:26.903715+00:00",
+    "type": "text",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_visual",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "channel": "narration",
+      "text": "正在生成交互式可视化…",
+      "source": "agent"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 6,
+    "ts": "2026-08-16T13:43:26.903762+00:00",
+    "type": "text",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_answer",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "channel": "assistant",
+      "streamId": "task_fixture:turn_fixture_1",
+      "delta": "叠加态是指"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 7,
+    "ts": "2026-08-16T13:43:26.903800+00:00",
+    "type": "text",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_visual",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "channel": "narration",
+      "text": "可视化已生成，稍后在右侧查看。",
+      "source": "agent"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 8,
+    "ts": "2026-08-16T13:43:26.903831+00:00",
+    "type": "text",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_answer",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "channel": "assistant",
+      "streamId": "task_fixture:turn_fixture_1",
+      "text": "叠加态是指一个量子系统同时处于多个基态的线性组合。"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 9,
+    "ts": "2026-08-16T13:43:26.903862+00:00",
+    "type": "resource",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_visual",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "resource": {
+        "id": "file_fixture_visual",
+        "type": "file",
+        "title": "visual-explainer.html",
+        "path": "学习产物/task_fixture/visual-explainer.html",
+        "sourceAgentRunId": "ar_visual",
+        "artifactKind": "visual"
+      },
+      "removed": false
+    }
+  },
+  {
+    "v": 1,
+    "seq": 10,
+    "ts": "2026-08-16T13:43:26.903910+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_visual",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "end",
+      "agentRunId": "ar_visual",
+      "status": "completed"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 11,
+    "ts": "2026-08-16T13:43:26.903962+00:00",
+    "type": "span",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "ar_answer",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "kind": "agent",
+      "event": "end",
+      "agentRunId": "ar_answer",
+      "status": "completed"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 12,
+    "ts": "2026-08-16T13:43:26.904004+00:00",
+    "type": "run",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "status": "completed",
+      "executionId": "exec_fixture_2"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 13,
+    "ts": "2026-08-16T13:43:26.904026+00:00",
+    "type": "complete",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "status": "delivered"
+    }
+  },
+  {
+    "v": 1,
+    "seq": 14,
+    "ts": "2026-08-16T13:43:26.904060+00:00",
+    "type": "turn",
+    "stream": {
+      "chatId": "task_fixture",
+      "turnId": "turn_fixture_1",
+      "executionId": "exec_fixture_2",
+      "streamId": "exec_fixture_2"
+    },
+    "scope": {
+      "agentRunId": "",
+      "parentAgentRunId": "",
+      "skillRunId": ""
+    },
+    "trace": {
+      "requestId": "exec_fixture_2",
+      "runId": "exec_fixture_2"
+    },
+    "payload": {
+      "turnId": "turn_fixture_1",
+      "turnIndex": 0,
+      "status": "delivered"
+    }
+  }
+]

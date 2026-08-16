@@ -19,6 +19,11 @@ import {
   InteractionCardInputRow,
   InteractionCardRecap,
 } from '@/app/workspace/[workspaceId]/home/components/message-content/components/interaction-card'
+import {
+  answerLabelsFor,
+  collectTypedAnswers,
+  type TypedQuestionAnswer,
+} from '@/app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers'
 import type { QuestionItem } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
 
 /**
@@ -92,6 +97,13 @@ interface QuestionDisplayProps {
   onSelect?: (message: string) => void
   /** Reports normalized answers to an existing assessment surface. */
   onAnswersSubmit?: (answers: string[]) => void
+  /**
+   * Reports the whole batch in option-id form. Returning `true` means the
+   * owner submitted it through the typed interaction API, and the formatted
+   * `onSelect` message is then not sent — a typed answer must never also
+   * arrive as an ordinary chat message.
+   */
+  onSubmitAnswers?: (answers: TypedQuestionAnswer[]) => boolean
   /** Reports that the active card was dismissed so its message actions can return. */
   onDismiss?: () => void
   /** Whether the active card can be dismissed without answering. */
@@ -114,14 +126,17 @@ export function QuestionDisplay({
   answers: transcriptAnswers,
   onSelect,
   onAnswersSubmit,
+  onSubmitAnswers,
   onDismiss,
   dismissible = true,
 }: QuestionDisplayProps) {
   const freeTextInputRef = useRef<HTMLInputElement>(null)
   const freeTextCheckboxRef = useRef<HTMLButtonElement>(null)
-  const disabled = !onSelect && !onAnswersSubmit
+  const disabled = !onSelect && !onAnswersSubmit && !onSubmitAnswers
   const [phase, setPhase] = useState<QuestionPhase>('active')
   const [step, setStep] = useState(0)
+  // Selections are option ids, never labels: the id is the answer's identity
+  // and the label is only what the learner reads.
   const [selectedByStep, setSelectedByStep] = useState<string[][]>(() => data.map(() => []))
   const [customByStep, setCustomByStep] = useState<string[]>(() => data.map(() => ''))
   const [freeText, setFreeText] = useState('')
@@ -187,13 +202,23 @@ export function QuestionDisplay({
     }
     setPhase('answered')
     const answers = data.map((q, i) => answerFor(q, selections[i] ?? [], customFor(i, customs)))
-    onSelect?.(formatQuestionAnswerMessage(data, answers))
+    // A typed interaction owns the submission: the formatted message exists
+    // for display and legacy transports only.
+    const handled =
+      onSubmitAnswers?.(
+        collectTypedAnswers(
+          data,
+          selections,
+          data.map((_question, i) => customFor(i, customs))
+        )
+      ) === true
+    if (!handled) onSelect?.(formatQuestionAnswerMessage(data, answers))
     onAnswersSubmit?.(answers)
   }
 
-  const handleSingleSelect = (label: string) => {
+  const handleSingleSelect = (optionId: string) => {
     const selections = [...selectedByStep]
-    selections[step] = [label]
+    selections[step] = [optionId]
     setSelectedByStep(selections)
     const customs = [...customByStep]
     customs[step] = ''
@@ -202,12 +227,12 @@ export function QuestionDisplay({
     finishStep(selections, customs)
   }
 
-  const handleMultiToggle = (label: string) => {
+  const handleMultiToggle = (optionId: string) => {
     const selections = [...selectedByStep]
     const current = selections[step] ?? []
-    selections[step] = current.includes(label)
-      ? current.filter((l) => l !== label)
-      : [...current, label]
+    selections[step] = current.includes(optionId)
+      ? current.filter((id) => id !== optionId)
+      : [...current, optionId]
     setSelectedByStep(selections)
   }
 
@@ -317,14 +342,14 @@ export function QuestionDisplay({
     >
       <div className='flex flex-col'>
         {options.map((option, i) => {
-          const isSelected = selected.includes(option.label)
+          const isSelected = selected.includes(option.id)
           return (
             <button
               key={option.id}
               type='button'
               disabled={disabled}
               onClick={() =>
-                isMulti ? handleMultiToggle(option.label) : handleSingleSelect(option.label)
+                isMulti ? handleMultiToggle(option.id) : handleSingleSelect(option.id)
               }
               className={cn(
                 INTERACTION_CARD_ROW_CLASSES,
@@ -439,13 +464,10 @@ export function QuestionDisplay({
  * A step's combined answer: selected option labels in option order, with the
  * typed "Something else" entry appended last. single_select carries at most
  * one selection, so this collapses to the chosen label or the typed text.
+ * Selections arrive as option ids; the labels are looked up for display.
  */
 function answerFor(question: QuestionItem, selected: string[], custom: string): string {
-  const ordered = question.options
-    .map((option) => option.label)
-    .filter((label) => selected.includes(label))
-  const parts = custom.trim() ? [...ordered, custom.trim()] : ordered
-  return parts.join(', ')
+  return answerLabelsFor(question, selected, custom).join(', ')
 }
 
 /** Separates known multi-select labels for the recap without changing the wire answer. */

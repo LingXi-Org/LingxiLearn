@@ -44,6 +44,7 @@ import {
 import {
   parseQuestionAnswerMessage,
   QuestionDisplay,
+  type TypedQuestionAnswer,
 } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
 import {
   resolveOAuthChipTarget,
@@ -1456,6 +1457,12 @@ interface SpecialTagsProps {
   /** The user moved on without submitting this message's credential card. */
   credentialAbandoned?: boolean
   onOptionSelect?: (id: string) => void
+  /**
+   * Submits the question card's answers in option-id form. Returning `true`
+   * means a typed interaction consumed them, so no formatted chat message is
+   * sent (issue #18 §10.5).
+   */
+  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean
   onQuestionDismiss?: () => void
   onWorkspaceResourceSelect?: (resource: WorkspaceResourceRef) => void
 }
@@ -1471,6 +1478,7 @@ export function SpecialTags({
   credentialSubmission,
   credentialAbandoned,
   onOptionSelect,
+  onQuestionSubmit,
   onQuestionDismiss,
   onWorkspaceResourceSelect,
 }: SpecialTagsProps) {
@@ -1501,6 +1509,7 @@ export function SpecialTags({
           data={segment.data}
           answers={questionAnswers}
           onSelect={onOptionSelect}
+          onSubmitAnswers={onQuestionSubmit}
           onDismiss={onQuestionDismiss}
         />
       )

@@ -15,6 +15,7 @@ import { Checkbox, CopyCodeButton, cn, languages, highlight as prismHighlight } 
 import { decodeVfsSegmentSafe } from '@/lib/copilot/vfs/path-utils'
 import { extractTextContent } from '@/lib/core/utils/react-node-text'
 import { ContextMentionIcon } from '@/app/workspace/[workspaceId]/home/components/context-mention-icon'
+import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
 import {
   type ContentSegment,
   type CredentialSubmissionPayload,
@@ -404,6 +405,9 @@ interface ChatContentProps {
   /** The user moved on without submitting this message's credential card. */
   credentialAbandoned?: boolean
   onOptionSelect?: (id: string) => void
+  /** Submits the question card in option-id form; `true` means a typed
+   * interaction consumed it and no chat message is sent (issue #18 §10.5). */
+  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean
   onQuestionDismiss?: () => void
   onWorkspaceResourceSelect?: (resource: WorkspaceResourceRef) => void
   onRevealStateChange?: (isRevealing: boolean) => void
@@ -424,6 +428,7 @@ function ChatContentInner({
   credentialSubmission,
   credentialAbandoned,
   onOptionSelect,
+  onQuestionSubmit,
   onQuestionDismiss,
   onWorkspaceResourceSelect,
   onRevealStateChange,
@@ -650,6 +655,7 @@ function ChatContentInner({
             credentialSubmission={credentialSubmission}
             credentialAbandoned={credentialAbandoned}
             onOptionSelect={onOptionSelect}
+            onQuestionSubmit={onQuestionSubmit}
             onQuestionDismiss={onQuestionDismiss}
           />
         )

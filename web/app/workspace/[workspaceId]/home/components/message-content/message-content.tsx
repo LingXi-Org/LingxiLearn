@@ -21,6 +21,7 @@ import {
   humanizeToolName,
 } from '@/lib/copilot/tools/tool-display'
 import { useChatSurface } from '@/app/workspace/[workspaceId]/home/components/chat-surface-context'
+import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
 import type { CredentialSubmissionPayload } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
 import type { ContentBlock, OptionItem, ReasoningStep, ToolCallData } from '../../types'
 import { SUBAGENT_LABELS } from '../../types'
@@ -855,6 +856,9 @@ interface MessageContentProps {
   /** The user moved on without submitting this message's credential card. */
   credentialAbandoned?: boolean
   onOptionSelect?: (id: string) => void
+  /** Submits the question card in option-id form; `true` means a typed
+   * interaction consumed it and no chat message is sent (issue #18 §10.5). */
+  onQuestionSubmit?: (answers: TypedQuestionAnswer[]) => boolean
   onQuestionDismiss?: () => void
   onPhaseChange?: (phase: MessagePhase) => void
   /**
@@ -877,6 +881,7 @@ function MessageContentInner({
   credentialSubmission,
   credentialAbandoned,
   onOptionSelect,
+  onQuestionSubmit,
   onQuestionDismiss,
   onPhaseChange,
   actions,
@@ -981,6 +986,7 @@ function MessageContentInner({
                   credentialSubmission={credentialSubmission}
                   credentialAbandoned={credentialAbandoned}
                   onOptionSelect={onOptionSelect}
+                  onQuestionSubmit={onQuestionSubmit}
                   onQuestionDismiss={onQuestionDismiss}
                   onWorkspaceResourceSelect={onWorkspaceResourceSelect}
                   onRevealStateChange={
