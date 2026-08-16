@@ -116,7 +116,6 @@ const nativeCanvasClassName = [
   String.raw`[&_.react-flow\_\_handle]:!z-[30]`,
   String.raw`[&_.react-flow\_\_handle]:!pointer-events-none`,
   String.raw`[&_.react-flow\_\_handle]:!invisible`,
-  String.raw`[&_.react-flow\_\_handle]:!hidden`,
   '[&_.workflow-drag-handle]:!pointer-events-none',
   '[&_.react-flow__pane]:select-none',
   '[&_.react-flow__selectionpane]:select-none',
