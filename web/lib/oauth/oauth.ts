@@ -1542,7 +1542,7 @@ function getProviderAuthConfig(provider: string): ProviderAuthConfig {
         clientSecret,
         useBasicAuth: true,
         additionalHeaders: {
-          'User-Agent': 'sim-studio/1.0 (https://github.com/simstudioai/sim)',
+          'User-Agent': 'sim-studio/1.0 (https://github.com/LingXi-Org/LingxiGraph)',
         },
       }
     }

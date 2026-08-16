@@ -1,4 +1,7 @@
+import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { ChipLink } from '@/components/ui-kit'
+import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 import {
   GitHubChip,
   LingxiWordmark,
@@ -9,7 +12,6 @@ import {
   NavMenuChip,
 } from '@/app/(landing)/components/navbar/components'
 import { SIGNUP_HREF } from '@/app/(landing)/constants'
-import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 
 /**
  * Landing navbar.
@@ -50,11 +52,13 @@ interface NavbarProps {
    * want the brand header without the full marketing navigation.
    */
   logoOnly?: boolean
+  /** Optional site-wide announcement rendered above the navigation in the same sticky header. */
+  announcement?: ReactNode
 }
 
-export function Navbar({ logoOnly = false }: NavbarProps) {
+export function Navbar({ logoOnly = false, announcement }: NavbarProps) {
   return (
-    <NavbarShell>
+    <NavbarShell announcement={announcement}>
       <nav
         aria-label='主导航'
         itemScope
@@ -76,6 +80,8 @@ export function Navbar({ logoOnly = false }: NavbarProps) {
               {NAV_MENUS.map((menu) => (
                 <NavMenuChip key={menu.label} menu={menu} />
               ))}
+              {/* 灵犀团队 - the one plain nav link: no dropdown, straight to the team contact page. */}
+              <ChipLink href='/contact'>灵犀团队</ChipLink>
               <GitHubChip />
             </div>
 

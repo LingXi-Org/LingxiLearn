@@ -30,6 +30,8 @@ export function useNavbarFrost(): NavbarFrostContextValue | null {
 }
 
 interface NavbarShellProps {
+  /** Optional site-wide announcement that shares the navbar's sticky chrome. */
+  announcement?: ReactNode
   children: ReactNode
 }
 
@@ -71,7 +73,7 @@ interface NavbarShellProps {
  * Only this shell hydrates; the nav content is server-rendered and passed through
  * as {@link children}, so the wordmark and links stay zero-hydration and crawlable.
  */
-export function NavbarShell({ children }: NavbarShellProps) {
+export function NavbarShell({ announcement, children }: NavbarShellProps) {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -102,6 +104,7 @@ export function NavbarShell({ children }: NavbarShellProps) {
             scrolled || menuOpen ? NAVBAR_GLASS_SURFACE : 'bg-[var(--bg)]'
           )}
         />
+        {announcement}
         {children}
       </header>
     </NavbarFrostContext>

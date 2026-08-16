@@ -30,7 +30,7 @@ export default function Contact() {
           <ProfileCard
             name='李承阳'
             title='技术负责人'
-            handle='chengyang.li'
+            handle='leecyang@lingxilearn.cn'
             status='LingXi Engineering'
             avatarUrl='/landing/contact/portrait-li-chengyang.webp'
             iconUrl='/landing/contact/code-icon.svg'
@@ -39,7 +39,7 @@ export default function Contact() {
           <ProfileCard
             name='李远洋'
             title='产品负责人'
-            handle='yuanyang.li'
+            handle='lyyzka@lingxilearn.cn'
             status='LingXi Product'
             avatarUrl='/landing/contact/portrait-li-yuanyang.webp'
             iconUrl='/landing/contact/product-icon.svg'

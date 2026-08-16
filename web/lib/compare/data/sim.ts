@@ -34,7 +34,7 @@ export const simProfile: CompetitorProfile = {
       shortDescription:
         'Combines vector and full-text search with configurable chunking across 11 file formats.',
       source: {
-        url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
         label: 'Sim codebase: KB schema + file-parsers',
         asOf: '2026-07-02',
       },
@@ -91,7 +91,7 @@ export const simProfile: CompetitorProfile = {
         'Real-time cursors, selection broadcasting, and synced concurrent edits over a dedicated realtime backend, so a team can build the same workflow together at the same time.',
       shortDescription: 'Real-time cursors, selections, and synced edits on the same canvas.',
       source: {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/realtime/src/handlers/presence.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/realtime/src/handlers/presence.ts',
         label: 'Sim codebase: realtime presence handler',
         asOf: '2026-07-04',
       },
@@ -105,7 +105,7 @@ export const simProfile: CompetitorProfile = {
       shortDescription:
         "266 blocks and ~3,900 tool actions, versus Zapier and Pipedream's larger raw app counts.",
       source: {
-        url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/registry-maps.ts',
+        url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/registry-maps.ts',
         label: 'Sim codebase: BLOCK_REGISTRY count',
         asOf: '2026-07-08',
       },
@@ -195,7 +195,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/commit/df5ad7d45f4fd38ab724e7726b083c2b928a1542',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/commit/df5ad7d45f4fd38ab724e7726b083c2b928a1542',
             label: 'Sim codebase: templates gallery and APIs removed',
             asOf: '2026-07-08',
           },
@@ -237,12 +237,12 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/workflows/diff/diff-engine.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/workflows/diff/diff-engine.ts',
             label: 'Sim codebase: WorkflowDiffEngine',
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
             label: 'Sim codebase: workflowCheckpoints / workflow_deployment_version tables',
             asOf: '2026-07-02',
           },
@@ -255,12 +255,12 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/realtime/src/handlers/presence.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/realtime/src/handlers/presence.ts',
             label: 'Sim codebase: realtime presence handler (cursor/selection broadcast)',
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/realtime/src/handlers/operations.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/realtime/src/handlers/operations.ts',
             label: 'Sim codebase: realtime operations handler',
             asOf: '2026-07-02',
           },
@@ -275,12 +275,12 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/workspace/%5BworkspaceId%5D/files/components/share-modal/share-modal.tsx',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/workspace/%5BworkspaceId%5D/files/components/share-modal/share-modal.tsx',
             label: 'Sim codebase: file share modal (password/email/SSO modes)',
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/workspace/%5BworkspaceId%5D/settings/components/recently-deleted/recently-deleted.tsx',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/workspace/%5BworkspaceId%5D/settings/components/recently-deleted/recently-deleted.tsx',
             label: 'Sim codebase: Recently Deleted (files, folders, and other resources)',
             asOf: '2026-07-08',
           },
@@ -308,7 +308,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/workspace/[workspaceId]/files/components/file-viewer/rich-markdown-editor/rich-markdown-editor.tsx',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/workspace/[workspaceId]/files/components/file-viewer/rich-markdown-editor/rich-markdown-editor.tsx',
             label: 'Sim codebase: rich markdown editor',
             asOf: '2026-07-02',
           },
@@ -337,17 +337,17 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/api/custom-blocks/route.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/api/custom-blocks/route.ts',
             label: 'Sim codebase: custom-blocks publish API (admin gate)',
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/custom/build-config.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/custom/build-config.ts',
             label: 'Sim codebase: custom-block config builder',
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/workspace/%5BworkspaceId%5D/settings/navigation.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/workspace/%5BworkspaceId%5D/settings/navigation.ts',
             label: 'Sim codebase: Custom blocks nav entry (Enterprise/self-hosted gating)',
             asOf: '2026-07-08',
           },
@@ -363,7 +363,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/providers/models.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/providers/models.ts',
             label: 'Sim codebase: PROVIDER_DEFINITIONS',
             asOf: '2026-07-02',
           },
@@ -376,7 +376,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/registry-maps.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/registry-maps.ts',
             label: 'Sim codebase: block registry',
             asOf: '2026-07-02',
           },
@@ -402,17 +402,17 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
             label: 'Sim codebase: KB schema (pgvector + tsvector)',
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/file-parsers/index.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/file-parsers/index.ts',
             label: 'Sim codebase: file-parser registry (11 format families)',
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/connectors/registry.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/connectors/registry.ts',
             label: 'Sim codebase: connector registry (51 connectors)',
             asOf: '2026-07-08',
           },
@@ -468,7 +468,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/executor/execution/snapshot.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/executor/execution/snapshot.ts',
             label: 'Sim codebase: execution snapshot serializer',
             asOf: '2026-07-02',
           },
@@ -481,22 +481,22 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/image_generator.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/image_generator.ts',
             label: 'Sim codebase: Image Generator V2',
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/video_generator.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/video_generator.ts',
             label: 'Sim codebase: Video Generator V3',
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/tts.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/tts.ts',
             label: 'Sim codebase: TTS block (7 providers)',
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/stt.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/stt.ts',
             label: 'Sim codebase: STT block (5 providers)',
             asOf: '2026-07-08',
           },
@@ -511,7 +511,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/executor/handlers/agent/agent-handler.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/executor/handlers/agent/agent-handler.ts',
             label: 'Sim codebase: agent tool resolution (pre-wired only)',
             asOf: '2026-07-02',
           },
@@ -526,7 +526,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/providers/index.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/providers/index.ts',
             label: 'Sim codebase: executeProviderRequest (no retry/fallback)',
             asOf: '2026-07-02',
           },
@@ -572,7 +572,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/workspace/[workspaceId]/knowledge/[id]/[documentId]/components/chunk-editor/chunk-editor.tsx',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/workspace/[workspaceId]/knowledge/[id]/[documentId]/components/chunk-editor/chunk-editor.tsx',
             label: 'Sim codebase: chunk editor',
             asOf: '2026-07-02',
           },
@@ -630,7 +630,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/registry-maps.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/registry-maps.ts',
             label: 'Sim codebase: BLOCK_REGISTRY',
             asOf: '2026-07-08',
           },
@@ -659,7 +659,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/triggers/table/poller.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/triggers/table/poller.ts',
             label: 'Sim codebase: Table row trigger',
             asOf: '2026-07-04',
           },
@@ -676,7 +676,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/registry-maps.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/registry-maps.ts',
             label: 'Sim codebase: block registry',
             asOf: '2026-07-02',
           },
@@ -744,7 +744,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/blocks/blocks/a2a.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/blocks/blocks/a2a.ts',
             label: 'Sim codebase: A2A block',
             asOf: '2026-07-02',
           },
@@ -802,7 +802,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-08',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/billing/constants.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/billing/constants.ts',
             label: 'Sim codebase: DEFAULT_FREE_CREDITS',
             asOf: '2026-07-08',
           },
@@ -820,12 +820,12 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/billing/calculations/usage-monitor.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/billing/calculations/usage-monitor.ts',
             label: 'Sim codebase: BYOK usage-monitor logic',
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/api-key/byok.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/api-key/byok.ts',
             label: 'Sim codebase: BYOK key rotation',
             asOf: '2026-07-02',
           },
@@ -863,7 +863,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/core/async-jobs/region.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/core/async-jobs/region.ts',
             label: 'Sim codebase: async job region resolution',
             asOf: '2026-07-02',
           },
@@ -883,12 +883,12 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
             label: 'Sim codebase: permissionTypeEnum, role columns',
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/permission-groups/types.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/permission-groups/types.ts',
             label: 'Sim codebase: permission groups',
             asOf: '2026-07-04',
           },
@@ -901,7 +901,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/packages/db/schema.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/packages/db/schema.ts',
             label: 'Sim codebase: auditLog table',
             asOf: '2026-07-02',
           },
@@ -935,7 +935,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/permission-groups/types.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/permission-groups/types.ts',
             label:
               'Sim codebase: PermissionGroupConfig (allowedModelProviders, deniedModels, deniedTools)',
             asOf: '2026-07-02',
@@ -961,7 +961,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/permission-groups/types.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/permission-groups/types.ts',
             label: 'Sim codebase: PermissionGroupConfig (allowedIntegrations)',
             asOf: '2026-07-02',
           },
@@ -1043,7 +1043,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/tree/main/apps/sim/blocks/blocks',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/tree/main/apps/sim/blocks/blocks',
             label: 'Sim codebase: first-party block directory',
             asOf: '2026-07-08',
           },
@@ -1060,7 +1060,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/logs/execution/trace-spans/trace-spans.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/logs/execution/trace-spans/trace-spans.ts',
             label: 'Sim codebase: TraceSpan tree builder',
             asOf: '2026-07-02',
           },
@@ -1080,12 +1080,12 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/tools/index.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/tools/index.ts',
             label: 'Sim codebase: ToolRetryConfig (exponential backoff)',
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/trigger.config.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/trigger.config.ts',
             label: 'Sim codebase: retries.default.maxAttempts = 1',
             asOf: '2026-07-02',
           },
@@ -1128,12 +1128,12 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/api/workflows/[id]/execute/route.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/api/workflows/[id]/execute/route.ts',
             label: 'Sim codebase: async execution handler',
             asOf: '2026-07-02',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/app/api/workflows/[id]/executions/[executionId]/route.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/app/api/workflows/[id]/executions/[executionId]/route.ts',
             label: 'Sim codebase: execution status endpoint',
             asOf: '2026-07-02',
           },
@@ -1158,7 +1158,7 @@ export const simProfile: CompetitorProfile = {
             asOf: '2026-08-10',
           },
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/billing/calculations/usage-reservation.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/billing/calculations/usage-reservation.ts',
             label: 'Sim codebase: max concurrent executions per plan',
             asOf: '2026-07-13',
           },
@@ -1171,7 +1171,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/executor/execution/edge-manager.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/executor/execution/edge-manager.ts',
             label: 'Sim codebase: error-output edge routing',
             asOf: '2026-07-02',
           },
@@ -1186,7 +1186,7 @@ export const simProfile: CompetitorProfile = {
         confidence: 'verified',
         sources: [
           {
-            url: 'https://github.com/simstudioai/sim/blob/main/apps/sim/lib/core/async-jobs/backends/trigger-dev.ts',
+            url: 'https://github.com/LingXi-Org/LingxiGraph/blob/main/apps/sim/lib/core/async-jobs/backends/trigger-dev.ts',
             label: 'Sim codebase: trigger.dev background job backend',
             asOf: '2026-07-02',
           },

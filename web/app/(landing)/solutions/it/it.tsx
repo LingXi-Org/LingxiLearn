@@ -51,7 +51,6 @@ const IT_CONFIG: SolutionsPageConfig = {
       id: 'service-desk',
       title: 'Automate the service desk.',
       subtitle: 'Sim agents handle the repetitive front line so your team works on what matters.',
-      cta: { label: 'See IT agents', href: '/signup' },
       cards: [
         {
           title: 'Triage tickets',
@@ -83,7 +82,6 @@ const IT_CONFIG: SolutionsPageConfig = {
       id: 'reliability',
       title: 'Keep systems healthy.',
       subtitle: 'Sim watches your stack and acts before small issues become outages.',
-      cta: { label: 'Explore monitoring', href: '/signup' },
       cards: [
         {
           title: 'Monitor infrastructure',

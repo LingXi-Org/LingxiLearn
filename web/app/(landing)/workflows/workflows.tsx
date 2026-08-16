@@ -61,7 +61,6 @@ const WORKFLOWS_CONFIG: SolutionsPageConfig = {
       title: 'Build AI agents the way that fits.',
       subtitle:
         'Sim lets teams build agents visually, in natural language, or with code, wiring up any model and 1,000+ integrations in one workspace.',
-      cta: { label: 'Explore the workflow builder', href: '/signup' },
       cards: [
         {
           title: 'Drag and connect',
@@ -90,7 +89,6 @@ const WORKFLOWS_CONFIG: SolutionsPageConfig = {
       title: 'Deploy and run without leaving Sim.',
       subtitle:
         'Ship agents to production as APIs, Slack bots, or scheduled jobs, and trace every run block by block, all in one workspace.',
-      cta: { label: 'Learn about deployment', href: '/signup' },
       columns: 2,
       cards: [
         {

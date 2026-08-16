@@ -7,7 +7,7 @@
   inset-inline: 0;
   top: -40%;
   height: 40%;
-  background: linear-gradient(to bottom, transparent, var(--text-inverse));
+  background: linear-gradient(to bottom, transparent, var(--text-primary));
   animation: learning-feedback-sweep 0.45s ease-in 0.85s forwards;
   opacity: 0;
 }

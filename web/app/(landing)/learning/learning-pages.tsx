@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
+import { EXPERIENCE_HREF } from '@/app/(landing)/constants'
 import type { HeroChatLoopContent } from '@/app/(landing)/components/hero/components/hero-chat-loop'
 import { HeroPlatformLoop } from '@/app/(landing)/components/hero/components/hero-platform-loop'
 import { PlatformHeroVisual } from '@/app/(landing)/components/platform-hero-visual'
@@ -27,12 +28,14 @@ import {
 import {
   COMPANION_HERO_WORKFLOW,
   HOMEWORK_HERO_WORKFLOW,
+  LOOP_HERO_WORKFLOW,
   PERSONALIZED_HERO_WORKFLOW,
   PRACTICE_HERO_WORKFLOW,
 } from '@/app/(landing)/learning/learning-hero-workflows'
 import { type LogsHeroContent, LogsHeroLoop } from '@/app/(landing)/logs/components/logs-hero-loop'
 
 export type LearningPageSlug =
+  | 'learning-loop'
   | 'personalized-learning'
   | 'explanation'
   | 'homework-support'
@@ -40,7 +43,7 @@ export type LearningPageSlug =
   | 'learning-diagnosis'
   | 'learning-companion'
 
-const EXPERIENCE_CTA = { label: '立即体验', href: '/workspace/lingxi/home' } as const
+const EXPERIENCE_CTA = { label: '开始体验', href: EXPERIENCE_HREF } as const
 
 const PERSONALIZED_HERO_CHAT = {
   userMessage: '我准备参加大学线性代数期末，矩阵特征值总是算错，帮我规划复习顺序。',
@@ -68,6 +71,13 @@ const COMPANION_HERO_CHAT = {
   replyMessage:
     '我会接着你上次的产品分析学习进度，保留已掌握的抽样概念，从置信区间的业务案例练习继续，并在完成后更新下一步。',
   followUps: ['继续未完成任务', '复习薄弱概念', '查看下一步计划'],
+} as const satisfies HeroChatLoopContent
+
+const LOOP_HERO_CHAT = {
+  userMessage: '帮我系统复习函数与导数，下周单元测验，我不想再靠猜。',
+  replyMessage:
+    '我会先用一组小题定位你真实的掌握状态，再按薄弱点安排讲解和练习，最后用同类题和迁移题验证，通过了才进入下一阶段。',
+  followUps: ['定位当前掌握状态', '生成本周复习计划', '验证阶段掌握'],
 } as const satisfies HeroChatLoopContent
 
 const EXPLANATION_HERO_CONTENT = {
@@ -268,20 +278,13 @@ function boundaryPanel(title: string, leftLabel: string, rightLabel: string, sea
   )
 }
 
-function hero(
-  heading: string,
-  description: string,
-  summary: string,
-  visual: ReactNode,
-  secondaryHref: string
-) {
+function hero(heading: string, description: string, summary: string, visual: ReactNode) {
   return {
     eyebrow: '学习体验',
     heading,
     description,
     summary,
     cta: EXPERIENCE_CTA,
-    secondaryCta: { label: '查看流程', href: secondaryHref },
     visual: <PlatformHeroVisual>{visual}</PlatformHeroVisual>,
   }
 }
@@ -292,6 +295,150 @@ const COMMON_FOOTER = {
 } as const
 
 export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig> = {
+  'learning-loop': {
+    pageKind: 'learning',
+    module: '学习闭环',
+    path: '/learning',
+    language: 'zh-CN',
+    showLogos: false,
+    seoDescription:
+      'LingXi 把学习组织成“理解问题、讲解练习、验证掌握”的完整闭环：先诊断真实水平，再按状态选择教学动作，最后用同类题和迁移题确认掌握。',
+    hero: hero(
+      '从一个问题，走到真正掌握',
+      'LingXi 把学习组织成完整的闭环：先理解你的问题和真实水平，再选择合适的教学动作，最后验证掌握程度。每一步的输出都是下一步的输入，学习因此能持续向前推进。',
+      'LingXi 把学习组织成“理解问题、讲解练习、验证掌握”的完整闭环：先诊断真实水平，再按状态选择教学动作，最后用同类题和迁移题确认掌握。',
+      <HeroPlatformLoop chat={LOOP_HERO_CHAT} workflow={LOOP_HERO_WORKFLOW} />,
+    ),
+    rows: [
+      {
+        id: 'loop',
+        title: '一个闭环，而不是一堆功能',
+        subtitle:
+          '诊断、讲解、练习和验证不是四个孤立模块；LingXi 让每一步的结果成为下一步的输入，学习才能持续向前推进。',
+        cards: [
+          {
+            title: '先理解，再教学',
+            description:
+              'LingXi 从学生的真实问题出发，定位卡点与已有基础，避免把已经掌握的内容再讲一遍。',
+            visual: answerPanel(
+              '我总是搞不清函数什么时候递增。',
+              '先看你对变化率的理解到了哪里，再决定从图像还是从定义讲起。',
+              '问题定位'
+            ),
+          },
+          {
+            title: '按状态选择教学动作',
+            description:
+              '根据当前掌握状态，在讲解、追问、练习与复习之间切换，组成连续的教学决策而不是固定流程。',
+            visual: preview('workflow'),
+          },
+          {
+            title: '用验证闭合每次学习',
+            description:
+              '讲解和练习之后，用同类题与迁移题确认掌握；未通过就回到薄弱点，通过才进入下一阶段。',
+            visual: stagingPanel(
+              '一次完整的学习闭环',
+              '问题已定位',
+              '掌握验证',
+              '同类题与迁移题通过后进入下一阶段',
+              ['卡点已定位', '讲解与练习完成', '等待验证结果'],
+              '学习',
+              '验证',
+              '开始验证'
+            ),
+          },
+        ],
+      },
+      {
+        id: 'experiences',
+        title: '围绕闭环组织的学习体验',
+        subtitle:
+          '每个体验专注闭环中的一个环节，也可以独立使用；它们共享同一份学习状态，换一个入口不换一份理解。',
+        cards: [
+          {
+            title: '个性化学习',
+            description:
+              'LingXi 根据学习目标、知识基础与可用时间动态规划学习路径，并随练习结果持续调整下一步。',
+            visual: pathPanel('个性化学习路径', [
+              { label: '阶段 1', title: '函数基础', detail: '当前学习内容', state: 'current' },
+              { label: '阶段 2', title: '导数应用', detail: '验证通过后进入', state: 'next' },
+              { label: '阶段 3', title: '综合复习', detail: '测验前完成', state: 'past' },
+            ]),
+          },
+          {
+            title: '疑难讲解',
+            description:
+              'LingXi 把抽象概念拆成可追问、可验证的分步讲解，讲完之后立即用理解检查确认效果。',
+            visual: preview('knowledge'),
+          },
+          {
+            title: '自适应练习',
+            description:
+              '根据掌握度动态生成训练，每次作答都更新诊断、反馈和下一题的题型与难度。',
+            visual: feedbackPanel('每次作答更新下一题', [
+              { label: '识别偶发失误', detail: '不立即降低难度' },
+              { label: '判断稳定薄弱点', detail: '回到相关知识' },
+              { label: '调整下一道练习', detail: '先提示，再验证迁移' },
+            ]),
+          },
+          {
+            title: '学情诊断',
+            description:
+              '把练习记录、测试结果与学习过程转成可解释的知识掌握诊断，识别薄弱点与关联关系。',
+            visual: preview('tables'),
+          },
+        ],
+      },
+      {
+        id: 'support',
+        title: '辅导、陪伴与验证，延伸到每个学习场景',
+        subtitle:
+          '从一道作业题到一个长期目标，LingXi 在不同场景里保持同一条主线：让学习真正发生，并被验证。',
+        cards: [
+          {
+            title: '作业辅导',
+            description:
+              'LingXi 用分步骤提示、错因分析和同类题训练辅导作业，帮助学生自己完成推理，而不是直接给答案。',
+            visual: answerPanel(
+              '我卡在第二步，接下来该看什么？',
+              '先比较两边是否能化成同一类表达式，再决定是移项还是因式分解。',
+              '下一步提示'
+            ),
+          },
+          {
+            title: '学习陪伴',
+            description:
+              '在持续对话中保留学习目标、阶段进度与关键困难，每次回来都从上一次的进度继续。',
+            visual: pathPanel('从上次进度继续', [
+              { label: '已完成', title: '函数基础', detail: '概念与图像理解', state: 'current' },
+              { label: '未完成', title: '迁移练习', detail: '下次打开即可继续', state: 'next' },
+              { label: '薄弱点', title: '解析式判断', detail: '需要再验证一次', state: 'past' },
+            ]),
+          },
+          {
+            title: '验证与再评估',
+            description:
+              '闭环以验证收尾：同类题与迁移题确认掌握，间隔再评估防止遗忘，未通过则回到薄弱点。',
+            visual: stagingPanel(
+              '同类题与迁移题',
+              '讲解完成',
+              '掌握验证',
+              '独立完成两道验证题',
+              ['同类题已生成', '迁移题已生成', '等待独立作答'],
+              '学习',
+              '验证',
+              '开始验证'
+            ),
+          },
+        ],
+      },
+    ],
+    footerCta: {
+      heading: '从一个真实的问题开始',
+      description: '让 LingXi 陪你沿着闭环走到真正掌握，而不是停在“讲过了”。',
+      ...COMMON_FOOTER,
+    },
+  },
   'personalized-learning': {
     pageKind: 'learning',
     module: '个性化学习',
@@ -305,14 +452,12 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
       'LingXi 先理解你的目标、基础与时间，再规划阶段任务；每次练习和反馈都会更新下一步，而不是把所有人放进同一张课程表。',
       'LingXi 根据学习目标、知识基础、练习表现与可用时间动态调整学习路径，让每一步都服务于当前最需要掌握的内容。',
       <HeroPlatformLoop chat={PERSONALIZED_HERO_CHAT} workflow={PERSONALIZED_HERO_WORKFLOW} />,
-      '#plan'
     ),
     rows: [
       {
         id: 'plan',
         title: '先理解你，再规划路径',
         subtitle: '把目标、基础和时间约束转成可执行的阶段计划，并明确每一步为什么现在值得学。',
-        cta: { label: '查看规划逻辑', href: '#plan' },
         cards: [
           {
             title: '目标与约束',
@@ -353,7 +498,6 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
         title: '学习过程中持续调整',
         subtitle:
           '计划不是一次生成后固定不变；LingXi 根据新表现更新状态，再选择下一步最合适的动作。',
-        cta: { label: '查看动态调整', href: '#adapt' },
         cards: [
           {
             title: '按状态选择下一步',
@@ -406,14 +550,12 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
       'LingXi 不急着给结论。它先识别你卡住的位置，再组织背景、概念、例子与可交互讲解，并在讲完后确认你是否真的理解。',
       'LingXi 将抽象知识拆成可追问、可验证的分步讲解，并通过知识依据、交互演示和理解检查帮助学生真正掌握概念。',
       <KnowledgeHeroLoop content={EXPLANATION_HERO_CONTENT} />,
-      '#explain'
     ),
     rows: [
       {
         id: 'explain',
         title: '从卡点开始，而不是从标准答案开始',
         subtitle: '先定位疑问，再调用知识与教学能力，把复杂概念拆成适合当前基础的讲解。',
-        cta: { label: '查看讲解流程', href: '#explain' },
         cards: [
           {
             title: '先弄清你卡在哪里',
@@ -446,7 +588,6 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
         id: 'verify',
         title: '讲完之后，确认是否真的理解',
         subtitle: '用追问、短练习和结果验证闭合一次讲解，而不是把“输出结束”当作“学习完成”。',
-        cta: { label: '查看理解验证', href: '#verify' },
         cards: [
           {
             title: '即时理解检查',
@@ -499,14 +640,12 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
       '面对作业问题，LingXi 先判断你已经做到哪一步，再给恰到好处的提示、错因分析和知识回顾；目标是帮助你完成推理，而不是把答案直接交给你。',
       'LingXi 通过分步骤提示、错因分析、知识点回顾和同类题训练辅导作业，帮助学生自己完成推理，而不是直接生成标准答案。',
       <HeroPlatformLoop chat={HOMEWORK_HERO_CHAT} workflow={HOMEWORK_HERO_WORKFLOW} />,
-      '#guide'
     ),
     rows: [
       {
         id: 'guide',
         title: '把“不会做”拆成下一步能做什么',
         subtitle: '辅导从学生已有过程开始，尽量给最小必要提示，让思考仍然由学生完成。',
-        cta: { label: '查看分步辅导', href: '#guide' },
         cards: [
           {
             title: '先看你的已有过程',
@@ -534,7 +673,6 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
         id: 'learn-from-error',
         title: '从一道错题，学会一类问题',
         subtitle: '找到错误发生的原因，回到相关知识点，再通过同类训练确认是否已经修正。',
-        cta: { label: '查看错因闭环', href: '#learn-from-error' },
         cards: [
           {
             title: '错因分析',
@@ -596,14 +734,12 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
       'LingXi 把掌握状态、近期错误和学习目标转成下一组练习；每次作答都会成为新的反馈，让题型、难度和提示随你变化。',
       'LingXi 根据知识掌握度、近期错误与学习目标动态生成训练，并在每次作答后更新下一轮题型、难度和反馈策略。',
       <HeroPlatformLoop chat={PRACTICE_HERO_CHAT} workflow={PRACTICE_HERO_WORKFLOW} />,
-      '#target'
     ),
     rows: [
       {
         id: 'target',
         title: '根据掌握度选择训练目标',
         subtitle: '先判断当前最值得练的知识点与能力，再决定题型、难度和训练数量。',
-        cta: { label: '查看练习生成', href: '#target' },
         cards: [
           {
             title: '读取当前掌握状态',
@@ -640,7 +776,6 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
         id: 'feedback-loop',
         title: '作答之后立即进入下一轮判断',
         subtitle: '每次结果都被用来更新诊断、反馈和下一题，而不是等一整套练习结束后才总结。',
-        cta: { label: '查看反馈闭环', href: '#feedback-loop' },
         cards: [
           {
             title: '错误后给针对性反馈',
@@ -693,14 +828,12 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
       'LingXi 不只给一个分数。它把练习、测试和学习过程组织成知识状态，识别薄弱点与关联，并把诊断转成下一步可执行的学习建议。',
       'LingXi 将练习记录、测试结果与学习过程转成可解释的知识掌握诊断，识别薄弱点、关联关系和下一步改进建议。',
       <LogsHeroLoop content={DIAGNOSIS_HERO_CONTENT} />,
-      '#diagnose'
     ),
     rows: [
       {
         id: 'diagnose',
         title: '把学习记录变成可行动的诊断',
         subtitle: '从过程数据中寻找稳定模式，而不是用一次作答定义学生。',
-        cta: { label: '查看诊断方法', href: '#diagnose' },
         cards: [
           {
             title: '汇总学习证据',
@@ -727,7 +860,6 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
         id: 'act',
         title: '诊断的终点，是下一步行动',
         subtitle: '把发现转成可以执行的学习建议，同时保留依据、风险边界和人工判断空间。',
-        cta: { label: '查看改进建议', href: '#act' },
         cards: [
           {
             title: '结论附带依据',
@@ -781,14 +913,12 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
       'LingXi 记住的不是闲聊，而是学习目标、阶段任务、关键困难和已经完成的进度。你不必每次重新解释，它会从当前状态继续推动下一步。',
       'LingXi 在持续对话中保留学习目标、阶段进度与关键学习状态，让每次回来都能从上一次的上下文继续，并推动下一步学习行动。',
       <HeroPlatformLoop chat={COMPANION_HERO_CHAT} workflow={COMPANION_HERO_WORKFLOW} />,
-      '#continue'
     ),
     rows: [
       {
         id: 'continue',
         title: '保留真正有用的学习上下文',
         subtitle: '把长期对话中的目标、进度与关键状态变成可继续执行的学习上下文。',
-        cta: { label: '查看上下文管理', href: '#continue' },
         cards: [
           {
             title: '记住学习目标与关键状态',
@@ -820,7 +950,6 @@ export const LEARNING_PAGE_CONFIGS: Record<LearningPageSlug, SolutionsPageConfig
         id: 'progress',
         title: '陪伴不是闲聊，而是持续推动学习',
         subtitle: '每次交互都应帮助学生理解当前状态、完成下一步并更新后续计划。',
-        cta: { label: '查看学习闭环', href: '#progress' },
         cards: [
           {
             title: '始终给出清楚的下一步',

@@ -51,7 +51,6 @@ const ENGINEERING_CONFIG: SolutionsPageConfig = {
       id: 'build',
       title: 'Automate the busywork.',
       subtitle: 'Sim agents take the repetitive engineering work off your plate.',
-      cta: { label: 'See engineering agents', href: '/signup' },
       cards: [
         {
           title: 'Review pull requests',
@@ -90,7 +89,6 @@ const ENGINEERING_CONFIG: SolutionsPageConfig = {
       id: 'connect',
       title: 'Wire into your tools.',
       subtitle: 'Sim connects the systems engineering already runs on.',
-      cta: { label: 'Browse integrations', href: '/signup' },
       cards: [
         {
           title: 'GitHub and GitLab',

@@ -2,7 +2,6 @@ import { BuildCallout } from '@/app/(landing)/components/features/components/bui
 import { FeatureCard } from '@/app/(landing)/components/features/components/feature-card'
 import { IntegrationsCallout } from '@/app/(landing)/components/features/components/integrations-callout/integrations-callout'
 import { KnowledgeCallout } from '@/app/(landing)/components/features/components/knowledge-callout/knowledge-callout'
-import { LogsCallout } from '@/app/(landing)/components/features/components/logs-callout'
 
 /**
  * Landing features - how LingXi works, as a learning lifecycle. Four beats, in
@@ -77,11 +76,11 @@ export function Features() {
           eyebrow='成长'
           title='持续追踪学习过程与效果'
           description='实时分析学习过程中的反馈、理解程度与知识掌握变化，让 AI 根据学生状态动态调整教学策略。'
-          backdropSrc='/landing/feature-monitor-backdrop.jpg'
+          backdropSrc='/landing/feature-context-backdrop.jpg'
           mediaSide='right'
           flushBottom
         >
-          <LogsCallout />
+          <KnowledgeCallout />
         </FeatureCard>
       </div>
 

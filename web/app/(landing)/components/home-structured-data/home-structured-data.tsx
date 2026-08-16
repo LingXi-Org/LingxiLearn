@@ -139,7 +139,7 @@ const HOME_JSON_LD = {
     {
       '@type': 'SoftwareSourceCode',
       '@id': `${SITE_URL}#source`,
-      codeRepository: 'https://github.com/simstudioai/sim',
+      codeRepository: 'https://github.com/LingXi-Org/LingxiLearn',
       programmingLanguage: ['TypeScript', 'Python'],
       runtimePlatform: 'Node.js',
       license: 'https://opensource.org/licenses/Apache-2.0',

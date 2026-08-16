@@ -55,7 +55,6 @@ const FILES_CONFIG: SolutionsPageConfig = {
       title: 'One place for every file.',
       subtitle:
         'Sim keeps uploads, agent outputs, and shared documents in a single store your whole workspace can reach.',
-      cta: { label: 'Explore Files', href: '/signup' },
       cards: [
         {
           title: 'One shared library',
@@ -122,7 +121,6 @@ const FILES_CONFIG: SolutionsPageConfig = {
       title: 'AI agents read, parse, and produce files.',
       subtitle:
         'Sim agents take files as inputs, pull the data out, and write new files back to the store for your team.',
-      cta: { label: 'Build a file-handling agent', href: '/signup' },
       cards: [
         {
           title: 'Read and parse anything',

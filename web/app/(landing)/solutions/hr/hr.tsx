@@ -52,7 +52,6 @@ const HR_CONFIG: SolutionsPageConfig = {
       id: 'onboard',
       title: 'Onboard and support.',
       subtitle: 'Sim agents handle the repetitive people-ops work end to end.',
-      cta: { label: 'See HR agents', href: '/signup' },
       cards: [
         {
           title: 'Onboard new hires',
@@ -98,7 +97,6 @@ const HR_CONFIG: SolutionsPageConfig = {
       id: 'run',
       title: 'Run the team.',
       subtitle: 'Sim keeps people operations moving without the manual chase.',
-      cta: { label: 'Explore HR automation', href: '/signup' },
       cards: [
         {
           title: 'Route approvals',

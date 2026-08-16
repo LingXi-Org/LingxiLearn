@@ -60,7 +60,6 @@ const LOGS_CONFIG: SolutionsPageConfig = {
       title: 'See exactly what every AI agent did.',
       subtitle:
         'Sim records every step of every agent run, so teams can follow each decision, tool call, and output on one timeline.',
-      cta: { label: 'Explore Logs in Sim', href: '/signup' },
       cards: [
         {
           title: 'Trace runs block by block',
@@ -135,7 +134,6 @@ const LOGS_CONFIG: SolutionsPageConfig = {
       title: 'Catch failures before they spread.',
       subtitle:
         'Sim surfaces failed runs the moment they happen, with the alerts and context teams need to fix them fast.',
-      cta: { label: 'Start tracing runs', href: '/signup' },
       cards: [
         {
           title: 'Filter to the runs that matter',

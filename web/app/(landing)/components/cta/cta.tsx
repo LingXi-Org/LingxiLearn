@@ -1,6 +1,6 @@
 import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 import type { SolutionsFooterCtaConfig } from '@/app/(landing)/components/solutions-page/types'
-import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
+import { EXPERIENCE_HREF } from '@/app/(landing)/constants'
 
 /**
  * Landing pre-footer CTA - the page's final conversion band. A tall, centered
@@ -21,8 +21,8 @@ interface CtaProps extends Partial<SolutionsFooterCtaConfig> {}
 export function Cta({
   heading = '立刻开始你的个性化学习之旅。',
   description,
-  primary = { label: '立即开始', href: SIGNUP_HREF },
-  secondary = { label: '联系销售', href: DEMO_HREF },
+  primary = { label: '开始体验', href: EXPERIENCE_HREF },
+  secondary = null,
 }: CtaProps = {}) {
   return (
     <section

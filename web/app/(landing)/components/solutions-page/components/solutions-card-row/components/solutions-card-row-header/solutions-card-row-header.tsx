@@ -38,9 +38,11 @@ export function SolutionsCardRowHeader({
           {row.note}
         </p>
       ) : null}
-      <div className={SOLUTIONS_SPACING.cardRowHeaderCtaGapFeature}>
-        <SolutionsPillCta cta={row.cta} />
-      </div>
+      {row.cta ? (
+        <div className={SOLUTIONS_SPACING.cardRowHeaderCtaGapFeature}>
+          <SolutionsPillCta cta={row.cta} />
+        </div>
+      ) : null}
     </div>
   )
 }

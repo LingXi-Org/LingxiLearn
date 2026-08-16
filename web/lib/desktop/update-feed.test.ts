@@ -135,10 +135,10 @@ describe('rewriteManifestUrls', () => {
     ].join('\n')
     const rewritten = rewriteManifestUrls(manifest, 'v0.5.24')
     expect(rewritten).toContain(
-      '  - url: https://github.com/simstudioai/sim/releases/download/v0.5.24/Sim-0.5.24-universal-mac.zip'
+      '  - url: https://github.com/LingXi-Org/LingxiGraph/releases/download/v0.5.24/Sim-0.5.24-universal-mac.zip'
     )
     expect(rewritten).toContain(
-      'path: https://github.com/simstudioai/sim/releases/download/v0.5.24/Sim-0.5.24-universal-mac.zip'
+      'path: https://github.com/LingXi-Org/LingxiGraph/releases/download/v0.5.24/Sim-0.5.24-universal-mac.zip'
     )
     expect(rewritten).toContain('sha512: abc')
   })

@@ -9,12 +9,16 @@ export const revalidate = 86400
 
 const STATIC_PATHS = [
   '/',
+  '/learning',
   '/learning/companion',
   '/learning/diagnosis',
   '/learning/explanation',
   '/learning/homework',
   '/learning/personalized',
   '/learning/practice',
+  '/safety',
+  '/safety/harness',
+  '/safety/data-compliance',
   '/knowledge',
   '/workflows',
   '/tables',

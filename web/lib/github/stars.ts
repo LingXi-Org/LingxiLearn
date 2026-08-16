@@ -4,11 +4,10 @@ import { env } from '@/lib/core/config/env'
 const logger = createLogger('GitHubStars')
 
 /**
- * Floor shown only when the live GitHub count can't be fetched. Kept a touch
- * below the real count (~28.9k as of 2026-06) so it never overstates, and
- * bumped periodically.
+ * Floor shown only when the live GitHub count can't be fetched. Matches the
+ * LingxiGraph repository's real count so it never overstates.
  */
-const FALLBACK_STAR_COUNT = 28900
+const FALLBACK_STAR_COUNT = 1
 
 /**
  * Formats a raw star count for display (e.g. 28900 → "28.9k").
@@ -20,7 +19,7 @@ export function formatStarCount(num: number): string {
 }
 
 /**
- * Fetches the Sim repository's GitHub star count, formatted for display.
+ * Fetches the LingxiGraph repository's GitHub star count, formatted for display.
  *
  * Server-only. The upstream fetch is cached for 1 hour via Next.js fetch
  * caching, so statically rendered pages (landing) and the `/api/stars`
@@ -30,11 +29,11 @@ export function formatStarCount(num: number): string {
 export async function getGitHubStars(): Promise<string> {
   try {
     const token = env.GITHUB_TOKEN
-    const response = await fetch('https://api.github.com/repos/simstudioai/sim', {
+    const response = await fetch('https://api.github.com/repos/LingXi-Org/LingxiGraph', {
       headers: {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'Sim/1.0',
+        'User-Agent': 'LingXi/1.0',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       next: { revalidate: 3600 },

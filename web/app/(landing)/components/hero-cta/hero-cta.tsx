@@ -1,7 +1,7 @@
 import { cn } from '@/components/ui-kit'
 import { AuthAwareChipLink } from '@/lib/auth/auth-aware-link'
 import type { SolutionsPillCta } from '@/app/(landing)/components/solutions-page/types'
-import { DEMO_HREF, SIGNUP_HREF } from '@/app/(landing)/constants'
+import { EXPERIENCE_HREF } from '@/app/(landing)/constants'
 
 /**
  * Hero-scale sizing shared by both CTAs - one step up from the navbar's 30px
@@ -30,8 +30,8 @@ interface HeroCtaProps {
 }
 
 export function HeroCta({
-  primary = { label: '预约演示', href: DEMO_HREF },
-  secondary = { label: '立即注册', href: SIGNUP_HREF },
+  primary = { label: '开始体验', href: EXPERIENCE_HREF },
+  secondary = null,
 }: HeroCtaProps = {}) {
   return (
     <div className='flex items-center gap-2 max-sm:w-full max-sm:flex-col max-sm:items-stretch'>

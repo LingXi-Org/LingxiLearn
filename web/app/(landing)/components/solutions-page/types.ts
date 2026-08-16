@@ -106,8 +106,11 @@ export interface SolutionsCardRowConfig {
    * would overload {@link subtitle} if merged into it (e.g. self-hosting).
    */
   note?: string
-  /** The row's single pill CTA. */
-  cta: SolutionsPillCta
+  /**
+   * The row's optional pill CTA. Omitted on product pages that keep a single
+   * "开始体验" page CTA; when absent the header renders title + subtitle only.
+   */
+  cta?: SolutionsPillCta
   /** The cards in this row - 3 or 4. The grid derives its columns from this length. */
   cards: SolutionsCardConfig[]
   /**

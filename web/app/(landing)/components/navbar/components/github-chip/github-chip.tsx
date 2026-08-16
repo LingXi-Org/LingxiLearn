@@ -13,7 +13,7 @@ import { ChipLink } from '@/components/ui-kit'
 export function GitHubChip() {
   return (
     <ChipLink
-      href='https://github.com/simstudioai/sim'
+      href='https://github.com/LingXi-Org/LingxiGraph'
       target='_blank'
       rel='noopener noreferrer'
       leftIcon={GithubOutlineIcon}

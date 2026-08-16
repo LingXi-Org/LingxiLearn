@@ -59,7 +59,6 @@ const TABLES_CONFIG: SolutionsPageConfig = {
       title: 'Give AI agents structured data to act on.',
       subtitle:
         'Sim stores the leads, tickets, and invoices agents work with as tables in the same workspace as the agents.',
-      cta: { label: 'Explore Tables', href: '/signup' },
       cards: [
         {
           title: 'Records agents act on',
@@ -88,7 +87,6 @@ const TABLES_CONFIG: SolutionsPageConfig = {
       title: 'Tables are your AI agents’ memory.',
       subtitle:
         'Sim carries state between runs. Every run writes rows, every change is recorded, and agents pick up exactly where they left off.',
-      cta: { label: 'See how agents use Tables', href: '/signup' },
       cards: [
         {
           title: 'State between runs',

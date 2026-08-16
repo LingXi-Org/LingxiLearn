@@ -114,6 +114,8 @@ export function SolutionsCard({
 
           <div
             aria-hidden='true'
+            data-export-widget='true'
+            data-export-title={card.title}
             className={cn(
               '-mr-8 -mb-8 max-lg:-mr-6 max-lg:-mb-6 mt-8 min-h-[240px] w-[calc(100%+2rem)] flex-1 max-lg:w-[calc(100%+1.5rem)]',
               pageKind === 'learning' &&

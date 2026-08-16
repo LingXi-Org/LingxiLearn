@@ -55,7 +55,7 @@ describe('withDesktopTabMentions', () => {
         {
           tabId: 'browser-2',
           title: '',
-          url: 'https://github.com/simstudioai/sim',
+          url: 'https://github.com/LingXi-Org/LingxiGraph',
           loading: false,
           active: false,
           pinned: false,

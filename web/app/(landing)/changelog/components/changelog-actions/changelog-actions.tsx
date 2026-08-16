@@ -16,7 +16,7 @@ export function ChangelogActions() {
     <div className='flex flex-wrap items-center gap-1'>
       <ChipLink
         variant='primary'
-        href='https://github.com/simstudioai/sim/releases'
+        href='https://github.com/LingXi-Org/LingxiGraph/releases'
         target='_blank'
         rel='noopener noreferrer'
         leftIcon={GithubOutlineIcon}
@@ -24,7 +24,7 @@ export function ChangelogActions() {
         View on GitHub
       </ChipLink>
       <ChipLink
-        href='https://docs.sim.ai'
+        href='https://docs.lingxilearn.cn/docs/zh/'
         target='_blank'
         rel='noopener noreferrer'
         leftIcon={BookOpen}
