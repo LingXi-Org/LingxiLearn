@@ -68,6 +68,15 @@ ALLOWED_COLUMN_TYPES = {"string", "number", "currency", "boolean", "date", "json
 PINNED_RESOURCE_TYPES = {"workflow", "file", "knowledge_base", "table", "folder", "workspace"}
 
 
+def _utc_datetime(value: datetime | None) -> datetime | None:
+    """Normalize SQLite's naive ``DateTime(timezone=True)`` values to UTC."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 async def _workspace(request: Request, context: LearnerContext) -> Workspace:
     svc = service_of(request)
     async with svc.db.session() as session:
@@ -4281,7 +4290,8 @@ async def list_logs(
                     0,
                     int(
                         (
-                            (execution.ended_at or utcnow()) - execution.started_at
+                            (_utc_datetime(execution.ended_at) or utcnow())
+                            - (_utc_datetime(execution.started_at) or utcnow())
                         ).total_seconds()
                         * 1000
                     ),
@@ -4291,7 +4301,7 @@ async def list_logs(
             ),
             "trigger": "agent-task",
             "createdAt": (
-                execution.started_at.isoformat()
+                _utc_datetime(execution.started_at).isoformat()
                 if execution is not None and execution.started_at
                 else task.created_at.isoformat()
                 if task.created_at
@@ -4348,13 +4358,17 @@ async def log_stats(
             .all()
         )
     now_dt = datetime.now(UTC)
-    durations = [
-        max(0, int(((row.ended_at or now_dt) - row.started_at).total_seconds() * 1000))
+    normalized_rows = [
+        (_utc_datetime(row.started_at), _utc_datetime(row.ended_at))
         for row in executions
-        if row.started_at
     ]
-    starts = [row.started_at for row in executions if row.started_at]
-    ends = [row.ended_at or now_dt for row in executions if row.started_at]
+    durations = [
+        max(0, int(((ended or now_dt) - started).total_seconds() * 1000))
+        for started, ended in normalized_rows
+        if started
+    ]
+    starts = [started for started, _ended in normalized_rows if started]
+    ends = [ended or now_dt for started, ended in normalized_rows if started]
     now = now_dt.isoformat()
     return {
         "workflows": [],

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from lingxilearn.api.workspace_routes import _utc_datetime
 from lingxilearn.runtime.trajectory import TRAJECTORY_LANES, build_trajectory_projection
 
 
@@ -75,3 +76,110 @@ def test_projection_is_execution_scoped_by_input_events() -> None:
         if item["kind"] == "agent.output"
     ]
     assert output_items and output_items[0]["metadata"]["message"] == "only this run"
+
+
+def test_round_lifecycle_uses_step_and_suppresses_legacy_fallback() -> None:
+    projection = build_trajectory_projection(
+        {
+            "id": "exec-round",
+            "started_at": "2026-08-16T00:00:00+00:00",
+            "ended_at": "2026-08-16T00:00:01+00:00",
+            "status": "completed",
+        },
+        [
+            {
+                "kind": "plan.created",
+                "ts": "2026-08-16T00:00:00.050000+00:00",
+                "payload": {"step": 1, "decision_id": "legacy"},
+            },
+            {
+                "kind": "round.started",
+                "ts": "2026-08-16T00:00:00.100000+00:00",
+                "payload": {"step": 1},
+            },
+            {
+                "kind": "node.appeared",
+                "ts": "2026-08-16T00:00:00.200000+00:00",
+                "payload": {"node_id": "n1", "step": 1},
+            },
+            {
+                "kind": "round.completed",
+                "ts": "2026-08-16T00:00:00.500000+00:00",
+                "payload": {"step": 1, "decision_id": "d1", "runtime_status": "completed"},
+            },
+            {
+                "kind": "decision.recorded",
+                "ts": "2026-08-16T00:00:00.600000+00:00",
+                "payload": {"step": 1, "decision_id": "legacy"},
+            },
+        ],
+    )
+
+    rounds = [item for item in projection["lanes"][1]["items"] if item["kind"] == "round"]
+    assert len(rounds) == 1
+    assert rounds[0]["id"] == "round:d1"
+    assert rounds[0]["durationMs"] == 400
+    task = projection["lanes"][2]["items"][0]
+    assert task["parentId"] == rounds[0]["id"]
+
+
+def test_control_and_resource_projection_is_independent_and_first_output_is_execution_scoped() -> None:
+    projection = build_trajectory_projection(
+        {
+            "id": "exec-resources",
+            "started_at": "2026-08-16T00:00:00+00:00",
+            "ended_at": "2026-08-16T00:00:01+00:00",
+        },
+        [
+            {
+                "kind": "assistant.delta",
+                "ts": "2026-08-16T00:00:00.500000+00:00",
+                "payload": {"stream_id": "s", "text": "first"},
+            },
+            {
+                "kind": "agent.output.delta",
+                "ts": "2026-08-16T00:00:00.600000+00:00",
+                "payload": {"stream_id": "s", "text": "second"},
+            },
+        ],
+        [
+            {
+                "id": "interpret-1",
+                "name": "Interpret goal",
+                "type": "router_v2",
+                "primitive": "interpret_goal",
+                "category": "control",
+                "startTime": "2026-08-16T00:00:00.100000+00:00",
+                "endTime": "2026-08-16T00:00:00.200000+00:00",
+            },
+            {
+                "id": "model-1",
+                "name": "Model",
+                "type": "model",
+                "startTime": "2026-08-16T00:00:00.200000+00:00",
+                "endTime": "2026-08-16T00:00:00.400000+00:00",
+                "tokens": {"total": 4},
+            },
+            {
+                "id": "tool-1",
+                "name": "Tool",
+                "type": "tool",
+                "startTime": "2026-08-16T00:00:00.400000+00:00",
+                "endTime": "2026-08-16T00:00:00.450000+00:00",
+            },
+        ],
+    )
+
+    control = projection["lanes"][1]["items"]
+    resources = projection["lanes"][6]["items"]
+    output = projection["lanes"][7]["items"]
+    assert any(item["kind"] == "interpret_goal" for item in control)
+    assert {item["kind"] for item in resources} >= {"model.duration", "tool.duration", "tokens"}
+    assert sum(item["kind"] == "first.output" for item in output) == 1
+
+
+def test_sqlite_naive_running_timestamp_is_safe_for_aware_duration_math() -> None:
+    started = _utc_datetime(datetime(2026, 8, 16, 0, 0, 0))
+    now = _utc_datetime(datetime(2026, 8, 16, 0, 0, 1, tzinfo=UTC))
+    assert started is not None and now is not None
+    assert int((now - started).total_seconds() * 1000) == 1000

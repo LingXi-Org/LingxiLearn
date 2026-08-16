@@ -135,6 +135,97 @@ describe('buildTrajectoryModel', () => {
     expect(model.lanes[2].entries[0]).toMatchObject({ offsetMs: 200, durationMs: 300 })
     expect(model.source).toBe('trajectory')
   })
+
+  it('keeps semantic ids stable and maps parent chains across lanes', () => {
+    const model = buildTrajectoryModel([], 0, {
+      version: 'lingxi-trajectory.v1',
+      executionId: 'exec-parent',
+      clock: { startedAt: START, endedAt: '2026-08-15T08:00:01.000Z', durationMs: 1_000 },
+      lanes: [
+        { id: 'run', label: 'RUN', items: [] },
+        {
+          id: 'control',
+          label: 'CONTROL ROUND',
+          items: [
+            {
+              id: 'round:1',
+              lane: 'control',
+              kind: 'round',
+              label: 'Control round 1',
+              roundStep: 1,
+              startTime: START,
+              relativeStartMs: 0,
+              durationMs: 800,
+              precision: 'exact',
+            },
+          ],
+        },
+        {
+          id: 'task',
+          label: 'CAPABILITY TASK',
+          items: [
+            {
+              id: 'task:n1',
+              lane: 'task',
+              kind: 'capability.task',
+              label: 'Search',
+              parentId: 'round:1',
+              roundStep: 1,
+              startTime: '2026-08-15T08:00:00.100Z',
+              relativeStartMs: 100,
+              durationMs: 500,
+              precision: 'exact',
+            },
+          ],
+        },
+        {
+          id: 'action',
+          label: 'ACTION',
+          items: [
+            {
+              id: 'action:model',
+              lane: 'action',
+              kind: 'model',
+              label: 'Generate query',
+              parentId: 'task:n1',
+              startTime: '2026-08-15T08:00:00.200Z',
+              relativeStartMs: 200,
+              durationMs: 100,
+              precision: 'exact',
+              metadata: { tokens: { input: 4, output: 6 }, provider: 'test' },
+            },
+          ],
+        },
+        { id: 'runtime', label: 'RUNTIME', items: [] },
+        { id: 'state', label: 'STATE', items: [] },
+        { id: 'resource', label: 'RESOURCE', items: [] },
+        { id: 'output', label: 'OUTPUT', items: [] },
+      ],
+      summary: { tokens: 42 },
+    } as never)
+
+    const round = model.entries.find((entry) => entry.sourceId === 'round:1')!
+    const task = model.entries.find((entry) => entry.sourceId === 'task:n1')!
+    const action = model.entries.find((entry) => entry.sourceId === 'action:model')!
+    expect(round.id).toBe('round:1')
+    expect(task.parentId).toBe(round.id)
+    expect(action.parentIds).toEqual([round.id, task.id])
+    expect(summarizeTrajectory(model).tokenCount).toBe(42)
+
+    const matches = getVisibleTrajectoryEntries(model.entries, {
+      searchQuery: 'provider',
+      type: 'model',
+      collapsedIds: new Set(),
+    })
+    expect(matches.map((entry) => entry.id)).toEqual([round.id, task.id, action.id])
+    expect(
+      getVisibleTrajectoryEntries(model.entries, {
+        searchQuery: 'provider',
+        type: 'model',
+        collapsedIds: new Set([task.id]),
+      }).map((entry) => entry.id)
+    ).toEqual([round.id, task.id])
+  })
 })
 
 describe('trajectory summaries and filtering', () => {

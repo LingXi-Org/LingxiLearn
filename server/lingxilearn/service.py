@@ -90,6 +90,15 @@ AGENT_FLUSH_EVERY = 4
 """Batch size for persisting projections mid-run — small enough to feel live."""
 
 
+def _utc_datetime(value: datetime | None) -> datetime | None:
+    """Normalize SQLite's naive timezone columns before arithmetic."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 class _ProviderEventRuntime:
     """Small event bridge used by isolated provider contract tests."""
 
@@ -973,8 +982,8 @@ class Service:
         row = await self.repo.get_agent_execution(execution_id, learner_id)
         if row is None:
             raise KeyError(f"unknown execution: {execution_id}")
-        started = row.started_at
-        ended = row.ended_at
+        started = _utc_datetime(row.started_at)
+        ended = _utc_datetime(row.ended_at)
         duration = int((ended - started).total_seconds() * 1000) if ended and started else None
         records = await self.repo.agent_events_for_execution(execution_id, learner_id)
         trace = replay_sim_trace(

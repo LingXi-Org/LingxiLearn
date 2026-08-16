@@ -365,8 +365,9 @@ function TrajectoryLedger({
                 onClick={() => onSelect(entry)}
                 onKeyDown={(event) => handleKeyDown(event, entry, index)}
               >
-                <td className='px-3 py-2 font-mono text-[var(--text-tertiary)] text-xs tabular-nums'>
-                  {entry.path.join('.')}
+                <td className='px-3 py-2 font-mono text-[var(--text-tertiary)] text-xs uppercase tracking-[0.04em]'>
+                  {entry.lane.toUpperCase()}
+                  {entry.item?.roundStep != null ? ` · step ${entry.item.roundStep}` : ''}
                 </td>
                 <td className='min-w-0 px-2 py-2'>
                   <div
@@ -403,9 +404,9 @@ function TrajectoryLedger({
                     >
                       {getSpanName(entry.span)}
                     </span>
-                    {entry.depth === 0 ? (
+                    {entry.item?.roundStep != null ? (
                       <span className='ml-1 flex-shrink-0 text-[var(--text-tertiary)] text-caption'>
-                        Turn {entry.path[0]}
+                        Step {entry.item.roundStep}
                       </span>
                     ) : null}
                   </div>
