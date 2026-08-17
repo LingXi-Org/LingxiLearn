@@ -1,4 +1,4 @@
-name: LingXi 开发治理
+name: 协作检查
 
 on:
   pull_request:
@@ -18,10 +18,10 @@ permissions:
 jobs:
   approval-gate:
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
-    name: PR 审批门禁
+    name: PR 审阅要求
     runs-on: ubuntu-latest
     steps:
-      - name: 执行 Team 驱动的 PR 审批策略
+      - name: 检查审阅要求
         uses: LingXi-Org/.github/.github/actions/pr-approval-gate@main
         with:
           github_token: ${{ github.token }}
@@ -37,10 +37,10 @@ jobs:
 
   issue-approval:
     if: github.event_name == 'issues' || (github.event_name == 'issue_comment' && github.event.issue.pull_request == null)
-    name: Issue 审批治理
+    name: Issue 确认
     runs-on: ubuntu-latest
     steps:
-      - name: 执行 Mentor Issue 审批策略
+      - name: 检查 Issue 状态
         uses: LingXi-Org/.github/.github/actions/issue-approval@main
         with:
           github_token: ${{ github.token }}
