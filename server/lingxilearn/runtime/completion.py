@@ -37,6 +37,8 @@ class CompletionContext:
     """Current profile rows keyed by knowledge_point_id."""
     user_replied: bool = False
     quiz_graded: bool = False
+    provider_result: bool = False
+    """The provider returned a successful, host-observed result for this task."""
 
     def __post_init__(self) -> None:
         if self.profile is None:
@@ -92,6 +94,12 @@ def evaluate(condition: DoneCondition | None, context: CompletionContext) -> Ver
             return Verdict(
                 ok,
                 f"观察到 {len(matched)}/{condition.min_count} 条 {condition.signal} 证据",
+            )
+
+        case "provider_result":
+            return Verdict(
+                context.provider_result,
+                "执行者已产生有效结果" if context.provider_result else "执行者尚未产生有效结果",
             )
 
         case "profile_reaches":

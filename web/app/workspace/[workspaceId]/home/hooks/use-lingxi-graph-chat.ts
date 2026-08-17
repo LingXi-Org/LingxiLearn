@@ -109,6 +109,21 @@ function artifactResourceId(taskId: string, artifact: string): string {
   return `lingxi-artifact:${taskId}:${normalizeArtifactKind(artifact)}`
 }
 
+const RUNTIME_GRAPH_REFRESH_EVENTS = new Set([
+  'run.started',
+  'run.resumed',
+  'round.started',
+  'decision.recorded',
+  'node.started',
+  'node.completed',
+  'node.failed',
+  'node.held',
+  'node.revising',
+  'agent.started',
+  'agent.completed',
+  'agent.failed',
+])
+
 /**
  * Translate shared chat chips into the small, learner-scoped reference contract
  * understood by the LingxiGraph API. Unsupported legacy editor chips are
@@ -407,8 +422,32 @@ export function useLingxiGraphChat(
     }
 
     let cancelled = false
+    let runtimeGraphRefreshTimer: ReturnType<typeof globalThis.setTimeout> | null = null
+    let runtimeGraphRefreshInFlight = false
     setIsReconnecting(true)
     setError(null)
+
+    const refreshRuntimeGraph = async () => {
+      if (cancelled || runtimeGraphRefreshInFlight) return
+      runtimeGraphRefreshInFlight = true
+      try {
+        const graph = await api.runtimeGraph(taskId)
+        if (!cancelled) setWorkflowState(graph.workflowState)
+      } catch {
+        // The graph endpoint can briefly lag identity persistence; the next
+        // lifecycle event/catch-up tick schedules another coalesced refresh.
+      } finally {
+        runtimeGraphRefreshInFlight = false
+      }
+    }
+
+    const scheduleRuntimeGraphRefresh = () => {
+      if (cancelled || runtimeGraphRefreshTimer !== null) return
+      runtimeGraphRefreshTimer = globalThis.setTimeout(() => {
+        runtimeGraphRefreshTimer = null
+        void refreshRuntimeGraph()
+      }, 150)
+    }
 
     const appendEvent = (event: AgentTaskEvent) => {
       if (cancelled) return
@@ -422,6 +461,7 @@ export function useLingxiGraphChat(
       const eventWorkflowState =
         event.workflowState ?? (event.payload.workflowState as Record<string, unknown> | undefined)
       if (eventWorkflowState) setWorkflowState(eventWorkflowState)
+      if (RUNTIME_GRAPH_REFRESH_EVENTS.has(event.kind)) scheduleRuntimeGraphRefresh()
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
         if (artifact)
@@ -470,6 +510,9 @@ export function useLingxiGraphChat(
       reduceV1Event(model, envelope)
       v1ModelRef.current = model
       setV1Model({ chatId: model.chatId, turns: model.turns, lastSeq: model.lastSeq })
+      if (envelope.type === 'run' || envelope.type === 'span') {
+        scheduleRuntimeGraphRefresh()
+      }
       if (envelope.type === 'resource') {
         const resource = (envelope.payload as Record<string, unknown>).resource as
           | Record<string, unknown>
@@ -609,6 +652,7 @@ export function useLingxiGraphChat(
       unsubscribeV1Ref.current?.()
       unsubscribeV1Ref.current = null
       globalThis.clearInterval(v1CatchUpTimer)
+      if (runtimeGraphRefreshTimer !== null) globalThis.clearTimeout(runtimeGraphRefreshTimer)
     }
   }, [applyTurnState, locallyStopped, resolvedChatId, subscriptionEpoch])
 

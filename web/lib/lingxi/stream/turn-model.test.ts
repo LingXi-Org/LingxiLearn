@@ -87,6 +87,13 @@ describe('turn model reduction', () => {
       envelope(3, 'text', { channel: 'assistant', text: '量子叠加是指一个系统可同时处于多个状态。', streamId: 's1' }),
     ])
     expect(model.turns[0].assistantText).toBe('量子叠加是指一个系统可同时处于多个状态。')
+    expect(model.turns[0].blocks).toContainEqual(
+      expect.objectContaining({
+        type: 'text',
+        streamId: 's1',
+        content: '量子叠加是指一个系统可同时处于多个状态。',
+      })
+    )
   })
 
   it('upserts tool calls by id and maps statuses', () => {

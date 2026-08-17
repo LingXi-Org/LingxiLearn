@@ -73,6 +73,8 @@ export interface ContentBlock {
   parentToolCallId?: string
   spanId?: string
   parentSpanId?: string
+  /** Stable V1 text lane identity, used to upsert streamed assistant prose. */
+  streamId?: string
 }
 
 export interface LingxiChatMessage {
