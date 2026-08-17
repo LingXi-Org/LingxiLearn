@@ -77,8 +77,10 @@ services:
       NEXT_PUBLIC_MOCK_AUTH: "false"
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:8080}
     depends_on:
+      # Next rewrites /auth/* and /api/* to the API. Do not expose the web
+      # container until FastAPI's image healthcheck reports that port 8000 is ready.
       api:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${LINGXILEARN_WEB_PORT:-8080}:3000"
     restart: unless-stopped
@@ -138,6 +140,10 @@ services:
         condition: service_completed_successfully
       api-var-init:
         condition: service_completed_successfully
+    # The scheduler reuses the API image but does not run an HTTP server, so
+    # the image's /api/health probe must not mark this worker unhealthy.
+    healthcheck:
+      disable: true
     restart: unless-stopped
     stop_grace_period: 30s
     read_only: true
