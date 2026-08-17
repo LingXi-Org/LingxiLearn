@@ -55,6 +55,16 @@ jobs:
         working-directory: web
         run: bun install --frozen-lockfile
 
+      - name: Format frontend patch
+        working-directory: web
+        run: >-
+          bunx biome check --write
+          'lib/lingxi/chat-types.ts'
+          'lib/lingxi/stream/turn-model.ts'
+          'lib/lingxi/stream/turn-model.test.ts'
+          'lib/lingxi/live-stream-regression.test.ts'
+          'app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts'
+
       - name: Run frontend regressions
         working-directory: web
         run: >-
@@ -66,16 +76,6 @@ jobs:
       - name: Type-check frontend
         working-directory: web
         run: bun run type-check
-
-      - name: Check frontend formatting
-        working-directory: web
-        run: >-
-          bunx biome check
-          'lib/lingxi/chat-types.ts'
-          'lib/lingxi/stream/turn-model.ts'
-          'lib/lingxi/stream/turn-model.test.ts'
-          'lib/lingxi/live-stream-regression.test.ts'
-          'app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts'
 
       - name: Commit tested repair
         run: |
