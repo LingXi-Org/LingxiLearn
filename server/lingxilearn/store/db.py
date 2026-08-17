@@ -2461,7 +2461,23 @@ class Repository:
                     artifact_refs=list(artifact_refs or []),
                 )
                 s.add(row)
-                await s.commit()
+                try:
+                    await s.commit()
+                except IntegrityError:
+                    # Same-revision workers can legitimately race here.  The
+                    # unique key makes the snapshot first-write-wins; recover
+                    # the committed winner instead of failing the work item and
+                    # blocking every dependent learner-facing capability.
+                    await s.rollback()
+                    row = await s.scalar(
+                        select(FactSnapshot).where(
+                            FactSnapshot.task_id == task_id,
+                            FactSnapshot.turn_id == turn_id,
+                            FactSnapshot.plan_revision == plan_revision,
+                        )
+                    )
+                    if row is None:
+                        raise
             return {
                 "id": row.id,
                 "facts": dict(row.facts),
