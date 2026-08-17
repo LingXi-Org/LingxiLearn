@@ -22,6 +22,9 @@ jobs:
       - name: Apply repair
         run: python scripts/apply_durable_assistant_fix.py
 
+      - name: Normalize generated regression EOF
+        run: python -c "from pathlib import Path; p=Path('server/tests/test_durable_turn_regression.py'); p.write_text(p.read_text().rstrip() + '\\n')"
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
