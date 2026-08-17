@@ -5,7 +5,7 @@ import { cn, Loader } from '@sim/emcn'
 import { X } from '@sim/emcn/icons'
 import { getDocumentIcon } from '@/components/icons/document-icons'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
-import type { AttachedFile } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/hooks/use-file-attachments'
+import type { AttachedFile } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-file-attachments'
 
 /**
  * Chrome shared by both chip shapes. Not `chipFilledFillTokens` — its dark fill is

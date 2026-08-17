@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { SCROLL_TOLERANCE } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/constants'
+import { SCROLL_TOLERANCE } from '@/app/workspace/[workspaceId]/components/user-input/constants'
 import type { ChatContext } from '@/stores/panel'
 
 interface UseMentionMenuProps {

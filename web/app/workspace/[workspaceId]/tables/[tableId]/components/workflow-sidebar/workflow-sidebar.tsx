@@ -56,7 +56,7 @@ import {
   FieldError,
   RequiredLabel,
 } from '@/app/workspace/[workspaceId]/tables/[tableId]/components/sidebar-fields'
-import { PreviewWorkflow } from '@/app/workspace/[workspaceId]/w/components/preview'
+import { PreviewWorkflow } from '@/app/workspace/[workspaceId]/components/preview'
 import { getBlock } from '@/blocks'
 import { getTileIconColorClass } from '@/blocks/icon-color'
 import {

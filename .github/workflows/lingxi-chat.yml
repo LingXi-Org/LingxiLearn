@@ -47,6 +47,9 @@ jobs:
       - name: Type-check frontend contracts
         run: bun run type-check
 
+      - name: Check workspace module boundaries
+        run: bash ../scripts/check-workspace-boundaries.sh web
+
       - name: Check Lingxi frontend changes
         run: >-
           bunx biome check

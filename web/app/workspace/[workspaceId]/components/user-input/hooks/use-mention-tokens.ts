@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
-import type { useMentionMenu } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/hooks/use-mention-menu'
-import { SKILL_CHIP_TRIGGER } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/utils'
+import type { useMentionMenu } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-mention-menu'
+import { SKILL_CHIP_TRIGGER } from '@/app/workspace/[workspaceId]/components/user-input/utils'
 import type { ChatContext } from '@/stores/panel'
 
 interface UseMentionTokensProps {

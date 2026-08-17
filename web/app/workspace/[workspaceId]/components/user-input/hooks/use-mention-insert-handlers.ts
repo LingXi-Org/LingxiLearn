@@ -3,10 +3,10 @@ import {
   DOCS_CONFIG,
   FOLDER_CONFIGS,
   type FolderConfig,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/constants'
-import type { useMentionMenu } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/hooks/use-mention-menu'
-import type { MentionFolderNav } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/types'
-import { isContextAlreadySelected } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/utils'
+} from '@/app/workspace/[workspaceId]/components/user-input/constants'
+import type { useMentionMenu } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-mention-menu'
+import type { MentionFolderNav } from '@/app/workspace/[workspaceId]/components/user-input/types'
+import { isContextAlreadySelected } from '@/app/workspace/[workspaceId]/components/user-input/utils'
 import type { ChatContext } from '@/stores/panel'
 
 interface UseMentionInsertHandlersProps {
@@ -44,7 +44,7 @@ export function useMentionInsertHandlers({
   } = mentionMenu
 
   /**
-   * Closes all menus and resets state
+   * Closes all menus and resetting state
    */
   const closeMenus = useCallback(() => {
     setShowMentionMenu(false)

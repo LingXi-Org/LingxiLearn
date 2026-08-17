@@ -79,7 +79,7 @@ import {
 import { getDocumentIcon } from '@/app/workspace/[workspaceId]/knowledge/components'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
-import { useContextMenu } from '@/app/workspace/[workspaceId]/w/components/sidebar/hooks'
+import { useContextMenu } from '@/app/workspace/[workspaceId]/components/hooks'
 import { CONNECTOR_META_REGISTRY } from '@/connectors/registry'
 import {
   useKnowledgeBase,

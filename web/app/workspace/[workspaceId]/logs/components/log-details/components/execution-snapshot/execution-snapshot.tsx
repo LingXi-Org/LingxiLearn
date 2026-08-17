@@ -18,7 +18,7 @@ import {
 } from '@sim/emcn'
 import { CircleAlert } from '@sim/emcn/icons'
 import { createPortal } from 'react-dom'
-import { Preview } from '@/app/workspace/[workspaceId]/w/components/preview'
+import { Preview } from '@/app/workspace/[workspaceId]/components/preview'
 import { useExecutionSnapshot } from '@/hooks/queries/logs'
 import type { WorkflowState } from '@/stores/workflows/workflow/types'
 

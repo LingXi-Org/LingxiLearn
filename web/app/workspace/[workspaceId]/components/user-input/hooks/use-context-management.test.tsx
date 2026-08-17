@@ -4,7 +4,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { useContextManagement } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/hooks/use-context-management'
+import { useContextManagement } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-context-management'
 import type { ChatContext } from '@/stores/panel'
 
 let container: HTMLDivElement

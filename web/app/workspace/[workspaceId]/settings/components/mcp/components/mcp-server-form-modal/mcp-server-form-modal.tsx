@@ -21,8 +21,8 @@ import type { McpAuthType, McpTransport } from '@/lib/mcp/types'
 import {
   checkEnvVarTrigger,
   EnvVarDropdown,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/env-var-dropdown'
-import { formatDisplayText } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/formatted-text'
+} from '@/app/workspace/[workspaceId]/components/sub-blocks/env-var-dropdown'
+import { formatDisplayText } from '@/app/workspace/[workspaceId]/components/sub-blocks/formatted-text'
 import { useMcpServerTest } from '@/hooks/queries/mcp'
 
 const logger = createLogger('McpServerFormModal')
