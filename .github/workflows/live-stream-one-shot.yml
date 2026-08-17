@@ -22,6 +22,33 @@ jobs:
       - name: Apply live stream and snapshot fixes
         run: python scripts/apply_live_stream_fix.py
 
+      - name: Repair regression source quoting
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          Path('server/tests/test_live_stream_regression.py').write_text('''from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_v1_json_history_respects_durable_event_cursor() -> None:
+    source = (ROOT / "lingxilearn" / "api" / "routes.py").read_text(encoding="utf-8")
+    assert "cursor," in source
+    assert source.index("header = request.headers.get") < source.index('format") == "json"')
+
+
+def test_fact_snapshot_insert_race_recovers_committed_winner() -> None:
+    source = (ROOT / "lingxilearn" / "store" / "db.py").read_text(encoding="utf-8")
+    method = source[source.index("async def save_fact_snapshot"):source.index("# -- knowledge graphs")]
+    assert "except IntegrityError:" in method
+    assert "await s.rollback()" in method
+    assert "FactSnapshot.task_id == task_id" in method
+''', encoding='utf-8')
+          PY
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
