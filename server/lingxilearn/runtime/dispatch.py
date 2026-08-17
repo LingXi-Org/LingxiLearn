@@ -1057,6 +1057,8 @@ class Dispatcher:
                 profile=profile_rows,
                 user_replied=bool(self._deps.user_message.get("message")),
                 quiz_graded="grading" in self._results,
+                provider_result=str(result.status or "completed").casefold()
+                in {"completed", "success", "succeeded", "ok"},
             ),
         )
         return verdict.satisfied, verdict.detail

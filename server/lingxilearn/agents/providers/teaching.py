@@ -202,6 +202,14 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
     if not text:
         raise ProviderError("adaptive-pedagogy returned no learner-facing text")
 
+    text, withheld = _guarded(text, context)
+    await _emit_learner_output(
+        context.runtime,
+        "adaptive_pedagogy",
+        text,
+        f"{context.task_id}:adaptive_pedagogy:{context.task.id}",
+    )
+
     return ProviderResult(
         learner_message=text,
         data={
@@ -212,7 +220,7 @@ async def adaptive_pedagogy(context: ProviderContext) -> ProviderResult:
                 or "explain"
             ),
             "next_step": str(parsed.get("next_step") or ""),
-            "withheld_for_leakage": False,
+            "withheld_for_leakage": withheld,
         },
         persist_as="adaptive_pedagogy",
         detail=f"教学策略：{parsed.get('strategy') or 'explain'}",

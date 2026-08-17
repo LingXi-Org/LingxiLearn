@@ -185,6 +185,20 @@ function questionTagFor(card: LingxiV1InteractionCard): string {
 
 /** Recompose the turn's assistant text: primary stream, then the question
  * card tag, then resource tags — stable order regardless of arrival. */
+function upsertAssistantTextBlock(
+  turn: LingxiV1Turn,
+  streamId: string,
+  content: string,
+  timestamp?: number
+): void {
+  const index = turn.blocks.findIndex(
+    (block) => block.type === 'text' && block.streamId === streamId
+  )
+  const block: ContentBlock = { type: 'text', content, streamId, timestamp }
+  if (index >= 0) turn.blocks[index] = { ...turn.blocks[index], ...block }
+  else turn.blocks.push(block)
+}
+
 function refreshAssistantText(turn: LingxiV1Turn): void {
   const parts: string[] = []
   const primary = Object.entries(turn.streamText)
@@ -293,6 +307,12 @@ export function reduceV1Event(
       const full = str(payload.text)
       const buffer = turn.streamText[streamId] ?? ''
       turn.streamText[streamId] = full || buffer + delta
+      upsertAssistantTextBlock(
+        turn,
+        streamId,
+        turn.streamText[streamId],
+        Date.parse(envelope.ts) || undefined
+      )
       refreshAssistantText(turn)
       return model
     }
@@ -359,6 +379,12 @@ export function reduceV1Event(
           const tag = questionTagFor(card)
           if (tag && !turn.streamText.__question__) {
             turn.streamText.__question__ = tag
+            upsertAssistantTextBlock(
+              turn,
+              '__question__',
+              tag,
+              Date.parse(envelope.ts) || undefined
+            )
             refreshAssistantText(turn)
           }
         }
@@ -397,6 +423,12 @@ export function reduceV1Event(
           const existing = str(turn.streamText.__resource__ ?? '')
           if (!existing.includes(tag)) {
             turn.streamText.__resource__ = [existing, tag].filter(Boolean).join('\n')
+            upsertAssistantTextBlock(
+              turn,
+              '__resource__',
+              turn.streamText.__resource__,
+              Date.parse(envelope.ts) || undefined
+            )
             refreshAssistantText(turn)
           }
         }

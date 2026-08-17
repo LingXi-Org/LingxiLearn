@@ -63,7 +63,7 @@ SYSTEM_PROMPT = """你是 LingxiLearn 的学习计划决策器。每一轮重新
 - 输出 holds（对已有产物 revise 或 close）和 delivery_order（学生学习顺序，不是生成顺序）。
 - 候选之间 utility 差距小于 0.05 时可以按连贯性选择；否则跟随打分。
 
-done_when 可用类型：artifact_exists / artifact_valid / evidence_observed /
+done_when 可用类型：artifact_exists / artifact_valid / evidence_observed / provider_result /
 profile_reaches / user_replied / quiz_graded / always / all_of / any_of。
 
 reasoning 不超过 80 字，hypotheses 最多 2 条，scores.reason 不超过 24 字；不要复述候选详情。
@@ -164,7 +164,7 @@ def _default_done_condition(candidate: CandidateAction) -> DoneCondition:
             return DoneCondition(kind="evidence_observed", signal="self_report")
         case "dialog.probe":
             return DoneCondition(kind="user_replied")
-    return DoneCondition(kind="evidence_observed", signal="provider_result")
+    return DoneCondition(kind="provider_result")
 
 
 def _goal_condition(goal: Goal, world: WorldState) -> DoneCondition:
@@ -249,6 +249,15 @@ def _repair(
             continue
         try:
             raw_done = raw.get("done_when")
+            if (
+                isinstance(raw_done, Mapping)
+                and str(raw_done.get("kind")) == "evidence_observed"
+                and str(raw_done.get("signal")) == "provider_result"
+            ):
+                # Older planner prompts encoded a successful provider result as
+                # learning evidence. It is a host execution fact, so normalize
+                # it before validation instead of creating an impossible signal.
+                raw_done = {"kind": "provider_result"}
             if isinstance(raw_done, Mapping) and str(raw_done.get("kind")) == "always":
                 # ``always`` is an internal strategy fallback only; accepting
                 # it from a model would let a provider forge completion.
@@ -336,6 +345,10 @@ def _repair(
         opening_candidate is not None
         and not world.interview_completed
         and not any(info(task.capability).opening_conversation for task in tasks)
+        and not any(
+            info(task.capability).turn_complete and not info(task.capability).opening_conversation
+            for task in tasks
+        )
     ):
         tasks.insert(
             0,

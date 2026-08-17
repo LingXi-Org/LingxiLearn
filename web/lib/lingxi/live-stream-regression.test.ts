@@ -30,3 +30,14 @@ describe('Lingxi live V1 stream regressions', () => {
     expect(source).toContain('last_event_id=${Math.max(0, from)}')
   })
 })
+
+
+describe('Lingxi runtime graph live refresh regression', () => {
+  it('refreshes the graph from V0 lifecycle events and V1 replay/catch-up events', () => {
+    const source = readFileSync(hookPath, 'utf-8')
+    expect(source).toContain('RUNTIME_GRAPH_REFRESH_EVENTS.has(event.kind)')
+    expect(source).toContain("envelope.type === 'run' || envelope.type === 'span'")
+    expect(source).toContain('scheduleRuntimeGraphRefresh()')
+    expect(source).toContain('api.runtimeGraph(taskId)')
+  })
+})
