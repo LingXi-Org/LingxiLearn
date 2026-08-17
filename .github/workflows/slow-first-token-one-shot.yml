@@ -1,0 +1,252 @@
+name: Slow first-token one-shot fix
+
+on:
+  push:
+    branches:
+      - fix/slow-first-token-runtime
+    paths:
+      - '.github/workflows/slow-first-token-one-shot.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/slow-first-token-runtime
+          fetch-depth: 0
+
+      - name: Apply runtime latency fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          service = Path('server/lingxilearn/service.py')
+          replace_once(
+              service,
+              '''        buffer: list[dict[str, Any]] = []
+        current_agent = "coordinator"
+        graph: Any | None = None
+
+        def emit_runtime_event(kind: str, payload: dict[str, Any]) -> None:
+            agent = str(payload.pop("agent", "orchestrator"))
+            projected = projector.consume_runtime_event(kind, payload, agent=agent)
+            projected["execution_id"] = execution_id
+            buffer.append(projected)
+''',
+              '''        buffer: list[dict[str, Any]] = []
+        current_agent = "coordinator"
+        graph: Any | None = None
+        flush_lock = asyncio.Lock()
+
+        async def flush_buffer() -> None:
+            """Persist one ordered buffer slice and serialize competing flush triggers.
+
+            Runtime callbacks execute inside graph nodes, while native custom/message
+            events are consumed by the outer stream.  Both paths append to the same
+            buffer.  A force-flush callback therefore schedules this coroutine instead
+            of waiting for the next graph event/node boundary; the lock keeps public
+            projection state and durable sequence assignment strictly ordered.
+            """
+
+            async with flush_lock:
+                if not buffer:
+                    return
+                pending = list(buffer)
+                buffer.clear()
+                await persist_buffer(pending)
+
+        def emit_runtime_event(kind: str, payload: dict[str, Any]) -> None:
+            agent = str(payload.pop("agent", "orchestrator"))
+            projected = projector.consume_runtime_event(kind, payload, agent=agent)
+            projected["execution_id"] = execution_id
+            buffer.append(projected)
+            # `deps.emit` is synchronous and does not travel through the native
+            # CUSTOM stream.  Without this wake-up, learner-visible output and
+            # AgentRun identity can sit in memory until the node/model finishes.
+            if kind in _AGENT_FORCE_FLUSH:
+                self._spawn(flush_buffer())
+''',
+          )
+          replace_once(
+              service,
+              '''                    if len(buffer) >= AGENT_FLUSH_EVERY:
+                        await persist_buffer(list(buffer))
+                        buffer.clear()
+''',
+              '''                    if len(buffer) >= AGENT_FLUSH_EVERY:
+                        await flush_buffer()
+''',
+          )
+          replace_once(
+              service,
+              '''                if force_flush or len(buffer) >= AGENT_FLUSH_EVERY:
+                    await persist_buffer(list(buffer))
+                    buffer.clear()
+''',
+              '''                if force_flush or len(buffer) >= AGENT_FLUSH_EVERY:
+                    await flush_buffer()
+''',
+          )
+          replace_once(
+              service,
+              '''            await persist_buffer(buffer)
+            buffer.clear()
+''',
+              '''            await flush_buffer()
+''',
+          )
+          replace_once(
+              service,
+              '''        if buffer:
+            await persist_buffer(buffer)
+''',
+              '''        # Also joins any force-flush task that is already holding the
+        # lock, so terminal state can never overtake an earlier assistant frame.
+        await flush_buffer()
+''',
+          )
+          replace_once(
+              service,
+              '''                if current_record.status == "cancelled":
+                    snapshot = projector.snapshot()
+''',
+              '''                if current_record.status == "cancelled":
+                    await flush_buffer()
+                    snapshot = projector.snapshot()
+''',
+          )
+
+          loop = Path('server/lingxilearn/runtime/loop.py')
+          replace_once(
+              loop,
+              '''            results: list[TaskOutcome] = []
+            if safe:
+                gathered = await asyncio.gather(
+                    *(dispatcher.run(task, profile=profile_rows, budget=budget) for task in safe),
+                    return_exceptions=True,
+                )
+                results.extend(
+                    item
+                    if isinstance(item, TaskOutcome)
+                    else TaskOutcome(
+                        task_id=safe[index].id,
+                        capability=safe[index].capability,
+                        status="failed",
+                        detail=f"{type(item).__name__}: {item}",
+                    )
+                    for index, item in enumerate(gathered)
+                )
+            for task in serial:
+                results.append(await dispatcher.run(task, profile=profile_rows, budget=budget))
+''',
+              '''            results: list[TaskOutcome] = []
+            # Start independent parallel-safe work immediately, but do not make
+            # the learner-facing critical path wait for it.  The previous code
+            # awaited the whole safe batch before starting any serial task, so a
+            # prerequisite/background analysis could add seconds before the
+            # conversational Agent even began.
+            safe_future = (
+                asyncio.gather(
+                    *(dispatcher.run(task, profile=profile_rows, budget=budget) for task in safe),
+                    return_exceptions=True,
+                )
+                if safe
+                else None
+            )
+            try:
+                for task in serial:
+                    results.append(await dispatcher.run(task, profile=profile_rows, budget=budget))
+            finally:
+                # Same-tier tasks are dependency-independent.  Join the safe
+                # branch before moving to the next tier so dependency semantics
+                # stay unchanged, while its latency overlaps the serial path.
+                if safe_future is not None:
+                    gathered = await safe_future
+                    results.extend(
+                        item
+                        if isinstance(item, TaskOutcome)
+                        else TaskOutcome(
+                            task_id=safe[index].id,
+                            capability=safe[index].capability,
+                            status="failed",
+                            detail=f"{type(item).__name__}: {item}",
+                        )
+                        for index, item in enumerate(gathered)
+                    )
+''',
+          )
+
+          regression = Path('server/tests/test_slow_first_token_regression.py')
+          regression.write_text(
+              '''from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_force_flush_runtime_callbacks_do_not_wait_for_node_boundary() -> None:
+    source = (ROOT / "lingxilearn" / "service.py").read_text(encoding="utf-8")
+    assert "if kind in _AGENT_FORCE_FLUSH:" in source
+    assert "self._spawn(flush_buffer())" in source
+    assert "async with flush_lock:" in source
+    assert "await persist_buffer(pending)" in source
+
+
+def test_parallel_safe_work_does_not_block_serial_critical_path_start() -> None:
+    source = (ROOT / "lingxilearn" / "runtime" / "loop.py").read_text(encoding="utf-8")
+    start = source.index("safe_future = (")
+    serial = source.index("for task in serial:", start)
+    join = source.index("gathered = await safe_future", serial)
+    assert start < serial < join
+''',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install backend dependencies
+        working-directory: server
+        run: uv sync --locked --extra dev
+
+      - name: Run slow-first-token regressions and protocol lifecycle tests
+        working-directory: server
+        run: >-
+          uv run --extra dev pytest -q
+          tests/test_slow_first_token_regression.py
+          tests/test_parallel_dispatch.py
+          tests/test_public_projection.py
+          tests/test_mothership_stream_v1.py
+          tests/test_agent_runs_lifecycle.py
+
+      - name: Compile backend
+        working-directory: server
+        run: uv run python -m compileall -q lingxilearn
+
+      - name: Commit tested patch
+        shell: bash
+        run: |
+          git config user.name "lingxi-fix-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add server/lingxilearn/service.py server/lingxilearn/runtime/loop.py server/tests/test_slow_first_token_regression.py
+          git diff --cached --check
+          git commit -m "fix: stream learner output without orchestration stalls"
+          git push origin HEAD:fix/slow-first-token-runtime
