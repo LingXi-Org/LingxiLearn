@@ -42,9 +42,7 @@ import {
   CreditsChip,
   MothershipChat,
   MothershipResourcesProvider,
-  SuggestedActions,
   UserInput,
-  type UserInputHandle,
 } from './components'
 import {
   createLingxiGraphAdapter,
@@ -143,7 +141,6 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
   const [initialPrompt, setInitialPrompt] = useState('')
   const hasCheckedLandingStorageRef = useRef(false)
   const initialViewInputRef = useRef<HTMLDivElement>(null)
-  const initialViewUserInputRef = useRef<UserInputHandle>(null)
 
   useEffect(() => {
     const storageKey = `${GREETING_STORAGE_PREFIX}${userId ?? 'anonymous'}`
@@ -602,7 +599,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
         )}
         {showEmptyState ? (
           <div className='h-full overflow-y-auto [scrollbar-gutter:stable_both-edges]'>
-            {/* Asymmetric padding biases the group up so the full cluster (heading + input + suggestions) sits at the optical center */}
+            {/* Asymmetric padding biases the group up so the heading + input cluster sits at the optical center */}
             <div className='flex min-h-full flex-col items-center justify-center px-6 pt-[2vh] pb-[22vh]'>
               <h1 className='mb-7 max-w-chat text-balance font-season text-[26px] text-[var(--text-primary)] leading-[1.15] tracking-[-0.01em] sm:text-[28px]'>
                 {greeting}
@@ -614,7 +611,6 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
                   onContextRemove={handleInitialContextRemove}
                 >
                   <UserInput
-                    ref={initialViewUserInputRef}
                     defaultValue={initialPrompt}
                     draftScopeKey={draftScopeKey}
                     onSubmit={handleSubmit}
@@ -623,14 +619,6 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
                     excludedResourceTypes={excludedResourceTypes}
                   />
                 </ChatSurfaceProvider>
-                {/* Anchored out of flow so expanding/collapsing never shifts the centered input */}
-                <div className='absolute inset-x-0 top-full'>
-                  <SuggestedActions
-                    onSelectPrompt={(prompt) =>
-                      initialViewUserInputRef.current?.populatePrompt(prompt)
-                    }
-                  />
-                </div>
               </div>
             </div>
           </div>
