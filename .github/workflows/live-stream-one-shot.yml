@@ -1,0 +1,66 @@
+name: Live stream one-shot repair
+
+on:
+  push:
+    branches: [fix/live-stream-and-runtime-latency]
+    paths:
+      - '.github/workflows/live-stream-one-shot.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/live-stream-and-runtime-latency
+          fetch-depth: 0
+
+      - name: Apply live stream and snapshot fixes
+        run: python scripts/apply_live_stream_fix.py
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install backend dependencies
+        working-directory: server
+        run: uv sync --locked --extra dev
+
+      - name: Run backend regressions
+        working-directory: server
+        run: uv run --extra dev pytest -q tests/test_live_stream_regression.py tests/test_mothership_stream_v1.py tests/test_parallel_dispatch.py tests/test_agent_runs_lifecycle.py tests/test_interaction_continuation.py
+
+      - name: Compile backend
+        working-directory: server
+        run: uv run python -m compileall -q lingxilearn
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: bun install --frozen-lockfile
+
+      - name: Run frontend chat regressions
+        working-directory: web
+        run: bunx vitest run lib/lingxi/live-stream-regression.test.ts lib/lingxi/generated/mothership-stream-v1.test.ts lib/lingxi/stream/turn-model.test.ts
+
+      - name: Type-check frontend
+        working-directory: web
+        run: bun run type-check
+
+      - name: Commit tested repair
+        run: |
+          git config user.name "lingxi-fix-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add server/lingxilearn/api/routes.py server/lingxilearn/store/db.py server/tests/test_live_stream_regression.py web/lib/lingxi/api.ts web/lib/lingxi/live-stream-regression.test.ts 'web/app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts'
+          git diff --cached --check
+          git commit -m "fix: stream replies live without refresh"
+          git push origin HEAD:fix/live-stream-and-runtime-latency
