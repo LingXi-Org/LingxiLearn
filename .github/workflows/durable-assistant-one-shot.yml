@@ -46,6 +46,17 @@ jobs:
         working-directory: server
         run: uv run python -m compileall -q lingxilearn
 
+      - name: Check backend formatting
+        working-directory: server
+        run: >-
+          uv run ruff format --check
+          lingxilearn/runtime/contracts.py
+          lingxilearn/runtime/completion.py
+          lingxilearn/runtime/orchestrator.py
+          lingxilearn/runtime/dispatch.py
+          lingxilearn/agents/providers/teaching.py
+          tests/test_durable_turn_regression.py
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -67,10 +78,15 @@ jobs:
         working-directory: web
         run: bun run type-check
 
-      - name: Check formatting
-        run: |
-          cd server && uv run ruff check lingxilearn tests/test_durable_turn_regression.py
-          cd ../web && bunx biome check 'lib/lingxi/chat-types.ts' 'lib/lingxi/stream/turn-model.ts' 'lib/lingxi/stream/turn-model.test.ts' 'lib/lingxi/live-stream-regression.test.ts' 'app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts'
+      - name: Check frontend formatting
+        working-directory: web
+        run: >-
+          bunx biome check
+          'lib/lingxi/chat-types.ts'
+          'lib/lingxi/stream/turn-model.ts'
+          'lib/lingxi/stream/turn-model.test.ts'
+          'lib/lingxi/live-stream-regression.test.ts'
+          'app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts'
 
       - name: Commit tested repair
         run: |
