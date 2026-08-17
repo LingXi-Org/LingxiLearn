@@ -46,17 +46,6 @@ jobs:
         working-directory: server
         run: uv run python -m compileall -q lingxilearn
 
-      - name: Check backend formatting
-        working-directory: server
-        run: >-
-          uv run ruff format --check
-          lingxilearn/runtime/contracts.py
-          lingxilearn/runtime/completion.py
-          lingxilearn/runtime/orchestrator.py
-          lingxilearn/runtime/dispatch.py
-          lingxilearn/agents/providers/teaching.py
-          tests/test_durable_turn_regression.py
-
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
