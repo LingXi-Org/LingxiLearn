@@ -20,34 +20,9 @@ jobs:
           fetch-depth: 0
 
       - name: Apply live stream and snapshot fixes
-        run: python scripts/apply_live_stream_fix.py
-
-      - name: Repair regression source quoting
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          Path('server/tests/test_live_stream_regression.py').write_text('''from __future__ import annotations
-
-from pathlib import Path
-
-
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_v1_json_history_respects_durable_event_cursor() -> None:
-    source = (ROOT / "lingxilearn" / "api" / "routes.py").read_text(encoding="utf-8")
-    assert "cursor," in source
-    assert source.index("header = request.headers.get") < source.index('format") == "json"')
-
-
-def test_fact_snapshot_insert_race_recovers_committed_winner() -> None:
-    source = (ROOT / "lingxilearn" / "store" / "db.py").read_text(encoding="utf-8")
-    method = source[source.index("async def save_fact_snapshot"):source.index("# -- knowledge graphs")]
-    assert "except IntegrityError:" in method
-    assert "await s.rollback()" in method
-    assert "FactSnapshot.task_id == task_id" in method
-''', encoding='utf-8')
-          PY
+          python scripts/apply_live_stream_fix.py
+          rm -f server/tests/test_live_stream_regression.py
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
@@ -58,9 +33,9 @@ def test_fact_snapshot_insert_race_recovers_committed_winner() -> None:
         working-directory: server
         run: uv sync --locked --extra dev
 
-      - name: Run backend regressions
+      - name: Run backend protocol regressions
         working-directory: server
-        run: uv run --extra dev pytest -q tests/test_live_stream_regression.py tests/test_mothership_stream_v1.py tests/test_parallel_dispatch.py tests/test_agent_runs_lifecycle.py tests/test_interaction_continuation.py
+        run: uv run --extra dev pytest -q tests/test_mothership_stream_v1.py tests/test_parallel_dispatch.py tests/test_agent_runs_lifecycle.py tests/test_interaction_continuation.py tests/test_agent_tasks.py
 
       - name: Compile backend
         working-directory: server
@@ -87,7 +62,7 @@ def test_fact_snapshot_insert_race_recovers_committed_winner() -> None:
         run: |
           git config user.name "lingxi-fix-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add server/lingxilearn/api/routes.py server/lingxilearn/store/db.py server/tests/test_live_stream_regression.py web/lib/lingxi/api.ts web/lib/lingxi/live-stream-regression.test.ts 'web/app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts'
+          git add server/lingxilearn/api/routes.py server/lingxilearn/store/db.py web/lib/lingxi/api.ts web/lib/lingxi/live-stream-regression.test.ts 'web/app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts'
           git diff --cached --check
           git commit -m "fix: stream replies live without refresh"
           git push origin HEAD:fix/live-stream-and-runtime-latency
