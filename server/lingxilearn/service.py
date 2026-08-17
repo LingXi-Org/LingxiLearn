@@ -2555,12 +2555,33 @@ class Service:
         buffer: list[dict[str, Any]] = []
         current_agent = "coordinator"
         graph: Any | None = None
+        flush_lock = asyncio.Lock()
+
+        async def flush_buffer() -> None:
+            """Persist buffered learner events immediately and in sequence.
+
+            Runtime callbacks execute inside graph nodes while native stream
+            events are consumed by the outer iterator. Both paths append to
+            this buffer, so every flush is serialized through one lock.
+            """
+
+            async with flush_lock:
+                if not buffer:
+                    return
+                pending = list(buffer)
+                buffer.clear()
+                await persist_buffer(pending)
 
         def emit_runtime_event(kind: str, payload: dict[str, Any]) -> None:
             agent = str(payload.pop("agent", "orchestrator"))
             projected = projector.consume_runtime_event(kind, payload, agent=agent)
             projected["execution_id"] = execution_id
             buffer.append(projected)
+            # deps.emit is synchronous and bypasses the native CUSTOM stream.
+            # Force-flush learner output and AgentRun identity now instead of
+            # waiting for a model/node boundary to make the outer loop wake up.
+            if kind in _AGENT_FORCE_FLUSH:
+                self._spawn(flush_buffer())
 
         try:
             session_state = await self.runtime_state.ensure_session_state(
@@ -2605,6 +2626,7 @@ class Service:
                 if current_record is None:
                     return True
                 if current_record.status == "cancelled":
+                    await flush_buffer()
                     snapshot = projector.snapshot()
                     await self.repo.update_agent_execution(
                         execution_id,
@@ -2623,8 +2645,7 @@ class Service:
                     for item in message_events:
                         item["execution_id"] = execution_id
                     if len(buffer) >= AGENT_FLUSH_EVERY:
-                        await persist_buffer(list(buffer))
-                        buffer.clear()
+                        await flush_buffer()
                     continue
                 node = str(event.node or "")
                 if node and node not in _LOOP_NODES:
@@ -2661,8 +2682,7 @@ class Service:
                     projected["agent"] = projected.get("agent") or current_agent
                     buffer.append(projected)
                 if force_flush or len(buffer) >= AGENT_FLUSH_EVERY:
-                    await persist_buffer(list(buffer))
-                    buffer.clear()
+                    await flush_buffer()
         except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
             logger.exception("agent task failed: %s", task_id)
             detail = _safe_agent_error(exc, self.settings)
@@ -2719,8 +2739,7 @@ class Service:
                     },
                 }
             )
-            await persist_buffer(buffer)
-            buffer.clear()
+            await flush_buffer()
             # A failed turn closes only the turn; the thread returns to open
             # so the learner can keep talking (issue #18 §4.1).
             await self.repo.set_agent_task_status(
@@ -2747,8 +2766,8 @@ class Service:
             self._spawn(self._drain_interaction_continuations(task_id, learner_id))
             return True
 
-        if buffer:
-            await persist_buffer(buffer)
+        # Join any in-flight forced flush before terminal state is read.
+        await flush_buffer()
         if graph is None:  # pragma: no cover - the try/except above returns on failure
             return True
         state = await graph.aget_state(config)

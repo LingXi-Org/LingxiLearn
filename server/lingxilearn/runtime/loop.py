@@ -989,24 +989,35 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             ]
             serial = [task for task in ready if task not in safe]
             results: list[TaskOutcome] = []
-            if safe:
-                gathered = await asyncio.gather(
+            # Start independent safe work immediately, but never await that
+            # whole batch before the learner-facing serial critical path starts.
+            safe_future = (
+                asyncio.gather(
                     *(dispatcher.run(task, profile=profile_rows, budget=budget) for task in safe),
                     return_exceptions=True,
                 )
-                results.extend(
-                    item
-                    if isinstance(item, TaskOutcome)
-                    else TaskOutcome(
-                        task_id=safe[index].id,
-                        capability=safe[index].capability,
-                        status="failed",
-                        detail=f"{type(item).__name__}: {item}",
+                if safe
+                else None
+            )
+            try:
+                for task in serial:
+                    results.append(await dispatcher.run(task, profile=profile_rows, budget=budget))
+            finally:
+                # Same-tier tasks have no dependency edges between them. Join
+                # before the next tier so dependency semantics remain intact.
+                if safe_future is not None:
+                    gathered = await safe_future
+                    results.extend(
+                        item
+                        if isinstance(item, TaskOutcome)
+                        else TaskOutcome(
+                            task_id=safe[index].id,
+                            capability=safe[index].capability,
+                            status="failed",
+                            detail=f"{type(item).__name__}: {item}",
+                        )
+                        for index, item in enumerate(gathered)
                     )
-                    for index, item in enumerate(gathered)
-                )
-            for task in serial:
-                results.append(await dispatcher.run(task, profile=profile_rows, budget=budget))
             for outcome in results:
                 outcomes.append(outcome)
                 budget.spend_step(
