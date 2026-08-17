@@ -187,6 +187,15 @@ class SimTraceProjector:
     """
     _waiting_for_user_ms: int = field(default=0, init=False)
     """Accumulated waiting time from *completed* pause intervals only."""
+    _pause_intervals: list[tuple[str, str]] = field(default_factory=list, init=False)
+    """Completed ``(pause_ts, resume_ts)`` wall-clock windows.
+
+    Any span whose own ``[startTime, endTime]`` overlaps one of these windows
+    must have that overlap excluded from its ``durationMs`` — not just the
+    root's — otherwise a native span (e.g. ``await_user``) that is still open
+    when ``run.paused`` fires and only closes after ``run.resumed`` would show
+    the full paused wall-clock gap as active duration.
+    """
 
     def __post_init__(self) -> None:
         started = _iso(self.started_at)
@@ -657,6 +666,7 @@ class SimTraceProjector:
             if kind in _TERMINAL_RUN_EVENTS:
                 if self._paused_since:
                     self._waiting_for_user_ms += _millis(self._paused_since, timestamp)
+                    self._pause_intervals.append((self._paused_since, timestamp))
                     self._paused_since = ""
                 for span in list(self._active_native.values()):
                     if span.get("status") == "running":
@@ -809,6 +819,7 @@ class SimTraceProjector:
             self._root.update({"status": "running", "paused": False})
             if self._paused_since:
                 self._waiting_for_user_ms += _millis(self._paused_since, timestamp)
+                self._pause_intervals.append((self._paused_since, timestamp))
                 self._paused_since = ""
             self._event(
                 self._root,
@@ -1333,6 +1344,26 @@ class SimTraceProjector:
 
     # -- final projection ------------------------------------------------
 
+    def _paused_overlap_ms(self, start: str, end: str) -> int:
+        """Wall-clock time within ``[start, end]`` that fell inside a pause.
+
+        Covers every completed ``run.paused``/``run.resumed`` window plus, if
+        the run is *currently* paused, the still-open window up to ``end`` —
+        so a span whose ``node.completed`` lands after resume still excludes
+        the pause it straddled.
+        """
+
+        intervals = list(self._pause_intervals)
+        if self._paused_since:
+            intervals.append((self._paused_since, end))
+        total = 0
+        for pause_start, pause_end in intervals:
+            overlap_start = max(start, pause_start)
+            overlap_end = min(end, pause_end)
+            if overlap_start < overlap_end:
+                total += _millis(overlap_start, overlap_end)
+        return total
+
     def snapshot(
         self,
         *,
@@ -1387,9 +1418,10 @@ class SimTraceProjector:
                 clamp = freeze_at if paused else end
                 span["endTime"] = clamp
                 span["endedAt"] = clamp
-            span["duration"] = _millis(
-                str(span.get("startTime") or end), str(span.get("endTime") or end)
-            )
+            span_start = str(span.get("startTime") or end)
+            span_end = str(span.get("endTime") or end)
+            overlap = self._paused_overlap_ms(span_start, span_end) if span is not self._root else 0
+            span["duration"] = max(0, _millis(span_start, span_end) - overlap)
             span["durationMs"] = span["duration"]
             try:
                 span["relativeStartMs"] = _millis(root_start, str(span.get("startTime") or end))

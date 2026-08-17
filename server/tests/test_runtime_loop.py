@@ -512,6 +512,20 @@ async def test_turn_complete_requests_a_followup_interaction_and_resumes_to_plan
     assert len(decisions_after) > len(decisions_before)
 
 
+def test_followup_eligible_capabilities_include_converse_but_not_probe() -> None:
+    from lingxilearn.runtime.interactions import (
+        FOLLOWUP_ELIGIBLE_CAPABILITIES,
+        build_followup_interaction,
+    )
+
+    assert "dialog.converse" in FOLLOWUP_ELIGIBLE_CAPABILITIES
+    assert build_followup_interaction(capability="dialog.converse") is not None
+    assert "dialog.probe" not in FOLLOWUP_ELIGIBLE_CAPABILITIES
+    assert "dialog.interview" not in FOLLOWUP_ELIGIBLE_CAPABILITIES
+    assert build_followup_interaction(capability="dialog.probe") is None
+    assert build_followup_interaction(capability="dialog.interview") is None
+
+
 def test_budget_is_spent_as_the_loop_runs() -> None:
     budget = Budget(max_steps=3)
     budget.spend_step(heavy=True, tokens=120, wall_ms=90)

@@ -113,7 +113,9 @@ class InteractionAnswer(_WireModel):
         return self
 
 
-FOLLOWUP_ELIGIBLE_CAPABILITIES: frozenset[str] = frozenset({"teach.explain", "dialog.answer"})
+FOLLOWUP_ELIGIBLE_CAPABILITIES: frozenset[str] = frozenset(
+    {"teach.explain", "dialog.answer", "dialog.converse"}
+)
 """Capabilities whose completion answers a question rather than asking one.
 
 Deliberately an allowlist, not a "conversational" flag: capabilities that are
