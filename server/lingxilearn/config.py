@@ -69,8 +69,8 @@ class Settings(BaseSettings):
     # --- tutor brain -------------------------------------------------------
     brain: BrainKind = "scripted"
 
-    llm_model: str = "gpt-4o-mini"
-    llm_base_url: str = "https://api.openai.com/v1"
+    llm_model: str = "deepseek-v4-flash"
+    llm_base_url: str = "https://api.deepseek.com"
     llm_api_key: SecretStr = SecretStr("")
     llm_timeout: float = 45.0
     llm_temperature: float = 0.3
