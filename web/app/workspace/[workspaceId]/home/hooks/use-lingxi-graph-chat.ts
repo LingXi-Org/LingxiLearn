@@ -328,6 +328,9 @@ export function useLingxiGraphChat(
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const unsubscribeV1Ref = useRef<(() => void) | null>(null)
   const v1ModelRef = useRef<LingxiV1ThreadModel | null>(null)
+  // SSE Last-Event-ID belongs to the durable AgentTaskEvent table.  Never use
+  // LingxiV1ThreadModel.lastSeq here: that is the protocol envelope sequence.
+  const v1RowSequenceRef = useRef(0)
   const messagesRef = useRef<ChatMessage[]>([])
   const requestIdRef = useRef<string | undefined>(initialChatId)
   const resolvedChatIdRef = useRef<string | undefined>(initialChatId)
@@ -382,6 +385,7 @@ export function useLingxiGraphChat(
     setEvents([])
     setV1Model(null)
     v1ModelRef.current = null
+    v1RowSequenceRef.current = 0
     setLocalUsers([])
     setError(null)
     setLocallyStopped(false)
@@ -456,6 +460,9 @@ export function useLingxiGraphChat(
       if (cancelled) return
       const envelope = decodeLingxiMothershipEvent(row.payload)
       if (!envelope) return
+      if (typeof row.sequence === 'number') {
+        v1RowSequenceRef.current = Math.max(v1RowSequenceRef.current, row.sequence)
+      }
       // The V1 turn/run statuses are authoritative when the protocol is
       // available; the V0 reducer keeps serving tasks without V1 history.
       applyTurnState(reduceV1TurnState(turnStateRef.current, envelope))
@@ -471,6 +478,34 @@ export function useLingxiGraphChat(
         if (id) onResourceEventRef.current?.(id, 'artifact.ready')
       }
     }
+
+    // Attach the live V1 transport before any task/history hydration.
+    // Previously the hook waited for several HTTP round trips first, creating
+    // a window where the run could emit its opening response before the page
+    // was listening.  Starting from zero is safe because the reducer is
+    // idempotent and the durable stream replays in order.
+    unsubscribeV1Ref.current = subscribeAgentV1Events(taskId, applyV1Event, { from: 0 })
+
+    // Some production proxies/CDNs buffer fetch-based SSE even when the origin
+    // sets X-Accel-Buffering: no.  A cheap cursor-based JSON catch-up keeps the
+    // mounted page live in that environment, rather than making refresh the
+    // only way to observe already-persisted replies.
+    let v1CatchUpInFlight = false
+    const catchUpV1 = async () => {
+      if (cancelled || v1CatchUpInFlight) return
+      v1CatchUpInFlight = true
+      try {
+        const page = await agentTaskV1Events(taskId, v1RowSequenceRef.current)
+        for (const row of page.events.sort((a, b) => a.sequence - b.sequence)) {
+          applyV1Event(row)
+        }
+      } catch {
+        /* SSE remains the primary transport; retry on the next tick. */
+      } finally {
+        v1CatchUpInFlight = false
+      }
+    }
+    const v1CatchUpTimer = globalThis.setInterval(() => void catchUpV1(), 1000)
 
     const start = async () => {
       try {
@@ -497,8 +532,17 @@ export function useLingxiGraphChat(
               taskId,
               v1History.events.map((row) => decodeLingxiMothershipEvent(row.payload))
             )
-            v1ModelRef.current = model
-            setV1Model(model)
+            const durableHighWater = Math.max(
+              v1RowSequenceRef.current,
+              ...v1History.events.map((row) => row.sequence)
+            )
+            v1RowSequenceRef.current = durableHighWater
+            // Do not overwrite a live model that already received a newer
+            // envelope while the history request was in flight.
+            if (!v1ModelRef.current || v1ModelRef.current.lastSeq <= model.lastSeq) {
+              v1ModelRef.current = model
+              setV1Model(model)
+            }
           }
         } catch {
           /* V1 unavailable — the V0 projection stays authoritative. */
@@ -548,23 +592,9 @@ export function useLingxiGraphChat(
             }
           },
         })
-        // The V1 envelope stream drives the per-turn transcript.  It stays
-        // open across turns on the long-lived thread (issue #18 §15.1), so
-        // per-send resubscription is unnecessary but harmless.
-        if (v1ModelRef.current) {
-          unsubscribeV1Ref.current = subscribeAgentV1Events(taskId, applyV1Event, {
-            from: v1ModelRef.current.lastSeq,
-          })
-        } else {
-          // A chat created before V1 may still emit V1 envelopes once a new
-          // turn runs; watch for them and switch over on first arrival.
-          unsubscribeV1Ref.current = subscribeAgentV1Events(taskId, (row) => {
-            if (!v1ModelRef.current) {
-              v1ModelRef.current = emptyV1ThreadModel(taskId)
-            }
-            applyV1Event(row)
-          })
-        }
+        // V1 was subscribed before hydration above.  Keep that one
+        // long-lived subscription; catch-up polling shares the durable row
+        // cursor and fills gaps if the network buffers SSE chunks.
       } catch (cause) {
         if (cancelled) return
         setIsReconnecting(false)
@@ -578,6 +608,7 @@ export function useLingxiGraphChat(
       unsubscribeRef.current = null
       unsubscribeV1Ref.current?.()
       unsubscribeV1Ref.current = null
+      globalThis.clearInterval(v1CatchUpTimer)
     }
   }, [applyTurnState, locallyStopped, resolvedChatId, subscriptionEpoch])
 

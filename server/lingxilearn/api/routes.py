@@ -900,25 +900,29 @@ async def stream_agent_events(
     # else keeps the historical V0 event vocabulary, unchanged.
     protocol_version = 1 if request.query_params.get("protocol") == "v1" else 0
 
-    # History hydration uses one atomic JSON snapshot so the client can render
-    # the final graph state without replaying every old event as a new run.
+    # Both SSE replay and JSON catch-up use the durable AgentTaskEvent row
+    # sequence.  This is intentionally different from the protocol envelope's
+    # own `seq`, because V0 and V1 rows share one database event log.
+    header = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
+    try:
+        cursor = int(header) if header else 0
+    except ValueError:
+        cursor = 0
+
+    # History hydration is also the fallback catch-up transport for clients
+    # behind proxies that buffer a long-lived SSE response.  Respect the same
+    # cursor so polling transfers only rows the client has not consumed.
     if request.query_params.get("format") == "json":
         events = await svc.repo.agent_events_after_for_learner(
             task_id,
             context.learner_id,
-            0,
+            cursor,
             protocol_version=protocol_version,
         )
         return Response(
             content=json.dumps({"events": events}, ensure_ascii=False, separators=(",", ":")),
             media_type="application/json",
         )
-
-    header = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
-    try:
-        cursor = int(header) if header else 0
-    except ValueError:
-        cursor = 0
     heartbeat = svc.settings.sse_heartbeat_seconds
 
     async def generate():  # noqa: ANN202
