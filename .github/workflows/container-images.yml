@@ -40,6 +40,17 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Guard web production runtime
+        if: matrix.image == 'web'
+        shell: bash
+        run: |
+          grep -Eq '^FROM .*\/library\/node:.* AS runtime$' web/Dockerfile
+          grep -Fq 'CMD ["node", "server.js"]' web/Dockerfile
+          if grep -Fq 'CMD ["bun", "server.js"]' web/Dockerfile; then
+            echo 'Bun may build the web app, but production Next standalone must run on Node.' >&2
+            exit 1
+          fi
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
