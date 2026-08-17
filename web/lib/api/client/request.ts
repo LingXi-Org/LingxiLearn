@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import type { AnyApiRouteContract, ContractJsonResponse } from '@/lib/api/contracts'
-import { API_BASE } from '@/lib/lingxi/api'
+import { API_BASE } from '@/lib/api/config'
 
 type MaybeField<Key extends string, Value> = [Value] extends [undefined]
   ? { [K in Key]?: never }
