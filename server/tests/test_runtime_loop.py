@@ -417,6 +417,101 @@ def test_with_no_eligible_candidate_the_fallback_hands_back_to_the_learner() -> 
     assert not plan.tasks
 
 
+# --- post-answer follow-up interaction (issue #32) --------------------------
+
+
+@pytest.mark.asyncio
+async def test_turn_complete_requests_a_followup_interaction_and_resumes_to_planning(
+    state_db, fake_providers
+) -> None:
+    """A completed dialog.answer must not fall silently into WAITING_FOR_USER.
+
+    It should request a blocking follow-up Interaction through the same
+    lifecycle pre-execution HITL uses (interaction.requested + a durable
+    pending_interaction), and answering it must resume the checkpoint back
+    into another Orchestrator planning round rather than a hardcoded route.
+    """
+    from lingxigraph import Command, InMemorySaver
+
+    from lingxilearn.state.capabilities import parse
+    from lingxilearn.state.skill_catalog import SkillManifest
+
+    _database, runtime, learner_id = state_db
+    answer_registry = [*REGISTRY, registry_row("fake-answer", "dialog.answer", "fake_teacher")]
+    await runtime.sync_skill_manifests(
+        [
+            SkillManifest(
+                skill_id=row["skill_id"],
+                capabilities=(parse(row["capabilities"][0]),),
+                provider=row["provider"],
+                cost=row["cost"],
+                version="1.0.0",
+            )
+            for row in answer_registry
+        ]
+    )
+    task_id = "task-followup"
+    await runtime.ensure_session_state(learner_id=learner_id, task_id=task_id)
+
+    events: list[tuple[str, dict]] = []
+    deps = _deps(runtime, learner_id, task_id, events)
+    checkpointer = InMemorySaver()
+    graph = build_loop(deps, checkpointer=checkpointer)
+    config = {"configurable": {"thread_id": task_id}}
+
+    result = await graph.ainvoke(
+        initial_state(
+            learner_id=learner_id,
+            task_id=task_id,
+            utterance="什么是 TCP 拥塞控制？",
+            budget=new_budget({"max_steps": 4, "max_replans": 1}),
+        ),
+        config,
+    )
+
+    interrupts = result.get("__interrupt__")
+    assert interrupts, "a turn_complete answer must pause on a typed interrupt"
+    payload = interrupts[0].value
+    assert payload["kind"] == "interaction"
+    interaction_id = payload["interaction_id"]
+
+    requested = [payload for kind, payload in events if kind == "interaction.requested"]
+    assert requested, "turn_complete must emit interaction.requested"
+    assert requested[-1]["interaction_id"] == interaction_id
+    assert requested[-1]["reasonCode"] == "post_answer_followup"
+    assert requested[-1]["blocking"] is True
+
+    persisted = await runtime.get_session_state(task_id)
+    assert persisted is not None
+    assert persisted["runtime_status"] == str(RuntimeStatus.WAITING_FOR_USER)
+
+    decisions_before = await runtime.decisions_for_task(task_id)
+
+    await graph.ainvoke(
+        Command(
+            resume={
+                "kind": "interaction_answer",
+                "interaction_id": interaction_id,
+                "answers": [
+                    {
+                        "questionId": "followup",
+                        "selectedOptionIds": ["continue_deeper"],
+                        "text": None,
+                    }
+                ],
+            }
+        ),
+        config,
+    )
+
+    # The resume must hand control back to the Orchestrator (PLANNING) for a
+    # fresh round, not to any option-specific hardcoded next step.
+    round_started = [payload for kind, payload in events if kind == "round.started"]
+    assert len(round_started) >= 2, "resuming must re-enter orchestrate for a new round"
+    decisions_after = await runtime.decisions_for_task(task_id)
+    assert len(decisions_after) > len(decisions_before)
+
+
 def test_budget_is_spent_as_the_loop_runs() -> None:
     budget = Budget(max_steps=3)
     budget.spend_step(heavy=True, tokens=120, wall_ms=90)

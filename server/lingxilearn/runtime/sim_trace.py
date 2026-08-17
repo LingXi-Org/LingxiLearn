@@ -178,6 +178,15 @@ class SimTraceProjector:
     _counts: dict[str, int] = field(default_factory=dict, init=False)
     _last_timestamp: str = field(default="", init=False)
     _saw_run_lifecycle: bool = field(default=False, init=False)
+    _paused_since: str = field(default="", init=False)
+    """Set while the run is paused (``run.paused`` seen, no ``run.resumed`` yet).
+
+    Human wait time accrues from here, not from active-execution spans, so a
+    learner sitting on WAITING_FOR_USER for hours never shows up as hours of
+    Agent/Skill execution (issue #32 §3).
+    """
+    _waiting_for_user_ms: int = field(default=0, init=False)
+    """Accumulated waiting time from *completed* pause intervals only."""
 
     def __post_init__(self) -> None:
         started = _iso(self.started_at)
@@ -643,7 +652,12 @@ class SimTraceProjector:
             status = "error" if failed else ("running" if kind == "run.paused" else "success")
             self._root["status"] = status
             self._root["paused"] = kind == "run.paused"
+            if kind == "run.paused" and not self._paused_since:
+                self._paused_since = timestamp
             if kind in _TERMINAL_RUN_EVENTS:
+                if self._paused_since:
+                    self._waiting_for_user_ms += _millis(self._paused_since, timestamp)
+                    self._paused_since = ""
                 for span in list(self._active_native.values()):
                     if span.get("status") == "running":
                         self._finish(
@@ -793,6 +807,9 @@ class SimTraceProjector:
         if kind == "run.resumed":
             self._saw_run_lifecycle = True
             self._root.update({"status": "running", "paused": False})
+            if self._paused_since:
+                self._waiting_for_user_ms += _millis(self._paused_since, timestamp)
+                self._paused_since = ""
             self._event(
                 self._root,
                 kind,
@@ -1331,6 +1348,14 @@ class SimTraceProjector:
                 self._root["status"] = "success"
             elif normalized in {"awaiting_user", "paused"}:
                 self._root["status"] = "running"
+                if not self._root.get("paused"):
+                    # Entering pause via a status-only call (e.g. a replay with
+                    # no explicit run.paused event): freeze from the last known
+                    # activity instead of from "now", or the freeze point
+                    # itself would already include this call's own delay.
+                    self._paused_since = self._paused_since or str(
+                        self._root.get("endTime") or end
+                    )
                 self._root["paused"] = True
         if not self._saw_run_lifecycle and self._root.get("status") == "running":
             if not self._active_native and not self._active_tasks and not self._active_sidecars:
@@ -1338,7 +1363,18 @@ class SimTraceProjector:
                 # executions always receive a run.completed envelope and use
                 # the normalized ``success`` status above.
                 self._root["status"] = "completed"
+
         terminal = self._root.get("status") in {"success", "error"}
+        # While paused, repeated snapshot() calls (e.g. live polling) must not
+        # keep inflating active execution time with the human's wait — freeze
+        # running spans at the pause point and count the elapsed wait
+        # separately instead of folding it into their duration.
+        paused = bool(self._root.get("paused")) and not terminal
+        freeze_at = self._paused_since or end
+        waiting_ms = self._waiting_for_user_ms
+        if paused and self._paused_since:
+            waiting_ms += _millis(self._paused_since, end)
+
         if terminal and ended_at is not None:
             self._root["endTime"] = end
             self._root["endedAt"] = end
@@ -1347,9 +1383,10 @@ class SimTraceProjector:
             self._root["endedAt"] = self._root["endTime"]
 
         def update(span: dict[str, Any], root_start: str) -> dict[str, int]:
-            if span.get("status") == "running":
-                span["endTime"] = end
-                span["endedAt"] = end
+            if span.get("status") == "running" and span is not self._root:
+                clamp = freeze_at if paused else end
+                span["endTime"] = clamp
+                span["endedAt"] = clamp
             span["duration"] = _millis(
                 str(span.get("startTime") or end), str(span.get("endTime") or end)
             )
@@ -1369,6 +1406,18 @@ class SimTraceProjector:
 
         root_start = str(self._root.get("startTime") or end)
         update(self._root, root_start)
+
+        # wallDurationMs is real wall-clock elapsed time (grows through a
+        # pause); activeDurationMs excludes accumulated/ongoing waiting-for-
+        # user time; durationMs stays active-time for backward compatibility
+        # rather than the multi-hour wall-clock figure it used to carry.
+        wall_ms = _millis(root_start, str(self._root.get("endTime") or end))
+        active_ms = max(0, wall_ms - waiting_ms)
+        self._root["wallDurationMs"] = wall_ms
+        self._root["waitingForUserMs"] = waiting_ms
+        self._root["activeDurationMs"] = active_ms
+        self._root["durationMs"] = active_ms
+        self._root["duration"] = active_ms
         return _json_safe(self.trace_spans)
 
 
