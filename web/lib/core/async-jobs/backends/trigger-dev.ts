@@ -178,9 +178,6 @@ const JOB_TYPE_TO_TASK_ID: Record<JobType, string> = {
   'webhook-execution': 'webhook-execution',
   'resume-execution': 'resume-execution',
   'workflow-group-cell': 'workflow-group-cell',
-  'cleanup-logs': 'cleanup-logs',
-  'cleanup-soft-deletes': 'cleanup-soft-deletes',
-  'cleanup-tasks': 'cleanup-tasks',
   'run-data-drain': 'run-data-drain',
 }
 
