@@ -1237,8 +1237,13 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
             # pre-execution HITL path in ``orchestrate``) never reaches here
             # with tasks executed, but the check stays defensive against a
             # future round shape that does both in one pass.
-            pending_interaction: dict[str, Any] | None = None
-            if not state.get("pending_interaction"):
+            existing_pending_interaction = state.get("pending_interaction")
+            patch: dict[str, Any] = {
+                "runtime_status": str(RuntimeStatus.WAITING_FOR_USER),
+                "messages": [],
+                "replanning": False,
+            }
+            if not existing_pending_interaction:
                 followup = build_followup_interaction(
                     capability=turn_completing.capability,
                     knowledge_point_id=(
@@ -1247,7 +1252,12 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                     topic=goal.topic,
                 )
                 if followup is not None:
-                    pending_interaction = await _request_interaction(deps, followup)
+                    # Only touch the checkpoint field when we actually create a
+                    # new follow-up interaction. Unconditionally writing this
+                    # key (even as None) would clobber an existing pending
+                    # interaction from state, undoing the anti-double-card
+                    # guard above.
+                    patch["pending_interaction"] = await _request_interaction(deps, followup)
             await deps.runtime_state.set_runtime_status(
                 deps.task_id, RuntimeStatus.WAITING_FOR_USER
             )
@@ -1258,12 +1268,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 outcomes=[item.to_dict() for item in outcomes],
                 result="turn_complete",
             )
-            return {
-                "runtime_status": str(RuntimeStatus.WAITING_FOR_USER),
-                "messages": [],
-                "replanning": False,
-                "pending_interaction": pending_interaction,
-            }
+            return patch
 
         # A graph turn with detached work remains waiting only when the
         # Work Ledger has explicitly recorded pending work.
