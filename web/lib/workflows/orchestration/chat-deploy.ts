@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
-import type { PrincipalActor } from '@sim/auth/principal'
+import type { PrincipalActor } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { chat } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'

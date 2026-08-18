@@ -1,4 +1,4 @@
-import { type Principal, resolvePrincipalAttribution } from '@sim/auth/principal'
+import { type Principal, resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { createLogger } from '@sim/logger'
 import { authorizeWorkspaceOperation } from '@/lib/core/application'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

@@ -163,7 +163,6 @@ export function SettingsPage({ section }: SettingsPageProps) {
       {effectiveSection === 'teammates' && <Teammates />}
       {isBillingEnabled && effectiveSection === 'organization' && organizationId && (
         <TeamManagement
-          organizationId={organizationId}
           billingHref={`/workspace/${hostContext.workspace.id}/settings/billing`}
         />
       )}

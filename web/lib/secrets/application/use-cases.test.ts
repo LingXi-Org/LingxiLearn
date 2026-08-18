@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SetSecretInput } from '@/lib/secrets/application/use-cases'
 

@@ -1,5 +1,5 @@
 import { trace } from '@opentelemetry/api'
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import {
   chat as chatTable,

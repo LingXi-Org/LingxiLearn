@@ -53,10 +53,6 @@ vi.mock('@/ee/whitelabeling/components/branding-provider', () => ({
   BrandingProvider: mockBrandingProvider,
 }))
 
-vi.mock('@/app/workspace/[workspaceId]/components/impersonation-banner', () => ({
-  ImpersonationBanner: () => null,
-}))
-
 vi.mock('@/app/workspace/[workspaceId]/components/session-expired', () => ({
   SessionExpired: () => null,
 }))

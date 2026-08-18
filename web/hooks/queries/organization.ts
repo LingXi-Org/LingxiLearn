@@ -38,9 +38,6 @@ import {
   getOrganizationBillingContract,
   type OrganizationBillingApiResponse,
 } from '@/lib/api/contracts/subscription'
-import { client } from '@/lib/auth/auth-client'
-import { isEnterprise, isPaid, isTeam } from '@/lib/billing/plan-helpers'
-import { hasPaidSubscriptionStatus } from '@/lib/billing/subscriptions/utils'
 import { subscriptionKeys } from '@/hooks/queries/subscription'
 import { workspaceCredentialKeys } from '@/hooks/queries/utils/credential-keys'
 import { workspaceKeys } from '@/hooks/queries/workspace'
@@ -49,9 +46,6 @@ const logger = createLogger('OrganizationQueries')
 const invitationListsKey = ['invitations', 'list'] as const
 
 export const ORGANIZATION_ROSTER_STALE_TIME = 30 * 1000
-export const ORGANIZATION_LIST_STALE_TIME = 30 * 1000
-export const ORGANIZATION_DETAIL_STALE_TIME = 30 * 1000
-export const ORGANIZATION_SUBSCRIPTION_STALE_TIME = 30 * 1000
 export const ORGANIZATION_BILLING_STALE_TIME = 30 * 1000
 export const ORGANIZATION_MEMBERS_STALE_TIME = 30 * 1000
 export const ORGANIZATION_MEMBER_USAGE_LIMIT_STALE_TIME = 30 * 1000
@@ -62,39 +56,10 @@ export const ORGANIZATION_MEMBER_USAGE_LIMIT_STALE_TIME = 30 * 1000
  */
 export const ORGANIZATION_REMOVAL_IMPACT_STALE_TIME = 0
 
-type OrganizationSubscriptionCandidate = {
-  id: string
-  referenceId: string
-  status: string
-  plan: string
-  cancelAtPeriodEnd?: boolean
-  periodEnd?: number | Date
-  trialEnd?: number | Date
-}
-
 type OrganizationBillingQueryResult = UseQueryResult<OrganizationBillingApiResponse | null, Error>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-function isOrganizationSubscriptionCandidate(
-  value: unknown
-): value is OrganizationSubscriptionCandidate {
-  if (!isRecord(value)) return false
-  return (
-    typeof value.id === 'string' &&
-    typeof value.referenceId === 'string' &&
-    typeof value.status === 'string' &&
-    typeof value.plan === 'string' &&
-    (value.cancelAtPeriodEnd === undefined || typeof value.cancelAtPeriodEnd === 'boolean') &&
-    (value.periodEnd === undefined ||
-      typeof value.periodEnd === 'number' ||
-      value.periodEnd instanceof Date) &&
-    (value.trialEnd === undefined ||
-      typeof value.trialEnd === 'number' ||
-      value.trialEnd instanceof Date)
-  )
 }
 
 function readNumber(value: unknown): number | undefined {
@@ -185,115 +150,6 @@ export function useMemberRemovalImpact(
     queryFn: ({ signal }) => fetchMemberRemovalImpact(orgId as string, userId as string, signal),
     enabled: Boolean(orgId) && Boolean(userId) && (options?.enabled ?? true),
     staleTime: ORGANIZATION_REMOVAL_IMPACT_STALE_TIME,
-  })
-}
-
-/**
- * Fetches the current viewer's account-scoped organizations.
- *
- * `activeOrganization` reflects the viewer session's selected organization. It
- * must not be used as the organization context for a routed workspace; those
- * surfaces use the workspace host context instead. Billing data is fetched
- * separately, and the Better Auth client does not accept an AbortSignal.
- */
-async function fetchOrganizations(_signal?: AbortSignal) {
-  const [orgsResponse, activeOrgResponse] = await Promise.all([
-    client.organization.list(),
-    client.organization.getFullOrganization(),
-  ])
-
-  return {
-    organizations: orgsResponse.data || [],
-    activeOrganization: activeOrgResponse.data,
-  }
-}
-
-/**
- * Reads the viewer's account organizations and account-scoped active organization.
- *
- * Workspace-bound consumers must use the routed workspace host context instead
- * of `activeOrganization`.
- */
-export function useOrganizations() {
-  return useQuery({
-    queryKey: organizationKeys.lists(),
-    queryFn: ({ signal }) => fetchOrganizations(signal),
-    staleTime: ORGANIZATION_LIST_STALE_TIME,
-  })
-}
-
-/**
- * Fetch a specific organization by ID.
- *
- * `getFullOrganization` defaults to the active organization when no
- * `organizationId` is supplied; passing `orgId` through scopes the result to the
- * requested org so it is cached under the correct `organizationKeys.detail(orgId)`
- * (no cross-org cache collision). The active-org caller passes the active org's
- * id, so its behavior is unchanged.
- */
-async function fetchOrganization(orgId: string, _signal?: AbortSignal) {
-  const response = await client.organization.getFullOrganization({
-    query: { organizationId: orgId },
-  })
-  return response.data
-}
-
-/**
- * Hook to fetch a specific organization
- */
-export function useOrganization(orgId: string) {
-  return useQuery({
-    queryKey: organizationKeys.detail(orgId),
-    queryFn: ({ signal }) => fetchOrganization(orgId, signal),
-    enabled: !!orgId,
-    staleTime: ORGANIZATION_DETAIL_STALE_TIME,
-  })
-}
-
-/**
- * Fetch organization subscription data
- */
-async function fetchOrganizationSubscription(orgId: string, _signal?: AbortSignal) {
-  if (!orgId) {
-    return null
-  }
-
-  const response = await client.subscription.list({
-    query: { referenceId: orgId },
-  })
-
-  if (response.error) {
-    logger.error('Error fetching organization subscription', { error: response.error })
-    return null
-  }
-
-  // Any paid subscription attached to the org counts as its active sub.
-  // Priority: Enterprise > Team > Pro (matches `getHighestPrioritySubscription`).
-  // This intentionally includes `pro_*` plans that have been transferred
-  // to the org — they are pooled org-scoped subscriptions.
-  const rawSubscriptions: unknown = response.data
-  const entitled = (Array.isArray(rawSubscriptions) ? rawSubscriptions : [])
-    .filter(isOrganizationSubscriptionCandidate)
-    .filter((sub) => hasPaidSubscriptionStatus(sub.status) && isPaid(sub.plan))
-  const enterpriseSubscription = entitled.find((sub) => isEnterprise(sub.plan))
-  const teamSubscription = entitled.find((sub) => isTeam(sub.plan))
-  const proSubscription = entitled.find((sub) => !isEnterprise(sub.plan) && !isTeam(sub.plan))
-  const activeSubscription = enterpriseSubscription || teamSubscription || proSubscription
-
-  return activeSubscription || null
-}
-
-/**
- * Hook to fetch organization subscription
- */
-export function useOrganizationSubscription(orgId: string) {
-  return useQuery({
-    queryKey: organizationKeys.subscription(orgId),
-    queryFn: ({ signal }) => fetchOrganizationSubscription(orgId, signal),
-    enabled: !!orgId,
-    retry: false,
-    staleTime: ORGANIZATION_SUBSCRIPTION_STALE_TIME,
-    placeholderData: keepPreviousData,
   })
 }
 
@@ -707,10 +563,6 @@ export function useCreateOrganization() {
           name,
           slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
         },
-      })
-
-      await client.organization.setActive({
-        organizationId: data.organizationId,
       })
 
       return data

@@ -1,4 +1,4 @@
-import type { DelegatedPrincipal, Principal } from '@sim/auth/principal'
+import type { DelegatedPrincipal, Principal } from '@/lib/auth/principal'
 import type { db } from '@sim/db'
 import {
   type PermissionType,

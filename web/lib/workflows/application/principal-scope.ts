@@ -1,4 +1,4 @@
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 
 /** Leaves scoped-principal workspace mismatches to canonical authorization so they remain 403s. */
 export function assertedWorkflowWorkspaceId(

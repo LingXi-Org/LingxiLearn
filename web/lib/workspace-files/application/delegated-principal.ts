@@ -1,4 +1,4 @@
-import type { DelegatedPrincipal } from '@sim/auth/principal'
+import type { DelegatedPrincipal } from '@/lib/auth/principal'
 import { WORKSPACE_FILES_DELEGATION_AUDIENCE } from '@/lib/workspace-files/application/authorization'
 
 const WORKSPACE_FILE_DELEGATION_TTL_MS = 5 * 60 * 1000

@@ -7,7 +7,7 @@ import {
   resolvePrincipalAttribution,
   resolvePrincipalAuditAttribution,
   toPrincipalActor,
-} from '@sim/auth/principal'
+} from '@/lib/auth/principal'
 import { describe, expect, it } from 'vitest'
 
 describe('principal subject users', () => {

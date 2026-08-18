@@ -17,7 +17,7 @@ import { isOrgAdminRole } from '@sim/platform-authz/predicates'
 import { getErrorMessage } from '@sim/utils/errors'
 import { formatDate } from '@sim/utils/formatting'
 import { useRouter } from 'next/navigation'
-import { useSession, useSubscription } from '@/lib/auth/auth-client'
+import { useSession } from '@/lib/auth/auth-client'
 import { ON_DEMAND_UNLIMITED } from '@/lib/billing/constants'
 import { CREDIT_MULTIPLIER } from '@/lib/billing/credits/conversion'
 import {
@@ -42,7 +42,6 @@ import {
   hasUsableSubscriptionAccess,
 } from '@/lib/billing/subscriptions/utils'
 import { buildUpgradeHref } from '@/lib/billing/upgrade-reasons'
-import { getBaseUrl } from '@/lib/core/utils/urls'
 import { CreditUsageSection } from '@/app/workspace/[workspaceId]/settings/components/billing/components/credit-usage-section/credit-usage-section'
 import { UsageLimitField } from '@/app/workspace/[workspaceId]/settings/components/billing/components/usage-limit-field/usage-limit-field'
 import { getSubscriptionPermissions } from '@/app/workspace/[workspaceId]/settings/components/billing/subscription-permissions'
@@ -115,21 +114,16 @@ export function Billing({
   const router = useRouter()
   const isOrganizationScope = scope === 'organization'
 
-  const {
-    data: subscriptionData,
-    isLoading: isSubscriptionLoading,
-    refetch: refetchSubscription,
-  } = useSubscriptionData({
+  const { data: subscriptionData, isLoading: isSubscriptionLoading } = useSubscriptionData({
     includeOrg: false,
     enabled: !isOrganizationScope,
   })
   const billingOrganizationId = isOrganizationScope ? (organizationId ?? null) : null
 
-  const {
-    data: organizationBillingData,
-    isLoading: isOrgBillingLoading,
-    refetch: refetchOrganizationBilling,
-  } = useOrganizationBilling(billingOrganizationId || '', { enabled: isOrganizationScope })
+  const { data: organizationBillingData, isLoading: isOrgBillingLoading } = useOrganizationBilling(
+    billingOrganizationId || '',
+    { enabled: isOrganizationScope }
+  )
 
   const updateUserLimit = useUpdateUsageLimit()
   const updateOrgLimit = useUpdateOrganizationUsageLimit()
@@ -138,7 +132,6 @@ export function Billing({
   const updateGeneralSetting = useUpdateGeneralSetting()
 
   const { data: session } = useSession()
-  const betterAuthSubscription = useSubscription()
   const openBillingPortal = useOpenBillingPortal()
 
   const organizationBilling = organizationBillingData?.data
@@ -347,55 +340,26 @@ export function Billing({
     )
   }
 
-  const handleCancelSubscription = async () => {
+  const handleCancelSubscription = () => {
     if (!permissions.canEditUsageLimit) {
       toast.error("Can't cancel subscription", {
         description: 'Only organization admins can cancel the subscription.',
       })
       return
     }
-    if (!betterAuthSubscription.cancel) return
-    try {
-      if (subscription.isOrgScoped && !billingOrganizationId) {
-        throw new Error(
-          'Organization billing context is unavailable. Please refresh and try again.'
-        )
-      }
-      const referenceId = subscription.isOrgScoped ? billingOrganizationId : session?.user?.id
-      const returnUrl = getBaseUrl() + window.location.pathname
-      await betterAuthSubscription.cancel({ returnUrl, referenceId: referenceId || '' })
-    } catch (error) {
-      logger.error('Failed to cancel subscription', { error })
-      toast.error("Couldn't cancel subscription", {
-        description: getErrorMessage(error, 'Please try again in a moment.'),
-      })
-    }
+    // Subscription lifecycle actions are owned by the Stripe billing portal:
+    // LingxiLearn never mutates subscriptions directly.
+    handleOpenBillingPortal()
   }
 
-  const handleRestoreSubscription = async () => {
+  const handleRestoreSubscription = () => {
     if (!permissions.canEditUsageLimit) {
       toast.error("Can't restore subscription", {
         description: 'Only organization admins can restore the subscription.',
       })
       return
     }
-    if (!betterAuthSubscription.restore) return
-    try {
-      if (subscription.isOrgScoped && !billingOrganizationId) {
-        throw new Error(
-          'Organization billing context is unavailable. Please refresh and try again.'
-        )
-      }
-      const referenceId = subscription.isOrgScoped ? billingOrganizationId : session?.user?.id
-      await betterAuthSubscription.restore({ referenceId: referenceId || '' })
-      if (isOrganizationScope) await refetchOrganizationBilling()
-      else await refetchSubscription()
-    } catch (error) {
-      logger.error('Failed to restore subscription', { error })
-      toast.error("Couldn't restore subscription", {
-        description: getErrorMessage(error, 'Please try again in a moment.'),
-      })
-    }
+    handleOpenBillingPortal()
   }
 
   if (isLoading) return null

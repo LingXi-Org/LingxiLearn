@@ -1,24 +1,19 @@
 import { createLogger } from '@sim/logger'
 import { generateId } from '@sim/utils/id'
-import { client } from '@/lib/auth/auth-client'
+import { getSessionSnapshot } from '@/lib/auth/session-snapshot'
 import { useOperationQueueStore } from '@/stores/operation-queue/store'
 import type { WorkflowState } from '@/stores/workflows/workflow/types'
 import { normalizeWorkflowState } from '@/stores/workflows/workflow/validation'
 
 const logger = createLogger('WorkflowSocketOperations')
 
-async function resolveUserId(): Promise<string> {
-  try {
-    const sessionResult = await client.getSession()
-    const userId = sessionResult.data?.user?.id
-    if (userId) {
-      return userId
-    }
-  } catch (error) {
-    logger.warn('Failed to resolve session user id for workflow operation', { error })
-  }
-
-  return 'unknown'
+/**
+ * Reads the acting user off the canonical session snapshot. This is a pure
+ * read of state the SessionProvider already owns — an operation enqueue must
+ * never trigger its own `/api/v1/me` request.
+ */
+function resolveUserId(): string {
+  return getSessionSnapshot()?.user.id ?? 'unknown'
 }
 
 interface EnqueueWorkflowOperationArgs {
@@ -40,7 +35,7 @@ async function enqueueWorkflowOperation({
   workflowId,
   operationId,
 }: EnqueueWorkflowOperationArgs): Promise<string> {
-  const userId = await resolveUserId()
+  const userId = resolveUserId()
   const opId = operationId ?? generateId()
 
   useOperationQueueStore.getState().addToQueue({

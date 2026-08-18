@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import type { Principal, WorkflowExecutionDelegatedPrincipal } from '@sim/auth/principal'
+import type { Principal, WorkflowExecutionDelegatedPrincipal } from '@/lib/auth/principal'
 import { sha256Hex } from '@sim/security/hash'
 import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@sim/testing'
 import { eq, inArray, isNull } from 'drizzle-orm'

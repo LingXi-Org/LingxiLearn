@@ -1,4 +1,4 @@
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import type { ApplicationOperation } from '@/lib/core/application'
 
 export type BillingReadPrincipal = Extract<

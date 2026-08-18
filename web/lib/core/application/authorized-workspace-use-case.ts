@@ -1,6 +1,6 @@
 import { type AuditActionType, type AuditResourceTypeValue, recordAudit } from '@sim/audit'
-import type { PrincipalAuditAttribution } from '@sim/auth/principal'
-import { resolvePrincipalAuditAttribution } from '@sim/auth/principal'
+import type { PrincipalAuditAttribution } from '@/lib/auth/principal'
+import { resolvePrincipalAuditAttribution } from '@/lib/auth/principal'
 import type { OperationUseCase } from '@/lib/core/application/operation'
 import {
   authorizeWorkspaceOperation,

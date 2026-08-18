@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import type { SessionPrincipal } from '@sim/auth/principal'
+import type { SessionPrincipal } from '@/lib/auth/principal'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

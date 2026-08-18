@@ -1,5 +1,5 @@
-import type { Principal } from '@sim/auth/principal'
-import { requirePrincipalSubjectUserId, resolvePrincipalAttribution } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
+import { requirePrincipalSubjectUserId, resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { checkActorUsageLimits } from '@/lib/billing/calculations/usage-monitor'
 import {
   type BillingAttributionSnapshot,

@@ -48,7 +48,7 @@ const templateComponents = [
 describe('every email goes through the shared layer', () => {
   it('finds the senders and the templates', () => {
     expect(senderFiles.length).toBeGreaterThan(5)
-    expect(templateComponents).toContain('WelcomeEmail')
+    expect(templateComponents).toContain('OnboardingFollowupEmail')
   })
 
   it('no sender reaches for @react-email/render', () => {

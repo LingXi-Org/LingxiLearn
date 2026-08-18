@@ -1,4 +1,4 @@
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import type { AuditLogOperation, AuditLogPrincipal } from '@/lib/audit-logs/application/operations'
 import { resolveEnterpriseAuditAccess } from '@/lib/audit-logs/authorization'
 import type { OperationUseCase } from '@/lib/core/application'

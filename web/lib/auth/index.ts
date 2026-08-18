@@ -4,9 +4,7 @@ export {
   startLogin,
   startRegistration,
   startSocialLogin,
-  useActiveOrganization,
   useSession,
-  useSubscription,
 } from './auth-client'
 export type { AuthRedirectOptions, AuthRedirectResult, SocialAuthOptions } from './auth-client'
 export type {

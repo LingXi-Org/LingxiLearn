@@ -1,4 +1,4 @@
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import {
   cancelWorkflowExecution,

@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { db, workflow, workflowMcpServer, workflowMcpTool } from '@sim/db'
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { defineAuthorizedWorkspaceUseCase } from '@/lib/core/application'

@@ -1,4 +1,4 @@
-import type { Principal, WorkflowExecutionDelegatedPrincipal } from '@sim/auth/principal'
+import type { Principal, WorkflowExecutionDelegatedPrincipal } from '@/lib/auth/principal'
 import { db, dbFor } from '@sim/db'
 import { uploadSession } from '@sim/db/schema'
 import { safeCompare } from '@sim/security/compare'

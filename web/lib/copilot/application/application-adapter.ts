@@ -1,4 +1,4 @@
-import type { DelegatedPrincipal } from '@sim/auth/principal'
+import type { DelegatedPrincipal } from '@/lib/auth/principal'
 import {
   type CopilotDelegationConfiguration,
   type CopilotExecutionContext,

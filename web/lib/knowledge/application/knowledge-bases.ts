@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import type { Principal, SessionPrincipal } from '@sim/auth/principal'
+import type { Principal, SessionPrincipal } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { knowledgeBaseTagDefinitions } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'

@@ -6,7 +6,7 @@ import type {
   PersonalApiKeyPrincipal,
   SessionPrincipal,
   WorkspaceApiKeyPrincipal,
-} from '@sim/auth/principal'
+} from '@/lib/auth/principal'
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

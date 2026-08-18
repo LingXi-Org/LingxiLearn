@@ -1,4 +1,4 @@
-import type { SessionPrincipal } from '@sim/auth/principal'
+import type { SessionPrincipal } from '@/lib/auth/principal'
 import { captureServerEvent } from '@/lib/posthog/server'
 import type {
   ArchiveWorkspaceFileItemsInput,

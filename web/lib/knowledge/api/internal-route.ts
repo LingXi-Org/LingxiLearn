@@ -2,7 +2,7 @@ import {
   type Principal,
   requirePrincipalSubjectUserId,
   type SessionPrincipal,
-} from '@sim/auth/principal'
+} from '@/lib/auth/principal'
 import type { NextRequest } from 'next/server'
 import type { KnowledgeBaseData } from '@/lib/api/contracts/knowledge/base'
 import { type ChunkData, chunkDataSchema } from '@/lib/api/contracts/knowledge/chunks'

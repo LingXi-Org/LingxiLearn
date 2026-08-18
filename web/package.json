@@ -21,6 +21,7 @@
     "format:check": "biome format .",
     "test:trajectory": "vitest run \"app/workspace/[workspaceId]/logs/components/trajectory/trajectory-utils.test.ts\"",
     "check": "bun run type-check && bun run lint:check",
+    "check:auth-boundary": "bun run scripts/check-auth-boundary.ts",
     "prepare": "node -e \"if (process.env.CI) process.exit(0)\""
   },
   "dependencies": {
@@ -116,7 +117,6 @@
     ,"@tiptap/starter-kit": "3.26.1"
     ,"@tiptap/suggestion": "3.26.1"
     ,"@tiptap/y-tiptap": "3.0.7"
-    ,"better-auth": "1.6.23"
     ,"csv-parse": "6.1.0"
     ,"date-fns": "4.1.0"
     ,"drizzle-orm": "0.45.2"

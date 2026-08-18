@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import type { DelegatedPrincipal } from '@sim/auth/principal'
+import type { DelegatedPrincipal } from '@/lib/auth/principal'
 import { describe, expect, it } from 'vitest'
 import {
   WORKFLOW_DELEGATION_AUDIENCE,

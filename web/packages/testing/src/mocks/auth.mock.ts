@@ -27,9 +27,4 @@ export const authMockFns = {
  */
 export const authMock = {
   getSession: authMockFns.mockGetSession,
-  auth: {
-    api: {
-      getSession: authMockFns.mockGetSession,
-    },
-  },
 }

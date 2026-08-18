@@ -1,4 +1,4 @@
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import { createLogger } from '@sim/logger'
 import { DocCompileUserError } from '@/lib/copilot/tools/server/files/doc-compile-error'
 import { CodeLanguage } from '@/lib/execution/languages'

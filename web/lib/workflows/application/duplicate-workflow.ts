@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { type Principal, resolvePrincipalAttribution } from '@sim/auth/principal'
+import { type Principal, resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { generateRequestId } from '@/lib/core/utils/request'
 import { notifyWorkflowUpdated } from '@/lib/realtime/notify'

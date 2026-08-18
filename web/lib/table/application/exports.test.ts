@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import type { WorkflowExecutionDelegatedPrincipal } from '@sim/auth/principal'
+import type { WorkflowExecutionDelegatedPrincipal } from '@/lib/auth/principal'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TableDefinition } from '@/lib/table/types'
 

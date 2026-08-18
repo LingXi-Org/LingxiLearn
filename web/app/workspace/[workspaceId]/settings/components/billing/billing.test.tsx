@@ -83,10 +83,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/auth/auth-client', () => ({
   useSession: () => ({ data: { user: { id: 'viewer-a' } } }),
-  useSubscription: () => ({
-    cancel: vi.fn(),
-    restore: vi.fn(),
-  }),
 }))
 
 vi.mock('@/hooks/queries/general-settings', () => ({

@@ -3,7 +3,7 @@ import {
   type Principal,
   requirePrincipalSubjectUserId,
   resolvePrincipalAttribution,
-} from '@sim/auth/principal'
+} from '@/lib/auth/principal'
 import type { customTools } from '@sim/db/schema'
 import { getErrorMessage, getPostgresErrorCode } from '@sim/utils/errors'
 import type { ListSortOrder } from '@/lib/api/list-query'

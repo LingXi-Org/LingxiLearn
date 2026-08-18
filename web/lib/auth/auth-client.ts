@@ -49,7 +49,9 @@ export function useSession(): SessionHookResult {
     isPending: !context.ready,
     error: context.error ? new Error(context.error) : null,
     refetch: async () => {
-      await context.refresh()
+      // An explicit refetch is a "the session may have changed" signal, so it
+      // bypasses the provider's freshness window.
+      await context.refresh({ force: true })
     },
   }
 }
@@ -96,9 +98,7 @@ function callbackPath(...sources: Array<AuthRedirectOptions | undefined>): strin
  * posts credentials or receives an access/refresh token in JavaScript; the
  * BFF owns OIDC state, PKCE, the callback exchange, and the HttpOnly session.
  */
-export async function startLogin(
-  options: AuthRedirectOptions = {}
-): Promise<AuthRedirectResult> {
+export async function startLogin(options: AuthRedirectOptions = {}): Promise<AuthRedirectResult> {
   const nextPath = callbackPath(options)
   if (isMockAuthEnabled) {
     window.location.assign(nextPath)
@@ -122,9 +122,7 @@ export async function startRegistration(
 }
 
 /** Start a social provider through the same BFF + Logto Experience flow. */
-export async function startSocialLogin(
-  options: SocialAuthOptions
-): Promise<AuthRedirectResult> {
+export async function startSocialLogin(options: SocialAuthOptions): Promise<AuthRedirectResult> {
   const nextPath = callbackPath(options)
   if (isMockAuthEnabled) {
     window.location.assign(nextPath)
@@ -135,73 +133,17 @@ export async function startSocialLogin(
 }
 
 export const client = {
-  getSession: async (_options?: unknown) => {
-    if (isMockAuthEnabled) return { data: toSimSession(MOCK_IDENTITY_ME), error: null }
-    try {
-      const value = await identityApi.me()
-      return { data: toSimSession(value), error: null }
-    } catch {
-      return { data: null, error: null }
-    }
-  },
-  // Keep the compatibility client object for the many non-auth query modules,
-  // but expose only verb-first navigation methods. There is intentionally no
-  // `signIn.email`/`signUp.email`: LingxiLearn does not own credentials.
+  // Verb-first navigation methods only: the LingxiIdentity BFF owns
+  // credentials, tokens and session state. There is intentionally no
+  // `signIn.email`/`signUp.email`, no organization/subscription namespace,
+  // and no `getSession`: the SessionProvider is the single canonical owner of
+  // the browser session — React code reads `useSession`, imperative code
+  // reads `getSessionSnapshot` from `./session-snapshot`. Neither path may
+  // issue its own `/api/v1/me` request.
   startLogin,
   startRegistration,
   startSocialLogin,
-  // These namespaces keep the direct Sim query modules type-compatible while
-  // their organization/admin capabilities are migrated to Lingxi APIs.
-  organization: {
-    list: async (..._args: unknown[]) => ({ data: [], error: null }),
-    getFullOrganization: async (..._args: unknown[]) => ({ data: null, error: null }),
-    setActive: async (..._args: unknown[]) => ({ data: null, error: null }),
-  },
-  admin: {
-    createUser: async (..._args: unknown[]) => ({
-      data: null,
-      error: { message: '管理员账户 API 尚未接入' },
-    }),
-    getUser: async (..._args: unknown[]) => ({
-      data: null,
-      error: { message: '管理员账户 API 尚未接入' },
-    }),
-    listUsers: async (..._args: unknown[]) => ({ data: { users: [], total: 0 }, error: null }),
-    setRole: async (..._args: unknown[]) => ({
-      data: null,
-      error: { message: '管理员账户 API 尚未接入' },
-    }),
-    banUser: async (..._args: unknown[]) => ({
-      data: null,
-      error: { message: '管理员账户 API 尚未接入' },
-    }),
-    unbanUser: async (..._args: unknown[]) => ({
-      data: null,
-      error: { message: '管理员账户 API 尚未接入' },
-    }),
-    impersonateUser: async (..._args: unknown[]) => ({
-      data: null,
-      error: { message: '管理员账户 API 尚未接入' },
-    }),
-    stopImpersonating: async (..._args: unknown[]) => ({
-      data: null,
-      error: { message: '管理员账户 API 尚未接入' },
-    }),
-  },
-  subscription: {
-    list: async (..._args: unknown[]) => ({ data: [], error: null }),
-  },
-  useActiveOrganization: () => ({ data: null, isPending: false, error: null }),
-} as any
-
-export const useActiveOrganization = client.useActiveOrganization
-
-export const useSubscription = () => ({
-  list: undefined,
-  upgrade: undefined,
-  cancel: undefined,
-  restore: undefined,
-})
+}
 
 export async function signOut(): Promise<void> {
   if (!isMockAuthEnabled) await identityApi.logout()

@@ -1,4 +1,4 @@
-import type { DelegatedPrincipal } from '@sim/auth/principal'
+import type { DelegatedPrincipal } from '@/lib/auth/principal'
 
 export const COPILOT_APPLICATION_DELEGATION_TTL_MS = 5 * 60 * 1000
 

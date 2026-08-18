@@ -1,4 +1,4 @@
-import { requirePrincipalSubjectUserId } from '@sim/auth/principal'
+import { requirePrincipalSubjectUserId } from '@/lib/auth/principal'
 import {
   defineAuthorizedWorkspaceUseCase,
   type OperationUseCase,
