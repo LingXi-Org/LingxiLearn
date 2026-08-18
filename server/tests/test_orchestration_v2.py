@@ -9,7 +9,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_command_inbox_is_idempotent_and_work_claim_is_single_owner(state_db) -> None:
     database, _, learner_id = state_db
-    from lingxilearn.store.repositories import Repository
+    from lingxilearn.store.db import Repository
 
     repo = Repository(database)
     task_id = f"v2-task-{uuid4().hex}"
@@ -82,7 +82,7 @@ async def test_command_inbox_is_idempotent_and_work_claim_is_single_owner(state_
 @pytest.mark.asyncio
 async def test_confirmation_requires_exact_digest_and_reject_releases_work(state_db) -> None:
     database, _, learner_id = state_db
-    from lingxilearn.store.repositories import Repository
+    from lingxilearn.store.db import Repository
 
     repo = Repository(database)
     task_id = f"confirm-task-{uuid4().hex}"
@@ -126,7 +126,7 @@ async def test_confirmation_requires_exact_digest_and_reject_releases_work(state
 @pytest.mark.asyncio
 async def test_create_work_plan_flushes_items_before_dependencies(state_db) -> None:
     database, _, learner_id = state_db
-    from lingxilearn.store.repositories import Repository
+    from lingxilearn.store.db import Repository
 
     repo = Repository(database)
     task_id = f"dependency-task-{uuid4().hex}"
