@@ -39,11 +39,11 @@ describe('resolvePostSignupDestination', () => {
     expect(
       resolvePostSignupDestination({
         emailVerificationEnabled: false,
-        redirectUrl: '/cli/auth?callback=http%3A%2F%2F127.0.0.1%3A9000&state=xyz',
+        redirectUrl: '/workspace/lingxi/logs?taskId=abc&state=xyz',
       })
     ).toEqual({
       kind: 'redirect',
-      url: '/cli/auth?callback=http%3A%2F%2F127.0.0.1%3A9000&state=xyz',
+      url: '/workspace/lingxi/logs?taskId=abc&state=xyz',
     })
   })
 })

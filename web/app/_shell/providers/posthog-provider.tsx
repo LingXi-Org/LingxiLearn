@@ -25,7 +25,9 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
         const posthog = posthogModule.default
         if (!posthog.__loaded) {
           posthog.init(posthogKey, {
-            api_host: '/ingest',
+            // The Sim `/ingest` compatibility route was removed (issue #48);
+            // talk to PostHog directly instead of a permanent 404 placeholder.
+            api_host: 'https://us.posthog.com',
             ui_host: 'https://us.posthog.com',
             defaults: '2025-05-24',
             person_profiles: 'identified_only',
