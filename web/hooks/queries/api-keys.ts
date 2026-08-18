@@ -6,13 +6,9 @@ import {
   type CreatedApiKey,
   createPersonalApiKeyContract,
   createWorkspaceApiKeyContract,
-  deletePersonalApiKeyContract,
-  deleteWorkspaceApiKeyContract,
   listPersonalApiKeysContract,
   listWorkspaceApiKeysContract,
-  updateWorkspaceContract,
 } from '@/lib/api/contracts'
-import { workspaceKeys } from '@/hooks/queries/workspace'
 
 export type { ApiKey, CreatedApiKey }
 
@@ -40,6 +36,10 @@ export type ApiKeyScope = 'combined' | 'personal' | 'workspace'
 
 /**
  * Fetch API keys for one settings plane, or both for compatibility callers.
+ *
+ * The api-keys settings surfaces were removed from the product (issue #54):
+ * neither endpoint has a Lingxi backend owner. This query stays for the
+ * workflow MCP servers surface, which still reads key names through it.
  */
 export async function fetchApiKeys(
   workspaceId: string,
@@ -104,7 +104,9 @@ type CreateApiKeyParams = {
 } & ContractBodyInput<typeof createWorkspaceApiKeyContract>
 
 /**
- * Hook to create a new API key
+ * Hook to create a new API key. Retained with the api-keys settings surfaces'
+ * removal (issue #54): the workflow MCP servers surface still mints workspace
+ * keys through CreateApiKeyModal.
  */
 export function useCreateApiKey() {
   const queryClient = useQueryClient()
@@ -128,76 +130,6 @@ export function useCreateApiKey() {
       void queryClient.invalidateQueries({ queryKey: apiKeysKeys.workspace(variables.workspaceId) })
       return queryClient.invalidateQueries({
         queryKey: apiKeysKeys.combined(variables.workspaceId),
-      })
-    },
-  })
-}
-
-/**
- * Delete API key mutation params
- */
-type DeleteApiKeyParams = {
-  workspaceId: string
-  keyId: string
-  keyType: 'personal' | 'workspace'
-}
-
-/**
- * Hook to delete an API key
- */
-export function useDeleteApiKey() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ workspaceId, keyId, keyType }: DeleteApiKeyParams) => {
-      if (keyType === 'workspace') {
-        return requestJson(deleteWorkspaceApiKeyContract, {
-          params: { id: workspaceId, keyId },
-        })
-      }
-
-      return requestJson(deletePersonalApiKeyContract, { params: { id: keyId } })
-    },
-    onSettled: (_data, _error, variables) => {
-      if (variables.keyType === 'personal') {
-        void queryClient.invalidateQueries({ queryKey: apiKeysKeys.personal() })
-        return queryClient.invalidateQueries({ queryKey: apiKeysKeys.combineds() })
-      }
-      void queryClient.invalidateQueries({ queryKey: apiKeysKeys.workspace(variables.workspaceId) })
-      return queryClient.invalidateQueries({
-        queryKey: apiKeysKeys.combined(variables.workspaceId),
-      })
-    },
-  })
-}
-
-/**
- * Update workspace API key settings mutation params
- */
-type UpdateWorkspaceApiKeySettingsParams = { workspaceId: string } & Pick<
-  ContractBodyInput<typeof updateWorkspaceContract>,
-  'allowPersonalApiKeys'
->
-
-/**
- * Hook to update workspace API key settings
- */
-export function useUpdateWorkspaceApiKeySettings() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      allowPersonalApiKeys,
-    }: UpdateWorkspaceApiKeySettingsParams) => {
-      return requestJson(updateWorkspaceContract, {
-        params: { id: workspaceId },
-        body: { allowPersonalApiKeys },
-      })
-    },
-    onSettled: (_data, _error, variables) => {
-      return queryClient.invalidateQueries({
-        queryKey: workspaceKeys.settings(variables.workspaceId),
       })
     },
   })

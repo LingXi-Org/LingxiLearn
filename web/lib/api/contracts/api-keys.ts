@@ -29,30 +29,30 @@ export const createApiKeyBodySchema = z.object({
 
 export const createPersonalApiKeyBodySchema = createApiKeyBodySchema.pick({ name: true })
 
-export const apiKeyIdParamsSchema = z.object({
-  id: z.string({ error: 'API key ID is required' }).min(1, 'API key ID is required'),
-})
-
-export const workspaceApiKeyParamsSchema = z.object({
+const workspaceApiKeyParamsSchema = z.object({
   id: z.string().min(1),
 })
 
-export const workspaceApiKeyIdParamsSchema = z.object({
-  id: z.string().min(1),
-  keyId: z.string().min(1),
-})
-
-export const updateWorkspaceApiKeyBodySchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-})
-
-export const deleteWorkspaceApiKeysBodySchema = z.object({
-  keys: z.array(z.string()).min(1),
-})
-
+// The api-keys settings surfaces were removed with their capability decision
+// (issue #54): neither endpoint has a Lingxi backend owner. The list and
+// create contracts stay for the workflow MCP servers surface, which reads
+// existing key names and mints workspace keys through CreateApiKeyModal.
+// The delete/update contracts had no other caller and stay removed.
 export const listPersonalApiKeysContract = defineRouteContract({
   method: 'GET',
   path: '/api/users/me/api-keys',
+  response: {
+    mode: 'json',
+    schema: z.object({
+      keys: z.array(apiKeyListItemSchema),
+    }),
+  },
+})
+
+export const listWorkspaceApiKeysContract = defineRouteContract({
+  method: 'GET',
+  path: '/api/workspaces/[id]/api-keys',
+  params: workspaceApiKeyParamsSchema,
   response: {
     mode: 'json',
     schema: z.object({
@@ -73,30 +73,6 @@ export const createPersonalApiKeyContract = defineRouteContract({
   },
 })
 
-export const deletePersonalApiKeyContract = defineRouteContract({
-  method: 'DELETE',
-  path: '/api/users/me/api-keys/[id]',
-  params: apiKeyIdParamsSchema,
-  response: {
-    mode: 'json',
-    schema: z.object({
-      success: z.literal(true),
-    }),
-  },
-})
-
-export const listWorkspaceApiKeysContract = defineRouteContract({
-  method: 'GET',
-  path: '/api/workspaces/[id]/api-keys',
-  params: workspaceApiKeyParamsSchema,
-  response: {
-    mode: 'json',
-    schema: z.object({
-      keys: z.array(apiKeyListItemSchema),
-    }),
-  },
-})
-
 export const createWorkspaceApiKeyContract = defineRouteContract({
   method: 'POST',
   path: '/api/workspaces/[id]/api-keys',
@@ -106,47 +82,6 @@ export const createWorkspaceApiKeyContract = defineRouteContract({
     mode: 'json',
     schema: z.object({
       key: apiKeySchema,
-    }),
-  },
-})
-
-export const deleteWorkspaceApiKeyContract = defineRouteContract({
-  method: 'DELETE',
-  path: '/api/workspaces/[id]/api-keys/[keyId]',
-  params: workspaceApiKeyIdParamsSchema,
-  response: {
-    mode: 'json',
-    schema: z.object({
-      success: z.literal(true),
-    }),
-  },
-})
-
-export const updateWorkspaceApiKeyContract = defineRouteContract({
-  method: 'PUT',
-  path: '/api/workspaces/[id]/api-keys/[keyId]',
-  params: workspaceApiKeyIdParamsSchema,
-  body: updateWorkspaceApiKeyBodySchema,
-  response: {
-    mode: 'json',
-    schema: z.object({
-      key: apiKeyMetadataSchema.extend({
-        updatedAt: z.string(),
-      }),
-    }),
-  },
-})
-
-export const deleteWorkspaceApiKeysContract = defineRouteContract({
-  method: 'DELETE',
-  path: '/api/workspaces/[id]/api-keys',
-  params: workspaceApiKeyParamsSchema,
-  body: deleteWorkspaceApiKeysBodySchema,
-  response: {
-    mode: 'json',
-    schema: z.object({
-      success: z.literal(true),
-      deletedCount: z.number(),
     }),
   },
 })

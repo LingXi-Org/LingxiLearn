@@ -23,14 +23,6 @@ const NotIntegratedSection = ({ title }: { title: string }) => (
   </main>
 )
 
-const Admin = dynamic(() =>
-  import('@/app/workspace/[workspaceId]/settings/components/admin/admin').then((m) => m.Admin)
-)
-const ApiKeys = dynamic(() =>
-  import('@/app/workspace/[workspaceId]/settings/components/api-keys/api-keys').then(
-    (m) => m.ApiKeys
-  )
-)
 const BYOK = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/byok/byok').then((m) => m.BYOK)
 )
@@ -53,11 +45,6 @@ const Inbox = dynamic(() =>
 )
 const MCP = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/mcp/mcp').then((m) => m.MCP)
-)
-const Mothership = dynamic(() =>
-  import('@/app/workspace/[workspaceId]/settings/components/mothership/mothership').then(
-    (m) => m.Mothership
-  )
 )
 const RecentlyDeleted = dynamic(() =>
   import(
@@ -112,21 +99,19 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ section }: SettingsPageProps) {
-  const { data: session, isPending: sessionLoading } = useSession()
+  const { isPending: sessionLoading } = useSession()
   const hostContext = useWorkspaceHostContext()
   const posthog = usePostHog()
 
-  const isAdminRole = session?.user?.role === 'admin'
   const normalizedSection: SettingsSection =
     (section as string) === 'subscription' ? 'billing' : section
+  // admin/mothership/apikeys surfaces were removed with their Sim closures
+  // (issue #54): those paths have no section here, so billing gating is the
+  // only normalization left.
   const effectiveSection =
     !isBillingEnabled && (normalizedSection === 'billing' || normalizedSection === 'organization')
       ? 'general'
-      : normalizedSection === 'admin' && !sessionLoading && !isAdminRole
-        ? 'general'
-        : normalizedSection === 'mothership' && !sessionLoading && !isAdminRole
-          ? 'general'
-          : normalizedSection
+      : normalizedSection
   const organizationId = hostContext.hostOrganizationId
   const meta = getSettingsSectionMeta(effectiveSection)
 
@@ -167,7 +152,6 @@ export function SettingsPage({ section }: SettingsPageProps) {
       {effectiveSection === 'audit-logs' && organizationId && (
         <AuditLogs organizationId={organizationId} />
       )}
-      {effectiveSection === 'apikeys' && <ApiKeys scope='combined' />}
       {isBillingEnabled && effectiveSection === 'billing' && (
         <Billing
           scope={organizationId ? 'organization' : 'account'}
@@ -205,8 +189,6 @@ export function SettingsPage({ section }: SettingsPageProps) {
       {effectiveSection === 'inbox' && <Inbox />}
       {effectiveSection === 'recently-deleted' && <RecentlyDeleted />}
       {effectiveSection === 'self-host' && <SelfHost />}
-      {effectiveSection === 'admin' && <Admin />}
-      {effectiveSection === 'mothership' && <Mothership />}
     </SettingsSectionProvider>
   )
 }

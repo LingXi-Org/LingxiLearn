@@ -52,7 +52,6 @@ describe('settings navigation boundaries', () => {
       'secrets',
       'custom-tools',
       'mcp',
-      'apikeys',
       'workflow-mcp-servers',
       'byok',
       'sandboxes',
@@ -65,16 +64,8 @@ describe('settings navigation boundaries', () => {
       'data-drains',
       'whitelabeling',
       'custom-blocks',
-      'admin',
-      'mothership',
     ])
-    expect(ACCOUNT_SETTINGS_ITEMS.map(({ id }) => id)).toEqual([
-      'general',
-      'billing',
-      'api-keys',
-      'admin',
-      'mothership',
-    ])
+    expect(ACCOUNT_SETTINGS_ITEMS.map(({ id }) => id)).toEqual(['general', 'billing'])
     expect(SELFHOST_SETTINGS_ITEMS.map(({ id }) => id)).toEqual(['general', 'billing', 'chat-keys'])
     expect(ORGANIZATION_SETTINGS_ITEMS.map(({ id }) => id)).toEqual([
       'members',
@@ -95,7 +86,6 @@ describe('settings navigation boundaries', () => {
       'custom-tools',
       'mcp',
       'workflow-mcp-servers',
-      'api-keys',
       'inbox',
       'recently-deleted',
       'forks',
@@ -312,7 +302,7 @@ describe('settings navigation boundaries', () => {
 
     expect(parseAccountPath('general', null)).toBe('general')
     expect(parseAccountPath('/account/settings/billing/credit-usage', null)).toBe('billing')
-    expect(parseAccountPath('/account/settings/apikeys', null)).toBe('api-keys')
+    expect(parseAccountPath('/account/settings/apikeys', null)).toBeNull()
     expect(parseAccountPath('/account/settings/not-a-section', null)).toBeNull()
     expect(parseAccountPath('/account/settings', 'general')).toBe('general')
   })
@@ -341,13 +331,13 @@ describe('settings navigation boundaries', () => {
       })
 
     expect(parseWorkspacePath('secrets')).toBe('secrets')
-    expect(parseWorkspacePath('/workspace/workspace-a/settings/apikeys')).toBe('api-keys')
+    expect(parseWorkspacePath('/workspace/workspace-a/settings/apikeys')).toBeNull()
     expect(parseWorkspacePath('/workspace/workspace-a/settings/not-a-section')).toBeNull()
   })
 
-  it('keeps API keys split between account and workspace settings', () => {
-    expect(ACCOUNT_SETTINGS_ITEMS.some(({ id }) => id === 'api-keys')).toBe(true)
-    expect(WORKSPACE_SETTINGS_ITEMS.some(({ id }) => id === 'api-keys')).toBe(true)
+  it('keeps the api-keys section out of every settings plane (issue #54)', () => {
+    expect(ACCOUNT_SETTINGS_ITEMS.some(({ id }) => id === 'api-keys')).toBe(false)
+    expect(WORKSPACE_SETTINGS_ITEMS.some(({ id }) => id === 'api-keys')).toBe(false)
     expect(ORGANIZATION_SETTINGS_ITEMS.some(({ id }) => String(id) === 'api-keys')).toBe(false)
   })
 
@@ -411,7 +401,6 @@ describe('settings navigation boundaries', () => {
         'custom-tools',
         'mcp',
         'workflow-mcp-servers',
-        'api-keys',
         'inbox',
         'recently-deleted',
         'custom-blocks',
@@ -429,7 +418,6 @@ describe('settings navigation boundaries', () => {
         'custom-tools',
         'mcp',
         'workflow-mcp-servers',
-        'api-keys',
         'inbox',
         'recently-deleted',
         'custom-blocks',
@@ -467,7 +455,6 @@ describe('settings navigation boundaries', () => {
       permission: 'admin',
       permissionConfig: {
         hideSecretsTab: true,
-        hideApiKeysTab: true,
         hideInboxTab: true,
         disableMcpTools: true,
         disableCustomTools: true,
@@ -499,7 +486,6 @@ describe('settings navigation boundaries', () => {
     expect(canMutateWorkspaceSettingsSection('mcp', writer)).toBe(true)
     expect(canMutateWorkspaceSettingsSection('recently-deleted', writer)).toBe(true)
     expect(canMutateWorkspaceSettingsSection('workflow-mcp-servers', writer)).toBe(true)
-    expect(canMutateWorkspaceSettingsSection('api-keys', writer)).toBe(false)
     expect(canMutateWorkspaceSettingsSection('inbox', writer)).toBe(false)
   })
 })

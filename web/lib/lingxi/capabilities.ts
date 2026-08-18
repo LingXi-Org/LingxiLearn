@@ -47,16 +47,23 @@ export interface LingxiCapability {
  * invitations     | removed           | removed             | none                    | none              | not_integrated
  * integrations    | removed (#48)     | removed             | none                    | none              | not_integrated
  * oauth           | auth callbacks    | auth plumbing       | none                    | none              | not_integrated
- * credentials     | removed           | removed             | none                    | none              | not_integrated
+ * credentials     | removed (#54)     | removed             | none                    | none              | not_integrated
  * secrets         | removed           | removed             | none                    | none              | not_integrated
  * auditLogs       | removed           | removed             | none                    | none              | not_integrated
- * admin           | removed           | removed             | none                    | none              | not_integrated
+ * admin           | removed (#54)     | removed             | none                    | none              | not_integrated
  * schedules       | removed           | removed             | none                    | none              | not_integrated
  * workflows       | removed           | removed             | none                    | none              | not_integrated
  * desktop         | removed (#48)     | removed             | none                    | none              | not_integrated
  * cli             | removed (#48)     | removed             | none                    | none              | not_integrated
  * ingest          | removed (#48)     | removed             | none                    | none              | not_integrated
- * enterprise      | removed           | removed             | none                    | none              | not_integrated
+ * enterprise      | removed (#54)     | removed             | none                    | none              | not_integrated
+ *
+ * The #54 audit also removed the Sim account-settings closures that had no
+ * Lingxi backend owner: /account/settings/api-keys (credentials),
+ * /account/settings/admin (Better Auth admin stubs), and
+ * /account/settings/mothership (enterprise license/BYOK proxy endpoints that
+ * no LingxiLearn deployment serves). Unsupported capabilities are expressed
+ * by code not existing — never by a reachable route backed by a fake client.
  */
 export const LingxiCapabilityManifest = {
   chat: {
