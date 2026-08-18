@@ -2,10 +2,6 @@
 
 import { useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import type { WorkspaceHostContext } from '@/lib/api/contracts/workspaces'
-import { useSession } from '@/lib/auth/auth-client'
-import { canManageWorkspaceBilling } from '@/lib/billing/workspace-permissions'
-import { useOptionalWorkspaceHostContext } from '@/app/workspace/[workspaceId]/providers/workspace-host-provider'
 import type { SettingsSection } from '@/app/workspace/[workspaceId]/settings/navigation'
 
 const SETTINGS_RETURN_URL_KEY = 'settings-return-url'
@@ -27,25 +23,14 @@ interface UseSettingsNavigationReturn {
 interface ResolveSettingsHrefParams {
   options?: SettingsNavigationOptions
   workspaceId?: string
-  hostContext?: WorkspaceHostContext
-  viewerUserId?: string
 }
 
-export function resolveSettingsHref({
-  options,
-  workspaceId,
-  hostContext,
-  viewerUserId,
-}: ResolveSettingsHrefParams): string {
+export function resolveSettingsHref({ options, workspaceId }: ResolveSettingsHrefParams): string {
   if (!workspaceId) return '/workspace'
-  const section = options?.section || 'general'
-  if (
-    section === 'billing' &&
-    hostContext &&
-    !canManageWorkspaceBilling(hostContext, viewerUserId)
-  ) {
-    return `/workspace/${workspaceId}/upgrade`
-  }
+  // Billing is not an integrated LingxiLearn capability (issue #54): the
+  // section no longer resolves to a billing or upgrade surface, it lands on
+  // the general settings page like any other removed section.
+  const section = options?.section && options.section !== 'billing' ? options.section : 'general'
 
   const searchParams = new URLSearchParams()
   if (options?.mcpServerId) searchParams.set('mcpServerId', options.mcpServerId)
@@ -61,8 +46,6 @@ export function useSettingsNavigation(): UseSettingsNavigationReturn {
   const router = useRouter()
   const params = useParams<{ workspaceId?: string }>()
   const workspaceId = params.workspaceId
-  const hostContext = useOptionalWorkspaceHostContext()
-  const { data: session } = useSession()
 
   const settingsPrefix = `/workspace/${workspaceId}/settings/`
 
@@ -71,10 +54,8 @@ export function useSettingsNavigation(): UseSettingsNavigationReturn {
       resolveSettingsHref({
         options,
         workspaceId,
-        hostContext: hostContext ?? undefined,
-        viewerUserId: session?.user?.id,
       }),
-    [hostContext, session?.user?.id, workspaceId]
+    [workspaceId]
   )
 
   const popSettingsReturnUrl = useCallback((fallback: string): string => {

@@ -8,7 +8,6 @@ import {
   HexSimple,
   Key,
   KeySquare,
-  Lock,
   LogIn,
   Palette,
   PanelLeft,
@@ -42,7 +41,12 @@ import {
 
 export type SettingsPlane = 'account' | 'organization' | 'selfhost' | 'workspace'
 
-export type AccountSettingsSection = 'general' | 'billing' | 'api-keys' | 'admin' | 'mothership'
+/**
+ * Account-plane sections that still exist. The api-keys/admin/mothership
+ * surfaces were removed with their unreachable Sim closures (issue #54): none
+ * of them has a Lingxi backend owner, so they must not keep product routes.
+ */
+export type AccountSettingsSection = 'general' | 'billing'
 
 /**
  * Settings a self-hoster needs from the managed service: their profile, what
@@ -69,7 +73,6 @@ export type WorkspaceSettingsSection =
   | 'custom-tools'
   | 'mcp'
   | 'workflow-mcp-servers'
-  | 'api-keys'
   | 'inbox'
   | 'recently-deleted'
   | 'forks'
@@ -102,7 +105,6 @@ export type UnifiedSettingsSection =
   | 'access-control'
   | 'custom-blocks'
   | 'audit-logs'
-  | 'apikeys'
   | 'byok'
   | 'billing'
   | 'teammates'
@@ -115,11 +117,9 @@ export type UnifiedSettingsSection =
   | 'workflow-mcp-servers'
   | 'inbox'
   | 'sandboxes'
-  | 'admin'
   | 'sessions'
   | 'data-retention'
   | 'data-drains'
-  | 'mothership'
   | 'recently-deleted'
   | 'self-host'
 
@@ -265,9 +265,9 @@ export function getWorkspaceSettingsHref(
   return withSettingsSearchParams(`/workspace/${workspaceId}/settings/${section}`, searchParams)
 }
 
-export const ACCOUNT_SETTINGS_PATH_ALIASES = {
-  apikeys: 'api-keys',
-} as const satisfies Readonly<Record<string, AccountSettingsSection>>
+export const ACCOUNT_SETTINGS_PATH_ALIASES = {} as const satisfies Readonly<
+  Record<string, AccountSettingsSection>
+>
 
 export const ORGANIZATION_SETTINGS_PATH_ALIASES = {
   organization: 'members',
@@ -275,9 +275,9 @@ export const ORGANIZATION_SETTINGS_PATH_ALIASES = {
   domains: 'sso',
 } as const satisfies Readonly<Record<string, OrganizationSettingsSection>>
 
-export const WORKSPACE_SETTINGS_PATH_ALIASES = {
-  apikeys: 'api-keys',
-} as const satisfies Readonly<Record<string, WorkspaceSettingsSection>>
+export const WORKSPACE_SETTINGS_PATH_ALIASES = {} as const satisfies Readonly<
+  Record<string, WorkspaceSettingsSection>
+>
 
 interface ParseSettingsPathSectionOptions<
   Section extends string,
@@ -561,30 +561,6 @@ export const SETTINGS_SECTION_REGISTRY: readonly SettingsSectionRegistryEntry[] 
     },
   },
   {
-    label: 'Sim API keys',
-    icon: TerminalWindow,
-    unified: {
-      id: 'apikeys',
-      description: 'Create and manage API keys for the Sim API.',
-      group: 'workspace',
-      order: 7,
-    },
-    planes: {
-      account: {
-        id: 'api-keys',
-        description: 'Create and manage your personal Sim API keys.',
-        group: 'developer',
-        order: 2,
-      },
-      workspace: {
-        id: 'api-keys',
-        description: 'Manage workspace API keys and personal-key policy.',
-        group: 'system',
-        order: 7,
-      },
-    },
-  },
-  {
     label: 'MCP servers',
     icon: Server,
     unified: {
@@ -788,46 +764,18 @@ export const SETTINGS_SECTION_REGISTRY: readonly SettingsSectionRegistryEntry[] 
       workspace: { id: 'custom-blocks', group: 'enterprise', order: 11 },
     },
   },
-  {
-    label: 'Admin',
-    icon: Lock,
-    unified: {
-      id: 'admin',
-      description: 'Superuser administration and workspace tools.',
-      group: 'platform',
-      order: 0,
-      requiresAdminRole: true,
-    },
-    planes: {
-      account: { id: 'admin', group: 'platform', order: 4 },
-    },
-  },
-  {
-    label: 'Mothership',
-    icon: Server,
-    unified: {
-      id: 'mothership',
-      description: 'Internal Sim operations and license management.',
-      group: 'platform',
-      order: 1,
-      requiresAdminRole: true,
-    },
-    planes: {
-      account: { id: 'mothership', group: 'platform', order: 5 },
-    },
-  },
 ]
 
 const SETTINGS_LABELS: Record<string, string> = {
   General: '常规', Desktop: '桌面端', Browser: '浏览器', Terminal: '终端',
   'Permission groups': '权限组', 'Audit logs': '审计日志', 'Workspace forks': '工作区分支',
   Subscription: '订阅与计费', Teammates: '协作者', Members: '成员', Secrets: '密钥',
-  'Custom tools': '自定义工具', 'MCP tools': 'MCP 工具', 'Sim API keys': 'API 密钥',
+  'Custom tools': '自定义工具', 'MCP tools': 'MCP 工具',
   'MCP servers': 'MCP 服务器', BYOK: '自带密钥（BYOK）', Sandboxes: '沙盒',
   'Chat keys': '聊天密钥', 'Sim Mailer': '邮件触发器', 'Recently deleted': '最近删除',
   'Self hosting': '自托管', 'Single sign-on': '单点登录', 'Session policies': '会话策略',
   'Data retention': '数据留存', 'Data drains': '数据转发', 'White-labeling': '品牌定制',
-  'Custom blocks': '自定义模块', Admin: '管理员', Mothership: '平台管理',
+  'Custom blocks': '自定义模块',
 }
 
 const SETTINGS_DESCRIPTIONS: Record<string, string> = {
@@ -844,8 +792,6 @@ const SETTINGS_DESCRIPTIONS: Record<string, string> = {
   'Store environment variables for your workflows.': '存储工作流使用的环境变量。',
   'Create and manage custom tools for your agents.': '创建和管理智能体的自定义工具。',
   'Connect external MCP servers and use their tools in this workspace.': '连接外部 MCP 服务器并在此工作区使用其工具。',
-  'Create and manage API keys for the Sim API.': '创建和管理 API 密钥。',
-  'Manage workspace API keys and personal-key policy.': '管理工作区 API 密钥和个人密钥策略。',
   'Expose workflows from this workspace as tools on an MCP server.': '将此工作区的工作流作为 MCP 服务器工具公开。',
   'Bring your own model-provider API keys.': '使用你自己的模型提供商 API 密钥。',
   'Restore items deleted in the last 30 days.': '恢复最近 30 天内删除的项目。',
@@ -985,7 +931,6 @@ export function isOrganizationSettingsSectionAvailable(
 
 export interface WorkspacePermissionConfig {
   hideSecretsTab?: boolean
-  hideApiKeysTab?: boolean
   hideInboxTab?: boolean
   disableMcpTools?: boolean
   disableCustomTools?: boolean
@@ -1032,7 +977,6 @@ const WORKSPACE_MUTATION_PERMISSION: Record<WorkspaceSettingsSection, Permission
   'custom-tools': 'write',
   mcp: 'write',
   'workflow-mcp-servers': 'write',
-  'api-keys': 'admin',
   inbox: 'admin',
   'recently-deleted': 'write',
   forks: 'admin',
@@ -1061,7 +1005,6 @@ export function resolveWorkspaceNavigation({
 }: ResolveWorkspaceNavigationOptions): ResolvedWorkspaceNavigationItem[] {
   return WORKSPACE_SETTINGS_ITEMS.flatMap((item) => {
     if (item.id === 'secrets' && permissionConfig.hideSecretsTab) return []
-    if (item.id === 'api-keys' && permissionConfig.hideApiKeysTab) return []
     if (item.id === 'inbox' && permissionConfig.hideInboxTab) return []
     if (item.id === 'mcp' && permissionConfig.disableMcpTools) return []
     if (item.id === 'custom-tools' && permissionConfig.disableCustomTools) return []

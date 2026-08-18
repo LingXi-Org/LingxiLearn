@@ -167,37 +167,6 @@ function handleRootPathRedirects(
 }
 
 /**
- * Handles invitation link redirects for unauthenticated users
- */
-function handleInvitationRedirects(
-  request: NextRequest,
-  hasActiveSession: boolean
-): NextResponse | null {
-  if (!request.nextUrl.pathname.startsWith('/invite/')) {
-    return null
-  }
-
-  if (
-    !hasActiveSession &&
-    !request.nextUrl.pathname.endsWith('/login') &&
-    !request.nextUrl.pathname.endsWith('/signup') &&
-    !request.nextUrl.search.includes('callbackUrl')
-  ) {
-    const token = request.nextUrl.searchParams.get('token')
-    const inviteId = request.nextUrl.pathname.split('/').pop()
-    const callbackParam = encodeURIComponent(`/invite/${inviteId}${token ? `?token=${token}` : ''}`)
-    return NextResponse.redirect(
-      new URL(`/login?callbackUrl=${callbackParam}&invite_flow=true`, request.url)
-    )
-  }
-  const response = NextResponse.next()
-  response.headers.set('Content-Security-Policy', generateRuntimeCSP())
-  response.headers.set('X-Content-Type-Options', 'nosniff')
-  response.headers.set('X-Frame-Options', 'SAMEORIGIN')
-  return response
-}
-
-/**
  * Handles security filtering for suspicious user agents
  */
 function handleSecurityFiltering(request: NextRequest): NextResponse | null {
@@ -287,9 +256,6 @@ export async function proxy(request: NextRequest) {
     return track(request, response)
   }
 
-  const invitationRedirect = handleInvitationRedirects(request, hasActiveSession)
-  if (invitationRedirect) return track(request, invitationRedirect)
-
   const securityBlock = handleSecurityFiltering(request)
   if (securityBlock) return track(request, securityBlock)
 
@@ -343,7 +309,6 @@ export const config = {
     '/login',
     '/signup',
     '/auth/:path*', // Same-origin LingxiIdentity BFF callback and Experience routes
-    '/invite/:path*', // Match invitation routes
     '/api/:path*', // Runtime CORS
     // Catch-all for other pages, excluding static assets and public directories.
     // The `ingest` exclusion was removed with the fake analytics route (#48).

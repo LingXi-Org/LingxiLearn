@@ -28,15 +28,15 @@ describe('upgrade-reasons', () => {
     expect(UPGRADE_REASON_COPY.storage.header).toBe('Upgrade to scale your storage')
   })
 
-  it('builds hrefs with and without a reason', () => {
-    expect(buildUpgradeHref('ws-1')).toBe('/workspace/ws-1/upgrade')
-    expect(buildUpgradeHref('ws-1', 'tables')).toBe('/workspace/ws-1/upgrade?reason=tables')
+  it('routes upgrade prompts to settings now that billing is removed (issue #54)', () => {
+    expect(buildUpgradeHref('ws-1')).toBe('/workspace/ws-1/settings')
+    expect(buildUpgradeHref('ws-1', 'tables')).toBe('/workspace/ws-1/settings')
   })
 
   it('builds absolute hosted URLs for self-hosted deployments', () => {
-    expect(buildHostedUpgradeUrl()).toBe('https://www.sim.ai/upgrade')
-    expect(buildHostedUpgradeUrl('credits')).toBe('https://www.sim.ai/upgrade?reason=credits')
-    expect(HOSTED_BILLING_SETTINGS_URL).toBe('https://www.sim.ai/account/settings/billing')
+    expect(buildHostedUpgradeUrl()).toBe('https://www.sim.ai/account/settings')
+    expect(buildHostedUpgradeUrl('credits')).toBe('https://www.sim.ai/account/settings')
+    expect(HOSTED_BILLING_SETTINGS_URL).toBe('https://www.sim.ai/account/settings')
   })
 
   it('guards known reasons', () => {

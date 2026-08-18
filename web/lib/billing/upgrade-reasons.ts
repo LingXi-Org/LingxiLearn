@@ -80,27 +80,26 @@ export function isUpgradeReason(value: string | null | undefined): value is Upgr
 }
 
 /**
- * Build a link to the workspace upgrade page, optionally tagged with the reason
- * that sent the user there so the page can swap its header.
+ * Build the fallback link for upgrade prompts.
+ *
+ * Billing/plans are not an integrated LingxiLearn capability (issue #54) and
+ * the workspace upgrade route was removed, so upgrade prompts land on the
+ * workspace settings page instead of a dead route.
  */
-export function buildUpgradeHref(workspaceId: string, reason?: UpgradeReason): string {
-  const base = `/workspace/${workspaceId}/upgrade`
-  return reason ? `${base}?${UPGRADE_REASON_PARAM}=${reason}` : base
+export function buildUpgradeHref(workspaceId: string, _reason?: UpgradeReason): string {
+  return `/workspace/${workspaceId}/settings`
 }
 
 /**
- * Absolute upgrade URL on the hosted app.
+ * Absolute fallback link for upgrade prompts on the hosted app.
  *
- * Self-hosted deployments talk to Chat through a Chat key issued by the user's
- * sim.ai account, so their plan and credits live there rather than on the local
- * instance. A local workspace id is meaningless on the hosted app, so this
- * points at the account-scoped `/upgrade` entry, which resolves the signed-in
- * user's own workspace.
+ * Billing/plans are not an integrated LingxiLearn capability (issue #54); the
+ * account-scoped `/upgrade` entry was removed, so hosted upgrade prompts point
+ * at the account settings surface instead.
  */
-export function buildHostedUpgradeUrl(reason?: UpgradeReason): string {
-  const base = `${SITE_URL}/upgrade`
-  return reason ? `${base}?${UPGRADE_REASON_PARAM}=${reason}` : base
+export function buildHostedUpgradeUrl(_reason?: UpgradeReason): string {
+  return `${SITE_URL}/account/settings`
 }
 
-/** Account billing settings on the hosted app, for raising a usage limit. */
-export const HOSTED_BILLING_SETTINGS_URL = `${SITE_URL}/account/settings/billing` as const
+/** Account settings on the hosted app, for raising a usage limit. */
+export const HOSTED_BILLING_SETTINGS_URL = `${SITE_URL}/account/settings` as const
