@@ -20,7 +20,7 @@ from lingxilearn.config import Settings, get_settings
 from lingxilearn.learner import LearnerService
 from lingxilearn.main import create_app
 from lingxilearn.service import Service
-from lingxilearn.store.db import Database, Repository
+from lingxilearn.store.repositories import Database, Repository
 from lingxilearn.store.learner import LearnerRepository
 from lingxilearn.store.models import (
     LearningEvent,

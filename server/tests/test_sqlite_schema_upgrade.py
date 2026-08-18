@@ -19,7 +19,8 @@ import pytest_asyncio
 from sqlalchemy import text
 
 from lingxilearn.config import Settings
-from lingxilearn.store.db import _SQLITE_SCHEMA_HEAD, Database, Repository
+from lingxilearn.store.db import Database, _SQLITE_SCHEMA_HEAD
+from lingxilearn.store.repositories import Repository
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

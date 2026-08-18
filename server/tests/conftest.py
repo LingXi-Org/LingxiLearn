@@ -28,7 +28,7 @@ async def state_db() -> AsyncIterator[tuple[object, object, str]]:
     """
 
     from lingxilearn.config import Settings
-    from lingxilearn.store.db import Database, Repository
+    from lingxilearn.store.repositories import Database, Repository
     from lingxilearn.store.runtime_state import RuntimeStateRepository
 
     suffix = uuid4().hex
