@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { type Principal, resolvePrincipalAttribution } from '@sim/auth/principal'
+import { type Principal, resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { createLogger } from '@sim/logger'
 import {
   assertFolderMutable,

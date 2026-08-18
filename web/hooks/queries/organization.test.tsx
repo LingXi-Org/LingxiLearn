@@ -7,24 +7,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetFullOrganization, mockRequestJson } = vi.hoisted(() => ({
-  mockGetFullOrganization: vi.fn(),
+const { mockRequestJson } = vi.hoisted(() => ({
   mockRequestJson: vi.fn(),
 }))
 
 vi.mock('@/lib/api/client/request', () => ({
   requestJson: mockRequestJson,
-}))
-
-vi.mock('@/lib/auth/auth-client', () => ({
-  client: {
-    organization: {
-      getFullOrganization: mockGetFullOrganization,
-    },
-    subscription: {
-      list: vi.fn(),
-    },
-  },
 }))
 
 import {
@@ -35,11 +23,7 @@ import {
   getOrganizationBillingContract,
   type OrganizationBillingApiResponse,
 } from '@/lib/api/contracts/subscription'
-import {
-  useOrganization,
-  useOrganizationBilling,
-  useOrganizationRoster,
-} from '@/hooks/queries/organization'
+import { useOrganizationBilling, useOrganizationRoster } from '@/hooks/queries/organization'
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -52,11 +36,6 @@ function createDeferred<T>(): Deferred<T> {
     resolvePromise = resolve
   })
   return { promise, resolve: resolvePromise }
-}
-
-const ORGANIZATION_A = {
-  id: 'org-a',
-  name: 'Organization A',
 }
 
 const ROSTER_A: { success: true; data: OrganizationRoster } = {
@@ -91,14 +70,12 @@ let root: Root
 let queryClient: QueryClient
 
 function OrganizationProbe({ organizationId }: { organizationId: string }) {
-  const organization = useOrganization(organizationId)
   const roster = useOrganizationRoster(organizationId)
   const billing = useOrganizationBilling(organizationId)
-  const canManage = Boolean(organization.data && roster.data && billing.data)
+  const canManage = Boolean(roster.data && billing.data)
 
   return (
     <div>
-      <span data-testid='organization-name'>{organization.data?.name ?? ''}</span>
       <span data-testid='member-name'>{roster.data?.members[0]?.name ?? ''}</span>
       <span data-testid='billing-organization'>{billing.data?.data.organizationId ?? ''}</span>
       {canManage && <button type='button'>Manage organization</button>}
@@ -145,17 +122,10 @@ describe('organization identity transitions', () => {
     vi.clearAllMocks()
   })
 
-  it('clears organization detail, roster, billing, and actions while the next org loads', async () => {
-    const organizationB = createDeferred<{ data: typeof ORGANIZATION_A }>()
+  it('clears roster and billing while the next org loads', async () => {
     const rosterB = createDeferred<typeof ROSTER_A>()
     const billingB = createDeferred<OrganizationBillingApiResponse>()
 
-    mockGetFullOrganization.mockImplementation(
-      ({ query }: { query: { organizationId: string } }) =>
-        query.organizationId === 'org-a'
-          ? Promise.resolve({ data: ORGANIZATION_A })
-          : organizationB.promise
-    )
     mockRequestJson.mockImplementation(
       (
         contract: unknown,
@@ -177,7 +147,6 @@ describe('organization identity transitions', () => {
     renderOrganization('org-a')
     await flushQueries()
 
-    expect(container).toHaveTextContent('Organization A')
     expect(container).toHaveTextContent('Member A')
     expect(container).toHaveTextContent('org-a')
     expect(container.querySelector('button')).toHaveTextContent('Manage organization')
@@ -185,12 +154,8 @@ describe('organization identity transitions', () => {
     renderOrganization('org-b')
     await flushQueries()
 
-    expect(container).not.toHaveTextContent('Organization A')
     expect(container).not.toHaveTextContent('Member A')
     expect(container).not.toHaveTextContent('org-a')
     expect(container.querySelector('button')).toBeNull()
-    expect(mockGetFullOrganization).toHaveBeenCalledWith({
-      query: { organizationId: 'org-b' },
-    })
   })
 })

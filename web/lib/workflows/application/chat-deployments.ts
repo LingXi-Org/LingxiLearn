@@ -4,7 +4,7 @@ import {
   requirePrincipalSubjectUserId,
   resolvePrincipalAttribution,
   toPrincipalActor,
-} from '@sim/auth/principal'
+} from '@/lib/auth/principal'
 import { chat, db } from '@sim/db'
 import { and, eq, isNull } from 'drizzle-orm'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

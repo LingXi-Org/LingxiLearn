@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import type { TableSchema, TableViewConfig } from '@/lib/table'
 import { defineAuthorizedTableUseCase } from '@/lib/table/application/authorized-table-use-case'

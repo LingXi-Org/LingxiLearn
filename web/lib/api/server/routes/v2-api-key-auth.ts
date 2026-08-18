@@ -1,4 +1,4 @@
-import type { PersonalApiKeyPrincipal, WorkspaceApiKeyPrincipal } from '@sim/auth/principal'
+import type { PersonalApiKeyPrincipal, WorkspaceApiKeyPrincipal } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { apiKey, user } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'

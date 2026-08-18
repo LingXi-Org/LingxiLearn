@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import type { WorkflowExecutionDelegatedPrincipal } from '@sim/auth/principal'
+import type { WorkflowExecutionDelegatedPrincipal } from '@/lib/auth/principal'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({

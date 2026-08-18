@@ -47,6 +47,12 @@ jobs:
       - name: Type-check frontend contracts
         run: bun run type-check
 
+      # Enforce the auth boundary established by issue #52: LingxiLearn must
+      # not import Better Auth. All credential, OIDC token and session
+      # ownership belongs to the LingxiIdentity BFF.
+      - name: Auth boundary check (no Better Auth)
+        run: bun run check:auth-boundary
+
       - name: Check workspace module boundaries
         run: bash ../scripts/check-workspace-boundaries.sh web
 

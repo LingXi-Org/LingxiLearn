@@ -1,6 +1,6 @@
 import { Buffer } from 'buffer'
 import type { Readable } from 'stream'
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import JSZip from 'jszip'
 import { readZipCentralDirectoryStats } from '@/lib/file-parsers/zip-guard'
 import type { WorkspaceFileSecretProvenance } from '@/lib/uploads/contexts/workspace/workspace-file-secret-provenance'

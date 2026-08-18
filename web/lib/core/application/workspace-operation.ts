@@ -1,4 +1,4 @@
-import type { DelegatedPrincipal, DelegatedServiceId, Principal } from '@sim/auth/principal'
+import type { DelegatedPrincipal, DelegatedServiceId, Principal } from '@/lib/auth/principal'
 import type { PermissionType } from '@sim/platform-authz/workspace'
 import type { ApplicationOperation } from '@/lib/core/application/operation'
 

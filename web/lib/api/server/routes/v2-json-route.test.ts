@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import type { PersonalApiKeyPrincipal } from '@sim/auth/principal'
+import type { PersonalApiKeyPrincipal } from '@/lib/auth/principal'
 import {
   MockV2ApiKeyUnauthenticatedError,
   v2ApiKeyAuthModuleMock,

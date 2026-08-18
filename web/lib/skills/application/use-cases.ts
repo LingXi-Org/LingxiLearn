@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { requirePrincipalSubjectUserId, resolvePrincipalAttribution } from '@sim/auth/principal'
+import { requirePrincipalSubjectUserId, resolvePrincipalAttribution } from '@/lib/auth/principal'
 import type { skill } from '@sim/db/schema'
 import type { ListSortOrder } from '@/lib/api/list-query'
 import {

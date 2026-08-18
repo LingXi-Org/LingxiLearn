@@ -3,7 +3,7 @@ import type {
   Principal,
   SessionPrincipal,
   WorkflowExecutionDelegatedPrincipal,
-} from '@sim/auth/principal'
+} from '@/lib/auth/principal'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import type { ContractJsonResponse } from '@/lib/api/contracts'

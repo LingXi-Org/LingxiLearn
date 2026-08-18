@@ -39,10 +39,6 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'packages/audit/src'),
       },
       {
-        find: '@sim/auth',
-        replacement: path.resolve(__dirname, 'packages/auth/src'),
-      },
-      {
         find: '@sim/browser-protocol',
         replacement: path.resolve(__dirname, 'packages/browser-protocol/src'),
       },

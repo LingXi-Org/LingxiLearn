@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import type { ListSortOrder } from '@/lib/api/list-query'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { MAX_FOLDERS_PER_WORKSPACE } from '@/lib/folders/constants'

@@ -1,4 +1,4 @@
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { defineAuthorizedWorkflowUseCase } from '@/lib/workflows/application/authorized-workflow-use-case'
 import { resolveActiveWorkflowRunApplicationContext } from '@/lib/workflows/application/context'
 import { workflowOperations } from '@/lib/workflows/application/operations'

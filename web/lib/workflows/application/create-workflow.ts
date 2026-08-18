@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { createLogger } from '@sim/logger'
 import { assertFolderMutable, FolderLockedError } from '@sim/platform-authz/workflow'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

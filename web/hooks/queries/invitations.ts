@@ -20,8 +20,8 @@ import {
   resendInvitationContract,
 } from '@/lib/api/contracts/invitations'
 import { updateWorkspacePermissionsContract } from '@/lib/api/contracts/workspaces'
+import { refreshCanonicalSession } from '@/lib/auth/session-snapshot'
 import { organizationKeys } from '@/hooks/queries/organization'
-import { refreshSessionQuery } from '@/hooks/queries/session'
 import { subscriptionKeys } from '@/hooks/queries/subscription'
 import { workspaceCredentialKeys } from '@/hooks/queries/utils/credential-keys'
 import { workspaceKeys } from '@/hooks/queries/workspace'
@@ -185,7 +185,10 @@ export function useAcceptMyInvitation() {
       queryClient.invalidateQueries({ queryKey: organizationKeys.all })
       queryClient.invalidateQueries({ queryKey: workspaceCredentialKeys.all })
       queryClient.invalidateQueries({ queryKey: subscriptionKeys.all })
-      void refreshSessionQuery(queryClient)
+      // Accepting an invitation can change session fields (workspace
+      // membership), so revalidate the canonical session immediately instead
+      // of waiting out the provider's freshness window.
+      void refreshCanonicalSession({ force: true })
     },
     // Refresh the list on failure too, so a row that failed terminally
     // (expired / already-processed since the list loaded) drops instead of

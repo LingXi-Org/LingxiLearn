@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { folder as folderTable, workflow, workspaceFiles } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'

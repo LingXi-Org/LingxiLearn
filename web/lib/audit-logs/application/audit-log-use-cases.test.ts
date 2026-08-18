@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import type { SessionPrincipal, WorkspaceApiKeyPrincipal } from '@sim/auth/principal'
+import type { SessionPrincipal, WorkspaceApiKeyPrincipal } from '@/lib/auth/principal'
 import { dbChainMockFns, resetDbChainMock } from '@sim/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 

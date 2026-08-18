@@ -1,4 +1,4 @@
-import type { DelegatedPrincipal } from '@sim/auth/principal'
+import type { DelegatedPrincipal } from '@/lib/auth/principal'
 import { messageForCopilotApplicationError } from '@/lib/copilot/application/error'
 import {
   COPILOT_APPLICATION_DELEGATION_TTL_MS,

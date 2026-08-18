@@ -3,12 +3,6 @@ import { getBrandConfig } from '@/ee/whitelabeling'
 
 /** Email subject type for all supported email templates */
 export type EmailSubjectType =
-  | 'sign-in'
-  | 'email-verification'
-  | 'change-email'
-  | 'forget-password'
-  | 'reset-password'
-  | 'existing-account'
   | 'invitation'
   | 'batch-invitation'
   | 'workspace-added'
@@ -21,7 +15,6 @@ export type EmailSubjectType =
   | 'free-tier-exhausted'
   | 'schedule-disabled'
   | 'onboarding-followup'
-  | 'welcome'
 
 /**
  * Returns the email subject line for a given email type.
@@ -32,18 +25,6 @@ export function getEmailSubject(type: EmailSubjectType): string {
   const brandName = getBrandConfig().name
 
   switch (type) {
-    case 'sign-in':
-      return `Sign in to ${brandName}`
-    case 'email-verification':
-      return `Verify your email for ${brandName}`
-    case 'change-email':
-      return `Verify your new email for ${brandName}`
-    case 'forget-password':
-      return `Reset your ${brandName} password`
-    case 'reset-password':
-      return `Reset your ${brandName} password`
-    case 'existing-account':
-      return `Sign-up attempt with your ${brandName} email`
     case 'invitation':
       return `You've been invited to join a team on ${brandName}`
     case 'batch-invitation':
@@ -68,8 +49,6 @@ export function getEmailSubject(type: EmailSubjectType): string {
       return `A schedule was turned off on ${brandName}`
     case 'onboarding-followup':
       return `Quick question about ${brandName}`
-    case 'welcome':
-      return `Welcome to ${brandName}`
     default:
       return brandName
   }
@@ -97,9 +76,4 @@ export function getRequestConfirmationSubject(userSubject: string, requestType?:
   return requestType
     ? `Your ${requestType} request has been received: ${userSubject}`
     : `We've received your message: ${userSubject}`
-}
-
-/** Names the resource being unlocked rather than the brand — that is what the recipient opened. */
-export function getOtpSubject(resourceLabel: string): string {
-  return `Verification code for ${resourceLabel}`
 }

@@ -1,4 +1,4 @@
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import type { NormalizedWorkflowData } from '@sim/workflow-persistence/types'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { defineAuthorizedWorkflowUseCase } from '@/lib/workflows/application/authorized-workflow-use-case'

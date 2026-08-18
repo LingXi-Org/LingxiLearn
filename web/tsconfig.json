@@ -23,7 +23,6 @@
       "@/*": ["./*"],
       "@sim/audit": ["./packages/audit/src/index.ts"],
       "@sim/audit/*": ["./packages/audit/src/*"],
-      "@sim/auth/*": ["./packages/auth/src/*"],
       "@sim/browser-protocol": ["./packages/browser-protocol/src/index.ts"],
       "@sim/browser-protocol/*": ["./packages/browser-protocol/src/*"],
       "@sim/db": ["./packages/db/index.ts"],
@@ -44,7 +43,9 @@
       "@sim/workflow-persistence/*": ["./packages/workflow-persistence/src/*"],
       "@sim/workflow-renderer": ["./packages/workflow-renderer/src/index.ts"],
       "@sim/workflow-renderer/*": ["./packages/workflow-renderer/src/*"],
-      "@sim/workflow-renderer/note-colors": ["./packages/workflow-renderer/src/note/note-colors.ts"],
+      "@sim/workflow-renderer/note-colors": [
+        "./packages/workflow-renderer/src/note/note-colors.ts"
+      ],
       "@sim/workflow-types/*": ["./packages/workflow-types/src/*"]
     }
   },

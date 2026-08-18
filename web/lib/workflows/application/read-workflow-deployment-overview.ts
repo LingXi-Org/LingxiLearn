@@ -1,4 +1,4 @@
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import { chat, db, workflowMcpServer, workflowMcpTool } from '@sim/db'
 import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import { defineAuthorizedWorkflowUseCase } from '@/lib/workflows/application/authorized-workflow-use-case'

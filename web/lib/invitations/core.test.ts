@@ -19,7 +19,6 @@ const {
   mockEnsureTeamOrganizationForAcceptance,
   mockReconcileOrganizationSeats,
   mockGetWorkspaceWithOwner,
-  mockSetActiveOrganizationForCurrentSession,
   mockSyncUsageLimitsFromSubscription,
   mockSyncWorkspaceEnvCredentials,
   mockIsWorkspaceOnEnterprisePlan,
@@ -33,7 +32,6 @@ const {
   mockEnsureTeamOrganizationForAcceptance: vi.fn(),
   mockReconcileOrganizationSeats: vi.fn(),
   mockGetWorkspaceWithOwner: vi.fn(),
-  mockSetActiveOrganizationForCurrentSession: vi.fn(),
   mockSyncUsageLimitsFromSubscription: vi.fn(),
   mockSyncWorkspaceEnvCredentials: vi.fn(),
   mockIsWorkspaceOnEnterprisePlan: vi.fn(async () => true),
@@ -59,10 +57,6 @@ vi.mock('@/lib/billing/organizations/seats', () => ({
 
 vi.mock('@/lib/workspaces/permissions/utils', () => ({
   getWorkspaceWithOwner: mockGetWorkspaceWithOwner,
-}))
-
-vi.mock('@/lib/auth/active-organization', () => ({
-  setActiveOrganizationForCurrentSession: mockSetActiveOrganizationForCurrentSession,
 }))
 
 vi.mock('@/lib/billing/core/subscription', () => ({
@@ -380,7 +374,6 @@ describe('acceptInvitation', () => {
     }
     expect(mockEnsureTeamOrganizationForAcceptance).not.toHaveBeenCalled()
     expect(mockEnsureUserInOrganization).not.toHaveBeenCalled()
-    expect(mockSetActiveOrganizationForCurrentSession).not.toHaveBeenCalled()
     expect(mockSyncUsageLimitsFromSubscription).not.toHaveBeenCalled()
     expect(auditMock.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -525,7 +518,6 @@ describe('acceptInvitation', () => {
     if (result.success) {
       expect(result.invitation.organizationId).toBeNull()
     }
-    expect(mockSetActiveOrganizationForCurrentSession).not.toHaveBeenCalled()
     expect(auditMock.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: auditMock.AuditAction.INVITATION_ACCEPTED,
@@ -590,7 +582,6 @@ describe('acceptInvitation', () => {
     }
     expect(mockEnsureTeamOrganizationForAcceptance).not.toHaveBeenCalled()
     expect(mockEnsureUserInOrganization).not.toHaveBeenCalled()
-    expect(mockSetActiveOrganizationForCurrentSession).not.toHaveBeenCalled()
     expect(dbChainMockFns.set).toHaveBeenCalledWith(expect.objectContaining({ status: 'accepted' }))
     expect(dbChainMockFns.values).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -661,7 +652,6 @@ describe('acceptInvitation', () => {
       expect(dbChainMockFns.values).not.toHaveBeenCalled()
       expect(mockEnsureTeamOrganizationForAcceptance).not.toHaveBeenCalled()
       expect(mockEnsureUserInOrganization).not.toHaveBeenCalled()
-      expect(mockSetActiveOrganizationForCurrentSession).not.toHaveBeenCalled()
       expect(auditMock.recordAudit).not.toHaveBeenCalled()
     }
   )
@@ -756,7 +746,6 @@ describe('acceptInvitation', () => {
       reason: 'member-accepted-invite',
       actorId: 'invitee-user',
     })
-    expect(mockSetActiveOrganizationForCurrentSession).toHaveBeenCalledWith('org-new')
     expect(auditMock.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: 'invitee-user',
@@ -1512,7 +1501,6 @@ describe('acceptInvitation', () => {
     expect(mockEnsureTeamOrganizationForAcceptance).not.toHaveBeenCalled()
     expect(mockEnsureUserInOrganization).not.toHaveBeenCalled()
     expect(mockAttachOwnedWorkspacesToOrganizationTx).not.toHaveBeenCalled()
-    expect(mockSetActiveOrganizationForCurrentSession).not.toHaveBeenCalled()
   })
 
   it('redirects organization invitations with grants into the first granted workspace', async () => {
@@ -1873,7 +1861,6 @@ describe('acceptInvitation', () => {
 
     expect(auditMock.recordAudit).not.toHaveBeenCalled()
     expect(mockReconcileOrganizationSeats).not.toHaveBeenCalled()
-    expect(mockSetActiveOrganizationForCurrentSession).not.toHaveBeenCalled()
     expect(mockSyncWorkspaceEnvCredentials).not.toHaveBeenCalled()
     expect(mockSyncUsageLimitsFromSubscription).not.toHaveBeenCalled()
     expect(mockEnsureTeamOrganizationForAcceptance).toHaveBeenCalledWith(
@@ -1996,8 +1983,6 @@ describe('acceptInvitation', () => {
     if (!result.success) {
       expect(result.kind).toBe('already-processed')
     }
-    // Aborted before granting workspace access — no zombie permission write.
-    expect(mockSetActiveOrganizationForCurrentSession).not.toHaveBeenCalled()
   })
 })
 

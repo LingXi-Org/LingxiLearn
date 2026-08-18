@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { workflow } from '@sim/db/schema'
 import {

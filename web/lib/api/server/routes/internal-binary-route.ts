@@ -1,4 +1,4 @@
-import type { Principal, SessionPrincipal } from '@sim/auth/principal'
+import type { Principal, SessionPrincipal } from '@/lib/auth/principal'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { requireBinaryRouteDefinition } from '@/lib/api/server/routes/definition'

@@ -1,4 +1,4 @@
-import { type Principal, requirePrincipalSubjectUserId } from '@sim/auth/principal'
+import { type Principal, requirePrincipalSubjectUserId } from '@/lib/auth/principal'
 import { toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { mergeSubblockStateWithValues } from '@sim/workflow-persistence/subblocks'

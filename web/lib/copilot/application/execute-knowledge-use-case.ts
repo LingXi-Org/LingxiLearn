@@ -1,4 +1,4 @@
-import type { DelegatedPrincipal } from '@sim/auth/principal'
+import type { DelegatedPrincipal } from '@/lib/auth/principal'
 import { createCopilotApplicationAdapter } from '@/lib/copilot/application/application-adapter'
 import { messageForCopilotApplicationError } from '@/lib/copilot/application/error'
 import {

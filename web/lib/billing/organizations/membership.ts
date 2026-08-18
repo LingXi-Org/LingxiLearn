@@ -24,7 +24,6 @@ import { getErrorMessage } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { normalizeEmail } from '@sim/utils/string'
 import { and, count, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
-import { invalidateMembershipCache } from '@/lib/auth/security-policy'
 import { applySessionPolicyToNewMember } from '@/lib/auth/session-policy'
 import { syncUsageLimitsFromSubscription } from '@/lib/billing/core/usage'
 import {
@@ -1505,10 +1504,6 @@ export async function removeUserFromOrganization(
     billingActions.usageCaptured = result.usageCaptured
     billingActions.workspaceAccessRevoked = result.workspaceIdsToRevoke.length
     billingActions.pendingInvitationsCancelled = result.pendingInvitationsCancelled
-
-    // The departed member's cookie-version/hook-clamp fallbacks must stop
-    // resolving to this org immediately, not after the membership-cache TTL.
-    invalidateMembershipCache(userId)
 
     if (result.usageCaptured > 0) {
       logger.info('Captured departed member usage', {

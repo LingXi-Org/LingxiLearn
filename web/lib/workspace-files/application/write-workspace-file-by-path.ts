@@ -1,4 +1,4 @@
-import { type Principal, resolvePrincipalAttribution } from '@sim/auth/principal'
+import { type Principal, resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { ensureWorkspaceFileFolderPath } from '@/lib/uploads/contexts/workspace/workspace-file-folder-manager'
 import { loadActiveWorkspaceContext } from '@/lib/uploads/contexts/workspace/workspace-file-manager'

@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { apiKeyOperations } from '@/lib/api-key/application/operations'
 import { performCreateWorkspaceApiKey } from '@/lib/api-key/orchestration'
 import { defineAuthorizedWorkspaceUseCase } from '@/lib/core/application'

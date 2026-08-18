@@ -1,4 +1,4 @@
-import type { Principal } from '@sim/auth/principal'
+import type { Principal } from '@/lib/auth/principal'
 import {
   type CopilotFileDelegationContext,
   resolveCopilotFilePrincipal,

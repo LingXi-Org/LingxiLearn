@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Plus } from '@sim/emcn'
 import { createLogger } from '@sim/logger'
+import { isOrgAdminRole } from '@sim/platform-authz/workspace'
 import { useSession } from '@/lib/auth/auth-client'
 import { getSubscriptionAccessState } from '@/lib/billing/client/utils'
 import { getBaseUrl } from '@/lib/core/utils/urls'
-import { generateSlug, isAdminOrOwner, type Member } from '@/lib/workspaces/organization'
+import { generateSlug, type Member } from '@/lib/workspaces/organization'
+import { useWorkspaceHostContext } from '@/app/workspace/[workspaceId]/providers/workspace-host-provider'
 import { InviteModal } from '@/app/workspace/[workspaceId]/components/invite-modal'
 import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
 import {
@@ -20,7 +22,6 @@ import { useSettingsSearch } from '@/app/workspace/[workspaceId]/settings/compon
 import {
   useCreateOrganization,
   useMemberRemovalImpact,
-  useOrganization,
   useOrganizationBilling,
   useOrganizationRoster,
   useRemoveMember,
@@ -32,14 +33,12 @@ import { usePermissionConfig } from '@/hooks/use-permission-config'
 const logger = createLogger('TeamManagement')
 
 interface TeamManagementProps {
-  organizationId: string
   billingHref?: string
 }
 
-export function TeamManagement({
-  organizationId,
-  billingHref = `/organization/${organizationId}/settings/billing`,
-}: TeamManagementProps) {
+export function TeamManagement({ billingHref }: TeamManagementProps) {
+  const hostContext = useWorkspaceHostContext()
+  const organizationId = hostContext.hostOrganizationId
   const { data: session } = useSession()
   const { isInvitationsDisabled } = usePermissionConfig()
   const [memberQuery, setMemberQuery] = useSettingsSearch()
@@ -49,15 +48,17 @@ export function TeamManagement({
   const hasTeamPlan = subscriptionAccess.hasUsableTeamAccess
   const hasEnterprisePlan = subscriptionAccess.hasUsableEnterpriseAccess
 
-  const { data: organization, isLoading, error: orgError } = useOrganization(organizationId)
-  const adminOrOwner = isAdminOrOwner(organization, session?.user?.email)
+  // Organization identity and the viewer's role come from the routed
+  // workspace host context and the org roster (LingxiLearn API), never from
+  // a session-owned active-organization concept.
+  const { data: roster, isLoading: isLoadingRoster } = useOrganizationRoster(organizationId)
+  const viewerMember = roster?.members.find((member) => member.userId === session?.user?.id)
+  const adminOrOwner = isOrgAdminRole(viewerMember?.role)
 
   const { data: organizationBillingData, isLoading: isOrgBillingLoading } = useOrganizationBilling(
-    organizationId,
-    { enabled: adminOrOwner }
+    organizationId ?? '',
+    { enabled: adminOrOwner && Boolean(organizationId) }
   )
-
-  const { data: roster, isLoading: isLoadingRoster } = useOrganizationRoster(organizationId)
 
   const removeMemberMutation = useRemoveMember()
   const transferOwnershipMutation = useTransferOwnership()
@@ -101,11 +102,9 @@ export function TeamManagement({
   const pendingSeats = Math.max(0, reservedSeats - usedSeats)
 
   /**
-   * The org's active subscription, derived from DB-backed organization billing
-   * (`getOrganizationBillingData` only returns data when an entitled org
-   * subscription exists). We intentionally do not read this from better-auth's
-   * `client.subscription.list`, which does not reliably surface org-scoped
-   * subscriptions.
+   * The org's active subscription, derived from DB-backed organization
+   * billing (`getOrganizationBillingData` only returns data when an entitled
+   * org subscription exists).
    */
   const orgBilling = organizationBillingData?.data ?? null
   const orgSubscription = orgBilling
@@ -175,7 +174,7 @@ export function TeamManagement({
 
   const confirmRemoveMember = useCallback(async () => {
     const { memberId, isSelfRemoval } = removeMemberDialog
-    if (!session?.user || !memberId) return
+    if (!session?.user || !memberId || !organizationId) return
 
     try {
       await removeMemberMutation.mutateAsync({
@@ -223,6 +222,7 @@ export function TeamManagement({
 
   const handleConfirmTransfer = useCallback(
     async (newOwnerUserId: string) => {
+      if (!organizationId) return
       try {
         const result = await transferOwnershipMutation.mutateAsync({
           orgId: organizationId,
@@ -248,7 +248,7 @@ export function TeamManagement({
     openBillingPortal.mutate(
       {
         context: 'organization',
-        organizationId,
+        organizationId: organizationId ?? undefined,
         returnUrl: `${getBaseUrl()}/workspace`,
       },
       {
@@ -272,11 +272,14 @@ export function TeamManagement({
     )
   }, [organizationId, openBillingPortal])
 
-  const queryError = orgError
-  const errorMessage = queryError instanceof Error ? queryError.message : null
-  const displayOrganization = organization
+  const effectiveBillingHref =
+    billingHref ?? `/workspace/${hostContext.workspace.id}/settings/billing`
 
-  if (isLoading && !displayOrganization) {
+  const displayOrganization = hostContext.hostOrganizationId
+    ? { id: hostContext.hostOrganizationId }
+    : null
+
+  if (!displayOrganization && isLoadingRoster) {
     return null
   }
 
@@ -291,7 +294,7 @@ export function TeamManagement({
         onOrgNameChange={handleOrgNameChange}
         onCreateOrganization={handleCreateOrganization}
         isCreatingOrg={createOrgMutation.isPending}
-        error={errorMessage}
+        error={null}
         createOrgDialogOpen={createOrgDialogOpen}
         setCreateOrgDialogOpen={setCreateOrgDialogOpen}
       />
@@ -323,7 +326,7 @@ export function TeamManagement({
       >
         {adminOrOwner && (
           <TeamSeatsOverview
-            billingHref={billingHref}
+            billingHref={effectiveBillingHref}
             subscriptionData={orgSubscription}
             isLoadingSubscription={isOrgBillingLoading}
             totalSeats={totalSeats}

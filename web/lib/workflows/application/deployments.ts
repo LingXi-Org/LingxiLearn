@@ -4,7 +4,7 @@ import {
   requirePrincipalSubjectUserId,
   resolvePrincipalAttribution,
   toPrincipalActor,
-} from '@sim/auth/principal'
+} from '@/lib/auth/principal'
 import { assertWorkflowMutable, WorkflowLockedError } from '@sim/platform-authz/workflow'
 import { OrchestrationError, type OrchestrationErrorCode } from '@/lib/core/orchestration/types'
 import { notifyWorkflowReverted } from '@/lib/realtime/notify'

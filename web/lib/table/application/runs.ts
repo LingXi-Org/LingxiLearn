@@ -1,4 +1,4 @@
-import { resolvePrincipalAttribution } from '@sim/auth/principal'
+import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { getRequestContext } from '@sim/logger'
 import { generateId } from '@sim/utils/id'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

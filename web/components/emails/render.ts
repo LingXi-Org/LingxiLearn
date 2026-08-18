@@ -1,12 +1,6 @@
 import { render } from '@react-email/render'
 import { InboxErrorEmail, InboxResponseEmail } from '@/components/emails/agent/inbox-response-email'
-import {
-  ExistingAccountEmail,
-  OnboardingFollowupEmail,
-  OTPVerificationEmail,
-  ResetPasswordEmail,
-  WelcomeEmail,
-} from '@/components/emails/auth'
+import { OnboardingFollowupEmail } from '@/components/emails/auth'
 import {
   AbandonedCheckoutEmail,
   CreditPurchaseEmail,
@@ -35,30 +29,6 @@ interface WorkspaceInvitation {
   workspaceId: string
   workspaceName: string
   permission: 'admin' | 'write' | 'read'
-}
-
-export async function renderOTPEmail(
-  otp: string,
-  email: string,
-  type:
-    | 'sign-in'
-    | 'email-verification'
-    | 'change-email'
-    | 'forget-password' = 'email-verification',
-  chatTitle?: string
-): Promise<string> {
-  return await render(OTPVerificationEmail({ otp, email, type, chatTitle }))
-}
-
-export async function renderExistingAccountEmail(username: string): Promise<string> {
-  return await render(ExistingAccountEmail({ username }))
-}
-
-export async function renderPasswordResetEmail(
-  username: string,
-  resetLink: string
-): Promise<string> {
-  return await render(ResetPasswordEmail({ username, resetLink }))
 }
 
 export async function renderInvitationEmail(
@@ -201,10 +171,6 @@ export async function renderPlanWelcomeEmail(params: {
       loginLink: params.loginLink,
     })
   )
-}
-
-export async function renderWelcomeEmail(userName?: string): Promise<string> {
-  return await render(WelcomeEmail({ userName }))
 }
 
 export async function renderOnboardingFollowupEmail(userName?: string): Promise<string> {
