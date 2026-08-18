@@ -86,7 +86,7 @@ interface AuthCrossLinkParams {
  * Builds the login ⇄ signup cross-link, preserving the post-auth destination so
  * a visitor who signs up instead of signing in still lands where they were
  * headed. `URLSearchParams` does the encoding — a destination that carries its
- * own query string (`/cli/auth?callback=…&state=…`) must survive intact.
+ * own query string (`/workspace/lingxi/logs?taskId=…&page=…`) must survive intact.
  */
 export function buildAuthCrossLink(
   path: '/login' | '/signup',

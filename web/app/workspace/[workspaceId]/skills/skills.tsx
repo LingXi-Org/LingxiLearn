@@ -6,7 +6,8 @@ import { Plus } from '@sim/emcn/icons'
 import { getErrorMessage } from '@sim/utils/errors'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
-import { IntegrationTabsHeader, SkillTile } from '@/app/workspace/[workspaceId]/components'
+import { HEADER_ACTION_CLUSTER, PAGE_HEADER_BAR } from '@/components/page-header-bar'
+import { SkillTile } from '@/app/workspace/[workspaceId]/components'
 import { ShowcaseWithExplore } from '@/app/workspace/[workspaceId]/integrations/components/showcase-with-explore'
 import { SettingsEmptyState } from '@/app/workspace/[workspaceId]/settings/components/settings-empty-state'
 import {
@@ -79,7 +80,11 @@ export function Skills() {
 
   return (
     <div className='flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-[var(--bg)]'>
-      <IntegrationTabsHeader active='skills' workspaceId={workspaceId} rightSlot={addButton} />
+      {/* The integrations tab strip is gone (issue #48): skills is the only
+          remaining half of that surface, so the header keeps just its action. */}
+      <div className={PAGE_HEADER_BAR}>
+        <div className={`${HEADER_ACTION_CLUSTER} ml-auto max-w-full shrink-0`}>{addButton}</div>
+      </div>
       <div className='min-h-0 w-full min-w-0 flex-1 overflow-y-auto px-4 sm:px-6 [scrollbar-gutter:stable_both-edges]'>
         <div className='mx-auto flex w-full max-w-[48rem] min-w-0 flex-col gap-7 pb-3'>
           <ShowcaseWithExplore prompt='Explain the skills in Sim and which ones I should add to my agents.' />

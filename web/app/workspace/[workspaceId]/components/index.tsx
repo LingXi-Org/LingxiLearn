@@ -5,24 +5,9 @@ import { Button } from '@sim/emcn'
 
 export { ConversationListItem } from './conversation-list-item'
 export { InlineRenameInput } from './inline-rename-input'
-export { IntegrationTabsHeader } from './integration-tabs-header'
 export { MessageActions } from './message-actions'
 export { FloatingOverflowText } from './resource/components/floating-overflow-text'
 export { ResourceChromeFallback } from './resource/components/resource-chrome-fallback'
-export {
-  EMPTY_CELL_PLACEHOLDER,
-  Resource,
-  type PaginationConfig,
-  type ResourceCell,
-  type ResourceCellEditing,
-  type ResourceColumn,
-  type ResourceRow,
-  type ResourceTableHandle,
-  type RowDragDropConfig,
-  type SelectableConfig,
-} from './resource/resource'
-export { ResourceTile } from './resource-tile'
-export { SkillTile } from './skill-tile'
 export type {
   BreadcrumbEditing,
   BreadcrumbItem,
@@ -37,6 +22,20 @@ export type {
   SearchTag,
   SortConfig,
 } from './resource/components/resource-options'
+export {
+  EMPTY_CELL_PLACEHOLDER,
+  type PaginationConfig,
+  Resource,
+  type ResourceCell,
+  type ResourceCellEditing,
+  type ResourceColumn,
+  type ResourceRow,
+  type ResourceTableHandle,
+  type RowDragDropConfig,
+  type SelectableConfig,
+} from './resource/resource'
+export { ResourceTile } from './resource-tile'
+export { SkillTile } from './skill-tile'
 
 /** Lightweight compatibility exports for copied Sim route boundaries. */
 export interface ErrorBoundaryProps {
