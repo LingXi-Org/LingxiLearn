@@ -20,6 +20,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
+from ..contracts.rest_models import (
+    AllowedIntegrationsResponse,
+    AllowedProvidersResponse,
+    BillingInfoResponse,
+    MessageResponse,
+    OrganizationsResponse,
+    TelemetryResponse,
+    UserProfileResponse,
+    UserProfileUpdateResponse,
+    UserSettingsResponse,
+    UserSettingsUpdateResponse,
+    V2BillingLogsResponse,
+    V2BillingStatusResponse,
+    VoiceSettingsResponse,
+)
 from ..learner import LearnerContext
 from ..store.models.agent import AgentTask
 from ..store.models.identity import Learner, LearnerProfile
@@ -165,7 +180,7 @@ def _settings_public(context: LearnerContext) -> dict[str, Any]:
     }
 
 
-@router.get("/settings/allowed-integrations")
+@router.get("/settings/allowed-integrations", response_model=AllowedIntegrationsResponse)
 async def allowed_integrations(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
@@ -174,7 +189,7 @@ async def allowed_integrations(
     return {"allowedIntegrations": None, "integrationAvailability": []}
 
 
-@router.post("/telemetry")
+@router.post("/telemetry", response_model=TelemetryResponse)
 async def record_telemetry(
     body: dict[str, Any],
     context: LearnerContext = Depends(current_learner_context),
@@ -193,7 +208,7 @@ async def record_telemetry(
     return {"success": True, "forwarded": False}
 
 
-@router.get("/settings/allowed-providers")
+@router.get("/settings/allowed-providers", response_model=AllowedProvidersResponse)
 async def allowed_providers(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, list[str]]:
@@ -202,7 +217,7 @@ async def allowed_providers(
     return {"blacklistedProviders": []}
 
 
-@router.get("/settings/voice")
+@router.get("/settings/voice", response_model=VoiceSettingsResponse)
 async def voice_settings(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, bool]:
@@ -211,14 +226,14 @@ async def voice_settings(
     return {"sttAvailable": False}
 
 
-@router.get("/users/me/profile")
+@router.get("/users/me/profile", response_model=UserProfileResponse)
 async def get_user_profile(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     return {"user": _profile_public(context)}
 
 
-@router.patch("/users/me/profile")
+@router.patch("/users/me/profile", response_model=UserProfileUpdateResponse)
 async def update_user_profile(
     body: dict[str, Any],
     request: Request,
@@ -257,14 +272,14 @@ async def update_user_profile(
     return {"success": True, "user": public}
 
 
-@router.get("/users/me/settings")
+@router.get("/users/me/settings", response_model=UserSettingsResponse)
 async def get_user_settings(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     return {"data": _settings_public(context)}
 
 
-@router.get("/organizations")
+@router.get("/organizations", response_model=OrganizationsResponse)
 async def list_organizations(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
@@ -278,7 +293,7 @@ async def list_organizations(
     return {"organizations": [], "isMemberOfAnyOrg": False}
 
 
-@router.patch("/users/me/settings")
+@router.patch("/users/me/settings", response_model=UserSettingsUpdateResponse)
 async def update_user_settings(
     body: dict[str, Any],
     request: Request,
@@ -356,7 +371,7 @@ async def update_user_settings(
     return {"success": True, "data": _settings_public(context)}
 
 
-@router.get("/billing")
+@router.get("/billing", response_model=BillingInfoResponse)
 async def get_billing(
     request: Request,
     context: str = Query("user"),
@@ -470,7 +485,7 @@ async def billing_portal() -> dict[str, str]:
     return {"url": "/workspace/lingxi/settings/billing?placeholder=portal"}
 
 
-@router.post("/billing/credits")
+@router.post("/billing/credits", response_model=MessageResponse)
 async def purchase_credits() -> dict[str, Any]:
     return {"success": False, "message": "LingxiLearn 当前不启用在线充值"}
 
@@ -630,7 +645,7 @@ async def transfer_subscription(subscription_id: str, body: dict[str, Any]) -> d
     return {"success": True, "message": "LingxiLearn 个人工作区不支持订阅转移"}
 
 
-@router.get("/v2/billing/status")
+@router.get("/v2/billing/status", response_model=V2BillingStatusResponse)
 async def v2_billing_status(
     request: Request,
     workspaceId: str | None = None,
@@ -679,7 +694,7 @@ async def v2_billing_status(
     }
 
 
-@router.get("/v2/billing/logs")
+@router.get("/v2/billing/logs", response_model=V2BillingLogsResponse)
 async def v2_billing_logs(
     request: Request,
     period: str = Query("30d"),

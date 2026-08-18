@@ -1,0 +1,3 @@
+# Ensure deterministic line endings for generated contract artifacts
+var/openapi/*.json text eol=lf
+web/lib/api/contracts/generated/*.ts text eol=lf
