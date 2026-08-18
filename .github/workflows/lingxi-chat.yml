@@ -47,8 +47,8 @@ jobs:
       - name: Type-check frontend contracts
         run: bun run type-check
 
-      - name: Check workspace module boundaries
-        run: bash ../scripts/check-workspace-boundaries.sh web
+      - name: Auth boundary check (no Better Auth)
+        run: bun run check:auth-boundary
 
       - name: Check Lingxi frontend changes
         run: >-
