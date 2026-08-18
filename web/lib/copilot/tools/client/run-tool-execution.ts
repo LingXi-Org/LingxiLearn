@@ -26,7 +26,6 @@ import {
   getAsyncWorkflowDeploymentError,
   getWorkflowToolCompletionMessage,
 } from '@/lib/copilot/tools/workflow-tools'
-import { executeWorkflowWithFullLogging } from '@/app/workspace/[workspaceId]/w/[workflowId]/utils/workflow-execution-utils'
 import {
   isExecutionStreamHttpError,
   SSEEventHandlerError,
@@ -46,6 +45,13 @@ const activeRunToolByWorkflowId = new Map<string, string>()
 const activeRunAbortByWorkflowId = new Map<string, AbortController>()
 const manuallyStoppedToolCallIds = new Set<string>()
 const PENDING_COMPLETION_STORAGE_PREFIX = 'sim:copilot:run-tool-completion:'
+
+/** Workflow execution is intentionally unavailable in the Lingxi workspace. */
+async function executeWorkflowWithFullLogging(
+  ..._args: any[]
+): Promise<Record<string, unknown>> {
+  throw new Error('Editable workflow execution is not available in LingXi')
+}
 
 interface PendingCompletionReport {
   status: AsyncConfirmationStatus
