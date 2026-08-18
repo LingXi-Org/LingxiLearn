@@ -5,6 +5,8 @@ Contains models for learning sessions and workspace management.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import (
     JSON,
     Boolean,

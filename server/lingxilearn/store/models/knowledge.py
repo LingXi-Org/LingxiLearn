@@ -5,6 +5,8 @@ Contains models for knowledge bases, documents, chunks, and tags.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import (
     Boolean,
     DateTime,

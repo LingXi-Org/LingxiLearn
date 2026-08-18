@@ -5,6 +5,7 @@ Contains models for learner mastery, evidence tracking, and learning profiles.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (

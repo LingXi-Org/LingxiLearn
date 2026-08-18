@@ -5,6 +5,8 @@ Contains models for agent executions, runs, interactions, and event logs.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import (
     Boolean,
     DateTime,

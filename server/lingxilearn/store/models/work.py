@@ -5,6 +5,8 @@ Contains models for work items, dependencies, results, and orchestration state.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import (
     DateTime,
     ForeignKey,

@@ -5,6 +5,8 @@ Contains models for workspace tables, columns, rows, and views.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import (
     Boolean,
     DateTime,
