@@ -35,9 +35,6 @@ export type JobType =
   | 'webhook-execution'
   | 'resume-execution'
   | 'workflow-group-cell'
-  | 'cleanup-logs'
-  | 'cleanup-soft-deletes'
-  | 'cleanup-tasks'
   | 'run-data-drain'
 
 export type AsyncExecutionCorrelationSource =
