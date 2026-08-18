@@ -23,14 +23,14 @@ import {
   useIntegrationAutoMention,
   useMentionMenu,
   useMentionTokens,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/hooks'
+} from '@/app/workspace/[workspaceId]/components/user-input/hooks'
 import {
   escapeRegex,
   filterContextsPresentInMessage,
   prepareContextForInsert,
   restoreSkillTriggerText,
   SKILL_CHIP_TRIGGER,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/utils'
+} from '@/app/workspace/[workspaceId]/components/user-input/utils'
 import { type McpServer, useMcpServers } from '@/hooks/queries/mcp'
 import { type SkillDefinition, useSkills } from '@/hooks/queries/skills'
 import type { ChatContext } from '@/stores/panel'

@@ -30,7 +30,7 @@ import { api } from '@/lib/lingxi/api'
 import type { AgentTaskListItem } from '@/lib/lingxi/types'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { createCommands } from '@/app/workspace/[workspaceId]/utils/commands-utils'
-import { useSidebarResize } from '@/app/workspace/[workspaceId]/w/components/sidebar/hooks/use-sidebar-resize'
+import { useSidebarResize } from '@/app/workspace/[workspaceId]/components/hooks'
 import { useSidebarStore } from '@/stores/sidebar/store'
 import { useLingxiIdentity } from '@/lib/lingxi/lingxi-identity-provider'
 

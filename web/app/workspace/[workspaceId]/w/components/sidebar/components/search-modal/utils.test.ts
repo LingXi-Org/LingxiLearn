@@ -6,13 +6,14 @@ import {
   ACTION_MATCH_BIAS,
   filterAndCap,
   filterAndSort,
-  fuzzyMatch,
   getActionGroupLabel,
   getGlobalSearchResults,
   MAX_RESULTS_PER_GROUP,
   type SearchEntry,
   scoreActions,
   scoreAndSort,
+} from './utils'
+import { fuzzyMatch } from '@/lib/search/fuzzy-match'
   scoreSectionItems,
 } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/search-modal/utils'
 

@@ -26,6 +26,7 @@ test: ## Run the backend test suite against the current checkout
 check: ## Run frontend type and style checks
 	cd web && bun run type-check
 	cd web && bun run lint:check
+	bash scripts/check-workspace-boundaries.sh web
 
 clean: ## Remove generated frontend and Python cache directories
 	pwsh -NoProfile -Command "foreach ($$path in @('web/.next','web/out','web/node_modules','web/.cache','server/.pytest_cache','server/.ruff_cache')) { if (Test-Path -LiteralPath $$path) { [System.IO.Directory]::Delete((Resolve-Path -LiteralPath $$path).Path, $$true) } }"

@@ -1,6 +1,6 @@
 import type { BrowserKnownSession } from '@sim/browser-protocol'
 import type { BrowserCredentialMetadata, BrowserSiteInfo } from '@sim/desktop-bridge'
-import { fuzzyMatch } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/search-modal/utils'
+import { fuzzyMatch } from '@/lib/search/fuzzy-match'
 
 /** Rows the omnibox will show at once. */
 export const MAX_URL_SUGGESTIONS = 8

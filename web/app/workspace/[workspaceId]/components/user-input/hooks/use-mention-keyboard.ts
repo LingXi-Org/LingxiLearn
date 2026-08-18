@@ -4,16 +4,16 @@ import {
   FOLDER_ORDER,
   type MentionFolderId,
   ROOT_MENU_ITEM_COUNT,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/constants'
+} from '@/app/workspace/[workspaceId]/components/user-input/constants'
 import type {
   useMentionData,
   useMentionMenu,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/hooks'
-import type { MentionFolderNav } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/types'
+} from '@/app/workspace/[workspaceId]/components/user-input/hooks'
+import type { MentionFolderNav } from '@/app/workspace/[workspaceId]/components/user-input/types'
 import {
   getFolderData as getFolderDataUtil,
   getFolderEnsureLoaded as getFolderEnsureLoadedUtil,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/utils'
+} from '@/app/workspace/[workspaceId]/components/user-input/utils'
 
 interface UseMentionKeyboardProps {
   /** Mention menu hook instance */

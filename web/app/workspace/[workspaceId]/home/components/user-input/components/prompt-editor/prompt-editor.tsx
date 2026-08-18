@@ -19,7 +19,7 @@ import {
   computeMentionHighlightRanges,
   extractContextTokens,
   stripMentionTrigger,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/utils'
+} from '@/app/workspace/[workspaceId]/components/user-input/utils'
 
 export interface PromptEditorProps extends PromptEditorKeyPolicy {
   /** Editor instance from {@link usePromptEditor}. */

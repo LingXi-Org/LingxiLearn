@@ -17,7 +17,7 @@ vi.mock('@/lib/uploads/client/session-upload', () => ({
 }))
 
 import { MAX_WORKSPACE_FILE_SIZE } from '@/lib/uploads/shared/types'
-import { useFileAttachments } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/hooks/use-file-attachments'
+import { useFileAttachments } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-file-attachments'
 
 interface HookHarness {
   result: () => ReturnType<typeof useFileAttachments>

@@ -1,0 +1,28 @@
+name: Architecture boundary checks
+
+on:
+  pull_request:
+    paths:
+      - 'web/app/workspace/**'
+  push:
+    branches: [main]
+    paths:
+      - 'web/app/workspace/**'
+
+concurrency:
+  group: arch-boundary-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  workspace-boundary:
+    name: Workspace module boundary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify no product page imports from w/**
+        run: bash scripts/check-workspace-boundaries.sh web

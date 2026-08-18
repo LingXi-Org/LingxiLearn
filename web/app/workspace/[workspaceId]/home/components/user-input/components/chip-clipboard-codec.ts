@@ -3,7 +3,7 @@ import {
   extractContextTokens,
   restoreSkillTriggerText,
   stripMentionTrigger,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/utils'
+} from '@/app/workspace/[workspaceId]/components/user-input/utils'
 import type { ChatContext } from '@/stores/panel'
 
 /** URI scheme for portable chip links (`[label](sim:kind/id)`). Custom so only

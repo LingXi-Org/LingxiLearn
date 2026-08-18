@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 import {
   FOLDER_CONFIGS,
   type MentionFolderId,
-} from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/constants'
-import type { MentionDataReturn } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/hooks/use-mention-data'
+} from '@/app/workspace/[workspaceId]/components/user-input/constants'
+import type { MentionDataReturn } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-mention-data'
 import type { ChatContext } from '@/stores/panel'
 
 /**

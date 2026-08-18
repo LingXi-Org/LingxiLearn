@@ -21,7 +21,7 @@ import {
   browserTabTitle,
   shouldShowBrowserTabSpinner,
 } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/browser-session/browser-tab-label'
-import { ContextMenu } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/workflow-list/components/context-menu/context-menu'
+import { ContextMenu } from '@/app/workspace/[workspaceId]/components/context-menu/context-menu'
 
 interface BrowserTabStripProps {
   tabs: BrowserTabState[]

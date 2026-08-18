@@ -1,4 +1,4 @@
-import type { MentionFolderId } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/copilot/components/user-input/constants'
+import type { MentionFolderId } from '@/app/workspace/[workspaceId]/components/user-input/constants'
 
 /**
  * Shared folder navigation state for the mention menu.
