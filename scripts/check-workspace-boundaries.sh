@@ -41,7 +41,6 @@ PRODUCT_DIRS=(
   "skills"
   "integrations"
   "providers"
-  "hooks"
   "utils"
 )
 
