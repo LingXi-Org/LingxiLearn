@@ -21,11 +21,15 @@ if [ ! -d "$WORKSPACE_DIR" ]; then
 fi
 
 # Patterns that indicate an import from the workflow editor's private directory.
-# Matches both absolute @/ paths and relative ../w/ paths.
+# Matches the absolute @/ alias, relative paths at ANY depth ((\.\./)+w/ is one
+# or more "../" hops followed by w/, so ../../../w/ and deeper can never slip
+# past the gate), and relative paths that traverse the workspace tree down to
+# w/ from web-level directories such as lib/ or hooks/ (../../app/workspace/
+# [workspaceId]/w/...). Each violation is reported exactly once.
 FORBIDDEN_PATTERNS=(
   "@/app/workspace/\[workspaceId\]/w/"
-  "\.\./w/"
-  "\.\./\.\./w/"
+  "(\.\./)+w/"
+  "(\.\./)+app/workspace/\[workspaceId\]/w/"
 )
 
 # Directories that are product pages or shared layers (must NOT import from w/).
