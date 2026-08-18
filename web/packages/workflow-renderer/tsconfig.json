@@ -1,5 +1,5 @@
 {
-  "extends": "@sim/tsconfig/library.json",
+  "extends": "../tsconfig/library.json",
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],

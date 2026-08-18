@@ -1,9 +1,7 @@
 import type { ComponentType } from 'react'
+import { fuzzyMatch, type FuzzyResult } from '@/lib/search/fuzzy-match'
 import { toSearchToken } from '@/lib/search/tokens'
 import type { SearchBlockItem, SearchToolOperationItem } from '@/stores/modals/search/types'
-
-// Re-export fuzzyMatch from shared layer for internal w/** compatibility
-export { fuzzyMatch as fuzzyMatchImpl, type FuzzyResult } from '@/lib/search/fuzzy-match'
 
 /**
  * Every result group the palette can render. This is also the canonical order:
@@ -279,8 +277,12 @@ export const GROUP_HEADING_CLASSNAME =
 export const COMMAND_ITEM_CLASSNAME =
   'group mx-0.5 flex h-[30px] w-full cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 text-left text-sm scroll-mt-12 scroll-mb-1.5 aria-selected:border-[var(--border-1)] aria-selected:bg-[var(--surface-active)] data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50'
 
-// Re-export fuzzyMatch from shared layer for internal w/** compatibility
-export { fuzzyMatch as fuzzyMatchImpl, type FuzzyResult } from '@/lib/search/fuzzy-match'
+/**
+ * No-match sentinel for the scoring helpers below. Constructed locally against
+ * the shared matcher's public {@link FuzzyResult} contract — the shared module
+ * keeps its own sentinel private.
+ */
+const NO_MATCH: FuzzyResult = { matched: false, score: 0, positions: [] }
 
 /** Rank offset that lifts every name match above any secondary-text match. */
 const NAME_MATCH_TIER = 1_000_000

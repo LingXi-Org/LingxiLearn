@@ -11,7 +11,6 @@ import {
   isResourceToolName,
 } from '@/lib/copilot/resources/extraction'
 import { isUserLocalVfsToolCall } from '@/lib/copilot/tools/local-filesystem'
-import { isWorkflowToolName } from '@/lib/copilot/tools/workflow-tools'
 import { invalidateResourceQueries } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-registry'
 import type { StreamLoopContext } from '@/app/workspace/[workspaceId]/home/hooks/stream/stream-context'
 import {
@@ -127,7 +126,7 @@ function runToolResultSideEffects(ctx: StreamLoopContext, node: ToolNode): void 
 /**
  * Side effects for tool events. State (the tool node, its status, args, and the
  * edit_content row merge) is owned by `reduceEvent`; this handler routes preview
- * phases, fires client workflow tools, and runs result side effects, then
+ * phases, fires client tool executions, and runs result side effects, then
  * flushes the model-derived snapshot.
  */
 export function handleToolEvent(ctx: StreamLoopContext, parsed: ToolEvent): void {
@@ -162,17 +161,6 @@ export function handleToolEvent(ctx: StreamLoopContext, parsed: ToolEvent): void
   const name = payload.toolName
   const isPartial =
     payload.partial === true || payload.status === MothershipStreamV1ToolStatus.generating
-  if (isWorkflowToolName(name) && !isPartial) {
-    const shouldStartWorkflowTool =
-      !deps.options.suppressedWorkflowToolStartIds?.has(rawId) &&
-      node?.kind === 'tool' &&
-      node.status === 'running' &&
-      !node.result
-    if (shouldStartWorkflowTool) {
-      const args = payload.arguments as Record<string, unknown> | undefined
-      deps.startClientWorkflowTool(rawId, name, args ?? {})
-    }
-  }
   const localFilesystemArgs = payload.arguments as Record<string, unknown> | undefined
   if (isUserLocalVfsToolCall(name, localFilesystemArgs) && !isPartial) {
     const shouldStartLocalFilesystemTool =
@@ -183,7 +171,7 @@ export function handleToolEvent(ctx: StreamLoopContext, parsed: ToolEvent): void
   }
   if (isBrowserToolName(name) && !isPartial) {
     const shouldStartBrowserTool =
-      !deps.options.suppressedWorkflowToolStartIds?.has(rawId) &&
+      !deps.options.suppressedClientToolStartIds?.has(rawId) &&
       node?.kind === 'tool' &&
       node.status === 'running' &&
       !node.result
@@ -198,7 +186,7 @@ export function handleToolEvent(ctx: StreamLoopContext, parsed: ToolEvent): void
   }
   if (isTerminalToolName(name) && !isPartial) {
     const shouldStartTerminalTool =
-      !deps.options.suppressedWorkflowToolStartIds?.has(rawId) &&
+      !deps.options.suppressedClientToolStartIds?.has(rawId) &&
       node?.kind === 'tool' &&
       node.status === 'running' &&
       !node.result

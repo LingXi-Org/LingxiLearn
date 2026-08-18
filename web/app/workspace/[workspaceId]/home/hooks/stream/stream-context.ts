@@ -53,7 +53,7 @@ export interface StreamLoopOptions {
    * flush the rendered content only ever appends.
    */
   deferFlushes?: boolean
-  suppressedWorkflowToolStartIds?: ReadonlySet<string>
+  suppressedClientToolStartIds?: ReadonlySet<string>
   targetChatId?: string
   shouldContinue?: () => boolean
 }
@@ -97,7 +97,6 @@ export interface StreamLoopDeps {
 
   addResource: (resource: MothershipResource) => boolean
   removeResource: (resourceType: MothershipResourceType, resourceId: string) => void
-  startClientWorkflowTool: (id: string, name: string, args: Record<string, unknown>) => void
   startClientLocalFilesystemTool: (id: string, name: string, args: Record<string, unknown>) => void
   startClientBrowserTool: (
     id: string,

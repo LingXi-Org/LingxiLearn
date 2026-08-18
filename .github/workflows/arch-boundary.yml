@@ -4,10 +4,20 @@ on:
   pull_request:
     paths:
       - 'web/app/workspace/**'
+      - 'web/lib/**'
+      - 'web/hooks/**'
+      - 'scripts/check-workspace-boundaries.sh'
+      - 'scripts/test-workspace-boundaries.sh'
+      - '.github/workflows/arch-boundary.yml'
   push:
     branches: [main]
     paths:
       - 'web/app/workspace/**'
+      - 'web/lib/**'
+      - 'web/hooks/**'
+      - 'scripts/check-workspace-boundaries.sh'
+      - 'scripts/test-workspace-boundaries.sh'
+      - '.github/workflows/arch-boundary.yml'
 
 concurrency:
   group: arch-boundary-${{ github.workflow }}-${{ github.ref }}
@@ -23,6 +33,9 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Self-test the boundary checker against fixtures
+        run: bash scripts/test-workspace-boundaries.sh
 
       - name: Verify no product page imports from w/**
         run: bash scripts/check-workspace-boundaries.sh web
