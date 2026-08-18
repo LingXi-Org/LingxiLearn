@@ -30,15 +30,10 @@ from ..learner import LearnerContext
 from ..runtime.execution_graph import build_execution_graph
 from ..service import Service, agent_task_create_payload_digest
 from ..state.capabilities import CAPABILITY_INFO
-from ..store.models import (
-    AgentTask,
-    KnowledgeBase,
-    KnowledgeDocument,
-    PersonalSkill,
-    Workspace,
-    WorkspaceFile,
-    WorkspaceTable,
-)
+from ..store.models.agent import AgentTask
+from ..store.models.knowledge import KnowledgeBase, KnowledgeDocument
+from ..store.models.table import WorkspaceTable
+from ..store.models.workspace import PersonalSkill, Workspace, WorkspaceFile
 
 router = APIRouter(prefix="/api")
 

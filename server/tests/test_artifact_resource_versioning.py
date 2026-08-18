@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from lingxilearn.config import Settings
 from lingxilearn.service import Service
-from lingxilearn.store.models import Workspace, WorkspaceFile
+from lingxilearn.store.models.workspace import Workspace, WorkspaceFile
 
 
 @pytest_asyncio.fixture

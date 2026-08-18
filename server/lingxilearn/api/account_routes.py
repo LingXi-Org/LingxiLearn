@@ -21,7 +21,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
 from ..learner import LearnerContext
-from ..store.models import AgentTask, Learner, LearnerProfile, Workspace, WorkspaceFile
+from ..store.models.agent import AgentTask
+from ..store.models.identity import Learner, LearnerProfile
+from ..store.models.workspace import Workspace, WorkspaceFile
 from .routes import current_learner_context, not_found, service_of
 
 router = APIRouter(prefix="/api")

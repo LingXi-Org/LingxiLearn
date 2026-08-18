@@ -33,15 +33,15 @@ from ..state.session_state import (
 )
 from ..state.skill_catalog import SkillManifest
 from .db import Database
-from .models import (
+from .models.agent import ProjectionCursor
+from .models.learning import (
     DecisionTrace,
     LearningEvidence,
     LearningProfile,
-    ProjectionCursor,
     SessionState,
     SessionStateEvent,
-    SkillRegistryEntry,
 )
+from .models.runtime import SkillRegistryEntry
 
 logger = logging.getLogger(__name__)
 

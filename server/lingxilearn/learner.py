@@ -16,7 +16,7 @@ from .config import Settings
 
 if TYPE_CHECKING:
     from .store.learner import LearnerRepository
-    from .store.models import LearningPreference
+    from .store.models.learning import LearningPreference
 
 
 @dataclass(slots=True)

@@ -25,35 +25,37 @@ from ..config import Settings
 from .runtime_tables import project_runtime_events
 
 __all__ = ["Database", "Repository"]
-from .models import (
-    AgentExecution,
-    AgentInteraction,
-    AgentInteractionAnswer,
-    AgentRun,
+# Register every domain model on the shared metadata: ``create_all`` and the
+# SQLite quick-start must materialise the complete schema no matter which
+# subset of models the importing module happens to query.
+from .models import registry as _model_registry  # noqa: F401
+from .models.agent import (
     AgentSchedule,
     AgentScheduleRun,
     AgentTask,
     AgentTaskEvent,
     AgentTurn,
-    Base,
     BudgetLedger,
     CandidateSnapshot,
     CommandInbox,
     FactSnapshot,
-    Learner,
-    Mastery,
     QuizSubmission,
-    ReportRecord,
-    RunEvent,
-    Session,
-    SkillRun,
     TransactionalOutbox,
     WorkDependency,
     WorkItem,
     WorkResult,
-    Workspace,
-    utcnow,
 )
+from .models.base import Base, utcnow
+from .models.identity import Learner
+from .models.learning import Mastery, ReportRecord, RunEvent, Session
+from .models.runtime import (
+    AgentExecution,
+    AgentInteraction,
+    AgentInteractionAnswer,
+    AgentRun,
+    SkillRun,
+)
+from .models.workspace import Workspace
 
 
 def _utc_datetime(value: datetime) -> datetime:

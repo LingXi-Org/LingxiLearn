@@ -14,10 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..learner import LearnerContext
 from .db import Database
-from .models import (
-    IdentityUser,
-    Learner,
-    LearnerProfile,
+from .models.base import utcnow
+from .models.identity import IdentityUser, Learner, LearnerProfile
+from .models.learning import (
     LearningEvent,
     LearningEvidence,
     LearningPreference,
@@ -25,7 +24,6 @@ from .models import (
     Misconception,
     ReportRecord,
     Session,
-    utcnow,
 )
 
 

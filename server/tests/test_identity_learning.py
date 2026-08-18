@@ -22,7 +22,7 @@ from lingxilearn.main import create_app
 from lingxilearn.service import Service
 from lingxilearn.store.db import Database, Repository
 from lingxilearn.store.learner import LearnerRepository
-from lingxilearn.store.models import (
+from lingxilearn.store.models.learning import (
     LearningEvent,
     LearningEvidence,
     Misconception,
