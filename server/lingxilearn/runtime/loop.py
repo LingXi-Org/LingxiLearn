@@ -110,11 +110,11 @@ async def _request_interaction(
     spec = spec.model_copy(update={"interaction_id": interaction_id})
     request_payload = spec.public_request()
     turn = (
-        await deps.repository.latest_turn(deps.task_id) if deps.repository is not None else None
+        await deps.work_ledger.latest_turn(deps.task_id) if deps.work_ledger is not None else None
     )
-    if deps.repository is not None:
+    if deps.runtime_repository is not None:
         try:
-            await deps.repository.create_interaction(
+            await deps.runtime_repository.create_interaction(
                 interaction_id=interaction_id,
                 task_id=deps.task_id,
                 turn_id=str(turn["id"]) if turn else None,
@@ -169,7 +169,8 @@ class LoopDeps:
         self,
         *,
         runtime_state: RuntimeStateRepository,
-        repository: Any = None,
+        work_ledger: Any = None,
+        runtime_repository: Any = None,
         learner_id: str,
         task_id: str,
         model: Any = None,
@@ -187,7 +188,8 @@ class LoopDeps:
         board_lock: asyncio.Lock | None = None,
     ) -> None:
         self.runtime_state = runtime_state
-        self.repository = repository
+        self.work_ledger = work_ledger
+        self.runtime_repository = runtime_repository
         self.learner_id = learner_id
         self.task_id = task_id
         self.model = model
@@ -316,7 +318,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
     dispatcher = Dispatcher(
         DispatchDeps(
             runtime_state=deps.runtime_state,
-            repository=deps.repository,
+            work_ledger=deps.work_ledger,
+            runtime_repository=deps.runtime_repository,
             learner_id=deps.learner_id,
             task_id=deps.task_id,
             goal=Goal(goal_type="learn", topic=""),
@@ -463,8 +466,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         step = await deps.tracer.next_step()
         open_rounds.add(step)
         turn_id = ""
-        if deps.repository is not None:
-            current_turn = await deps.repository.latest_turn(deps.task_id)
+        if deps.work_ledger is not None:
+            current_turn = await deps.work_ledger.latest_turn(deps.task_id)
             turn_id = str(current_turn.get("id") or "") if current_turn else ""
         if deps.emit is not None:
             deps.emit(
@@ -670,8 +673,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         # When running under the service, mirror the validated plan into the
         # durable ledger before any provider starts. Unit callers without a
         # repository retain the standalone graph contract.
-        if deps.repository is not None and produced.tasks:
-            turn = await deps.repository.latest_turn(deps.task_id)
+        if deps.work_ledger is not None and produced.tasks:
+            turn = await deps.work_ledger.latest_turn(deps.task_id)
             if turn is not None:
                 dispatcher.bind_turn(str(turn["id"]))
             if turn is not None:
@@ -734,7 +737,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                     for dependency in task.depends_on
                     if dependency in work_ids
                 ]
-                durable = await deps.repository.create_work_plan(
+                durable = await deps.work_ledger.create_work_plan(
                     task_id=deps.task_id,
                     turn_id=turn["id"],
                     expected_revision=int(turn.get("revision") or 0),
@@ -967,7 +970,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 task.id in heavy_ids
                 and not any(dep in heavy_ids for dep in task.depends_on)
                 and deps.schedule_background is not None
-                and deps.repository is None
+                and deps.work_ledger is None
             ):
                 await queue_background(task)
 
@@ -988,7 +991,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 if not task.estimated_cost.critical_path
                 and (task.estimated_cost.heavy_artifact or not task.estimated_cost.blocking)
                 and deps.schedule_background is not None
-                and deps.repository is None
+                and deps.work_ledger is None
             ]
             if background:
                 background_pending = True

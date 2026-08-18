@@ -35,7 +35,7 @@ async def main() -> None:
         raise RuntimeError("scheduled task did not create an execution")
 
     try:
-        await SchedulerWorker(service.repo, launch).serve()
+        await SchedulerWorker(service.agent_task_repository, launch).serve()
     finally:
         await service.shutdown()
 

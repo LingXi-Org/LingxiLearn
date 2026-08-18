@@ -8,9 +8,12 @@ import pytest
 from sqlalchemy import select
 
 from lingxilearn.config import Settings
-from lingxilearn.store.db import Database, Repository
+from lingxilearn.store.database import Database
+from lingxilearn.store.learner import LearnerRepository
 from lingxilearn.store.models.table import WorkspaceTable, WorkspaceTableRow
 from lingxilearn.store.models.workspace import Workspace
+from lingxilearn.store.repositories.agent_tasks import AgentTaskRepository
+from lingxilearn.store.repositories.sessions import SessionRepository
 
 
 @pytest.mark.asyncio
@@ -21,13 +24,14 @@ async def test_agent_event_sequence_allocation_is_safe_for_concurrent_writers() 
         database_url=f"sqlite+aiosqlite:///./var/test-event-lock-{suffix}.sqlite3",
     )
     database = Database(settings)
-    repository = Repository(database)
+    agent_task_repository = AgentTaskRepository(database)
+    learner_repository = LearnerRepository(database)
     learner_id = f"learner-{suffix}"
     task_id = f"task-{suffix}"
     try:
         await database.create_all()
-        await repository.ensure_learner(learner_id)
-        await repository.create_agent_task(
+        await learner_repository.ensure_learner(learner_id)
+        await agent_task_repository.create_agent_task(
             id=task_id,
             learner_id=learner_id,
             prompt="解释 TCP",
@@ -44,14 +48,14 @@ async def test_agent_event_sequence_allocation_is_safe_for_concurrent_writers() 
         )
         await asyncio.gather(
             *(
-                repository.append_agent_events(
+                agent_task_repository.append_agent_events(
                     task_id,
                     [{"kind": "node.appeared", "agent": "orchestrator", "payload": {}}],
                 )
                 for _ in range(12)
             )
         )
-        events = await repository.agent_events_after(task_id)
+        events = await agent_task_repository.agent_events_after(task_id)
         assert [event["sequence"] for event in events] == list(range(1, 13))
     finally:
         await database.dispose()
@@ -67,13 +71,15 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
     )
     database = Database(settings)
     await database.create_all()
-    repository = Repository(database)
+    agent_task_repository = AgentTaskRepository(database)
+    session_repository = SessionRepository(database)
+    learner_repository = LearnerRepository(database)
     learner_id = f"learner-{suffix}"
     task_id = f"task-{suffix}"
     session_id = f"session-{suffix}"
     try:
-        await repository.ensure_learner(learner_id)
-        await repository.create_agent_task(
+        await learner_repository.ensure_learner(learner_id)
+        await agent_task_repository.create_agent_task(
             id=task_id,
             learner_id=learner_id,
             prompt="解释 TCP",
@@ -88,7 +94,7 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
             user_messages=[],
             visual_result={},
         )
-        await repository.append_agent_events(
+        await agent_task_repository.append_agent_events(
             task_id,
             [
                 {
@@ -105,7 +111,7 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
                 },
             ],
         )
-        await repository.create_quiz_submission(
+        submission = await agent_task_repository.create_quiz_submission(
             task_id=task_id,
             submission_id="submission-1",
             answers={"q01": "A"},
@@ -113,7 +119,14 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
             total_score=1,
             total_points=1,
         )
-        await repository.create_session(
+        await session_repository.project_runtime_event(
+            learner_id=learner_id,
+            record_key=f"assessment:{task_id}:submission-1",
+            task_id=task_id,
+            kind="assessment.submitted",
+            payload=submission,
+        )
+        await session_repository.create_session(
             id=session_id,
             learner_id=learner_id,
             pack_id="pack",
@@ -121,7 +134,7 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
             mission_id="mission",
             status="running",
         )
-        await repository.append_events(
+        await session_repository.append_events(
             session_id,
             [{"kind": "evidence.added", "node": "judge", "payload": {"id": "ev_1"}}],
         )
@@ -169,7 +182,7 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
             assert all(row.values["learner_id"] == learner_id for row in rows)
 
         # Replaying through the public projection path updates the same row.
-        result = await repository.project_runtime_event(
+        result = await session_repository.project_runtime_event(
             learner_id=learner_id,
             record_key=f"task:{task_id}:1",
             task_id=task_id,

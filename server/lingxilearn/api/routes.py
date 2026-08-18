@@ -87,7 +87,7 @@ async def copilot_tool_permission(
         decision = str(item.get("decision") or "")
         if not tool_call_id or decision not in {"allow", "allow_chat", "always_allow", "skip"}:
             raise HTTPException(status_code=422, detail="invalid_tool_permission_decision")
-        applied_result = await svc.repo.decide_schedule_permission(
+        applied_result = await svc.agent_task_repository.decide_schedule_permission(
             proposal_id=tool_call_id,
             learner_id=context.learner_id,
             decision=decision,
@@ -98,7 +98,7 @@ async def copilot_tool_permission(
             and applied_result.get("source_task_id")
         ):
             source_task_id = str(applied_result["source_task_id"])
-            await svc.repo.append_agent_events(
+            await svc.agent_task_repository.append_agent_events(
                 source_task_id,
                 [
                     {
@@ -517,7 +517,7 @@ async def get_session(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     svc = service_of(request)
-    if await svc.repo.get_session_for_learner(session_id, context.learner_id) is None:
+    if await svc.session_repository.get_session_for_learner(session_id, context.learner_id) is None:
         raise not_found()
     try:
         return await svc.snapshot(session_id, learner_id=context.learner_id)
@@ -533,7 +533,7 @@ async def answer(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     svc = service_of(request)
-    record = await svc.repo.get_session_for_learner(session_id, context.learner_id)
+    record = await svc.session_repository.get_session_for_learner(session_id, context.learner_id)
     if record is None:
         raise not_found()
     if record.status == "running":
@@ -564,7 +564,7 @@ async def create_agent_task(
         skill_ids=body.skill_ids,
     )
     if body.idempotency_key:
-        existing = await svc.repo.get_agent_task_by_create_idempotency_key(
+        existing = await svc.agent_task_repository.get_agent_task_by_create_idempotency_key(
             context.learner_id, body.idempotency_key
         )
         if existing is not None:
@@ -908,7 +908,7 @@ async def stream_agent_events(
     # behind proxies that buffer a long-lived SSE response.  Respect the same
     # cursor so polling transfers only rows the client has not consumed.
     if request.query_params.get("format") == "json":
-        events = await svc.repo.agent_events_after_for_learner(
+        events = await svc.agent_task_repository.agent_events_after_for_learner(
             task_id,
             context.learner_id,
             cursor,
@@ -926,7 +926,7 @@ async def stream_agent_events(
         while True:
             if await request.is_disconnected():
                 return
-            events = await svc.repo.agent_events_after_for_learner(
+            events = await svc.agent_task_repository.agent_events_after_for_learner(
                 task_id, context.learner_id, cursor, protocol_version=protocol_version
             )
             for event in events:
@@ -939,7 +939,7 @@ async def stream_agent_events(
             # single turn delivers — a long-lived chat keeps its SSE channel
             # across turns (issue #18 §15.1).
             if current.get("threadStatus") == "cancelled":
-                tail = await svc.repo.agent_events_after_for_learner(
+                tail = await svc.agent_task_repository.agent_events_after_for_learner(
                     task_id, context.learner_id, cursor, protocol_version=protocol_version
                 )
                 for event in tail:
@@ -975,9 +975,9 @@ async def get_report(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     svc = service_of(request)
-    if await svc.repo.get_session_for_learner(session_id, context.learner_id) is None:
+    if await svc.session_repository.get_session_for_learner(session_id, context.learner_id) is None:
         raise not_found()
-    stored = await svc.repo.get_report_for_learner(session_id, context.learner_id)
+    stored = await svc.session_repository.get_report_for_learner(session_id, context.learner_id)
     if stored is not None:
         return stored
     try:
@@ -998,7 +998,7 @@ async def download_artifact(
 ) -> FileResponse:
     """Hand over the raw capture so the learner can audit us in Wireshark."""
     svc = service_of(request)
-    record = await svc.repo.get_session_for_learner(session_id, context.learner_id)
+    record = await svc.session_repository.get_session_for_learner(session_id, context.learner_id)
     if record is None:
         raise not_found()
     pack = svc.packs.get(record.pack_id)
@@ -1147,7 +1147,7 @@ async def agent_task_decisions(
     """Every decision this task made: candidates, choice, reason, evidence, diff."""
 
     svc = service_of(request)
-    if await svc.repo.get_agent_task_for_learner(task_id, context.learner_id) is None:
+    if await svc.agent_task_repository.get_agent_task_for_learner(task_id, context.learner_id) is None:
         raise not_found()
     return {"decisions": await svc.runtime_state.decisions_for_task(task_id)}
 
@@ -1166,19 +1166,19 @@ async def agent_task_runtime_graph(
     """
 
     svc = service_of(request)
-    task = await svc.repo.get_agent_task_for_learner(task_id, context.learner_id)
+    task = await svc.agent_task_repository.get_agent_task_for_learner(task_id, context.learner_id)
     if task is None:
         raise not_found()
     execution_id = task.latest_execution_id or task.current_execution_id
     execution = (
-        await svc.repo.get_agent_execution(execution_id, context.learner_id)
+        await svc.runtime_repository.get_agent_execution(execution_id, context.learner_id)
         if execution_id
         else None
     )
     state = dict(execution.workflow_state or {}) if execution is not None else {}
-    runs = await svc.repo.agent_runs_for_task(task_id)
-    dependencies = await svc.repo.work_dependencies_for_task(task_id)
-    skill_runs = await svc.repo.skill_runs_for_task(task_id)
+    runs = await svc.runtime_repository.agent_runs_for_task(task_id)
+    dependencies = await svc.work_ledger.work_dependencies_for_task(task_id)
+    skill_runs = await svc.runtime_repository.skill_runs_for_task(task_id)
     return {
         "id": f"runtime-graph:{task_id}",
         "type": "runtime-graph",
@@ -1207,7 +1207,7 @@ async def agent_task_evidence(
     """The evidence this task produced, for drilling into a node."""
 
     svc = service_of(request)
-    if await svc.repo.get_agent_task_for_learner(task_id, context.learner_id) is None:
+    if await svc.agent_task_repository.get_agent_task_for_learner(task_id, context.learner_id) is None:
         raise not_found()
     return {"evidence": await svc.runtime_state.evidence_for_task(task_id)}
 
@@ -1220,7 +1220,7 @@ async def me_mastery(
     svc = service_of(request)
     return {
         "mastery": await svc.learners.get_mastery(context),
-        "sessions": await svc.repo.list_sessions(context.learner_id),
+        "sessions": await svc.session_repository.list_sessions(context.learner_id),
     }
 
 
@@ -1257,7 +1257,7 @@ async def stream_events(
     context: LearnerContext = Depends(current_learner_context),
 ) -> StreamingResponse:
     svc = service_of(request)
-    record = await svc.repo.get_session_for_learner(session_id, context.learner_id)
+    record = await svc.session_repository.get_session_for_learner(session_id, context.learner_id)
     if record is None:
         raise not_found()
 
@@ -1275,20 +1275,20 @@ async def stream_events(
         while True:
             if await request.is_disconnected():
                 return
-            events = await svc.repo.events_after_for_learner(session_id, context.learner_id, cursor)
+            events = await svc.session_repository.events_after_for_learner(session_id, context.learner_id, cursor)
             for event in events:
                 cursor = event["sequence"]
                 payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
                 yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
 
-            current = await svc.repo.get_session_for_learner(session_id, context.learner_id)
+            current = await svc.session_repository.get_session_for_learner(session_id, context.learner_id)
             status = current.status if current else "failed"
             # Only a terminal status closes the stream. `awaiting_learner` means
             # the session is alive and will emit again the moment the learner
             # answers, so the connection is held open with heartbeats instead.
             if status in TERMINAL:
                 # Drain anything appended between the query and the status read.
-                tail = await svc.repo.events_after_for_learner(
+                tail = await svc.session_repository.events_after_for_learner(
                     session_id, context.learner_id, cursor
                 )
                 for event in tail:

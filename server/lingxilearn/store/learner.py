@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..learner import LearnerContext
-from .db import Database
+from .database import Database
 from .models.base import utcnow
 from .models.identity import IdentityUser, Learner, LearnerProfile
 from .models.learning import (
@@ -25,6 +25,7 @@ from .models.learning import (
     ReportRecord,
     Session,
 )
+from .models.workspace import Workspace
 
 
 def _json_value(value: Any) -> Any:
@@ -105,6 +106,36 @@ class LearnerRepository:
                 await s.commit()
                 return winner.learner_id
             return learner_id
+
+    async def ensure_learner(self, learner_id: str, display_name: str = "") -> None:
+        async with self.db.session() as s:
+            existing = await s.get(Learner, learner_id)
+            if existing is None:
+                s.add(Learner(id=learner_id, display_name=display_name or learner_id))
+                await s.commit()
+
+    async def ensure_workspace(self, learner_id: str) -> None:
+        """Create the learner workspace once, tolerating concurrent first runs."""
+
+        async with self.db.session() as s:
+            existing = await s.scalar(select(Workspace).where(Workspace.learner_id == learner_id))
+            if existing is not None:
+                return
+            s.add(
+                Workspace(
+                    id=f"ws_{uuid4().hex}",
+                    learner_id=learner_id,
+                    name="灵犀智学",
+                    appearance={},
+                )
+            )
+            try:
+                await s.commit()
+            except IntegrityError:
+                await s.rollback()
+                winner = await s.scalar(select(Workspace).where(Workspace.learner_id == learner_id))
+                if winner is None:
+                    raise
 
     async def context_for_identity(
         self, *, issuer: str, subject: str, learner_id: str
@@ -192,6 +223,52 @@ class LearnerRepository:
                 query = query.where(Mastery.concept.in_(requested))
             rows = (await s.execute(query.order_by(Mastery.concept))).scalars()
             return {row.concept: float(row.score) for row in rows}
+
+    async def mastery_detail(self, learner_id: str) -> list[dict[str, Any]]:
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(Mastery)
+                    .where(Mastery.learner_id == learner_id)
+                    .order_by(Mastery.concept)
+                )
+            ).scalars()
+            return [
+                {
+                    "concept": r.concept,
+                    "score": round(r.score, 4),
+                    "evidence_count": r.evidence_count,
+                    "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+                }
+                for r in rows
+            ]
+
+    async def save_mastery(self, learner_id: str, scores: dict[str, float]) -> None:
+        if not scores:
+            return
+        async with self.db.session() as s:
+            existing = {
+                row.concept: row
+                for row in (
+                    await s.execute(select(Mastery).where(Mastery.learner_id == learner_id))
+                ).scalars()
+            }
+            for concept, score in scores.items():
+                row = existing.get(concept)
+                if row is None:
+                    s.add(
+                        Mastery(
+                            learner_id=learner_id,
+                            concept=concept,
+                            score=float(score),
+                            evidence_count=1,
+                        )
+                    )
+                else:
+                    row.score = float(score)
+                    row.evidence_count += 1
+                    row.updated_at = utcnow()
+            await s.commit()
 
     async def record_evidence(
         self, learner_id: str, session_id: str, entries: Iterable[Mapping[str, Any]]

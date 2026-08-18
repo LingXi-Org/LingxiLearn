@@ -19,7 +19,10 @@ import pytest_asyncio
 from sqlalchemy import text
 
 from lingxilearn.config import Settings
-from lingxilearn.store.db import _SQLITE_SCHEMA_HEAD, Database, Repository
+from lingxilearn.store.database import Database
+from lingxilearn.store.repositories.agent_tasks import AgentTaskRepository
+from lingxilearn.store.repositories.runtime import RuntimeRepository
+from lingxilearn.store.sqlite_compat import SQLITE_SCHEMA_HEAD
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -171,7 +174,7 @@ async def test_existing_0017_sqlite_file_upgrades_without_data_loss(legacy_sqlit
         assert preserved == "什么是量子叠加？"
 
         marker = (await conn.exec_driver_sql("SELECT version_num FROM alembic_version")).scalar()
-        assert marker == _SQLITE_SCHEMA_HEAD == "0018_mothership_protocol_v1"
+        assert marker == SQLITE_SCHEMA_HEAD == "0018_mothership_protocol_v1"
 
 
 async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) -> None:
@@ -179,10 +182,11 @@ async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) 
 
     database, _path = legacy_sqlite_db
     await database.ensure_sqlite_schema()
-    repo = Repository(database)
+    agent_task_repository = AgentTaskRepository(database)
+    runtime_repository = RuntimeRepository(database)
 
-    await repo.set_agent_thread_status("task_legacy", "running")
-    await repo.create_agent_run(
+    await agent_task_repository.set_agent_thread_status("task_legacy", "running")
+    await runtime_repository.create_agent_run(
         agent_run_id="ar_upgrade",
         task_id="task_legacy",
         execution_id="exec_upgrade",
@@ -192,7 +196,7 @@ async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) 
         presentation_role="primary",
         started=True,
     )
-    await repo.create_skill_run(
+    await runtime_repository.create_skill_run(
         skill_run_id="sr_upgrade",
         agent_run_id="ar_upgrade",
         task_id="task_legacy",
@@ -200,7 +204,7 @@ async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) 
         skill_id="knowledge-qa",
         display_name="知识点答疑",
     )
-    await repo.append_agent_events(
+    await agent_task_repository.append_agent_events(
         "task_legacy",
         [
             {
@@ -216,9 +220,9 @@ async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) 
         ],
     )
 
-    runs = await repo.agent_runs_for_task("task_legacy")
+    runs = await runtime_repository.agent_runs_for_task("task_legacy")
     assert [run["id"] for run in runs] == ["ar_upgrade"]
-    events = await repo.agent_events_after("task_legacy")
+    events = await agent_task_repository.agent_events_after("task_legacy")
     v1_events = [event for event in events if int(event.get("protocol_version") or 0) == 1]
     assert len(v1_events) == 1
     assert v1_events[0]["turn_id"] == "turn_upgrade"
@@ -229,11 +233,11 @@ async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) 
 def test_compat_columns_cover_every_0018_existing_table_column(table: str) -> None:
     """Guards the next migration: 0018's added columns must all be repairable."""
 
-    from lingxilearn.store.db import _SQLITE_COMPAT_COLUMNS
+    from lingxilearn.store.sqlite_compat import SQLITE_COMPAT_COLUMNS
 
     expected = {
         "agent_tasks": {"thread_status"},
         "agent_task_events": {"protocol_version", "turn_id", "agent_run_id", "skill_run_id"},
         "agent_executions": {"turn_id", "parent_execution_id", "resumes_execution_id"},
     }[table]
-    assert expected <= set(_SQLITE_COMPAT_COLUMNS[table])
+    assert expected <= set(SQLITE_COMPAT_COLUMNS[table])

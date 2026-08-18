@@ -33,8 +33,8 @@ async def service_with_task(tmp_path: Path):
     await service.db.create_all()
     learner_id = f"learner-{suffix}"
     task_id = f"task-{suffix}"
-    await service.repo.ensure_learner(learner_id)
-    await service.repo.create_agent_task(
+    await service.learner_repository.ensure_learner(learner_id)
+    await service.agent_task_repository.create_agent_task(
         id=task_id,
         learner_id=learner_id,
         prompt="讲清量子叠加，并给我一个可视化",

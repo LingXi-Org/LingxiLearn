@@ -224,7 +224,7 @@ async def test_missing_deepseek_key_is_a_durable_failed_task(tmp_path: Path) -> 
         assert created["status"] == "failed"
         snapshot = await service.agent_task_snapshot(task_id)
         assert snapshot["status"] == "failed"
-        events = await service.repo.agent_events_after(task_id)
+        events = await service.agent_task_repository.agent_events_after(task_id)
         assert [event["kind"] for event in events] == ["task.started", "task.failed"]
         assert "DS_API_KEY" in snapshot["error"]
     finally:
@@ -275,9 +275,9 @@ async def test_create_agent_task_idempotency_is_durable_and_conflict_safe(tmp_pa
             f"create-second-{suffix}",
         }
         assert second == first
-        assert len(await service.repo.list_agent_tasks("create-test")) == 1
+        assert len(await service.agent_task_repository.list_agent_tasks("create-test")) == 1
         assert len(spawned) == 1
-        events = await service.repo.agent_events_after(first["id"])
+        events = await service.agent_task_repository.agent_events_after(first["id"])
         assert [event["kind"] for event in events] == ["task.started"]
 
         with pytest.raises(ValueError, match="idempotency_key_reused"):
@@ -288,7 +288,7 @@ async def test_create_agent_task_idempotency_is_durable_and_conflict_safe(tmp_pa
                 resources=[{"type": "file", "id": "file-1"}],
                 idempotency_key=key,
             )
-        assert len(await service.repo.list_agent_tasks("create-test")) == 1
+        assert len(await service.agent_task_repository.list_agent_tasks("create-test")) == 1
         assert len(spawned) == 1
     finally:
         await service.db.dispose()
@@ -305,16 +305,16 @@ async def test_agent_task_claim_is_atomic(tmp_path: Path) -> None:
     service = Service(settings)
     await service.db.create_all()
     try:
-        await service.repo.ensure_learner("claim-test")
-        await service.repo.create_agent_task(
+        await service.learner_repository.ensure_learner("claim-test")
+        await service.agent_task_repository.create_agent_task(
             id=f"claim-task-{suffix}",
             learner_id="claim-test",
             prompt="解释 TCP",
             graph_version="test@1",
             status="queued",
         )
-        first = await service.repo.claim_agent_task(f"claim-task-{suffix}", "claim-test")
-        second = await service.repo.claim_agent_task(f"claim-task-{suffix}", "claim-test")
+        first = await service.agent_task_repository.claim_agent_task(f"claim-task-{suffix}", "claim-test")
+        second = await service.agent_task_repository.claim_agent_task(f"claim-task-{suffix}", "claim-test")
         assert first is not None
         assert first.status == "running"
         assert second is None

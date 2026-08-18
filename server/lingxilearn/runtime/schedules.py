@@ -120,12 +120,12 @@ class SchedulerWorker:
 
     def __init__(
         self,
-        repo: Any,
+        tasks: Any,
         launch: Callable[[dict[str, Any]], Awaitable[str]],
         *,
         owner: str | None = None,
     ) -> None:
-        self.repo = repo
+        self.tasks = tasks
         self.launch = launch
         self.owner = owner or f"scheduler-{os.getpid()}-{uuid.uuid4().hex[:8]}"
 
@@ -133,7 +133,7 @@ class SchedulerWorker:
         moment = now or datetime.now(UTC)
         if moment.tzinfo is None:
             moment = moment.replace(tzinfo=UTC)
-        claim = await self.repo.claim_due_schedule(owner=self.owner, now=moment)
+        claim = await self.tasks.claim_due_schedule(owner=self.owner, now=moment)
         if claim is None:
             return None
         execution_id = await self.launch(claim)
@@ -144,7 +144,7 @@ class SchedulerWorker:
         # backlog of overlapping runs.
         while next_run <= moment:
             next_run = next_schedule_time(claim["cron"], claim["timezone"], next_run)
-        await self.repo.finish_schedule_claim(
+        await self.tasks.finish_schedule_claim(
             run_id=claim["run_id"],
             schedule_id=claim["schedule_id"],
             scheduled_for=claim["scheduled_for"],
