@@ -16,7 +16,7 @@ async def postgres_repositories():
     if not url:
         pytest.skip("LINGXILEARN_POSTGRES_TEST_URL is not configured")
 
-    from lingxilearn.store.repositories import Database, Repository
+    from lingxilearn.store.db import Database, Repository
 
     settings = Settings(_env_file="", database_url=url)
     db_a = Database(settings)

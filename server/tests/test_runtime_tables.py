@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from lingxilearn.config import Settings
-from lingxilearn.store.repositories import Database, Repository
+from lingxilearn.store.db import Database, Repository
 from lingxilearn.store.models import Workspace, WorkspaceTable, WorkspaceTableRow
 
 
