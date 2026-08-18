@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import { Button, ChipInput, Label } from '@/components/ui-kit'
 import { type IdentitySession, identityApi } from '@/lib/auth/identity-api'
 import { useSession } from '@/lib/auth/session-provider'
@@ -256,18 +255,6 @@ export function AccountSettings({ initialSection = 'profile' }: { initialSection
               {label}
             </button>
           ))}
-          <Link
-            href='/account/settings/billing'
-            className='rounded-lg px-3 py-2 text-left text-[var(--text-muted)] text-sm hover:bg-[var(--surface-2)]'
-          >
-            计费与用量
-          </Link>
-          <Link
-            href='/account/settings/users'
-            className='rounded-lg px-3 py-2 text-left text-[var(--text-muted)] text-sm hover:bg-[var(--surface-2)]'
-          >
-            用户管理
-          </Link>
         </nav>
 
         <div className='space-y-5'>

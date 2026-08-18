@@ -3,23 +3,17 @@ import { AccountSettingsRenderer } from '@/components/settings/account-settings-
 import { AccountSettings } from '../account-settings'
 
 export function generateStaticParams() {
-  return [
-    { section: 'profile' },
-    { section: 'security' },
-    { section: 'sessions' },
-    { section: 'billing' },
-    { section: 'users' },
-  ]
+  return [{ section: 'profile' }, { section: 'security' }, { section: 'sessions' }]
 }
 
 export default async function Page({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params
-  // Profile, billing and API keys use the complete native settings surfaces.
-  // Identity-specific security/session flows remain on the LingxiIdentity
-  // surface because they require its verification and session APIs.
-  if (section === 'billing' || section === 'api-keys' || section === 'admin' || section === 'mothership') {
-    const nativeSection = section === 'api-keys' ? 'api-keys' : section
-    return <AccountSettingsRenderer section={nativeSection as AccountSettingsSection} />
+  // API keys and platform admin sections keep their native surfaces; every
+  // account identity flow stays on LingxiIdentity. Billing had no backend
+  // owner and was removed with its routes (issue #54), so billing-shaped
+  // sections fall back to the identity profile instead of a fake closure.
+  if (section === 'api-keys' || section === 'admin' || section === 'mothership') {
+    return <AccountSettingsRenderer section={section as AccountSettingsSection} />
   }
   if (
     section === 'profile' ||
@@ -29,5 +23,5 @@ export default async function Page({ params }: { params: Promise<{ section: stri
   ) {
     return <AccountSettings initialSection={section === 'general' ? 'profile' : section} />
   }
-  return <AccountSettingsRenderer section='general' />
+  return <AccountSettings initialSection='profile' />
 }

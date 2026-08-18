@@ -511,28 +511,12 @@ function SettingsPage() {
             </p>
           </Link>
           <Link
-            href='/workspace/lingxi/settings/billing'
-            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-          >
-            <p className='text-[13px] text-[var(--text-primary)]'>计费与用量</p>
-            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>内部学习额度与只读审计</p>
-          </Link>
-          <Link
             href='/workspace/lingxi/settings/users'
             className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
           >
             <p className='text-[13px] text-[var(--text-primary)]'>用户管理</p>
             <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-              个人账户中心；成员协作保留占位
-            </p>
-          </Link>
-          <Link
-            href='/workspace/lingxi/settings/integrations'
-            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-          >
-            <p className='text-[13px] text-[var(--text-primary)]'>未启用设置</p>
-            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-              SSO、API Keys、凭据等占位页面
+              个人账户中心；工作区保持个人私有
             </p>
           </Link>
         </div>
