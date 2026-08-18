@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import type { ServedFolderResourceType } from '@/lib/api/contracts/folders'
 import { breadcrumbFolderChain } from '@/app/workspace/[workspaceId]/components/folders/folder-breadcrumbs'
 import { useFolders } from '@/hooks/queries/folders'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
 export interface UseFolderAncestorsOptions {
   resourceType: ServedFolderResourceType
@@ -28,10 +28,10 @@ export interface FolderAncestors {
    * deleted folder, a stale bookmark, a resource moved by someone else) — callers render the
    * root trail rather than a path that skips a level.
    */
-  ancestors: WorkflowFolder[]
+  ancestors: WorkspaceFolder[]
   /** Every active folder in this resource's tree, as returned by the folders API. */
-  folders: WorkflowFolder[]
-  folderById: Map<string, WorkflowFolder>
+  folders: WorkspaceFolder[]
+  folderById: Map<string, WorkspaceFolder>
   /**
    * Whether `folders`/`folderById` can be trusted to be the COMPLETE set for this workspace.
    *
@@ -44,7 +44,7 @@ export interface FolderAncestors {
   foldersResolved: boolean
 }
 
-const EMPTY_FOLDERS: WorkflowFolder[] = []
+const EMPTY_FOLDERS: WorkspaceFolder[] = []
 
 /**
  * The folder tree for one resource type, plus the ancestor chain of a single folder in it.
@@ -66,7 +66,7 @@ export function useFolderAncestors({
   } = useFolders(workspaceId, { resourceType, enabled })
 
   const folderById = useMemo(() => {
-    const byId = new Map<string, WorkflowFolder>()
+    const byId = new Map<string, WorkspaceFolder>()
     for (const folder of folders) byId.set(folder.id, folder)
     return byId
   }, [folders])

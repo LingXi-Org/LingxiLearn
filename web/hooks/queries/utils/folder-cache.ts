@@ -1,16 +1,16 @@
 import type { FolderResourceType } from '@/lib/api/contracts/folders'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
 import { folderKeys } from '@/hooks/queries/utils/folder-keys'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
-const EMPTY_FOLDERS: WorkflowFolder[] = []
+const EMPTY_FOLDERS: WorkspaceFolder[] = []
 
 function getFolders(
   workspaceId: string,
   resourceType: FolderResourceType = 'workflow'
-): WorkflowFolder[] {
+): WorkspaceFolder[] {
   return (
-    getQueryClient().getQueryData<WorkflowFolder[]>(
+    getQueryClient().getQueryData<WorkspaceFolder[]>(
       folderKeys.list(workspaceId, 'active', resourceType)
     ) ?? EMPTY_FOLDERS
   )
@@ -19,7 +19,7 @@ function getFolders(
 export function getFolderMap(
   workspaceId: string,
   resourceType: FolderResourceType = 'workflow'
-): Record<string, WorkflowFolder> {
+): Record<string, WorkspaceFolder> {
   return Object.fromEntries(
     getFolders(workspaceId, resourceType).map((folder) => [folder.id, folder])
   )

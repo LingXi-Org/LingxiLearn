@@ -78,7 +78,7 @@ import { useDebouncedSearchSetter } from '@/hooks/use-debounced-search-setter'
 import { useInlineRename } from '@/hooks/use-inline-rename'
 import { usePermissionConfig } from '@/hooks/use-permission-config'
 import { useUrlSort } from '@/hooks/use-url-sort'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 import { useImportTrayStore } from '@/stores/table/import-tray/store'
 
 const logger = createLogger('Tables')
@@ -100,7 +100,7 @@ const EMPTY_TABLES: TableDefinition[] = []
 /** A list row (and the right-clicked row), resolved to the entity it refers to. */
 type TableResourceItem =
   | { kind: 'table'; table: TableDefinition }
-  | { kind: 'folder'; folder: WorkflowFolder }
+  | { kind: 'folder'; folder: WorkspaceFolder }
 
 export function Tables() {
   const params = useParams()
@@ -205,7 +205,7 @@ export function Tables() {
   const [isDeleteFolderDialogOpen, setIsDeleteFolderDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [activeTable, setActiveTable] = useState<TableDefinition | null>(null)
-  const [activeFolder, setActiveFolder] = useState<WorkflowFolder | null>(null)
+  const [activeFolder, setActiveFolder] = useState<WorkspaceFolder | null>(null)
 
   const [{ search: urlSearchTerm, rows: rowCountFilter, owner: ownerFilter }, setTableFilters] =
     useQueryStates(tablesParsers, tablesUrlKeys)
@@ -455,7 +455,7 @@ export function Tables() {
   ])
 
   const startFolderRename = useCallback(
-    (folder: WorkflowFolder) => listRename.startRename(folderRowId(folder.id), folder.name),
+    (folder: WorkspaceFolder) => listRename.startRename(folderRowId(folder.id), folder.name),
     [listRename.startRename]
   )
 

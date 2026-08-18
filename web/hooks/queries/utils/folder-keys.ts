@@ -1,12 +1,12 @@
 import type { FolderApi, FolderResourceType } from '@/lib/api/contracts/folders'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
 export type FolderQueryScope = 'active' | 'archived'
 
 export const FOLDER_LIST_STALE_TIME = 60 * 1000
 
 /**
- * Maps a wire folder row to the client `WorkflowFolder` shape (string dates → `Date`).
+ * Maps a wire folder row to the client `WorkspaceFolder` shape (string dates → `Date`).
  *
  * Lives beside the keys rather than in the hooks module so a server prefetch can hydrate a
  * folder list without importing `@/hooks/queries/folders`, which drags the contracts barrel and
@@ -14,7 +14,7 @@ export const FOLDER_LIST_STALE_TIME = 60 * 1000
  * new wire field cannot silently enter the cached shape and diverge a hydrated entry from a
  * client fetch.
  */
-export function mapFolder(folder: FolderApi): WorkflowFolder {
+export function mapFolder(folder: FolderApi): WorkspaceFolder {
   return {
     id: folder.id,
     name: folder.name,

@@ -1,15 +1,15 @@
 import type { FolderResourceType } from '@/lib/api/contracts/folders'
 
 /**
- * Client-side shape of a folder row. Named for its original workflow-only scope; now
- * carries `resourceType` since the underlying table is shared by workflows, files,
- * knowledge bases, and tables.
+ * Client-side shape of a folder row. Domain-neutral on purpose: the underlying table is
+ * shared by workflows, files, knowledge bases, and tables, so no single resource owns this
+ * type (it carries `resourceType` to tell the trees apart).
  *
  * `color` and `isExpanded` were dropped along with the generic-folder table: `color` had
  * no consumer, and expansion state is client-only (it lives in this store, and was never
  * read back from the server).
  */
-export interface WorkflowFolder {
+export interface WorkspaceFolder {
   id: string
   resourceType: FolderResourceType
   name: string
@@ -24,7 +24,7 @@ export interface WorkflowFolder {
   deletedAt?: Date | null
 }
 
-export interface FolderTreeNode extends WorkflowFolder {
+export interface FolderTreeNode extends WorkspaceFolder {
   children: FolderTreeNode[]
   level: number
 }

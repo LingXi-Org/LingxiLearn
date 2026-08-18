@@ -1,6 +1,6 @@
 import { buildFolderPath } from '@/lib/folders/paths'
 import { folderAncestorChain } from '@/lib/folders/tree'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
 /**
  * Returns true when the folder or one of its ancestors is locked. Used to
@@ -13,7 +13,7 @@ import type { WorkflowFolder } from '@/stores/folders/types'
  */
 export function isFolderOrAncestorLocked(
   folderId: string | null | undefined,
-  folders: Record<string, WorkflowFolder>
+  folders: Record<string, WorkspaceFolder>
 ): boolean {
   const visited = new Set<string>()
   let currentFolderId = folderId ?? null
@@ -39,7 +39,7 @@ export function isFolderOrAncestorLocked(
  */
 export function getFolderPath(
   folderId: string | null | undefined,
-  folders: Record<string, WorkflowFolder>,
+  folders: Record<string, WorkspaceFolder>,
   separator = ' / '
 ): string | null {
   const segments = folderAncestorChain(folderId, (id) => folders[id]).map((folder) => folder.name)
@@ -49,7 +49,7 @@ export function getFolderPath(
 /** Returns the canonical public API path for a folder and rejects corrupt trees. */
 export function getCanonicalFolderPath(
   folderId: string | null | undefined,
-  folders: Record<string, WorkflowFolder> | Map<string, WorkflowFolder>
+  folders: Record<string, WorkspaceFolder> | Map<string, WorkspaceFolder>
 ): string {
   if (!folderId) return '/'
 
@@ -61,7 +61,7 @@ export function getCanonicalFolderPath(
     if (visited.has(currentFolderId)) throw new Error('Folder tree contains a cycle')
     visited.add(currentFolderId)
 
-    const folder: WorkflowFolder | undefined =
+    const folder: WorkspaceFolder | undefined =
       folders instanceof Map ? folders.get(currentFolderId) : folders[currentFolderId]
     if (!folder) throw new Error(`Folder ${currentFolderId} was not found`)
     segments.unshift(folder.name)
@@ -94,7 +94,7 @@ export function collectDuplicateNames(names: Iterable<string>): Set<string> {
 export function disambiguateLabelByFolder(
   name: string,
   folderId: string | null | undefined,
-  folders: Record<string, WorkflowFolder>,
+  folders: Record<string, WorkspaceFolder>,
   duplicateNames: Set<string>
 ): string {
   if (!duplicateNames.has(name)) return name
@@ -109,8 +109,8 @@ export function disambiguateLabelByFolder(
  */
 export function findLockedAncestorFolder(
   folderId: string | null | undefined,
-  folders: Record<string, WorkflowFolder>
-): WorkflowFolder | null {
+  folders: Record<string, WorkspaceFolder>
+): WorkspaceFolder | null {
   if (!folderId) return null
 
   const visited = new Set<string>()
@@ -119,7 +119,7 @@ export function findLockedAncestorFolder(
   while (currentFolderId) {
     if (visited.has(currentFolderId)) return null
     visited.add(currentFolderId)
-    const folder: WorkflowFolder | undefined = folders[currentFolderId]
+    const folder: WorkspaceFolder | undefined = folders[currentFolderId]
     if (!folder) return null
     if (folder.locked) return folder
     currentFolderId = folder.parentId
@@ -136,7 +136,7 @@ export function findLockedAncestorFolder(
  */
 export function isWorkflowEffectivelyLocked(
   workflow: { locked?: boolean | null; folderId?: string | null } | null | undefined,
-  folders: Record<string, WorkflowFolder>
+  folders: Record<string, WorkspaceFolder>
 ): boolean {
   if (!workflow) return false
   if (workflow.locked) return true
@@ -151,7 +151,7 @@ export function isWorkflowEffectivelyLocked(
  */
 export function isFolderEffectivelyLocked(
   folder: { locked?: boolean | null; parentId?: string | null } | null | undefined,
-  folders: Record<string, WorkflowFolder>
+  folders: Record<string, WorkspaceFolder>
 ): boolean {
   if (!folder) return false
   if (folder.locked) return true
