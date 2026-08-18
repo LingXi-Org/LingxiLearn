@@ -5,6 +5,8 @@ Contains models for learner identity, authentication mappings, and learner profi
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import (
     JSON,
     Boolean,
