@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -15,7 +14,9 @@ def test_force_flush_runtime_callbacks_do_not_wait_for_node_boundary() -> None:
 
 
 def test_parallel_safe_work_does_not_block_serial_critical_path_start() -> None:
-    source = (ROOT / "lingxilearn" / "runtime" / "loop.py").read_text(encoding="utf-8")
+    source = (ROOT / "lingxilearn" / "runtime" / "nodes" / "execution.py").read_text(
+        encoding="utf-8"
+    )
     start = source.index("safe_future = (")
     serial = source.index("for task in serial:", start)
     join = source.index("gathered = await safe_future", serial)

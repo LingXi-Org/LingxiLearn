@@ -16,8 +16,14 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[1] / "lingxilearn"
 
-LOOP = PACKAGE / "runtime" / "loop.py"
-"""The only module allowed to declare graph topology."""
+LOOP = PACKAGE / "runtime" / "graph.py"
+"""The only module allowed to declare graph topology.
+
+Historically this was ``loop.py``; the topology now lives in ``graph.py``
+(with node implementations under ``runtime/nodes/``) as part of the runtime
+lifecycle refactor (issues #35, #59).  ``loop.py`` is a thin
+backward-compatible re-export.
+"""
 
 DISPATCH = PACKAGE / "runtime" / "dispatch.py"
 """The only module allowed to turn a capability into a call."""
@@ -79,7 +85,7 @@ def test_only_the_loop_declares_graph_topology() -> None:
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                 if node.func.id == "StateGraph":
                     offenders.append(f"{path.relative_to(PACKAGE)}:{node.lineno}")
-    assert not offenders, "only runtime/loop.py may build a StateGraph; found one at " + "; ".join(
+    assert not offenders, "only runtime/graph.py may build a StateGraph; found one at " + "; ".join(
         offenders
     )
 
@@ -99,7 +105,7 @@ def test_conditional_edges_exist_only_in_the_loop_and_name_no_domain_concept() -
             if name != "add_conditional_edges":
                 continue
             assert path == LOOP, (
-                f"conditional routing outside runtime/loop.py: "
+                f"conditional routing outside runtime/graph.py: "
                 f"{path.relative_to(PACKAGE)}:{node.lineno}"
             )
             mapping = next(
