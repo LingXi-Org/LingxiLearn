@@ -21,7 +21,10 @@ from sqlalchemy import engine_from_config, pool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lingxilearn.config import get_settings  # noqa: E402
-from lingxilearn.store.models import Base  # noqa: E402
+
+# The registry import is load-bearing: it registers every domain model module
+# on the shared Base.metadata before Alembic diffs or migrates.
+from lingxilearn.store.models.registry import Base  # noqa: E402
 
 config = context.config
 if config.config_file_name is not None:

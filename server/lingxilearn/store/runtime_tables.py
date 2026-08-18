@@ -16,7 +16,8 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Workspace, WorkspaceTable, WorkspaceTableColumn, WorkspaceTableRow
+from .models.table import WorkspaceTable, WorkspaceTableColumn, WorkspaceTableRow
+from .models.workspace import Workspace
 
 RUNTIME_TABLE_VERSION = "lingxi-runtime.v1"
 

@@ -80,7 +80,7 @@ from .state.session_state import Goal, GoalKind, RuntimeStatus, new_budget
 from .state.skill_catalog import discover as discover_skill_manifests
 from .store.db import Database, Repository
 from .store.learner import LearnerRepository
-from .store.models import (
+from .store.models.workspace import (
     Workspace,
     WorkspaceFile,
 )

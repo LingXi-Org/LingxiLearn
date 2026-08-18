@@ -21,7 +21,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..store.models import LearningProfile
+from ..store.models.learning import LearningProfile
 from .scheduling import confidence as compute_confidence
 
 LEARNING_STATES = {

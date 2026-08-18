@@ -9,7 +9,8 @@ from sqlalchemy import select
 
 from lingxilearn.config import Settings
 from lingxilearn.store.db import Database, Repository
-from lingxilearn.store.models import Workspace, WorkspaceTable, WorkspaceTableRow
+from lingxilearn.store.models.table import WorkspaceTable, WorkspaceTableRow
+from lingxilearn.store.models.workspace import Workspace
 
 
 @pytest.mark.asyncio

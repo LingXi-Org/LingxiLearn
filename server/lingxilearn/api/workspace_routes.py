@@ -32,26 +32,29 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy import delete, desc, false, func, or_, select, update
 
 from ..learner import LearnerContext
-from ..store.models import (
-    AgentExecution,
-    AgentTask,
-    AgentTaskEvent,
+from ..store.models.agent import AgentTask, AgentTaskEvent
+from ..store.models.base import utcnow
+from ..store.models.knowledge import (
     KnowledgeBase,
     KnowledgeChunk,
     KnowledgeDocument,
     KnowledgeDocumentTag,
     KnowledgeTag,
+)
+from ..store.models.runtime import AgentExecution
+from ..store.models.table import (
+    WorkspaceTable,
+    WorkspaceTableColumn,
+    WorkspaceTableRow,
+    WorkspaceTableView,
+)
+from ..store.models.workspace import (
     PersonalSkill,
     Workspace,
     WorkspaceFile,
     WorkspaceFolder,
     WorkspacePinnedItem,
-    WorkspaceTable,
-    WorkspaceTableColumn,
-    WorkspaceTableRow,
-    WorkspaceTableView,
     WorkspaceUploadSession,
-    utcnow,
 )
 from ..store.runtime_tables import (
     RUNTIME_COLUMN_LABELS,
