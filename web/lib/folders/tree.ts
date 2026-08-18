@@ -1,7 +1,7 @@
-import type { FolderTreeNode, WorkflowFolder } from '@/stores/folders/types'
+import type { FolderTreeNode, WorkspaceFolder } from '@/stores/folders/types'
 
 export function buildFolderTree(
-  folders: Record<string, WorkflowFolder>,
+  folders: Record<string, WorkspaceFolder>,
   workspaceId: string
 ): FolderTreeNode[] {
   const workspaceFolders = Object.values(folders).filter(
@@ -23,16 +23,16 @@ export function buildFolderTree(
 }
 
 export function getFolderById(
-  folders: Record<string, WorkflowFolder>,
+  folders: Record<string, WorkspaceFolder>,
   folderId: string
-): WorkflowFolder | undefined {
+): WorkspaceFolder | undefined {
   return folders[folderId]
 }
 
 export function getChildFolders(
-  folders: Record<string, WorkflowFolder>,
+  folders: Record<string, WorkspaceFolder>,
   parentId: string | null
-): WorkflowFolder[] {
+): WorkspaceFolder[] {
   return Object.values(folders)
     .filter((folder) => folder.parentId === parentId)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
@@ -82,9 +82,9 @@ export function folderAncestorChain<T extends FolderAncestorNode>(
  * `getFolderPath` in `@/hooks/queries/utils/folder-tree`.
  */
 export function getFolderPath(
-  folders: Record<string, WorkflowFolder>,
+  folders: Record<string, WorkspaceFolder>,
   folderId: string
-): WorkflowFolder[] {
+): WorkspaceFolder[] {
   return folderAncestorChain(folderId, (id) => folders[id])
 }
 
@@ -94,7 +94,7 @@ export function getFolderPath(
  * rather than an empty array.
  */
 export function getFolderPathNames(
-  folders: Record<string, WorkflowFolder>,
+  folders: Record<string, WorkspaceFolder>,
   folderId: string | null | undefined
 ): string[] | undefined {
   if (!folderId) return undefined

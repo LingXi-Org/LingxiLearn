@@ -11,9 +11,9 @@ import {
   isFolderOrAncestorLocked,
   isWorkflowEffectivelyLocked,
 } from '@/hooks/queries/utils/folder-tree'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
-function makeFolder(overrides: Partial<WorkflowFolder> & { id: string }): WorkflowFolder {
+function makeFolder(overrides: Partial<WorkspaceFolder> & { id: string }): WorkspaceFolder {
   return {
     id: overrides.id,
     name: overrides.name ?? overrides.id,

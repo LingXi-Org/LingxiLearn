@@ -7,7 +7,7 @@ import type {
 } from '@/app/workspace/[workspaceId]/components/resource/components/resource-header'
 
 /**
- * Structural rather than `WorkflowFolder` so the Files tree — same `folder` table, own routes
+ * Structural rather than `WorkspaceFolder` so the Files tree — same `folder` table, own routes
  * and row type (see `servedFolderResourceTypeSchema` in `@/lib/api/contracts/folders`) — shares
  * this code path instead of forking it.
  */

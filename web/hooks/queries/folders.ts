@@ -30,7 +30,7 @@ import {
 import { tableKeys } from '@/hooks/queries/utils/table-keys'
 import { getTopInsertionSortOrder } from '@/hooks/queries/utils/top-insertion-sort-order'
 import { getWorkflows } from '@/hooks/queries/utils/workflow-cache'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
 const logger = createLogger('FolderQueries')
 
@@ -38,7 +38,7 @@ function mapLingxiFolder(
   folder: WorkspaceFolderItem,
   index: number,
   resourceType: ServedFolderResourceType
-): WorkflowFolder {
+): WorkspaceFolder {
   const createdAt = folder.createdAt ? new Date(folder.createdAt) : new Date(0)
   const updatedAt = folder.updatedAt ? new Date(folder.updatedAt) : createdAt
   return {
@@ -63,7 +63,7 @@ async function fetchFolders(
   scope: FolderQueryScope = 'active',
   resourceType: ServedFolderResourceType = 'workflow',
   signal?: AbortSignal
-): Promise<WorkflowFolder[]> {
+): Promise<WorkspaceFolder[]> {
   if (workspaceId === LINGXI_WORKSPACE_ID) {
     const { folders } = await api.workspaceFolders(scope)
     return folders.map((folder, index) => mapLingxiFolder(folder, index, resourceType))
@@ -94,7 +94,7 @@ export function useFolders(
   })
 }
 
-const selectFolderMap = (folders: WorkflowFolder[]): Record<string, WorkflowFolder> =>
+const selectFolderMap = (folders: WorkspaceFolder[]): Record<string, WorkspaceFolder> =>
   Object.fromEntries(folders.map((folder) => [folder.id, folder]))
 
 export function useFolderMap(
@@ -124,7 +124,7 @@ interface UpdateFolderVariables {
   workspaceId: string
   resourceType?: ServedFolderResourceType
   id: string
-  updates: Partial<Pick<WorkflowFolder, 'name' | 'parentId' | 'sortOrder' | 'locked'>>
+  updates: Partial<Pick<WorkspaceFolder, 'name' | 'parentId' | 'sortOrder' | 'locked'>>
 }
 
 interface DeleteFolderVariables {
@@ -182,44 +182,47 @@ function createFolderMutationHandlers<
   createOptimisticFolder: (
     variables: TVariables,
     tempId: string,
-    previousFolders: Record<string, WorkflowFolder>
-  ) => WorkflowFolder,
+    previousFolders: Record<string, WorkspaceFolder>
+  ) => WorkspaceFolder,
   customGenerateTempId?: (variables: TVariables) => string
 ) {
-  return createOptimisticMutationHandlers<WorkflowFolder, TVariables, WorkflowFolder>(queryClient, {
-    name,
-    getQueryKey: (variables) =>
-      folderKeys.list(variables.workspaceId, 'active', variables.resourceType ?? 'workflow'),
-    getSnapshot: (variables) => ({
-      ...getFolderMap(variables.workspaceId, variables.resourceType ?? 'workflow'),
-    }),
-    generateTempId: customGenerateTempId ?? (() => generateTempId('temp-folder')),
-    createOptimisticItem: (variables, tempId) => {
-      const previousFolders = getFolderMap(
-        variables.workspaceId,
-        variables.resourceType ?? 'workflow'
-      )
-      return createOptimisticFolder(variables, tempId, previousFolders)
-    },
-    applyOptimisticUpdate: (tempId, item) => {
-      queryClient.setQueryData<WorkflowFolder[]>(
-        folderKeys.list(item.workspaceId, 'active', item.resourceType),
-        (old) => [...(old ?? []), item]
-      )
-    },
-    replaceOptimisticEntry: (tempId, data) => {
-      queryClient.setQueryData<WorkflowFolder[]>(
-        folderKeys.list(data.workspaceId, 'active', data.resourceType),
-        (old) => (old ?? []).map((folder) => (folder.id === tempId ? data : folder))
-      )
-    },
-    rollback: (snapshot, variables) => {
-      queryClient.setQueryData(
+  return createOptimisticMutationHandlers<WorkspaceFolder, TVariables, WorkspaceFolder>(
+    queryClient,
+    {
+      name,
+      getQueryKey: (variables) =>
         folderKeys.list(variables.workspaceId, 'active', variables.resourceType ?? 'workflow'),
-        Object.values(snapshot)
-      )
-    },
-  })
+      getSnapshot: (variables) => ({
+        ...getFolderMap(variables.workspaceId, variables.resourceType ?? 'workflow'),
+      }),
+      generateTempId: customGenerateTempId ?? (() => generateTempId('temp-folder')),
+      createOptimisticItem: (variables, tempId) => {
+        const previousFolders = getFolderMap(
+          variables.workspaceId,
+          variables.resourceType ?? 'workflow'
+        )
+        return createOptimisticFolder(variables, tempId, previousFolders)
+      },
+      applyOptimisticUpdate: (tempId, item) => {
+        queryClient.setQueryData<WorkspaceFolder[]>(
+          folderKeys.list(item.workspaceId, 'active', item.resourceType),
+          (old) => [...(old ?? []), item]
+        )
+      },
+      replaceOptimisticEntry: (tempId, data) => {
+        queryClient.setQueryData<WorkspaceFolder[]>(
+          folderKeys.list(data.workspaceId, 'active', data.resourceType),
+          (old) => (old ?? []).map((folder) => (folder.id === tempId ? data : folder))
+        )
+      },
+      rollback: (snapshot, variables) => {
+        queryClient.setQueryData(
+          folderKeys.list(variables.workspaceId, 'active', variables.resourceType ?? 'workflow'),
+          Object.values(snapshot)
+        )
+      },
+    }
+  )
 }
 
 export function useCreateFolder() {
@@ -417,7 +420,7 @@ export function useDuplicateFolderMutation() {
       name,
       parentId,
       newId,
-    }: DuplicateFolderVariables): Promise<WorkflowFolder> => {
+    }: DuplicateFolderVariables): Promise<WorkspaceFolder> => {
       if (workspaceId === LINGXI_WORKSPACE_ID) {
         const { folder } = await api.createWorkspaceFolder(name, parentId ?? null)
         return mapLingxiFolder(folder, 0, 'workflow')
@@ -479,10 +482,10 @@ export function useReorderFolders() {
       )
       await queryClient.cancelQueries({ queryKey: listKey })
 
-      const snapshot = queryClient.getQueryData<WorkflowFolder[]>(listKey)
+      const snapshot = queryClient.getQueryData<WorkspaceFolder[]>(listKey)
 
       const updatesById = new Map(variables.updates.map((update) => [update.id, update]))
-      queryClient.setQueryData<WorkflowFolder[]>(listKey, (old) => {
+      queryClient.setQueryData<WorkspaceFolder[]>(listKey, (old) => {
         if (!old?.length) return old
         return old.map((folder) => {
           const update = updatesById.get(folder.id)

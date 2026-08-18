@@ -4,7 +4,7 @@ import type {
   ResourceCell,
   ResourceRow,
 } from '@/app/workspace/[workspaceId]/components/resource/resource'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
 const FOLDER_ICON = <Folder className='size-[14px]' />
 
@@ -38,7 +38,7 @@ export interface FolderRowOptions {
  * inline rename is layered over the built rows by the page so a keystroke in the rename
  * field rebuilds one cell instead of every row's cells.
  */
-export function folderRow(folder: WorkflowFolder, options: FolderRowOptions = {}): ResourceRow {
+export function folderRow(folder: WorkspaceFolder, options: FolderRowOptions = {}): ResourceRow {
   const { pinned, cells, nameColumnId = 'name' } = options
 
   return {

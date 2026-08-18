@@ -18,13 +18,13 @@ import {
   parseMoveOptionValue,
   ROOT_MOVE_OPTION_VALUE,
 } from '@/app/workspace/[workspaceId]/components/folders/move-options'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
 function makeFolder(
   id: string,
   parentId: string | null = null,
-  overrides: Partial<WorkflowFolder> = {}
-): WorkflowFolder {
+  overrides: Partial<WorkspaceFolder> = {}
+): WorkspaceFolder {
   return {
     id,
     name: id,
@@ -280,7 +280,7 @@ describe('folderBreadcrumbItems', () => {
 })
 
 describe('breadcrumbFolderChain', () => {
-  function mapOf(...folders: WorkflowFolder[]) {
+  function mapOf(...folders: WorkspaceFolder[]) {
     return new Map(folders.map((folder) => [folder.id, folder]))
   }
 
@@ -318,13 +318,13 @@ describe('breadcrumbFolderChain', () => {
 
 describe('folderAncestorChain', () => {
   it('keeps the part it walked when a link does not resolve — the breadcrumb rule is a wrapper', () => {
-    const folders: Record<string, WorkflowFolder> = { leaf: makeFolder('leaf', 'gone') }
+    const folders: Record<string, WorkspaceFolder> = { leaf: makeFolder('leaf', 'gone') }
     const chain = folderAncestorChain('leaf', (id) => folders[id])
     expect(chain.map((folder) => folder.id)).toEqual(['leaf'])
   })
 
   it('stops on a cycle instead of looping forever', () => {
-    const folders: Record<string, WorkflowFolder> = {
+    const folders: Record<string, WorkspaceFolder> = {
       a: makeFolder('a', 'b'),
       b: makeFolder('b', 'a'),
     }

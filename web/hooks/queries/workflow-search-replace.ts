@@ -37,10 +37,10 @@ import {
 import { collectDuplicateNames, disambiguateLabelByFolder } from '@/hooks/queries/utils/folder-tree'
 import { getSelectorDefinition, loadAllSelectorOptions } from '@/hooks/selectors/registry'
 import type { SelectorKey, SelectorOption } from '@/hooks/selectors/types'
-import type { WorkflowFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/stores/folders/types'
 
 /** Stable identity while a folder list loads, so `select` isn't re-keyed on it. */
-const EMPTY_FOLDER_MAP: Record<string, WorkflowFolder> = {}
+const EMPTY_FOLDER_MAP: Record<string, WorkspaceFolder> = {}
 
 export interface WorkflowSearchResolvedResource {
   matchRawValue: string
