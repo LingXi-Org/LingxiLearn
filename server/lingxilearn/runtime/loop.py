@@ -46,6 +46,7 @@ from .dispatch import DispatchDeps, Dispatcher
 from .guardrails import Budget, apply_hold_policy, check_plan, check_replan, degrade_message
 from .interactions import (
     InteractionSpec,
+    build_followup_interaction,
     opaque_interrupt_payload,
 )
 from .run_context import new_interaction_id
@@ -88,6 +89,54 @@ def _interaction_answer_summary(value: Mapping[str, Any], pending: Any) -> str:
         if chosen:
             parts.append(chosen)
     return "学习者选择了：" + "；".join(parts) if parts else "学习者已回答澄清问题。"
+
+
+async def _request_interaction(
+    deps: LoopDeps, spec: InteractionSpec
+) -> dict[str, Any] | None:
+    """Persist and announce one blocking Interaction; return its checkpoint entry.
+
+    This is the single Interaction-request path in the loop (issue #32 §1):
+    pre-execution HITL clarification and post-answer follow-up both go
+    through it, so both get the same interaction_id, the same durable
+    ``agent_interactions`` row, the same ``interaction.requested`` event, and
+    the same ``pending_interaction`` checkpoint shape. A non-blocking spec is
+    a legacy-path suggestion, not a typed interrupt, and produces nothing here.
+    """
+
+    if not spec.blocking:
+        return None
+    interaction_id = new_interaction_id()
+    spec = spec.model_copy(update={"interaction_id": interaction_id})
+    request_payload = spec.public_request()
+    turn = (
+        await deps.repository.latest_turn(deps.task_id) if deps.repository is not None else None
+    )
+    if deps.repository is not None:
+        try:
+            await deps.repository.create_interaction(
+                interaction_id=interaction_id,
+                task_id=deps.task_id,
+                turn_id=str(turn["id"]) if turn else None,
+                execution_id=deps.execution_id or None,
+                request_payload=request_payload,
+                purpose=spec.purpose,
+                presentation=spec.presentation,
+                blocking=spec.blocking,
+                reason_code=spec.reason_code,
+            )
+        except Exception:  # noqa: BLE001 - interaction must not fail the run
+            logger.exception("failed to persist interaction")
+    if deps.emit is not None:
+        deps.emit(
+            "interaction.requested",
+            {
+                "interaction_id": interaction_id,
+                "turn_id": str(turn["id"]) if turn else "",
+                **request_payload,
+            },
+        )
+    return {"interaction_id": interaction_id, "request": request_payload}
 
 
 class LoopState(TypedDict, total=False):
@@ -811,43 +860,8 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 spec = InteractionSpec.model_validate(dict(produced.interaction))
             except Exception:  # noqa: BLE001 - degrade to the legacy text path
                 spec = None
-            if spec is not None and spec.blocking:
-                interaction_id = new_interaction_id()
-                spec = spec.model_copy(update={"interaction_id": interaction_id})
-                request_payload = spec.public_request()
-                turn = (
-                    await deps.repository.latest_turn(deps.task_id)
-                    if deps.repository is not None
-                    else None
-                )
-                if deps.repository is not None:
-                    try:
-                        await deps.repository.create_interaction(
-                            interaction_id=interaction_id,
-                            task_id=deps.task_id,
-                            turn_id=str(turn["id"]) if turn else None,
-                            execution_id=deps.execution_id or None,
-                            request_payload=request_payload,
-                            purpose=spec.purpose,
-                            presentation=spec.presentation,
-                            blocking=spec.blocking,
-                            reason_code=spec.reason_code,
-                        )
-                    except Exception:  # noqa: BLE001 - interaction must not fail the run
-                        logger.exception("failed to persist interaction")
-                if deps.emit is not None:
-                    deps.emit(
-                        "interaction.requested",
-                        {
-                            "interaction_id": interaction_id,
-                            "turn_id": str(turn["id"]) if turn else "",
-                            **request_payload,
-                        },
-                    )
-                pending_interaction = {
-                    "interaction_id": interaction_id,
-                    "request": request_payload,
-                }
+            if spec is not None:
+                pending_interaction = await _request_interaction(deps, spec)
 
         status = (
             RuntimeStatus.WAITING_FOR_USER
@@ -1209,7 +1223,41 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
         # long-lived learning goal is intentionally kept open for the next
         # learner message.  Without this boundary the accumulated outcomes
         # made the loop replan the same question over and over.
-        if any(item.satisfied and info(item.capability).turn_complete for item in outcomes):
+        turn_completing = next(
+            (item for item in outcomes if item.satisfied and info(item.capability).turn_complete),
+            None,
+        )
+        if turn_completing is not None:
+            # A completed answer/explanation must not fall silently into
+            # WAITING_FOR_USER (issue #32 §2): offer a structured follow-up
+            # through the same Interaction protocol pre-execution HITL uses,
+            # so the frontend renders a card and the learner's choice becomes
+            # an Orchestrator input on the next round rather than a dead end.
+            # A round that already produced its own blocking interaction (the
+            # pre-execution HITL path in ``orchestrate``) never reaches here
+            # with tasks executed, but the check stays defensive against a
+            # future round shape that does both in one pass.
+            existing_pending_interaction = state.get("pending_interaction")
+            patch: dict[str, Any] = {
+                "runtime_status": str(RuntimeStatus.WAITING_FOR_USER),
+                "messages": [],
+                "replanning": False,
+            }
+            if not existing_pending_interaction:
+                followup = build_followup_interaction(
+                    capability=turn_completing.capability,
+                    knowledge_point_id=(
+                        goal.knowledge_points[0] if goal.knowledge_points else ""
+                    ),
+                    topic=goal.topic,
+                )
+                if followup is not None:
+                    # Only touch the checkpoint field when we actually create a
+                    # new follow-up interaction. Unconditionally writing this
+                    # key (even as None) would clobber an existing pending
+                    # interaction from state, undoing the anti-double-card
+                    # guard above.
+                    patch["pending_interaction"] = await _request_interaction(deps, followup)
             await deps.runtime_state.set_runtime_status(
                 deps.task_id, RuntimeStatus.WAITING_FOR_USER
             )
@@ -1220,11 +1268,7 @@ def build_loop(deps: LoopDeps, *, checkpointer: Any = None, store: Any = None) -
                 outcomes=[item.to_dict() for item in outcomes],
                 result="turn_complete",
             )
-            return {
-                "runtime_status": str(RuntimeStatus.WAITING_FOR_USER),
-                "messages": [],
-                "replanning": False,
-            }
+            return patch
 
         # A graph turn with detached work remains waiting only when the
         # Work Ledger has explicitly recorded pending work.

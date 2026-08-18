@@ -178,6 +178,24 @@ class SimTraceProjector:
     _counts: dict[str, int] = field(default_factory=dict, init=False)
     _last_timestamp: str = field(default="", init=False)
     _saw_run_lifecycle: bool = field(default=False, init=False)
+    _paused_since: str = field(default="", init=False)
+    """Set while the run is paused (``run.paused`` seen, no ``run.resumed`` yet).
+
+    Human wait time accrues from here, not from active-execution spans, so a
+    learner sitting on WAITING_FOR_USER for hours never shows up as hours of
+    Agent/Skill execution (issue #32 §3).
+    """
+    _waiting_for_user_ms: int = field(default=0, init=False)
+    """Accumulated waiting time from *completed* pause intervals only."""
+    _pause_intervals: list[tuple[str, str]] = field(default_factory=list, init=False)
+    """Completed ``(pause_ts, resume_ts)`` wall-clock windows.
+
+    Any span whose own ``[startTime, endTime]`` overlaps one of these windows
+    must have that overlap excluded from its ``durationMs`` — not just the
+    root's — otherwise a native span (e.g. ``await_user``) that is still open
+    when ``run.paused`` fires and only closes after ``run.resumed`` would show
+    the full paused wall-clock gap as active duration.
+    """
 
     def __post_init__(self) -> None:
         started = _iso(self.started_at)
@@ -643,7 +661,13 @@ class SimTraceProjector:
             status = "error" if failed else ("running" if kind == "run.paused" else "success")
             self._root["status"] = status
             self._root["paused"] = kind == "run.paused"
+            if kind == "run.paused" and not self._paused_since:
+                self._paused_since = timestamp
             if kind in _TERMINAL_RUN_EVENTS:
+                if self._paused_since:
+                    self._waiting_for_user_ms += _millis(self._paused_since, timestamp)
+                    self._pause_intervals.append((self._paused_since, timestamp))
+                    self._paused_since = ""
                 for span in list(self._active_native.values()):
                     if span.get("status") == "running":
                         self._finish(
@@ -793,6 +817,10 @@ class SimTraceProjector:
         if kind == "run.resumed":
             self._saw_run_lifecycle = True
             self._root.update({"status": "running", "paused": False})
+            if self._paused_since:
+                self._waiting_for_user_ms += _millis(self._paused_since, timestamp)
+                self._pause_intervals.append((self._paused_since, timestamp))
+                self._paused_since = ""
             self._event(
                 self._root,
                 kind,
@@ -1316,6 +1344,26 @@ class SimTraceProjector:
 
     # -- final projection ------------------------------------------------
 
+    def _paused_overlap_ms(self, start: str, end: str) -> int:
+        """Wall-clock time within ``[start, end]`` that fell inside a pause.
+
+        Covers every completed ``run.paused``/``run.resumed`` window plus, if
+        the run is *currently* paused, the still-open window up to ``end`` —
+        so a span whose ``node.completed`` lands after resume still excludes
+        the pause it straddled.
+        """
+
+        intervals = list(self._pause_intervals)
+        if self._paused_since:
+            intervals.append((self._paused_since, end))
+        total = 0
+        for pause_start, pause_end in intervals:
+            overlap_start = max(start, pause_start)
+            overlap_end = min(end, pause_end)
+            if overlap_start < overlap_end:
+                total += _millis(overlap_start, overlap_end)
+        return total
+
     def snapshot(
         self,
         *,
@@ -1331,6 +1379,14 @@ class SimTraceProjector:
                 self._root["status"] = "success"
             elif normalized in {"awaiting_user", "paused"}:
                 self._root["status"] = "running"
+                if not self._root.get("paused"):
+                    # Entering pause via a status-only call (e.g. a replay with
+                    # no explicit run.paused event): freeze from the last known
+                    # activity instead of from "now", or the freeze point
+                    # itself would already include this call's own delay.
+                    self._paused_since = self._paused_since or str(
+                        self._root.get("endTime") or end
+                    )
                 self._root["paused"] = True
         if not self._saw_run_lifecycle and self._root.get("status") == "running":
             if not self._active_native and not self._active_tasks and not self._active_sidecars:
@@ -1338,7 +1394,18 @@ class SimTraceProjector:
                 # executions always receive a run.completed envelope and use
                 # the normalized ``success`` status above.
                 self._root["status"] = "completed"
+
         terminal = self._root.get("status") in {"success", "error"}
+        # While paused, repeated snapshot() calls (e.g. live polling) must not
+        # keep inflating active execution time with the human's wait — freeze
+        # running spans at the pause point and count the elapsed wait
+        # separately instead of folding it into their duration.
+        paused = bool(self._root.get("paused")) and not terminal
+        freeze_at = self._paused_since or end
+        waiting_ms = self._waiting_for_user_ms
+        if paused and self._paused_since:
+            waiting_ms += _millis(self._paused_since, end)
+
         if terminal and ended_at is not None:
             self._root["endTime"] = end
             self._root["endedAt"] = end
@@ -1347,12 +1414,14 @@ class SimTraceProjector:
             self._root["endedAt"] = self._root["endTime"]
 
         def update(span: dict[str, Any], root_start: str) -> dict[str, int]:
-            if span.get("status") == "running":
-                span["endTime"] = end
-                span["endedAt"] = end
-            span["duration"] = _millis(
-                str(span.get("startTime") or end), str(span.get("endTime") or end)
-            )
+            if span.get("status") == "running" and span is not self._root:
+                clamp = freeze_at if paused else end
+                span["endTime"] = clamp
+                span["endedAt"] = clamp
+            span_start = str(span.get("startTime") or end)
+            span_end = str(span.get("endTime") or end)
+            overlap = self._paused_overlap_ms(span_start, span_end) if span is not self._root else 0
+            span["duration"] = max(0, _millis(span_start, span_end) - overlap)
             span["durationMs"] = span["duration"]
             try:
                 span["relativeStartMs"] = _millis(root_start, str(span.get("startTime") or end))
@@ -1369,6 +1438,18 @@ class SimTraceProjector:
 
         root_start = str(self._root.get("startTime") or end)
         update(self._root, root_start)
+
+        # wallDurationMs is real wall-clock elapsed time (grows through a
+        # pause); activeDurationMs excludes accumulated/ongoing waiting-for-
+        # user time; durationMs stays active-time for backward compatibility
+        # rather than the multi-hour wall-clock figure it used to carry.
+        wall_ms = _millis(root_start, str(self._root.get("endTime") or end))
+        active_ms = max(0, wall_ms - waiting_ms)
+        self._root["wallDurationMs"] = wall_ms
+        self._root["waitingForUserMs"] = waiting_ms
+        self._root["activeDurationMs"] = active_ms
+        self._root["durationMs"] = active_ms
+        self._root["duration"] = active_ms
         return _json_safe(self.trace_spans)
 
 
