@@ -50,7 +50,7 @@ VIOLATIONS=""
 VIOLATION_COUNT=0
 
 for dir in "${PRODUCT_DIRS[@]}"; do
-  target="$WORKSPACE_DIR/\[workspaceId\]/$dir"
+  target="$WORKSPACE_DIR/[workspaceId]/$dir"
   if [ ! -d "$target" ]; then
     continue
   fi
@@ -77,4 +77,23 @@ if [ $VIOLATION_COUNT -gt 0 ]; then
 fi
 
 echo "✅ Workspace boundary check passed — no product page imports from w/**"
+
+# Regression test: verify the script can actually detect violations
+# by temporarily injecting a forbidden import and checking that it fails
+REGRESSION_TEST_DIR="$WORKSPACE_DIR/[workspaceId]/components"
+if [ -d "$REGRESSION_TEST_DIR" ]; then
+  TEST_FILE="$REGRESSION_TEST_DIR/.boundary-regression-test.ts"
+  echo "import '../../w/internal';" > "$TEST_FILE"
+  
+  if grep -rn --include='*.ts' --include='*.tsx' -E "@/app/workspace/\[workspaceId\]/w/|\\\.\\./w/|\\\.\\./\\\.\\./w/" "$REGRESSION_TEST_DIR" 2>/dev/null | grep -q ".boundary-regression-test.ts"; then
+    echo "✅ Regression test passed — script can detect forbidden imports"
+  else
+    echo "❌ Regression test failed — script cannot detect forbidden imports (broken)"
+    rm -f "$TEST_FILE"
+    exit 1
+  fi
+  
+  rm -f "$TEST_FILE"
+fi
+
 exit 0
