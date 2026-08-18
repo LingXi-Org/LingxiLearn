@@ -113,6 +113,65 @@ class InteractionAnswer(_WireModel):
         return self
 
 
+FOLLOWUP_ELIGIBLE_CAPABILITIES: frozenset[str] = frozenset(
+    {"teach.explain", "dialog.answer", "dialog.converse"}
+)
+"""Capabilities whose completion answers a question rather than asking one.
+
+Deliberately an allowlist, not a "conversational" flag: capabilities that are
+already mid-question this turn (``dialog.probe``, ``dialog.interview``) must
+never get a second, stacked follow-up card, and a positive list keeps that
+true by construction instead of needing an exclusion list kept in sync.
+"""
+
+_FOLLOWUP_REASON_CODE = "post_answer_followup"
+
+_FOLLOWUP_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("continue_deeper", "我理解了，继续深入"),
+    ("explain_again", "还是有点抽象，再解释一下"),
+    ("give_example", "给我一个具体例子"),
+    ("quiz_me", "出一道简单题检查我的理解"),
+)
+
+
+def build_followup_interaction(
+    *, capability: str, knowledge_point_id: str = "", topic: str = ""
+) -> InteractionSpec | None:
+    """Deterministic post-answer follow-up policy (issue #32).
+
+    Runs after a turn-completing explanation/answer so the conversation keeps
+    going through the same structured Interaction protocol instead of ending
+    in a silent ``WAITING_FOR_USER``.  No model call: the card is the same
+    four options regardless of subject, and the learner's choice becomes a
+    new intent/state signal for the Orchestrator on the next planning round —
+    it is never mapped straight to a fixed agent or skill here.
+    """
+
+    if capability not in FOLLOWUP_ELIGIBLE_CAPABILITIES:
+        return None
+    subject = topic or knowledge_point_id or "这部分内容"
+    prompt = f"关于「{subject}」，你想接下来怎么做？"
+    return InteractionSpec(
+        purpose="assessment",
+        presentation="options",
+        blocking=True,
+        title="理解确认",
+        prompt=prompt,
+        reason_code=_FOLLOWUP_REASON_CODE,
+        questions=[
+            InteractionQuestion(
+                id="followup",
+                type="single_select",
+                prompt=prompt,
+                options=[
+                    InteractionOption(id=option_id, label=label)
+                    for option_id, label in _FOLLOWUP_OPTIONS
+                ],
+            )
+        ],
+    )
+
+
 def opaque_interrupt_payload(interaction_id: str) -> dict[str, Any]:
     """The interrupt value: identity only, never checkpoint/graph state."""
 
@@ -150,11 +209,13 @@ def parse_answers(raw: Any) -> list[InteractionAnswer]:
 
 
 __all__ = [
+    "FOLLOWUP_ELIGIBLE_CAPABILITIES",
     "InteractionAnswer",
     "InteractionOption",
     "InteractionQuestion",
     "InteractionSpec",
     "InteractionStatus",
+    "build_followup_interaction",
     "is_interaction_interrupt",
     "opaque_interrupt_payload",
     "parse_answers",
