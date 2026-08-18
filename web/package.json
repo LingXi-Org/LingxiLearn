@@ -22,6 +22,7 @@
     "test:trajectory": "vitest run \"app/workspace/[workspaceId]/logs/components/trajectory/trajectory-utils.test.ts\"",
     "check": "bun run type-check && bun run lint:check",
     "check:auth-boundary": "bun run scripts/check-auth-boundary.ts",
+    "check:contracts": "bun run scripts/generate-rest-contracts.ts --check",
     "prepare": "node -e \"if (process.env.CI) process.exit(0)\""
   },
   "dependencies": {
