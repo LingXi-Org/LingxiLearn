@@ -2,15 +2,6 @@ name: Lingxi chat checks
 
 on:
   pull_request:
-    paths:
-      - 'web/**'
-      - 'server/lingxilearn/**'
-      - 'server/migrations/**'
-      - 'server/tests/**'
-      - 'contracts/fixtures/**'
-      - 'server/pyproject.toml'
-      - 'server/uv.lock'
-      - '.github/workflows/lingxi-chat.yml'
   push:
     branches: [main]
     paths:

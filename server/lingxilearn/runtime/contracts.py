@@ -24,6 +24,7 @@ DoneKind = Literal[
     "artifact_exists",
     "artifact_valid",
     "evidence_observed",
+    "provider_result",
     "profile_reaches",
     "user_replied",
     "quiz_graded",
@@ -76,6 +77,8 @@ class DoneCondition(BaseModel):
                 return f"{self.artifact} 通过校验"
             case "evidence_observed":
                 return f"观察到 {self.signal} 证据 ×{self.min_count}"
+            case "provider_result":
+                return "执行者已产生有效结果"
             case "profile_reaches":
                 return f"{self.knowledge_point_id} 掌握度达到 {self.mastery:.2f}"
             case "user_replied":
