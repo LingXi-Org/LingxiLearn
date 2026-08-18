@@ -26,11 +26,49 @@ export default defineConfig({
     testTimeout: 10000,
   },
   resolve: {
-    tsconfigPaths: true,
+    // `resolve.tsconfigPaths` is not a real Vitest option — the @sim/* scopes
+    // only resolve through these explicit aliases, which must mirror the paths
+    // block in tsconfig.json.
     alias: [
       {
         find: '@sim/testing',
-        replacement: path.resolve(__dirname, 'packages/testing/src/index.ts'),
+        replacement: path.resolve(__dirname, 'packages/testing/src'),
+      },
+      {
+        find: '@sim/audit',
+        replacement: path.resolve(__dirname, 'packages/audit/src'),
+      },
+      {
+        find: '@sim/auth',
+        replacement: path.resolve(__dirname, 'packages/auth/src'),
+      },
+      {
+        find: '@sim/browser-protocol',
+        replacement: path.resolve(__dirname, 'packages/browser-protocol/src'),
+      },
+      {
+        find: '@sim/platform-authz',
+        replacement: path.resolve(__dirname, 'packages/platform-authz/src'),
+      },
+      {
+        find: '@sim/realtime-protocol',
+        replacement: path.resolve(__dirname, 'packages/realtime-protocol/src'),
+      },
+      {
+        find: '@sim/runtime-secrets',
+        replacement: path.resolve(__dirname, 'packages/runtime-secrets/src'),
+      },
+      {
+        find: '@sim/terminal-protocol',
+        replacement: path.resolve(__dirname, 'packages/terminal-protocol/src'),
+      },
+      {
+        find: '@sim/workflow-persistence',
+        replacement: path.resolve(__dirname, 'packages/workflow-persistence/src'),
+      },
+      {
+        find: '@sim/workflow-renderer',
+        replacement: path.resolve(__dirname, 'packages/workflow-renderer/src'),
       },
       {
         find: '@sim/utils',
@@ -50,7 +88,7 @@ export default defineConfig({
       },
       {
         find: '@sim/desktop-bridge',
-        replacement: path.resolve(__dirname, 'packages/desktop-bridge/src/index.ts'),
+        replacement: path.resolve(__dirname, 'packages/desktop-bridge/src'),
       },
       {
         find: /^@sim\/workflow-types\/(.*)$/,

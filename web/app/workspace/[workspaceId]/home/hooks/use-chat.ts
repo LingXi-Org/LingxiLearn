@@ -24,7 +24,6 @@ import {
   removeMothershipChatResourceContract,
   reorderMothershipChatResourcesContract,
 } from '@/lib/api/contracts/mothership-chats'
-import { cancelWorkflowExecutionContract } from '@/lib/api/contracts/workflows'
 import { buildResourceAttachments } from '@/lib/browser-agent/attachments'
 import { onOpenInBrowserPanel } from '@/lib/browser-agent/open-in-panel'
 import {
@@ -75,17 +74,9 @@ import {
 } from '@/lib/copilot/resources/types'
 import { executeBrowserToolOnClient } from '@/lib/copilot/tools/client/browser-tool-execution'
 import { executeLocalFilesystemTool } from '@/lib/copilot/tools/client/local-filesystem'
-import {
-  bindRunToolToExecution,
-  cancelRunToolExecution,
-  executeRunToolOnClient,
-  markRunToolManuallyStopped,
-  reportManualRunToolStop,
-} from '@/lib/copilot/tools/client/run-tool-execution'
 import { executeTerminalToolOnClient } from '@/lib/copilot/tools/client/terminal-tool-execution'
 import { setCurrentChatTraceparent } from '@/lib/copilot/tools/client/trace-context'
 import { isUserLocalVfsToolCall } from '@/lib/copilot/tools/local-filesystem'
-import { isWorkflowToolName } from '@/lib/copilot/tools/workflow-tools'
 import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import { readSSELines } from '@/lib/core/utils/sse'
 import { getDesktopBridge, getDesktopChatCapabilities } from '@/lib/desktop'
@@ -130,17 +121,14 @@ import {
 import { getFolderMap } from '@/hooks/queries/utils/folder-cache'
 import { invalidateWorkflowSelectors } from '@/hooks/queries/utils/invalidate-workflow-lists'
 import { getTopInsertionSortOrder } from '@/hooks/queries/utils/top-insertion-sort-order'
-import { getWorkflowById, getWorkflows } from '@/hooks/queries/utils/workflow-cache'
+import { getWorkflows } from '@/hooks/queries/utils/workflow-cache'
 import { workflowKeys } from '@/hooks/queries/workflows'
-import { useExecutionStream } from '@/hooks/use-execution-stream'
-import { useExecutionStore } from '@/stores/execution/store'
 import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
 import type {
   QueuedMothershipMessage,
   QueuedSendHandoffSeed,
 } from '@/stores/mothership-queue/types'
 import type { ChatContext } from '@/stores/panel'
-import { useTerminalConsoleStore } from '@/stores/terminal'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import type { WorkflowMetadata } from '@/stores/workflows/registry/types'
 import type {
@@ -152,7 +140,6 @@ import type {
   MothershipResource,
   MothershipResourceType,
   QueuedMessage,
-  ToolCallInfo,
 } from '../types'
 import { useLingxiGraphChat } from './use-lingxi-graph-chat'
 
@@ -1113,7 +1100,7 @@ export function selectReconnectReplayState(params: {
   return { afterCursor: '0', preserveExistingState: false, source: 'reset' }
 }
 
-export function getReplayCompletedWorkflowToolCallIds(events: StreamBatchEvent[]): Set<string> {
+export function getReplayCompletedClientToolCallIds(events: StreamBatchEvent[]): Set<string> {
   const completedToolCallIds = new Set<string>()
   for (const entry of events) {
     const event = entry.event
@@ -1121,12 +1108,9 @@ export function getReplayCompletedWorkflowToolCallIds(events: StreamBatchEvent[]
     const payload = event.payload
     if (!('phase' in payload)) continue
     if (payload.phase !== MothershipStreamV1ToolPhase.result) continue
-    // Client-executed tools (workflow runs, browser actions) must never
-    // re-fire when their completed call replays after reconnect/reload.
-    if (
-      typeof payload.toolCallId === 'string' &&
-      (isWorkflowToolName(payload.toolName) || isBrowserToolName(payload.toolName))
-    ) {
+    // Client-executed tools (browser actions) must never re-fire when their
+    // completed call replays after reconnect/reload.
+    if (typeof payload.toolCallId === 'string' && isBrowserToolName(payload.toolName)) {
       completedToolCallIds.add(payload.toolCallId)
     }
   }
@@ -1136,10 +1120,10 @@ export function getReplayCompletedWorkflowToolCallIds(events: StreamBatchEvent[]
 /**
  * Which live panel the transcript is mid-action on, or null for neither.
  *
- * Used on reconnect to restore that panel, the way workflow-run recovery
- * restores workflows. A completed browser or terminal call is suppressed on
- * replay, so it never re-opens its own panel — without this, returning to a
- * chat mid-turn lands on whichever resource happened to be persisted last
+ * Used on reconnect to restore that panel. A completed browser or terminal
+ * call is suppressed on replay, so it never re-opens its own panel — without
+ * this, returning to a chat mid-turn lands on whichever resource happened to
+ * be persisted last
  * while the agent is driving a different one. When calls against both are in
  * flight the later one wins, being the one the user was watching.
  */
@@ -1451,7 +1435,7 @@ function useSimChat(
         preserveExistingState?: boolean
         resumeCursor?: string
         deferFlushes?: boolean
-        suppressedWorkflowToolStartIds?: ReadonlySet<string>
+        suppressedClientToolStartIds?: ReadonlySet<string>
         targetChatId?: string
         shouldContinue?: () => boolean
       }
@@ -1511,10 +1495,7 @@ function useSimChat(
   const resourceActivityTrackerRef = useRef<ResourceActivityTracker | null>(null)
   const streamingContentRef = useRef('')
   const streamingBlocksRef = useRef<ContentBlock[]>([])
-  const handledClientWorkflowToolIdsRef = useRef<Set<string>>(new Set())
   const handledClientLocalFilesystemToolIdsRef = useRef<Set<string>>(new Set())
-  const recoveringClientWorkflowToolIdsRef = useRef<Set<string>>(new Set())
-  const executionStream = useExecutionStream()
   const isHomePage = pathname.endsWith('/home')
 
   const setTransportIdle = useCallback(() => {
@@ -1898,49 +1879,6 @@ function useSimChat(
     })
   }, [])
 
-  const ensureWorkflowToolResource = useCallback(
-    (toolArgs: Record<string, unknown>): string | undefined => {
-      const targetWorkflowId =
-        typeof toolArgs.workflowId === 'string'
-          ? toolArgs.workflowId
-          : useWorkflowRegistry.getState().activeWorkflowId
-
-      if (!targetWorkflowId) {
-        return undefined
-      }
-
-      const meta = getWorkflowById(workspaceId, targetWorkflowId)
-      addResource({
-        type: 'workflow',
-        id: targetWorkflowId,
-        title: meta?.name ?? 'Workflow',
-      })
-      onResourceEventRef.current?.(targetWorkflowId)
-
-      return targetWorkflowId
-    },
-    [addResource, workspaceId]
-  )
-
-  const startClientWorkflowTool = useCallback(
-    (toolCallId: string, toolName: string, toolArgs: Record<string, unknown>) => {
-      if (!isWorkflowToolName(toolName)) {
-        return
-      }
-      if (handledClientWorkflowToolIdsRef.current.has(toolCallId)) {
-        return
-      }
-      if (recoveringClientWorkflowToolIdsRef.current.has(toolCallId)) {
-        return
-      }
-      handledClientWorkflowToolIdsRef.current.add(toolCallId)
-
-      ensureWorkflowToolResource(toolArgs)
-      executeRunToolOnClient(toolCallId, toolName, toolArgs)
-    },
-    [ensureWorkflowToolResource]
-  )
-
   const startClientLocalFilesystemTool = useCallback(
     (toolCallId: string, toolName: string, toolArgs: Record<string, unknown>) => {
       if (!isUserLocalVfsToolCall(toolName, toolArgs)) {
@@ -2086,49 +2024,6 @@ function useSimChat(
       sendBrowserPanelAction('navigate', { url }, desktopScopeIdRef.current)
     })
   }, [openBrowserResource])
-
-  const recoverPendingClientWorkflowTools = useCallback(
-    async (nextMessages: ChatMessage[]) => {
-      const pending: ToolCallInfo[] = []
-
-      for (const message of nextMessages) {
-        for (const block of message.contentBlocks ?? []) {
-          const toolCall = block.toolCall
-          if (!toolCall || !isWorkflowToolName(toolCall.name)) continue
-          if (toolCall.status !== 'executing') continue
-          if (
-            handledClientWorkflowToolIdsRef.current.has(toolCall.id) ||
-            recoveringClientWorkflowToolIdsRef.current.has(toolCall.id)
-          ) {
-            continue
-          }
-          recoveringClientWorkflowToolIdsRef.current.add(toolCall.id)
-          pending.push(toolCall)
-        }
-      }
-
-      for (const toolCall of pending) {
-        try {
-          const toolArgs = toolCall.params ?? {}
-          const targetWorkflowId = ensureWorkflowToolResource(toolArgs)
-
-          if (targetWorkflowId) {
-            const rebound = await bindRunToolToExecution(toolCall.id, targetWorkflowId)
-            if (rebound) {
-              handledClientWorkflowToolIdsRef.current.add(toolCall.id)
-              continue
-            }
-          }
-
-          recoveringClientWorkflowToolIdsRef.current.delete(toolCall.id)
-          startClientWorkflowTool(toolCall.id, toolCall.name, toolArgs)
-        } finally {
-          recoveringClientWorkflowToolIdsRef.current.delete(toolCall.id)
-        }
-      }
-    },
-    [ensureWorkflowToolResource, startClientWorkflowTool]
-  )
 
   useEffect(() => {
     const previousDesktopScopeId = desktopScopeIdRef.current
@@ -2322,8 +2217,6 @@ function useSimChat(
       locallyTerminalStreamIdRef.current = undefined
     }
 
-    void recoverPendingClientWorkflowTools(mappedMessages)
-
     const hasPersistedStreamingFile = chatHistory.resources.some((r) => r.id === 'streaming-file')
     if (hasPersistedStreamingFile) {
       requestJson(removeMothershipChatResourceContract, {
@@ -2478,7 +2371,6 @@ function useSimChat(
     flushPendingResources,
     openBrowserResource,
     openTerminalResource,
-    recoverPendingClientWorkflowTools,
     seedPreviewSessions,
     setTransportIdle,
     setTransportReconnecting,
@@ -2493,7 +2385,7 @@ function useSimChat(
         preserveExistingState?: boolean
         resumeCursor?: string
         deferFlushes?: boolean
-        suppressedWorkflowToolStartIds?: ReadonlySet<string>
+        suppressedClientToolStartIds?: ReadonlySet<string>
         targetChatId?: string
         shouldContinue?: () => boolean
       }
@@ -2547,7 +2439,6 @@ function useSimChat(
         setActiveResourceId,
         addResource,
         removeResource,
-        startClientWorkflowTool,
         startClientLocalFilesystemTool,
         startClientBrowserTool: startClientBrowserToolForStream,
         startClientTerminalTool: startClientTerminalToolForStream,
@@ -2672,7 +2563,6 @@ function useSimChat(
       queryClient,
       addResource,
       removeResource,
-      startClientWorkflowTool,
       startClientLocalFilesystemTool,
       startClientBrowserTool,
       startClientTerminalTool,
@@ -2872,7 +2762,7 @@ function useSimChat(
       let preserveNextReplayState = initialReplaySelection.preserveExistingState
       let seedEvents = opts.initialBatch?.events ?? []
       let streamStatus = opts.initialBatch?.status ?? 'unknown'
-      let suppressedSeedWorkflowToolStartIds = getReplayCompletedWorkflowToolCallIds(seedEvents)
+      let suppressedSeedClientToolStartIds = getReplayCompletedClientToolCallIds(seedEvents)
 
       setTransportReconnecting()
       setError(null)
@@ -2888,7 +2778,7 @@ function useSimChat(
                 preserveExistingState: preserveNextReplayState,
                 resumeCursor: latestCursor,
                 deferFlushes: true,
-                suppressedWorkflowToolStartIds: suppressedSeedWorkflowToolStartIds,
+                suppressedClientToolStartIds: suppressedSeedClientToolStartIds,
                 ...(targetChatId ? { targetChatId } : {}),
                 ...(shouldContinue ? { shouldContinue } : {}),
               }
@@ -2900,7 +2790,7 @@ function useSimChat(
             lastCursorRef.current = latestCursor
             seedEvents = []
             preserveNextReplayState = true
-            suppressedSeedWorkflowToolStartIds = new Set()
+            suppressedSeedClientToolStartIds = new Set()
 
             if (replayResult.sawStreamError) {
               return { error: true, aborted: false }
@@ -2985,7 +2875,7 @@ function useSimChat(
           seedStreamBatchPreviewSessions(batch)
           seedEvents = batch.events
           streamStatus = batch.status
-          suppressedSeedWorkflowToolStartIds = getReplayCompletedWorkflowToolCallIds(seedEvents)
+          suppressedSeedClientToolStartIds = getReplayCompletedClientToolCallIds(seedEvents)
 
           // `latestCursor` stays at the pre-batch position so the seed replay
           // at the top of the loop folds the batch events into the model; the
@@ -3053,7 +2943,7 @@ function useSimChat(
               preserveExistingState: replaySelection.preserveExistingState,
               resumeCursor: replaySelection.afterCursor,
               deferFlushes: true,
-              suppressedWorkflowToolStartIds: getReplayCompletedWorkflowToolCallIds(batch.events),
+              suppressedClientToolStartIds: getReplayCompletedClientToolCallIds(batch.events),
               ...(targetChatId ? { targetChatId } : {}),
               ...(shouldContinue ? { shouldContinue } : {}),
             }
@@ -4423,51 +4313,6 @@ function useSimChat(
       clearQueuedSendHandoffClaim(handoff.id, claimOwnerId)
     })
   }, [workspaceId, chatHistory, queuedHandoffRecoveryEpoch, startSendMessage])
-  const cancelActiveWorkflowExecutions = useCallback(() => {
-    const execState = useExecutionStore.getState()
-    const consoleStore = useTerminalConsoleStore.getState()
-
-    for (const [workflowId, wfExec] of execState.workflowExecutions) {
-      if (!wfExec.isExecuting) continue
-
-      const toolCallId = markRunToolManuallyStopped(workflowId)
-      cancelRunToolExecution(workflowId)
-
-      const executionId = execState.getCurrentExecutionId(workflowId)
-      if (executionId) {
-        execState.setCurrentExecutionId(workflowId, null)
-        requestJson(cancelWorkflowExecutionContract, {
-          params: { id: workflowId, executionId },
-        }).catch(() => {})
-      }
-
-      consoleStore.cancelRunningEntries(workflowId, executionId ?? undefined)
-      const now = new Date()
-      consoleStore.addConsole({
-        input: {},
-        output: {},
-        success: false,
-        error: 'Run was cancelled',
-        durationMs: 0,
-        startedAt: now.toISOString(),
-        executionOrder: Number.MAX_SAFE_INTEGER,
-        endedAt: now.toISOString(),
-        workflowId,
-        blockId: 'cancelled',
-        executionId: executionId ?? undefined,
-        blockName: 'Run Cancelled',
-        blockType: 'cancelled',
-      })
-
-      executionStream.cancel(workflowId)
-      execState.setIsExecuting(workflowId, false)
-      execState.setIsDebugging(workflowId, false)
-      execState.setActiveBlocks(workflowId, new Set())
-
-      reportManualRunToolStop(workflowId, toolCallId).catch(() => {})
-    }
-  }, [executionStream])
-
   const stopGeneration = useCallback(
     async (options?: StopGenerationOptions) => {
       const mode = options?.mode ?? 'normal'
@@ -4599,10 +4444,6 @@ function useSimChat(
         rejectStopOperation(err)
         throw err
       }
-
-      // Cancel active run-tool executions before waiting for the server-side stream
-      // shutdown barrier; otherwise the abort settle can sit behind tool execution teardown.
-      cancelActiveWorkflowExecutions()
 
       let abortSucceeded = false
       const stopBarrier = (async () => {
@@ -4741,7 +4582,6 @@ function useSimChat(
       }
     },
     [
-      cancelActiveWorkflowExecutions,
       cancelActiveBrowserTools,
       invalidateChatQueries,
       notifyTurnEnded,

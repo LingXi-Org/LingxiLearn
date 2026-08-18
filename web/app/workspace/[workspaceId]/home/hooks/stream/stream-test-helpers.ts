@@ -39,7 +39,6 @@ export function makeStreamLoopDeps(overrides: Partial<StreamLoopDeps> = {}): Str
     setActiveResourceId: vi.fn(),
     addResource: vi.fn(() => true),
     removeResource: vi.fn(),
-    startClientWorkflowTool: vi.fn(),
     startClientLocalFilesystemTool: vi.fn(),
     startClientBrowserTool: vi.fn(),
     startClientTerminalTool: vi.fn(),

@@ -9,7 +9,7 @@ import {
 } from '@/lib/copilot/generated/mothership-stream-v1'
 import type { StreamBatchEvent } from '@/lib/copilot/request/session/types'
 import {
-  getReplayCompletedWorkflowToolCallIds,
+  getReplayCompletedClientToolCallIds,
   panelForExecutingClientTool,
   reconcileLiveAssistantTurn,
   selectReconnectReplayState,
@@ -242,15 +242,15 @@ describe('selectReconnectReplayState', () => {
   })
 })
 
-describe('getReplayCompletedWorkflowToolCallIds', () => {
-  it('suppresses only workflow tool starts that already have results in the replay batch', () => {
-    const result = getReplayCompletedWorkflowToolCallIds([
-      toolBatchEvent(1, 'workflow-active', 'run_workflow', MothershipStreamV1ToolPhase.call),
+describe('getReplayCompletedClientToolCallIds', () => {
+  it('suppresses only client tool starts that already have results in the replay batch', () => {
+    const result = getReplayCompletedClientToolCallIds([
+      toolBatchEvent(1, 'browser-active', 'browser_navigate', MothershipStreamV1ToolPhase.call),
       toolBatchEvent(2, 'search-complete', 'tool_search', MothershipStreamV1ToolPhase.result),
-      toolBatchEvent(3, 'workflow-complete', 'run_workflow', MothershipStreamV1ToolPhase.result),
+      toolBatchEvent(3, 'browser-complete', 'browser_navigate', MothershipStreamV1ToolPhase.result),
     ])
 
-    expect(result).toEqual(new Set(['workflow-complete']))
+    expect(result).toEqual(new Set(['browser-complete']))
   })
 })
 
@@ -286,7 +286,7 @@ describe('panelForExecutingClientTool', () => {
     const messages = [
       toolCallMessage('m1', 'browser_click', 'success'),
       toolCallMessage('m2', 'terminal', 'success'),
-      toolCallMessage('m3', 'run_workflow', 'executing'),
+      toolCallMessage('m3', 'tool_search', 'executing'),
       { id: 'm4', role: 'assistant' as const, content: 'no blocks' },
     ]
 
