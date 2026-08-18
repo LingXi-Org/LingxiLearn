@@ -1,4 +1,12 @@
-import type { WorkflowFolder } from '@/stores/folders/types'
+/**
+ * The minimal folder shape this dedupe needs — a parent link and a display name. Structural
+ * on purpose: workflow folders and workspace file folders share this code path instead of
+ * forking it.
+ */
+export interface FolderNameSource {
+  parentId?: string | null
+  name: string
+}
 
 const DEFAULT_FOLDER_NAME = 'New folder'
 
@@ -13,7 +21,10 @@ const DEFAULT_FOLDER_NAME = 'New folder'
  * server so a deduped name reads the same however it was produced. A concurrent create can
  * still win the race; the caller must handle the 409 that follows.
  */
-export function nextUntitledFolderName(folders: WorkflowFolder[], parentId: string | null): string {
+export function nextUntitledFolderName(
+  folders: readonly FolderNameSource[],
+  parentId: string | null
+): string {
   const siblingNames = new Set(
     folders.filter((folder) => (folder.parentId ?? null) === parentId).map((folder) => folder.name)
   )

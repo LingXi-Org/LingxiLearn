@@ -7,7 +7,18 @@ import {
   DropdownMenuSubTrigger,
 } from '@sim/emcn'
 import { Folder } from '@sim/emcn/icons'
-import type { WorkflowFolder } from '@/stores/folders/types'
+
+/**
+ * The minimal folder shape these builders need — an id, a parent link, a display name, and an
+ * ordering. Structural on purpose: workflow folders and workspace file folders share this code
+ * path instead of forking it.
+ */
+export interface MoveOptionFolder {
+  id: string
+  parentId: string | null
+  name: string
+  sortOrder: number
+}
 
 export interface MoveOptionNode {
   value: string
@@ -27,7 +38,7 @@ export function parseMoveOptionValue(optionValue: string): string | null {
 }
 
 export interface BuildMoveOptionsParams {
-  folders: WorkflowFolder[]
+  folders: MoveOptionFolder[]
   rootLabel: string
   /**
    * Folder ids that must not appear as destinations — the folder being moved and every
@@ -53,7 +64,7 @@ export function buildMoveOptions({
   rootLabel,
   excludedFolderIds,
 }: BuildMoveOptionsParams): MoveOptionNode[] {
-  const childrenByParent = new Map<string | null, WorkflowFolder[]>()
+  const childrenByParent = new Map<string | null, MoveOptionFolder[]>()
   for (const folder of folders) {
     if (excludedFolderIds?.has(folder.id)) continue
     const parentId = folder.parentId ?? null
@@ -80,7 +91,7 @@ export function buildMoveOptions({
  * candidate instead of re-walking the tree. `seen` terminates a cycle, which the DB permits
  * between constraint checks.
  */
-export function buildDescendantIndex(folders: WorkflowFolder[]): Map<string, Set<string>> {
+export function buildDescendantIndex(folders: MoveOptionFolder[]): Map<string, Set<string>> {
   const childrenByParent = new Map<string, string[]>()
   for (const folder of folders) {
     if (!folder.parentId) continue

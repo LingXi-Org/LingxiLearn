@@ -1,6 +1,7 @@
 export type { BreadcrumbFolder, FolderBreadcrumbItemsOptions } from './folder-breadcrumbs'
 export { breadcrumbFolderChain, folderBreadcrumbItems } from './folder-breadcrumbs'
 export { FolderContextMenu } from './folder-context-menu'
+export type { FolderNameSource } from './folder-naming'
 export { nextUntitledFolderName } from './folder-naming'
 export type { FolderRowOptions } from './folder-row'
 export { folderRow } from './folder-row'
@@ -11,7 +12,7 @@ export type {
   FolderedResourceHeaderMeta,
 } from './foldered-resources'
 export { FOLDERED_RESOURCE_HEADERS, folderedResourceListHref } from './foldered-resources'
-export type { BuildMoveOptionsParams, MoveOptionNode } from './move-options'
+export type { BuildMoveOptionsParams, MoveOptionFolder, MoveOptionNode } from './move-options'
 export {
   buildDescendantIndex,
   buildMoveOptions,
