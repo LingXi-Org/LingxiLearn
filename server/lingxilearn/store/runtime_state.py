@@ -1,11 +1,11 @@
 """Data access for the four state tables.
 
-Kept out of :mod:`lingxilearn.store.db` deliberately: that module is already the
-largest in the package, and the state layer has one rule the rest of the
-repository does not — evidence is append-only and the profile has exactly one
-writer.  Holding those two invariants in one small module makes them auditable.
+Kept out of the domain repositories deliberately: the state layer has one rule
+the rest of the package does not — evidence is append-only and the profile has
+exactly one writer.  Holding those two invariants in one small module makes
+them auditable.
 
-Same transaction discipline as :class:`~lingxilearn.store.db.Repository`: every
+Same transaction discipline as the domain repositories: every
 method opens and closes its own short session, and none is held across a graph
 run.
 """
@@ -32,7 +32,7 @@ from ..state.session_state import (
     transition,
 )
 from ..state.skill_catalog import SkillManifest
-from .db import Database
+from .database import Database
 from .models.agent import ProjectionCursor
 from .models.learning import (
     DecisionTrace,

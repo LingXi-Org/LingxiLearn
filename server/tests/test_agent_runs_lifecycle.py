@@ -209,7 +209,7 @@ def _deps(repo: FakeRepo | None, *, runtime: Any = None) -> DispatchDeps:
         task_id="task_1",
         goal=Goal(goal_type="learn", topic="量子叠加"),
         skills=SKILLS,
-        repository=repo,
+        runtime_repository=repo,
         graph_runtime=runtime,
         emit=None,
         execution_id="exec_1",

@@ -9,11 +9,13 @@ import pytest
 @pytest.mark.asyncio
 async def test_command_inbox_is_idempotent_and_work_claim_is_single_owner(state_db) -> None:
     database, _, learner_id = state_db
-    from lingxilearn.store.db import Repository
+    from lingxilearn.store.repositories.agent_tasks import AgentTaskRepository
+    from lingxilearn.store.repositories.work_ledger import WorkLedgerRepository
 
-    repo = Repository(database)
+    agent_task_repository = AgentTaskRepository(database)
+    work_ledger = WorkLedgerRepository(database)
     task_id = f"v2-task-{uuid4().hex}"
-    await repo.create_agent_task(
+    await agent_task_repository.create_agent_task(
         id=task_id,
         learner_id=learner_id,
         prompt="测试持久化编排",
@@ -21,13 +23,13 @@ async def test_command_inbox_is_idempotent_and_work_claim_is_single_owner(state_
         status="awaiting_user",
     )
 
-    first = await repo.append_command(
+    first = await work_ledger.append_command(
         task_id=task_id,
         kind="message",
         payload={"message": "继续"},
         idempotency_key="message-1",
     )
-    retry = await repo.append_command(
+    retry = await work_ledger.append_command(
         task_id=task_id,
         kind="message",
         payload={"message": "继续"},
@@ -35,11 +37,11 @@ async def test_command_inbox_is_idempotent_and_work_claim_is_single_owner(state_
     )
     assert first["created"] is True
     assert retry["created"] is False
-    assert len(await repo.pending_commands(task_id)) == 1
+    assert len(await work_ledger.pending_commands(task_id)) == 1
 
-    turn = await repo.latest_turn(task_id)
+    turn = await work_ledger.latest_turn(task_id)
     assert turn is not None
-    plan = await repo.create_work_plan(
+    plan = await work_ledger.create_work_plan(
         task_id=task_id,
         turn_id=str(turn["id"]),
         expected_revision=0,
@@ -65,43 +67,45 @@ async def test_command_inbox_is_idempotent_and_work_claim_is_single_owner(state_
     assert plan.get("budget_exceeded") is not True
 
     claims = await asyncio.gather(
-        repo.claim_work_item(work_id="work-v2-1", owner="worker-a"),
-        repo.claim_work_item(work_id="work-v2-1", owner="worker-b"),
+        work_ledger.claim_work_item(work_id="work-v2-1", owner="worker-a"),
+        work_ledger.claim_work_item(work_id="work-v2-1", owner="worker-b"),
     )
     assert sum(claim is not None for claim in claims) == 1
     owner = next(claim["lease_owner"] for claim in claims if claim is not None)
-    assert await repo.finish_work(
+    assert await work_ledger.finish_work(
         work_id="work-v2-1",
         owner=str(owner),
         status="succeeded",
         result={"schema_id": "answer.v1", "safe_summary": "完成", "usage": {"tokens": 7}},
     )
-    assert (await repo.get_work(task_id=task_id, work_id="work-v2-1"))["status"] == "succeeded"
+    assert (await work_ledger.get_work(task_id=task_id, work_id="work-v2-1"))["status"] == "succeeded"
 
 
 @pytest.mark.asyncio
 async def test_confirmation_requires_exact_digest_and_reject_releases_work(state_db) -> None:
     database, _, learner_id = state_db
-    from lingxilearn.store.db import Repository
+    from lingxilearn.store.repositories.agent_tasks import AgentTaskRepository
+    from lingxilearn.store.repositories.work_ledger import WorkLedgerRepository
 
-    repo = Repository(database)
+    agent_task_repository = AgentTaskRepository(database)
+    work_ledger = WorkLedgerRepository(database)
     task_id = f"confirm-task-{uuid4().hex}"
-    await repo.create_agent_task(
+    await agent_task_repository.create_agent_task(
         id=task_id,
         learner_id=learner_id,
         prompt="测试确认",
         graph_version="test@v2",
         status="awaiting_user",
     )
-    await repo.append_command(
+    await work_ledger.append_command(
         task_id=task_id,
         kind="message",
         payload={"message": "执行"},
         idempotency_key="confirm-message",
     )
-    turn = await repo.latest_turn(task_id)
+    turn = await work_ledger.latest_turn(task_id)
     assert turn is not None
-    plan = await repo.create_work_plan(
+    plan = await work_ledger.create_work_plan(
         task_id=task_id,
         turn_id=str(turn["id"]),
         expected_revision=0,
@@ -118,34 +122,36 @@ async def test_confirmation_requires_exact_digest_and_reject_releases_work(state
         ],
     )
     assert plan is not None
-    assert await repo.confirm_work(work_id="confirm-work", payload_digest="wrong", approve=True) is False
-    assert await repo.confirm_work(work_id="confirm-work", payload_digest="digest-1", approve=False) is False
-    assert (await repo.get_work(task_id=task_id, work_id="confirm-work"))["status"] == "cancelled"
+    assert await work_ledger.confirm_work(work_id="confirm-work", payload_digest="wrong", approve=True) is False
+    assert await work_ledger.confirm_work(work_id="confirm-work", payload_digest="digest-1", approve=False) is False
+    assert (await work_ledger.get_work(task_id=task_id, work_id="confirm-work"))["status"] == "cancelled"
 
 
 @pytest.mark.asyncio
 async def test_create_work_plan_flushes_items_before_dependencies(state_db) -> None:
     database, _, learner_id = state_db
-    from lingxilearn.store.db import Repository
+    from lingxilearn.store.repositories.agent_tasks import AgentTaskRepository
+    from lingxilearn.store.repositories.work_ledger import WorkLedgerRepository
 
-    repo = Repository(database)
+    agent_task_repository = AgentTaskRepository(database)
+    work_ledger = WorkLedgerRepository(database)
     task_id = f"dependency-task-{uuid4().hex}"
-    await repo.create_agent_task(
+    await agent_task_repository.create_agent_task(
         id=task_id,
         learner_id=learner_id,
         prompt="测试依赖持久化顺序",
         graph_version="test@v2",
         status="awaiting_user",
     )
-    await repo.append_command(
+    await work_ledger.append_command(
         task_id=task_id,
         kind="message",
         payload={"message": "执行"},
         idempotency_key="dependency-message",
     )
-    turn = await repo.latest_turn(task_id)
+    turn = await work_ledger.latest_turn(task_id)
     assert turn is not None
-    plan = await repo.create_work_plan(
+    plan = await work_ledger.create_work_plan(
         task_id=task_id,
         turn_id=str(turn["id"]),
         expected_revision=0,

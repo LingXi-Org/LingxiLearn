@@ -1990,7 +1990,7 @@ async def record_learning_event(
     if not task_id or sequence <= 0:
         raise HTTPException(status_code=422, detail="taskId_and_event_sequence_required")
     kind = str(event.get("kind") or "")
-    projection = await service_of(request).repo.project_runtime_event(
+    projection = await service_of(request).session_repository.project_runtime_event(
         learner_id=context.learner_id,
         record_key=f"task:{task_id}:{sequence}",
         task_id=task_id,

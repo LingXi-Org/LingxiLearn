@@ -20,13 +20,15 @@ from lingxilearn.config import Settings, get_settings
 from lingxilearn.learner import LearnerService
 from lingxilearn.main import create_app
 from lingxilearn.service import Service
-from lingxilearn.store.db import Database, Repository
+from lingxilearn.store.database import Database
 from lingxilearn.store.learner import LearnerRepository
 from lingxilearn.store.models.learning import (
     LearningEvent,
     LearningEvidence,
     Misconception,
 )
+from lingxilearn.store.repositories.agent_tasks import AgentTaskRepository
+from lingxilearn.store.repositories.sessions import SessionRepository
 
 
 @pytest_asyncio.fixture
@@ -74,7 +76,7 @@ async def test_learning_writes_merge_and_are_idempotent(learner_store) -> None:
     context = await service.get_learner_context(
         Principal(subject="user-1", issuer="https://issuer.example")
     )
-    legacy = Repository(db)
+    legacy = SessionRepository(db)
     await legacy.create_session(
         id="s-idempotent",
         learner_id=context.learner_id,
@@ -341,8 +343,10 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     second = await service.learners.get_learner_context(
         Principal(subject="subject-b", issuer=identity_issuer)
     )
-    legacy = Repository(service.db)
-    await legacy.create_session(
+    session_repository = SessionRepository(service.db)
+    learner_repository = LearnerRepository(service.db)
+    agent_task_repository = AgentTaskRepository(service.db)
+    await session_repository.create_session(
         id="s-owned",
         learner_id=first.learner_id,
         pack_id="pack",
@@ -351,16 +355,16 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         checkpoint_ns="",
         status="done",
     )
-    await legacy.append_events("s-owned", [{"kind": "run.ended", "payload": {}}])
-    await legacy.save_mastery(first.learner_id, {"concept-a": 0.9})
-    await legacy.save_mastery(second.learner_id, {"concept-b": 0.4})
-    await legacy.save_report(
+    await session_repository.append_events("s-owned", [{"kind": "run.ended", "payload": {}}])
+    await learner_repository.save_mastery(first.learner_id, {"concept-a": 0.9})
+    await learner_repository.save_mastery(second.learner_id, {"concept-b": 0.4})
+    await session_repository.save_report(
         session_id="s-owned",
         learner_id=first.learner_id,
         mission_id="mission",
         report={"headline": "owned"},
     )
-    await legacy.create_agent_task(
+    await agent_task_repository.create_agent_task(
         id="t-owned",
         learner_id=first.learner_id,
         prompt="prompt",
@@ -369,7 +373,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         lecture_result={"selected_hook": {"title": "Hook"}},
         visual_result={},
     )
-    await legacy.append_agent_events("t-owned", [{"kind": "task.completed", "payload": {}}])
+    await agent_task_repository.append_agent_events("t-owned", [{"kind": "task.completed", "payload": {}}])
 
     async def fake_snapshot(session_id: str, learner_id: str | None = None) -> dict[str, str]:
         return {"id": session_id, "owner": learner_id or ""}
@@ -507,7 +511,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
                 snapshot = (await client.get(f"/api/sessions/{session_id}")).json()
             assert snapshot["status"] == "done"
 
-        record = await service.repo.get_session(session_id)
+        record = await service.session_repository.get_session(session_id)
         assert record is not None
         async with service.db.session() as session:
             before = {

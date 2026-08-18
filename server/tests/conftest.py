@@ -28,7 +28,8 @@ async def state_db() -> AsyncIterator[tuple[object, object, str]]:
     """
 
     from lingxilearn.config import Settings
-    from lingxilearn.store.db import Database, Repository
+    from lingxilearn.store.database import Database
+    from lingxilearn.store.learner import LearnerRepository
     from lingxilearn.store.runtime_state import RuntimeStateRepository
 
     suffix = uuid4().hex
@@ -40,7 +41,7 @@ async def state_db() -> AsyncIterator[tuple[object, object, str]]:
     database = Database(settings)
     await database.create_all()
     learner_id = f"learner-{suffix}"
-    await Repository(database).ensure_learner(learner_id)
+    await LearnerRepository(database).ensure_learner(learner_id)
     try:
         yield database, RuntimeStateRepository(database), learner_id
     finally:

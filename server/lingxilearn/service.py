@@ -62,11 +62,11 @@ from .config import REPO_ROOT, Settings, get_settings
 from .learner import LearnerService
 from .packs.loader import discover_packs, validate_pack
 from .packs.models import Pack
+from .runtime.interactions import parse_answers
 from .runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
 from .runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from .runtime.loop import LoopDeps, build_loop
 from .runtime.loop import initial_state as initial_loop_state
-from .runtime.interactions import parse_answers
 from .runtime.public_projection import PublicProjector
 from .runtime.schedules import next_schedule_time, validate_schedule
 from .runtime.sim_semantics import (
@@ -78,12 +78,16 @@ from .runtime.sim_semantics import (
 from .runtime.trajectory import build_trajectory_projection
 from .state.session_state import Goal, GoalKind, RuntimeStatus, new_budget
 from .state.skill_catalog import discover as discover_skill_manifests
-from .store.db import Database, Repository
+from .store.database import Database
 from .store.learner import LearnerRepository
 from .store.models.workspace import (
     Workspace,
     WorkspaceFile,
 )
+from .store.repositories.agent_tasks import AgentTaskRepository
+from .store.repositories.runtime import RuntimeRepository
+from .store.repositories.sessions import SessionRepository
+from .store.repositories.work_ledger import WorkLedgerRepository
 from .store.runtime_state import RuntimeStateRepository
 from .stream.projector import EventProjector
 from .tools import knowledge
@@ -494,7 +498,10 @@ class Service:
         self.registry: ToolRegistry = load_builtin_tools()
         self.packs: dict[str, Pack] = {}
         self.db = Database(self.settings)
-        self.repo = Repository(self.db)
+        self.agent_task_repository = AgentTaskRepository(self.db)
+        self.runtime_repository = RuntimeRepository(self.db)
+        self.work_ledger = WorkLedgerRepository(self.db)
+        self.session_repository = SessionRepository(self.db)
         self.learner_repository = LearnerRepository(self.db)
         self.runtime_state = RuntimeStateRepository(self.db)
         self.learner_service = LearnerService(self.learner_repository, self.settings)
@@ -599,11 +606,11 @@ class Service:
             }
         self.checkpointer = build_checkpointer(self.settings)
         # V2 work is recovered from the Work Ledger.
-        await self.repo.recover_expired_work()
+        await self.work_ledger.recover_expired_work()
         # Agent tasks are accepted before their graph starts.  Recover tasks
         # left in that durable queue when the API process is restarted; the
         # atomic claim in _run_agent_task makes this safe across replicas.
-        for task in await self.repo.queued_agent_tasks():
+        for task in await self.agent_task_repository.queued_agent_tasks():
             self._spawn(self._drive_agent_task(task["id"], task["learner_id"], task["prompt"]))
         # An interaction answer commits its continuation command before the
         # resume runs.  A command still unconsumed means the resume never
@@ -663,7 +670,8 @@ class Service:
         return build_loop(
             LoopDeps(
                 runtime_state=self.runtime_state,
-                repository=self.repo,
+                work_ledger=self.work_ledger,
+                runtime_repository=self.runtime_repository,
                 learner_id=learner_id,
                 task_id=task_id,
                 model=self.agent_model,
@@ -709,8 +717,8 @@ class Service:
         if mission_id not in pack.missions:
             raise KeyError(f"unknown mission: {mission_id}")
 
-        await self.repo.ensure_learner(learner_id)
-        await self.repo.create_session(
+        await self.learner_repository.ensure_learner(learner_id)
+        await self.session_repository.create_session(
             id=session_id,
             learner_id=learner_id,
             pack_id=pack.id,
@@ -776,9 +784,9 @@ class Service:
             attachments=attachment_refs,
             resources=resources or [],
         )
-        await self.repo.ensure_learner(learner_id)
+        await self.learner_repository.ensure_learner(learner_id)
         if idempotency_key:
-            existing = await self.repo.get_agent_task_by_create_idempotency_key(
+            existing = await self.agent_task_repository.get_agent_task_by_create_idempotency_key(
                 learner_id, idempotency_key
             )
             if existing is not None:
@@ -787,7 +795,7 @@ class Service:
                 return _agent_task_create_result(existing)
 
         try:
-            await self.repo.create_agent_task(
+            await self.agent_task_repository.create_agent_task(
                 id=task_id,
                 learner_id=learner_id,
                 create_idempotency_key=idempotency_key,
@@ -811,7 +819,7 @@ class Service:
             # the committed task instead of spawning a second graph.
             if not idempotency_key:
                 raise
-            existing = await self.repo.get_agent_task_by_create_idempotency_key(
+            existing = await self.agent_task_repository.get_agent_task_by_create_idempotency_key(
                 learner_id, idempotency_key
             )
             if existing is None:
@@ -819,20 +827,20 @@ class Service:
             if existing.create_payload_digest != payload_digest:
                 raise ValueError("idempotency_key_reused") from None
             return _agent_task_create_result(existing)
-        await self.repo.append_command(
+        await self.work_ledger.append_command(
             task_id=task_id,
             kind="initial_prompt",
             payload={"message": normalized, "attachments": attachment_refs},
             idempotency_key=f"task:{task_id}:initial",
         )
-        await self.repo.append_agent_events(
+        await self.agent_task_repository.append_agent_events(
             task_id,
             [{"kind": "task.started", "agent": "coordinator", "payload": {"status": "queued"}}],
         )
         if self.agent_model is None:
             message = "DS_API_KEY is not configured"
-            await self.repo.set_agent_task_status(task_id, "failed", message)
-            await self.repo.append_agent_events(
+            await self.agent_task_repository.set_agent_task_status(task_id, "failed", message)
+            await self.agent_task_repository.append_agent_events(
                 task_id,
                 [{"kind": "task.failed", "agent": "coordinator", "payload": {"message": message}}],
             )
@@ -864,7 +872,7 @@ class Service:
         expression, zone = validate_schedule(cron, timezone)
         now = datetime.now(UTC)
         proposal_id = f"schedule-proposal-{uuid.uuid4().hex}"
-        row = await self.repo.create_schedule_proposal(
+        row = await self.agent_task_repository.create_schedule_proposal(
             id=f"schedule-{uuid.uuid4().hex}",
             proposal_id=proposal_id,
             learner_id=learner_id,
@@ -879,7 +887,7 @@ class Service:
             next_run_at=next_schedule_time(expression, zone, now),
         )
         if source_task_id:
-            await self.repo.append_agent_events(
+            await self.agent_task_repository.append_agent_events(
                 source_task_id,
                 [
                     {
@@ -909,11 +917,11 @@ class Service:
     async def propose_schedule_revocation(
         self, *, learner_id: str, schedule_id: str
     ) -> dict[str, Any]:
-        schedule = await self.repo.get_schedule(schedule_id=schedule_id, learner_id=learner_id)
+        schedule = await self.agent_task_repository.get_schedule(schedule_id=schedule_id, learner_id=learner_id)
         if schedule is None:
             raise KeyError(schedule_id)
         proposal_id = f"schedule-revoke-proposal-{uuid.uuid4().hex}"
-        row = await self.repo.create_schedule_proposal(
+        row = await self.agent_task_repository.create_schedule_proposal(
             id=f"schedule-{uuid.uuid4().hex}",
             proposal_id=proposal_id,
             learner_id=learner_id,
@@ -929,7 +937,7 @@ class Service:
             revision=int(schedule.revision or 1) + 1,
         )
         if schedule.source_task_id:
-            await self.repo.append_agent_events(
+            await self.agent_task_repository.append_agent_events(
                 schedule.source_task_id,
                 [
                     {
@@ -957,20 +965,20 @@ class Service:
         self, task_id: str, learner_id: str | None = None
     ) -> dict[str, Any]:
         record = (
-            await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
             if learner_id is not None
-            else await self.repo.get_agent_task(task_id)
+            else await self.agent_task_repository.get_agent_task(task_id)
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
-        executions = await self.repo.list_agent_executions(record.id, record.learner_id)
+        executions = await self.runtime_repository.list_agent_executions(record.id, record.learner_id)
         session_state = await self.runtime_state.get_session_state(record.id) or {}
-        latest_turn = await self.repo.latest_turn(record.id)
+        latest_turn = await self.work_ledger.latest_turn(record.id)
         stack = await self.runtime_state.goal_stack(record.id)
         current_goal = stack.current()
         decisions = await self.runtime_state.decisions_for_task(record.id)
         artifacts = await self._artifact_snapshot(record)
-        durable_work = await self.repo.list_work(record.id)
+        durable_work = await self.work_ledger.list_work(record.id)
         runtime_status = str(session_state.get("runtime_status") or "")
         current_plan = dict(session_state.get("plan") or {})
         goal_status = str(current_goal.status) if current_goal else "open"
@@ -1076,7 +1084,7 @@ class Service:
                 "queue": list((session_state.get("board") or {}).get("delivery") or []),
                 "cursor": int((session_state.get("board") or {}).get("cursor") or 0),
             },
-            "quiz_submission": await _submission_snapshot(self.repo, record.id),
+            "quiz_submission": await _submission_snapshot(self.agent_task_repository, record.id),
             "error": record.error,
             "created_at": record.created_at.isoformat() if record.created_at else None,
             "updated_at": record.updated_at.isoformat() if record.updated_at else None,
@@ -1085,7 +1093,7 @@ class Service:
     async def list_agent_tasks(
         self, learner_id: str, *, scope: str = "active"
     ) -> list[dict[str, Any]]:
-        return await self.repo.list_agent_tasks(learner_id, scope=scope)
+        return await self.agent_task_repository.list_agent_tasks(learner_id, scope=scope)
 
     def _task_results(self, record: Any) -> tuple[dict[str, Any], tuple[str, ...]]:
         """Restore provider outputs and artifacts when a task is resumed.
@@ -1139,7 +1147,7 @@ class Service:
         """
 
         expected_count: int | None = None
-        count_reader = getattr(self.repo, "agent_event_count_for_execution", None)
+        count_reader = getattr(self.agent_task_repository, "agent_event_count_for_execution", None)
         if callable(count_reader):
             try:
                 expected_count = max(0, int(await count_reader(execution_id)))
@@ -1156,7 +1164,7 @@ class Service:
         while True:
             pages += 1
             try:
-                page = await self.repo.agent_events_for_execution(
+                page = await self.agent_task_repository.agent_events_for_execution(
                     execution_id,
                     learner_id,
                     limit=AGENT_EVENT_PAGE_SIZE,
@@ -1170,7 +1178,7 @@ class Service:
                 if cursor:
                     truncated = True
                     break
-                page = await self.repo.agent_events_for_execution(execution_id, learner_id)
+                page = await self.agent_task_repository.agent_events_for_execution(execution_id, learner_id)
 
             if not isinstance(page, list):
                 page = list(page or ())
@@ -1270,7 +1278,7 @@ class Service:
                     metadata["eventLogTruncated"] = True
 
     async def agent_execution_snapshot(self, execution_id: str, learner_id: str) -> dict[str, Any]:
-        row = await self.repo.get_agent_execution(execution_id, learner_id)
+        row = await self.runtime_repository.get_agent_execution(execution_id, learner_id)
         if row is None:
             raise KeyError(f"unknown execution: {execution_id}")
         started = _utc_datetime(row.started_at)
@@ -1336,7 +1344,7 @@ class Service:
                 raise ValueError("title must not be empty")
         if resources is not None and len(resources) > 100:
             raise ValueError("too many resources")
-        row = await self.repo.update_agent_task_metadata(
+        row = await self.agent_task_repository.update_agent_task_metadata(
             task_id,
             learner_id,
             title=title,
@@ -1355,19 +1363,19 @@ class Service:
         }
 
     async def delete_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
-        row = await self.repo.set_agent_task_deleted(task_id, learner_id, True)
+        row = await self.agent_task_repository.set_agent_task_deleted(task_id, learner_id, True)
         if row is None:
             raise KeyError(f"unknown agent task: {task_id}")
         return {"id": row.id, "deleted_at": row.deleted_at.isoformat() if row.deleted_at else None}
 
     async def restore_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
-        row = await self.repo.set_agent_task_deleted(task_id, learner_id, False)
+        row = await self.agent_task_repository.set_agent_task_deleted(task_id, learner_id, False)
         if row is None:
             raise KeyError(f"unknown agent task: {task_id}")
         return {"id": row.id, "deleted_at": None}
 
     async def fork_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
-        source = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        source = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
         if source is None:
             raise KeyError(f"unknown agent task: {task_id}")
         new_id = f"t-{uuid.uuid4().hex[:20]}"
@@ -1377,7 +1385,7 @@ class Service:
             prompt=source.prompt,
             resources=list(source.resources or []),
         )
-        await self.repo.update_agent_task_metadata(new_id, learner_id, title=source.title)
+        await self.agent_task_repository.update_agent_task_metadata(new_id, learner_id, title=source.title)
         return result
 
     async def project_agent_artifacts(self, learner_id: str, task_id: str | None = None) -> int:
@@ -1406,7 +1414,7 @@ class Service:
 
                 tasks = []
                 for scope in ("active", "archived"):
-                    for item in await self.repo.list_agent_tasks(learner_id, scope=scope):
+                    for item in await self.agent_task_repository.list_agent_tasks(learner_id, scope=scope):
                         if task_id is None or item["id"] == task_id:
                             tasks.append(item)
                 projected = 0
@@ -1491,15 +1499,15 @@ class Service:
                 return projected
 
     async def cancel_agent_task(self, task_id: str, learner_id: str) -> dict[str, Any]:
-        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        record = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
         if record.status in {"completed", "partial", "handed_off", "failed", "cancelled"}:
             return {"id": task_id, "status": record.status}
-        for work in await self.repo.list_work(task_id):
+        for work in await self.work_ledger.list_work(task_id):
             if work.get("status") not in {"succeeded", "failed", "cancelled", "blocked"}:
-                await self.repo.cancel_work(task_id=task_id, work_id=str(work["id"]))
-        await self.repo.set_agent_task_status(task_id, "cancelled", thread_status="cancelled")
+                await self.work_ledger.cancel_work(task_id=task_id, work_id=str(work["id"]))
+        await self.agent_task_repository.set_agent_task_status(task_id, "cancelled", thread_status="cancelled")
         runners = [
             runner
             for runner in self._agent_runners.get(task_id, set())
@@ -1510,24 +1518,24 @@ class Service:
         if runners:
             await asyncio.gather(*runners, return_exceptions=True)
         if record.current_execution_id:
-            latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            latest = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
             execution_id = str(
                 (latest.current_execution_id if latest else None)
                 or record.current_execution_id
             )
-            execution = await self.repo.get_agent_execution(execution_id, learner_id)
+            execution = await self.runtime_repository.get_agent_execution(execution_id, learner_id)
             if execution is not None:
                 state = dict(execution.workflow_state or {})
                 metadata = dict(state.get("metadata") or {})
                 metadata.update({"terminal": True, "status": "cancelled", "paused": False})
                 state["metadata"] = metadata
-                await self.repo.update_agent_execution(
+                await self.runtime_repository.update_agent_execution(
                     execution.id,
                     status="cancelled",
                     workflow_state=state,
                     ended=True,
                 )
-        await self.repo.append_agent_events(
+        await self.agent_task_repository.append_agent_events(
             task_id,
             [
                 {
@@ -1586,9 +1594,9 @@ class Service:
         self, task_id: str, kind: str, learner_id: str | None = None
     ) -> tuple[bytes, str, str]:
         record = (
-            await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
             if learner_id is not None
-            else await self.repo.get_agent_task(task_id)
+            else await self.agent_task_repository.get_agent_task(task_id)
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
@@ -1633,17 +1641,17 @@ class Service:
     ) -> dict[str, Any]:
         """Approve or reject one irreversible work item by exact digest."""
 
-        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        record = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
-        work = await self.repo.get_work(task_id=task_id, work_id=work_item_id)
+        work = await self.work_ledger.get_work(task_id=task_id, work_id=work_item_id)
         if work is None:
             raise KeyError(f"unknown work item: {work_item_id}")
         if not work.get("confirmation_digest"):
             raise ValueError("work_item_does_not_require_confirmation")
         if work["confirmation_digest"] != payload_digest:
             raise ValueError("payload_digest_mismatch")
-        command = await self.repo.append_command(
+        command = await self.work_ledger.append_command(
             task_id=task_id,
             kind="confirmation",
             payload={
@@ -1665,7 +1673,7 @@ class Service:
                 "status": "accepted",
                 "payloadDigest": payload_digest,
             }
-        accepted = await self.repo.confirm_work(
+        accepted = await self.work_ledger.confirm_work(
             work_id=work_item_id, payload_digest=payload_digest, approve=approve
         )
         if approve and not accepted:
@@ -1769,9 +1777,9 @@ class Service:
         """
 
         record = await (
-            self.repo.get_agent_task_for_learner(task_id, learner_id)
+            self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
             if learner_id
-            else self.repo.get_agent_task(task_id)
+            else self.agent_task_repository.get_agent_task(task_id)
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
@@ -1782,7 +1790,7 @@ class Service:
         attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
         command = None
         if idempotency_key:
-            command = await self.repo.append_command(
+            command = await self.work_ledger.append_command(
                 task_id=task_id,
                 kind="message",
                 payload={"message": message.strip(), "attachments": attachment_refs},
@@ -1858,10 +1866,10 @@ class Service:
         thread is created, and prior AgentRuns/interactions stay in history.
         """
 
-        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        record = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
-        interaction = await self.repo.get_interaction(interaction_id, task_id=task_id)
+        interaction = await self.runtime_repository.get_interaction(interaction_id, task_id=task_id)
         if interaction is None:
             raise KeyError(f"unknown interaction: {interaction_id}")
         validated = parse_answers(answers)
@@ -1869,7 +1877,7 @@ class Service:
         # One atomic step: persist the answer, resolve the interaction and
         # enqueue the durable continuation command.  Nothing below can leave
         # the thread resolved-but-never-resumed (issue #18 §10.4).
-        claim = await self.repo.claim_interaction_answer(
+        claim = await self.runtime_repository.claim_interaction_answer(
             interaction_id=interaction_id,
             task_id=task_id,
             answers=payload_answers,
@@ -1935,7 +1943,7 @@ class Service:
         async with self._interaction_publish_locks[task_id]:
             rows = [
                 row
-                for row in await self.repo.pending_outbox(task_id=task_id)
+                for row in await self.work_ledger.pending_outbox(task_id=task_id)
                 if row.get("kind") == "interaction.resolved"
             ]
             if not rows:
@@ -1944,7 +1952,7 @@ class Service:
                 payload = dict(row.get("payload") or {})
                 interaction_id = str(payload.get("interaction_id") or "")
                 if not interaction_id:
-                    await self.repo.mark_outbox_published(str(row["id"]))
+                    await self.work_ledger.mark_outbox_published(str(row["id"]))
                     continue
                 execution_id = str(payload.get("execution_id") or "")
                 resolved_payload = {
@@ -1962,7 +1970,7 @@ class Service:
                     [{"kind": "interaction.resolved", "agent": "", "payload": resolved_payload}],
                     execution_id=execution_id,
                 )
-                if await self.repo.publish_outbox_agent_events(
+                if await self.agent_task_repository.publish_outbox_agent_events(
                     outbox_id=str(row["id"]),
                     task_id=task_id,
                     events=[
@@ -2001,12 +2009,12 @@ class Service:
             while True:
                 pending = [
                     command
-                    for command in await self.repo.pending_commands(task_id)
+                    for command in await self.work_ledger.pending_commands(task_id)
                     if command.get("kind") == "interaction_answer"
                 ]
                 if not pending:
                     return drained
-                record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                record = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
                 if record is None:
                     return drained
                 if str(getattr(record, "thread_status", "") or "open") == "cancelled":
@@ -2017,7 +2025,7 @@ class Service:
                 payload = dict(pending[0].get("payload") or {})
                 interaction_id = str(payload.get("interaction_id") or "")
                 if not interaction_id:
-                    await self.repo.consume_command(str(pending[0]["id"]))
+                    await self.work_ledger.consume_command(str(pending[0]["id"]))
                     continue
                 owned = await self._drive_agent_task(
                     task_id,
@@ -2041,7 +2049,7 @@ class Service:
                 # a resume that reached a durable outcome already consumed it,
                 # and consuming here covers the failed turn so one continuation
                 # is never replayed in a loop.
-                await self.repo.consume_command(str(pending[0]["id"]))
+                await self.work_ledger.consume_command(str(pending[0]["id"]))
 
     async def _recover_interaction_continuations(self) -> int:
         """Replay answered-but-unresumed interactions after a restart."""
@@ -2050,10 +2058,10 @@ class Service:
         # A publish that never finished is repaired first: the interaction is
         # durably resolved, so the replay log must say so before the recap is
         # rebuilt (issue #18 §10.6).
-        for row in await self.repo.pending_outbox():
+        for row in await self.work_ledger.pending_outbox():
             if row.get("kind") == "interaction.resolved":
                 await self._publish_interaction_outbox(str(row["task_id"]))
-        for command in await self.repo.pending_interaction_continuations():
+        for command in await self.runtime_repository.pending_interaction_continuations():
             payload = dict(command.get("payload") or {})
             interaction_id = str(payload.get("interaction_id") or "")
             if not interaction_id:
@@ -2087,7 +2095,7 @@ class Service:
             while not queue.empty():
                 item = await queue.get()
                 while True:
-                    record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                    record = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
                     if record is None:
                         return
                     if str(getattr(record, "thread_status", "") or "open") == "cancelled":
@@ -2128,13 +2136,13 @@ class Service:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         record = await (
-            self.repo.get_agent_task_for_learner(task_id, learner_id)
+            self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
             if learner_id
-            else self.repo.get_agent_task(task_id)
+            else self.agent_task_repository.get_agent_task(task_id)
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
-        command = await self.repo.append_command(
+        command = await self.work_ledger.append_command(
             task_id=task_id,
             kind="quiz_submission",
             payload={"submission_id": submission_id, "answers": answers},
@@ -2148,26 +2156,33 @@ class Service:
                 raise ValueError("idempotency_key_reused")
             return {
                 "status": "duplicate",
-                "submission": await _submission_snapshot(self.repo, task_id),
+                "submission": await _submission_snapshot(self.agent_task_repository, task_id),
             }
-        existing = await self.repo.get_quiz_submission(task_id)
+        existing = await self.agent_task_repository.get_quiz_submission(task_id)
         if existing is not None:
             if existing.submission_id == submission_id:
                 return {
                     "status": "duplicate",
-                    "submission": await _submission_snapshot(self.repo, task_id),
+                    "submission": await _submission_snapshot(self.agent_task_repository, task_id),
                 }
             raise ValueError("already_submitted")
         if record.status != "awaiting_user":
             raise ValueError(f"task_not_waiting:{record.status}")
         result = _grade_agent_quiz(record.quiz_result or {}, answers)
-        await self.repo.create_quiz_submission(
+        snapshot = await self.agent_task_repository.create_quiz_submission(
             task_id=task_id,
             submission_id=submission_id,
             answers=answers,
             per_question=result["per_question"],
             total_score=result["total_score"],
             total_points=result["total_points"],
+        )
+        await self.session_repository.project_runtime_event(
+            learner_id=record.learner_id,
+            record_key=f"assessment:{task_id}:{submission_id}",
+            task_id=task_id,
+            kind="assessment.submitted",
+            payload=snapshot,
         )
         try:
             await self.ack_delivery(task_id, "quiz", learner_id=record.learner_id)
@@ -2181,7 +2196,7 @@ class Service:
                 resume={"message": "已提交答题", "kind": "quiz_submit", "answers": answers},
             )
         )
-        return {"status": "accepted", "submission": await _submission_snapshot(self.repo, task_id)}
+        return {"status": "accepted", "submission": await _submission_snapshot(self.agent_task_repository, task_id)}
 
     async def ack_delivery(
         self,
@@ -2192,14 +2207,14 @@ class Service:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         record = await (
-            self.repo.get_agent_task_for_learner(task_id, learner_id)
+            self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
             if learner_id
-            else self.repo.get_agent_task(task_id)
+            else self.agent_task_repository.get_agent_task(task_id)
         )
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
         if idempotency_key:
-            command = await self.repo.append_command(
+            command = await self.work_ledger.append_command(
                 task_id=task_id,
                 kind="delivery_ack",
                 payload={"artifact": artifact},
@@ -2228,7 +2243,7 @@ class Service:
             cursor += 1
             if cursor < len(queue):
                 queue[cursor]["state"] = "unlocked"
-                await self.repo.append_agent_events(
+                await self.agent_task_repository.append_agent_events(
                     task_id,
                     [
                         {
@@ -2301,14 +2316,14 @@ class Service:
 
         self._hold_sweep_pending.discard(task_id)
         if self.agent_model is None:
-            await self.repo.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
+            await self.agent_task_repository.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
             self._notify_agent(task_id)
             return False
-        record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        record = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
         if record is None:
             return False
         if resume is not None and resume.get("message"):
-            await self.repo.update_agent_task_output(
+            await self.agent_task_repository.update_agent_task_output(
                 task_id,
                 "user_message",
                 {
@@ -2320,10 +2335,10 @@ class Service:
                     "attachments": _json_safe(resume.get("attachments") or []),
                 },
             )
-        latest = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+        latest = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
         if latest is None or latest.status == "cancelled":
             return False
-        claimed = await self.repo.claim_agent_task(task_id, learner_id)
+        claimed = await self.agent_task_repository.claim_agent_task(task_id, learner_id)
         if claimed is None:
             # Another API process (or the request that originally created the
             # task) already owns this run.  The caller must treat this as "not
@@ -2334,25 +2349,25 @@ class Service:
         # while the graph is running belong to a later turn and must remain
         # pending for the next coordinator pass.
         turn_command_ids = {
-            str(command["id"]) for command in await self.repo.pending_commands(task_id)
+            str(command["id"]) for command in await self.work_ledger.pending_commands(task_id)
         }
         execution_id = f"exec-{uuid.uuid4().hex}"
         try:
             # Bind this invocation to the canonical turn it executes.  A
             # resume keeps the turn that paused; new messages claim the
             # latest pending turn (issue #18 §4.3).
-            current_turn = await self.repo.latest_turn(task_id)
+            current_turn = await self.work_ledger.latest_turn(task_id)
             turn_id = str(current_turn["id"]) if current_turn else ""
             turn_index = int(current_turn["turn_index"]) if current_turn else 0
             # An interaction answer resumes the paused execution inside the
             # same turn; link the new execution back to it (issue #18 §4.3).
             resumes_execution_id: str | None = None
             if resume is not None and resume.get("kind") == "interaction_answer":
-                prior = await self.repo.get_interaction(
+                prior = await self.runtime_repository.get_interaction(
                     str(resume.get("interaction_id") or ""), task_id=task_id
                 )
                 resumes_execution_id = str((prior or {}).get("execution_id") or "") or None
-            await self.repo.create_agent_execution(
+            await self.runtime_repository.create_agent_execution(
                 execution_id=execution_id,
                 task_id=task_id,
                 learner_id=learner_id,
@@ -2420,16 +2435,16 @@ class Service:
                 )
             # The thread is executing again; the legacy per-run status keeps
             # its historical meaning for existing readers (issue #18 §4.1).
-            await self.repo.set_agent_thread_status(task_id, "running")
-            await self.repo.append_agent_events(task_id, start_events)
+            await self.agent_task_repository.set_agent_thread_status(task_id, "running")
+            await self.agent_task_repository.append_agent_events(task_id, start_events)
         except Exception as exc:  # noqa: BLE001 - startup failures are user-visible
             logger.exception("agent task failed before graph start: %s", task_id)
             detail = _safe_agent_error(exc, self.settings)
-            await self.repo.set_agent_task_status(
+            await self.agent_task_repository.set_agent_task_status(
                 task_id, "failed", f"启动失败：{type(exc).__name__}: {detail}"
             )
-            await self.repo.set_agent_thread_status(task_id, "open")
-            await self.repo.append_agent_events(
+            await self.agent_task_repository.set_agent_thread_status(task_id, "open")
+            await self.agent_task_repository.append_agent_events(
                 task_id,
                 [
                     {
@@ -2501,19 +2516,19 @@ class Service:
                 }
             # Dual projection: V1 rows carry the canonical identity the next
             # frontend stage consumes; V0 keeps serving today's UI unchanged.
-            await self.repo.append_agent_events(task_id, [*public_events, *v1_rows])
+            await self.agent_task_repository.append_agent_events(task_id, [*public_events, *v1_rows])
             if not public_events and not v1_rows:
                 return
-            await self.repo.update_agent_execution(
+            await self.runtime_repository.update_agent_execution(
                 execution_id,
                 workflow_state=current_workflow_state,
                 trace_spans=projector.snapshot()["traceSpans"],
-                event_count=await self.repo.agent_event_count_for_execution(execution_id),
+                event_count=await self.agent_task_repository.agent_event_count_for_execution(execution_id),
             )
             self._notify_agent(task_id)
 
         async def persist_result(agent: str, value: dict[str, Any]) -> None:
-            await self.repo.update_agent_task_output(task_id, agent, value)
+            await self.agent_task_repository.update_agent_task_output(task_id, agent, value)
             self._notify_agent(task_id)
 
         async def emit_turn_terminal(status: str) -> None:
@@ -2525,7 +2540,7 @@ class Service:
             if envelope is None:
                 return
             try:
-                await self.repo.append_agent_events(
+                await self.agent_task_repository.append_agent_events(
                     task_id,
                     [
                         {
@@ -2622,13 +2637,13 @@ class Service:
                     "resource_refs": list(record.resources or []),
                 },
             ):
-                current_record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+                current_record = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
                 if current_record is None:
                     return True
                 if current_record.status == "cancelled":
                     await flush_buffer()
                     snapshot = projector.snapshot()
-                    await self.repo.update_agent_execution(
+                    await self.runtime_repository.update_agent_execution(
                         execution_id,
                         status="cancelled",
                         workflow_state=snapshot["workflowState"],
@@ -2742,17 +2757,17 @@ class Service:
             await flush_buffer()
             # A failed turn closes only the turn; the thread returns to open
             # so the learner can keep talking (issue #18 §4.1).
-            await self.repo.set_agent_task_status(
+            await self.agent_task_repository.set_agent_task_status(
                 task_id, failure_status, f"运行失败：{type(exc).__name__}: {detail}"
             )
-            await self.repo.set_agent_thread_status(task_id, "cancelled" if failure_status == "cancelled" else "open")
+            await self.agent_task_repository.set_agent_thread_status(task_id, "cancelled" if failure_status == "cancelled" else "open")
             await emit_turn_terminal("cancelled" if failure_status == "cancelled" else "failed")
             snapshot = projector.snapshot()
             workflow_state = dict(snapshot["workflowState"])
             metadata = dict(workflow_state.get("metadata") or {})
             metadata.update({"terminal": True, "status": failure_status, "paused": False})
             workflow_state["metadata"] = metadata
-            await self.repo.update_agent_execution(
+            await self.runtime_repository.update_agent_execution(
                 execution_id,
                 status=failure_status,
                 error=f"运行失败：{type(exc).__name__}: {detail}",
@@ -2779,13 +2794,13 @@ class Service:
         thread_status = {"awaiting_user": "awaiting_user", "cancelled": "cancelled"}.get(
             status, "open"
         )
-        await self.repo.set_agent_task_status(
+        await self.agent_task_repository.set_agent_task_status(
             task_id,
             "handed_off" if status == "handed_off" else status,
             "; ".join(errors),
             thread_status=thread_status,
         )
-        turn = await self.repo.latest_turn(task_id)
+        turn = await self.work_ledger.latest_turn(task_id)
         if turn is not None:
             turn_status = {
                 "awaiting_user": "awaiting_user",
@@ -2794,7 +2809,7 @@ class Service:
                 "failed": "failed",
                 "cancelled": "cancelled",
             }.get(status, "active")
-            await self.repo.update_turn(
+            await self.work_ledger.update_turn(
                 turn_id=str(turn["id"]),
                 status=turn_status,
                 phase="evaluating" if turn_status == "active" else "delivered",
@@ -2809,11 +2824,11 @@ class Service:
         # consumed only after the graph has produced a durable outcome, so a
         # crash cannot silently drop an input.
         if status not in {"failed", "partial"}:
-            for command in await self.repo.pending_commands(task_id):
+            for command in await self.work_ledger.pending_commands(task_id):
                 if str(command["id"]) not in turn_command_ids:
                     continue
-                await self.repo.consume_command(str(command["id"]))
-        await self.repo.update_agent_execution(
+                await self.work_ledger.consume_command(str(command["id"]))
+        await self.runtime_repository.update_agent_execution(
             execution_id,
             status="awaiting_user"
             if status == "awaiting_user"
@@ -2839,7 +2854,7 @@ class Service:
         async with self._hold_sweep_locks[task_id]:
             if task_id in self._hold_sweep_pending:
                 return
-            record = await self.repo.get_agent_task_for_learner(task_id, learner_id)
+            record = await self.agent_task_repository.get_agent_task_for_learner(task_id, learner_id)
             if record is None or record.status != "awaiting_user":
                 return
             board = await self.runtime_state.get_board(task_id)
@@ -2850,23 +2865,23 @@ class Service:
 
     async def answer(self, session_id: str, payload: Any, learner_id: str | None = None) -> None:
         record = (
-            await self.repo.get_session_for_learner(session_id, learner_id)
+            await self.session_repository.get_session_for_learner(session_id, learner_id)
             if learner_id is not None
-            else await self.repo.get_session(session_id)
+            else await self.session_repository.get_session(session_id)
         )
         if record is None:
             raise KeyError(f"unknown session: {session_id}")
         pack = self.packs.get(record.pack_id)
         if pack is None:
             raise KeyError(f"unknown pack: {record.pack_id}")
-        await self.repo.set_status(session_id, "running")
+        await self.session_repository.set_status(session_id, "running")
         self._spawn(self._drive(session_id, pack, record.learner_id, Command(resume=payload)))
 
     async def snapshot(self, session_id: str, learner_id: str | None = None) -> dict[str, Any]:
         record = (
-            await self.repo.get_session_for_learner(session_id, learner_id)
+            await self.session_repository.get_session_for_learner(session_id, learner_id)
             if learner_id is not None
-            else await self.repo.get_session(session_id)
+            else await self.session_repository.get_session(session_id)
         )
         if record is None:
             raise KeyError(f"unknown session: {session_id}")
@@ -2937,7 +2952,7 @@ class Service:
 
             async def flush() -> None:
                 if buffer:
-                    await self.repo.append_events(session_id, list(buffer))
+                    await self.session_repository.append_events(session_id, list(buffer))
                     buffer.clear()
                     self._notify(session_id)
 
@@ -3012,9 +3027,9 @@ class Service:
                 await self._finalize(
                     session_id, pack, learner_id, runtime_status, outcome_override="failed"
                 )
-            await self.repo.set_status(session_id, status, error)
+            await self.session_repository.set_status(session_id, status, error)
             if error:
-                await self.repo.append_events(
+                await self.session_repository.append_events(
                     session_id, [{"kind": "run.failed", "payload": {"message": error}}]
                 )
             self._notify(session_id)
@@ -3062,8 +3077,8 @@ class Service:
             # readable only to legacy internal tooling and are never mapped
             # automatically to a new Identity user.
             if completed:
-                await self.repo.save_mastery(learner_id, mastery)
-                await self.repo.save_report(
+                await self.learner_repository.save_mastery(learner_id, mastery)
+                await self.session_repository.save_report(
                     session_id=session_id,
                     learner_id=learner_id,
                     mission_id="",
@@ -3072,7 +3087,7 @@ class Service:
                 return "done"
             return "failed"
 
-        session_record = await self.repo.get_session(session_id)
+        session_record = await self.session_repository.get_session(session_id)
         await self.learners.record_session_outcome(
             context,
             session_id=session_id,
@@ -3155,7 +3170,7 @@ def _lesson_intro_metadata(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def _submission_snapshot(repo: Repository, task_id: str) -> dict[str, Any] | None:
+async def _submission_snapshot(repo: AgentTaskRepository, task_id: str) -> dict[str, Any] | None:
     row = await repo.get_quiz_submission(task_id)
     if row is None:
         return None

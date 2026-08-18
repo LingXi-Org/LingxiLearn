@@ -306,7 +306,7 @@ async def test_execution_snapshot_event_reader_pages_past_5000_without_truncatin
 
     repo = PagedRepo()
     service = Service.__new__(Service)
-    service.repo = repo
+    service.agent_task_repository = repo
 
     records, status = await service._agent_events_for_execution_snapshot("exec", "learner")
 

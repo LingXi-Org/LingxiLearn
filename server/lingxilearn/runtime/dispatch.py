@@ -129,7 +129,8 @@ class DispatchDeps:
     task_id: str
     goal: Goal
     skills: Sequence[Mapping[str, Any]]
-    repository: Any = None
+    work_ledger: Any = None
+    runtime_repository: Any = None
     model: Any = None
     settings: Any = None
     artifacts: Any = None
@@ -323,8 +324,8 @@ class Dispatcher:
             or f"{self._deps.task_id}:{task.inputs.get('__runtime_step') or 0}:{task.id}"
         )
         claimed: dict[str, Any] | None = None
-        if work_id and self._deps.repository is not None:
-            claimed = await self._deps.repository.claim_work_item(
+        if work_id and self._deps.work_ledger is not None:
+            claimed = await self._deps.work_ledger.claim_work_item(
                 work_id=work_id,
                 owner=f"dispatcher:{self._deps.task_id}",
             )
@@ -357,12 +358,12 @@ class Dispatcher:
                 )
         owner = f"dispatcher:{self._deps.task_id}"
         heartbeat: asyncio.Task[None] | None = None
-        if work_id and self._deps.repository is not None:
+        if work_id and self._deps.work_ledger is not None:
 
             async def keep_lease() -> None:
                 while True:
                     await asyncio.sleep(20)
-                    if not await self._deps.repository.heartbeat_work(work_id=work_id, owner=owner):
+                    if not await self._deps.work_ledger.heartbeat_work(work_id=work_id, owner=owner):
                         return
 
             heartbeat = asyncio.create_task(keep_lease())
@@ -376,8 +377,8 @@ class Dispatcher:
         except NoProvider as exc:
             if heartbeat is not None:
                 await self._stop_heartbeat(heartbeat)
-            if work_id and self._deps.repository is not None:
-                await self._deps.repository.finish_work(
+            if work_id and self._deps.work_ledger is not None:
+                await self._deps.work_ledger.finish_work(
                     work_id=work_id,
                     owner=owner,
                     status="failed",
@@ -421,8 +422,8 @@ class Dispatcher:
         if provider is None:
             if heartbeat is not None:
                 await self._stop_heartbeat(heartbeat)
-            if work_id and self._deps.repository is not None:
-                await self._deps.repository.finish_work(
+            if work_id and self._deps.work_ledger is not None:
+                await self._deps.work_ledger.finish_work(
                     work_id=work_id,
                     owner=owner,
                     status="failed",
@@ -459,8 +460,8 @@ class Dispatcher:
         except asyncio.CancelledError:
             raise
         except ProviderError as exc:
-            if work_id and self._deps.repository is not None:
-                await self._deps.repository.finish_work(
+            if work_id and self._deps.work_ledger is not None:
+                await self._deps.work_ledger.finish_work(
                     work_id=work_id,
                     owner=owner,
                     status="failed",
@@ -468,8 +469,8 @@ class Dispatcher:
                 )
             return self._failed(task, resolution, str(exc), started, node_id=node_id)
         except Exception as exc:  # noqa: BLE001 - one provider must not end the run
-            if work_id and self._deps.repository is not None:
-                await self._deps.repository.finish_work(
+            if work_id and self._deps.work_ledger is not None:
+                await self._deps.work_ledger.finish_work(
                     work_id=work_id,
                     owner=owner,
                     status="failed",
@@ -491,8 +492,8 @@ class Dispatcher:
 
         evidence_ids = await self._persist(result)
         satisfied, detail = await self._check_done(task, result, evidence_ids)
-        if work_id and self._deps.repository is not None:
-            await self._deps.repository.finish_work(
+        if work_id and self._deps.work_ledger is not None:
+            await self._deps.work_ledger.finish_work(
                 work_id=work_id,
                 owner=owner,
                 status="succeeded" if satisfied else "incomplete",
@@ -510,7 +511,7 @@ class Dispatcher:
                 },
             )
             if claimed is not None:
-                await self._deps.repository.save_fact_snapshot(
+                await self._deps.work_ledger.save_fact_snapshot(
                     task_id=self._deps.task_id,
                     turn_id=str(claimed.get("turn_id") or ""),
                     plan_revision=int(claimed.get("plan_revision") or 0),
@@ -654,9 +655,9 @@ class Dispatcher:
         agent_run_id = run_context.agent_run_id
         skill_run_id = new_skill_run_id()
         skill_display_name = resolution.display_name or resolution.skill_id
-        if self._deps.repository is not None:
+        if self._deps.runtime_repository is not None:
             for persist in (
-                lambda: self._deps.repository.create_agent_run(
+                lambda: self._deps.runtime_repository.create_agent_run(
                     agent_run_id=agent_run_id,
                     task_id=self._deps.task_id,
                     execution_id=self._deps.execution_id or self._deps.task_id,
@@ -671,7 +672,7 @@ class Dispatcher:
                     started=True,
                     safe_metadata={"skill_id": resolution.skill_id},
                 ),
-                lambda: self._deps.repository.create_skill_run(
+                lambda: self._deps.runtime_repository.create_skill_run(
                     skill_run_id=skill_run_id,
                     agent_run_id=agent_run_id,
                     task_id=self._deps.task_id,
@@ -958,14 +959,14 @@ class Dispatcher:
         before the rows are written.
         """
 
-        if self._deps.repository is None:
+        if self._deps.runtime_repository is None:
             return
 
         async def finalise() -> None:
-            await self._deps.repository.update_agent_run(
+            await self._deps.runtime_repository.update_agent_run(
                 agent_run_id, status=agent_status, ended=True
             )
-            await self._deps.repository.update_skill_run(skill_run_id, status=skill_status)
+            await self._deps.runtime_repository.update_skill_run(skill_run_id, status=skill_status)
 
         try:
             if shielded:

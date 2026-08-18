@@ -50,15 +50,15 @@ async def paused_thread(tmp_path: Path):
 
     learner_id = f"learner-{suffix}"
     task_id = f"task-{suffix}"
-    await service.repo.ensure_learner(learner_id)
-    await service.repo.create_agent_task(
+    await service.learner_repository.ensure_learner(learner_id)
+    await service.agent_task_repository.create_agent_task(
         id=task_id,
         learner_id=learner_id,
         prompt="帮我准备一下量子力学",
         graph_version="test@1",
         status="awaiting_user",
     )
-    command = await service.repo.append_command(
+    command = await service.work_ledger.append_command(
         task_id=task_id,
         kind="message",
         payload={"message": "帮我准备一下量子力学"},
@@ -66,7 +66,7 @@ async def paused_thread(tmp_path: Path):
     )
     turn_id = str(command["turn_id"])
     interaction_id = f"it_{suffix}"
-    await service.repo.create_interaction(
+    await service.runtime_repository.create_interaction(
         interaction_id=interaction_id,
         task_id=task_id,
         turn_id=turn_id,
@@ -93,12 +93,12 @@ async def test_answer_commits_a_durable_continuation_command(paused_thread) -> N
     )
     assert result["status"] == "accepted"
 
-    interaction = await service.repo.get_interaction(interaction_id, task_id=task_id)
+    interaction = await service.runtime_repository.get_interaction(interaction_id, task_id=task_id)
     assert interaction is not None and interaction["status"] == "resolved"
 
     pending = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert len(pending) == 1
@@ -106,7 +106,7 @@ async def test_answer_commits_a_durable_continuation_command(paused_thread) -> N
     assert pending[0]["payload"]["answers"] == ANSWERS
     # The continuation stays inside the turn that paused; it never opens one.
     assert pending[0]["turn_id"] == turn_id
-    latest = await service.repo.latest_turn(task_id)
+    latest = await service.work_ledger.latest_turn(task_id)
     assert latest is not None and latest["id"] == turn_id
 
 
@@ -151,8 +151,8 @@ async def test_crash_between_commit_and_resume_is_recovered(paused_thread) -> No
     ]
 
     # Once the turn consumes the command, recovery stops replaying it.
-    for command in await service.repo.pending_commands(task_id):
-        await service.repo.consume_command(str(command["id"]))
+    for command in await service.work_ledger.pending_commands(task_id):
+        await service.work_ledger.consume_command(str(command["id"]))
     replayed.clear()
     started.clear()
     assert await service._recover_interaction_continuations() == 0
@@ -180,7 +180,7 @@ async def test_answer_during_a_running_turn_resumes_without_a_restart(paused_thr
     async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
         # The real claim refuses a running thread; model exactly that, and
         # report ownership the way _run_agent_task now does.
-        record = await service.repo.get_agent_task_for_learner(task, learner)
+        record = await service.agent_task_repository.get_agent_task_for_learner(task, learner)
         if record is not None and record.status == "running":
             return False
         resumes.append(dict(kwargs.get("resume") or {}))
@@ -190,7 +190,7 @@ async def test_answer_during_a_running_turn_resumes_without_a_restart(paused_thr
     service._drive_agent_task = drive  # type: ignore[method-assign]
 
     # The previous execution is still running when the answer arrives.
-    await service.repo.set_agent_task_status(task_id, "running", thread_status="running")
+    await service.agent_task_repository.set_agent_task_status(task_id, "running", thread_status="running")
     result = await service.answer_agent_interaction(
         task_id,
         interaction_id,
@@ -203,14 +203,14 @@ async def test_answer_during_a_running_turn_resumes_without_a_restart(paused_thr
     assert resumes == [], "a running thread cannot be claimed by the fast path"
     pending = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert len(pending) == 1, "the continuation stays durable"
 
     # The execution finishes and releases the thread.
     started.clear()
-    await service.repo.set_agent_task_status(task_id, "completed", thread_status="open")
+    await service.agent_task_repository.set_agent_task_status(task_id, "completed", thread_status="open")
     drained = await service._drain_interaction_continuations(task_id, learner_id)
     await asyncio.gather(*started)
 
@@ -224,7 +224,7 @@ async def test_answer_during_a_running_turn_resumes_without_a_restart(paused_thr
     ]
     remaining = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert remaining == [], "a drained continuation is consumed exactly once"
@@ -255,13 +255,13 @@ async def test_drain_defers_while_another_turn_owns_the_thread(paused_thread) ->
         idempotency_key="ans-defer",
         learner_id=learner_id,
     )
-    await service.repo.set_agent_task_status(task_id, "running", thread_status="running")
+    await service.agent_task_repository.set_agent_task_status(task_id, "running", thread_status="running")
 
     assert await service._drain_interaction_continuations(task_id, learner_id) == 0
     assert resumes == [], "the live turn's own tail drains it"
     pending = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert len(pending) == 1
@@ -305,7 +305,7 @@ async def test_a_losing_worker_never_consumes_the_continuation(paused_thread) ->
     assert len(attempts) == 1
     pending = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert len(pending) == 1, "a losing worker must not consume the winner's command"
@@ -315,7 +315,7 @@ async def test_a_losing_worker_never_consumes_the_continuation(paused_thread) ->
     assert await service._drain_interaction_continuations(task_id, learner_id) == 1
     remaining = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert remaining == [], "the owner closes the ledger entry when its run returns"
@@ -357,11 +357,11 @@ async def test_resolved_event_publishes_from_the_outbox_and_repairs(paused_threa
         )
 
     # Durable state says resolved; the replay log does not yet.
-    interaction = await service.repo.get_interaction(interaction_id, task_id=task_id)
+    interaction = await service.runtime_repository.get_interaction(interaction_id, task_id=task_id)
     assert interaction is not None and interaction["status"] == "resolved"
-    events = await service.repo.agent_events_after(task_id)
+    events = await service.agent_task_repository.agent_events_after(task_id)
     assert not [event for event in events if event["kind"] == "interaction.resolved"]
-    outbox = await service.repo.pending_outbox(task_id=task_id)
+    outbox = await service.work_ledger.pending_outbox(task_id=task_id)
     assert [row["event_key"] for row in outbox] == [f"interaction:{interaction_id}:resolved"]
 
     # The retry repairs it: same key, same payload, so the answer is the
@@ -376,7 +376,7 @@ async def test_resolved_event_publishes_from_the_outbox_and_repairs(paused_threa
     )
     assert result["status"] == "accepted"
 
-    events = await service.repo.agent_events_after(task_id)
+    events = await service.agent_task_repository.agent_events_after(task_id)
     resolved = [event for event in events if event["kind"] == "interaction.resolved"]
     assert len(resolved) == 1
     assert resolved[0]["payload"]["interaction_id"] == interaction_id
@@ -388,11 +388,11 @@ async def test_resolved_event_publishes_from_the_outbox_and_repairs(paused_threa
         and event["payload"].get("type") == "interaction"
     ]
     assert v1_resolved, "the V1 stream carries the resolved fact for the recap"
-    assert await service.repo.pending_outbox(task_id=task_id) == []
+    assert await service.work_ledger.pending_outbox(task_id=task_id) == []
 
     # Publishing again is a no-op: the fact exists exactly once.
     assert await service._publish_interaction_outbox(task_id) == 0
-    events = await service.repo.agent_events_after(task_id)
+    events = await service.agent_task_repository.agent_events_after(task_id)
     assert len([event for event in events if event["kind"] == "interaction.resolved"]) == 1
 
 
@@ -450,16 +450,16 @@ async def test_ui_retry_with_a_new_key_repairs_and_resumes(paused_thread) -> Non
     await asyncio.gather(*started)
     assert result["status"] == "already_resolved"
 
-    events = await service.repo.agent_events_after(task_id)
+    events = await service.agent_task_repository.agent_events_after(task_id)
     resolved = [event for event in events if event["kind"] == "interaction.resolved"]
     assert len(resolved) == 1, "the retry repaired the missing public fact exactly once"
-    assert await service.repo.pending_outbox(task_id=task_id) == []
+    assert await service.work_ledger.pending_outbox(task_id=task_id) == []
 
     assert len(resumed) == 1, "the durable continuation ran, exactly once"
     assert resumed[0]["interaction_id"] == interaction_id
     remaining = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert remaining == []
@@ -514,7 +514,7 @@ async def test_two_publishers_write_the_resolved_fact_exactly_once(paused_thread
 
     assert sorted((first, second)) == [0, 1], "exactly one replica published"
 
-    events = await service.repo.agent_events_after(task_id)
+    events = await service.agent_task_repository.agent_events_after(task_id)
     v0_resolved = [event for event in events if event["kind"] == "interaction.resolved"]
     v1_resolved = [
         event
@@ -524,7 +524,7 @@ async def test_two_publishers_write_the_resolved_fact_exactly_once(paused_thread
     ]
     assert len(v0_resolved) == 1
     assert len(v1_resolved) == 1
-    assert await service.repo.pending_outbox(task_id=task_id) == []
+    assert await service.work_ledger.pending_outbox(task_id=task_id) == []
 
 
 async def test_startup_recovery_repairs_an_unpublished_resolution(paused_thread) -> None:
@@ -558,10 +558,10 @@ async def test_startup_recovery_repairs_an_unpublished_resolution(paused_thread)
     assert await service._recover_interaction_continuations() == 1
     await asyncio.gather(*started)
 
-    events = await service.repo.agent_events_after(task_id)
+    events = await service.agent_task_repository.agent_events_after(task_id)
     resolved = [event for event in events if event["kind"] == "interaction.resolved"]
     assert len(resolved) == 1, "restart repairs the missing public fact"
-    assert await service.repo.pending_outbox(task_id=task_id) == []
+    assert await service.work_ledger.pending_outbox(task_id=task_id) == []
 
 
 async def test_concurrent_answers_produce_exactly_one_continuation(paused_thread) -> None:
@@ -587,7 +587,7 @@ async def test_concurrent_answers_produce_exactly_one_continuation(paused_thread
 
     commands = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert len(commands) == 1, "a blocking interaction resumes its checkpoint exactly once"
@@ -613,7 +613,7 @@ async def test_same_key_is_idempotent_and_a_changed_payload_conflicts(paused_thr
     assert first["status"] == replay["status"] == "accepted"
     commands = [
         command
-        for command in await service.repo.pending_commands(task_id)
+        for command in await service.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
     assert len(commands) == 1
