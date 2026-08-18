@@ -42,15 +42,38 @@ PRODUCT_DIRS=(
   "integrations"
   "providers"
   "hooks"
-  "lib"
   "utils"
+)
+
+# Special handling for lib and hooks - they exist at web/ level, not under [workspaceId]
+SPECIAL_DIRS=(
+  "lib"
+  "hooks"
 )
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
 
+# Check workspace-specific product directories
 for dir in "${PRODUCT_DIRS[@]}"; do
   target="$WORKSPACE_DIR/[workspaceId]/$dir"
+  if [ ! -d "$target" ]; then
+    continue
+  fi
+
+  for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+    while IFS= read -r line; do
+      if [ -n "$line" ]; then
+        VIOLATIONS="$VIOLATIONS$line"$'\n'
+        VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+      fi
+    done < <(grep -rn --include='*.ts' --include='*.tsx' -E "$pattern" "$target" 2>/dev/null | grep -v "node_modules" || true)
+  done
+done
+
+# Check web-level directories (lib, hooks) that must not import from w/**
+for dir in "${SPECIAL_DIRS[@]}"; do
+  target="$WEB_DIR/$dir"
   if [ ! -d "$target" ]; then
     continue
   fi
