@@ -1,0 +1,13 @@
+# LingxiLearn code owners
+#
+# GitHub's CODEOWNERS rule requires at least one approval from a listed
+# code owner when "Require review from Code Owners" is enabled.
+# The repository's governance workflow applies the author-specific policy:
+# - repository owner: no additional approval
+# - Mentors: approval from @leecyang
+# - other contributors / Builders: approval from 2 Mentors
+#
+# Keep both the repository owner and the Mentors team as code owners for
+# every path so the native GitHub rule and the governance workflow agree.
+
+* @leecyang @LingXi-Org/mentors
