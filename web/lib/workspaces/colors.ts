@@ -1,5 +1,5 @@
-import { randomItem } from '@sim/utils/random'
 import { hexToRgb } from '@/lib/colors'
+import { randomItem } from '@/lib/utils/random'
 
 /** Color palette for workspace accents. */
 export const WORKSPACE_COLORS = [

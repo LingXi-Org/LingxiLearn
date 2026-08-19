@@ -25,8 +25,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@aws-sdk/client-secrets-manager": "3.1032.0",
-    "@sim/utils": "workspace:*"
+    "@aws-sdk/client-secrets-manager": "3.1032.0"
   },
   "devDependencies": {
     "@sim/tsconfig": "workspace:*",

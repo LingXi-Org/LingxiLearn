@@ -24,6 +24,15 @@ const migrated = new Map([
   [`${legacyScope}/utils/object`, '@/lib/utils/object'],
   [`${legacyScope}/utils/string`, '@/lib/utils/string'],
   [`${legacyScope}/utils/fractional-indexing`, '@/lib/utils/fractional-indexing'],
+  [`${legacyScope}/utils`, '@/lib/utils'],
+  [`${legacyScope}/utils/color`, '@/lib/utils/color'],
+  [`${legacyScope}/utils/formatting`, '@/lib/utils/formatting'],
+  [`${legacyScope}/utils/helpers`, '@/lib/utils/helpers'],
+  [`${legacyScope}/utils/media-embed`, '@/lib/utils/media-embed'],
+  [`${legacyScope}/utils/random`, '@/lib/utils/random'],
+  [`${legacyScope}/utils/retry`, '@/lib/utils/retry'],
+  [`${legacyScope}/utils/sandbox-references`, '@/lib/utils/sandbox-references'],
+  [`${legacyScope}/utils/sso-domain`, '@/lib/utils/sso-domain'],
 ])
 const moduleSpecifier = /(?:from\s*|import\s*|require\s*\(|import\s*\(\s*)['"]([^'"]+)['"]/
 const violations: string[] = []

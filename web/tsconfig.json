@@ -37,8 +37,6 @@
       "@sim/security/*": ["./packages/security/src/*"],
       "@sim/terminal-protocol": ["./packages/terminal-protocol/src/index.ts"],
       "@sim/testing/*": ["./packages/testing/src/*"],
-      "@sim/utils": ["./packages/utils/src/index.ts"],
-      "@sim/utils/*": ["./packages/utils/src/*"],
       "@sim/workflow-persistence/*": ["./packages/workflow-persistence/src/*"],
       "@sim/workflow-renderer": ["./packages/workflow-renderer/src/index.ts"],
       "@sim/workflow-renderer/*": ["./packages/workflow-renderer/src/*"],

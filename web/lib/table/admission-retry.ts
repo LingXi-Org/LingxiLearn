@@ -1,10 +1,10 @@
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
 import {
   classifyTransientAdmissionFailure,
   type TransientAdmissionFailure,
 } from '@/lib/core/admission/transient-failure'
 import type { PreprocessExecutionResult } from '@/lib/execution/preprocessing'
+import { sleep } from '@/lib/utils/helpers'
+import { backoffWithJitter } from '@/lib/utils/retry'
 
 export const TABLE_ADMISSION_RETRY_MAX_ATTEMPTS = 4
 

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { generateRandomString } from '@sim/utils/random'
+import { generateRandomString } from '@/lib/utils/random'
 
 /**
  * Options for creating a mock edge.

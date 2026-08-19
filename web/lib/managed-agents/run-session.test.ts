@@ -30,7 +30,7 @@ vi.mock('@/lib/managed-agents/session-client', () => ({
   interruptSession: mocks.interruptSession,
 }))
 vi.mock('@/lib/core/utils/sse', () => ({ readSSEEvents: mocks.readSSEEvents }))
-vi.mock('@sim/utils/helpers', () => ({ sleep: mocks.sleep }))
+vi.mock('@/lib/utils/helpers', () => ({ sleep: mocks.sleep }))
 
 import { runManagedAgentSession } from '@/lib/managed-agents/run-session'
 

@@ -1,4 +1,4 @@
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import type {
   ConsumeResult,

@@ -4,7 +4,7 @@
  * This file contains mock data samples to be used in tool unit tests.
  */
 
-import { randomFloat } from '@sim/utils/random'
+import { randomFloat } from '@/lib/utils/random'
 
 /**
  * HTTP Request mock responses for different scenarios.

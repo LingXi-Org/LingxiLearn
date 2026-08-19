@@ -6,7 +6,7 @@ import {
   isValidE2BTemplateReferenceName,
   isValidSandboxReleaseGeneration,
   normalizeSandboxProvider,
-} from '@sim/utils/sandbox-references'
+} from './sandbox-references'
 import { describe, expect, it } from 'vitest'
 
 const BUILD_ID = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'

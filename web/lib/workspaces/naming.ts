@@ -2,9 +2,9 @@
  * Utility functions for generating names for workspaces and folders
  */
 
-import { randomItem } from '@sim/utils/random'
 import { requestJson } from '@/lib/api/client/request'
 import { type FolderApi, listFoldersContract } from '@/lib/api/contracts/folders'
+import { randomItem } from '@/lib/utils/random'
 
 interface NameableEntity {
   name: string

@@ -1,9 +1,9 @@
-import { getPostgresErrorCode } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
+import { getPostgresErrorCode } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
+import { backoffWithJitter } from '@/lib/utils/retry'
 import { runScriptMigrations } from '../script-migrations/index'
 
 /**

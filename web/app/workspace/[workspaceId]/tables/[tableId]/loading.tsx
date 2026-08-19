@@ -1,7 +1,7 @@
 'use client'
 
 import { Table as TableIcon } from '@sim/emcn/icons'
-import { noop } from '@sim/utils/helpers'
+import { noop } from '@/lib/utils/helpers'
 import {
   type BreadcrumbItem,
   ResourceChromeFallback,

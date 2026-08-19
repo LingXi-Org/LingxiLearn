@@ -1,5 +1,5 @@
-import { sleep } from '@sim/utils/helpers'
-import { parseRetryAfter } from '@sim/utils/retry'
+import { sleep } from '@/lib/utils/helpers'
+import { parseRetryAfter } from '@/lib/utils/retry'
 import type { SlackCanvasFile } from '@/tools/slack/types'
 
 export const mapCanvasFile = (file: SlackCanvasFile): SlackCanvasFile => ({

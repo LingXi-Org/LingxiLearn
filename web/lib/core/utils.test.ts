@@ -6,7 +6,7 @@ import {
   formatDuration,
   formatTime,
   getTimezoneAbbreviation,
-} from '@sim/utils/formatting'
+} from '@/lib/utils/formatting'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 beforeAll(() => {

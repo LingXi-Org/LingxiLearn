@@ -14,11 +14,11 @@ import {
   RefreshCw,
 } from '@sim/emcn'
 import { Download } from '@sim/emcn/icons'
-import { formatDuration } from '@sim/utils/formatting'
 import { useParams } from 'next/navigation'
 import { formatDateShort } from '@/lib/core/utils/date-display'
 import { hasActiveFilters } from '@/lib/logs/filters'
 import { getTriggerOptions } from '@/lib/logs/get-trigger-options'
+import { formatDuration } from '@/lib/utils/formatting'
 import type {
   ResourceAction,
   ResourceColumn,

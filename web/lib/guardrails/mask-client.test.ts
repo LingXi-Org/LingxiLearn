@@ -14,7 +14,7 @@ const { mockToken, mockSleep } = vi.hoisted(() => ({
 const mockBaseUrl = urlsMockFns.mockGetInternalApiBaseUrl
 
 vi.mock('@/lib/auth/internal', () => ({ generateInternalToken: mockToken }))
-vi.mock('@sim/utils/helpers', () => ({ sleep: mockSleep }))
+vi.mock('@/lib/utils/helpers', () => ({ sleep: mockSleep }))
 
 import { maskPIIBatchViaHttp } from '@/lib/guardrails/mask-client'
 

@@ -1,7 +1,7 @@
+import { getRedisClient } from '@/lib/core/config/redis'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { getRedisClient } from '@/lib/core/config/redis'
+import { sleep } from '@/lib/utils/helpers'
 import { getStreamConfig } from './buffer'
 import {
   FILE_PREVIEW_SESSION_SCHEMA_VERSION,

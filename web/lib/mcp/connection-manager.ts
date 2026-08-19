@@ -10,9 +10,8 @@
  * stale-time cache approach — no persistent connection is kept.
  */
 
-import { createLogger } from '@/lib/logger'
-import { backoffWithJitter } from '@sim/utils/retry'
 import { isTest } from '@/lib/core/config/env-flags'
+import { createLogger } from '@/lib/logger'
 import { McpClient } from '@/lib/mcp/client'
 import { getOrCreateOauthRow, loadPreregisteredClient, SimMcpOauthProvider } from '@/lib/mcp/oauth'
 import { mcpPubSub } from '@/lib/mcp/pubsub'
@@ -23,6 +22,7 @@ import type {
   McpToolsChangedCallback,
   ToolsChangedEvent,
 } from '@/lib/mcp/types'
+import { backoffWithJitter } from '@/lib/utils/retry'
 
 const logger = createLogger('McpConnectionManager')
 

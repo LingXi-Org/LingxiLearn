@@ -10,11 +10,11 @@ const { mockBackoffWithJitter, mockSleep } = vi.hoisted(() => ({
   mockSleep: vi.fn(),
 }))
 
-vi.mock('@sim/utils/helpers', () => ({
+vi.mock('@/lib/utils/helpers', () => ({
   sleep: mockSleep,
 }))
 
-vi.mock('@sim/utils/retry', () => ({
+vi.mock('@/lib/utils/retry', () => ({
   backoffWithJitter: mockBackoffWithJitter,
 }))
 

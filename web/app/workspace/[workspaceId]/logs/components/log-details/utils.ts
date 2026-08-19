@@ -1,7 +1,7 @@
-import { perceivedBrightness } from '@sim/utils/color'
 import { formatCreditCost } from '@/lib/billing/credits/conversion'
 import { hasUnhandledError } from '@/lib/logs/execution/trace-spans/trace-spans'
 import type { TraceSpan } from '@/lib/logs/types'
+import { perceivedBrightness } from '@/lib/utils/color'
 import { getSpanPresentation } from '@/app/workspace/[workspaceId]/logs/model/span-presentation'
 import { normalizeToolId } from '@/tools/normalize'
 

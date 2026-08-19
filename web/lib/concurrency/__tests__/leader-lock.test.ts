@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { redisConfigMockFns } from '@sim/testing'
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { withLeaderLock } from '@/lib/concurrency/leader-lock'
 

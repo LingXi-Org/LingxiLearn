@@ -1,10 +1,5 @@
 import type { Context } from '@opentelemetry/api'
-import { createLogger } from '@/lib/logger'
 import type { PermissionType } from '@sim/platform-authz/workspace'
-import { toError } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { generateId } from '@/lib/utils/id'
-import { omit } from '@/lib/utils/object'
 import {
   type AttributedBillingRequestEnvelope,
   assertBillingAttributionSnapshot,
@@ -68,7 +63,12 @@ import {
   isCopilotToolPermissionsEnabled,
   isHosted,
 } from '@/lib/core/config/env-flags'
+import { createLogger } from '@/lib/logger'
 import { filterModelSafeWorkspaceFileAttachments } from '@/lib/uploads/contexts/workspace/workspace-file-secret-provenance'
+import { toError } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
+import { generateId } from '@/lib/utils/id'
+import { omit } from '@/lib/utils/object'
 import { refuseResolvedSecretProjection } from '@/executor/utils/resolved-secret-projection-refusal'
 import type { ResolvedSecretTraceRegistry } from '@/executor/utils/resolved-secret-trace-registry'
 

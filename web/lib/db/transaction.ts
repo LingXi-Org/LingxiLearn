@@ -1,9 +1,9 @@
 import { db } from '@sim/db'
+import type { DbOrTx } from '@/lib/db/types'
 import { createLogger } from '@/lib/logger'
 import { getPostgresErrorCode } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
-import type { DbOrTx } from '@/lib/db/types'
+import { sleep } from '@/lib/utils/helpers'
+import { backoffWithJitter } from '@/lib/utils/retry'
 
 const logger = createLogger('DbTransaction')
 

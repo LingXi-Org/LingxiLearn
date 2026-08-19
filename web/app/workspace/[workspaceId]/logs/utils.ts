@@ -1,7 +1,7 @@
 import React from 'react'
 import { Badge } from '@sim/emcn'
-import { formatDuration, formatRelativeTime } from '@sim/utils/formatting'
 import { format } from 'date-fns'
+import { formatDuration, formatRelativeTime } from '@/lib/utils/formatting'
 import type { RunStatus, TriggerPresentation } from './model/execution-log'
 
 /** Wire-compatibility fallback for historical dashboard rows with deleted sources. */

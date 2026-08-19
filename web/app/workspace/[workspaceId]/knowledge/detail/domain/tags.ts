@@ -9,7 +9,6 @@
  * Pure functions only — no React, no query client, no URL state.
  */
 
-import { formatDate } from '@sim/utils/formatting'
 import { format } from 'date-fns'
 import { ALL_TAG_SLOTS, type AllTagSlot, getFieldTypeForSlot } from '@/lib/knowledge/constants'
 import {
@@ -19,6 +18,7 @@ import {
 } from '@/lib/knowledge/filters/types'
 import type { DocumentTag } from '@/lib/knowledge/tags/types'
 import type { DocumentData } from '@/lib/knowledge/types'
+import { formatDate } from '@/lib/utils/formatting'
 
 /**
  * Minimal structural contract the tag domain needs from a tag definition.

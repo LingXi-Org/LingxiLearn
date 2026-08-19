@@ -3,13 +3,10 @@ import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamable
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import { db } from '@sim/db'
 import { mcpServers } from '@sim/db/schema'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
 import { and, eq, isNull, lte, or } from 'drizzle-orm'
 import { isTest } from '@/lib/core/config/env-flags'
 import { generateRequestId } from '@/lib/core/utils/request'
+import { createLogger } from '@/lib/logger'
 import { McpClient } from '@/lib/mcp/client'
 import { mcpConnectionManager } from '@/lib/mcp/connection-manager'
 import { mcpConnectionPool } from '@/lib/mcp/connection-pool'
@@ -42,6 +39,9 @@ import {
   type McpTransport,
 } from '@/lib/mcp/types'
 import { MCP_CLIENT_CONSTANTS, MCP_CONSTANTS } from '@/lib/mcp/utils'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
+import { backoffWithJitter } from '@/lib/utils/retry'
 import {
   isResolvedSecretTraceProvenanceV1,
   type ResolvedSecretTraceProvenanceV1,

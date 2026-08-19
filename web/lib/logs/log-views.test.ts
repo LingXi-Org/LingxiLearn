@@ -32,7 +32,7 @@ vi.mock('@/lib/execution/payloads/store', () => ({
   materializeLargeValueRef: materializeLargeValueRefMock,
 }))
 
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import type { TraceSpan } from '@/lib/logs/types'
 import { grepSpans, type LogViewContext, toFull, toOverview } from './log-views'
 

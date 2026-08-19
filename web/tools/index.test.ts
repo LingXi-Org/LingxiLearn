@@ -24,7 +24,7 @@ import {
   setEnv,
   setEnvFlags,
 } from '@sim/testing'
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import { projectToolResultForCopilot } from '@/lib/copilot/request/tools/resolved-secret-result'

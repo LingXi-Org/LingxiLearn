@@ -1,4 +1,4 @@
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import type { ToolConfig } from '@/tools/types'
 import { wizaHosting } from '@/tools/wiza/hosting'
 import type {

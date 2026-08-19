@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { Readable } from 'node:stream'
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { describe, expect, it } from 'vitest'
 import { sniffCsvDelimiterFromStream } from '@/lib/table/csv-delimiter-stream'
 import {

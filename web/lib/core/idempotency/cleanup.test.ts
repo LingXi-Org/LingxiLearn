@@ -6,7 +6,7 @@ import { resetDbChainMock } from '@sim/testing'
 import { like, notLike } from 'drizzle-orm'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@sim/utils/helpers', () => ({ sleep: vi.fn() }))
+vi.mock('@/lib/utils/helpers', () => ({ sleep: vi.fn() }))
 
 import { cleanupExpiredIdempotencyKeys } from '@/lib/core/idempotency/cleanup'
 

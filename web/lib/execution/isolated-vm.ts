@@ -2,10 +2,6 @@ import { type ChildProcess, execSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@/lib/utils/errors'
-import { filterUndefined } from '@/lib/utils/object'
-import { randomFloat } from '@sim/utils/random'
 import { env } from '@/lib/core/config/env'
 import { getConfiguredCacheProvider } from '@/lib/core/config/env-capabilities.server'
 import { getRedisClient } from '@/lib/core/config/redis'
@@ -16,6 +12,10 @@ import {
 import type { CodePlaceholderRuntimeBinding } from '@/lib/execution/code-placeholders'
 import { buildJavaScriptRuntimeBindingsSource } from '@/lib/execution/code-placeholders/javascript-runtime'
 import { MAX_ISOLATED_VM_BROKER_RESULT_JSON_CHARS } from '@/lib/execution/isolated-vm-limits'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
+import { filterUndefined } from '@/lib/utils/object'
+import { randomFloat } from '@/lib/utils/random'
 
 const logger = createLogger('IsolatedVMExecution')
 

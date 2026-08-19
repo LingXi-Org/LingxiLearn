@@ -1,4 +1,4 @@
-import type { EmbedInfo } from '@sim/utils/media-embed'
+import type { EmbedInfo } from '@/lib/utils/media-embed'
 
 /**
  * Iframes are rendered at native size then CSS-scaled down so embedded players keep their

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

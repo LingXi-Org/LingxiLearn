@@ -59,7 +59,7 @@ vi.mock('@/lib/core/execution-limits/metrics', () => ({
 
 vi.mock('@/lib/core/utils/background', () => ({ runDetached: mockRunDetached }))
 
-vi.mock('@sim/utils/helpers', () => ({ sleep: mockSleep }))
+vi.mock('@/lib/utils/helpers', () => ({ sleep: mockSleep }))
 
 vi.mock('@sim/db/schema', () => ({
   sandboxImage: {

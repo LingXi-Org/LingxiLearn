@@ -1,9 +1,9 @@
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
 import { NextResponse } from 'next/server'
 import { SSE_HEADERS } from '@/lib/core/utils/sse'
+import { createLogger } from '@/lib/logger'
 import type { EventLogEntry, EventLogReadResult } from '@/lib/realtime/event-log'
+import { toError } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
 
 const logger = createLogger('EventStreamRoute')
 

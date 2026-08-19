@@ -1,11 +1,4 @@
 import type { CreateSandboxFromSnapshotParams } from '@daytona/sdk'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { generateShortId } from '@/lib/utils/id'
-import {
-  IMMUTABLE_DAYTONA_SNAPSHOT_REF_ERROR,
-  isImmutableDaytonaSnapshotRef,
-} from '@sim/utils/sandbox-references'
 import { env } from '@/lib/core/config/env'
 import {
   isPayloadSizeLimitError,
@@ -31,6 +24,13 @@ import type {
   SandboxKind,
   SandboxProvider,
 } from '@/lib/execution/remote-sandbox/types'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
+import {
+  IMMUTABLE_DAYTONA_SNAPSHOT_REF_ERROR,
+  isImmutableDaytonaSnapshotRef,
+} from '@/lib/utils/sandbox-references'
 
 const logger = createLogger('DaytonaSandboxProvider')
 const DAYTONA_DEFAULT_SANDBOX_TTL_MS = 24 * 60 * 60 * 1000

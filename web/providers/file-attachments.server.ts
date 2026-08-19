@@ -1,10 +1,10 @@
 import { FileState, GoogleGenAI } from '@google/genai'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
 import { StorageService } from '@/lib/uploads'
 import { resolveTrustedFileContext } from '@/lib/uploads/utils/file-utils'
 import { downloadServableFileFromStorage } from '@/lib/uploads/utils/file-utils.server'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
 import { verifyFileAccess } from '@/app/api/files/authorization'
 import type { UserFile } from '@/executor/types'
 import {

@@ -1,4 +1,4 @@
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { dropcontactHosting } from '@/tools/dropcontact/hosting'
 import type {
   DropcontactEmailEntry,

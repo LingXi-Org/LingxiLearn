@@ -1,4 +1,4 @@
-import { backoffWithJitter } from '@sim/utils/retry'
+import { backoffWithJitter } from '@/lib/utils/retry'
 import {
   SCHEDULE_INFRA_RETRY_BASE_MS,
   SCHEDULE_INFRA_RETRY_MAX_MS,

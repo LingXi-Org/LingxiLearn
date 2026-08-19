@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { randomFloat } from '@sim/utils/random'
+import { sleep } from '@/lib/utils/helpers'
+import { randomFloat } from '@/lib/utils/random'
 
 const logger = createLogger('RetryUtils')
 
