@@ -17,9 +17,7 @@ import {
   Trash,
 } from '@sim/emcn'
 import { createLogger } from '@sim/logger'
-import { formatDate } from '@sim/utils/formatting'
 import {
-  ALL_TAG_SLOTS,
   type AllTagSlot,
   FIELD_TYPE_LABELS,
   KNOWLEDGE_TAG_DISPLAY_NAME_MAX_LENGTH,
@@ -28,47 +26,18 @@ import {
 import type { DocumentTag } from '@/lib/knowledge/tags/types'
 import type { DocumentData } from '@/lib/knowledge/types'
 import {
-  type TagDefinition,
-  useKnowledgeBaseTagDefinitions,
-} from '@/hooks/kb/use-knowledge-base-tag-definitions'
+  buildDocumentTags,
+  buildTagSlotPayload,
+  formatTagValueForModal,
+  getAvailableTagDefinitions,
+  getValueForFieldTypeChange,
+  hasTagNameConflict,
+} from '@/app/workspace/[workspaceId]/knowledge/detail/domain/tags'
+import { useKnowledgeBaseTagDefinitions } from '@/hooks/kb/use-knowledge-base-tag-definitions'
 import { type TagDefinitionInput, useTagDefinitions } from '@/hooks/kb/use-tag-definitions'
 import { useNextAvailableSlotMutation, useUpdateDocumentTags } from '@/hooks/queries/kb/knowledge'
 
 const logger = createLogger('DocumentTagsModal')
-
-/**
- * Gets the appropriate value when changing field types.
- * Clears value when type changes to allow placeholder to show.
- */
-function getValueForFieldType(
-  newFieldType: string,
-  currentFieldType: string,
-  currentValue: string
-): string {
-  return newFieldType === currentFieldType ? currentValue : ''
-}
-
-/** Format value for display based on field type */
-function formatValueForDisplay(value: string, fieldType: string): string {
-  if (!value) return ''
-  switch (fieldType) {
-    case 'boolean':
-      return value === 'true' ? 'True' : 'False'
-    case 'date':
-      try {
-        const date = new Date(value)
-        if (Number.isNaN(date.getTime())) return value
-        if (typeof value === 'string' && (value.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(value))) {
-          return formatDate(new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-        }
-        return formatDate(date)
-      } catch {
-        return value
-      }
-    default:
-      return value
-  }
-}
 
 interface DocumentTagsModalProps {
   open: boolean
@@ -105,29 +74,6 @@ export function DocumentTagsModal({
     value: '',
   })
 
-  const buildDocumentTags = useCallback((docData: DocumentData, definitions: TagDefinition[]) => {
-    const tags: DocumentTag[] = []
-
-    ALL_TAG_SLOTS.forEach((slot) => {
-      const rawValue = docData[slot]
-      const definition = definitions.find((def) => def.tagSlot === slot)
-
-      if (rawValue !== null && rawValue !== undefined && definition) {
-        const stringValue = String(rawValue).trim()
-        if (stringValue) {
-          tags.push({
-            slot,
-            displayName: definition.displayName,
-            fieldType: definition.fieldType,
-            value: stringValue,
-          })
-        }
-      }
-    })
-
-    return tags
-  }, [])
-
   const handleTagsChange = useCallback((newTags: DocumentTag[]) => {
     setDocumentTags(newTags)
   }, [])
@@ -136,16 +82,7 @@ export function DocumentTagsModal({
     async (tagsToSave: DocumentTag[]) => {
       if (!documentData) return
 
-      const tagData: Record<string, string> = {}
-
-      ALL_TAG_SLOTS.forEach((slot) => {
-        const tag = tagsToSave.find((t) => t.slot === slot)
-        if (tag?.value.trim()) {
-          tagData[slot] = tag.value.trim()
-        } else {
-          tagData[slot] = ''
-        }
-      })
+      const tagData = buildTagSlotPayload(tagsToSave)
 
       await updateDocumentTags({
         knowledgeBaseId,
@@ -208,22 +145,7 @@ export function DocumentTagsModal({
     setIsCreatingTag(false)
   }
 
-  const hasTagNameConflict = (name: string) => {
-    if (!name.trim()) return false
-
-    return documentTags.some((tag, index) => {
-      if (editingTagIndex !== null && index === editingTagIndex) {
-        return false
-      }
-      return tag.displayName.toLowerCase() === name.trim().toLowerCase()
-    })
-  }
-
-  const availableDefinitions = kbTagDefinitions.filter((def) => {
-    return !documentTags.some(
-      (tag) => tag.displayName.toLowerCase() === def.displayName.toLowerCase()
-    )
-  })
+  const availableDefinitions = getAvailableTagDefinitions(kbTagDefinitions, documentTags)
 
   const tagNameOptions = availableDefinitions.map((def) => ({
     label: def.displayName,
@@ -333,7 +255,7 @@ export function DocumentTagsModal({
   }
 
   const isTagEditing = editingTagIndex !== null || isCreatingTag
-  const tagNameConflict = hasTagNameConflict(editTagForm.displayName)
+  const tagNameConflict = hasTagNameConflict(documentTags, editTagForm.displayName, editingTagIndex)
 
   const hasTagChanges = () => {
     if (editingTagIndex === null) return true
@@ -361,7 +283,7 @@ export function DocumentTagsModal({
       const rebuiltTags = buildDocumentTags(documentData, tagDefinitions)
       setDocumentTags(rebuiltTags)
     }
-  }, [documentData, tagDefinitions, buildDocumentTags, isSavingTag])
+  }, [documentData, tagDefinitions, isSavingTag])
 
   const handleClose = (openState: boolean) => {
     if (!openState) {
@@ -407,7 +329,7 @@ export function DocumentTagsModal({
                   </span>
                   <div className='mb-[-1.5px] h-[14px] w-[1.25px] flex-shrink-0 rounded-full bg-[var(--border-1)]' />
                   <span className='min-w-0 flex-1 truncate text-[var(--text-muted)] text-caption'>
-                    {formatValueForDisplay(tag.value, tag.fieldType)}
+                    {formatTagValueForModal(tag.value, tag.fieldType)}
                   </span>
                   <div className='flex flex-shrink-0 items-center gap-1'>
                     <Button
@@ -596,7 +518,7 @@ export function DocumentTagsModal({
                           ...editTagForm,
                           displayName: value,
                           fieldType: newFieldType,
-                          value: getValueForFieldType(
+                          value: getValueForFieldTypeChange(
                             newFieldType,
                             editTagForm.fieldType,
                             editTagForm.value

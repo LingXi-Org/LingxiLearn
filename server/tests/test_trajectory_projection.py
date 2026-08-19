@@ -5,8 +5,11 @@ from typing import Any
 import pytest
 
 from lingxilearn.api.workspace_routes import _utc_datetime
+from lingxilearn.application.agent_events import (
+    AgentEventService,
+    _annotate_truncated_trajectory,
+)
 from lingxilearn.runtime.trajectory import TRAJECTORY_LANES, build_trajectory_projection
-from lingxilearn.service import Service
 
 
 def test_projection_uses_execution_clock_and_eight_lanes() -> None:
@@ -305,10 +308,10 @@ async def test_execution_snapshot_event_reader_pages_past_5000_without_truncatin
             return self.events[after : after + limit]
 
     repo = PagedRepo()
-    service = Service.__new__(Service)
-    service.agent_task_repository = repo
+    events = AgentEventService.__new__(AgentEventService)
+    events._agent_tasks = repo
 
-    records, status = await service._agent_events_for_execution_snapshot("exec", "learner")
+    records, status = await events._agent_events_for_execution_snapshot("exec", "learner")
 
     assert len(records) == 5001
     assert status["truncated"] is False
@@ -340,7 +343,7 @@ def test_truncated_event_read_marks_only_uncertain_trajectory_tail_inferred() ->
             },
         ]
     }
-    Service._annotate_truncated_trajectory(
+    _annotate_truncated_trajectory(
         trajectory,
         {
             "truncated": True,
