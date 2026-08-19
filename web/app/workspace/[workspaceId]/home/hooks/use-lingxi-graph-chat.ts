@@ -9,7 +9,6 @@ import {
   agentTaskV1Events,
   answerAgentInteraction,
   api,
-  type LingxiAttachmentRef,
   subscribeAgentV1Events,
 } from '@/lib/lingxi/api'
 import { decodeLingxiMothershipEvent } from '@/lib/lingxi/generated/mothership-stream-v1'
@@ -43,6 +42,14 @@ import type {
   FileAttachmentForApi,
   GenericResourceData,
 } from '../types'
+import { attachmentRefs, contextOptions, requestMessage } from './controllers/context-controller'
+import {
+  mergeAgentTaskEvent,
+  RUNTIME_GRAPH_REFRESH_EVENTS,
+  reduceV1TurnState,
+} from './controllers/event-controller'
+import { lingxiIdempotencyKey, queueKeyFor, queueMigration } from './controllers/queue-controller'
+import { artifactResourceId, artifactResources } from './controllers/resource-controller'
 import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './use-chat'
 
 function userMessage(
@@ -66,240 +73,11 @@ function userMessage(
   }
 }
 
-function contextSuffix(contexts?: ChatContext[]): string {
-  const entries = (contexts ?? [])
-    .map((context) => {
-      const label = context.label.trim()
-      const selectionText =
-        'text' in context && typeof context.text === 'string' ? context.text.trim() : ''
-      return selectionText ? `${label}:\n${selectionText}` : label
-    })
-    .filter(Boolean)
-  return entries.length > 0
-    ? `\n\n[Context]\n${entries.map((entry) => `- ${entry}`).join('\n')}`
-    : ''
-}
-
-function requestMessage(content: string, contexts?: ChatContext[]): string {
-  const normalized = content.trim()
-  const maxLength = 4000
-  if (normalized.length >= maxLength) return normalized.slice(0, maxLength)
-  return `${normalized}${contextSuffix(contexts).slice(0, maxLength - normalized.length)}`
-}
-
-function attachmentRefs(attachments?: FileAttachmentForApi[]): LingxiAttachmentRef[] {
-  return (attachments ?? [])
-    .filter((attachment) => Boolean(attachment.key && attachment.filename))
-    .map((attachment) => ({
-      key: attachment.key,
-      ...(attachment.path ? { path: attachment.path } : {}),
-      filename: attachment.filename,
-      media_type: attachment.media_type,
-      size: attachment.size,
-    }))
-}
-
-function normalizeArtifactKind(artifact: string): string {
-  if (artifact === 'lesson_intro') return 'lesson-intro'
-  if (artifact === 'lecture_deck') return 'lecture-deck'
-  return artifact
-}
-
-function artifactResourceId(taskId: string, artifact: string): string {
-  return `lingxi-artifact:${taskId}:${normalizeArtifactKind(artifact)}`
-}
-
-const RUNTIME_GRAPH_REFRESH_EVENTS = new Set([
-  'run.started',
-  'run.resumed',
-  'round.started',
-  'decision.recorded',
-  'node.started',
-  'node.completed',
-  'node.failed',
-  'node.held',
-  'node.revising',
-  'agent.started',
-  'agent.completed',
-  'agent.failed',
-])
-
-/**
- * Translate shared chat chips into the small, learner-scoped reference contract
- * understood by the LingxiGraph API. Unsupported legacy editor chips are
- * intentionally ignored; this surface never sends an editable workflow
- * reference to the learning graph.
- */
-function contextOptions(contexts?: ChatContext[]) {
-  const resourceRefs: Array<Record<string, unknown>> = []
-  const skillIds: string[] = []
-  for (const context of contexts ?? []) {
-    switch (context.kind) {
-      case 'file':
-        resourceRefs.push({ type: 'file', id: context.fileId, label: context.label })
-        break
-      case 'file_selection':
-        resourceRefs.push({
-          type: 'file',
-          id: context.fileId,
-          label: context.label,
-          selection: {
-            text: context.text,
-            fileName: context.fileName,
-            ...(context.startLine !== undefined ? { startLine: context.startLine } : {}),
-            ...(context.endLine !== undefined ? { endLine: context.endLine } : {}),
-          },
-        })
-        break
-      case 'table':
-        resourceRefs.push({ type: 'table', id: context.tableId, label: context.label })
-        break
-      case 'table_selection':
-        resourceRefs.push({
-          type: 'table',
-          id: context.tableId,
-          label: context.label,
-          selection: {
-            tableName: context.tableName,
-            rowIds: context.rowIds,
-            ...(context.columnIds ? { columnIds: context.columnIds } : {}),
-          },
-        })
-        break
-      case 'knowledge':
-        if (context.knowledgeId) {
-          resourceRefs.push({ type: 'knowledge', id: context.knowledgeId, label: context.label })
-        }
-        break
-      case 'past_chat':
-        resourceRefs.push({ type: 'task', id: context.chatId, label: context.label })
-        break
-      case 'skill':
-        skillIds.push(context.skillId)
-        break
-      default:
-        break
-    }
-  }
-  return {
-    resourceRefs: resourceRefs.filter((ref) => typeof ref.id === 'string' && ref.id.length > 0),
-    skillIds: [...new Set(skillIds)],
-  }
-}
-
-function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[] {
-  if (!task) return []
-  const entries: Array<{
-    key: keyof AgentTaskSnapshot['artifacts']
-    title: string
-    path?: string
-  }> = [
-    {
-      key: 'lesson_intro',
-      title: '课程引入',
-      path: task.artifacts.lesson_intro?.url,
-    },
-    {
-      key: 'lecture_deck',
-      title: '交互式讲义',
-      path: task.artifacts.lecture_deck?.url,
-    },
-    {
-      key: 'quiz',
-      title: '知识检测',
-    },
-    {
-      key: 'visual',
-      title: '交互式可视化',
-      path: task.artifacts.visual?.url,
-    },
-  ]
-  const graphResource: MothershipResource = {
-    type: 'generic',
-    id: `runtime-graph:${task.id}`,
-    title: '实时运行图',
-  }
-  const unlocked = new Set(
-    (task.delivery?.queue ?? [])
-      .filter((item) => item.state === 'unlocked' || item.state === 'consumed')
-      .map((item) => item.artifact)
-  )
-  const hasDeliveryGate = (task.delivery?.queue ?? []).length > 0
-  const artifactResources = entries
-    .filter(({ key }) => {
-      const artifact =
-        key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key
-      return Boolean(task.artifacts[key]?.available) && (!hasDeliveryGate || unlocked.has(artifact))
-    })
-    .sort((left, right) => {
-      const order = task.delivery?.order ?? []
-      return (
-        order.indexOf(
-          left.key === 'lesson_intro'
-            ? 'lesson-intro'
-            : left.key === 'lecture_deck'
-              ? 'lecture-deck'
-              : left.key
-        ) -
-        order.indexOf(
-          right.key === 'lesson_intro'
-            ? 'lesson-intro'
-            : right.key === 'lecture_deck'
-              ? 'lecture-deck'
-              : right.key
-        )
-      )
-    })
-    .map(({ key, title, path }) => ({
-      type: 'file' as const,
-      id: `lingxi-artifact:${task.id}:${key === 'lesson_intro' ? 'lesson-intro' : key === 'lecture_deck' ? 'lecture-deck' : key}`,
-      title,
-      path,
-    }))
-  return [graphResource, ...artifactResources]
-}
-
 const EMPTY_LINGXI_QUEUE: QueuedMothershipMessage[] = []
-
-/**
- * Reduce the authoritative V1 turn/run statuses into the hook's turn state.
- * The V0 event reducer remains the fallback for tasks without V1 history.
- */
-function reduceV1TurnState(
-  current: LingxiTurnState,
-  envelope: {
-    type: string
-    payload: Record<string, unknown>
-  }
-): LingxiTurnState {
-  const status = typeof envelope.payload.status === 'string' ? envelope.payload.status : ''
-  switch (envelope.type) {
-    case 'turn':
-      if (status === 'started' || status === 'resumed') return 'active'
-      if (status === 'awaiting_user') return 'awaiting_user'
-      if (status === 'delivered' || status === 'failed' || status === 'cancelled') {
-        return 'terminal'
-      }
-      return current
-    case 'run':
-      if (status === 'started' || status === 'resumed') return 'active'
-      if (status === 'checkpoint_pause') return 'awaiting_user'
-      return current
-    case 'span':
-    case 'tool':
-      return 'active'
-    default:
-      return current
-  }
-}
 
 function generateLingxiId(prefix: string): string {
   const uuid = globalThis.crypto?.randomUUID?.()
   return `${prefix}:${uuid ?? `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`}`
-}
-
-function lingxiIdempotencyKey(messageId: string, revision = ''): string {
-  return `lingxi-message:${messageId}${revision ? `:${revision}` : ''}`
 }
 
 export function useLingxiGraphChat(
@@ -331,7 +109,6 @@ export function useLingxiGraphChat(
   const [subscriptionEpoch, setSubscriptionEpoch] = useState(0)
   const [turnState, setTurnState] = useState<LingxiTurnState>('idle')
   const [dispatchingHeadId, setDispatchingHeadId] = useState<string | null>(null)
-  const pendingQueueKey = useMemo(() => `lingxi:pending:${workspaceId}`, [workspaceId])
   const [activeResourceIdState, setActiveResourceIdState] = useState<string | null>(
     options?.initialActiveResourceId ?? null
   )
@@ -349,13 +126,13 @@ export function useLingxiGraphChat(
   const messagesRef = useRef<ChatMessage[]>([])
   const requestIdRef = useRef<string | undefined>(initialChatId)
   const resolvedChatIdRef = useRef<string | undefined>(initialChatId)
-  const queueKeyRef = useRef(initialChatId ?? pendingQueueKey)
+  const queueKeyRef = useRef(queueKeyFor(workspaceId, initialChatId))
   const turnStateRef = useRef<LingxiTurnState>('idle')
   const optimisticActiveRef = useRef(false)
   const dispatchingHeadIdRef = useRef<string | null>(null)
   const drainQueueRef = useRef<() => Promise<void>>(async () => {})
 
-  const queueKey = resolvedChatId ?? pendingQueueKey
+  const queueKey = queueKeyFor(workspaceId, resolvedChatId)
   queueKeyRef.current = queueKey
   const messageQueue = useMothershipQueueStore(
     (state) => state.queues[queueKey] ?? EMPTY_LINGXI_QUEUE
@@ -453,10 +230,7 @@ export function useLingxiGraphChat(
       if (cancelled) return
       const eventState = reduceLingxiTurnState(turnStateRef.current, event)
       applyTurnState(eventState)
-      setEvents((current) => {
-        if (current.some((candidate) => candidate.sequence === event.sequence)) return current
-        return [...current, event].sort((a, b) => a.sequence - b.sequence)
-      })
+      setEvents((current) => mergeAgentTaskEvent(current, event))
       void api.recordLearningEvent(taskId, event).catch(() => {})
       const eventWorkflowState =
         event.workflowState ?? (event.payload.workflowState as Record<string, unknown> | undefined)
@@ -819,7 +593,8 @@ export function useLingxiGraphChat(
         if (!taskId) {
           const created = await currentAdapter.createTask(prompt, attachments, context)
           taskId = created.id
-          migrateQueuedMessages(pendingQueueKey, taskId)
+          const migration = queueMigration(workspaceId, taskId)
+          migrateQueuedMessages(migration.from, migration.to)
           resolvedChatIdRef.current = taskId
           requestIdRef.current = taskId
           setResolvedChatId(taskId)
@@ -841,7 +616,7 @@ export function useLingxiGraphChat(
         setIsSending(false)
       }
     },
-    [applyTurnState, migrateQueuedMessages, pendingQueueKey, router, workspaceId]
+    [applyTurnState, migrateQueuedMessages, router, workspaceId]
   )
 
   /**
