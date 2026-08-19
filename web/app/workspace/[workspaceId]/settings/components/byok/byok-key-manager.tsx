@@ -14,7 +14,7 @@ import {
   ChipModalHeader,
 } from '@sim/emcn'
 import { Eye, EyeOff, Search } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import {
   CHIP_FIELD_INPUT,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   BLOCK_OPERATIONS,
   BLOCKS_OPERATIONS,

@@ -8,7 +8,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { truncate } from '@sim/utils/string'
 import { withPiSandbox } from '@/lib/execution/remote-sandbox'
 import { resolvePiRunLifetimeMs } from '@/lib/execution/remote-sandbox/pi-lifetime'

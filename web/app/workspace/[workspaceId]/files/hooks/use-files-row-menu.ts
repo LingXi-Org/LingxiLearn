@@ -1,7 +1,7 @@
 'use client'
 
 import { type MouseEvent, useCallback, useMemo, useRef } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
 import {
   buildMoveOptions,

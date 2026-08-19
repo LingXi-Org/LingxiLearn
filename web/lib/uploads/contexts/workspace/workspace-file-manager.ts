@@ -6,7 +6,7 @@
 import { randomBytes } from 'crypto'
 import { db } from '@sim/db'
 import { uploadSession, workspace, workspaceFiles } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   describeError,
   getErrorMessage,

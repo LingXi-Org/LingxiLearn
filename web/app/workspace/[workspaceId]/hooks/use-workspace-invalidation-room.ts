@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { RoomType } from '@sim/realtime-protocol/rooms'
 import { useSocket } from '@/app/workspace/providers/socket-provider'
 

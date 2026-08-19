@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { PlatformEvents } from '@/lib/core/telemetry'
 import type { ParallelDeepResearchParams } from '@/tools/parallel/types'

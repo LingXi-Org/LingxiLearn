@@ -1,6 +1,6 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
 import { requirePrincipalSubjectUserId } from '@/lib/auth/principal'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ShareAuthType, ShareRecord } from '@/lib/api/contracts/public-shares'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import {

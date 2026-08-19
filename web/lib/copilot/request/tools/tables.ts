@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { parse as csvParse } from 'csv-parse/sync'
 import { executeCopilotReplaceProjectedWireRows } from '@/lib/copilot/application/table-commands'
 import { messageForCopilotTableError } from '@/lib/copilot/auth/table-delegation'

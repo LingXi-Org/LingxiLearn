@@ -1,6 +1,6 @@
 import '@sim/testing/mocks/executor'
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { authOAuthUtilsMock, authOAuthUtilsMockFns } from '@sim/testing'
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 

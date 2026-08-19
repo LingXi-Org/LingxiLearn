@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { compactSubflowResults } from '@/lib/execution/payloads/serializer'
 import { DEFAULTS } from '@/executor/constants'

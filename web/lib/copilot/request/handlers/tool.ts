@@ -1,5 +1,5 @@
 import { isBrowserToolName } from '@sim/browser-protocol'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isTerminalToolName } from '@sim/terminal-protocol'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import type { AsyncCompletionSignal } from '@/lib/copilot/async-runs/lifecycle'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ChatContext, FileAttachmentForApi } from '@/app/workspace/[workspaceId]/home/types'
 
 const logger = createLogger('MothershipEvents')

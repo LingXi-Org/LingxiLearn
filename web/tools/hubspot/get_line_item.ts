@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { HubSpotGetLineItemParams, HubSpotGetLineItemResponse } from '@/tools/hubspot/types'
 import { LINE_ITEM_OBJECT_OUTPUT } from '@/tools/hubspot/types'
 import type { ToolConfig } from '@/tools/types'

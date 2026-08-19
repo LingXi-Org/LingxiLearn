@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { JWT } from 'google-auth-library'
 import MailComposer from 'nodemailer/lib/mail-composer'
 import { env } from '@/lib/core/config/env'

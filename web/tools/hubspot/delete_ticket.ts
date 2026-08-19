@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { HubSpotDeleteTicketParams, HubSpotDeleteTicketResponse } from '@/tools/hubspot/types'
 import type { ToolConfig } from '@/tools/types'
 

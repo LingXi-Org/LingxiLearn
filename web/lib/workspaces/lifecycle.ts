@@ -12,7 +12,7 @@ import {
   workspace,
   workspaceFiles,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { mcpPubSub } from '@/lib/mcp/pubsub'
 import { mcpService } from '@/lib/mcp/service'

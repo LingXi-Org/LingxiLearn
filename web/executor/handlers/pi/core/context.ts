@@ -6,7 +6,7 @@
  * user task plus the agent's final message.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { memoryService } from '@/executor/handlers/agent/memory'
 import { resolveSkillContentById } from '@/executor/handlers/agent/skills-resolver'

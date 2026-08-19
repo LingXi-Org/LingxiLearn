@@ -15,7 +15,7 @@ import {
   SecretInput,
 } from '@sim/emcn'
 import { ChevronDown, ChevronRight } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import type { McpAuthType, McpTransport } from '@/lib/mcp/types'
 import {

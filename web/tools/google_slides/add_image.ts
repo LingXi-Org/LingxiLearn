@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateRandomString } from '@sim/utils/random'
 import type { ToolConfig } from '@/tools/types'
 

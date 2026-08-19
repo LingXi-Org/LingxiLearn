@@ -2,7 +2,7 @@
  * React Query hooks for managing workflow metadata and mutations.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import {
   keepPreviousData,

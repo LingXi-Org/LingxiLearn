@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { NextResponse } from 'next/server'
 import { validateMondayNumericId } from '@/lib/core/security/input-validation'

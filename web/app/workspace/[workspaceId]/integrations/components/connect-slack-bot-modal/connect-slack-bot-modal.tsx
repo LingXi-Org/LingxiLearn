@@ -13,7 +13,7 @@ import {
   Wizard,
 } from '@sim/emcn'
 import { Loader } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { SlackIcon } from '@/components/icons'

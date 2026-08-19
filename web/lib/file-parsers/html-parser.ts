@@ -1,5 +1,5 @@
 import { readFile } from 'fs/promises'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import * as cheerio from 'cheerio'
 import type { FileParseResult, FileParser } from '@/lib/file-parsers/types'

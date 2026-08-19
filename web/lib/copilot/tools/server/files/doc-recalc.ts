@@ -1,5 +1,5 @@
 import type { Principal } from '@/lib/auth/principal'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { DocCompileUserError } from '@/lib/copilot/tools/server/files/doc-compile-error'
 import { CodeLanguage } from '@/lib/execution/languages'
 import { executeInSandbox } from '@/lib/execution/remote-sandbox'

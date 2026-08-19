@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { AuthorizedWorkspaceUseCaseContext } from '@/lib/core/application'
 import { notifyWorkspaceFilesChanged } from '@/lib/realtime/notify'
 import {

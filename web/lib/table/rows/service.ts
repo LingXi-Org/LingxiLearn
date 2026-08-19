@@ -12,7 +12,7 @@
 
 import { db } from '@sim/db'
 import { tableJobs, userTableRows } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { and, asc, count, eq, inArray, lte, notInArray, type SQL, sql } from 'drizzle-orm'

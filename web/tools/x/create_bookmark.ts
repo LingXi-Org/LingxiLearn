@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ToolConfig } from '@/tools/types'
 import type { XCreateBookmarkParams, XCreateBookmarkResponse } from '@/tools/x/types'
 

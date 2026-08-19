@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { extractInputFieldsFromBlocks } from '@/lib/workflows/input-format'
 import {
   buildCanonicalIndex,

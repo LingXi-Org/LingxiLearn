@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import OpenAI from 'openai'
 import { getOllamaUrl } from '@/lib/core/utils/urls'

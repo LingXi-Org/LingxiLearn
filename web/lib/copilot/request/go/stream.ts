@@ -1,5 +1,5 @@
 import { type Context, SpanStatusCode } from '@opentelemetry/api'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { ORCHESTRATION_TIMEOUT_MS } from '@/lib/copilot/constants'
 import {

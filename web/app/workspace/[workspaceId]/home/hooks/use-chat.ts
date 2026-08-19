@@ -9,7 +9,6 @@ import {
 } from 'react'
 import { isBrowserToolName } from '@sim/browser-protocol'
 import { isPendingDesktopScopeId } from '@sim/desktop-bridge'
-import { createLogger } from '@sim/logger'
 import { isTerminalToolName } from '@sim/terminal-protocol'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { sleep } from '@sim/utils/helpers'
@@ -91,6 +90,7 @@ import type { LingxiGraphChatAdapter } from '@/lib/lingxi/lingxi-graph-adapter'
 import type { LingxiV1ThreadModel } from '@/lib/lingxi/stream/turn-model'
 import type { LingxiTurnState } from '@/lib/lingxi/turn-state'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import { createLogger } from '@/lib/logger'
 import { sendMothershipMessage } from '@/lib/mothership/events'
 import { initTerminalTransport } from '@/lib/terminal/transport'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
@@ -129,7 +129,6 @@ import type {
   QueuedSendHandoffSeed,
 } from '@/stores/mothership-queue/types'
 import type { ChatContext } from '@/stores/panel'
-import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import type { WorkflowMetadata } from '@/stores/workflows/registry/types'
 import type {
   ChatMessage,

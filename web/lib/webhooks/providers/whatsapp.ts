@@ -1,6 +1,6 @@
 import { db, workflowDeploymentVersion } from '@sim/db'
 import { webhook } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { sha256Hex } from '@sim/security/hash'
 import { hmacSha256Hex } from '@sim/security/hmac'

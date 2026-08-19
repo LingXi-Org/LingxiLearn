@@ -1,4 +1,4 @@
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import type { FetchMessageObject, MailboxLockObject } from 'imapflow'
 import { ImapFlow } from 'imapflow'

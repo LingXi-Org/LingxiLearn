@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ToolConfig } from '@/tools/types'
 import type { XGetPersonalizedTrendsParams, XPersonalizedTrendListResponse } from '@/tools/x/types'
 import { transformPersonalizedTrend } from '@/tools/x/types'

@@ -1,6 +1,6 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
 import { resolvePrincipalAttribution } from '@/lib/auth/principal'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { isTriggerDevEnabled } from '@/lib/core/config/env-flags'

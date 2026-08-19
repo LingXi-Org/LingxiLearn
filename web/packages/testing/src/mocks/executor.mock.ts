@@ -19,7 +19,7 @@ import { setupGlobalFetchMock } from './fetch.mock'
 import { loggerMock } from './logger.mock'
 
 // Logger
-vi.mock('@sim/logger', () => loggerMock)
+vi.mock('@/lib/logger', () => loggerMock)
 
 // Blocks
 vi.mock('@/blocks/index', () => ({

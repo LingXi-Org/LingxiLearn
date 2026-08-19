@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { filterUndefined } from '@sim/utils/object'
 import { truncate } from '@sim/utils/string'
 import {

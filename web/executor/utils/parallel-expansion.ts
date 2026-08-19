@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { sha256Hex } from '@sim/security/hash'
 import { CONTROL_BACK_EDGE_HANDLES, EDGE } from '@/executor/constants'
 import type { DAG, DAGNode } from '@/executor/dag/builder'

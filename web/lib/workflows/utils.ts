@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { folder as folderTable, workflow as workflowTable } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { authorizeWorkflowByWorkspacePermission } from '@sim/platform-authz/workflow'
 import { generateId } from '@sim/utils/id'
 import { and, asc, eq, inArray, isNull, min, sql } from 'drizzle-orm'

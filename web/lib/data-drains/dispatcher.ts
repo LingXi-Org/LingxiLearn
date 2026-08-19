@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { dataDrainRuns, dataDrains } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { and, eq, isNull, lt, or } from 'drizzle-orm'
 import { isOrganizationOnEnterprisePlan } from '@/lib/billing/core/subscription'

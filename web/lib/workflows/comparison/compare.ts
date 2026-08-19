@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { blockRetryEquals } from '@sim/workflow-types/workflow'
 import type { WorkflowState } from '@/stores/workflows/workflow/types'
 import {

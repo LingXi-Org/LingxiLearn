@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { webhook } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 import type {
   FormatInputContext,

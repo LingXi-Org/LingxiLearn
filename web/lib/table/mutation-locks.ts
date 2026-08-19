@@ -18,7 +18,7 @@
  *   never blocked.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { HttpError } from '@/lib/core/utils/http-error'
 import { getColumnId } from '@/lib/table/column-keys'
 import type { RowData, TableDefinition, TableLockKind } from '@/lib/table/types'

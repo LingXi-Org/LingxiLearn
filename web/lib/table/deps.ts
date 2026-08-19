@@ -4,7 +4,7 @@
  * can import it without pulling in `@sim/db` and other server-only deps.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type {
   RowData,
   RowExecutionMetadata,

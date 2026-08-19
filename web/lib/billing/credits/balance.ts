@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { organization, userStats } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq, sql } from 'drizzle-orm'
 import { getEffectiveBillingStatus } from '@/lib/billing/core/access'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'

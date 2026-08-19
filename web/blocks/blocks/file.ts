@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { DocumentIcon } from '@/components/icons'
 import { inferContextFromKey } from '@/lib/uploads/utils/file-utils'
 import type { BlockConfig, SubBlockType } from '@/blocks/types'

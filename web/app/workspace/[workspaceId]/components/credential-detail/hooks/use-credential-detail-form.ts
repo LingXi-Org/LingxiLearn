@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { useUpdateWorkspaceCredential, type WorkspaceCredential } from '@/hooks/queries/credentials'
 import { useUnsavedChangesGuard } from './use-unsaved-changes-guard'

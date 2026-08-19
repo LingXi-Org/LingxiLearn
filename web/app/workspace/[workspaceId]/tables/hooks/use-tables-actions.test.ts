@@ -53,7 +53,7 @@ vi.mock('@sim/emcn', () => ({
   toast: { success: vi.fn(), error: (...args: unknown[]) => toastError(...args) },
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 

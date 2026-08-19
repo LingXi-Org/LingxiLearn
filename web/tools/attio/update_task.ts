@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ToolConfig } from '@/tools/types'
 import type { AttioUpdateTaskParams, AttioUpdateTaskResponse } from './types'
 import { TASK_OUTPUT_PROPERTIES } from './types'

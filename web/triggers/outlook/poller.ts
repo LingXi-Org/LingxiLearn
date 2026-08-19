@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { OutlookIcon } from '@/components/icons'
 import { requestJson } from '@/lib/api/client/request'
 import { outlookFoldersSelectorContract } from '@/lib/api/contracts/selectors/microsoft'

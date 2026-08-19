@@ -11,7 +11,7 @@ import {
   DEFAULT_TEAM_STORAGE_LIMIT_GB,
 } from '@sim/db/constants'
 import { organization, userStats } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isRecordLike } from '@sim/utils/object'
 import { eq } from 'drizzle-orm'
 import type { HighestPrioritySubscription } from '@/lib/billing/core/plan'

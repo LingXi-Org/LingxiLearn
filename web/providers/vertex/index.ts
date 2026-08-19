@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { OAuth2Client } from 'google-auth-library'
 import { env } from '@/lib/core/config/env'
 import {

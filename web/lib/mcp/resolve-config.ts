@@ -4,7 +4,7 @@
  * Do NOT import this file in client components.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import {
   type EnvironmentResolutionSnapshot,

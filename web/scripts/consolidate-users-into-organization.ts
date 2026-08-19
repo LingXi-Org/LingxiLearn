@@ -63,7 +63,7 @@
 
 import { db } from '@sim/db'
 import { member, organization, session, user, workspace } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { normalizeEmail } from '@sim/utils/string'
 import { and, count, eq, inArray, isNull, ne } from 'drizzle-orm'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateShortId } from '@sim/utils/id'
 import {
   MothershipStreamV1RunKind,

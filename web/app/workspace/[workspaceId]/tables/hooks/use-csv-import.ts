@@ -2,7 +2,7 @@
 
 import { type ChangeEvent, type RefObject, useCallback, useRef, useState } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { pickCsvFiles } from '@/app/workspace/[workspaceId]/tables/csv'
 import { useImportCsv } from '@/hooks/queries/tables'
 import { useImportTrayStore } from '@/stores/table/import-tray/store'

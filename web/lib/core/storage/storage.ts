@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getConfiguredCacheProvider } from '@/lib/core/config/env-capabilities.server'
 import { getRedisClient } from '@/lib/core/config/redis'
 

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { isPayloadSizeLimitError } from '@/lib/core/utils/stream-limits'
 import { isUserFileWithMetadata } from '@/lib/core/utils/user-file'

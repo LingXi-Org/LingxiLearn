@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { loadWorkflowFromNormalizedTables } from '@/lib/workflows/persistence/utils'
 import { hasValidStartBlockInState } from '@/lib/workflows/triggers/trigger-utils'
 

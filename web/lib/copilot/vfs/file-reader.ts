@@ -1,5 +1,5 @@
 import { type Span, trace } from '@opentelemetry/api'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import type { SharpConstructor } from 'sharp'
 import {

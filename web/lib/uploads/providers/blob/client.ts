@@ -1,6 +1,6 @@
 import type { Readable } from 'node:stream'
 import type { BlobServiceClient as BlobServiceClientType } from '@azure/storage-blob'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import {
   assertKnownSizeWithinLimit,

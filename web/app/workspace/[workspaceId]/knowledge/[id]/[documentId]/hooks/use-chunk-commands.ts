@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ChunkData } from '@/lib/knowledge/types'
 import { resolveBulkTargets } from '@/app/workspace/[workspaceId]/knowledge/detail/domain/documents'
 import { useBulkChunkOperation, useUpdateChunk } from '@/hooks/queries/kb/knowledge'

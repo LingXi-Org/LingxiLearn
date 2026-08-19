@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import { AuditAction, AuditResourceType } from '@sim/audit'
 import { requirePrincipalSubjectUserId, resolvePrincipalAttribution } from '@/lib/auth/principal'
-import { getRequestContext } from '@sim/logger'
+import { getRequestContext } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { isPlainRecord } from '@sim/utils/object'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

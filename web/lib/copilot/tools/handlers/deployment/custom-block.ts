@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { generateShortId } from '@sim/utils/id'
 import { isAllowedCustomBlockIconUrl } from '@/lib/api/contracts/custom-blocks'

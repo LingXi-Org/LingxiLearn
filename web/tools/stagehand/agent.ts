@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { StagehandAgentParams, StagehandAgentResponse } from '@/tools/stagehand/types'
 import { STAGEHAND_AGENT_RESULT_OUTPUT_PROPERTIES } from '@/tools/stagehand/types'
 import type { ToolConfig } from '@/tools/types'

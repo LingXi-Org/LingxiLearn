@@ -1,5 +1,5 @@
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { isRecordLike } from '@sim/utils/object'
 import type { StreamingExecution } from '@/executor/types'

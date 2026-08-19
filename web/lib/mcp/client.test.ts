@@ -16,7 +16,7 @@ const { mockLogger, mockSdkConnect, mockSdkListTools, mockPinnedClose } = vi.hoi
   mockPinnedClose: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => mockLogger,
 }))
 

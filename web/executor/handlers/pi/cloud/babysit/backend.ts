@@ -4,7 +4,7 @@
  * delimited untrusted PR feedback, but no GitHub or Sim tools.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { truncate } from '@sim/utils/string'
 import { sleepUntilAborted } from '@/lib/data-drains/destinations/utils'

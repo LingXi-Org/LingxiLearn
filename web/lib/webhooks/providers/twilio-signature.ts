@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { NextResponse } from 'next/server'
 import type { AuthContext } from '@/lib/webhooks/providers/types'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getRedisClient, onRedisReconnect } from '@/lib/core/config/redis'
 import { getStorageMethod, type StorageMethod } from '@/lib/core/storage'
 import type { RateLimitStorageAdapter } from './adapter'

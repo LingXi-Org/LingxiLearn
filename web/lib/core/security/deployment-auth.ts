@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import type { NextRequest } from 'next/server'
 import type { TokenBucketConfig } from '@/lib/core/rate-limiter'

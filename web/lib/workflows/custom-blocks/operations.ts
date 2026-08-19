@@ -6,7 +6,7 @@ import {
   workflowDeploymentVersion,
   workspace,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId, generateShortId } from '@sim/utils/id'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { isOrganizationOnEnterprisePlan } from '@/lib/billing/core/subscription'

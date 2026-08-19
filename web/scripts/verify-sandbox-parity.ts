@@ -33,7 +33,7 @@
  */
 
 import { writeFile } from 'node:fs/promises'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { CodeLanguage } from '@/lib/execution/languages'
 import { executeInSandbox, executeShellInSandbox } from '@/lib/execution/remote-sandbox'

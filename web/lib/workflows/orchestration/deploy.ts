@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import type { PrincipalActor } from '@/lib/auth/principal'
 import { db, workflowDeploymentVersion, workflow as workflowTable } from '@sim/db'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { assertWorkflowMutable, WorkflowLockedError } from '@sim/platform-authz/workflow'
 import { sha256Hex } from '@sim/security/hash'
 import { getErrorMessage } from '@sim/utils/errors'

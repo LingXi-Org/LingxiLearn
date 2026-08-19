@@ -136,7 +136,7 @@ export const isEmailVerificationEnabled = isTruthy(env.EMAIL_VERIFICATION_ENABLE
 export const isAuthDisabled = isTruthy(env.DISABLE_AUTH) && !isHosted
 
 if (isTruthy(env.DISABLE_AUTH)) {
-  import('@sim/logger')
+  import('@/lib/logger')
     .then(({ createLogger }) => {
       const logger = createLogger('EnvFlags')
       if (isHosted) {
@@ -165,7 +165,7 @@ if (isTruthy(env.DISABLE_AUTH)) {
 export const isPrivateDatabaseHostsAllowed = isTruthy(env.ALLOW_PRIVATE_DATABASE_HOSTS) && !isHosted
 
 if (isTruthy(env.ALLOW_PRIVATE_DATABASE_HOSTS)) {
-  import('@sim/logger')
+  import('@/lib/logger')
     .then(({ createLogger }) => {
       const logger = createLogger('EnvFlags')
       if (isHosted) {

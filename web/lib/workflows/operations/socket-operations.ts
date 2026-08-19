@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { getSessionSnapshot } from '@/lib/auth/session-snapshot'
 import { useOperationQueueStore } from '@/stores/operation-queue/store'

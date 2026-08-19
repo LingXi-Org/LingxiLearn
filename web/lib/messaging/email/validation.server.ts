@@ -1,6 +1,6 @@
 import type { MxRecord } from 'dns'
 import dns from 'dns/promises'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 
 const logger = createLogger('EmailValidationServer')

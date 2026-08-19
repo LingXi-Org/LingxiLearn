@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { randomFloat } from '@sim/utils/random'
 import Redis, { type RedisOptions } from 'ioredis'

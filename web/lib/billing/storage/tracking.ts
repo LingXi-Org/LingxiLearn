@@ -3,7 +3,7 @@
  */
 
 import { organization, userStats, workspace } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { isRecordLike } from '@sim/utils/object'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'

@@ -5,7 +5,7 @@
  * and streams Server-Sent Events with heartbeats and cleanup.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { NextRequest } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { SSE_HEADERS } from '@/lib/core/utils/sse'

@@ -4,7 +4,7 @@ import type React from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Badge, Button, cn, Tooltip } from '@sim/emcn'
 import { ArrowUp, Paperclip, X } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { CHAT_ACCEPT_ATTRIBUTE } from '@/lib/uploads/utils/validation'
 

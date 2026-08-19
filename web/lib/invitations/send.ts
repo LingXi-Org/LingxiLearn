@@ -7,7 +7,7 @@ import {
   organization,
   workspace,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isOrgAdminRole } from '@sim/platform-authz/workspace'
 import { getPostgresConstraintName, getPostgresErrorCode } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'

@@ -11,7 +11,7 @@ import {
   Label,
   Switch,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
 import { useInboxConfig, useToggleInbox } from '@/hooks/queries/inbox'
 

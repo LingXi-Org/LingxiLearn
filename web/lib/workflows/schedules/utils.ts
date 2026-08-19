@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { formatDateTime, getTimezoneAbbreviation } from '@sim/utils/formatting'
 import { Cron } from 'croner'

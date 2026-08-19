@@ -11,7 +11,7 @@ vi.mock('@aws-sdk/client-secrets-manager', () => ({
   },
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 

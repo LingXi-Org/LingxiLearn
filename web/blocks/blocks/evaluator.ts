@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { ChartBarIcon } from '@/components/icons'
 import type { BlockConfig, ParamType } from '@/blocks/types'
 import {

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { processExecutionFiles } from '@/lib/execution/files'
 import type { UserFile } from '@/executor/types'
 

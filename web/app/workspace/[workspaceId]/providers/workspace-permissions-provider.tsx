@@ -3,7 +3,7 @@
 import type React from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react'
 import { useToast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 import { useSocket } from '@/app/workspace/providers/socket-provider'

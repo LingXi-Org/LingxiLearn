@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 import {
   deleteFile,

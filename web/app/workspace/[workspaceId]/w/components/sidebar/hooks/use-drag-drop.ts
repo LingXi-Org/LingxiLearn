@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { noop } from '@sim/utils/helpers'
 import { useParams } from 'next/navigation'
 import { getFolderPath } from '@/lib/folders/tree'

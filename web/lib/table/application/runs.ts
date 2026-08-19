@@ -1,5 +1,5 @@
 import { resolvePrincipalAttribution } from '@/lib/auth/principal'
-import { getRequestContext } from '@sim/logger'
+import { getRequestContext } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import {

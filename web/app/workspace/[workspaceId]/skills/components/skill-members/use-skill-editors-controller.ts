@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { AddPeopleTarget } from '@/components/permissions'
 import type { SkillEditor } from '@/lib/api/contracts'
 import { useRemoveSkillMember, useSkillMembers, useUpsertSkillMember } from '@/hooks/queries/skills'

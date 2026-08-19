@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isRecordLike } from '@sim/utils/object'
 import type { ProviderTiming, TraceSpan } from '@/lib/logs/types'
 import {

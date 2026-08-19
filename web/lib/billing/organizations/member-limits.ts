@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { organizationMemberUsageLimit, usageLog, workspace } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { and, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'
 import { getOrganizationSubscription } from '@/lib/billing/core/billing'

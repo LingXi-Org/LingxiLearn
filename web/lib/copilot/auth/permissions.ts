@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { authorizeWorkflowByWorkspacePermission } from '@sim/platform-authz/workflow'
 import type { PermissionType } from '@/lib/workspaces/permissions/utils'
 

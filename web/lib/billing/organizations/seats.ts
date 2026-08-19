@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import { db } from '@sim/db'
 import { member, subscription } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, count, eq, inArray } from 'drizzle-orm'
 import { syncSubscriptionUsageLimits } from '@/lib/billing/organization'
 import { isTeam } from '@/lib/billing/plan-helpers'

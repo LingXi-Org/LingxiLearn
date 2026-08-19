@@ -1,6 +1,6 @@
 import type { Readable } from 'node:stream'
 import type { Storage } from '@google-cloud/storage'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { env } from '@/lib/core/config/env'
 import {

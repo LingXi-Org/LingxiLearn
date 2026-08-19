@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { FILE_DOC_TIMEOUTS } from '@sim/realtime-protocol/file-doc'
 import { getErrorMessage } from '@sim/utils/errors'
 import type { FolderResourceType } from '@/lib/api/contracts/folders'

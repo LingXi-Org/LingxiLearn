@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { describeError, toError } from '@sim/utils/errors'
 import { isRetryableInfrastructureError } from '@/lib/core/errors/retryable-infrastructure'
 import type { LoggingSession } from '@/lib/logs/execution/logging-session'

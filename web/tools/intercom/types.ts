@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { OutputProperty } from '@/tools/types'
 
 const logger = createLogger('Intercom')

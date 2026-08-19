@@ -43,7 +43,7 @@ const {
   }
 })
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => mockLogger,
 }))
 

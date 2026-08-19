@@ -1,7 +1,7 @@
 import { createSign } from 'crypto'
 import { db } from '@sim/db'
 import { account, credential } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getPostgresErrorCode, toError } from '@sim/utils/errors'
 import { and, desc, eq } from 'drizzle-orm'
 import { withLeaderLock } from '@/lib/concurrency/leader-lock'

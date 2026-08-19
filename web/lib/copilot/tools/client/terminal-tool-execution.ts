@@ -7,7 +7,7 @@
  * and reports the outcome via the confirm endpoint, which wakes the
  * server-side waiter.
  */
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   isTerminalOperation,
   type TerminalOperation,

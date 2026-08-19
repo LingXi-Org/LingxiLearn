@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { createSandboxBodySchema, updateSandboxBodySchema } from '@/lib/api/contracts/sandboxes'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'

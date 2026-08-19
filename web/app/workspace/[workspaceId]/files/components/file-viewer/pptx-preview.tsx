@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useEffect, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
 import { PptxSandboxHost } from '@/app/workspace/[workspaceId]/files/components/file-viewer/pptx-sandbox-host'
 import {

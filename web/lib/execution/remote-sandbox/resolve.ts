@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { CodeLanguage } from '@/lib/execution/languages'
 import { classifyInstallOutput, tailBuildLog } from '@/lib/execution/remote-sandbox/build-errors'
 import {

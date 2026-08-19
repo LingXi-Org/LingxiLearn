@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { account, webhook, workflow, workflowDeploymentVersion } from '@sim/db/schema'
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { and, eq, isNull, ne, or, sql } from 'drizzle-orm'
 import {
   getOAuthToken,

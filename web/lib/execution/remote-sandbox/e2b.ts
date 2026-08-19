@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { Sandbox as E2BSandbox, Template as E2BTemplate } from '@e2b/code-interpreter'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { generateShortId } from '@sim/utils/id'
 import { isRecordLike } from '@sim/utils/object'

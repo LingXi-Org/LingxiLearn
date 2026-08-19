@@ -21,7 +21,7 @@ vi.mock('@sim/db', () => ({
   workflowSubflows: tables.workflowSubflows,
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
 }))
 

@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { invitation, member, organization, subscription, user } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, count, eq, gt, ne, sql } from 'drizzle-orm'
 import { getOrganizationSubscription } from '@/lib/billing/core/billing'
 import { resolveEnterpriseMetadataIntent } from '@/lib/billing/enterprise-outbox'

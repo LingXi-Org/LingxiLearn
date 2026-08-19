@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ComboboxOption } from '@sim/emcn'
 import { ChipConfirmModal, Plus, Upload } from '@sim/emcn'
 import { FolderPlus, Pencil, Trash } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useParams, useRouter } from 'next/navigation'
 import type { TableDefinition } from '@/lib/table'
 import type {

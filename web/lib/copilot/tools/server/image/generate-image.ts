@@ -1,5 +1,5 @@
 import { GoogleGenAI, type Part } from '@google/genai'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import {
   executeCopilotFileUseCase,

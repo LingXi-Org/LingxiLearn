@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { FILE_DOC_SEED } from '@sim/realtime-protocol/file-doc'
 import { getErrorMessage } from '@sim/utils/errors'
 import * as Y from 'yjs'

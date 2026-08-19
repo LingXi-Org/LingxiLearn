@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { type NextRequest, NextResponse } from 'next/server'
 import { sendToProfound } from './lib/analytics/profound'
 import { getEnv } from './lib/core/config/env'

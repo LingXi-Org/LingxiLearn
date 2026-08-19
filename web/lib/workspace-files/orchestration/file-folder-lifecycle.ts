@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getPostgresErrorCode, toError } from '@sim/utils/errors'
 import { asOrchestrationError, type OrchestrationErrorCode } from '@/lib/core/orchestration/types'
 import { FolderPathError } from '@/lib/folders/paths'

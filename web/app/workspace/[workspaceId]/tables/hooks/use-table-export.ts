@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { exportTable } from '@/hooks/queries/tables'
 
 const logger = createLogger('TablesCsvExport')

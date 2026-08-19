@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 
 export const FORMS_API_BASE = 'https://forms.googleapis.com/v1'
 

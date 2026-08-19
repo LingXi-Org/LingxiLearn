@@ -12,7 +12,7 @@ import {
   ChipModalHeader,
   SecretReveal,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { type CreatedApiKey, useCreateApiKey } from '@/hooks/queries/api-keys'
 

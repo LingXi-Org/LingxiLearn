@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { resolveCopilotKnowledgePrincipal } from '@/lib/copilot/application/execute-knowledge-use-case'
 import { resolveCopilotFilePrincipal } from '@/lib/copilot/auth/file-delegation'

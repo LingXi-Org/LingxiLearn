@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { getRequestContext } from '@sim/logger'
+import { getRequestContext } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { responseWithRequestId, withRequestId } from '@/lib/api/server/routes/request-id'

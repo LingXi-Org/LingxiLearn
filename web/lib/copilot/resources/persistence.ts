@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { copilotChats } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { eq, sql } from 'drizzle-orm'
 import { GENERIC_RESOURCE_TITLES, type MothershipResource, sanitizeChatResources } from './types'

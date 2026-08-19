@@ -6,7 +6,7 @@
  * immediately - no polling or cron involved.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateShortId } from '@sim/utils/id'
 import { fillMissingColumns, namedRowMapper } from '@/lib/table/cell-format'
 import { buildNameById } from '@/lib/table/column-keys'

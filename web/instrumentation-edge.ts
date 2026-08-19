@@ -5,7 +5,7 @@
  * No Node.js APIs (like process.on, crypto, fs, etc.) are allowed here.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 
 const logger = createLogger('EdgeInstrumentation')
 

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { normalizeWorkflowEdgeSourceHandle } from '@sim/workflow-types/workflow'
 import { CONTROL_BACK_EDGE_HANDLES, EDGE, SUBFLOW_CONTROL_EDGE_HANDLES } from '@/executor/constants'
 import type { DAG, DAGNode } from '@/executor/dag/builder'

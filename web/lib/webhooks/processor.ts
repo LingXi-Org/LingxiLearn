@@ -1,5 +1,5 @@
 import { db, webhook, webhookPathClaim, workflow, workflowDeploymentVersion } from '@sim/db'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { truncate } from '@sim/utils/string'

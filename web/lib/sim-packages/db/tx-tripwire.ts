@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 
 const logger = createLogger('DbTxTripwire')
 

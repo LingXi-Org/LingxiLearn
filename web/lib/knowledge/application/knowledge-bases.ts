@@ -2,7 +2,7 @@ import { AuditAction, AuditResourceType } from '@sim/audit'
 import type { Principal, SessionPrincipal } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { knowledgeBaseTagDefinitions } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { inArray } from 'drizzle-orm'
 import {
   authorizeWorkspaceOperation,

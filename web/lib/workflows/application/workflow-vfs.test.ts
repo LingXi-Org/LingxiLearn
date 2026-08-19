@@ -43,7 +43,7 @@ vi.mock('@sim/audit', () => ({
   recordAudit: mocks.audit,
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
     error: mocks.logError,
     info: vi.fn(),

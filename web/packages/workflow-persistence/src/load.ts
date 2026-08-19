@@ -1,5 +1,5 @@
 import { db, workflow, workflowBlocks, workflowEdges, workflowSubflows } from '@sim/db'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { BlockRetryConfig, BlockState, Loop, Parallel } from '@sim/workflow-types/workflow'
 import {
   normalizeBlockRetryTries,

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { messageForCopilotApplicationError } from '@/lib/copilot/application/error'
 import { executeCopilotCustomToolUseCase } from '@/lib/copilot/application/execute-custom-tool-use-case'
 import { executeCopilotFileUseCase } from '@/lib/copilot/application/execute-file-use-case'

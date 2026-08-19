@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { generateId } from '@sim/utils/id'
 import { type JWTPayload, jwtVerify, SignJWT } from 'jose'

@@ -5,7 +5,7 @@
  * Runs in Node.js (proxy.ts on ECS), so module-level state persists across requests.
  * @see https://docs.tryprofound.com/agent-analytics/custom
  */
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { env } from '@/lib/core/config/env'
 import { isHosted } from '@/lib/core/config/env-flags'
 import { getClientIp } from '@/lib/core/utils/request'

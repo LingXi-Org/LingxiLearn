@@ -9,7 +9,7 @@ import {
   ChipModalFooter,
   ChipModalHeader,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { partitionSettledFailures, resolveAddEmail } from '@/lib/workspaces/sharing'
 import { useWorkspacePermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'

@@ -8,7 +8,7 @@
  * server-side waiter.
  */
 import type { BrowserToolName } from '@sim/browser-protocol'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { isRecordLike } from '@sim/utils/object'
 import {

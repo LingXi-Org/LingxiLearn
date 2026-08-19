@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { remapConditionBlockIds } from '@/lib/workflows/condition-ids'
 import { isDynamicHandleSubblock } from '@/lib/workflows/dynamic-handle-topology'
 import {

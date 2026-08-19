@@ -1,5 +1,5 @@
 import { inflateRawSync } from 'zlib'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   MAX_OOXML_ENTRY_UNCOMPRESSED_BYTES,
   MAX_OOXML_TOTAL_UNCOMPRESSED_BYTES,

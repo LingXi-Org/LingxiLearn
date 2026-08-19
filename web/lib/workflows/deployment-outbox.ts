@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import type { PrincipalActor } from '@/lib/auth/principal'
 import { db, workflowDeploymentVersion, workflow as workflowTable } from '@sim/db'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { and, eq, ne } from 'drizzle-orm'
 import { NextRequest } from 'next/server'

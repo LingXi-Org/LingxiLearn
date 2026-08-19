@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { uploadFileFromRawData } from '@/lib/uploads/contexts/execution'
 import type { UserFile } from '@/executor/types'
 

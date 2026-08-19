@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { TinybirdQueryPipeParams, TinybirdQueryPipeResponse } from '@/tools/tinybird/types'
 import type { ToolConfig } from '@/tools/types'
 

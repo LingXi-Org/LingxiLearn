@@ -1,5 +1,5 @@
 import { type Principal, resolvePrincipalAttribution } from '@/lib/auth/principal'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { authorizeWorkspaceOperation } from '@/lib/core/application'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { MAX_FOLDERS_PER_WORKSPACE } from '@/lib/folders/constants'

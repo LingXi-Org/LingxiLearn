@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { z } from 'zod'
 import { QueryLogs } from '@/lib/copilot/generated/tool-catalog-v1'
 import type { BaseServerTool, ServerToolContext } from '@/lib/copilot/tools/server/base-tool'

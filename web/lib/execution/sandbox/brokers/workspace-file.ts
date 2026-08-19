@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   MAX_ISOLATED_VM_BROKER_RESULT_JSON_CHARS,
   MAX_SANDBOX_IMAGE_DATA_URI_CHARS,

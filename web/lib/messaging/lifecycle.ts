@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { tasks } from '@trigger.dev/sdk'
 import { resolveTriggerRegion } from '@/lib/core/async-jobs/region'
 import { env } from '@/lib/core/config/env'

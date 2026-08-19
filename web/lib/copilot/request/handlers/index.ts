@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { MothershipStreamV1EventType } from '@/lib/copilot/generated/mothership-stream-v1'
 import type { StreamEvent, StreamingContext } from '@/lib/copilot/request/types'
 import { handleCompleteEvent } from './complete'

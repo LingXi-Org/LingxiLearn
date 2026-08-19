@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { PipedriveGetLeadsParams, PipedriveGetLeadsResponse } from '@/tools/pipedrive/types'
 import { PIPEDRIVE_LEAD_OUTPUT_PROPERTIES } from '@/tools/pipedrive/types'
 import { getPipedriveAuthHeaders } from '@/tools/pipedrive/utils'

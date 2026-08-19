@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { createCopilotWorkspaceApiKey } from '@/lib/api-key/application/create-api-key'
 import { messageForCopilotApplicationError } from '@/lib/copilot/application/error'
 import { executeCopilotApiKeyUseCase } from '@/lib/copilot/application/execute-api-key-use-case'

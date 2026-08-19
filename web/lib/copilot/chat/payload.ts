@@ -1,5 +1,5 @@
 import type { BrowserKnownSession } from '@sim/browser-protocol'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isPermissionType, permissionSatisfies } from '@sim/platform-authz/predicates'
 import { toError } from '@sim/utils/errors'
 import { LRUCache } from 'lru-cache'

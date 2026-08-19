@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { apiKey } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateShortId } from '@sim/utils/id'
 import { and, eq } from 'drizzle-orm'
 import {

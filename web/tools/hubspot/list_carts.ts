@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { HubSpotListCartsParams, HubSpotListCartsResponse } from '@/tools/hubspot/types'
 import { GENERIC_CRM_ARRAY_OUTPUT, METADATA_OUTPUT, PAGING_OUTPUT } from '@/tools/hubspot/types'
 import type { ToolConfig } from '@/tools/types'

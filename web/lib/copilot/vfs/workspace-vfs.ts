@@ -12,7 +12,7 @@ import {
   workflowMcpServer,
   workflowMcpTool,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { and, desc, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm'
 import { listApiKeys } from '@/lib/api-key/service'

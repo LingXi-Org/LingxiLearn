@@ -9,7 +9,7 @@ const { mockEnv, mockLogger } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/core/config/env', () => ({ env: mockEnv }))
-vi.mock('@sim/logger', () => ({ createLogger: () => mockLogger }))
+vi.mock('@/lib/logger', () => ({ createLogger: () => mockLogger }))
 
 import {
   DURABLE_SECRET_PROVENANCE_SURFACES,

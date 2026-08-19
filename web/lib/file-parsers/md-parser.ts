@@ -1,5 +1,5 @@
 import { readFile } from 'fs/promises'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { FileParseResult, FileParser } from '@/lib/file-parsers/types'
 import { sanitizeTextForUTF8 } from '@/lib/file-parsers/utils'
 

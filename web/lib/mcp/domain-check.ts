@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { resolveHostAddresses } from '@sim/security/dns'
 import { isIpLiteral, isLoopbackIp, isPrivateIp, unwrapIpv6Brackets } from '@sim/security/ssrf'
 import { toError } from '@sim/utils/errors'

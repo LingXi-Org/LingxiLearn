@@ -10,7 +10,7 @@ import {
   workflowSchedule,
   workspace,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { env } from '@/lib/core/config/env'
 import { PlatformEvents } from '@/lib/core/telemetry'

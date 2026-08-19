@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { EnrichmentRun } from '@/lib/copilot/generated/tool-catalog-v1'
 import type { BaseServerTool } from '@/lib/copilot/tools/server/base-tool'
 import { getEnrichment } from '@/enrichments/registry'

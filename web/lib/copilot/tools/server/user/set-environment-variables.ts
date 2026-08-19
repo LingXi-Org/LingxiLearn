@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { z } from 'zod'
 import { SetEnvironmentVariables } from '@/lib/copilot/generated/tool-catalog-v1'
 import {

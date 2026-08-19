@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { useRouter } from 'next/navigation'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'

@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from '@sim/logger'
+import { createLogger, type Logger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { combineExecutionAbortSignals } from '@/lib/core/execution-limits'
 import {

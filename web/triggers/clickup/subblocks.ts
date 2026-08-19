@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { requestJson } from '@/lib/api/client/request'
 import { clickupWorkspacesSelectorContract } from '@/lib/api/contracts/selectors/clickup'
 import type { SubBlockConfig } from '@/blocks/types'

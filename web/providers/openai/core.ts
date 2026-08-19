@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { isRecordLike } from '@sim/utils/object'
 import { truncate } from '@sim/utils/string'

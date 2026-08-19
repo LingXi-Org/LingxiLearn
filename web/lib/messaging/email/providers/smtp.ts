@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import nodemailer from 'nodemailer'
 import { env, envBoolean, envNumber } from '@/lib/core/config/env'
 import { sendViaNodemailer } from '@/lib/messaging/email/providers/_nodemailer'

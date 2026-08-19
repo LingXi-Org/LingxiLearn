@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getActiveWorkflowContext } from '@sim/platform-authz/workflow'
 import { generateShortId } from '@sim/utils/id'
 import type { WorkflowExecutionLog } from '@/lib/logs/types'

@@ -11,7 +11,7 @@ import {
   ChipTextarea,
   SecretInput,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isApiClientError } from '@/lib/api/client/errors'
 import {
   AUTH_METHOD_FIELD_ID,

@@ -1,6 +1,6 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
 import type { Principal } from '@/lib/auth/principal'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { checkAttributedUsageLimits } from '@/lib/billing/core/billing-attribution'
 import { authorizeWorkspaceOperation } from '@/lib/core/application'
 import { asOrchestrationError, OrchestrationError } from '@/lib/core/orchestration/types'

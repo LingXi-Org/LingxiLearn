@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { secureFetchWithRetry } from '@/lib/knowledge/documents/secure-fetch.server'
 import { VALIDATE_RETRY_OPTIONS } from '@/lib/knowledge/documents/utils'

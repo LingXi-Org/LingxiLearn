@@ -4,7 +4,7 @@
  * Uses workspace billing account to determine plan-based limits.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { resolveWorkspaceBillingPayer } from '@/lib/billing/core/billing-attribution'
 import { maybeNotifyLimit } from '@/lib/billing/core/limit-notifications'
 import { getPlanTypeForLimits } from '@/lib/billing/plan-helpers'

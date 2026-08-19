@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { isRecordLike } from '@sim/utils/object'
 import { NextResponse } from 'next/server'

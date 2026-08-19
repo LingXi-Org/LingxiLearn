@@ -1,6 +1,6 @@
 import { dbFor } from '@sim/db'
 import { pausedExecutions, resumeQueue, workflowExecutionLogs } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { isRecordLike, omit } from '@sim/utils/object'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { PermissionGroupConfig } from '@/lib/permission-groups/types'
 
 /** Selector subblock types that can be validated */

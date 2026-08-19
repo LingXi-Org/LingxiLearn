@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { workspaceBYOKKeys } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, asc, eq } from 'drizzle-orm'
 import { getRotatingApiKey } from '@/lib/core/config/api-keys'
 import { env } from '@/lib/core/config/env'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { MicrosoftSharepointIcon } from '@/components/icons'
 import { getScopesForService } from '@/lib/oauth/utils'

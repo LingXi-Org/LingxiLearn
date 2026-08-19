@@ -12,7 +12,7 @@ import {
   type ToolConfig,
   Type,
 } from '@google/genai'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { isRecordLike } from '@sim/utils/object'
 import { buildGeminiMessageParts } from '@/providers/attachments'

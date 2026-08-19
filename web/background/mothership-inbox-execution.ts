@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { task } from '@trigger.dev/sdk'
 import { executeInboxTask } from '@/lib/mothership/inbox/executor'
 

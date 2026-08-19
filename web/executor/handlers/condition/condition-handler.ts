@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { normalizeStringRecord, normalizeWorkflowVariables } from '@/lib/core/utils/records'
 import { isElseConditionTitle } from '@/lib/workflows/conditions'
 import type { BlockOutput } from '@/blocks/types'

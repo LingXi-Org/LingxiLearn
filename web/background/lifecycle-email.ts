@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { user } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { task } from '@trigger.dev/sdk'
 import { eq } from 'drizzle-orm'
 import { getEmailSubject, renderOnboardingFollowupEmail } from '@/components/emails'

@@ -10,7 +10,7 @@
  */
 
 import type Anthropic from '@anthropic-ai/sdk'
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { isRecordLike } from '@sim/utils/object'
 import type { IterationToolCall } from '@/executor/types'

@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { usePostHog } from 'posthog-js/react'
 import { captureEvent } from '@/lib/posthog/client'

@@ -11,7 +11,7 @@ import {
   type ThinkingConfig,
   type ToolConfig,
 } from '@google/genai'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { isRecordLike } from '@sim/utils/object'
 import type { IterationToolCall, NormalizedBlockOutput, StreamingExecution } from '@/executor/types'

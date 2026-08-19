@@ -1,6 +1,6 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
 import { resolvePrincipalAttribution } from '@/lib/auth/principal'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ListSortOrder } from '@/lib/api/list-query'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { parseFolderPath } from '@/lib/folders/paths'

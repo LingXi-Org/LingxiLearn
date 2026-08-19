@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { MailServerIcon } from '@/components/icons'
 import { requestJson } from '@/lib/api/client/request'
 import { imapMailboxesContract } from '@/lib/api/contracts/tools/imap'

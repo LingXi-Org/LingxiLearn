@@ -31,7 +31,7 @@ const { mockLogger, statsLogErrorMock } = vi.hoisted(() => {
   return { mockLogger, statsLogErrorMock: mockLogger.error }
 })
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: vi.fn(() => mockLogger),
   logger: mockLogger,
   runWithRequestContext: vi.fn(<T>(_ctx: unknown, fn: () => T): T => fn()),

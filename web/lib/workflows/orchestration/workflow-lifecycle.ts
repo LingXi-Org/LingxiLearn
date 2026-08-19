@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import { db } from '@sim/db'
 import { folder as folderTable, workflow } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isFolderInWorkspace } from '@sim/platform-authz/workflow'
 import { toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'

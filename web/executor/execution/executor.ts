@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from '@sim/logger'
+import { createLogger, type Logger } from '@/lib/logger'
 import { normalizeStringArray } from '@/lib/core/utils/arrays'
 import { normalizeStringRecord, normalizeWorkflowVariables } from '@/lib/core/utils/records'
 import { collectUserFileKeys } from '@/lib/core/utils/user-file'

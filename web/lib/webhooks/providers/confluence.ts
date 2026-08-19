@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { validateJiraSignature } from '@/lib/webhooks/providers/jira'
 import type {

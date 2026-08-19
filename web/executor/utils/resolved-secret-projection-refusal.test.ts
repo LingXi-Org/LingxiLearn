@@ -4,7 +4,7 @@ const { mockLogger } = vi.hoisted(() => ({
   mockLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => mockLogger,
 }))
 

@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from '@sim/logger'
+import { createLogger, type Logger } from '@/lib/logger'
 import { sleep } from '@sim/utils/helpers'
 import { isTimeoutAbortReason } from '@/lib/core/execution-limits/types'
 import { redactApiKeys } from '@/lib/core/security/redaction'

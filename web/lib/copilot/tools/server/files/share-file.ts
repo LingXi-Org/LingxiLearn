@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ShareAuthType } from '@/lib/api/contracts/public-shares'
 import {
   executeCopilotFileUseCase,

@@ -2,7 +2,7 @@
  * Streaming-specific tokenization helpers
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { calculateStreamingCost } from '@/lib/tokenization/calculators'
 import { TOKENIZATION_CONFIG } from '@/lib/tokenization/constants'

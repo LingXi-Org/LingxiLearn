@@ -17,7 +17,7 @@
 
 import { db } from '@sim/db'
 import { userTableDefinitions, userTableRows } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { omit } from '@sim/utils/object'
 import { and, asc, count, eq, gt, sql } from 'drizzle-orm'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

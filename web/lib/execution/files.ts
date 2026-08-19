@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { uploadExecutionFile } from '@/lib/uploads/contexts/execution'
 import { TRIGGER_TYPES } from '@/lib/workflows/triggers/triggers'
 import type { InputFormatField } from '@/lib/workflows/types'

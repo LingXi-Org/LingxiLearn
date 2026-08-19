@@ -4,7 +4,7 @@
  */
 
 import v8 from 'node:v8'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 
 const logger = createLogger('MemoryTelemetry', { logLevel: 'INFO' })
 

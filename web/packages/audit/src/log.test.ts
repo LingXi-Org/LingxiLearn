@@ -21,7 +21,7 @@ vi.mock('drizzle-orm', () => ({
   or: vi.fn(),
   sql: vi.fn(),
 }))
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { validateOktaDomain } from '@/lib/core/security/input-validation'
 import type {
   OktaApiError,

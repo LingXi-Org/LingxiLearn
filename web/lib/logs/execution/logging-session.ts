@@ -1,6 +1,6 @@
 import { dbFor } from '@sim/db'
 import { workflowExecutionLogs } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { describeError, toError } from '@sim/utils/errors'
 import { and, eq, sql } from 'drizzle-orm'
 import { releaseExecutionSlot } from '@/lib/billing/calculations/usage-reservation'

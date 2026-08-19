@@ -2,7 +2,7 @@ import { discoverOAuthServerInfo } from '@modelcontextprotocol/sdk/client/auth.j
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { db } from '@sim/db'
 import { mcpServers } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { and, eq } from 'drizzle-orm'
 import { decryptSecret } from '@/lib/core/security/encryption'

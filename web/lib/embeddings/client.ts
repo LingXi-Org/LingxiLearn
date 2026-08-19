@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { chunkArray } from '@sim/utils/helpers'
 import { getBYOKKey } from '@/lib/api-key/byok'
 import { getRotatingApiKey } from '@/lib/core/config/api-keys'

@@ -14,13 +14,13 @@ import {
 } from 'react'
 import { Button, cn, toast } from '@sim/emcn'
 import { PanelLeft } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { usePostHog } from 'posthog-js/react'
 import { LandingPromptStorage, MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import { LINGXI_EXCLUDED_RESOURCE_TYPES } from '@/lib/lingxi/supported-contexts'
+import { createLogger } from '@/lib/logger'
 import {
   addMothershipContexts,
   MOTHERSHIP_SEND_MESSAGE_EVENT,

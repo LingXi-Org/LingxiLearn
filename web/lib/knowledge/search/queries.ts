@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { document, embedding } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { and, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import type { StructuredFilter } from '@/lib/knowledge/types'

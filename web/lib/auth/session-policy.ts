@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import type { SessionPolicySettings } from '@sim/db/schema'
 import { organization } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq, sql } from 'drizzle-orm'
 import { MIN_IDLE_TIMEOUT_HOURS } from '@/lib/api/contracts/organization'
 import { isOrganizationFeatureEntitled } from '@/lib/billing/core/subscription'

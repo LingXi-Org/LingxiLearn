@@ -12,7 +12,7 @@ import {
   Tooltip,
   toast,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import { copilotToolPermissionContract } from '@/lib/api/contracts/copilot'

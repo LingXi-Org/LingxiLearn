@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isLoopbackIp, isPrivateIp, unwrapIpv6Brackets } from '@sim/security/ssrf'
 import * as ipaddr from 'ipaddr.js'
 import { isHosted } from '@/lib/core/config/env-flags'

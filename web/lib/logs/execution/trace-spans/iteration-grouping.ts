@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { TraceSpan } from '@/lib/logs/types'
 import { stripCloneSuffixes } from '@/executor/utils/subflow-utils'
 

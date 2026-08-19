@@ -7,7 +7,7 @@ import {
   userTableDefinitions,
   workflow,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'

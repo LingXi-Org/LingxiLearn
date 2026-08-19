@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import type { ListRenderOptions } from '@/lib/pptx-renderer/core/viewer'
 import { PptxViewer } from '@/lib/pptx-renderer/core/viewer'

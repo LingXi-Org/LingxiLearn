@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { member, organization, subscription as subscriptionTable, user } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isOrgAdminRole } from '@sim/platform-authz/workspace'
 import { generateId } from '@sim/utils/id'
 import { and, eq, inArray, ne, sql } from 'drizzle-orm'

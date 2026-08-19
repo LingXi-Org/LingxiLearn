@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
 import path from 'path'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { FileParseResult, FileParser, SupportedFileType } from '@/lib/file-parsers/types'
 import { assertOoxmlArchiveWithinLimits } from '@/lib/file-parsers/zip-guard'
 

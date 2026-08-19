@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { HubSpotListOwnersParams, HubSpotListOwnersResponse } from '@/tools/hubspot/types'
 import { METADATA_OUTPUT, OWNERS_ARRAY_OUTPUT, PAGING_OUTPUT } from '@/tools/hubspot/types'
 import type { ToolConfig } from '@/tools/types'

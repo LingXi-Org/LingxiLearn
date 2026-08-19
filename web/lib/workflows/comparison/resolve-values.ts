@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { truncate } from '@sim/utils/string'
 import { buildSelectorContextFromBlock } from '@/lib/workflows/subblocks/context'
 import { getBlock } from '@/blocks/registry'

@@ -26,7 +26,7 @@ const { serviceLogger } = vi.hoisted(() => {
   return { serviceLogger: logger }
 })
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: vi.fn(() => serviceLogger),
   logger: serviceLogger,
   runWithRequestContext: vi.fn(<T>(_ctx: unknown, fn: () => T): T => fn()),

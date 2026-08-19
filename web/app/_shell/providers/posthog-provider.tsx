@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { PostHog } from 'posthog-js'
 import { getEnv, isTruthy, publicEnvMissingAtModuleInit } from '@/lib/core/config/env'
 

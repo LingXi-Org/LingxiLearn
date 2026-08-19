@@ -12,7 +12,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type {
   PiBackendRun,
   PiLocalRunParams,

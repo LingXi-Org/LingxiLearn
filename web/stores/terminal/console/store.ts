@@ -1,5 +1,5 @@
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'

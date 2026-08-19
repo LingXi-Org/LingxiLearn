@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { useShallow } from 'zustand/react/shallow'
 import { useCollaborativeWorkflow } from '@/hooks/use-collaborative-workflow'

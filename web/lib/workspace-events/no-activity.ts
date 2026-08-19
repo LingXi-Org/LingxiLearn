@@ -1,6 +1,6 @@
 import { db, dbReplica } from '@sim/db'
 import { webhook, workflow, workflowDeploymentVersion, workflowExecutionLogs } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, asc, eq, gt, gte, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { deliverableWebhookPredicate } from '@/lib/webhooks/delivery-predicate'
 import { SIM_RULE_COOLDOWN_HOURS, SIM_TRIGGER_PROVIDER } from '@/lib/workspace-events/constants'

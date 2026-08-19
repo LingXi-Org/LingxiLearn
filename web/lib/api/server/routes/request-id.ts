@@ -1,4 +1,4 @@
-import { getRequestContext } from '@sim/logger'
+import { getRequestContext } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
 /**

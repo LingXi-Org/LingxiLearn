@@ -12,7 +12,7 @@ import {
   SecretReveal,
 } from '@sim/emcn'
 import { Plus } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { formatDate } from '@sim/utils/formatting'
 import { RowActionsMenu } from '@/app/workspace/[workspaceId]/settings/components/row-actions-menu'
 import { SettingsEmptyState } from '@/app/workspace/[workspaceId]/settings/components/settings-empty-state'

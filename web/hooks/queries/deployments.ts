@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { QueryClient } from '@tanstack/react-query'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requestJson, requestRaw } from '@/lib/api/client/request'

@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { member, subscription } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, eq, inArray } from 'drizzle-orm'
 import { isOrganizationBillingBlocked } from '@/lib/billing/core/access'
 import { USABLE_SUBSCRIPTION_STATUSES } from '@/lib/billing/subscriptions/utils'

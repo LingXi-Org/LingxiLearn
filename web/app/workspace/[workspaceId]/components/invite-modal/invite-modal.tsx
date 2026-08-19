@@ -12,7 +12,7 @@ import {
   ChipModalHeader,
   toast,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { BatchInvitationResult } from '@/lib/api/contracts/invitations'
 import { useSession } from '@/lib/auth/auth-client'
 import { isEnterprise } from '@/lib/billing/plan-helpers'

@@ -1,6 +1,6 @@
 import { AuditAction, AuditResourceType, auditUpdatedFields, recordAudit } from '@sim/audit'
 import { db, workflow, workflowMcpServer, workflowMcpTool } from '@sim/db'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import type { DbOrTx } from '@/lib/db/types'
