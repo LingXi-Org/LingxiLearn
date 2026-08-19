@@ -109,13 +109,18 @@ const inventory = readdirSync(libRoot, { withFileTypes: true })
     const files = filesUnder(path.join(libRoot, entry.name)).filter(isSource)
     const productionFiles = files.filter((file) => production.has(file)).length
     const testFiles = files.filter((file) => tests.has(file)).length
+    const unreachableFiles = files.filter((file) => !production.has(file) && !tests.has(file))
     return {
       directory: entry.name,
       sourceFiles: files.length,
       productionFiles,
       testFiles,
+      unreachableFiles: unreachableFiles.length,
       sampleProductionFiles: files
         .filter((file) => production.has(file))
+        .slice(0, 5)
+        .map((file) => path.relative(root, file).replaceAll('\\', '/')),
+      sampleUnreachableFiles: unreachableFiles
         .slice(0, 5)
         .map((file) => path.relative(root, file).replaceAll('\\', '/')),
       classification:
