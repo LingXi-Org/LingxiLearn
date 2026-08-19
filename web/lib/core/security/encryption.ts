@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { decrypt, encrypt } from '@sim/security/encryption'
 import { toError } from '@sim/utils/errors'
 import { randomInt } from '@sim/utils/random'

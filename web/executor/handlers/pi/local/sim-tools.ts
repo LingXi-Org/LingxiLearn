@@ -7,7 +7,7 @@
  * MCP and custom tools are skipped in v1; block/integration tools are supported.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { resolveCustomBlockToolBinding } from '@/lib/workflows/custom-blocks/operations'
 import { getAllBlocks } from '@/blocks/registry'

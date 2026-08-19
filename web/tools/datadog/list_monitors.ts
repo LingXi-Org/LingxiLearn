@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ListMonitorsParams, ListMonitorsResponse } from '@/tools/datadog/types'
 import type { ToolConfig } from '@/tools/types'
 

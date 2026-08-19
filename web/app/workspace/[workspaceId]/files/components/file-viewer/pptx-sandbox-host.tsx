@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { openSimPptxViewer, type SimPptxViewerHandle } from '@/lib/pptx-renderer/sim-pptx-viewer'
 import { PreviewToolbar } from '@/app/workspace/[workspaceId]/files/components/file-viewer/preview-toolbar'

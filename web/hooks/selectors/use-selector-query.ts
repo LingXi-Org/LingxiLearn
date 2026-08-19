@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 import { extractEnvVarName, isEnvVarReference, isReference } from '@/executor/constants'
 import { usePersonalEnvironment } from '@/hooks/queries/environment'

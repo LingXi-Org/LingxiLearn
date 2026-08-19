@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { member, subscription } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, eq, inArray, isNotNull, like, or, sql } from 'drizzle-orm'
 import { reconcileOrganizationSeats } from '@/lib/billing/organizations/seats'
 import { ENTITLED_SUBSCRIPTION_STATUSES } from '@/lib/billing/subscriptions/utils'

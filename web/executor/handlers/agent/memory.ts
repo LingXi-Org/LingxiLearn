@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { memory, memorySecretProvenance } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { isPlainRecord } from '@sim/utils/object'
 import { and, eq, sql } from 'drizzle-orm'

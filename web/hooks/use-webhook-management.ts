@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 import { getBlock } from '@/blocks'

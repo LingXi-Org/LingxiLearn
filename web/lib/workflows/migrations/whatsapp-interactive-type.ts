@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getBlock } from '@/blocks'
 import type { BlockState } from '@/stores/workflows/workflow/types'
 

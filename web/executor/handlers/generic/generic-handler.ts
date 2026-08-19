@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { isPlainRecord } from '@sim/utils/object'
 import { getBlock } from '@/blocks/index'

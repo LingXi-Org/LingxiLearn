@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { executeCopilotFileUseCase } from '@/lib/copilot/application/execute-file-use-case'
 import { MothershipStreamV1EventType } from '@/lib/copilot/generated/mothership-stream-v1'

@@ -75,10 +75,6 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'packages/db'),
       },
       {
-        find: '@sim/logger',
-        replacement: path.resolve(__dirname, 'packages/logger/src'),
-      },
-      {
         find: '@sim/emcn',
         replacement: path.resolve(__dirname, 'packages/emcn/src'),
       },

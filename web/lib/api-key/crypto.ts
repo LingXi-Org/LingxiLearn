@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { decrypt, encrypt } from '@sim/security/encryption'
 import { sha256Hex } from '@sim/security/hash'
 import { generateSecureToken } from '@sim/security/tokens'

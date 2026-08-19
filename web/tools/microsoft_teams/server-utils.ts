@@ -3,7 +3,7 @@
  * This file contains functions that require server-side dependencies and should
  * only be imported by API routes, NOT by tool definitions (to avoid circular imports).
  */
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { secureFetchWithValidation } from '@/lib/core/security/input-validation.server'
 import { processFilesToUserFiles, type RawFileInput } from '@/lib/uploads/utils/file-utils'
 import { downloadServableFileFromStorage } from '@/lib/uploads/utils/file-utils.server'

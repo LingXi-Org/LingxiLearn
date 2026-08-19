@@ -28,7 +28,7 @@ import {
   PutMetricDataCommand,
   StandardUnit,
 } from '@aws-sdk/client-cloudwatch'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 
 const logger = createLogger('HostedKeyMetrics')

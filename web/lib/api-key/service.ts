@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { apiKey as apiKeyTable, user as userTable } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, eq, isNull, lt, or } from 'drizzle-orm'
 import { hashApiKey } from '@/lib/api-key/crypto'
 import { getUserEntityPermissions } from '@/lib/workspaces/permissions/utils'

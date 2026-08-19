@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import type { SecureFetchResponse } from '@/lib/core/security/input-validation.server'
 import { isSameOrigin } from '@/lib/core/utils/validation'

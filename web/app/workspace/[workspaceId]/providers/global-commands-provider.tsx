@@ -9,7 +9,7 @@ import {
   useMemo,
   useRef,
 } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { useRouter } from 'next/navigation'
 import { isMacPlatform } from '@/lib/core/utils/platform'

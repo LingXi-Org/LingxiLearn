@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { account } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 import { resolveOAuthAccountId } from '@/lib/oauth/credential-service'

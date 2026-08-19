@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { sha256Hex } from '@sim/security/hash'
 import { toError } from '@sim/utils/errors'
 import * as jose from 'jose'

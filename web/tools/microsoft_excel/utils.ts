@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { validatePathSegment } from '@/lib/core/security/input-validation'
 import type { ExcelCellValue } from '@/tools/microsoft_excel/types'
 

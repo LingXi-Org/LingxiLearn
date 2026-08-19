@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isRecordLike } from '@sim/utils/object'
 import { isColumnType } from '@/lib/table/column-types'
 import { enrichTableToolDescription, enrichTableToolParameters } from '@/lib/table/llm/enrichment'

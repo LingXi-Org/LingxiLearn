@@ -1,4 +1,4 @@
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { omit } from '@sim/utils/object'
 import type { StorageContext } from '@/lib/uploads'
 import {

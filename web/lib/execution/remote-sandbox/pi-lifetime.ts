@@ -4,7 +4,7 @@
  * against the same number without importing the provider SDKs.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { env } from '@/lib/core/config/env'
 import { inspectCapability, SANDBOX_CAPABILITY } from '@/lib/core/config/env-capabilities'
 import { getMaxExecutionTimeout, getRemainingExecutionMs } from '@/lib/core/execution-limits'

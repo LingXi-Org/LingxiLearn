@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ToolConfig } from '@/tools/types'
 import type { AttioGetNoteParams, AttioGetNoteResponse } from './types'
 import { mapNoteTags, NOTE_OUTPUT_PROPERTIES } from './types'

@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { user, workflow, workflowSchedule } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 import { getEmailSubject, renderScheduleDisabledEmail } from '@/components/emails'
 import { getBaseUrl } from '@/lib/core/utils/urls'

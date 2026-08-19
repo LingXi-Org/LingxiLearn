@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { z } from 'zod'
 import { getCopilotToolDescription } from '@/lib/copilot/tools/descriptions'

@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { account, webhook } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 import { validateAirtableId } from '@/lib/core/security/input-validation'
 import { getBaseUrl } from '@/lib/core/utils/urls'

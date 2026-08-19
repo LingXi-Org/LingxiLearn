@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { backoffWithJitter } from '@sim/utils/retry'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'

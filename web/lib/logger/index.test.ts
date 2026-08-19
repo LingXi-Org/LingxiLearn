@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createLogger, Logger, LogLevel } from './index'
 
+vi.unmock('@/lib/logger')
+
 /**
  * Tests for the console logger module.
  * Tests the Logger class and createLogger factory function.

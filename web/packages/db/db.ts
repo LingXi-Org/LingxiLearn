@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { resolveDbUrl } from './connection-url'

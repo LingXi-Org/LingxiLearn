@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
 import { db } from '@sim/db'
 import { document as documentTable } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, eq, isNull } from 'drizzle-orm'
 import {
   type BillingAttributionSnapshot,

@@ -1,6 +1,6 @@
 'use client'
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { signOut } from '@/lib/auth/auth-client'
 import { clearUserData } from '@/stores'
 

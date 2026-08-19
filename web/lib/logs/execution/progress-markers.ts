@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { isRecordLike as isRecord } from '@sim/utils/object'
 import { getRedisClient } from '@/lib/core/config/redis'

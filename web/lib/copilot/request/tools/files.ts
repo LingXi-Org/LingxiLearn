@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { FunctionExecute, UserTable } from '@/lib/copilot/generated/tool-catalog-v1'
 import { CopilotOutputFileOutcome } from '@/lib/copilot/generated/trace-attribute-values-v1'

@@ -1,7 +1,7 @@
 import { type Context as OtelContext, context as otelContextApi } from '@opentelemetry/api'
 import { db } from '@sim/db'
 import { copilotChats } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { eq } from 'drizzle-orm'

@@ -6,7 +6,7 @@
  */
 
 import { EventEmitter } from 'events'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { noop } from '@sim/utils/helpers'
 import Redis, { type RedisOptions } from 'ioredis'
 import { getConfiguredRedisUrl, getRedisConnectionDefaults } from '@/lib/core/config/redis'

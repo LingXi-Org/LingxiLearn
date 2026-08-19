@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { organization, userStats } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { eq } from 'drizzle-orm'
 import { getPlanPricing } from '@/lib/billing/core/billing'

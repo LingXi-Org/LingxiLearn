@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { truncate } from '@sim/utils/string'
 import * as XLSX from 'xlsx'
 import type { FileParseResult, FileParser } from '@/lib/file-parsers/types'

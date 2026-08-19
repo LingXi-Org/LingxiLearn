@@ -1,5 +1,5 @@
 import { db, workflowMcpServer, workflowMcpTool } from '@sim/db'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, asc, eq, gt, inArray, isNull } from 'drizzle-orm'
 import type { DbOrTx } from '@/lib/db/types'
 import { MAX_MCP_SERVERS_PER_WORKFLOW } from '@/lib/mcp/constants'

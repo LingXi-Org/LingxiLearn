@@ -9,7 +9,7 @@
 
 import { db } from '@sim/db'
 import { userTableDefinitions, userTableRows } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, eq, isNull } from 'drizzle-orm'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import type { DbOrTx } from '@/lib/db/types'

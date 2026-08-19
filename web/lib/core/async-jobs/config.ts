@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { taskContext } from '@trigger.dev/core/v3'
 import type { AsyncBackendType, JobQueueBackend } from '@/lib/core/async-jobs/types'
 import { getConfiguredAsyncJobsProvider } from '@/lib/core/config/env-capabilities.server'

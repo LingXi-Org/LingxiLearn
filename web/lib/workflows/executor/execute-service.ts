@@ -1,5 +1,5 @@
 import type { workflow as workflowTable } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { generateId, isValidUuid } from '@sim/utils/id'
 import { releaseExecutionSlot } from '@/lib/billing/calculations/usage-reservation'

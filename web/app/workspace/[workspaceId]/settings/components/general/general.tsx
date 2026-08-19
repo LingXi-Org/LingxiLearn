@@ -16,7 +16,7 @@ import {
   Tooltip,
 } from '@sim/emcn'
 import { Camera, Check, CircleInfo, Pencil } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { requestJson } from '@/lib/api/client/request'

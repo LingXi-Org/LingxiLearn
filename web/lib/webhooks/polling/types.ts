@@ -1,5 +1,5 @@
 import type { webhook, workflow } from '@sim/db/schema'
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { isRecordLike } from '@sim/utils/object'
 
 /** Summary returned after polling all webhooks for a provider. */

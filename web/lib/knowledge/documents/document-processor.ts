@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { PDFDocument } from 'pdf-lib'
 import { getBYOKKey } from '@/lib/api-key/byok'

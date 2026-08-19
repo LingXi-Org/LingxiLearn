@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { resolveAtlassianCloudId } from '@/lib/atlassian/discovery'
 import type { RetryOptions } from '@/lib/knowledge/documents/utils'
 import { fetchWithRetry } from '@/lib/knowledge/documents/utils'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { normalizeEmail } from '@sim/utils/string'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from '@/lib/auth/auth-client'

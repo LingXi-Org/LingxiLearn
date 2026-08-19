@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { BlockType, HTTP } from '@/executor/constants'
 import type { BlockHandler, ExecutionContext, NormalizedBlockOutput } from '@/executor/types'
 import {

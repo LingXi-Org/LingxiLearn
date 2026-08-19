@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { skill, skillMember } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId, generateShortId } from '@sim/utils/id'
 import { and, type Column, desc, eq, ne } from 'drizzle-orm'
 import { type ListSortOrder, listOrderBy, searchFilter } from '@/lib/api/list-query'

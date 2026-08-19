@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { ErrorExtractorId } from '@/tools/error-extractors'
 import type {
   MicrosoftPlannerGetPlanDetailsResponse,

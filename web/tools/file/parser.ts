@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { inferContextFromKey } from '@/lib/uploads/utils/file-utils'
 import type { UserFile } from '@/executor/types'
 import type {

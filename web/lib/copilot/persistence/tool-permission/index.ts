@@ -1,5 +1,5 @@
 import type { CopilotToolPermissionDecision } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { isExecutableToolPermissionDecision } from '@/lib/copilot/async-runs/lifecycle'
 import { getAsyncToolCall } from '@/lib/copilot/async-runs/repository'

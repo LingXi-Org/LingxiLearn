@@ -1,6 +1,6 @@
 'use client'
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
 import { API_BASE } from '@/lib/lingxi/api'
 import { DesktopTitleBarLane } from '@/app/_shell/desktop-title-bar'

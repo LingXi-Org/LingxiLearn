@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { user } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 import type Stripe from 'stripe'
 import { getEmailSubject, renderAbandonedCheckoutEmail } from '@/components/emails'

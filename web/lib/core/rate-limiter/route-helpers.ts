@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { sha256Hex } from '@sim/security/hash'
 import { normalizeEmail } from '@sim/utils/string'
 import { type NextRequest, NextResponse } from 'next/server'

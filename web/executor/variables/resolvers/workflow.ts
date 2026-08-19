@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isLargeArrayManifest } from '@/lib/execution/payloads/large-array-manifest-metadata'
 import { assertNoLargeValueRefs, isLargeValueRef } from '@/lib/execution/payloads/large-value-ref'
 import { VariableManager } from '@/lib/workflows/variables/variable-manager'

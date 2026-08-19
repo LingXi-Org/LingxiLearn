@@ -9,7 +9,7 @@ vi.mock('@/lib/core/security/encryption', () => ({
   decryptSecret: mockDecryptSecret,
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => mockLogger,
 }))
 

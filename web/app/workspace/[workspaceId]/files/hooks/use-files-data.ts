@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
 import { buildDescendantIndex } from '@/app/workspace/[workspaceId]/components/folders'
 import { buildFolderSizeMap } from '@/app/workspace/[workspaceId]/files/lib/folder-size-map'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { assertNoLargeValueRefs } from '@/lib/execution/payloads/large-value-ref'
 import { isReference, normalizeName, parseReferencePath, REFERENCE } from '@/executor/constants'
 import { InvalidFieldError } from '@/executor/utils/block-reference'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isValidKey } from '@/lib/workflows/sanitization/key-validation'
 import { TriggerUtils } from '@/lib/workflows/triggers/triggers'
 import { getBlock } from '@/blocks/registry'

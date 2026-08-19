@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { JiraRetrieveParams, JiraRetrieveResponse } from '@/tools/jira/types'
 import { ISSUE_ITEM_PROPERTIES, TIMESTAMP_OUTPUT } from '@/tools/jira/types'
 import {

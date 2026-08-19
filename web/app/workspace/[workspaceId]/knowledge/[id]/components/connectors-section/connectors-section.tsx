@@ -26,7 +26,7 @@ import {
   Trash,
   TriangleAlert,
 } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { format, formatDistanceToNow, isPast } from 'date-fns'
 import { consumeOAuthReturnContext, writeOAuthReturnContext } from '@/lib/credentials/client-state'
 import { getCanonicalScopesForProvider, getProviderIdFromServiceId } from '@/lib/oauth'

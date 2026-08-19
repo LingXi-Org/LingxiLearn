@@ -12,7 +12,7 @@ import {
   MAX_GREP_RESULTS,
   MAX_READ_LINES,
 } from '@sim/desktop-bridge/local-filesystem-limits'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import micromatch from 'micromatch'
 import { ASYNC_TOOL_CONFIRMATION_STATUS } from '@/lib/copilot/async-runs/lifecycle'

@@ -8,7 +8,7 @@ import {
   copilotRunCheckpoints,
   copilotRuns,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { filterUndefined } from '@sim/utils/object'
 import { sanitizeValueForJsonb } from '@sim/utils/string'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'

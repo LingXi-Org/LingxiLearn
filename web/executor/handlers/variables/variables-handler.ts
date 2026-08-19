@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { parseLargeExecutionValue } from '@/lib/execution/payloads/large-execution-value'
 import { compactWorkflowVariableValue } from '@/lib/execution/payloads/serializer'

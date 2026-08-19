@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import type { DocumentData } from '@/lib/knowledge/types'
 import type { DocumentEnabledFilter } from '@/app/workspace/[workspaceId]/knowledge/[id]/hooks/use-document-list-controller'

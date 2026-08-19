@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { HubSpotSearchEmailsParams, HubSpotSearchEmailsResponse } from '@/tools/hubspot/types'
 import { EMAILS_ARRAY_OUTPUT, METADATA_OUTPUT, PAGING_OUTPUT } from '@/tools/hubspot/types'
 import type { ToolConfig } from '@/tools/types'

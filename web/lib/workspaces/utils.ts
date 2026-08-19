@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { member, permissions, workflow, workspace as workspaceTable } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { PermissionType } from '@sim/platform-authz/workspace'
 import { isOrgAdminRole } from '@sim/platform-authz/workspace'
 import { generateId } from '@sim/utils/id'

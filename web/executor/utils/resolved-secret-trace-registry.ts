@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { decryptSecret } from '@/lib/core/security/encryption'
 import { isLargeArrayManifest } from '@/lib/execution/payloads/large-array-manifest-metadata'

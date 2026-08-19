@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { env } from '@/lib/core/config/env'
 
 const logger = createLogger('GitHubStars')

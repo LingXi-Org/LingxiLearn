@@ -17,7 +17,7 @@
  */
 
 import { context, type Span, SpanStatusCode, trace } from '@opentelemetry/api'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { TraceAttr } from '@/lib/copilot/generated/trace-attributes-v1'
 import type { TraceSpan } from '@/lib/logs/types'
 import { hostedKeyMetrics } from '@/lib/monitoring/metrics'

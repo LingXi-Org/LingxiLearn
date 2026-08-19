@@ -7,7 +7,7 @@ import {
   SUPPORTED_PROTOCOL_VERSIONS,
   ToolListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isPrivateIp } from '@sim/security/ssrf'
 import { getErrorMessage } from '@sim/utils/errors'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'

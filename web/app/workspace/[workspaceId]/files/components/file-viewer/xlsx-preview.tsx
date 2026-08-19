@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from 'react'
 import { Chip } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import type { WorkBook } from 'xlsx'
 import { assertOoxmlPreviewWithinLimits } from '@/lib/file-parsers/ooxml-preview-guard'

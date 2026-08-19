@@ -19,7 +19,7 @@ import {
   JsonRpcTransportFactory,
   RestTransportFactory,
 } from '@a2a-js/sdk/client'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import {

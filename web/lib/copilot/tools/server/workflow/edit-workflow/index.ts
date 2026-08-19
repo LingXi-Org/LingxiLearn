@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { workflow as workflowTable } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   assertWorkflowMutable,
   authorizeWorkflowByWorkspacePermission,

@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { account } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 import { canUseCredential, getCredentialActorContext } from '@/lib/credentials/access'
 import { getServiceAccountToken, refreshTokenIfNeeded } from '@/lib/oauth/credential-service'

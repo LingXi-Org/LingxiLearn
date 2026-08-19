@@ -12,7 +12,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { warnMock } = vi.hoisted(() => ({ warnMock: vi.fn() }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: warnMock, error: vi.fn() }),
 }))
 

@@ -1,5 +1,5 @@
 import type { Principal } from '@/lib/auth/principal'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { omit } from '@sim/utils/object'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'
 import { resolveCopilotFilePrincipal } from '@/lib/copilot/auth/file-delegation'

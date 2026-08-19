@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import {
   anyToolCallRunning,

@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { StreamingExecution } from '@/executor/types'
 import { executeAnthropicProviderRequest } from '@/providers/anthropic/core'
 import { getCachedProviderClient } from '@/providers/client-cache'

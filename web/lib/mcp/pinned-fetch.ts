@@ -1,5 +1,5 @@
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isPrivateIp } from '@sim/security/ssrf'
 import type { Agent } from 'undici'
 import {

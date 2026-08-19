@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { ChipDropdown, toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isOrgAdminRole } from '@sim/platform-authz/predicates'
 import { getErrorMessage } from '@sim/utils/errors'
 import { formatDate } from '@sim/utils/formatting'

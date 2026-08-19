@@ -1,6 +1,6 @@
 import { createReadStream, existsSync } from 'fs'
 import { Readable } from 'stream'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { type Options, parse } from 'csv-parse'
 import type { FileParseResult, FileParser } from '@/lib/file-parsers/types'
 import { sanitizeTextForUTF8, truncationNotice } from '@/lib/file-parsers/utils'

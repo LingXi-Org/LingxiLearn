@@ -1,4 +1,4 @@
-import { createLogger, runWithRequestContext } from '@sim/logger'
+import { createLogger, runWithRequestContext } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'

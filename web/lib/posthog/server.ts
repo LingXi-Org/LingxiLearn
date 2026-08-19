@@ -1,4 +1,4 @@
-import { createLogger, getRequestContext } from '@sim/logger'
+import { createLogger, getRequestContext } from '@/lib/logger'
 import type { PostHog } from 'posthog-node'
 import type { PostHogEventMap, PostHogEventName } from '@/lib/posthog/events'
 

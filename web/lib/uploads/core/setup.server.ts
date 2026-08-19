@@ -1,7 +1,7 @@
 import { existsSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import path, { join } from 'path'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { env } from '@/lib/core/config/env'
 import {
   getStorageProvider,

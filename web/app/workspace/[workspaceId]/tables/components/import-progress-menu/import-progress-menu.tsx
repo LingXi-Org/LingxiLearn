@@ -9,7 +9,7 @@ import {
   toast,
 } from '@sim/emcn'
 import { CircleAlert, CircleCheck, Loader } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { cancelTableImport, downloadExportResult } from '@/hooks/queries/tables'
 import { useImportTrayStore } from '@/stores/table/import-tray/store'
 import { getImportStage } from './import-stage'

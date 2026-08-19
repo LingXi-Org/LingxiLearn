@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { omit } from '@sim/utils/object'
 import { get, set } from 'idb-keyval'
 import type { ConsoleEntry } from '@/stores/terminal/console/types'

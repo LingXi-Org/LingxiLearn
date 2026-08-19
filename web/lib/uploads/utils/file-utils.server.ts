@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from '@sim/logger'
+import { createLogger, type Logger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'
 import {

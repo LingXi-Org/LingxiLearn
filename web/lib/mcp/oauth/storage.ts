@@ -5,7 +5,7 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js'
 import { db } from '@sim/db'
 import { mcpServerOauth } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { sleep } from '@sim/utils/helpers'
 import { generateId, generateShortId } from '@sim/utils/id'

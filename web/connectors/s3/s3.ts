@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isLoopbackHostname } from '@sim/security/ssrf'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { isHosted } from '@/lib/core/config/env-flags'

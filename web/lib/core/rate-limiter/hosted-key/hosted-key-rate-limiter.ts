@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { sleep } from '@sim/utils/helpers'
 import { generateShortId } from '@sim/utils/id'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'

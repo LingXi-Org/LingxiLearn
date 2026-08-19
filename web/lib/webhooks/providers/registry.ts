@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 import { airtableHandler } from '@/lib/webhooks/providers/airtable'
 import { ashbyHandler } from '@/lib/webhooks/providers/ashby'

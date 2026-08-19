@@ -17,7 +17,7 @@
  */
 
 import { defaultBuildLogger, Template, waitForTimeout } from '@e2b/code-interpreter'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { immutableE2BTemplateRef, isValidE2BTemplateName } from '@sim/utils/sandbox-references'
 import {

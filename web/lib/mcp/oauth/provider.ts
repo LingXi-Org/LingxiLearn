@@ -6,7 +6,7 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js'
 import { db } from '@sim/db'
 import { mcpServers } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { eq } from 'drizzle-orm'

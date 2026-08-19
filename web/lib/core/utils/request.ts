@@ -1,4 +1,4 @@
-import { getRequestContext } from '@sim/logger'
+import { getRequestContext } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 /**
  * Generate a short request ID for correlation. If called inside a request

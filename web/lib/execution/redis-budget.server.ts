@@ -1,4 +1,4 @@
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 
 const REDIS_BUDGET_PREFIX = 'execution:redis-budget:'
 const MAX_SINGLE_REDIS_WRITE_BYTES = 8 * 1024 * 1024

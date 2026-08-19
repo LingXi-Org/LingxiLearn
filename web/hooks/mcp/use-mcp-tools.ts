@@ -7,7 +7,7 @@
 
 import type { ComponentType, SVGProps } from 'react'
 import { useCallback, useMemo } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useQueryClient } from '@tanstack/react-query'
 import { McpIcon } from '@/components/icons'
 import { createMcpToolId } from '@/lib/mcp/shared'

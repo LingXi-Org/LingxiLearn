@@ -1,6 +1,6 @@
 'use client'
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
 import { environmentKeys } from '@/hooks/queries/environment'
 import { useExecutionStore } from '@/stores/execution'

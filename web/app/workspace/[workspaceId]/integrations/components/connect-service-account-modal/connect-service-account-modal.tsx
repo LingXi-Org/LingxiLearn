@@ -10,7 +10,7 @@ import {
   ChipModalHeader,
   SecretInput,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { isApiClientError } from '@/lib/api/client/errors'
 import { serviceAccountJsonSchema } from '@/lib/api/contracts/credentials'

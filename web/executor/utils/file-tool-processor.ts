@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { isUserFile } from '@/lib/core/utils/user-file'
 import { uploadExecutionFile, uploadFileFromRawData } from '@/lib/uploads/contexts/execution'

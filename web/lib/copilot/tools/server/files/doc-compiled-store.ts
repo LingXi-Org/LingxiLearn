@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { downloadFile, uploadFile } from '@/lib/uploads/core/storage-service'
 

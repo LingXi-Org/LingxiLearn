@@ -6,7 +6,7 @@
  * internal Babysit continuation in its backend.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { projectResolvedModelInput } from '@/lib/execution/model-input-provenance'
 import type { BlockOutput } from '@/blocks/types'
 import { parseOptionalNumberInput } from '@/blocks/utils'

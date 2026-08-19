@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId, isValidUuid } from '@sim/utils/id'
 import { sortObjectKeysDeep } from '@sim/utils/object'
 import { isIntegrationDeploymentAvailableForVisibility } from '@/lib/integrations/availability.server'

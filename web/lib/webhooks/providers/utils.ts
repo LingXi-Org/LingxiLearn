@@ -1,5 +1,5 @@
-import type { Logger } from '@sim/logger'
-import { createLogger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
+import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { sha256Hex } from '@sim/security/hash'
 import { NextResponse } from 'next/server'

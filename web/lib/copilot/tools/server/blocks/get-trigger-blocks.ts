@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { z } from 'zod'
 import type { BaseServerTool } from '@/lib/copilot/tools/server/base-tool'
 import { getAllowedIntegrationsFromEnv } from '@/lib/core/config/env-flags'

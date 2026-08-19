@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { Chunk, ChunkerOptions } from '@/lib/chunkers/types'
 import {
   buildChunks,

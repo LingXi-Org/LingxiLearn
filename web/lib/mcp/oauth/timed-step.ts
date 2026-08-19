@@ -1,4 +1,4 @@
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 
 /** Thrown when a `timedStep`-bounded operation doesn't settle within its budget. */

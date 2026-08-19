@@ -14,7 +14,7 @@
 import { createHash } from 'crypto'
 import { db } from '@sim/db'
 import { userTableDefinitions } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 import { getColumnId } from '@/lib/table/column-keys'
 import { formatCsvCell, neutralizeCsvFormula, toCsvRow } from '@/lib/table/export-format'

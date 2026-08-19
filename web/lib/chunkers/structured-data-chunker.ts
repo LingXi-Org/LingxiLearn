@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { Chunk, StructuredDataOptions } from '@/lib/chunkers/types'
 
 /** Structured data is denser in tokens (~3 chars/token vs ~4 for prose) */

@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { docsEmbeddings } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { sql } from 'drizzle-orm'
 import { SearchDocumentation } from '@/lib/copilot/generated/tool-catalog-v1'
 import type { BaseServerTool } from '@/lib/copilot/tools/server/base-tool'

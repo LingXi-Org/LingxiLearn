@@ -15,7 +15,7 @@ import {
   handleKeyboardActivation,
   Trash,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { TagUsageData } from '@/lib/api/contracts/knowledge'
 import {
   FIELD_TYPE_LABELS,

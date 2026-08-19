@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -95,7 +95,7 @@ import { runCloudReviewPi } from '@/executor/handlers/pi/cloud/review/backend'
 import type { PiCloudReviewRunParams } from '@/executor/handlers/pi/core/backend'
 
 /**
- * The mock logger instance the global `@sim/logger` mock handed to the module
+ * The mock logger instance the global `@/lib/logger` mock handed to the module
  * under test at import time, captured so the suite can assert on its warns.
  */
 const mockLoggerWarn = vi.mocked(createLogger).mock.results[

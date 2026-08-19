@@ -6,7 +6,7 @@ import {
   knowledgeBase,
   knowledgeBaseTagDefinitions,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

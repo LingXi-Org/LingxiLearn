@@ -14,7 +14,7 @@ import {
   type ToolResultBlock,
   type ToolUseBlock,
 } from '@aws-sdk/client-bedrock-runtime'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { isRecordLike } from '@sim/utils/object'
 import { validateAwsRegion } from '@/lib/core/security/input-validation'

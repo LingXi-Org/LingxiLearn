@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAuditBatch } from '@sim/audit'
 import { db } from '@sim/db'
 import { member, permissions, workspace } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm'
 import { syncUsageLimitsFromSubscription } from '@/lib/billing/core/usage'

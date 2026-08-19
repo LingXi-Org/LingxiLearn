@@ -5,7 +5,7 @@
  * All paths are sanitized and confined to the configured `repoPath` (S4).
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import type { Client, SFTPWrapper } from 'ssh2'
 import {

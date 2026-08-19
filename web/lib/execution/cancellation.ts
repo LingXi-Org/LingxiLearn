@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getRedisClient } from '@/lib/core/config/redis'
 import { createPubSubChannel, type PubSubChannel } from '@/lib/events/pubsub'
 

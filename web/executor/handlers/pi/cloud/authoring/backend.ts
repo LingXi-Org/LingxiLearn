@@ -18,7 +18,7 @@
  * credential; successful model and repository content remains unchanged.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateShortId } from '@sim/utils/id'
 import { truncate } from '@sim/utils/string'
 import { getMaxExecutionTimeout, getRemainingExecutionMs } from '@/lib/core/execution-limits'

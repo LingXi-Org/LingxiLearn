@@ -32,7 +32,7 @@ vi.mock('@/app/api/files/authorization', () => ({
   verifyFileAccess: vi.fn(),
 }))
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   downloadFileFromStorage,
   downloadServableFileFromStorage,

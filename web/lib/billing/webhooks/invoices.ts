@@ -7,7 +7,7 @@ import {
   user,
   userStats,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isOrgAdminRole } from '@sim/platform-authz/workspace'
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import type Stripe from 'stripe'

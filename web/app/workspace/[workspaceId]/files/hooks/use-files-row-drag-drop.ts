@@ -1,7 +1,7 @@
 'use client'
 
 import { type DragEvent, useCallback, useMemo, useRef, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { RowDragDropConfig } from '@/app/workspace/[workspaceId]/components'
 import { parseFilesRowId } from '@/app/workspace/[workspaceId]/files/lib/file-row-ids'
 

@@ -57,7 +57,7 @@ vi.mock('@sim/db/schema', () => ({
   },
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),

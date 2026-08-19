@@ -5,7 +5,7 @@
  * push, pull-request, review, or other GitHub-write phase.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { withPiSandbox } from '@/lib/execution/remote-sandbox'
 import { resolvePiRunLifetimeMs } from '@/lib/execution/remote-sandbox/pi-lifetime'
 import {

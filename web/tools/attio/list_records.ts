@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { ToolConfig } from '@/tools/types'
 import type { AttioListRecordsParams, AttioListRecordsResponse } from './types'
 import { RECORDS_ARRAY_OUTPUT } from './types'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { HubSpotCreateEmailParams, HubSpotCreateEmailResponse } from '@/tools/hubspot/types'
 import { EMAIL_OBJECT_OUTPUT } from '@/tools/hubspot/types'
 import type { ToolConfig } from '@/tools/types'

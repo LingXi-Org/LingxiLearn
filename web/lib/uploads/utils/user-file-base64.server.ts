@@ -1,5 +1,5 @@
-import type { Logger } from '@sim/logger'
-import { createLogger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
+import { createLogger } from '@/lib/logger'
 import { isPlainRecord } from '@sim/utils/object'
 import { getRedisClient } from '@/lib/core/config/redis'
 import { isUserFileWithMetadata } from '@/lib/core/utils/user-file'

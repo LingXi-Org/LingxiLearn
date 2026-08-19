@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { env } from '@/lib/core/config/env'
 import { createPinnedFetch, validateUrlWithDNS } from '@/lib/core/security/input-validation.server'
 import type { StreamingExecution } from '@/executor/types'

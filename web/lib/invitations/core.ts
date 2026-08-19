@@ -13,7 +13,7 @@ import {
   workspace,
   workspaceEnvironment,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isOrgAdminRole, PERMISSION_RANK, type PermissionType } from '@sim/platform-authz/workspace'
 import { generateId } from '@sim/utils/id'
 import { normalizeEmail } from '@sim/utils/string'

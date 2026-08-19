@@ -13,7 +13,7 @@
  */
 
 import { Daytona, Image } from '@daytona/sdk'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import {
   IMMUTABLE_DAYTONA_SNAPSHOT_REF_ERROR,

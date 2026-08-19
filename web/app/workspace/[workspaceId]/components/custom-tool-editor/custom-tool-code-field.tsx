@@ -11,7 +11,7 @@ import {
   PopoverScrollArea,
   PopoverSection,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   CODE_PLACEHOLDER,
   type SchemaParameter,

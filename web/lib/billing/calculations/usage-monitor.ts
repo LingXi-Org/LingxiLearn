@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { userStats } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { eq } from 'drizzle-orm'
 import { isOrganizationBillingBlocked } from '@/lib/billing/core/access'

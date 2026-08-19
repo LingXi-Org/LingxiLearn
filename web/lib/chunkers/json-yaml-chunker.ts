@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import * as yaml from 'js-yaml'
 import type { Chunk, ChunkerOptions } from '@/lib/chunkers/types'
 import { estimateTokens } from '@/lib/chunkers/utils'

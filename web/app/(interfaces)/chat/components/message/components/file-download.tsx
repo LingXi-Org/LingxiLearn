@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Button, Download, Loader } from '@sim/emcn'
 import { Music } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { sleep } from '@sim/utils/helpers'
 import { DefaultFileIcon, getDocumentIcon } from '@/components/icons/document-icons'
 import { isSafeHttpUrl } from '@/lib/core/utils/urls'

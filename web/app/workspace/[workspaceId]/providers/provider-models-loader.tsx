@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
 import { useProviderModels } from '@/hooks/queries/providers'
 import {

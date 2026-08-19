@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { getTableById, type TableDefinition } from '@/lib/table'
 import type { TableAuthorizationContext } from '@/lib/table/application/authorization'

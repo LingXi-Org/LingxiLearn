@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { MicrosoftTeamsAttachment } from '@/tools/microsoft_teams/types'
 import type { ToolFileData } from '@/tools/types'
 

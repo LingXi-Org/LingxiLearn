@@ -27,7 +27,7 @@ import {
   toast,
 } from '@sim/emcn'
 import { TerminalWindow } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'

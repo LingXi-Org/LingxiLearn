@@ -3,7 +3,7 @@ import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamable
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import { db } from '@sim/db'
 import { mcpServers } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { sleep } from '@sim/utils/helpers'
 import { backoffWithJitter } from '@sim/utils/retry'

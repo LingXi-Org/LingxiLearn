@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { db, dbReplica } from '@sim/db'
 import { usageLog, workflow } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { and, desc, eq, gte, inArray, lt, lte, or, sql } from 'drizzle-orm'

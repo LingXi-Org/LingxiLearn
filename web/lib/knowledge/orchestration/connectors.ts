@@ -7,7 +7,7 @@ import {
   knowledgeBaseTagDefinitions,
   knowledgeConnector,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { encryptApiKey } from '@/lib/api-key/crypto'

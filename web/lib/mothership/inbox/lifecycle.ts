@@ -1,5 +1,5 @@
 import { db, mothershipInboxWebhook, workspace } from '@sim/db'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { eq } from 'drizzle-orm'
 import { getBaseUrl } from '@/lib/core/utils/urls'

@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import { db } from '@sim/db'
 import { member, organization, subscription, userStats } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { and, eq, sql } from 'drizzle-orm'
 import { BILLING_LOCK_TIMEOUT_MS, DEFAULT_OVERAGE_THRESHOLD } from '@/lib/billing/constants'

@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { releaseExecutionSlot } from '@/lib/billing/calculations/usage-reservation'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'

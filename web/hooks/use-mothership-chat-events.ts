@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { QueryClient } from '@tanstack/react-query'
 import { useQueryClient } from '@tanstack/react-query'
 import { getLiveAssistantMessageId } from '@/lib/copilot/chat/effective-transcript'

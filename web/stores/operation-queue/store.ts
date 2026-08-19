@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { create } from 'zustand'
 import type {
   OperationQueueState,

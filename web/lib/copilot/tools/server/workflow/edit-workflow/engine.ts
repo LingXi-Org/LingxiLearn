@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { PermissionGroupConfig } from '@/lib/permission-groups/types'
 import { isValidKey } from '@/lib/workflows/sanitization/key-validation'
 import { validateEdges } from '@/stores/workflows/workflow/edge-validation'

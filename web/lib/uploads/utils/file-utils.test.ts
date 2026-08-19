@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { describe, expect, it } from 'vitest'
 import {
   extractStorageKey,

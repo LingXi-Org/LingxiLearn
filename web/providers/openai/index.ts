@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { StreamingExecution } from '@/executor/types'
 import { getProviderDefaultModel, getProviderModels } from '@/providers/models'
 import type { ProviderConfig, ProviderRequest, ProviderResponse } from '@/providers/types'

@@ -31,7 +31,6 @@
       "@sim/desktop-bridge/*": ["./packages/desktop-bridge/src/*"],
       "@sim/emcn": ["./packages/emcn/src/index.ts"],
       "@sim/emcn/*": ["./packages/emcn/src/*"],
-      "@sim/logger": ["./packages/logger/src/index.ts"],
       "@sim/platform-authz/*": ["./packages/platform-authz/src/*"],
       "@sim/realtime-protocol/*": ["./packages/realtime-protocol/src/*"],
       "@sim/runtime-secrets": ["./packages/runtime-secrets/src/index.ts"],

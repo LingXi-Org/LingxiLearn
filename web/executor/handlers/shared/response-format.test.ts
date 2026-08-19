@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseResponseFormat } from '@/executor/handlers/shared/response-format'
 

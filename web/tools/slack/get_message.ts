@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { SlackGetMessageParams, SlackGetMessageResponse } from '@/tools/slack/types'
 import { MESSAGE_OUTPUT_PROPERTIES } from '@/tools/slack/types'
 import type { ToolConfig } from '@/tools/types'

@@ -13,7 +13,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 
 const logger = createLogger('SandboxBundleBuild')
 

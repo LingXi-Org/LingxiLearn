@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { tableRowExecutions, userTableDefinitions, workflowExecutionLogs } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { and, eq, inArray } from 'drizzle-orm'
 import { appendTableEvent } from '@/lib/table/events'

@@ -1,5 +1,5 @@
 import type { CreateSandboxFromSnapshotParams } from '@daytona/sdk'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { generateShortId } from '@sim/utils/id'
 import {

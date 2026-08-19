@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { TABLE_LIMITS } from '@/lib/table/constants'
 import {
   TABLE_LOCK_FLAGS,

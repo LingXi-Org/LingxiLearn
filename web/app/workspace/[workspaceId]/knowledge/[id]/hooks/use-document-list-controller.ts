@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useQueryState, useQueryStates } from 'nuqs'
 import type { DocumentSortField, SortOrder } from '@/lib/knowledge/documents/types'
 import { SEARCH_DEBOUNCE_MS } from '@/lib/url-state'

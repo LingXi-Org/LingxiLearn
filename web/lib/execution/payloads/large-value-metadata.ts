@@ -6,7 +6,7 @@ import {
   pausedExecutions,
   workflowExecutionLogs,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { chunkArray } from '@sim/utils/helpers'
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import { collectLargeValueKeys } from '@/lib/execution/payloads/large-execution-value'

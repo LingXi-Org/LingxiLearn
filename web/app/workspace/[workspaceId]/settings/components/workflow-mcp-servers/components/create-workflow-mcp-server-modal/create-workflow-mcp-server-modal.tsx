@@ -13,7 +13,7 @@ import {
   ChipSelect,
   type ComboboxOption,
 } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useCreateWorkflowMcpServer } from '@/hooks/queries/workflow-mcp-servers'
 
 const logger = createLogger('CreateWorkflowMcpServerModal')

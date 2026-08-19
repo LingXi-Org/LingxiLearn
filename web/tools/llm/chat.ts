@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { type ModelCost, resolveProxiedModelCost } from '@/providers/cost-policy'
 import { getProviderFromModel } from '@/providers/utils'
 import type { ToolConfig, ToolResponse } from '@/tools/types'

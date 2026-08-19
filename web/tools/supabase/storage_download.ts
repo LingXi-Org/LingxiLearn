@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import {
   STORAGE_DOWNLOAD_OUTPUT_PROPERTIES,
   type SupabaseStorageDownloadParams,

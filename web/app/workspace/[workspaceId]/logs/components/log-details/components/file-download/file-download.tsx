@@ -2,7 +2,7 @@
 
 import { Button } from '@sim/emcn'
 import { Download } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useRouter } from 'next/navigation'
 import { API_BASE } from '@/lib/lingxi/api'
 import { extractWorkspaceIdFromExecutionKey, getViewerUrl } from '@/lib/uploads/utils/file-utils'

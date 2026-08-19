@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { CONTAINER_DIMENSIONS } from '@sim/workflow-renderer'
 import {
   CONTAINER_PADDING_X,

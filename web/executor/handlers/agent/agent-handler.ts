@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { mcpServers } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { sleep } from '@sim/utils/helpers'
 import { isPlainRecord } from '@sim/utils/object'

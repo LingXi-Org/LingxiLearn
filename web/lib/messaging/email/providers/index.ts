@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { EMAIL_CAPABILITY, type FallbackFactories } from '@/lib/core/config/env-capabilities'
 import { wireServerFallback } from '@/lib/core/config/env-capabilities.server'
 import { createAzureProvider } from '@/lib/messaging/email/providers/azure'

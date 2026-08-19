@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { validateUrlWithDNS } from '@/lib/core/security/input-validation.server'
 import { BlockType, HTTP } from '@/executor/constants'
 import type { BlockHandler, ExecutionContext } from '@/executor/types'

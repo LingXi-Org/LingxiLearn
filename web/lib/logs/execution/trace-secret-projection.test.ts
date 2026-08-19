@@ -10,7 +10,7 @@ const { materializeLargeValueRefMock, storeLargeValueMock, warnMock } = vi.hoist
   warnMock: vi.fn(),
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     info: vi.fn(),

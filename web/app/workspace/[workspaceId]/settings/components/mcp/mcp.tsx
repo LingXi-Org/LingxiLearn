@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Badge, Button, Chip, ChipConfirmModal, cn, Tooltip, toast } from '@sim/emcn'
 import { ArrowLeft, ChevronDown, Plus } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { useParams } from 'next/navigation'
 import { useQueryState } from 'nuqs'

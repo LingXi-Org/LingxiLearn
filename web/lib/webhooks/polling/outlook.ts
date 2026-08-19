@@ -1,4 +1,4 @@
-import type { Logger } from '@sim/logger'
+import type { Logger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { htmlToText } from 'html-to-text'
 import { pollingIdempotency } from '@/lib/core/idempotency/service'

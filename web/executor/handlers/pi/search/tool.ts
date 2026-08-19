@@ -7,7 +7,7 @@
  * return early — Pi search can never spend a Sim-owned key.
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { PiSearchConfig, PiToolSpec } from '@/executor/handlers/pi/core/backend'
 import { PI_SEARCH_PROVIDERS } from '@/executor/handlers/pi/core/keys'
 import {

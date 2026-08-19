@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { hmacSha256Hex } from '@sim/security/hmac'
 import type {

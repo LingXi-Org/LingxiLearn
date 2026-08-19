@@ -11,7 +11,7 @@
 
 import { db } from '@sim/db'
 import { tableViews } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId } from '@sim/utils/id'
 import { and, asc, eq, ne, sql } from 'drizzle-orm'
 import { getColumnId } from '@/lib/table/column-keys'

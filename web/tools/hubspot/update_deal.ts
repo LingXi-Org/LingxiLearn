@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { HubSpotUpdateDealParams, HubSpotUpdateDealResponse } from '@/tools/hubspot/types'
 import { DEAL_OBJECT_OUTPUT } from '@/tools/hubspot/types'
 import type { ToolConfig } from '@/tools/types'

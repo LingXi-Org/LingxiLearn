@@ -27,7 +27,7 @@ const { mockGetAccessToken, JWTCtor, loggerInstance } = vi.hoisted(() => {
 })
 
 vi.mock('google-auth-library', () => ({ JWT: JWTCtor }))
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => loggerInstance,
   logger: loggerInstance,
   runWithRequestContext: <T>(_ctx: unknown, fn: () => T): T => fn(),

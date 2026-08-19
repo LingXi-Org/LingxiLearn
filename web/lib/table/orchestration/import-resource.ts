@@ -1,7 +1,7 @@
 import type { Principal } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { tableJobs } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { and, eq } from 'drizzle-orm'

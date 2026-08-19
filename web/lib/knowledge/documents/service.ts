@@ -9,7 +9,7 @@ import {
   knowledgeConnector,
   workspace as workspaceTable,
 } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { sha256Hex } from '@sim/security/hash'
 import { getErrorMessage, toError } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'

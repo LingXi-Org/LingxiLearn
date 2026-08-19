@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   routeExecution: vi.fn(),
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ error: mocks.loggerError }),
 }))
 

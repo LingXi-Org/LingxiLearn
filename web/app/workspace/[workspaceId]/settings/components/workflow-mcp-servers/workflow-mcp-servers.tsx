@@ -22,7 +22,7 @@ import {
   useCopyToClipboard,
 } from '@sim/emcn'
 import { ArrowLeft, Check, Clipboard, Plus, Server } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { useParams } from 'next/navigation'
 import { useQueryState } from 'nuqs'

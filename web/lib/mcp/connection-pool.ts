@@ -23,7 +23,7 @@
  * connection errors).
  */
 
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isTest } from '@/lib/core/config/env-flags'
 import type { McpClient } from '@/lib/mcp/client'
 

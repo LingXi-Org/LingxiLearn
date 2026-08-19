@@ -1,6 +1,6 @@
 import fs from 'fs/promises'
 import path from 'path'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { TextChunker } from '@/lib/chunkers/text-chunker'
 import type { DocChunk, DocsChunkerOptions } from '@/lib/chunkers/types'
 import { estimateTokens } from '@/lib/chunkers/utils'

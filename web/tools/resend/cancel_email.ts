@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { CancelEmailParams, CancelEmailResult } from '@/tools/resend/types'
 import type { ToolConfig } from '@/tools/types'
 

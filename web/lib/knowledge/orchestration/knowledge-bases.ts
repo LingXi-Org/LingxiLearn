@@ -1,5 +1,5 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { PlatformEvents } from '@/lib/core/telemetry'
 import { generateRequestId } from '@/lib/core/utils/request'
 import { DEFAULT_CHUNKING_CONFIG } from '@/lib/knowledge/constants'

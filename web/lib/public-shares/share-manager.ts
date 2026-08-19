@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { publicShare, user, workspace, workspaceFiles } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { generateId, generateShortId } from '@sim/utils/id'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import type { z } from 'zod'

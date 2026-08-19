@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import type { GmailSearchParams, GmailToolResponse } from '@/tools/gmail/types'
 import {
   createMessagesSummary,

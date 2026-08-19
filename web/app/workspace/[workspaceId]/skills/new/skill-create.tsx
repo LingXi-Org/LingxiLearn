@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ChipLink, toast } from '@sim/emcn'
 import { ArrowLeft } from '@sim/emcn/icons'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { useRouter } from 'next/navigation'
 import { SaveDiscardChips } from '@/components/settings/save-discard-actions'

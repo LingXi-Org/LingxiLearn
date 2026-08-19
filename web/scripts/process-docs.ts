@@ -3,7 +3,7 @@
 import path from 'path'
 import { db } from '@sim/db'
 import { docsEmbeddings } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { sql } from 'drizzle-orm'
 import { type DocChunk, DocsChunker } from '@/lib/chunkers'
 import { isDev } from '@/lib/core/config/env-flags'

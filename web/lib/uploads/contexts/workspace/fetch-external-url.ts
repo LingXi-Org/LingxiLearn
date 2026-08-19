@@ -1,6 +1,6 @@
 import type { Buffer } from 'buffer'
 import path from 'path'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { describeError } from '@sim/utils/errors'
 import {
   secureFetchWithPinnedIP,

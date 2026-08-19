@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { toError } from '@sim/utils/errors'
 import { MothershipStreamV1EventType } from '@/lib/copilot/generated/mothership-stream-v1'
 import { appendEvents } from './buffer'

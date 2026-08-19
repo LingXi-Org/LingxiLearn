@@ -13,11 +13,11 @@ vi.mock('@/lib/oauth/utils', () => ({
 }))
 
 /**
- * Overrides the global `@sim/logger` mock (which hands out a fresh logger per
+ * Overrides the global `@/lib/logger` mock (which hands out a fresh logger per
  * `createLogger` call) with one whose `warn` is a shared spy, so the
  * api_domain/region mismatch warning can be asserted.
  */
-vi.mock('@sim/logger', () => {
+vi.mock('@/lib/logger', () => {
   const createLogger = () => ({
     debug: vi.fn(),
     info: vi.fn(),

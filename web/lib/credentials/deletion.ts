@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import { db } from '@sim/db'
 import * as schema from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { and, eq, or, sql } from 'drizzle-orm'
 import type { NextRequest } from 'next/server'
 import { CREDENTIAL_SUBBLOCK_IDS } from '@/lib/workflows/persistence/utils'

@@ -1,5 +1,5 @@
 import { createPrivateKey, type KeyObject } from 'crypto'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { SignJWT } from 'jose'
 import {

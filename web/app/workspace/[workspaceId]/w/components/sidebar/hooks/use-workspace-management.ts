@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { useRouter } from 'next/navigation'
 import { requestJson } from '@/lib/api/client/request'
 import { updateUserSettingsContract } from '@/lib/api/contracts'

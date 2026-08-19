@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { useRouter } from 'next/navigation'
 import type { TableDefinition } from '@/lib/table'

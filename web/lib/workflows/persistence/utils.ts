@@ -6,7 +6,7 @@ import {
   workflowDeploymentVersion,
 } from '@sim/db'
 import { credential } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { getActiveWorkflowContext } from '@sim/platform-authz/workflow'
 import { getErrorMessage } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'

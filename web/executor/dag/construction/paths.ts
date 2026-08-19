@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@/lib/logger'
 import { isMetadataOnlyBlockType, isTriggerBlockType } from '@/executor/constants'
 import { extractBaseBlockId } from '@/executor/utils/subflow-utils'
 import type { SerializedBlock, SerializedWorkflow } from '@/serializer/types'
