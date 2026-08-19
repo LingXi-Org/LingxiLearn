@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import { validateExternalUrl } from '@/lib/core/security/input-validation'
 import type {
   ConvexFunctionCallApiResponse,

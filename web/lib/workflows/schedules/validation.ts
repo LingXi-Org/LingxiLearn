@@ -2,7 +2,7 @@
  * Client-safe schedule validation functions
  * These can be used in both client and server contexts
  */
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   type BlockState,
   calculateNextRunTime,

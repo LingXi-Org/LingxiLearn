@@ -20,7 +20,7 @@ type OutboxRow = {
   processedAt: Date | null
 }
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: vi.fn(() => 'test-event-id'),
 }))
 

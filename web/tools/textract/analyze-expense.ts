@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import type {
   TextractAnalyzeExpenseOutput,
   TextractAnalyzeExpenseV2Input,

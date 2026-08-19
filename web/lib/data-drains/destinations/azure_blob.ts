@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { z } from 'zod'
 import { buildObjectKey, normalizePrefix } from '@/lib/data-drains/destinations/utils'
 import type { DrainDestination } from '@/lib/data-drains/types'

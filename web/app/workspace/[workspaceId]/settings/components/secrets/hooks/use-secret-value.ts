@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { toast } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useSession } from '@/lib/auth/auth-client'
 import type { WorkspaceCredential } from '@/hooks/queries/credentials'
 import {

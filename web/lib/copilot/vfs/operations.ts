@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import micromatch from 'micromatch'
 import {
   isNonGreppablePlaceholder,

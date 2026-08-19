@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
 import type { SecureFetchResponse } from '@/lib/core/security/input-validation.server'
 import { isSameOrigin } from '@/lib/core/utils/validation'
 import { secureFetchWithRetry } from '@/lib/knowledge/documents/secure-fetch.server'

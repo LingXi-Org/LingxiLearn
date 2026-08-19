@@ -10,7 +10,7 @@ import {
   ChipModalHeader,
   Info,
 } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   useOrganizationMemberUsageLimit,
   useUpdateOrganizationMemberUsageLimit,

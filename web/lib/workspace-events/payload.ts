@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import { dollarsToCredits } from '@/lib/billing/credits/conversion'
 import {
   SIM_FINAL_OUTPUT_MAX_BYTES,

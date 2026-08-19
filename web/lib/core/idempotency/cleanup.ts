@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { idempotencyKey } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
 import { and, count, inArray, like, lt, max, min, notLike, sql } from 'drizzle-orm'
 

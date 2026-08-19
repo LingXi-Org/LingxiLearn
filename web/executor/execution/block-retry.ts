@@ -1,4 +1,4 @@
-import { findCause } from '@sim/utils/errors'
+import { findCause } from '@/lib/utils/errors'
 import { type BlockRetryConfig, resolveBlockRetryConfig } from '@sim/workflow-types/workflow'
 import { isRetryEligibleBlock } from '@/lib/workflows/blocks/retry-eligibility'
 import { ChildWorkflowError } from '@/executor/errors/child-workflow-error'

@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { identityApi } from '@/lib/auth/identity-api'
 import { AuthHeader, AuthNavPrompt } from '@/app/(auth)/components'

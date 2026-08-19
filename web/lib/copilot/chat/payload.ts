@@ -1,7 +1,7 @@
 import type { BrowserKnownSession } from '@sim/browser-protocol'
 import { createLogger } from '@/lib/logger'
 import { isPermissionType, permissionSatisfies } from '@sim/platform-authz/predicates'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { LRUCache } from 'lru-cache'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
 import { isPaid } from '@/lib/billing/plan-helpers'

@@ -1,4 +1,4 @@
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import type { Mem0Response, Mem0SearchMemoriesParams } from '@/tools/mem0/types'
 import { SEARCH_RESULT_OUTPUT_PROPERTIES } from '@/tools/mem0/types'
 import type { JsonRecord } from '@/tools/mem0/utils'

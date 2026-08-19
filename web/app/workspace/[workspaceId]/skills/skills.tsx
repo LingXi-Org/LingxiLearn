@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { Chip, ChipInput, Search } from '@sim/emcn'
 import { Plus } from '@sim/emcn/icons'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { HEADER_ACTION_CLUSTER, PAGE_HEADER_BAR } from '@/components/page-header-bar'

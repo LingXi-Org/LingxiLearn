@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { workspaceFiles } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { and, asc, desc, eq, isNull, or } from 'drizzle-orm'
 import {
   type FileReadResult,

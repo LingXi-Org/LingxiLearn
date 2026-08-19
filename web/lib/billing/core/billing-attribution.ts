@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { workspace } from '@sim/db/schema'
-import { generateId, isValidUuid } from '@sim/utils/id'
-import { isRecordLike } from '@sim/utils/object'
+import { generateId, isValidUuid } from '@/lib/utils/id'
+import { isRecordLike } from '@/lib/utils/object'
 import { eq } from 'drizzle-orm'
 import {
   checkBillingBlocked,

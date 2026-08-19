@@ -1,5 +1,5 @@
 import { Bell, ClipboardList, Database, File, Search, Server, Trash, Wrench } from '@sim/emcn/icons'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { ClickHouseIcon } from '@/components/icons'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'
 import { IntegrationType } from '@/blocks/types'

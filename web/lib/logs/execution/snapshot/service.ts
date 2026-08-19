@@ -2,7 +2,7 @@ import { dbFor } from '@sim/db'
 import { workflowExecutionLogs, workflowExecutionSnapshots } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
 import { sha256Hex } from '@sim/security/hash'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, inArray, lt, notExists, sql } from 'drizzle-orm'
 import type {
   SnapshotService as ISnapshotService,

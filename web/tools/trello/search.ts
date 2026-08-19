@@ -1,5 +1,5 @@
-import { getErrorMessage } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { isRecordLike } from '@/lib/utils/object'
 import { env } from '@/lib/core/config/env'
 import {
   extractTrelloErrorMessage,

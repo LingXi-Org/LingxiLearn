@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { isRecordLike as isRecord } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { isRecordLike as isRecord } from '@/lib/utils/object'
 import { getRedisClient } from '@/lib/core/config/redis'
 import { getExecutionReservationTtlMs } from '@/lib/core/execution-limits'
 import type { ExecutionLastCompletedBlock, ExecutionLastStartedBlock } from '@/lib/logs/types'

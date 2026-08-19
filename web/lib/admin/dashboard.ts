@@ -10,8 +10,8 @@ import {
   userStats,
   workspace,
 } from '@sim/db/schema'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { and, count, countDistinct, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm'
 import {
   getOrganizationUsageLimitFallbackDollars,

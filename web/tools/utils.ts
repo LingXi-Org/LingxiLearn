@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { stripVersionSuffix } from '@sim/utils/string'
+import { stripVersionSuffix } from '@/lib/utils/string'
 import {
   normalizeRecord,
   normalizeStringRecord,
@@ -16,12 +16,12 @@ const logger = createLogger('ToolsUtils')
 
 /**
  * Strips version suffix (_v2, _v3, etc.) from a tool ID or name.
- * Re-exported from the canonical `@sim/utils/string` helper so existing
+ * Re-exported from the canonical `@/lib/utils/string` helper so existing
  * `@/tools/utils` consumers keep working unchanged.
  * @example stripVersionSuffix('notion_search_v2') => 'notion_search'
  * @example stripVersionSuffix('github_create_pr_v3') => 'github_create_pr'
  */
-export { stripVersionSuffix } from '@sim/utils/string'
+export { stripVersionSuffix } from '@/lib/utils/string'
 
 /** Materialized HTTP request accepted by the legacy executeRequest helper. */
 export interface RequestParams {

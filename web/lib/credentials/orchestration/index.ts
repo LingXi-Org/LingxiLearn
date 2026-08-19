@@ -2,7 +2,7 @@ import { AuditAction, AuditResourceType, auditUpdatedFields, recordAudit } from 
 import { db } from '@sim/db'
 import { credential, environment, webhook, workspaceEnvironment } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, sql } from 'drizzle-orm'
 import type { NextRequest } from 'next/server'
 import { decryptSecret } from '@/lib/core/security/encryption'

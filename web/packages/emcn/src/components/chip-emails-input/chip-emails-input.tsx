@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { isValidEmailSyntax, normalizeEmail } from '@sim/utils/string'
+import { isValidEmailSyntax, normalizeEmail } from '@/lib/utils/string'
 import { TagInput, type TagItem } from '../tag-input/tag-input'
 
 const ENTER_PREFIX = 'enter'

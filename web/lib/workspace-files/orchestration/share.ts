@@ -1,6 +1,6 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import type { ShareAuthType, ShareRecord } from '@/lib/api/contracts/public-shares'
 import type {
   OrchestrationErrorCode,

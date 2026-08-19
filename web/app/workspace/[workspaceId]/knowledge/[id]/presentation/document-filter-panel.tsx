@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import { Button, ChipDatePicker, ChipDropdown, type ChipDropdownOption, ChipInput } from '@sim/emcn'
 import { Plus, X } from '@sim/emcn/icons'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { getOperatorsForFieldType } from '@/lib/knowledge/filters/types'
 import type { DocumentEnabledFilter } from '@/app/workspace/[workspaceId]/knowledge/[id]/hooks/use-document-list-controller'
 import {

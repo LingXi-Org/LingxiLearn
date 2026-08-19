@@ -1,7 +1,7 @@
 import { randomInt } from 'crypto'
 import { db } from '@sim/db'
 import { verification } from '@sim/db/schema'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, gt } from 'drizzle-orm'
 import { getRedisClient } from '@/lib/core/config/redis'
 import type { TokenBucketConfig } from '@/lib/core/rate-limiter'

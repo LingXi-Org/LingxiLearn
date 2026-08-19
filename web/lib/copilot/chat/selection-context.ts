@@ -5,7 +5,7 @@
  * resolver can consume the same limits and formatting.
  */
 
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 
 /**
  * Max characters of selected file text carried inline on a `file_selection`.

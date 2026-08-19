@@ -1,6 +1,6 @@
 import type { Logger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
+import { isRecordLike } from '@/lib/utils/object'
 import type OpenAI from 'openai'
 import { MAX_TOOL_ITERATIONS } from '@/providers'
 import { enrichLastModelSegmentFromOpenAIResponse } from '@/providers/openai/trace'

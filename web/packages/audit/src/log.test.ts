@@ -29,7 +29,7 @@ vi.mock('@/lib/logger', () => ({
     debug: vi.fn(),
   }),
 }))
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: () => 'test-uuid-123',
   generateShortId: () => 'test-id-123',
   isValidUuid: (v: string) =>

@@ -3,7 +3,7 @@ import { member, permissions, workflow, workspace as workspaceTable } from '@sim
 import { createLogger } from '@/lib/logger'
 import type { PermissionType } from '@sim/platform-authz/workspace'
 import { isOrgAdminRole } from '@sim/platform-authz/workspace'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, count, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { changeWorkspaceStoragePayerInTx } from '@/lib/billing/storage/payer-transfer'
 import type { DbOrTx } from '@/lib/db/types'

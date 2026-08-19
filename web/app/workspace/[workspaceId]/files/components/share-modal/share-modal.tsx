@@ -11,7 +11,7 @@ import {
   ChipModalHeader,
 } from '@sim/emcn'
 import { Send } from '@sim/emcn/icons'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { GeneratedPasswordInput } from '@/components/ui'
 import type { ShareAuthType, ShareRecord } from '@/lib/api/contracts/public-shares'
 import { isSsoEnabled } from '@/lib/core/config/env-flags'

@@ -1,6 +1,6 @@
 import { SpanStatusCode, trace } from '@opentelemetry/api'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { updateRunStatus } from '@/lib/copilot/async-runs/repository'
 import {
   MothershipStreamV1CompletionStatus,

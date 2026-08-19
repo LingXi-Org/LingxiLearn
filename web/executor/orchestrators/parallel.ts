@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { compactSubflowResults } from '@/lib/execution/payloads/serializer'
 import { DEFAULTS } from '@/executor/constants'
 import type { DAG } from '@/executor/dag/builder'

@@ -9,8 +9,8 @@
  */
 import type { BrowserToolName } from '@sim/browser-protocol'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { isRecordLike } from '@/lib/utils/object'
 import {
   cancelBrowserTool,
   executeBrowserTool,

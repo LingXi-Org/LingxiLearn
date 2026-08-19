@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { getPollingHandler } from '@/lib/webhooks/polling/registry'
 import type { PollSummary } from '@/lib/webhooks/polling/types'
 import { fetchActiveWebhooks, runWithConcurrency } from '@/lib/webhooks/polling/utils'

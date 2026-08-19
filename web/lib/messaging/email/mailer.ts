@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { getAccessControlConfig, isEmailBlockedByAccessControl } from '@/lib/auth/access-control'
 import { processEmailData, shouldSkipForUnsubscribe } from '@/lib/messaging/email/prepare'
 import { activeProviders, emailFallback } from '@/lib/messaging/email/providers'

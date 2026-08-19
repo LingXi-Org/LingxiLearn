@@ -16,7 +16,7 @@ import {
 } from '@sim/emcn'
 import { ChevronDown, ChevronRight } from '@sim/emcn/icons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { McpAuthType, McpTransport } from '@/lib/mcp/types'
 import {
   checkEnvVarTrigger,

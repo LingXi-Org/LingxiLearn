@@ -1,4 +1,4 @@
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { ErrorExtractorId } from '@/tools/error-extractors'
 import type { InvoiceResponse, PublishInvoiceParams } from '@/tools/square/types'
 import {

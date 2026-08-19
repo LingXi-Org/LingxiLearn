@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { isPlainRecord, omit } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { isPlainRecord, omit } from '@/lib/utils/object'
 import {
   isLargeArrayManifest,
   LARGE_ARRAY_MANIFEST_MARKER,

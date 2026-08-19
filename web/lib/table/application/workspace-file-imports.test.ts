@@ -42,7 +42,7 @@ vi.mock('@sim/platform-authz/workspace', () => ({
   },
   resolveEffectiveWorkspacePermission: mocks.resolvePermission,
 }))
-vi.mock('@sim/utils/id', () => ({ generateId: () => 'request-id-1234' }))
+vi.mock('@/lib/utils/id', () => ({ generateId: () => 'request-id-1234' }))
 vi.mock('@/lib/core/config/env-flags', () => ({ isTriggerDevEnabled: false }))
 vi.mock('@/lib/core/utils/background', () => ({ runDetached: mocks.runDetached }))
 vi.mock('@/lib/table', () => ({

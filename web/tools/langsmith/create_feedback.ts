@@ -1,5 +1,5 @@
-import { generateId } from '@sim/utils/id'
-import { filterUndefined } from '@sim/utils/object'
+import { generateId } from '@/lib/utils/id'
+import { filterUndefined } from '@/lib/utils/object'
 import type {
   LangsmithCreateFeedbackParams,
   LangsmithCreateFeedbackResponse,

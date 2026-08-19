@@ -1,6 +1,6 @@
 import { ChipConfirmModal } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
-import { formatQuotedNameList } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { formatQuotedNameList } from '@/lib/utils/string'
 
 const MAX_LISTED_CREDENTIALS = 3
 

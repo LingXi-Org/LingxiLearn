@@ -10,7 +10,7 @@ import {
   ChipModalHeader,
 } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { partitionSettledFailures, resolveAddEmail } from '@/lib/workspaces/sharing'
 import { useWorkspacePermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { MEMBER_ROLE_OPTIONS, type MemberRole } from './member-role-options'

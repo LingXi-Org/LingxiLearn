@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { createLogger } from '@/lib/logger'
-import { getPostgresErrorCode } from '@sim/utils/errors'
+import { getPostgresErrorCode } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
 import { backoffWithJitter } from '@sim/utils/retry'
 import type { DbOrTx } from '@/lib/db/types'

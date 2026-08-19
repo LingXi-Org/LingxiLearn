@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { type PermissionType, permissionSatisfies } from '@sim/platform-authz/workspace'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { projectToolErrorMessageForCopilot } from '@/lib/copilot/request/tools/resolved-secret-result'
 import { DEFAULT_EXECUTION_TIMEOUT_MS } from '@/lib/execution/constants'
 import { executeTool as executeAppTool } from '@/tools'

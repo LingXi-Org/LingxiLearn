@@ -14,7 +14,7 @@ import {
 } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
 import { isOrgAdminRole } from '@sim/platform-authz/predicates'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { formatDate } from '@sim/utils/formatting'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/auth/auth-client'

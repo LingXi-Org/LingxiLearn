@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { cn, Input, Label } from '@sim/emcn'
 import { Eye, EyeOff } from '@sim/emcn/icons'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useRouter } from 'next/navigation'
 import { AuthSubmitButton } from '@/app/(auth)/components'
 import { PublicFileAuthShell } from '@/app/f/[token]/public-file-auth-shell'

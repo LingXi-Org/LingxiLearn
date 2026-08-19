@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { DatabricksRunJobParams, DatabricksRunJobResponse } from '@/tools/databricks/types'
 import type { ToolConfig } from '@/tools/types'
 

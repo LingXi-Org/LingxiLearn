@@ -15,7 +15,7 @@ import {
 } from '@sim/emcn'
 import { Eye, EyeOff, Search } from '@sim/emcn/icons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   CHIP_FIELD_INPUT,
   CHIP_FIELD_SHELL,

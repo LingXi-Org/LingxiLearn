@@ -1,4 +1,4 @@
-import { stripVersionSuffix } from '@sim/utils/string'
+import { stripVersionSuffix } from '@/lib/utils/string'
 import type { BlockVisibilityState } from '@/lib/core/config/block-visibility'
 import { env } from '@/lib/core/config/env'
 import {

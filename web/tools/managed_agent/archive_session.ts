@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { archiveSession } from '@/lib/managed-agents/session-client'
 import {
   ACCESS_TOKEN_PARAM,

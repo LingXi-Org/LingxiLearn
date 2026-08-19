@@ -1,4 +1,4 @@
-import { stripVersionSuffix } from '@sim/utils/string'
+import { stripVersionSuffix } from '@/lib/utils/string'
 import type { BlockVisibilityState } from '@/lib/core/config/block-visibility'
 import { overlayBlocks, resolveOverlayBlock } from '@/blocks/custom/overlay'
 import { BLOCK_META_REGISTRY, BLOCK_REGISTRY } from '@/blocks/registry-maps'

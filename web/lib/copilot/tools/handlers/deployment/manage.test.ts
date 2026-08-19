@@ -8,7 +8,7 @@ import {
   workflowsOrchestrationMock,
   workflowsOrchestrationMockFns,
 } from '@sim/testing'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionContext } from '@/lib/copilot/request/types'
 

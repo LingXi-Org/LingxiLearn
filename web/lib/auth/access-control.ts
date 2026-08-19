@@ -1,4 +1,4 @@
-import { normalizeEmail } from '@sim/utils/string'
+import { normalizeEmail } from '@/lib/utils/string'
 import { fetchAppConfigProfile } from '@/lib/core/config/appconfig'
 import { env } from '@/lib/core/config/env'
 import { isAppConfigEnabled } from '@/lib/core/config/env-flags'

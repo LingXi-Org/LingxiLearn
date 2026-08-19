@@ -1,5 +1,5 @@
 import { hmacSha256Hex } from '@sim/security/hmac'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import type { RequestResponse, WebhookRequestParams } from '@/tools/http/types'
 import type { ToolConfig } from '@/tools/types'
 

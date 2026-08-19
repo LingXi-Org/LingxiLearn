@@ -15,7 +15,7 @@
  * imports it directly, and the barrel stays free of `@/blocks` value imports.
  */
 
-import { stripVersionSuffix } from '@sim/utils/string'
+import { stripVersionSuffix } from '@/lib/utils/string'
 import { INTEGRATIONS } from '@/lib/integrations'
 import { getAllBlockMeta } from '@/blocks/registry'
 

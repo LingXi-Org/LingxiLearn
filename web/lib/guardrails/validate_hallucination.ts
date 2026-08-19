@@ -1,8 +1,8 @@
 import { db } from '@sim/db'
 import { account } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { isPlainRecord } from '@sim/utils/object'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { isPlainRecord } from '@/lib/utils/object'
 import { eq } from 'drizzle-orm'
 import { generateInternalDelegationToken } from '@/lib/auth/internal'
 import {

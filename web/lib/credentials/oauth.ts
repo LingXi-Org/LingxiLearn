@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { account, credential, credentialMember } from '@sim/db/schema'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, inArray, notInArray } from 'drizzle-orm'
 import { getServiceConfigByProviderId } from '@/lib/oauth'
 

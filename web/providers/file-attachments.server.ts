@@ -1,6 +1,6 @@
 import { FileState, GoogleGenAI } from '@google/genai'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
 import { StorageService } from '@/lib/uploads'
 import { resolveTrustedFileContext } from '@/lib/uploads/utils/file-utils'

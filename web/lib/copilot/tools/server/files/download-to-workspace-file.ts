@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { z } from 'zod'
 import { executeCopilotFileUseCase } from '@/lib/copilot/application/execute-file-use-case'
 import { messageForCopilotFileError } from '@/lib/copilot/auth/file-delegation'

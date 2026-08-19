@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { OutputProperty } from '@/tools/types'
 import type { ZoomInfoBaseParams } from '@/tools/zoominfo/types'
 

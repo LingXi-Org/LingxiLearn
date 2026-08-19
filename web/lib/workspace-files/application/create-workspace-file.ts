@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
 import { type Principal, resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { createLogger } from '@/lib/logger'
-import { getPostgresErrorCode } from '@sim/utils/errors'
+import { getPostgresErrorCode } from '@/lib/utils/errors'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import {
   FileConflictError,

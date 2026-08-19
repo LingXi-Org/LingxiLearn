@@ -61,7 +61,7 @@ vi.mock('@sim/workflow-persistence/subblocks', () => ({
   mergeSubblockStateWithValues: vi.fn((blocks) => blocks),
 }))
 
-vi.mock('@sim/utils/id', () => ({ generateId: vi.fn(() => 'child-execution-1') }))
+vi.mock('@/lib/utils/id', () => ({ generateId: vi.fn(() => 'child-execution-1') }))
 vi.mock('@/lib/core/utils/request', () => ({ generateRequestId: vi.fn(() => 'request-1') }))
 
 import {

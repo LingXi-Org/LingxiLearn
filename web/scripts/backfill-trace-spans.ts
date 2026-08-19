@@ -21,7 +21,7 @@
 
 import { db } from '@sim/db'
 import { workflowExecutionLogs } from '@sim/db/schema'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { and, asc, eq, gt, sql } from 'drizzle-orm'
 import {
   collectLargeValueReferenceKeys,

@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { hmacSha256Hex } from '@sim/security/hmac'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { NextResponse } from 'next/server'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 import { refreshAccessTokenIfNeeded } from '@/lib/oauth/credential-service'

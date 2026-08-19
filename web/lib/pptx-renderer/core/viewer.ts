@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { ECharts } from 'echarts'
 import { isAllowedExternalUrl } from '@/lib/core/security/url-safety'
 import { buildPresentation, type PresentationData } from '../model/presentation'

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { parseLargeExecutionValue } from '@/lib/execution/payloads/large-execution-value'
 import { compactWorkflowVariableValue } from '@/lib/execution/payloads/serializer'
 import type { BlockOutput } from '@/blocks/types'

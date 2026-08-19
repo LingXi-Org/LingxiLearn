@@ -3,7 +3,7 @@
 import { type MutableRefObject, useCallback } from 'react'
 import { toast } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   folderRowId,
   nextUntitledFolderName,

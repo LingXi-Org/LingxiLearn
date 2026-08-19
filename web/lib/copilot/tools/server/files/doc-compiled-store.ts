@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
 import { downloadFile, uploadFile } from '@/lib/uploads/core/storage-service'
 
 const logger = createLogger('CopilotDocCompiledStore')

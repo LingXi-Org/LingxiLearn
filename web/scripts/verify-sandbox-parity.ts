@@ -34,7 +34,7 @@
 
 import { writeFile } from 'node:fs/promises'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { CodeLanguage } from '@/lib/execution/languages'
 import { executeInSandbox, executeShellInSandbox } from '@/lib/execution/remote-sandbox'
 import {

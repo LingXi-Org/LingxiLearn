@@ -36,7 +36,7 @@ vi.mock('@sim/platform-authz/workspace', () => ({
   },
   resolveEffectiveWorkspacePermission: mocks.resolvePermission,
 }))
-vi.mock('@sim/utils/id', () => ({ generateId: () => 'generated-id' }))
+vi.mock('@/lib/utils/id', () => ({ generateId: () => 'generated-id' }))
 vi.mock('@/enrichments/registry', () => ({ getEnrichment: mocks.getEnrichment }))
 vi.mock('@/lib/core/utils/background', () => ({
   runDetached: (label: string, work: () => Promise<unknown>) => {

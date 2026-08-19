@@ -1,4 +1,4 @@
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { SimAutoIcon } from '@/components/icons'
 import {
   isAzureConfigured,

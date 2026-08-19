@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { NextResponse } from 'next/server'
 import { getNotificationUrl, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
 import type {

@@ -1,6 +1,6 @@
 import { createLogger, runWithRequestContext } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { task, timeout } from '@trigger.dev/sdk'
 import {
   refreshExecutionSlotExpiry,

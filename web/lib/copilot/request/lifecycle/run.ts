@@ -1,10 +1,10 @@
 import type { Context } from '@opentelemetry/api'
 import { createLogger } from '@/lib/logger'
 import type { PermissionType } from '@sim/platform-authz/workspace'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
-import { generateId } from '@sim/utils/id'
-import { omit } from '@sim/utils/object'
+import { generateId } from '@/lib/utils/id'
+import { omit } from '@/lib/utils/object'
 import {
   type AttributedBillingRequestEnvelope,
   assertBillingAttributionSnapshot,

@@ -29,7 +29,7 @@ import {
   StandardUnit,
 } from '@aws-sdk/client-cloudwatch'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 
 const logger = createLogger('HostedKeyMetrics')
 

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { validateServiceNowInstanceUrl } from '@/lib/core/security/input-validation'
 import { fetchWithRetry, VALIDATE_RETRY_OPTIONS } from '@/lib/knowledge/documents/utils'
 import { DEFAULT_MAX_ITEMS, servicenowConnectorMeta } from '@/connectors/servicenow/meta'

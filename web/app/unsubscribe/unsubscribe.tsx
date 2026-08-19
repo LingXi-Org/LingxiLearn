@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import { Chip, cn, Loader } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useSearchParams } from 'next/navigation'
 import type { UnsubscribeType } from '@/lib/api/contracts/user'
 import { AuthSubmitButton } from '@/app/(auth)/components'

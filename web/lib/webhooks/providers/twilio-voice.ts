@@ -1,4 +1,4 @@
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import { NextResponse } from 'next/server'
 import { verifyTwilioAuth } from '@/lib/webhooks/providers/twilio-signature'
 import type {

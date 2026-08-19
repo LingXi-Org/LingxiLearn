@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateShortId } from '@sim/utils/id'
-import { isRecordLike } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
+import { isRecordLike } from '@/lib/utils/object'
 import { NextResponse } from 'next/server'
 import { getNotificationUrl, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
 import type {

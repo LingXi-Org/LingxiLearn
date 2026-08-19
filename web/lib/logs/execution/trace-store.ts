@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { omit } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { omit } from '@/lib/utils/object'
 import { isLargeValueRef } from '@/lib/execution/payloads/large-value-ref'
 import { materializeLargeValueRef, storeLargeValue } from '@/lib/execution/payloads/store'
 import { FunctionalOutputsUnavailableError } from '@/lib/logs/execution/functional-outputs'

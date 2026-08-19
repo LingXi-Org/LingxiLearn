@@ -1,4 +1,4 @@
-import { filterUndefined } from '@sim/utils/object'
+import { filterUndefined } from '@/lib/utils/object'
 import type { BlockState, SubBlockState } from '@sim/workflow-types/workflow'
 
 export const DEFAULT_SUBBLOCK_TYPE = 'short-input'

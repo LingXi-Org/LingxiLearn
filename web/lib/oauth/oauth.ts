@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { truncate } from '@sim/utils/string'
+import { toError } from '@/lib/utils/errors'
+import { truncate } from '@/lib/utils/string'
 import {
   AirtableIcon,
   AsanaIcon,

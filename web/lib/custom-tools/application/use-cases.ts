@@ -5,7 +5,7 @@ import {
   resolvePrincipalAttribution,
 } from '@/lib/auth/principal'
 import type { customTools } from '@sim/db/schema'
-import { getErrorMessage, getPostgresErrorCode } from '@sim/utils/errors'
+import { getErrorMessage, getPostgresErrorCode } from '@/lib/utils/errors'
 import type { ListSortOrder } from '@/lib/api/list-query'
 import { defineAuthorizedWorkspaceUseCase } from '@/lib/core/application'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { cn, Input, InputOTP, InputOTPGroup, InputOTPSlot, Label } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { quickValidateEmail } from '@/lib/messaging/email/validation'
 import { AuthSubmitButton } from '@/app/(auth)/components'
 import { AUTH_TEXT_LINK } from '@/app/(auth)/components/auth-button-classes'

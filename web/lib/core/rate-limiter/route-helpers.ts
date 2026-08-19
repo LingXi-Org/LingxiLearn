@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { sha256Hex } from '@sim/security/hash'
-import { normalizeEmail } from '@sim/utils/string'
+import { normalizeEmail } from '@/lib/utils/string'
 import { type NextRequest, NextResponse } from 'next/server'
 import { RateLimiter } from '@/lib/core/rate-limiter/rate-limiter'
 import type { TokenBucketConfig } from '@/lib/core/rate-limiter/storage'

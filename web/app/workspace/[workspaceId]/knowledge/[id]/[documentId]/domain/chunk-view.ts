@@ -4,7 +4,7 @@
  * Pure projections behind the chunk list's search mode (client-side paging of
  * the search result set) and row previews. No React, no URL state.
  */
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 
 /**
  * Page projection for the search view. The raw URL page can point past the end

@@ -10,7 +10,7 @@ import {
   useRef,
 } from 'react'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { useRouter } from 'next/navigation'
 import { isMacPlatform } from '@/lib/core/utils/platform'
 

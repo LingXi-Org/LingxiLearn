@@ -33,7 +33,7 @@ vi.mock('@/lib/core/idempotency/transaction', () => ({
     return { result: await params.operation(), isFirstTime: true }
   },
 }))
-vi.mock('@sim/utils/id', () => ({ generateId: vi.fn(() => 'generated-id') }))
+vi.mock('@/lib/utils/id', () => ({ generateId: vi.fn(() => 'generated-id') }))
 vi.mock('@/lib/billing/core/plan', () => ({
   getHighestPrioritySubscription: vi.fn(async () => mocks.billingSubscriptions.shift() ?? null),
 }))

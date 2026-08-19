@@ -8,8 +8,8 @@ import {
   workspaceEnvironment,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
-import { normalizeEmail } from '@sim/utils/string'
+import { generateId } from '@/lib/utils/id'
+import { normalizeEmail } from '@/lib/utils/string'
 import { and, eq, sql } from 'drizzle-orm'
 import type { NextRequest } from 'next/server'
 import {

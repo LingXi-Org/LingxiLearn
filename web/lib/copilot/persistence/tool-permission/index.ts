@@ -1,6 +1,6 @@
 import type { CopilotToolPermissionDecision } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { isExecutableToolPermissionDecision } from '@/lib/copilot/async-runs/lifecycle'
 import { getAsyncToolCall } from '@/lib/copilot/async-runs/repository'
 import { createPubSubChannel, type PubSubChannel } from '@/lib/events/pubsub'

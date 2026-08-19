@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { settings, user } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { eq, inArray } from 'drizzle-orm'
 import type { UserSettingsApi } from '@/lib/api/contracts/user'
 import { normalizeStringArray } from '@/lib/core/utils/arrays'

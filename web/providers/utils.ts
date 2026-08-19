@@ -1,6 +1,6 @@
 import { createLogger, type Logger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { omit } from '@sim/utils/object'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { omit } from '@/lib/utils/object'
 import type OpenAI from 'openai'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import { formatCreditCost } from '@/lib/billing/credits/conversion'

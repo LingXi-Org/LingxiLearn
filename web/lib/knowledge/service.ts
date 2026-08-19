@@ -8,8 +8,8 @@ import {
   workspaceFiles,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getPostgresErrorCode } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getPostgresErrorCode } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import {
   and,
   type Column,

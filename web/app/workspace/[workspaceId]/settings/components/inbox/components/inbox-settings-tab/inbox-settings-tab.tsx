@@ -17,7 +17,7 @@ import {
   useCopyToClipboard,
 } from '@sim/emcn'
 import { Check, Clipboard, Pencil, Plus, Trash } from '@sim/emcn/icons'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { SettingsSection } from '@/app/workspace/[workspaceId]/settings/components/settings-section/settings-section'
 import {

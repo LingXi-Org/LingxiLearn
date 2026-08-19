@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { idempotencyKey } from '@sim/db/schema'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, gt, lt, sql } from 'drizzle-orm'
 import type { DbOrTx } from '@/lib/db/types'
 

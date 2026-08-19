@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { type PermissionType, permissionSatisfies } from '@sim/platform-authz/workspace'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import type { NextRequest, NextResponse } from 'next/server'
 import { type AuthTypeValue, checkSessionOrInternalAuth } from '@/lib/auth/hybrid'
 import { generateRequestId } from '@/lib/core/utils/request'

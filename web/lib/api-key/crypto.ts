@@ -2,7 +2,7 @@ import { createLogger } from '@/lib/logger'
 import { decrypt, encrypt } from '@sim/security/encryption'
 import { sha256Hex } from '@sim/security/hash'
 import { generateSecureToken } from '@sim/security/tokens'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { env } from '@/lib/core/config/env'
 
 const logger = createLogger('ApiKeyCrypto')

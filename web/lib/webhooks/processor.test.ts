@@ -54,7 +54,7 @@ const mockPreprocessExecution = executionPreprocessingMockFns.mockPreprocessExec
 
 vi.mock('@sim/db', () => ({ ...dbChainMock, ...schemaMock }))
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: mockGenerateId,
   generateShortId: vi.fn(() => 'mock-short-id'),
   isValidUuid: vi.fn((v: string) =>

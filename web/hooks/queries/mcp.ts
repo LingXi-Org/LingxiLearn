@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { createLogger } from '@/lib/logger'
 import { isLoopbackHostname } from '@sim/security/hostnames'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   keepPreviousData,
   useMutation,

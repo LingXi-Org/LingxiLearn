@@ -1,7 +1,7 @@
-import { toError } from '@sim/utils/errors'
 import { create } from 'zustand'
 import { createJSONStorage, devtools, persist } from 'zustand/middleware'
 import { createLogger } from '@/lib/logger'
+import { toError } from '@/lib/utils/errors'
 import type { MothershipQueueState, QueuedMothershipMessage } from '@/stores/mothership-queue/types'
 
 const logger = createLogger('MothershipQueueStore')

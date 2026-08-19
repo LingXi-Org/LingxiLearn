@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { sleep } from '@sim/utils/helpers'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'
 import {
   createStorageAdapter,

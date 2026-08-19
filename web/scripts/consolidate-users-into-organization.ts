@@ -64,8 +64,8 @@
 import { db } from '@sim/db'
 import { member, organization, session, user, workspace } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { normalizeEmail } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { normalizeEmail } from '@/lib/utils/string'
 import { and, count, eq, inArray, isNull, ne } from 'drizzle-orm'
 import {
   createOrganizationWithOwner,

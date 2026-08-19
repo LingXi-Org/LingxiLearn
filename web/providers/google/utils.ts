@@ -13,8 +13,8 @@ import {
   Type,
 } from '@google/genai'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { isRecordLike } from '@/lib/utils/object'
 import { buildGeminiMessageParts } from '@/providers/attachments'
 import type { GeminiUsage } from '@/providers/gemini/types'
 import type { AgentStreamEvent } from '@/providers/stream-events'

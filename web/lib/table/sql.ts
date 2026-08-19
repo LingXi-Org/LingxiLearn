@@ -5,7 +5,7 @@
  * Uses text extraction (->>) for comparisons and pattern matching.
  */
 
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import type { SQL } from 'drizzle-orm'
 import { sql } from 'drizzle-orm'
 import { getColumnId } from '@/lib/table/column-keys'

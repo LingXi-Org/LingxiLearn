@@ -1,5 +1,5 @@
 import type { workflow } from '@sim/db/schema'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import type { Variable } from '@sim/workflow-types/workflow'
 import type { InferSelectModel } from 'drizzle-orm'
 

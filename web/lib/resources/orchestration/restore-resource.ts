@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import type { FolderResourceType } from '@/lib/api/contracts/folders'
 import type { MothershipResource } from '@/lib/copilot/resources/types'
 import type { ToolExecutionResult } from '@/lib/copilot/tool-executor/types'

@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, cn } from '@sim/emcn'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { formatDate, formatLatency } from '@/app/workspace/[workspaceId]/logs/utils'
 
 export interface LineChartPoint {

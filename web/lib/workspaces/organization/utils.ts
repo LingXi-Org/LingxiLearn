@@ -4,7 +4,7 @@
  */
 
 import { isOrgAdminRole } from '@sim/platform-authz/predicates'
-import { normalizeEmail } from '@sim/utils/string'
+import { normalizeEmail } from '@/lib/utils/string'
 import { quickValidateEmail } from '@/lib/messaging/email/validation'
 import type { Organization } from '@/lib/workspaces/organization/types'
 

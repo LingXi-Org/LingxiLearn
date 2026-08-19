@@ -19,7 +19,7 @@
  * the source of truth for how those calls travel to the desktop main process.
  */
 
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 
 /** The single tool the model calls; what it does is in `operation`. */
 export const TERMINAL_TOOL_NAME = 'terminal'

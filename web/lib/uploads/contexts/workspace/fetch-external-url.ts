@@ -1,7 +1,7 @@
 import type { Buffer } from 'buffer'
 import path from 'path'
 import { createLogger } from '@/lib/logger'
-import { describeError } from '@sim/utils/errors'
+import { describeError } from '@/lib/utils/errors'
 import {
   secureFetchWithPinnedIP,
   validateUrlWithDNS,

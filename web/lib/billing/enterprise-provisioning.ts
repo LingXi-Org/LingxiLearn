@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import { db } from '@sim/db'
 import { member, organization, outboxEvent, subscription, user } from '@sim/db/schema'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import type Stripe from 'stripe'
 import { parseBillingConcurrencyLimit } from '@/lib/billing/concurrency-defaults'

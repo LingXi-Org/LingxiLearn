@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import { LARGE_ARRAY_MANIFEST_MARKER } from '@/lib/execution/payloads/large-array-manifest-metadata'
 import { LARGE_VALUE_REF_MARKER } from '@/lib/execution/payloads/large-value-ref'
 import { MAX_INLINE_MATERIALIZATION_BYTES } from '@/lib/execution/payloads/limits'

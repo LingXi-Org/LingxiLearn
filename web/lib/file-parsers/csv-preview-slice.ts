@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream'
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import { parse as parseCsvStream } from 'csv-parse'
 import { CSV_PREVIEW_MAX_ROWS } from '@/lib/api/contracts/workspace-file-table'
 import type { StorageContext } from '@/lib/uploads/config'

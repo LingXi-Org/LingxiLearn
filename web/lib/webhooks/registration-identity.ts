@@ -1,5 +1,5 @@
 import { sha256Hex } from '@sim/security/hash'
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 
 export interface DesiredWebhookRegistrationIdentity {
   provider: string

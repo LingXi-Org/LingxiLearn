@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import type { ListRenderOptions } from '@/lib/pptx-renderer/core/viewer'
 import { PptxViewer } from '@/lib/pptx-renderer/core/viewer'
 import type { ZipParseLimits } from '@/lib/pptx-renderer/parser/zip-parser'

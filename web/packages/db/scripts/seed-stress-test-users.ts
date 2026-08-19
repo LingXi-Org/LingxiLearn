@@ -6,7 +6,7 @@
  *   cd packages/db && bun run scripts/seed-stress-test-users.ts
  */
 
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { randomFloat, randomInt, randomItem } from '@sim/utils/random'
 import { eq, type InferInsertModel } from 'drizzle-orm'
 import { db, userTableDefinitions, userTableRows } from '../index'

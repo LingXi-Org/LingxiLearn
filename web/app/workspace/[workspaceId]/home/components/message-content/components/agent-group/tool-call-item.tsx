@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { isPlainRecord } from '@sim/utils/object'
 import { ShimmerText } from '@/components/ui'
 import {
   BrowserRequestTakeover,
@@ -12,6 +11,7 @@ import {
 import { getReadTargetBlock } from '@/lib/copilot/tools/client/read-block'
 import { extractStreamingStringArgument } from '@/lib/copilot/tools/streaming-args'
 import { getToolStatusDisplayTitle, getWaitCountdownTitle } from '@/lib/copilot/tools/tool-display'
+import { isPlainRecord } from '@/lib/utils/object'
 import { getBareIconStyle } from '@/blocks/brand-icon-style'
 import { getBlockByToolName } from '@/blocks/registry'
 import type { ToolCallData, ToolCallStatus } from '../../../../types'

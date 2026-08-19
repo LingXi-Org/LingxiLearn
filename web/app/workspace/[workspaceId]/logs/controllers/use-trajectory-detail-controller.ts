@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { ExecutionLogDetail, ExecutionLogRow } from '@/lib/api/contracts/logs'
 import type { ExecutionLogDetailView } from '@/app/workspace/[workspaceId]/logs/model/execution-log'
 import { mapExecutionLogDetail } from '@/app/workspace/[workspaceId]/logs/model/execution-log-mapper'

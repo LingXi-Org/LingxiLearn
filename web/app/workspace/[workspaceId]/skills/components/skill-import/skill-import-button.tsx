@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { Chip, Loader, toast } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   type ParsedSkill,
   readSkillFile,

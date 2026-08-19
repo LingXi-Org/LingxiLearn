@@ -1,8 +1,8 @@
 import { db } from '@sim/db'
 import { memory, memorySecretProvenance } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
-import { isPlainRecord } from '@sim/utils/object'
+import { generateId } from '@/lib/utils/id'
+import { isPlainRecord } from '@/lib/utils/object'
 import { and, eq, sql } from 'drizzle-orm'
 import {
   bindDurableSecretProvenanceToValue,

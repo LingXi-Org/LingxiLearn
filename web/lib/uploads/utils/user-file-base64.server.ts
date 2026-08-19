@@ -1,6 +1,6 @@
 import type { Logger } from '@/lib/logger'
 import { createLogger } from '@/lib/logger'
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import { getRedisClient } from '@/lib/core/config/redis'
 import { isUserFileWithMetadata } from '@/lib/core/utils/user-file'
 import { recordMaterializedAccessKeys } from '@/lib/execution/payloads/access-keys'

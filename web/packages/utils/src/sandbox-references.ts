@@ -1,4 +1,4 @@
-import { isValidUuid } from '@sim/utils/id'
+import { isValidUuid } from './id'
 
 export const IMMUTABLE_E2B_TEMPLATE_REF_ERROR =
   'must be an immutable E2B build reference in the form <template>:<build-id>'

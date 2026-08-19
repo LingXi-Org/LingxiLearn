@@ -20,9 +20,9 @@ import {
   workspace,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
-import { normalizeEmail } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
+import { normalizeEmail } from '@/lib/utils/string'
 import { and, count, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { applySessionPolicyToNewMember } from '@/lib/auth/session-policy'
 import { syncUsageLimitsFromSubscription } from '@/lib/billing/core/usage'

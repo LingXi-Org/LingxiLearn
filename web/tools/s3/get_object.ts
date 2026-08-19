@@ -1,5 +1,5 @@
 import crypto from 'crypto'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   encodeS3PathComponent,
   generatePresignedUrl,

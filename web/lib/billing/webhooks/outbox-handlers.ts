@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { member, subscription as subscriptionTable, user } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { and, eq } from 'drizzle-orm'
 import { isTeam } from '@/lib/billing/plan-helpers'
 import { getPlanByName } from '@/lib/billing/plans'

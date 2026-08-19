@@ -1,9 +1,9 @@
 import { db } from '@sim/db'
 import { outboxEvent } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
-import { truncate } from '@sim/utils/string'
+import { toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
+import { truncate } from '@/lib/utils/string'
 import { and, asc, desc, eq, inArray, lte, sql } from 'drizzle-orm'
 
 const logger = createLogger('OutboxService')

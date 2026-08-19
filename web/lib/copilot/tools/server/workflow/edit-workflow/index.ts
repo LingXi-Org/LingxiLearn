@@ -5,7 +5,7 @@ import {
   assertWorkflowMutable,
   authorizeWorkflowByWorkspacePermission,
 } from '@sim/platform-authz/workflow'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { eq } from 'drizzle-orm'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'
 import { getBlockVisibilityForCopilot } from '@/lib/copilot/block-visibility'

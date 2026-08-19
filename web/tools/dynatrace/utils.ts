@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import type {
   DynatraceAttack,
   DynatraceAuditLog,

@@ -8,8 +8,8 @@ import {
 import { credential } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
 import { getActiveWorkflowContext } from '@sim/platform-authz/workflow'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import {
   loadWorkflowFromNormalizedTablesRaw,
   persistMigratedBlocks,

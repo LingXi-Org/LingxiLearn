@@ -11,8 +11,8 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Logger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
+import { isRecordLike } from '@/lib/utils/object'
 import type { IterationToolCall } from '@/executor/types'
 import { MAX_TOOL_ITERATIONS } from '@/providers'
 import {

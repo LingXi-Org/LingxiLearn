@@ -1,6 +1,6 @@
 import { resolvePrincipalAttribution } from '@/lib/auth/principal'
 import { getRequestContext } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import {
   DEFAULT_TABLE_PLAN_LIMITS,

@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import type { Sandbox as E2BSandbox, Template as E2BTemplate } from '@e2b/code-interpreter'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateShortId } from '@sim/utils/id'
-import { isRecordLike } from '@sim/utils/object'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
+import { isRecordLike } from '@/lib/utils/object'
 import {
   IMMUTABLE_E2B_TEMPLATE_REF_ERROR,
   immutableE2BTemplateRef,

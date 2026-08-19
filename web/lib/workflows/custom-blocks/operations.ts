@@ -7,7 +7,7 @@ import {
   workspace,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { generateId, generateShortId } from '@sim/utils/id'
+import { generateId, generateShortId } from '@/lib/utils/id'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { isOrganizationOnEnterprisePlan } from '@/lib/billing/core/subscription'
 import { isFeatureEnabled } from '@/lib/core/config/feature-flags'

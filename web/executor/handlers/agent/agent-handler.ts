@@ -1,10 +1,10 @@
 import { db } from '@sim/db'
 import { mcpServers } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
-import { isPlainRecord } from '@sim/utils/object'
-import { truncate } from '@sim/utils/string'
+import { isPlainRecord } from '@/lib/utils/object'
+import { truncate } from '@/lib/utils/string'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { normalizeStringRecord, normalizeWorkflowVariables } from '@/lib/core/utils/records'
 import {

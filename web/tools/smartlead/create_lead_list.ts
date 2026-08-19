@@ -1,4 +1,4 @@
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import { ErrorExtractorId } from '@/tools/error-extractors'
 import type { SmartleadBaseParams, SmartleadLeadListResponse } from '@/tools/smartlead/types'
 import {

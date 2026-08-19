@@ -1,7 +1,7 @@
 'use client'
 
 import { toast } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { parseFolderedRowId } from '@/app/workspace/[workspaceId]/components/folders'
 import { useUpdateFolder } from '@/hooks/queries/folders'
 import { useUpdateKnowledgeBase } from '@/hooks/queries/kb/knowledge'

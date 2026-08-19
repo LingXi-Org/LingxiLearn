@@ -1,4 +1,4 @@
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import type { PrivateSecretProvenanceSelection } from '@/lib/execution/model-input-provenance'
 import {
   knowledgeDocumentContentSelectionKey,

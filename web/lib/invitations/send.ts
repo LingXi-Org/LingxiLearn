@@ -9,9 +9,9 @@ import {
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
 import { isOrgAdminRole } from '@sim/platform-authz/workspace'
-import { getPostgresConstraintName, getPostgresErrorCode } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
-import { normalizeEmail } from '@sim/utils/string'
+import { getPostgresConstraintName, getPostgresErrorCode } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
+import { normalizeEmail } from '@/lib/utils/string'
 import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm'
 import {
   getEmailSubject,

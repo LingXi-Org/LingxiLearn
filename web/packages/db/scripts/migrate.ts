@@ -1,4 +1,4 @@
-import { getPostgresErrorCode } from '@sim/utils/errors'
+import { getPostgresErrorCode } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
 import { backoffWithJitter } from '@sim/utils/retry'
 import { drizzle } from 'drizzle-orm/postgres-js'

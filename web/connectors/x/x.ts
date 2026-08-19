@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
-import { truncate } from '@sim/utils/string'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
+import { truncate } from '@/lib/utils/string'
 import { fetchWithRetry, VALIDATE_RETRY_OPTIONS } from '@/lib/knowledge/documents/utils'
 import type { ConnectorConfig, ExternalDocument, ExternalDocumentList } from '@/connectors/types'
 import { parseMultiValue, parseTagDate } from '@/connectors/utils'

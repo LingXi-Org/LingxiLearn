@@ -9,7 +9,7 @@ const { getEditableSkillIdsMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@sim/db', () => ({ ...dbChainMock, ...schemaMock }))
-vi.mock('@sim/utils/id', () => ({ generateId: () => 'gen-uuid', generateShortId: () => 'gen-id' }))
+vi.mock('@/lib/utils/id', () => ({ generateId: () => 'gen-uuid', generateShortId: () => 'gen-id' }))
 vi.mock('@/lib/skills/access', () => ({
   getEditableSkillIds: getEditableSkillIdsMock,
 }))

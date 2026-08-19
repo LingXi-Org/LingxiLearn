@@ -12,7 +12,7 @@ import {
 } from '@sim/db/constants'
 import { organization, userStats } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import { eq } from 'drizzle-orm'
 import type { HighestPrioritySubscription } from '@/lib/billing/core/plan'
 import type { BillingEntity } from '@/lib/billing/core/usage-log'

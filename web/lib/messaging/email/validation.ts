@@ -1,4 +1,4 @@
-import { isValidEmailSyntax } from '@sim/utils/string'
+import { isValidEmailSyntax } from '@/lib/utils/string'
 
 export interface EmailValidationResult {
   isValid: boolean

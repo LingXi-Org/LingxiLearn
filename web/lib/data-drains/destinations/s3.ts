@@ -5,7 +5,7 @@ import {
   type S3ServiceException,
 } from '@aws-sdk/client-s3'
 import { createLogger } from '@/lib/logger'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { z } from 'zod'
 import { validateExternalUrl } from '@/lib/core/security/input-validation'
 import { validateUrlWithDNS } from '@/lib/core/security/input-validation.server'

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { isUserFileWithMetadata } from '@/lib/core/utils/user-file'
 import { mergeLargeValueKeys } from '@/lib/execution/payloads/access-keys'
 import { isLargeArrayManifest } from '@/lib/execution/payloads/large-array-manifest-metadata'

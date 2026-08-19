@@ -1,6 +1,6 @@
 'use client'
 
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 
 export const OAUTH_CHAT_ATTEMPT_PARAM = 'oauthAttempt'
 export const OAUTH_CHAT_ATTEMPT_EVENT = 'sim:oauth-chat-attempt'

@@ -8,7 +8,7 @@
  * map builders here.
  */
 
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import type {
   ColumnDefinition,
   Filter,

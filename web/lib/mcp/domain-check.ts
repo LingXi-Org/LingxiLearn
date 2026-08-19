@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
 import { resolveHostAddresses } from '@sim/security/dns'
 import { isIpLiteral, isLoopbackIp, isPrivateIp, unwrapIpv6Brackets } from '@sim/security/ssrf'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { getAllowedMcpDomainsFromEnv, isHosted } from '@/lib/core/config/env-flags'
 import { createEnvVarPattern } from '@/executor/utils/reference-validation'
 

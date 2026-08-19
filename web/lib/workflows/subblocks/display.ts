@@ -6,8 +6,8 @@
  * Every resolver takes plain data instead of hooks so both surfaces run the
  * exact same logic and cannot drift.
  */
-import { isRecordLike } from '@sim/utils/object'
-import { truncate } from '@sim/utils/string'
+import { isRecordLike } from '@/lib/utils/object'
+import { truncate } from '@/lib/utils/string'
 import type { FilterRule, SortRule } from '@/lib/table/types'
 import { DELETED_WORKFLOW_LABEL } from '@/app/workspace/[workspaceId]/logs/utils'
 import { getBlock } from '@/blocks'

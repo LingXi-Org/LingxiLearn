@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { sendCustomToolResults } from '@/lib/managed-agents/session-client'
 import { isTruthyAck } from '@/tools/managed_agent/normalizers'
 import {

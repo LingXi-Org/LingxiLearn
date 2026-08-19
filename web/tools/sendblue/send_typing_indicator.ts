@@ -1,4 +1,4 @@
-import { filterUndefined } from '@sim/utils/object'
+import { filterUndefined } from '@/lib/utils/object'
 import type {
   SendblueTypingIndicatorParams,
   SendblueTypingIndicatorResponse,

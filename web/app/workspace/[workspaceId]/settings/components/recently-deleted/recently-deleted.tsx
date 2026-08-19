@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { Chip, ChipInput, ChipModalTabs } from '@sim/emcn'
 import { Search } from '@sim/emcn/icons'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { formatDate } from '@sim/utils/formatting'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryStates } from 'nuqs'

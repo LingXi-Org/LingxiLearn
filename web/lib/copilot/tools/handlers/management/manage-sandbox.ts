@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
 import { createSandboxBodySchema, updateSandboxBodySchema } from '@/lib/api/contracts/sandboxes'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'
 import type { ExecutionContext, ToolCallResult } from '@/lib/copilot/request/types'

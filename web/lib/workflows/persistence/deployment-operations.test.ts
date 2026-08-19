@@ -15,7 +15,7 @@ vi.mock('@sim/db', () => ({
   workflowDeploymentVersion: schemaMock.workflowDeploymentVersion,
 }))
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: mockGenerateId,
 }))
 

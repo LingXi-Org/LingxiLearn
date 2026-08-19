@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 
 /**
  * Identity reported to the Temporal server on write operations so they are

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import {
   MothershipStreamV1RunKind,
   MothershipStreamV1ToolOutcome,

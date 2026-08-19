@@ -25,7 +25,7 @@
  */
 
 import { Daytona, Image } from '@daytona/sdk'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   PI_APT,
   PI_BUN_VERSION_ASSERT,
