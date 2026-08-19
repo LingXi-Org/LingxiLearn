@@ -109,11 +109,33 @@ def not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="resource_not_found")
 
 
-def _require_runtime_debug(services: ApplicationServices) -> None:
+def _require_runtime_debug(
+    services: ApplicationServices, principal: Principal | None = None
+) -> None:
     """Hide raw runtime diagnostics unless the deployment opts in explicitly."""
 
     if not services.settings.runtime_debug_enabled:
         raise not_found()
+    if services.settings.insecure_dev_auth:
+        return
+    if principal is None or not (
+        "runtime:debug" in principal.permissions
+        or bool({"admin", "internal"}.intersection(principal.roles))
+    ):
+        raise not_found()
+
+
+async def runtime_debug_context(
+    request: Request, principal: Principal = Depends(get_principal)
+) -> LearnerContext:
+    """Authorize the internal debug capability, then resolve its learner scope."""
+
+    services = services_of(request)
+    _require_runtime_debug(services, principal)
+    try:
+        return await services.learners.get_learner_context(principal)
+    except (LookupError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="invalid_identity") from exc
 
 
 def _redact_runtime_debug(value: Any) -> Any:
@@ -1096,12 +1118,11 @@ async def override_learning_profile(
 async def agent_task_decisions(
     task_id: str,
     request: Request,
-    context: LearnerContext = Depends(current_learner_context),
+    context: LearnerContext = Depends(runtime_debug_context),
 ) -> dict[str, Any]:
     """Every decision this task made: candidates, choice, reason, evidence, diff."""
 
     services = services_of(request)
-    _require_runtime_debug(services)
     if await services.agent_tasks.get_task_record(task_id, context.learner_id) is None:
         raise not_found()
     decisions = await services.agent_events.decisions_for_task(task_id)
@@ -1114,7 +1135,7 @@ async def agent_task_decisions(
 async def agent_task_runtime_graph(
     task_id: str,
     request: Request,
-    context: LearnerContext = Depends(current_learner_context),
+    context: LearnerContext = Depends(runtime_debug_context),
 ) -> dict[str, Any]:
     """Return the durable Sim-compatible runtime graph for this task.
 
@@ -1124,7 +1145,6 @@ async def agent_task_runtime_graph(
     """
 
     services = services_of(request)
-    _require_runtime_debug(services)
     task = await services.agent_tasks.get_task_record(task_id, context.learner_id)
     if task is None:
         raise not_found()

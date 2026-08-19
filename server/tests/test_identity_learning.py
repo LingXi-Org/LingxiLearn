@@ -321,6 +321,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     def bff(request: httpx.Request) -> httpx.Response:
         cookie = request.headers.get("cookie", "")
         subject = "subject-a" if "session-a" in cookie else "subject-b"
+        permissions = [] if "ordinary" in cookie else ["runtime:debug"]
         return httpx.Response(
             200,
             json={
@@ -328,7 +329,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
                     "subject": subject,
                     "issuer": "https://auth.lingxilearn.cn/oidc",
                     "roles": [],
-                    "permissions": [],
+                    "permissions": permissions,
                     "audience": [],
                 },
                 "user": {"id": subject},
@@ -428,10 +429,15 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         hidden_runtime_graph = await client.get(
             "/api/agent-tasks/t-owned/runtime-graph", headers=second_headers
         )
+        ordinary_decisions = await client.get(
+            "/api/agent-tasks/t-owned/decisions",
+            headers={"Cookie": "lingxi_session=ordinary"},
+        )
         assert decisions.status_code == 200
         assert runtime_graph.status_code == 200
         assert hidden_decisions.status_code == 404
         assert hidden_runtime_graph.status_code == 404
+        assert ordinary_decisions.status_code == 404
 
         artifact = await client.get(
             "/api/agent-tasks/t-owned/artifacts/background", headers=first_headers

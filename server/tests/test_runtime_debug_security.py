@@ -35,3 +35,15 @@ def test_runtime_debug_capability_is_disabled_by_default() -> None:
         _require_runtime_debug(services)
 
     assert raised.value.status_code == 404
+
+
+def test_runtime_debug_rejects_an_ordinary_production_principal() -> None:
+    services = SimpleNamespace(
+        settings=SimpleNamespace(runtime_debug_enabled=True, insecure_dev_auth=False)
+    )
+    principal = SimpleNamespace(permissions=frozenset(), roles=frozenset())
+
+    with pytest.raises(HTTPException) as raised:
+        _require_runtime_debug(services, principal)
+
+    assert raised.value.status_code == 404
