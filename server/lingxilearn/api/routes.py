@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 import uuid
 from collections.abc import Mapping
 from pathlib import Path
@@ -70,6 +71,18 @@ router = APIRouter(prefix="/api")
 
 TERMINAL = {"done", "failed", "cancelled"}
 
+_DEBUG_SECRET_KEYS = (
+    "api_key",
+    "apikey",
+    "authorization",
+    "cookie",
+    "credential",
+    "password",
+    "secret",
+    "system_prompt",
+    "token",
+)
+
 
 def services_of(request: Request) -> ApplicationServices:
     """Dependency-container lookup: returns the composition root, never a god service."""
@@ -94,6 +107,32 @@ def not_found() -> HTTPException:
     """Use one response for missing and not-owned persistent resources."""
 
     return HTTPException(status_code=404, detail="resource_not_found")
+
+
+def _require_runtime_debug(services: ApplicationServices) -> None:
+    """Hide raw runtime diagnostics unless the deployment opts in explicitly."""
+
+    if not services.settings.runtime_debug_enabled:
+        raise not_found()
+
+
+def _redact_runtime_debug(value: Any) -> Any:
+    """Recursively remove credentials and prompts from diagnostic payloads."""
+
+    if isinstance(value, Mapping):
+        return {
+            key: "[REDACTED]"
+            if any(
+                marker.replace("_", "")
+                in re.sub(r"[^a-z0-9]", "", str(key).lower())
+                for marker in _DEBUG_SECRET_KEYS
+            )
+            else _redact_runtime_debug(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_redact_runtime_debug(item) for item in value]
+    return value
 
 
 @router.post("/copilot/tool-permission", response_model=CopilotToolPermissionResponse)
@@ -1062,9 +1101,11 @@ async def agent_task_decisions(
     """Every decision this task made: candidates, choice, reason, evidence, diff."""
 
     services = services_of(request)
+    _require_runtime_debug(services)
     if await services.agent_tasks.get_task_record(task_id, context.learner_id) is None:
         raise not_found()
-    return {"decisions": await services.agent_events.decisions_for_task(task_id)}
+    decisions = await services.agent_events.decisions_for_task(task_id)
+    return {"decisions": _redact_runtime_debug(decisions)}
 
 
 @router.get(
@@ -1083,6 +1124,7 @@ async def agent_task_runtime_graph(
     """
 
     services = services_of(request)
+    _require_runtime_debug(services)
     task = await services.agent_tasks.get_task_record(task_id, context.learner_id)
     if task is None:
         raise not_found()
@@ -1105,12 +1147,14 @@ async def agent_task_runtime_graph(
         "updatedAt": execution.updated_at.isoformat()
         if execution and execution.updated_at
         else None,
-        "workflowState": state,
-        "executionGraph": build_execution_graph(
-            runs,
-            task_id=task_id,
-            work_dependencies=cast(list[Mapping[str, Any]], dependencies),
-            skill_runs=skill_runs,
+        "workflowState": _redact_runtime_debug(state),
+        "executionGraph": _redact_runtime_debug(
+            build_execution_graph(
+                runs,
+                task_id=task_id,
+                work_dependencies=cast(list[Mapping[str, Any]], dependencies),
+                skill_runs=skill_runs,
+            )
         ),
     }
 

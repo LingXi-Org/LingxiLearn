@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     insecure_dev_auth: bool = False
     dev_subject: str = "lingxilearn-dev"
 
+    # Raw orchestration diagnostics are an explicit operator capability. Keep
+    # this disabled in normal deployments; it is intended for local/internal
+    # debugging only and is never inferred from a learner session.
+    runtime_debug_enabled: bool = False
+
     # --- tutor brain -------------------------------------------------------
     brain: BrainKind = "scripted"
 

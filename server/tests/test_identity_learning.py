@@ -307,6 +307,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         database_url=f"sqlite+aiosqlite:///{path.as_posix()}",
         identity_bff_url="http://identity-bff",
         insecure_dev_auth=False,
+        runtime_debug_enabled=True,
     )
     identity_issuer = "https://auth.lingxilearn.cn/oidc"
     services = ApplicationServices(settings)
@@ -415,6 +416,23 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         assert task.status_code == 200
         assert hidden_task.status_code == 404
 
+        decisions = await client.get(
+            "/api/agent-tasks/t-owned/decisions", headers=first_headers
+        )
+        hidden_decisions = await client.get(
+            "/api/agent-tasks/t-owned/decisions", headers=second_headers
+        )
+        runtime_graph = await client.get(
+            "/api/agent-tasks/t-owned/runtime-graph", headers=first_headers
+        )
+        hidden_runtime_graph = await client.get(
+            "/api/agent-tasks/t-owned/runtime-graph", headers=second_headers
+        )
+        assert decisions.status_code == 200
+        assert runtime_graph.status_code == 200
+        assert hidden_decisions.status_code == 404
+        assert hidden_runtime_graph.status_code == 404
+
         artifact = await client.get(
             "/api/agent-tasks/t-owned/artifacts/background", headers=first_headers
         )
@@ -425,7 +443,9 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         assert hidden_artifact.status_code == 404
 
         missing_auth = await client.get("/api/me/mastery")
+        missing_debug_auth = await client.get("/api/agent-tasks/t-owned/decisions")
         assert missing_auth.status_code == 401
+        assert missing_debug_auth.status_code == 401
 
     await services.db.dispose()
     await authenticator.aclose()
