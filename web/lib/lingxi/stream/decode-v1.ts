@@ -87,6 +87,31 @@ const PAYLOAD_KEYS: Record<LingxiV1EventType, ReadonlySet<string>> = {
   error: new Set(['message', 'code', 'fatal']),
   complete: new Set(['status', 'finishedReason']),
 }
+const SPAN_START_KEYS = new Set([
+  'kind',
+  'event',
+  'agentRunId',
+  'providerId',
+  'displayName',
+  'executionKind',
+  'capability',
+  'presentationRole',
+  'parentAgentRunId',
+  'skillIds',
+])
+const SPAN_END_KEYS = new Set(['kind', 'event', 'agentRunId', 'status', 'detail'])
+const INTERACTION_REQUEST_KEYS = new Set([
+  'interactionId',
+  'purpose',
+  'presentation',
+  'blocking',
+  'title',
+  'prompt',
+  'questions',
+  'reasonCode',
+  'dismissible',
+])
+const INTERACTION_RESOLVED_KEYS = new Set(['interactionId', 'answers'])
 
 const TURN_STATUSES = new Set([
   'started',
@@ -192,7 +217,17 @@ function validateCommonPayload(
   type: LingxiV1EventType,
   payload: RecordValue
 ): LingxiV1DecodeResult | undefined {
-  const extra = unknownKey(payload, PAYLOAD_KEYS[type])
+  const allowed =
+    type === 'span'
+      ? payload.event === 'start'
+        ? SPAN_START_KEYS
+        : SPAN_END_KEYS
+      : type === 'interaction'
+        ? 'answers' in payload
+          ? INTERACTION_RESOLVED_KEYS
+          : INTERACTION_REQUEST_KEYS
+        : PAYLOAD_KEYS[type]
+  const extra = unknownKey(payload, allowed)
   if (extra)
     return fail('unknown_field', `payload.${extra}`, `${type} payload contains an unknown field`)
   return undefined
@@ -253,6 +288,14 @@ function validatePayload(
           return fail('invalid_payload', 'payload.executionKind', 'invalid execution kind')
         if (!inSet(payload.presentationRole, new Set(['primary', 'supporting', 'background'])))
           return fail('invalid_payload', 'payload.presentationRole', 'invalid presentation role')
+        if (!optionalString(payload.capability) || !optionalString(payload.parentAgentRunId))
+          return fail('invalid_payload', 'payload', 'span metadata must be strings')
+        if (
+          payload.skillIds !== undefined &&
+          (!Array.isArray(payload.skillIds) ||
+            !payload.skillIds.every((id) => typeof id === 'string'))
+        )
+          return fail('invalid_payload', 'payload.skillIds', 'skillIds must be an array of strings')
       } else if (!inSet(payload.status, SPAN_STATUSES)) {
         return fail('invalid_payload', 'payload.status', 'invalid span status')
       }
@@ -287,6 +330,55 @@ function validatePayload(
           return fail('invalid_payload', 'payload.presentation', 'invalid interaction presentation')
         if (typeof payload.blocking !== 'boolean')
           return fail('invalid_payload', 'payload.blocking', 'blocking must be a boolean')
+        for (const key of ['title', 'prompt', 'reasonCode']) {
+          if (!optionalString(payload[key]))
+            return fail('invalid_payload', `payload.${key}`, `${key} must be a string`)
+        }
+        if (payload.dismissible !== undefined && typeof payload.dismissible !== 'boolean')
+          return fail('invalid_payload', 'payload.dismissible', 'dismissible must be a boolean')
+        if (payload.questions !== undefined) {
+          if (!Array.isArray(payload.questions))
+            return fail('invalid_payload', 'payload.questions', 'questions must be an array')
+          for (let index = 0; index < payload.questions.length; index += 1) {
+            const question = payload.questions[index]
+            const base = `payload.questions.${index}`
+            if (!isRecord(question))
+              return fail('invalid_payload', base, 'question must be an object')
+            const extra = unknownKey(
+              question,
+              new Set(['id', 'type', 'prompt', 'options', 'allowFreeText'])
+            )
+            if (extra)
+              return fail('unknown_field', `${base}.${extra}`, 'question contains an unknown field')
+            if (!nonEmptyString(question.id) || !nonEmptyString(question.prompt))
+              return fail('invalid_payload', base, 'question id and prompt are required')
+            if (!inSet(question.type, new Set(['single_select', 'multi_select'])))
+              return fail('invalid_payload', `${base}.type`, 'invalid question type')
+            if (typeof question.allowFreeText !== 'boolean')
+              return fail(
+                'invalid_payload',
+                `${base}.allowFreeText`,
+                'allowFreeText must be boolean'
+              )
+            if (!Array.isArray(question.options))
+              return fail('invalid_payload', `${base}.options`, 'options must be an array')
+            for (let optionIndex = 0; optionIndex < question.options.length; optionIndex += 1) {
+              const option = question.options[optionIndex]
+              const optionBase = `${base}.options.${optionIndex}`
+              if (!isRecord(option))
+                return fail('invalid_payload', optionBase, 'option must be an object')
+              const optionExtra = unknownKey(option, new Set(['id', 'label']))
+              if (optionExtra)
+                return fail(
+                  'unknown_field',
+                  `${optionBase}.${optionExtra}`,
+                  'option contains an unknown field'
+                )
+              if (!nonEmptyString(option.id) || !nonEmptyString(option.label))
+                return fail('invalid_payload', optionBase, 'option id and label are required')
+            }
+          }
+        }
       }
       return undefined
     case 'resource': {

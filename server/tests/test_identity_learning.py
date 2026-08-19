@@ -396,11 +396,11 @@ async def test_api_resources_are_scoped_to_authenticated_learner() -> None:
         )
         assert current_events.json() == {"events": [], "protocol": "v1"}
         await agent_task_repository.append_agent_events(
-            "t-owned",
+            "t-current",
             [{"kind": "v1.turn", "payload": {"v": 1}, "protocol_version": 1}],
         )
         canonical_events = await client.get(
-            "/api/agent-tasks/t-owned/events?format=json&protocol=v1",
+            "/api/agent-tasks/t-current/events?format=json&protocol=v1",
             headers=first_headers,
         )
         assert canonical_events.status_code == 200

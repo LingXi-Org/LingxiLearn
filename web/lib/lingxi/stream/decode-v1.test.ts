@@ -98,6 +98,45 @@ describe('strict V1 stream decoder', () => {
     expectError(event, 'missing_identity', 'payload.interactionId')
   })
 
+  it('rejects malformed interaction questions and mixed union variants', () => {
+    const nullQuestion = eventFrom('interaction', {
+      interactionId: 'interaction-1',
+      purpose: 'clarification',
+      presentation: 'question',
+      blocking: true,
+      questions: [null],
+    })
+    expectError(nullQuestion, 'invalid_payload', 'payload.questions.0')
+
+    const nullOption = eventFrom('interaction', {
+      interactionId: 'interaction-1',
+      purpose: 'clarification',
+      presentation: 'options',
+      blocking: true,
+      questions: [{
+        id: 'question-1',
+        type: 'single_select',
+        prompt: 'Choose',
+        options: [null],
+        allowFreeText: false,
+      }],
+    })
+    expectError(nullOption, 'invalid_payload', 'payload.questions.0.options.0')
+
+    const mixed = eventFrom('interaction', {
+      interactionId: 'interaction-1',
+      answers: [],
+      purpose: 'clarification',
+    })
+    expectError(mixed, 'unknown_field', 'payload.purpose')
+  })
+
+  it('rejects fields from the other span union variant', () => {
+    const event = firstEvent('span')
+    ;(event.payload as Record<string, unknown>).status = 'completed'
+    expectError(event, 'unknown_field', 'payload.status')
+  })
+
   it('requires canonical resource identity', () => {
     const event = firstEvent('resource')
     delete ((event.payload as Record<string, unknown>).resource as Record<string, unknown>).id
