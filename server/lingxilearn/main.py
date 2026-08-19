@@ -17,7 +17,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from .api.account_routes import router as account_router
-from .api.routes import router
+from .api.agent_events import router as agent_events_router
+from .api.agent_interactions import router as agent_interactions_router
+from .api.agent_tasks import router as agent_tasks_router
+from .api.artifacts import router as artifacts_router
+from .api.catalog import router as catalog_router
+from .api.health import router as health_router
+from .api.internal_runtime import router as internal_runtime_router
+from .api.learner_profile import router as learner_profile_router
 from .api.workspace_routes import router as workspace_router
 from .application import ApplicationServices
 from .auth import build_authenticator
@@ -123,7 +130,14 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(router)
+    app.include_router(agent_interactions_router)
+    app.include_router(agent_events_router)
+    app.include_router(agent_tasks_router)
+    app.include_router(artifacts_router)
+    app.include_router(health_router)
+    app.include_router(catalog_router)
+    app.include_router(internal_runtime_router)
+    app.include_router(learner_profile_router)
     app.include_router(account_router)
     app.include_router(workspace_router)
 

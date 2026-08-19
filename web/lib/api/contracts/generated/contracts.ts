@@ -1,4 +1,4 @@
-// 128 contracts generated from 126 paths.
+// 128 contracts generated from 121 paths.
 // AUTO-GENERATED — do not edit by hand.
 // Regenerate:  python scripts/export_openapi.py && bun run web/scripts/generate-rest-contracts.ts
 // eslint-disable @typescript-eslint/no-explicit-any
@@ -6,6 +6,15 @@
 import { z } from "zod";
 import { defineRouteContract } from "@/lib/api/contracts/types";
 import * as S from "./schemas";
+
+export const decideSchedulePermissionsApiAgentInteractionsSchedulePermissionsPostContract = defineRouteContract({
+  method: "POST" as const,
+  path: "/api/agent-interactions/schedule-permissions",
+  response: {
+    mode: "json" as const,
+    schema: S.SchedulePermissionResponseSchema,
+  },
+});
 
 export const listAgentTasksApiAgentTasksGetContract = defineRouteContract({
   method: "GET" as const,
@@ -163,12 +172,12 @@ export const purchaseCreditsApiBillingCreditsPostContract = defineRouteContract(
   },
 });
 
-export const copilotToolPermissionApiCopilotToolPermissionPostContract = defineRouteContract({
+export const legacyCopilotToolPermissionApiCopilotToolPermissionPostContract = defineRouteContract({
   method: "POST" as const,
   path: "/api/copilot/tool-permission",
   response: {
     mode: "json" as const,
-    schema: S.CopilotToolPermissionResponseSchema,
+    schema: S.LegacyToolPermissionResponseSchema,
   },
 });
 
@@ -792,18 +801,6 @@ export const deletePinnedItemApiPinnedItems_ResourceType__ResourceId_DeleteContr
   response: {
     mode: "json" as const,
     schema: S.SuccessResponseSchema,
-  },
-});
-
-export const getSessionApiSessions_SessionId_GetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/sessions/[session_id]",
-  params: z.object({
-    session_id: z.string(),
-  }),
-  response: {
-    mode: "json" as const,
-    schema: S.SessionSnapshotResponseSchema,
   },
 });
 

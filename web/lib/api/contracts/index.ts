@@ -1,4 +1,5 @@
 export * from './admin'
+export * from './agent-interactions'
 export * from './api-keys'
 export * from './audit-logs'
 export * from './byok-keys'

@@ -23,7 +23,6 @@ from ..runtime.sim_semantics import replay_sim_trace, sim_trace_total_tokens
 from ..runtime.trajectory import build_trajectory_projection
 from ..store.repositories.agent_tasks import AgentTaskRepository
 from ..store.repositories.runtime import RuntimeRepository
-from ..store.repositories.sessions import SessionRepository
 from ..store.repositories.work_ledger import WorkLedgerRepository
 from ..store.runtime_state import RuntimeStateRepository
 from .shared import _event_timestamp, _utc_datetime
@@ -107,13 +106,11 @@ class AgentEventService:
         runtime_repository: RuntimeRepository,
         work_ledger: WorkLedgerRepository,
         runtime_state: RuntimeStateRepository,
-        session_repository: SessionRepository,
     ) -> None:
         self._agent_tasks = agent_task_repository
         self._runtime = runtime_repository
         self._work_ledger = work_ledger
         self._runtime_state = runtime_state
-        self._sessions = session_repository
         self._agent_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         # Publishing an interaction outbox row is idempotent across processes;
         # this lock only keeps one process from doing the same work twice.
@@ -353,7 +350,7 @@ class AgentEventService:
     ) -> dict[str, Any]:
         """Project a replayed runtime event into the canonical runtime tables."""
 
-        return await self._sessions.project_runtime_event(
+        return await self._runtime.project_runtime_event(
             learner_id=learner_id,
             record_key=record_key,
             task_id=task_id,

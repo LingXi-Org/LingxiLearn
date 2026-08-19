@@ -3,7 +3,10 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from lingxilearn.api.routes import _redact_runtime_debug, _require_runtime_debug
+from lingxilearn.api.internal_runtime import (
+    _redact_runtime_debug,
+    _require_runtime_debug,
+)
 
 
 def test_runtime_debug_payloads_redact_secret_keys_recursively() -> None:

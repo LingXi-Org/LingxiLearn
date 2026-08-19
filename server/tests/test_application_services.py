@@ -165,7 +165,6 @@ async def test_agent_task_service_runs_through_the_runtime_port(container) -> No
         runtime_repository=services.runtime_repository,
         runtime_state=services.runtime_state,
         learner_repository=services.learner_repository,
-        session_repository=services.session_repository,
         db=services.db,
         artifact_service=services.artifacts,
         event_service=services.agent_events,
@@ -194,7 +193,6 @@ async def test_running_message_is_submitted_once_without_queue_replay(container)
         runtime_repository=services.runtime_repository,
         runtime_state=services.runtime_state,
         learner_repository=services.learner_repository,
-        session_repository=services.session_repository,
         db=services.db,
         artifact_service=services.artifacts,
         event_service=services.agent_events,
@@ -229,7 +227,6 @@ async def test_agent_event_service_owns_append_and_replay(container) -> None:
         runtime_repository=services.runtime_repository,
         work_ledger=services.work_ledger,
         runtime_state=services.runtime_state,
-        session_repository=services.session_repository,
     )
     learner_id = f"learner-{uuid4().hex}"
     task_id = f"task-{uuid4().hex}"

@@ -34,7 +34,6 @@ from ..store.models.table import WorkspaceTable
 from ..store.models.workspace import PersonalSkill, Workspace, WorkspaceFile
 from ..store.repositories.agent_tasks import AgentTaskRepository
 from ..store.repositories.runtime import RuntimeRepository
-from ..store.repositories.sessions import SessionRepository
 from ..store.repositories.work_ledger import WorkLedgerRepository
 from ..store.runtime_state import RuntimeStateRepository
 from .agent_events import AgentEventService
@@ -212,7 +211,6 @@ class AgentTaskService:
         runtime_repository: RuntimeRepository,
         runtime_state: RuntimeStateRepository,
         learner_repository: LearnerRepository,
-        session_repository: SessionRepository,
         db: Database,
         artifact_service: ArtifactResourceService,
         event_service: AgentEventService,
@@ -224,7 +222,6 @@ class AgentTaskService:
         self._runtime_repo = runtime_repository
         self._runtime_state = runtime_state
         self._learners = learner_repository
-        self._sessions = session_repository
         self._db = db
         self._artifacts = artifact_service
         self._events = event_service
@@ -1024,7 +1021,7 @@ class AgentTaskService:
             total_score=result["total_score"],
             total_points=result["total_points"],
         )
-        await self._sessions.project_runtime_event(
+        await self._runtime_repo.project_runtime_event(
             learner_id=record.learner_id,
             record_key=f"assessment:{task_id}:{submission_id}",
             task_id=task_id,

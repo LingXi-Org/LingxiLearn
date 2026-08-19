@@ -520,17 +520,17 @@ class RuntimeGraphResponse(BaseModel):
     executionGraph: dict[str, Any] = Field(default_factory=dict)
 
 
-class CopilotToolPermissionResult(BaseModel):
-    toolCallId: str
+class SchedulePermissionResult(BaseModel):
+    proposalId: str
     decision: str
     applied: bool = False
     status: str = "unknown"
     scope: Any = None
 
 
-class CopilotToolPermissionResponse(BaseModel):
+class SchedulePermissionResponse(BaseModel):
     success: bool
-    results: list[CopilotToolPermissionResult] = Field(default_factory=list)
+    results: list[SchedulePermissionResult] = Field(default_factory=list)
 
 
 class LearningRecordResponse(BaseModel):

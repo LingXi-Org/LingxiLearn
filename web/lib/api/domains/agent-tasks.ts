@@ -6,6 +6,7 @@
  * Issue #40: extracted from the God API object in ``lib/lingxi/api.ts``.
  */
 
+import { API_BASE } from '@/lib/api/config'
 import { AGENT_EVENT_KINDS } from '@/lib/lingxi/agent-events'
 import type {
   AgentTaskEvent,
@@ -15,9 +16,8 @@ import type {
   SimExecutionSnapshot,
 } from '@/lib/lingxi/types'
 import { request } from '../transport'
-import { subscribeSse } from '../transport/sse'
-import { API_BASE } from '@/lib/api/config'
 import type { SseOptions } from '../transport/sse'
+import { subscribeSse } from '../transport/sse'
 
 // ---------------------------------------------------------------------------
 // Types shared across agent task operations
@@ -153,9 +153,7 @@ export function getRuntimeGraph(taskId: string) {
 }
 
 export function getAgentTaskDecisions(taskId: string) {
-  return request<{ decisions: Array<Record<string, unknown>> }>(
-    `/agent-tasks/${taskId}/decisions`
-  )
+  return request<{ decisions: Array<Record<string, unknown>> }>(`/agent-tasks/${taskId}/decisions`)
 }
 
 export function subscribeAgentEvents(
@@ -233,19 +231,16 @@ export function confirmAgentWork(
   taskId: string,
   input: { workItemId: string; approve: boolean; payloadDigest: string; idempotencyKey?: string }
 ) {
-  return request<{ status: string; workItemId: string }>(
-    `/agent-tasks/${taskId}/confirmations`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        work_item_id: input.workItemId,
-        approve: input.approve,
-        payload_digest: input.payloadDigest,
-        idempotency_key:
-          input.idempotencyKey ?? idempotencyKey(`confirmation:${taskId}:${input.workItemId}`),
-      }),
-    }
-  )
+  return request<{ status: string; workItemId: string }>(`/agent-tasks/${taskId}/confirmations`, {
+    method: 'POST',
+    body: JSON.stringify({
+      work_item_id: input.workItemId,
+      approve: input.approve,
+      payload_digest: input.payloadDigest,
+      idempotency_key:
+        input.idempotencyKey ?? idempotencyKey(`confirmation:${taskId}:${input.workItemId}`),
+    }),
+  })
 }
 
 export function ackAgentDelivery(
@@ -253,10 +248,14 @@ export function ackAgentDelivery(
   artifact: string,
   requestKey = idempotencyKey(`delivery:${taskId}:${artifact}`)
 ) {
-  return request<{ artifact: string; cursor: number; delivery: AgentTaskSnapshot['delivery']['queue'] }>(
-    `/agent-tasks/${taskId}/delivery/${artifact}/ack`,
-    { method: 'POST', headers: { 'Idempotency-Key': requestKey } }
-  )
+  return request<{
+    artifact: string
+    cursor: number
+    delivery: AgentTaskSnapshot['delivery']['queue']
+  }>(`/agent-tasks/${taskId}/delivery/${artifact}/ack`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': requestKey },
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -295,22 +294,6 @@ export async function uploadAttachment(file: File) {
       data: btoa(binary),
     }),
   })
-}
-
-// ---------------------------------------------------------------------------
-// Copilot tool permission
-// ---------------------------------------------------------------------------
-
-export function copilotToolPermission(
-  decisions: Array<{
-    toolCallId: string
-    decision: 'allow' | 'allow_chat' | 'always_allow' | 'skip'
-  }>
-) {
-  return request<{ success: boolean; results: Array<Record<string, unknown>> }>(
-    '/copilot/tool-permission',
-    { method: 'POST', body: JSON.stringify({ decisions }) }
-  )
 }
 
 // ---------------------------------------------------------------------------
