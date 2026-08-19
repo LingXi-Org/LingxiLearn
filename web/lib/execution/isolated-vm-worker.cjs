@@ -52,7 +52,7 @@ function getBundleSource(bundleName) {
   const bundlePath = path.join(SANDBOX_BUNDLE_DIR, fileName)
   if (!fs.existsSync(bundlePath)) {
     throw new Error(
-      `Sandbox bundle not found at ${bundlePath}. Run \`bun run build:sandbox-bundles\`.`
+      `Prebuilt sandbox bundle not found at ${bundlePath}. Check the deployment artifact manifest.`
     )
   }
   const source = fs.readFileSync(bundlePath, 'utf-8')

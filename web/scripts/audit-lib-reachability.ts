@@ -105,6 +105,13 @@ const operationalEntries = filesUnder(path.join(root, 'scripts')).filter(
 const testEntries = filesUnder(root).filter(
   (file) => isSource(file) && isTest(file) && !file.includes(`${path.sep}node_modules${path.sep}`)
 )
+const configuredGeneratedFiles = new Set(
+  [
+    'lib/api/contracts/generated/contracts.ts',
+    'lib/api/contracts/generated/index.ts',
+    'lib/api/contracts/generated/schemas.ts',
+  ].map((file) => path.join(root, file))
+)
 const production = reachableFrom(productionEntries)
 const operational = reachableFrom(operationalEntries)
 const tests = reachableFrom(testEntries)
@@ -145,7 +152,24 @@ const inventory = readdirSync(libRoot, { withFileTypes: true })
     const productionFiles = files.filter((file) => production.has(file)).length
     const operationalFiles = files.filter((file) => operational.has(file)).length
     const testFiles = files.filter((file) => tests.has(file)).length
-    const unreachableFiles = files.filter((file) => !production.has(file) && !tests.has(file))
+    const operationalOnlyFiles = files.filter(
+      (file) => !production.has(file) && !tests.has(file) && operational.has(file)
+    )
+    const generatedFiles = files.filter((file) => configuredGeneratedFiles.has(file))
+    const testOnlyFiles = files.filter(
+      (file) =>
+        !production.has(file) &&
+        tests.has(file) &&
+        !operational.has(file) &&
+        !configuredGeneratedFiles.has(file)
+    )
+    const unreachableFiles = files.filter(
+      (file) =>
+        !production.has(file) &&
+        !tests.has(file) &&
+        !operational.has(file) &&
+        !configuredGeneratedFiles.has(file)
+    )
     return {
       directory: entry.name,
       ownership: ownership[entry.name],
@@ -153,7 +177,16 @@ const inventory = readdirSync(libRoot, { withFileTypes: true })
       productionFiles,
       operationalFiles,
       testFiles,
+      testOnlyFiles: testOnlyFiles.length,
+      testOnlyFilePaths: testOnlyFiles.map((file) =>
+        path.relative(root, file).replaceAll('\\', '/')
+      ),
+      operationalOnlyFiles: operationalOnlyFiles.length,
+      generatedFiles: generatedFiles.length,
       unreachableFiles: unreachableFiles.length,
+      unreachableFilePaths: unreachableFiles.map((file) =>
+        path.relative(root, file).replaceAll('\\', '/')
+      ),
       sampleProductionFiles: files
         .filter((file) => production.has(file))
         .slice(0, 5)
@@ -175,6 +208,7 @@ const missingOwnership = inventory
 const staleOwnership = Object.keys(ownership).filter(
   (directory) => !inventoryDirectories.has(directory)
 )
+const unreachableSourceFiles = inventory.flatMap((entry) => entry.unreachableFilePaths)
 const compatibilityWithoutDeletionCondition = Object.entries(ownership)
   .filter(([, entry]) => entry.status === 'compatibility' && !entry.deletionCondition?.trim())
   .map(([directory]) => directory)
@@ -185,6 +219,11 @@ if (
 ) {
   throw new Error(
     `web/lib ownership mismatch: missing=[${missingOwnership.join(',')}], stale=[${staleOwnership.join(',')}], compatibilityWithoutDeletionCondition=[${compatibilityWithoutDeletionCondition.join(',')}]`
+  )
+}
+if (unreachableSourceFiles.length > 0) {
+  throw new Error(
+    `Unowned web/lib source files are not reachable from production, operational, tests, or configured generators: ${unreachableSourceFiles.join(', ')}`
   )
 }
 

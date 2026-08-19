@@ -23,6 +23,8 @@ dynamic imports so they cannot silently justify deletion.
 
 Known non-literal imports are allowlisted by file and expression with a reason;
 the audit fails closed when a new unresolved dynamic import appears.
+Deterministically generated API contracts are classified explicitly instead of
+being mistaken for dead source; `check:contracts` verifies their freshness.
 
 Every surviving top-level directory must also have an entry in
 `ownership.json`. The audit fails when an owner/capability entry is missing or
