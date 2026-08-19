@@ -76,7 +76,6 @@ export const AgentIntentInfoSchema = z.object({
 });
 export type AgentIntentInfo = z.output<typeof AgentIntentInfoSchema>;
 
-/** Structured answers for one blocking interaction (issue #18 §10.4). */
 export const AgentInteractionAnswerRequestSchema = z.object({
   answers: z.array(z.record(z.string(), z.unknown())).min(1).max(20),
   idempotency_key: z.string().min(1).max(192).nullable(),
@@ -283,16 +282,6 @@ export const AllowedProvidersResponseSchema = z.object({
 });
 export type AllowedProvidersResponse = z.output<typeof AllowedProvidersResponseSchema>;
 
-export const AnswerBodySchema = z.object({
-  answer: z.unknown(),
-});
-export type AnswerBody = z.output<typeof AnswerBodySchema>;
-
-export const AnswerResponseSchema = z.object({
-  status: z.string(),
-});
-export type AnswerResponse = z.output<typeof AnswerResponseSchema>;
-
 export const AttachmentUploadResponseSchema = z.object({
   filename: z.string(),
   key: z.string(),
@@ -376,21 +365,6 @@ export const ContextResponseSchema = z.object({
 });
 export type ContextResponse = z.output<typeof ContextResponseSchema>;
 
-export const CopilotToolPermissionResultSchema = z.object({
-  applied: z.boolean().default(false),
-  decision: z.string(),
-  scope: z.unknown(),
-  status: z.string().default("unknown"),
-  toolCallId: z.string(),
-});
-export type CopilotToolPermissionResult = z.output<typeof CopilotToolPermissionResultSchema>;
-
-export const CopilotToolPermissionResponseSchema = z.object({
-  results: z.array(CopilotToolPermissionResultSchema),
-  success: z.boolean(),
-});
-export type CopilotToolPermissionResponse = z.output<typeof CopilotToolPermissionResponseSchema>;
-
 export const CreateAgentTaskSchema = z.object({
   attachments: z.array(z.record(z.string(), z.unknown())).max(10),
   idempotency_key: z.string().min(1).max(192).nullable(),
@@ -399,12 +373,6 @@ export const CreateAgentTaskSchema = z.object({
   skill_ids: z.array(z.string()).max(50),
 });
 export type CreateAgentTask = z.output<typeof CreateAgentTaskSchema>;
-
-export const CreateSessionSchema = z.object({
-  mission_id: z.string(),
-  pack_id: z.string(),
-});
-export type CreateSession = z.output<typeof CreateSessionSchema>;
 
 export const UploadSessionInfoSchema = z.object({
   contentType: z.string(),
@@ -932,6 +900,32 @@ export const LearningRecordResponseSchema = z.object({
 });
 export type LearningRecordResponse = z.output<typeof LearningRecordResponseSchema>;
 
+export const LegacyToolPermissionDecisionSchema = z.object({
+  decision: z.string(),
+  toolCallId: z.string().min(1).max(255),
+});
+export type LegacyToolPermissionDecision = z.output<typeof LegacyToolPermissionDecisionSchema>;
+
+export const LegacyToolPermissionRequestSchema = z.object({
+  decisions: z.array(LegacyToolPermissionDecisionSchema).min(1).max(50),
+});
+export type LegacyToolPermissionRequest = z.output<typeof LegacyToolPermissionRequestSchema>;
+
+export const LegacyToolPermissionResultSchema = z.object({
+  applied: z.boolean().default(false),
+  decision: z.string(),
+  scope: z.unknown(),
+  status: z.string().default("unknown"),
+  toolCallId: z.string(),
+});
+export type LegacyToolPermissionResult = z.output<typeof LegacyToolPermissionResultSchema>;
+
+export const LegacyToolPermissionResponseSchema = z.object({
+  results: z.array(LegacyToolPermissionResultSchema),
+  success: z.boolean(),
+});
+export type LegacyToolPermissionResponse = z.output<typeof LegacyToolPermissionResponseSchema>;
+
 export const SessionListItemInfoSchema = z.object({
   created_at: z.string().nullable(),
   id: z.string(),
@@ -1115,48 +1109,31 @@ export const RuntimeGraphResponseSchema = z.object({
 });
 export type RuntimeGraphResponse = z.output<typeof RuntimeGraphResponseSchema>;
 
-export const SessionCreateResponseSchema = z.object({
-  id: z.string(),
-  mission_id: z.string(),
-  pack_id: z.string(),
-  status: z.string(),
+export const SchedulePermissionDecisionSchema = z.object({
+  decision: z.string(),
+  proposalId: z.string().min(1).max(255),
 });
-export type SessionCreateResponse = z.output<typeof SessionCreateResponseSchema>;
+export type SchedulePermissionDecision = z.output<typeof SchedulePermissionDecisionSchema>;
 
-export const SessionInterruptInfoSchema = z.object({
-  id: z.unknown(),
-  resumable: z.boolean().default(true),
-  value: z.record(z.string(), z.unknown()),
+export const SchedulePermissionRequestSchema = z.object({
+  decisions: z.array(SchedulePermissionDecisionSchema).min(1).max(50),
 });
-export type SessionInterruptInfo = z.output<typeof SessionInterruptInfoSchema>;
+export type SchedulePermissionRequest = z.output<typeof SchedulePermissionRequestSchema>;
 
-export const SessionMissionInfoSchema = z.object({
-  concepts: z.array(z.string()),
-  id: z.string().default(""),
-  subtitle: z.string().default(""),
-  title: z.string().default(""),
-  why_not_chat: z.string().default(""),
+export const SchedulePermissionResultSchema = z.object({
+  applied: z.boolean().default(false),
+  decision: z.string(),
+  proposalId: z.string(),
+  scope: z.unknown(),
+  status: z.string().default("unknown"),
 });
-export type SessionMissionInfo = z.output<typeof SessionMissionInfoSchema>;
+export type SchedulePermissionResult = z.output<typeof SchedulePermissionResultSchema>;
 
-/** The runtime-truth session snapshot (see ``Service.snapshot``). */
-export const SessionSnapshotResponseSchema = z.object({
-  budget: z.record(z.string(), z.unknown()),
-  decisions: z.array(z.record(z.string(), z.unknown())),
-  error: z.string().nullable(),
-  goal: z.record(z.string(), z.unknown()),
-  goal_stack: z.array(z.unknown()),
-  id: z.string(),
-  interrupts: z.array(SessionInterruptInfoSchema),
-  mission: SessionMissionInfoSchema,
-  pack_id: z.string().default(""),
-  pack_version: z.string().default(""),
-  plan: z.record(z.string(), z.unknown()),
-  profile: z.array(LearningProfileRowInfoSchema),
-  runtime_status: z.string().default(""),
-  status: z.string().default("created"),
+export const SchedulePermissionResponseSchema = z.object({
+  results: z.array(SchedulePermissionResultSchema),
+  success: z.boolean(),
 });
-export type SessionSnapshotResponse = z.output<typeof SessionSnapshotResponseSchema>;
+export type SchedulePermissionResponse = z.output<typeof SchedulePermissionResponseSchema>;
 
 export const SkillCreateResponseSchema = z.object({
   data: PersonalSkillInfoSchema,

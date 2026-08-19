@@ -254,7 +254,6 @@
       },
       "AgentInteractionAnswerRequest": {
         "additionalProperties": false,
-        "description": "Structured answers for one blocking interaction (issue #18 §10.4).",
         "properties": {
           "answers": {
             "items": {
@@ -1139,32 +1138,6 @@
         "title": "AllowedProvidersResponse",
         "type": "object"
       },
-      "AnswerBody": {
-        "additionalProperties": false,
-        "properties": {
-          "answer": {
-            "title": "Answer"
-          }
-        },
-        "required": [
-          "answer"
-        ],
-        "title": "AnswerBody",
-        "type": "object"
-      },
-      "AnswerResponse": {
-        "properties": {
-          "status": {
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "title": "AnswerResponse",
-        "type": "object"
-      },
       "ArtifactSnapshotInfo": {
         "properties": {
           "available": {
@@ -1591,57 +1564,6 @@
         "title": "ContextResponse",
         "type": "object"
       },
-      "CopilotToolPermissionResponse": {
-        "properties": {
-          "results": {
-            "items": {
-              "$ref": "#/components/schemas/CopilotToolPermissionResult"
-            },
-            "title": "Results",
-            "type": "array"
-          },
-          "success": {
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "success"
-        ],
-        "title": "CopilotToolPermissionResponse",
-        "type": "object"
-      },
-      "CopilotToolPermissionResult": {
-        "properties": {
-          "applied": {
-            "default": false,
-            "title": "Applied",
-            "type": "boolean"
-          },
-          "decision": {
-            "title": "Decision",
-            "type": "string"
-          },
-          "scope": {
-            "title": "Scope"
-          },
-          "status": {
-            "default": "unknown",
-            "title": "Status",
-            "type": "string"
-          },
-          "toolCallId": {
-            "title": "Toolcallid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "toolCallId",
-          "decision"
-        ],
-        "title": "CopilotToolPermissionResult",
-        "type": "object"
-      },
       "CreateAgentTask": {
         "properties": {
           "attachments": {
@@ -1694,25 +1616,6 @@
           "prompt"
         ],
         "title": "CreateAgentTask",
-        "type": "object"
-      },
-      "CreateSession": {
-        "additionalProperties": false,
-        "properties": {
-          "mission_id": {
-            "title": "Mission Id",
-            "type": "string"
-          },
-          "pack_id": {
-            "title": "Pack Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "mission_id",
-          "pack_id"
-        ],
-        "title": "CreateSession",
         "type": "object"
       },
       "CreateUploadData": {
@@ -3513,6 +3416,103 @@
         "title": "LearningRecordResponse",
         "type": "object"
       },
+      "LegacyToolPermissionDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "allow",
+              "allow_chat",
+              "always_allow",
+              "skip"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "toolCallId": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Toolcallid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "toolCallId",
+          "decision"
+        ],
+        "title": "LegacyToolPermissionDecision",
+        "type": "object"
+      },
+      "LegacyToolPermissionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/LegacyToolPermissionDecision"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Decisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "decisions"
+        ],
+        "title": "LegacyToolPermissionRequest",
+        "type": "object"
+      },
+      "LegacyToolPermissionResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LegacyToolPermissionResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "LegacyToolPermissionResponse",
+        "type": "object"
+      },
+      "LegacyToolPermissionResult": {
+        "properties": {
+          "applied": {
+            "default": false,
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope"
+          },
+          "status": {
+            "default": "unknown",
+            "title": "Status",
+            "type": "string"
+          },
+          "toolCallId": {
+            "title": "Toolcallid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "toolCallId",
+          "decision"
+        ],
+        "title": "LegacyToolPermissionResult",
+        "type": "object"
+      },
       "MasteryResponse": {
         "properties": {
           "mastery": {
@@ -4335,51 +4335,101 @@
         "title": "RuntimeGraphResponse",
         "type": "object"
       },
-      "SessionCreateResponse": {
+      "SchedulePermissionDecision": {
+        "additionalProperties": false,
         "properties": {
-          "id": {
-            "title": "Id",
+          "decision": {
+            "enum": [
+              "allow",
+              "allow_chat",
+              "always_allow",
+              "skip"
+            ],
+            "title": "Decision",
             "type": "string"
           },
-          "mission_id": {
-            "title": "Mission Id",
+          "proposalId": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Proposalid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposalId",
+          "decision"
+        ],
+        "title": "SchedulePermissionDecision",
+        "type": "object"
+      },
+      "SchedulePermissionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SchedulePermissionDecision"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Decisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "decisions"
+        ],
+        "title": "SchedulePermissionRequest",
+        "type": "object"
+      },
+      "SchedulePermissionResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SchedulePermissionResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "SchedulePermissionResponse",
+        "type": "object"
+      },
+      "SchedulePermissionResult": {
+        "properties": {
+          "applied": {
+            "default": false,
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "decision": {
+            "title": "Decision",
             "type": "string"
           },
-          "pack_id": {
-            "title": "Pack Id",
+          "proposalId": {
+            "title": "Proposalid",
             "type": "string"
+          },
+          "scope": {
+            "title": "Scope"
           },
           "status": {
+            "default": "unknown",
             "title": "Status",
             "type": "string"
           }
         },
         "required": [
-          "id",
-          "mission_id",
-          "pack_id",
-          "status"
+          "proposalId",
+          "decision"
         ],
-        "title": "SessionCreateResponse",
-        "type": "object"
-      },
-      "SessionInterruptInfo": {
-        "properties": {
-          "id": {
-            "title": "Id"
-          },
-          "resumable": {
-            "default": true,
-            "title": "Resumable",
-            "type": "boolean"
-          },
-          "value": {
-            "additionalProperties": true,
-            "title": "Value",
-            "type": "object"
-          }
-        },
-        "title": "SessionInterruptInfo",
+        "title": "SchedulePermissionResult",
         "type": "object"
       },
       "SessionListItemInfo": {
@@ -4419,129 +4469,6 @@
           "status"
         ],
         "title": "SessionListItemInfo",
-        "type": "object"
-      },
-      "SessionMissionInfo": {
-        "properties": {
-          "concepts": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Concepts",
-            "type": "array"
-          },
-          "id": {
-            "default": "",
-            "title": "Id",
-            "type": "string"
-          },
-          "subtitle": {
-            "default": "",
-            "title": "Subtitle",
-            "type": "string"
-          },
-          "title": {
-            "default": "",
-            "title": "Title",
-            "type": "string"
-          },
-          "why_not_chat": {
-            "default": "",
-            "title": "Why Not Chat",
-            "type": "string"
-          }
-        },
-        "title": "SessionMissionInfo",
-        "type": "object"
-      },
-      "SessionSnapshotResponse": {
-        "description": "The runtime-truth session snapshot (see ``Service.snapshot``).",
-        "properties": {
-          "budget": {
-            "additionalProperties": true,
-            "title": "Budget",
-            "type": "object"
-          },
-          "decisions": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Decisions",
-            "type": "array"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "goal": {
-            "additionalProperties": true,
-            "title": "Goal",
-            "type": "object"
-          },
-          "goal_stack": {
-            "items": {},
-            "title": "Goal Stack",
-            "type": "array"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "interrupts": {
-            "items": {
-              "$ref": "#/components/schemas/SessionInterruptInfo"
-            },
-            "title": "Interrupts",
-            "type": "array"
-          },
-          "mission": {
-            "$ref": "#/components/schemas/SessionMissionInfo"
-          },
-          "pack_id": {
-            "default": "",
-            "title": "Pack Id",
-            "type": "string"
-          },
-          "pack_version": {
-            "default": "",
-            "title": "Pack Version",
-            "type": "string"
-          },
-          "plan": {
-            "additionalProperties": true,
-            "title": "Plan",
-            "type": "object"
-          },
-          "profile": {
-            "items": {
-              "$ref": "#/components/schemas/LearningProfileRowInfo"
-            },
-            "title": "Profile",
-            "type": "array"
-          },
-          "runtime_status": {
-            "default": "",
-            "title": "Runtime Status",
-            "type": "string"
-          },
-          "status": {
-            "default": "created",
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "title": "SessionSnapshotResponse",
         "type": "object"
       },
       "SkillCreateResponse": {
@@ -7121,6 +7048,44 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/agent-interactions/schedule-permissions": {
+      "post": {
+        "operationId": "decide_schedule_permissions_api_agent_interactions_schedule_permissions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchedulePermissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchedulePermissionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Schedule Permissions"
+      }
+    },
     "/api/agent-tasks": {
       "get": {
         "operationId": "list_agent_tasks_api_agent_tasks_get",
@@ -7678,7 +7643,6 @@
     },
     "/api/agent-tasks/{task_id}/interactions/{interaction_id}/answers": {
       "post": {
-        "description": "Answer a blocking interaction; the server resumes the paused checkpoint.",
         "operationId": "answer_agent_interaction_api_agent_tasks__task_id__interactions__interaction_id__answers_post",
         "parameters": [
           {
@@ -7874,7 +7838,7 @@
     },
     "/api/agent-tasks/{task_id}/runtime-graph": {
       "get": {
-        "description": "Return the durable Sim-compatible runtime graph for this task.\n\n``executionGraph`` is the canonical V1 graph whose nodes are AgentRuns —\nthe same identities the chat renders (issue #18 §14).  ``workflowState``\nremains the legacy heuristic projection for today's UI.",
+        "description": "Return the durable Sim-compatible runtime graph for this task.\n\n``executionGraph`` is the canonical V1 graph whose nodes are AgentRuns --\nthe same identities the chat renders (issue #18 section 14).\n``workflowState`` remains the legacy heuristic projection for today's UI.",
         "operationId": "agent_task_runtime_graph_api_agent_tasks__task_id__runtime_graph_get",
         "parameters": [
           {
@@ -8164,15 +8128,14 @@
     },
     "/api/copilot/tool-permission": {
       "post": {
-        "description": "Use Sim's native permission card contract for agent schedule proposals.",
-        "operationId": "copilot_tool_permission_api_copilot_tool_permission_post",
+        "deprecated": true,
+        "description": "Deprecated compatibility adapter; use schedule-permissions instead.",
+        "operationId": "legacy_copilot_tool_permission_api_copilot_tool_permission_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
-                "title": "Body",
-                "type": "object"
+                "$ref": "#/components/schemas/LegacyToolPermissionRequest"
               }
             }
           },
@@ -8183,7 +8146,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CopilotToolPermissionResponse"
+                  "$ref": "#/components/schemas/LegacyToolPermissionResponse"
                 }
               }
             },
@@ -8200,7 +8163,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Copilot Tool Permission"
+        "summary": "Legacy Copilot Tool Permission"
       }
     },
     "/api/files/serve/{storage_key}": {
@@ -11230,257 +11193,6 @@
         "summary": "Delete Pinned Item"
       }
     },
-    "/api/sessions": {
-      "post": {
-        "operationId": "create_session_api_sessions_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSession"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionCreateResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Session"
-      }
-    },
-    "/api/sessions/{session_id}": {
-      "get": {
-        "operationId": "get_session_api_sessions__session_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionSnapshotResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Session"
-      }
-    },
-    "/api/sessions/{session_id}/answer": {
-      "post": {
-        "operationId": "answer_api_sessions__session_id__answer_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AnswerBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnswerResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Answer"
-      }
-    },
-    "/api/sessions/{session_id}/artifact/{artifact_id}": {
-      "get": {
-        "description": "Hand over the raw capture so the learner can audit us in Wireshark.",
-        "operationId": "download_artifact_api_sessions__session_id__artifact__artifact_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "artifact_id",
-            "required": true,
-            "schema": {
-              "title": "Artifact Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Download Artifact"
-      }
-    },
-    "/api/sessions/{session_id}/events": {
-      "get": {
-        "operationId": "stream_events_api_sessions__session_id__events_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Stream Events"
-      }
-    },
-    "/api/sessions/{session_id}/report": {
-      "get": {
-        "operationId": "get_report_api_sessions__session_id__report_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Report Api Sessions  Session Id  Report Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Report"
-      }
-    },
     "/api/settings/allowed-integrations": {
       "get": {
         "description": "Keep the shared Sim capability query on the native API boundary.",
@@ -11539,7 +11251,7 @@
     },
     "/api/skill-registry": {
       "get": {
-        "description": "The capability registry the orchestrator plans against.\n\nDistinct from ``/skills``, which is the human catalogue: this is the\nmachine view — capability tags, IO contracts, preconditions and cost — plus\nthe capability vocabulary itself so a client can render the whole space.",
+        "description": "Expose the machine-readable capability registry used for planning.",
         "operationId": "skill_registry_api_skill_registry_get",
         "responses": {
           "200": {
@@ -11558,7 +11270,7 @@
     },
     "/api/skills": {
       "get": {
-        "description": "Expose the project's native LingxiSkills catalogue to the workspace.\n\nServed from ``skill_registry`` rather than re-parsed here, so the catalogue\nthe UI shows and the catalogue the orchestrator plans against are the same\ntable.  ``content`` is still read from disk because the registry stores the\nmanifest's meaning, not its prose.",
+        "description": "Expose the native LingxiSkills catalogue to the workspace.",
         "operationId": "list_skills_api_skills_get",
         "responses": {
           "200": {
