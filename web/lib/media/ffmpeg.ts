@@ -10,7 +10,7 @@ const logger = createLogger('MediaFfmpeg')
 let ffmpegInitialized = false
 let ffmpegPath: string | null = null
 
-/** Lazy system FFmpeg binary resolution, mirroring lib/audio/extractor.ts. */
+/** Lazy system FFmpeg binary resolution for media tool execution. */
 function ensureFfmpeg(): void {
   if (ffmpegInitialized) {
     if (!ffmpegPath) {

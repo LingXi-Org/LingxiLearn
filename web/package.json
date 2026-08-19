@@ -24,6 +24,7 @@
     "check:auth-boundary": "bun run scripts/check-auth-boundary.ts",
     "check:native-primitives-boundary": "bun run scripts/check-native-primitives-boundary.ts",
     "check:contracts": "bun run scripts/generate-rest-contracts.ts --check",
+    "audit:lib-reachability": "bun run scripts/audit-lib-reachability.ts",
     "prepare": "node -e \"if (process.env.CI) process.exit(0)\""
   },
   "dependencies": {
