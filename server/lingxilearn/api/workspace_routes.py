@@ -124,7 +124,7 @@ from ..store.runtime_tables import (
     RUNTIME_STUDENT_COLUMNS,
     ensure_runtime_tables,
 )
-from .routes import current_learner_context, not_found, services_of
+from .dependencies import current_learner_context, not_found, services_of
 
 router = APIRouter(prefix="/api")
 MAX_FILE_SIZE = 20 * 1024 * 1024

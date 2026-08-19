@@ -24,11 +24,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from lingxi_identity import Principal  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
 
 from ..application import ApplicationServices, agent_task_create_payload_digest
 from ..auth import get_principal
-from ..config import REPO_ROOT
 from ..contracts.rest_models import (
     AckDeliveryResponse,
     AgentDecisionsResponse,
@@ -48,24 +46,19 @@ from ..contracts.rest_models import (
     ConfirmWorkResponse,
     ContextResponse,
     CopilotToolPermissionResponse,
-    HealthResponse,
     InteractionAnswerResponse,
     LearningProfileResponse,
     MasteryResponse,
-    PacksResponse,
     PreferencesResponse,
     ProfileChangeResponse,
     QuizSubmissionResponse,
     RuntimeGraphResponse,
     SessionCreateResponse,
     SessionSnapshotResponse,
-    SkillRegistryResponse,
-    SkillsResponse,
 )
 from ..learner import LearnerContext
 from ..runtime.execution_graph import build_execution_graph
-from ..state.capabilities import CAPABILITY_INFO
-from ..store.models.workspace import PersonalSkill
+from .dependencies import current_learner_context, not_found, services_of
 
 router = APIRouter(prefix="/api")
 
@@ -82,31 +75,6 @@ _DEBUG_SECRET_KEYS = (
     "system_prompt",
     "token",
 )
-
-
-def services_of(request: Request) -> ApplicationServices:
-    """Dependency-container lookup: returns the composition root, never a god service."""
-
-    services: ApplicationServices | None = getattr(request.app.state, "services", None)
-    if services is None:
-        raise HTTPException(status_code=503, detail="service_unavailable")
-    return services
-
-
-async def current_learner_context(
-    request: Request, principal: Principal = Depends(get_principal)
-) -> LearnerContext:
-    services = services_of(request)
-    try:
-        return await services.learners.get_learner_context(principal)
-    except (LookupError, ValueError) as exc:
-        raise HTTPException(status_code=401, detail="invalid_identity") from exc
-
-
-def not_found() -> HTTPException:
-    """Use one response for missing and not-owned persistent resources."""
-
-    return HTTPException(status_code=404, detail="resource_not_found")
 
 
 def _require_runtime_debug(
@@ -200,166 +168,6 @@ async def _validated_task_context(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except KeyError as exc:
         raise not_found() from exc
-
-
-# --------------------------------------------------------------------------
-# Health & catalogue
-# --------------------------------------------------------------------------
-
-
-@router.get("/health", response_model=HealthResponse)
-async def health(request: Request) -> dict[str, Any]:
-    services = services_of(request)
-    try:
-        db_ok = await services.db.ping()
-    except Exception:  # noqa: BLE001 - health must answer even when the DB is down
-        db_ok = False
-    return {
-        "status": "ok" if db_ok else "degraded",
-        "database": db_ok,
-        "brain": services.brain.name if services.brain else "unconfigured",
-        "agent": {
-            "configured": services.settings.agents_configured,
-            "model": services.settings.agent_model,
-        },
-        "packs": sorted(services.packs),
-        "tools": len(services.registry.specs),
-    }
-
-
-@router.get("/packs", response_model=PacksResponse)
-async def list_packs(request: Request) -> dict[str, Any]:
-    services = services_of(request)
-    return {
-        "packs": [
-            {
-                "id": pack.id,
-                "title": pack.title,
-                "version": pack.version,
-                "description": pack.description,
-                "concepts": [
-                    {"id": c.id, "title": c.title, "summary": c.summary, "requires": c.requires}
-                    for c in pack.concepts.values()
-                ],
-                "missions": [
-                    {
-                        "id": m.id,
-                        "title": m.title,
-                        "subtitle": m.subtitle,
-                        "summary": m.summary,
-                        "why_not_chat": m.why_not_chat,
-                        "concepts": list(m.concepts),
-                        "estimated_minutes": m.estimated_minutes,
-                        "steps": len(m.steps),
-                    }
-                    for m in pack.missions.values()
-                ],
-            }
-            for pack in services.packs.values()
-        ]
-    }
-
-
-@router.get("/skills", response_model=SkillsResponse)
-async def list_skills(
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    """Expose the project's native LingxiSkills catalogue to the workspace.
-
-    Served from ``skill_registry`` rather than re-parsed here, so the catalogue
-    the UI shows and the catalogue the orchestrator plans against are the same
-    table.  ``content`` is still read from disk because the registry stores the
-    manifest's meaning, not its prose.
-    """
-
-    services = services_of(request)
-    skills: list[dict[str, Any]] = []
-    for entry in await services.learner_state.list_skills(learner_id=context.learner_id):
-        manifest_path = REPO_ROOT / "skills" / entry["skill_id"] / "SKILL.md"
-        skills.append(
-            {
-                "id": entry["skill_id"],
-                "name": entry["skill_id"],
-                "display_name": entry["display_name"] or entry["skill_id"],
-                "description": entry["description"],
-                "version": entry["version"],
-                "license": "MIT",
-                "compatibility": "",
-                "content": manifest_path.read_text(encoding="utf-8")
-                if manifest_path.is_file()
-                else "",
-                "source": entry["source"],
-                "is_system": entry["source"] == "system",
-                "capabilities": entry["capabilities"],
-                "ownership": entry["ownership"],
-                "provider": entry["provider"],
-                "cost": entry["cost"],
-                "enabled": entry["enabled"],
-            }
-        )
-    async with services.db.session() as session:
-        personal = (
-            (
-                await session.execute(
-                    select(PersonalSkill).where(PersonalSkill.learner_id == context.learner_id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-    skills.extend(
-        {
-            "id": row.id,
-            "name": row.name,
-            "display_name": row.name,
-            "description": row.description,
-            "content": row.content,
-            "version": row.version,
-            "source": "personal",
-            "is_system": False,
-            "created_at": row.created_at.isoformat() if row.created_at else None,
-            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-        }
-        for row in personal
-    )
-    return {"skills": skills}
-
-
-@router.get("/skill-registry", response_model=SkillRegistryResponse)
-async def skill_registry(
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    """The capability registry the orchestrator plans against.
-
-    Distinct from ``/skills``, which is the human catalogue: this is the
-    machine view — capability tags, IO contracts, preconditions and cost — plus
-    the capability vocabulary itself so a client can render the whole space.
-    """
-
-    services = services_of(request)
-    entries = await services.learner_state.list_skills(learner_id=context.learner_id)
-    by_capability: dict[str, list[str]] = {}
-    for entry in entries:
-        if not entry["enabled"]:
-            continue
-        for tag in entry["capabilities"]:
-            by_capability.setdefault(tag, []).append(entry["skill_id"])
-    return {
-        "skills": entries,
-        "capabilities": [
-            {
-                "capability": str(item.capability),
-                "label": item.label,
-                "learner_facing": item.learner_facing,
-                "heavy_artifact": item.heavy_artifact,
-                "irreversible": item.irreversible,
-                "providers": by_capability.get(str(item.capability), []),
-            }
-            for item in CAPABILITY_INFO.values()
-        ],
-    }
 
 
 # --------------------------------------------------------------------------

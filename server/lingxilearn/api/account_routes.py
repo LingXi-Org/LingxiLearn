@@ -39,7 +39,7 @@ from ..learner import LearnerContext
 from ..store.models.agent import AgentTask
 from ..store.models.identity import Learner, LearnerProfile
 from ..store.models.workspace import Workspace, WorkspaceFile
-from .routes import current_learner_context, not_found, services_of
+from .dependencies import current_learner_context, not_found, services_of
 
 router = APIRouter(prefix="/api")
 

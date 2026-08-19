@@ -14,26 +14,15 @@
  */
 
 import { AGENT_EVENT_KINDS } from './agent-events'
-import type {
-  AgentTaskEvent,
-  RunEvent,
-  SessionSnapshot,
-  SimExecutionSnapshot,
-  QuizSubmissionSnapshot,
-  AgentTaskListItem,
-  AgentTaskSnapshot,
-  NativeSkill,
-  Pack,
-  SessionListItem,
-} from './types'
+import type { AgentTaskEvent } from './types'
 
 // Re-export types that callers may import from this module.
 export type {
+  KnowledgeBaseItem,
+  KnowledgeDocumentItem,
   WorkspaceFileItem,
   WorkspaceFolderItem,
   WorkspaceTableItem,
-  KnowledgeBaseItem,
-  KnowledgeDocumentItem,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -41,38 +30,36 @@ export type {
 // ---------------------------------------------------------------------------
 
 export { API_BASE } from '@/lib/api/config'
+export type { AccessTokenProvider } from '@/lib/api/transport/http'
 export {
   ApiError,
+  apiUrl,
   authorizedFetch,
   request,
-  apiUrl,
   setAccessTokenProvider,
+  setAccessTokenRefreshHandler,
   setAuthenticationFailureHandler,
   setSessionRefreshHandler,
-  setAccessTokenRefreshHandler,
 } from '@/lib/api/transport/http'
-export type { AccessTokenProvider } from '@/lib/api/transport/http'
-export { subscribeSse } from '@/lib/api/transport/sse'
 export type { SseOptions } from '@/lib/api/transport/sse'
+export { subscribeSse } from '@/lib/api/transport/sse'
 
 // ---------------------------------------------------------------------------
 // Domain re-exports (backwards-compatible ``api.xxx`` shape)
 // ---------------------------------------------------------------------------
 
+import * as agentTasksClient from '@/lib/api/domains/agent-tasks'
 import {
+  createSkill as _createSkill,
+  deleteSkill as _deleteSkill,
+  updateSkill as _updateSkill,
   getHealth,
   getPacks,
   getSkills,
-  createSkill as _createSkill,
-  updateSkill as _updateSkill,
-  deleteSkill as _deleteSkill,
 } from '@/lib/api/domains/catalogue'
-
-import * as workspaceClient from '@/lib/api/domains/workspace'
 import * as knowledgeClient from '@/lib/api/domains/knowledge'
-import * as agentTasksClient from '@/lib/api/domains/agent-tasks'
 import * as userSettingsClient from '@/lib/api/domains/user-settings'
-import * as sessionsClient from '@/lib/api/domains/sessions'
+import * as workspaceClient from '@/lib/api/domains/workspace'
 import { fetchArtifactBlob } from '@/lib/api/transport/http'
 
 // ---------------------------------------------------------------------------
@@ -154,12 +141,7 @@ export const api = {
   updateSkill: _updateSkill,
   deleteSkill: _deleteSkill,
 
-  // Sessions
-  createSession: sessionsClient.createSession,
-  session: sessionsClient.getSession,
-  answer: sessionsClient.submitAnswer,
-  report: sessionsClient.getSessionReport,
-  artifactUrl: sessionsClient.artifactUrl,
+  // Shared artifact transport (used by Agent Tasks)
   fetchArtifact: fetchArtifactBlob,
 
   // User / Settings
@@ -188,16 +170,8 @@ export const api = {
 }
 
 // ---------------------------------------------------------------------------
-// SSE subscriptions (re-exported from domain clients)
+// SSE subscriptions (re-exported from the Agent Tasks domain client)
 // ---------------------------------------------------------------------------
-
-export function subscribeEvents(
-  sessionId: string,
-  onEvent: (event: RunEvent) => void,
-  options: import('@/lib/api/transport/sse').SseOptions = {}
-): () => void {
-  return sessionsClient.subscribeSessionEvents(sessionId, onEvent, options)
-}
 
 export function subscribeAgentEvents(
   taskId: string,
@@ -208,10 +182,7 @@ export function subscribeAgentEvents(
 }
 
 /** Mothership Stream V1 history: durable envelopes only (issue #18). */
-export function agentTaskV1Events(
-  taskId: string,
-  from = 0
-): Promise<{ events: AgentTaskEvent[] }> {
+export function agentTaskV1Events(taskId: string, from = 0): Promise<{ events: AgentTaskEvent[] }> {
   return agentTasksClient.getAgentTaskV1Events(taskId, from)
 }
 
@@ -235,7 +206,12 @@ export function answerAgentInteraction(
   }>,
   explicitIdempotencyKey?: string
 ): Promise<{ status: string; interactionId: string }> {
-  return agentTasksClient.answerAgentInteraction(taskId, interactionId, answers, explicitIdempotencyKey)
+  return agentTasksClient.answerAgentInteraction(
+    taskId,
+    interactionId,
+    answers,
+    explicitIdempotencyKey
+  )
 }
 
 export const KNOWN_EVENT_KINDS = [

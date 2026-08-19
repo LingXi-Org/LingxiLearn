@@ -17,6 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from .api.account_routes import router as account_router
+from .api.catalog import router as catalog_router
+from .api.health import router as health_router
 from .api.routes import router
 from .api.workspace_routes import router as workspace_router
 from .application import ApplicationServices
@@ -124,6 +126,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    app.include_router(health_router)
+    app.include_router(catalog_router)
     app.include_router(account_router)
     app.include_router(workspace_router)
 
