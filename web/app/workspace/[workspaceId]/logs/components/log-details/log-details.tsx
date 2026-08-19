@@ -752,9 +752,7 @@ export const LogDetails = memo(function LogDetails({
             <div className='flex items-center justify-between'>
               <h2 className='text-[var(--text-primary)] text-sm'>Log Details</h2>
               <div className='flex items-center gap-[1px]'>
-                {/* Retry is only available for legacy workflow runs (the retry
-                    endpoint is workflow-scoped on the wire). */}
-                {log.status === 'error' && log.source.kind === 'workflow' && (
+                {log.status === 'error' && log.source.kind !== 'unknown' && (
                   <Tooltip.Root>
                     <Tooltip.Trigger asChild>
                       <Button

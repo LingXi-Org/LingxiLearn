@@ -109,12 +109,17 @@ describe('native execution log mapper', () => {
     }
     const detail = {
       ...summary(),
-      executionData: { enhanced: true as const, workflowInput: { taskId: 'task-1' }, trajectory },
+      executionData: {
+        enhanced: true as const,
+        taskId: 'task-canonical',
+        workflowInput: { taskId: 'task-legacy-input' },
+        trajectory,
+      },
       files: null,
       costLedger: null,
     } satisfies ExecutionLogDetail
     const view = mapExecutionLogDetail(detail)
-    expect(view.taskId).toBe('task-1')
+    expect(view.taskId).toBe('task-canonical')
     expect(view.trajectory).toBe(trajectory)
     expect(view.trajectory?.lanes[1].items[0].parentId).toBe('agent-run-1')
   })

@@ -60,7 +60,7 @@ export const LogRowContextMenu = memo(function LogRowContextMenu({
     log?.status === 'cancelling' ||
     (isCancelPending && cancelPendingExecutionId === log?.identity.executionId)
   const showCancelAction = canCancelExecution && hasExecutionId && (isCancellable || isStopping)
-  const isRetryable = log?.status === 'error' && log.source.kind !== 'agent-task'
+  const isRetryable = log?.status === 'error' && log.source.kind !== 'unknown'
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={(open) => !open && onClose()} modal={false}>

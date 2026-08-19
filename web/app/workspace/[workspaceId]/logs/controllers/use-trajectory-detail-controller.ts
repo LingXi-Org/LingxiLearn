@@ -8,6 +8,7 @@ import type { ExecutionLogDetailView } from '@/app/workspace/[workspaceId]/logs/
 import { mapExecutionLogDetail } from '@/app/workspace/[workspaceId]/logs/model/execution-log-mapper'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { useCancelExecution, useLogDetail, useRetryExecution } from '@/hooks/queries/logs'
+import { api } from '@/lib/lingxi/api'
 
 const ACTIVE_RUN_DETAIL_REFRESH_MS = 3_000 as const
 
@@ -27,9 +28,8 @@ interface UseTrajectoryDetailControllerParams {
  * canonical trajectory projector unchanged), and exposes the run commands
  * (cancel/retry) plus the snapshot preview state.
  *
- * Cancel/retry still target the workflow-scoped command endpoints on the wire;
- * the workflow id is read from the wire row here, at the controller boundary —
- * it never enters the view model.
+ * Native AgentTask runs use AgentTask cancel/fork commands. Only explicitly
+ * classified legacy workflow rows use the compatibility workflow endpoints.
  */
 export function useTrajectoryDetailController({
   workspaceId,
@@ -55,6 +55,8 @@ export function useTrajectoryDetailController({
   })
 
   const [previewLogId, setPreviewLogId] = useState<string | null>(null)
+  const [nativeCancelPending, setNativeCancelPending] = useState(false)
+  const [nativeRetryPending, setNativeRetryPending] = useState(false)
   const previewDetailQuery = useLogDetail(previewLogId ?? undefined, workspaceId, {
     refetchInterval,
   })
@@ -72,16 +74,25 @@ export function useTrajectoryDetailController({
 
   const cancelRun = useCallback(
     async (log: ExecutionLogRow | null) => {
-      // Wire-compat: the cancel endpoint is still workflow-scoped on the wire.
+      const mapped = log ? mapExecutionLogDetail(log) : null
       const workflowId = log?.workflow?.id || log?.workflowId
       const executionId = log?.executionId
-      if (!userPermissions.canEdit || !workflowId || !executionId) return
+      if (!userPermissions.canEdit || !executionId) return
 
       try {
-        await cancelMutate({ workflowId, executionId })
+        if (mapped?.source.kind === 'agent-task' && mapped.taskId) {
+          setNativeCancelPending(true)
+          await api.cancelAgentTask(mapped.taskId)
+        } else if (mapped?.source.kind === 'workflow' && workflowId) {
+          await cancelMutate({ workflowId, executionId })
+        } else {
+          return
+        }
         toast.success('Run stopped')
       } catch (error) {
         toast.error(getErrorMessage(error, 'Failed to stop run'))
+      } finally {
+        setNativeCancelPending(false)
       }
     },
     [userPermissions.canEdit, cancelMutate]
@@ -89,16 +100,25 @@ export function useTrajectoryDetailController({
 
   const retryRun = useCallback(
     async (log: ExecutionLogRow | null) => {
-      // Wire-compat: the retry endpoint is still workflow-scoped on the wire.
+      const mapped = log ? mapExecutionLogDetail(log) : null
       const workflowId = log?.workflow?.id || log?.workflowId
       const executionId = log?.executionId
-      if (!workflowId || !executionId) return
+      if (!executionId) return
 
       try {
-        await retryMutate({ workflowId, executionId })
+        if (mapped?.source.kind === 'agent-task' && mapped.taskId) {
+          setNativeRetryPending(true)
+          await api.forkAgentTask(mapped.taskId)
+        } else if (mapped?.source.kind === 'workflow' && workflowId) {
+          await retryMutate({ workflowId, executionId })
+        } else {
+          return
+        }
         toast.success('Retry started')
       } catch {
         toast.error('Failed to retry execution')
+      } finally {
+        setNativeRetryPending(false)
       }
     },
     [retryMutate]
@@ -120,9 +140,9 @@ export function useTrajectoryDetailController({
       cancelRun,
       retryRun,
       canEdit: userPermissions.canEdit,
-      isCancelPending: cancelExecution.isPending,
+      isCancelPending: cancelExecution.isPending || nativeCancelPending,
       cancelPendingExecutionId: cancelExecution.variables?.executionId,
-      isRetryPending: retryExecution.isPending,
+      isRetryPending: retryExecution.isPending || nativeRetryPending,
     },
   }
 }
