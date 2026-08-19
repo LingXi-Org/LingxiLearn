@@ -115,6 +115,9 @@ export const api = {
   workspaceTableRows: workspaceClient.getWorkspaceTableRows,
   createWorkspaceRows: workspaceClient.createWorkspaceRows,
   updateWorkspaceRow: workspaceClient.updateWorkspaceRow,
+  deleteWorkspaceRow: workspaceClient.deleteWorkspaceRow,
+  workspaceTableViews: workspaceClient.getWorkspaceTableViews,
+  createWorkspaceTableView: workspaceClient.createWorkspaceTableView,
 
   // Knowledge
   workspaceKnowledge: knowledgeClient.getKnowledgeBases,

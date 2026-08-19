@@ -5,13 +5,14 @@
  * from the God API object in ``lib/lingxi/api.ts``.
  */
 
+import { API_BASE } from '@/lib/api/config'
 import type {
   WorkspaceFileItem,
   WorkspaceFolderItem,
   WorkspaceTableItem,
+  WorkspaceTableViewItem,
 } from '@/lib/lingxi/types'
 import { request } from '../transport'
-import { API_BASE } from '@/lib/api/config'
 
 function normalizeWorkspaceFile(file: WorkspaceFileItem): WorkspaceFileItem {
   if (!file.url || !file.url.startsWith('/api/')) return file
@@ -194,5 +195,29 @@ export function updateWorkspaceRow(tableId: string, rowId: string, data: Record<
   return request<{ data: { row: Record<string, unknown> } }>(
     `/table/${encodeURIComponent(tableId)}/rows/${encodeURIComponent(rowId)}`,
     { method: 'PATCH', body: JSON.stringify({ data }) }
+  )
+}
+
+export function deleteWorkspaceRow(tableId: string, rowId: string) {
+  return request<{ data: Record<string, never> }>(
+    `/table/${encodeURIComponent(tableId)}/rows/${encodeURIComponent(rowId)}`,
+    { method: 'DELETE' }
+  )
+}
+
+export function getWorkspaceTableViews(tableId: string) {
+  return request<{ data: { views: WorkspaceTableViewItem[] } }>(
+    `/table/${encodeURIComponent(tableId)}/views`
+  )
+}
+
+export function createWorkspaceTableView(
+  tableId: string,
+  name: string,
+  config: Record<string, unknown>
+) {
+  return request<{ data: { view: WorkspaceTableViewItem } }>(
+    `/table/${encodeURIComponent(tableId)}/views`,
+    { method: 'POST', body: JSON.stringify({ name, config }) }
   )
 }

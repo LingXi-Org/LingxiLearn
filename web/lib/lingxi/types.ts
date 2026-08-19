@@ -399,6 +399,15 @@ export interface WorkspaceTableItem {
   rowCount?: number
   totalRows?: number
   archived?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface WorkspaceTableViewItem {
+  id: string
+  tableId: string
+  name: string
+  config: Record<string, unknown>
+  isDefault?: boolean
 }
 
 // ---------------------------------------------------------------------------
