@@ -28,8 +28,9 @@ from lingxilearn.agents.skill_runtime import (
     staged_artifact_tools,
 )
 from lingxilearn.agents.web_tools import _assert_public_url
+from lingxilearn.application import ApplicationServices
+from lingxilearn.application.runtime_adapter import _agent_task_status, _message_trace_events
 from lingxilearn.config import Settings
-from lingxilearn.service import Service, _agent_task_status, _message_trace_events
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -214,21 +215,21 @@ async def test_missing_deepseek_key_is_a_durable_failed_task(tmp_path: Path) -> 
         database_url=f"sqlite+aiosqlite:///./var/agent-key-check-{suffix}.sqlite3",
         agent_task_dir=tmp_path,
     )
-    service = Service(settings)
-    await service.db.create_all()
+    services = ApplicationServices(settings)
+    await services.db.create_all()
     try:
         task_id = f"missing-key-{suffix}"
-        created = await service.create_agent_task(
+        created = await services.agent_tasks.create_agent_task(
             task_id=task_id, learner_id="guest-test", prompt="解释 TCP"
         )
         assert created["status"] == "failed"
-        snapshot = await service.agent_task_snapshot(task_id)
+        snapshot = await services.agent_tasks.agent_task_snapshot(task_id)
         assert snapshot["status"] == "failed"
-        events = await service.agent_task_repository.agent_events_after(task_id)
+        events = await services.agent_task_repository.agent_events_after(task_id)
         assert [event["kind"] for event in events] == ["task.started", "task.failed"]
         assert "DS_API_KEY" in snapshot["error"]
     finally:
-        await service.db.dispose()
+        await services.db.dispose()
 
 
 @pytest.mark.asyncio
@@ -239,27 +240,27 @@ async def test_create_agent_task_idempotency_is_durable_and_conflict_safe(tmp_pa
         database_url=f"sqlite+aiosqlite:///./var/agent-create-idempotency-{suffix}.sqlite3",
         agent_task_dir=tmp_path,
     )
-    service = Service(settings)
-    await service.db.create_all()
+    services = ApplicationServices(settings)
+    await services.db.create_all()
     spawned: list[Any] = []
 
     def capture_spawn(coro: Any) -> None:
         spawned.append(coro)
         coro.close()
 
-    service.agent_model = {"coordinator": object()}
-    service._spawn = capture_spawn  # type: ignore[method-assign]
+    services.runtime.agent_model = {"coordinator": object()}
+    services.tasks.spawn = capture_spawn  # type: ignore[method-assign]
     key = f"lingxi-create:{suffix}"
     try:
         first, second = await asyncio.gather(
-            service.create_agent_task(
+            services.agent_tasks.create_agent_task(
                 task_id=f"create-first-{suffix}",
                 learner_id="create-test",
                 prompt="解释 TCP 重传",
                 resources=[{"type": "file", "id": "file-1"}],
                 idempotency_key=key,
             ),
-            service.create_agent_task(
+            services.agent_tasks.create_agent_task(
                 task_id=f"create-second-{suffix}",
                 learner_id="create-test",
                 prompt="解释 TCP 重传",
@@ -275,23 +276,23 @@ async def test_create_agent_task_idempotency_is_durable_and_conflict_safe(tmp_pa
             f"create-second-{suffix}",
         }
         assert second == first
-        assert len(await service.agent_task_repository.list_agent_tasks("create-test")) == 1
+        assert len(await services.agent_task_repository.list_agent_tasks("create-test")) == 1
         assert len(spawned) == 1
-        events = await service.agent_task_repository.agent_events_after(first["id"])
+        events = await services.agent_task_repository.agent_events_after(first["id"])
         assert [event["kind"] for event in events] == ["task.started"]
 
         with pytest.raises(ValueError, match="idempotency_key_reused"):
-            await service.create_agent_task(
+            await services.agent_tasks.create_agent_task(
                 task_id=f"create-conflict-{suffix}",
                 learner_id="create-test",
                 prompt="解释 TCP 拥塞控制",
                 resources=[{"type": "file", "id": "file-1"}],
                 idempotency_key=key,
             )
-        assert len(await service.agent_task_repository.list_agent_tasks("create-test")) == 1
+        assert len(await services.agent_task_repository.list_agent_tasks("create-test")) == 1
         assert len(spawned) == 1
     finally:
-        await service.db.dispose()
+        await services.db.dispose()
 
 
 @pytest.mark.asyncio
@@ -302,24 +303,24 @@ async def test_agent_task_claim_is_atomic(tmp_path: Path) -> None:
         database_url=f"sqlite+aiosqlite:///./var/agent-claim-{suffix}.sqlite3",
         agent_task_dir=tmp_path,
     )
-    service = Service(settings)
-    await service.db.create_all()
+    services = ApplicationServices(settings)
+    await services.db.create_all()
     try:
-        await service.learner_repository.ensure_learner("claim-test")
-        await service.agent_task_repository.create_agent_task(
+        await services.learner_repository.ensure_learner("claim-test")
+        await services.agent_task_repository.create_agent_task(
             id=f"claim-task-{suffix}",
             learner_id="claim-test",
             prompt="解释 TCP",
             graph_version="test@1",
             status="queued",
         )
-        first = await service.agent_task_repository.claim_agent_task(f"claim-task-{suffix}", "claim-test")
-        second = await service.agent_task_repository.claim_agent_task(f"claim-task-{suffix}", "claim-test")
+        first = await services.agent_task_repository.claim_agent_task(f"claim-task-{suffix}", "claim-test")
+        second = await services.agent_task_repository.claim_agent_task(f"claim-task-{suffix}", "claim-test")
         assert first is not None
         assert first.status == "running"
         assert second is None
     finally:
-        await service.db.dispose()
+        await services.db.dispose()
 
 
 def test_visual_artifact_is_task_scoped_and_single_file_only(tmp_path: Path) -> None:

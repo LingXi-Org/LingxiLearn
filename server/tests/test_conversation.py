@@ -1,9 +1,9 @@
 from pathlib import Path
 
+from lingxilearn.application.runtime_adapter import _ProviderEventRuntime
 from lingxilearn.runtime.candidates import WorldState
 from lingxilearn.runtime.contracts import CandidateAction
 from lingxilearn.runtime.orchestrator import _repair
-from lingxilearn.service import _ProviderEventRuntime
 from lingxilearn.state.capabilities import Capability
 from lingxilearn.state.gain import ProfileView
 from lingxilearn.state.session_state import Goal
