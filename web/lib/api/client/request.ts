@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import type { AnyApiRouteContract, ContractJsonResponse } from '@/lib/api/contracts'
 import { API_BASE } from '@/lib/api/config'
+import { authorizedFetch } from '@/lib/api/transport/http'
 
 type MaybeField<Key extends string, Value> = [Value] extends [undefined]
   ? { [K in Key]?: never }
@@ -122,11 +123,10 @@ export async function requestRaw<C extends AnyApiRouteContract>(
       body = JSON.stringify(input.body)
     }
   }
-  const response = await fetch(url, {
+  const response = await authorizedFetch(url, {
     method: contract.method,
     headers,
     body,
-    credentials: 'include',
     signal: input.signal,
     cache: options.cache,
   })
