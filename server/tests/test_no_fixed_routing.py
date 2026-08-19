@@ -25,8 +25,13 @@ lifecycle refactor (issues #35, #59).  ``loop.py`` is a thin
 backward-compatible re-export.
 """
 
-DISPATCH = PACKAGE / "runtime" / "dispatch.py"
-"""The only module allowed to turn a capability into a call."""
+DISPATCH = PACKAGE / "runtime" / "dispatch"
+"""The dispatch package: the only place a capability becomes a call.
+
+Historically this was the single module ``runtime/dispatch.py``; issue #60
+split it into a package whose pipeline composition lives in
+``dispatch/dispatcher.py`` with focused owners alongside it.
+"""
 
 LOOP_CONTROL_NODES = {
     "interpret_goal",
@@ -62,6 +67,12 @@ def _modules() -> list[Path]:
 
 def _tree(path: Path) -> ast.Module:
     return ast.parse(path.read_text(encoding="utf-8"))
+
+
+def _is_dispatch_module(path: Path) -> bool:
+    """Dispatch-package membership: the package directory or anything inside."""
+
+    return path == DISPATCH or DISPATCH in path.parents
 
 
 def test_the_deleted_routing_machinery_has_not_come_back() -> None:
@@ -135,7 +146,7 @@ def test_no_module_branches_on_a_routing_field_to_pick_what_runs() -> None:
 
     offenders: list[str] = []
     for path in _modules():
-        if path == DISPATCH:
+        if _is_dispatch_module(path):
             continue
         for node in ast.walk(_tree(path)):
             if not isinstance(node, ast.If):
@@ -227,10 +238,18 @@ def test_the_provider_table_is_populated_by_registration_not_by_a_literal() -> N
 def test_providers_are_resolved_through_the_registry() -> None:
     """Dispatch must look a provider up, not import one directly."""
 
-    source = DISPATCH.read_text(encoding="utf-8")
-    assert "resolve(" in source
-    assert "skill_registry" in source or "skills" in source
+    sources = {
+        path: path.read_text(encoding="utf-8")
+        for path in sorted(DISPATCH.rglob("*.py"))
+        if "__pycache__" not in path.parts
+    }
+    assert sources, "the dispatch package must exist and contain modules"
+    combined = "\n".join(sources.values())
+    assert "resolve(" in combined
+    assert "skill_registry" in combined or "skills" in combined
     for module in ("providers.content", "providers.teaching", "providers.assessment"):
-        assert module not in source, (
-            f"dispatch imports {module} directly, which pins a capability to an implementation"
-        )
+        for path, source in sources.items():
+            assert module not in source, (
+                f"{path.relative_to(PACKAGE)} imports {module} directly, "
+                "which pins a capability to an implementation"
+            )
