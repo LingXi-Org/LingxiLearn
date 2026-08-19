@@ -12,10 +12,10 @@ import {
   Tooltip,
   toast,
 } from '@sim/emcn'
-import { createLogger } from '@/lib/logger'
 import { useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
-import { copilotToolPermissionContract } from '@/lib/api/contracts/copilot'
+import { schedulePermissionContract } from '@/lib/api/contracts/agent-interactions'
+import { createLogger } from '@/lib/logger'
 import { generalSettingsKeys } from '@/hooks/queries/general-settings'
 import { useToolPermissionStore } from '@/stores/tool-permission/store'
 
@@ -101,8 +101,8 @@ export function ToolPermissionCard({
       setSubmitting(decision)
       markSubmitted(ids)
       try {
-        await requestJson(copilotToolPermissionContract, {
-          body: { decisions: ids.map((id) => ({ toolCallId: id, decision })) },
+        await requestJson(schedulePermissionContract, {
+          body: { decisions: ids.map((id) => ({ proposalId: id, decision })) },
         })
         if (decision === 'always_allow') {
           void queryClient.invalidateQueries({ queryKey: generalSettingsKeys.settings() })

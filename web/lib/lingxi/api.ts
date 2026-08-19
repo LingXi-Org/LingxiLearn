@@ -131,7 +131,6 @@ export const api = {
   confirmAgentWork: agentTasksClient.confirmAgentWork,
   ackAgentDelivery: agentTasksClient.ackAgentDelivery,
   agentArtifactUrl: agentTasksClient.agentArtifactUrl,
-  copilotToolPermission: agentTasksClient.copilotToolPermission,
   executionSnapshot: agentTasksClient.getExecutionSnapshot,
   logByExecution: agentTasksClient.getLogByExecution,
   recordLearningEvent: agentTasksClient.recordLearningEvent,

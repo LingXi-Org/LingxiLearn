@@ -18,13 +18,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..application import agent_task_create_payload_digest
 from ..contracts.rest_models import (
-    AckDeliveryResponse,
     AgentEvidenceResponse,
     AgentMessageResponse,
     AgentTaskCancelResponse,
@@ -37,15 +36,11 @@ from ..contracts.rest_models import (
     AgentTaskRestoreResponse,
     AgentTaskSnapshotResponse,
     AnswerResponse,
-    ConfirmWorkResponse,
     ContextResponse,
-    CopilotToolPermissionResponse,
-    InteractionAnswerResponse,
     LearningProfileResponse,
     MasteryResponse,
     PreferencesResponse,
     ProfileChangeResponse,
-    QuizSubmissionResponse,
     SessionCreateResponse,
     SessionSnapshotResponse,
 )
@@ -55,32 +50,6 @@ from .dependencies import current_learner_context, not_found, services_of
 router = APIRouter(prefix="/api")
 
 TERMINAL = {"done", "failed", "cancelled"}
-
-@router.post("/copilot/tool-permission", response_model=CopilotToolPermissionResponse)
-async def copilot_tool_permission(
-    body: dict[str, Any],
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    """Use Sim's native permission card contract for agent schedule proposals."""
-
-    decisions = body.get("decisions") if isinstance(body, dict) else None
-    if (
-        not isinstance(decisions, list)
-        or not decisions
-        or any(not isinstance(item, dict) for item in decisions)
-    ):
-        raise HTTPException(status_code=422, detail="At least one decision is required")
-    services = services_of(request)
-    try:
-        results = await services.agent_tasks.decide_schedule_permission(
-            learner_id=context.learner_id,
-            decisions=decisions,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"success": True, "results": results}
-
 
 async def _validated_task_context(
     request: Request,
@@ -146,32 +115,6 @@ class AgentMessage(BaseModel):
     resource_refs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     skill_ids: list[str] = Field(default_factory=list, max_length=50)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
-
-
-class AgentInteractionAnswerRequest(BaseModel):
-    """Structured answers for one blocking interaction (issue #18 §10.4)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    answers: list[dict[str, Any]] = Field(min_length=1, max_length=20)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
-
-
-class QuizSubmissionBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    submission_id: str = Field(min_length=1, max_length=128)
-    answers: dict[str, Any]
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
-
-
-class AgentConfirmation(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    work_item_id: str = Field(min_length=1, max_length=128)
-    approve: bool
-    payload_digest: str = Field(min_length=1, max_length=128)
-    idempotency_key: str = Field(min_length=1, max_length=192)
 
 
 @router.post("/sessions", status_code=201, response_model=SessionCreateResponse)
@@ -339,40 +282,6 @@ async def post_agent_message(
     }
 
 
-@router.post(
-    "/agent-tasks/{task_id}/interactions/{interaction_id}/answers",
-    status_code=202,
-    response_model=InteractionAnswerResponse,
-)
-async def answer_agent_interaction(
-    task_id: str,
-    interaction_id: str,
-    body: AgentInteractionAnswerRequest,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    """Answer a blocking interaction; the server resumes the paused checkpoint."""
-
-    try:
-        return await services_of(request).agent_tasks.answer_agent_interaction(
-            task_id,
-            interaction_id,
-            answers=body.answers,
-            idempotency_key=body.idempotency_key or "",
-            learner_id=context.learner_id,
-        )
-    except KeyError as exc:
-        raise not_found() from exc
-    except ValueError as exc:
-        # Reusing a key with a different answer is a conflict, not a bad
-        # request — same semantics as the create-task idempotency contract.
-        detail = str(exc)
-        raise HTTPException(
-            status_code=409 if detail == "idempotency_key_reused" else 400,
-            detail=detail,
-        ) from exc
-
-
 @router.patch("/agent-tasks/{task_id}", response_model=AgentTaskMetaResponse)
 async def patch_agent_task(
     task_id: str,
@@ -441,83 +350,6 @@ async def cancel_agent_task(
         return await services_of(request).agent_tasks.cancel_agent_task(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
-
-
-@router.post(
-    "/agent-tasks/{task_id}/quiz-submissions",
-    status_code=202,
-    response_model=QuizSubmissionResponse,
-)
-async def submit_agent_quiz(
-    task_id: str,
-    body: QuizSubmissionBody,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    services = services_of(request)
-    try:
-        return await services.agent_tasks.submit_agent_quiz(
-            task_id,
-            submission_id=body.submission_id,
-            answers=body.answers,
-            learner_id=context.learner_id,
-            idempotency_key=body.idempotency_key,
-        )
-    except KeyError as exc:
-        raise not_found() from exc
-    except ValueError as exc:
-        detail = str(exc)
-        raise HTTPException(
-            status_code=409
-            if detail in {"already_submitted", "task_not_waiting:awaiting_user"}
-            or detail.startswith("task_not_waiting")
-            else 400,
-            detail=detail,
-        ) from exc
-
-
-@router.post(
-    "/agent-tasks/{task_id}/confirmations", status_code=202, response_model=ConfirmWorkResponse
-)
-async def confirm_agent_work(
-    task_id: str,
-    body: AgentConfirmation,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    try:
-        return await services_of(request).agent_tasks.confirm_agent_work(
-            task_id,
-            work_item_id=body.work_item_id,
-            approve=body.approve,
-            payload_digest=body.payload_digest,
-            idempotency_key=body.idempotency_key,
-            learner_id=context.learner_id,
-        )
-    except KeyError as exc:
-        raise not_found() from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-
-@router.post(
-    "/agent-tasks/{task_id}/delivery/{artifact}/ack", response_model=AckDeliveryResponse
-)
-async def ack_agent_delivery(
-    task_id: str,
-    artifact: str,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-) -> dict[str, Any]:
-    try:
-        return await services_of(request).agent_tasks.ack_delivery(
-            task_id, artifact, learner_id=context.learner_id, idempotency_key=idempotency_key
-        )
-    except KeyError as exc:
-        raise not_found() from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/agent-tasks/{task_id}/events", response_model=AgentTaskEventsResponse)
