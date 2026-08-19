@@ -25,7 +25,6 @@ interface ChunkContextMenuProps {
   disableDelete?: boolean
   disableAddChunk?: boolean
   disableEdit?: boolean
-  isConnectorDocument?: boolean
   selectedCount?: number
   enabledCount?: number
   disabledCount?: number
@@ -52,7 +51,6 @@ export function ChunkContextMenu({
   disableDelete = false,
   disableAddChunk = false,
   disableEdit = false,
-  isConnectorDocument = false,
   selectedCount = 1,
   enabledCount = 0,
   disabledCount = 0,
@@ -110,7 +108,7 @@ export function ChunkContextMenu({
             {!isMultiSelect && onEdit && (
               <DropdownMenuItem disabled={disableEdit} onSelect={onEdit}>
                 <Pencil />
-                {isConnectorDocument ? 'View' : 'Edit'}
+                Edit
               </DropdownMenuItem>
             )}
             {!isMultiSelect && onCopyContent && (
