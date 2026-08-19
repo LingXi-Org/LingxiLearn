@@ -36,8 +36,6 @@ export {
   toolsMetadataMock,
   toolsUtilsMock,
 } from './blocks.mock'
-// Copilot HTTP mocks (for @/lib/copilot/request/http)
-export { copilotHttpMock, copilotHttpMockFns } from './copilot-http.mock'
 // Database mocks
 export {
   createMockSql,
