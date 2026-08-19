@@ -28,5 +28,9 @@ check: ## Run frontend type and style checks
 	cd web && bun run lint:check
 	bash scripts/check-workspace-boundaries.sh web
 
+check-contracts: ## Verify OpenAPI export and generated Zod contracts are in sync
+	python scripts/export_openapi.py --check
+	cd web && bun run check:contracts
+
 clean: ## Remove generated frontend and Python cache directories
 	pwsh -NoProfile -Command "foreach ($$path in @('web/.next','web/out','web/node_modules','web/.cache','server/.pytest_cache','server/.ruff_cache')) { if (Test-Path -LiteralPath $$path) { [System.IO.Directory]::Delete((Resolve-Path -LiteralPath $$path).Path, $$true) } }"
