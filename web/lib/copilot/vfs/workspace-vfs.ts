@@ -1,5 +1,4 @@
 import { trace } from '@opentelemetry/api'
-import type { Principal } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import {
   chat as chatTable,
@@ -12,10 +11,9 @@ import {
   workflowMcpServer,
   workflowMcpTool,
 } from '@sim/db/schema'
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
 import { and, desc, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm'
 import { listApiKeys } from '@/lib/api-key/service'
+import type { Principal } from '@/lib/auth/principal'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'
 import {
   buildWorkspaceContextMd,
@@ -120,6 +118,8 @@ import {
   listArchivedKnowledgeBases,
   listKnowledgeBaseCatalog,
 } from '@/lib/knowledge/application/knowledge-bases'
+import { DEFAULT_EMBEDDING_MODEL, EMBEDDING_DIMENSIONS } from '@/lib/knowledge/embedding-models'
+import { createLogger } from '@/lib/logger'
 import { validateMermaidSource } from '@/lib/mermaid/validate'
 import { isBlockTypeAccessControlExempt } from '@/lib/permission-groups/block-access'
 import { intersectIntegrationAllowlists } from '@/lib/permission-groups/integration-allowlist'
@@ -131,6 +131,7 @@ import type {
   WorkspaceFileSecretProvenanceIdentity,
 } from '@/lib/uploads/contexts/workspace/workspace-file-secret-provenance'
 import { isImageFileType, resolveEffectiveMimeType } from '@/lib/uploads/utils/file-utils'
+import { toError } from '@/lib/utils/errors'
 import { listCustomBlocksWithInputsForWorkspace } from '@/lib/workflows/custom-blocks/operations'
 import { getCustomToolById } from '@/lib/workflows/custom-tools/operations'
 import { checkNeedsRedeployment } from '@/lib/workflows/deployment-status'
@@ -872,7 +873,7 @@ export class WorkspaceVFS {
             // Per-viewer gating happens HERE, not in the shared builder: files
             // owned by blocks hidden for this viewer are skipped at stamp time.
             const configuredAllowedIntegrations = intersectIntegrationAllowlists(
-              permissionConfig?.allowedIntegrations ?? null,
+              permissionConfig?.config.allowedIntegrations ?? null,
               getAllowedIntegrationsFromEnv()
             )
             const allowedIntegrationTypes = configuredAllowedIntegrations
@@ -1825,8 +1826,8 @@ export class WorkspaceVFS {
           id: kb.id,
           name: kb.name,
           description: kb.description,
-          embeddingModel: kb.embeddingModel,
-          embeddingDimension: kb.embeddingDimension,
+          embeddingModel: kb.embeddingModel ?? DEFAULT_EMBEDDING_MODEL,
+          embeddingDimension: kb.embeddingDimension ?? EMBEDDING_DIMENSIONS,
           tokenCount: kb.tokenCount,
           createdAt: kb.createdAt,
           updatedAt: kb.updatedAt,
@@ -2453,8 +2454,8 @@ export class WorkspaceVFS {
             id: kb.id,
             name: kb.name,
             description: kb.description,
-            embeddingModel: kb.embeddingModel,
-            embeddingDimension: kb.embeddingDimension,
+            embeddingModel: kb.embeddingModel ?? DEFAULT_EMBEDDING_MODEL,
+            embeddingDimension: kb.embeddingDimension ?? EMBEDDING_DIMENSIONS,
             tokenCount: kb.tokenCount,
             createdAt: kb.createdAt,
             updatedAt: kb.updatedAt,
@@ -2500,7 +2501,7 @@ export class WorkspaceVFS {
           permissionConfigPromise,
         ])
       const configuredAllowedIntegrations = intersectIntegrationAllowlists(
-        permissionConfig?.allowedIntegrations ?? null,
+        permissionConfig?.config.allowedIntegrations ?? null,
         getAllowedIntegrationsFromEnv()
       )
       const credentialVisibility = createIntegrationCredentialVisibility({

@@ -10,7 +10,6 @@ import { listWorkspacesForViewer } from '@/lib/workspaces/list'
 import { getWorkspacePermissionsForAuthorizedViewer } from '@/lib/workspaces/permissions/utils'
 import {
   MOTHERSHIP_CHAT_LIST_STALE_TIME,
-  mapChat,
   mothershipChatKeys,
 } from '@/hooks/queries/mothership-chats'
 import {
@@ -88,7 +87,15 @@ export async function prefetchWorkspaceSidebar(
             queryKey: mothershipChatKeys.list(workspaceId, 'active'),
             queryFn: async () => {
               const data = await listMothershipChats(userId, workspaceId)
-              return data.map(mapChat)
+              return data.map((chat) => ({
+                id: chat.id,
+                name: chat.title ?? '新学习任务',
+                updatedAt: new Date(chat.updatedAt),
+                isActive: chat.activeStreamId !== null,
+                isUnread: false,
+                isPinned: chat.pinned,
+                deletedAt: chat.deletedAt ? new Date(chat.deletedAt) : null,
+              }))
             },
             staleTime: MOTHERSHIP_CHAT_LIST_STALE_TIME,
           }),

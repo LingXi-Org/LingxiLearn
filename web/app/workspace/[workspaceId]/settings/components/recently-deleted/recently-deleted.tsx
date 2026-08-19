@@ -141,7 +141,7 @@ const TYPE_LABEL: Record<Exclude<ResourceType, 'all'>, string> = {
 
 function ResourceIcon({ resource }: { resource: DeletedResource }) {
   const mothershipType = RESOURCE_TYPE_TO_MOTHERSHIP[resource.type]
-  const config = RESOURCE_REGISTRY[mothershipType]
+  const config = RESOURCE_REGISTRY[mothershipType] ?? RESOURCE_REGISTRY.generic
   return config.renderTabIcon(
     { type: mothershipType, id: resource.id, title: resource.name },
     ICON_CLASS

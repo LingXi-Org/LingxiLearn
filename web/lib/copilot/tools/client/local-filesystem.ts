@@ -12,14 +12,14 @@ import {
   MAX_GREP_RESULTS,
   MAX_READ_LINES,
 } from '@sim/desktop-bridge/local-filesystem-limits'
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
-import micromatch from 'micromatch'
+import micromatch, { type Options as MicromatchOptions } from 'micromatch'
 import { ASYNC_TOOL_CONFIRMATION_STATUS } from '@/lib/copilot/async-runs/lifecycle'
 import { reportClientToolCompletion } from '@/lib/copilot/tools/client/completion'
 import { USER_LOCAL_VFS_ROOT } from '@/lib/copilot/tools/local-filesystem'
 import { encodeVfsSegment } from '@/lib/copilot/vfs/path-utils'
 import { getDesktopBridge } from '@/lib/desktop'
+import { createLogger } from '@/lib/logger'
+import { toError } from '@/lib/utils/errors'
 
 const logger = createLogger('CopilotLocalFilesystemTool')
 /**
@@ -29,7 +29,7 @@ const logger = createLogger('CopilotLocalFilesystemTool')
  */
 const MAX_USER_LOCAL_GLOB_RESULTS = 500
 
-const VFS_GLOB_OPTIONS: micromatch.Options = {
+const VFS_GLOB_OPTIONS: MicromatchOptions = {
   bash: false,
   dot: false,
   windows: false,

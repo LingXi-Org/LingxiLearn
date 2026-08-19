@@ -2,14 +2,13 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Temporary until #51/#61 remove clean-install-unreachable Sim modules whose
+  // undeclared optional dependencies prevent Next from checking the real closure.
+  typescript: { ignoreBuildErrors: true },
   trailingSlash: false,
   poweredByHeader: false,
   images: { unoptimized: true },
   turbopack: { root: import.meta.dirname },
-  // The imported upstream graph includes server-only Sim modules which are
-  // intentionally inert in Lingxi. The dedicated frontend tsconfig performs
-  // the source-closure parse check; Next must still emit the standalone app.
-  typescript: { ignoreBuildErrors: true },
   experimental: {
     turbopackFileSystemCacheForDev: true,
     turbopackFileSystemCacheForBuild: false,

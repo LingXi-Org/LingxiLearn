@@ -283,7 +283,7 @@ export function CustomToolCodeField({
         {showEnvVars && (
           <EnvVarDropdown
             visible={showEnvVars}
-            onSelect={(newValue) => {
+            onSelect={(newValue: string) => {
               onChange(newValue)
               setShowEnvVars(false)
             }}
@@ -307,7 +307,7 @@ export function CustomToolCodeField({
         {showTags && blockId && (
           <TagDropdown
             visible={showTags}
-            onSelect={(newValue) => {
+            onSelect={(newValue: string) => {
               onChange(newValue)
               setShowTags(false)
               setActiveSourceBlockId(null)

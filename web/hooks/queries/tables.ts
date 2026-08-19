@@ -5,7 +5,6 @@
  */
 
 import { toast } from '@sim/emcn'
-import { createLogger } from '@/lib/logger'
 import {
   type InfiniteData,
   infiniteQueryOptions,
@@ -88,8 +87,10 @@ import {
 } from '@/lib/api/contracts/tables'
 import type { V2TableImportSource, V2TableImportTarget } from '@/lib/api/contracts/v2/tables'
 import { buildUpgradeHref } from '@/lib/billing/upgrade-reasons'
-import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import { api as lingxiApi } from '@/lib/lingxi/api'
+import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
+import type { WorkspaceTableItem } from '@/lib/lingxi/types'
+import { createLogger } from '@/lib/logger'
 import type {
   CsvHeaderMapping,
   EnrichmentRunDetail,
@@ -106,13 +107,14 @@ import type {
   WorkflowGroupOutput,
 } from '@/lib/table'
 import { getColumnId } from '@/lib/table/column-keys'
-import { TABLE_LIMITS } from '@/lib/table/constants'
+import { COLUMN_TYPES, TABLE_LIMITS } from '@/lib/table/constants'
 import {
   areGroupDepsSatisfied,
   isExecInFlight,
   optimisticallyScheduleNewlyEligibleGroups,
 } from '@/lib/table/deps'
 import { sanitizeName } from '@/lib/table/import'
+import { type ColumnDefinition, UNLOCKED_TABLE_LOCKS } from '@/lib/table/types'
 import type { UploadProgressEvent } from '@/lib/uploads/client/types'
 import { uploadFileSession } from '@/lib/uploads/client/upload-session'
 import { useTimezone } from '@/hooks/queries/general-settings'
@@ -150,6 +152,36 @@ interface RowMutationContext {
   tableId: string
 }
 
+function isColumnType(value: unknown): value is ColumnDefinition['type'] {
+  return typeof value === 'string' && COLUMN_TYPES.some((candidate) => candidate === value)
+}
+
+function toTableDefinition(table: WorkspaceTableItem): TableDefinition {
+  const rawColumns = table.schema?.columns ?? table.columns ?? []
+  const columns: ColumnDefinition[] = rawColumns.map((column, index) => ({
+    ...(typeof column.id === 'string' ? { id: column.id } : {}),
+    name:
+      typeof column.name === 'string' && column.name.trim().length > 0
+        ? column.name
+        : `Column ${index + 1}`,
+    type: isColumnType(column.type) ? column.type : 'string',
+  }))
+
+  return {
+    id: table.id,
+    name: table.name,
+    description: table.description ?? null,
+    schema: { columns },
+    rowCount: table.rowCount ?? table.totalRows ?? 0,
+    workspaceId: LINGXI_WORKSPACE_ID,
+    folderId: null,
+    createdBy: null,
+    locks: UNLOCKED_TABLE_LOCKS,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  }
+}
+
 type UpdateTableRowParams = Pick<TableRowParamsInput, 'rowId'> &
   Omit<UpdateTableRowBodyInput, 'workspaceId' | 'data'> & {
     data: Record<string, unknown>
@@ -167,7 +199,7 @@ async function fetchTable(
 ): Promise<TableDefinition> {
   if (workspaceId === LINGXI_WORKSPACE_ID) {
     const response = await lingxiApi.workspaceTable(tableId)
-    return response.data.table as TableDefinition
+    return toTableDefinition(response.data.table)
   }
   const response = await requestJson(getTableContract, {
     params: { tableId },
@@ -426,10 +458,7 @@ async function bumpRunState(
  * SSE `kind: 'cell'` and `kind: 'dispatch'` events incrementally update the
  * same cache.
  */
-export function useTableRunState(
-  tableId: string | undefined,
-  workspaceId?: string
-) {
+export function useTableRunState(tableId: string | undefined, workspaceId?: string) {
   return useQuery({
     queryKey: tableKeys.activeDispatches(tableId ?? ''),
     queryFn: ({ signal }) => fetchTableRunState(tableId as string, signal),

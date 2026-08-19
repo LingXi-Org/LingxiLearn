@@ -1,4 +1,3 @@
-import { toError } from '@/lib/utils/errors'
 import type { ExecutionContext, ToolCallResult } from '@/lib/copilot/request/types'
 import { ensureWorkspaceAccess } from '@/lib/copilot/tools/handlers/access'
 import { getAllowedIntegrationsFromEnv } from '@/lib/core/config/env-flags'
@@ -9,6 +8,7 @@ import { isOAuthServiceAllowedByIntegrationTypes } from '@/lib/integrations/avai
 import { isOAuthServiceDeploymentAvailable } from '@/lib/integrations/availability.server'
 import { getAllOAuthServices } from '@/lib/oauth/utils'
 import { intersectIntegrationAllowlists } from '@/lib/permission-groups/integration-allowlist'
+import { toError } from '@/lib/utils/errors'
 import type { WorkspaceAccess } from '@/lib/workspaces/permissions/utils'
 import { getUserPermissionConfig } from '@/ee/access-control/utils/permission-check'
 
@@ -50,7 +50,7 @@ export async function executeOAuthGetAuthLink(
     )
     const permissionConfig = await getUserPermissionConfig(context.userId, context.workspaceId)
     const configuredAllowedIntegrations = intersectIntegrationAllowlists(
-      permissionConfig?.allowedIntegrations ?? null,
+      permissionConfig?.config.allowedIntegrations ?? null,
       getAllowedIntegrationsFromEnv()
     )
     const allowedIntegrationTypes = configuredAllowedIntegrations

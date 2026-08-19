@@ -64,6 +64,8 @@ export function useFilesRowMenu({
   onBulkDelete,
   downloads,
   deleteFlow,
+  pinnedFolderIds,
+  pinnedFileIds,
   togglePin,
   descendantIndex,
   onMoved,

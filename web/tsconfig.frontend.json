@@ -16,10 +16,5 @@
     "lib/lingxi/**/*.ts",
     "lib/lingxi/**/*.tsx"
   ],
-  "exclude": [
-    "node_modules",
-    ".next",
-    "**/*.test.ts",
-    "**/*.test.tsx"
-  ]
+  "exclude": ["node_modules", ".next", "**/*.test.ts", "**/*.test.tsx"]
 }

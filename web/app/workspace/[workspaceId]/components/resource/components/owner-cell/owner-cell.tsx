@@ -36,13 +36,14 @@ const OwnerAvatar = memo(function OwnerAvatar({ name, image }: OwnerAvatarProps)
  */
 export function ownerCell(
   userId: string | null | undefined,
-  members?: WorkspaceMember[] | Map<string, WorkspaceMember>
+  members?: WorkspaceMember[] | ReadonlyMap<string, WorkspaceMember>
 ): ResourceCell {
   if (!userId) return { label: null }
   if (!members) return { label: null }
 
-  const member =
-    members instanceof Map ? members.get(userId) : members.find((m) => m.userId === userId)
+  const member = Array.isArray(members)
+    ? members.find((m) => m.userId === userId)
+    : members.get(userId)
   if (!member) return { label: null }
 
   return {

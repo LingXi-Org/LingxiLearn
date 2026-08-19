@@ -1,7 +1,5 @@
 import { db } from '@sim/db'
 import { account, user } from '@sim/db/schema'
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
 import { eq } from 'drizzle-orm'
 import { decodeJwt } from 'jose'
 import { createPermissionError, verifyWorkflowAccess } from '@/lib/copilot/auth/permissions'
@@ -10,12 +8,14 @@ import { getAllowedIntegrationsFromEnv } from '@/lib/core/config/env-flags'
 import { getAccessibleOAuthCredentials } from '@/lib/credentials/environment'
 import { getPersonalAndWorkspaceEnv } from '@/lib/environment/utils'
 import { createIntegrationCredentialVisibility } from '@/lib/integrations/credential-visibility.server'
+import { createLogger } from '@/lib/logger'
 import {
   canonicalizeServiceProviderId,
   credentialProviderMatchesService,
   getAllOAuthServices,
 } from '@/lib/oauth'
 import { intersectIntegrationAllowlists } from '@/lib/permission-groups/integration-allowlist'
+import { toError } from '@/lib/utils/errors'
 import { checkWorkspaceAccess, type WorkspaceAccess } from '@/lib/workspaces/permissions/utils'
 import { overlayVisibility } from '@/blocks/visibility/context'
 import { getUserPermissionConfig } from '@/ee/access-control/utils/permission-check'
@@ -80,7 +80,7 @@ export const getCredentialsServerTool: BaseServerTool<GetCredentialsParams, any>
 
     const permissionConfig = workspaceId ? await getUserPermissionConfig(userId, workspaceId) : null
     const configuredAllowedIntegrations = intersectIntegrationAllowlists(
-      permissionConfig?.allowedIntegrations ?? null,
+      permissionConfig?.config.allowedIntegrations ?? null,
       getAllowedIntegrationsFromEnv()
     )
     const allowedIntegrationTypes = configuredAllowedIntegrations

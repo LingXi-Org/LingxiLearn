@@ -1,7 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { createLogger } from '@/lib/logger'
 import { isLoopbackHostname } from '@sim/security/hostnames'
-import { getErrorMessage } from '@/lib/utils/errors'
 import {
   keepPreviousData,
   useMutation,
@@ -28,6 +26,7 @@ import {
   updateMcpServerContract,
 } from '@/lib/api/contracts/mcp'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
+import { createLogger } from '@/lib/logger'
 import { sanitizeForHttp, sanitizeHeaders } from '@/lib/mcp/shared'
 import type {
   McpAuthType,
@@ -36,6 +35,7 @@ import type {
   McpTransport,
   StoredMcpTool,
 } from '@/lib/mcp/types'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { workflowMcpServerKeys } from '@/hooks/queries/workflow-mcp-servers'
 
 const logger = createLogger('McpQueries')
@@ -536,19 +536,23 @@ const SSE_KEY = '__mcp_sse_connections' as const
 type SseEntry = { source: EventSource; refs: number }
 
 const mcpGlobal = globalThis as Record<string, unknown>
-let sseConnections = mcpGlobal[SSE_KEY] as Map<string, SseEntry> | undefined
-if (!sseConnections) {
-  sseConnections = new Map<string, SseEntry>()
-  mcpGlobal[SSE_KEY] = sseConnections
-}
+const sseConnections = (() => {
+  const existing = mcpGlobal[SSE_KEY]
+  if (existing instanceof Map) return existing as Map<string, SseEntry>
+  const created = new Map<string, SseEntry>()
+  mcpGlobal[SSE_KEY] = created
+  return created
+})()
 
 /** Per-workspace flag: has this session ever held a live SSE subscription for it? */
 const SSE_SUBSCRIBED_KEY = '__mcp_sse_subscribed' as const
-let sseEverSubscribed = mcpGlobal[SSE_SUBSCRIBED_KEY] as Set<string> | undefined
-if (!sseEverSubscribed) {
-  sseEverSubscribed = new Set<string>()
-  mcpGlobal[SSE_SUBSCRIBED_KEY] = sseEverSubscribed
-}
+const sseEverSubscribed = (() => {
+  const existing = mcpGlobal[SSE_SUBSCRIBED_KEY]
+  if (existing instanceof Set) return existing as Set<string>
+  const created = new Set<string>()
+  mcpGlobal[SSE_SUBSCRIBED_KEY] = created
+  return created
+})()
 
 /** Subscribes to `tools_changed` SSE events and invalidates the affected query keys. */
 export function useMcpToolsEvents(workspaceId: string) {

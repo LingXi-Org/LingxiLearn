@@ -1,15 +1,15 @@
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
 import { z } from 'zod'
 import { getCopilotToolDescription } from '@/lib/copilot/tools/descriptions'
 import type { BaseServerTool } from '@/lib/copilot/tools/server/base-tool'
 import { getAllowedIntegrationsFromEnv, isHosted } from '@/lib/core/config/env-flags'
 import { isIntegrationDeploymentAvailableForVisibility } from '@/lib/integrations/availability.server'
+import { createLogger } from '@/lib/logger'
 import { getServiceAccountProviderForProviderId } from '@/lib/oauth/utils'
 import { isBlockTypeAccessControlExempt } from '@/lib/permission-groups/block-access'
 import { intersectIntegrationAllowlists } from '@/lib/permission-groups/integration-allowlist'
+import { toError } from '@/lib/utils/errors'
 import { isCustomBlockType } from '@/blocks/custom/build-config'
 import { getBlock } from '@/blocks/registry'
 import { AuthMode, type BlockConfig, isHiddenFromDisplay } from '@/blocks/types'
@@ -128,7 +128,7 @@ export const getBlocksMetadataServerTool: BaseServerTool<
         ? await getUserPermissionConfig(context.userId, context.workspaceId)
         : null
     const allowedIntegrations = intersectIntegrationAllowlists(
-      permissionConfig?.allowedIntegrations ?? null,
+      permissionConfig?.config.allowedIntegrations ?? null,
       getAllowedIntegrationsFromEnv()
     )
     const visibility = overlayVisibility()

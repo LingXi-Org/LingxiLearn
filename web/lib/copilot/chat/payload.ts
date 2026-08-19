@@ -1,7 +1,5 @@
 import type { BrowserKnownSession } from '@sim/browser-protocol'
-import { createLogger } from '@/lib/logger'
 import { isPermissionType, permissionSatisfies } from '@sim/platform-authz/predicates'
-import { toError } from '@/lib/utils/errors'
 import { LRUCache } from 'lru-cache'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
 import { isPaid } from '@/lib/billing/plan-helpers'
@@ -26,9 +24,11 @@ import {
   isIntegrationDeploymentAvailableForVisibility,
   isOAuthServiceDeploymentAvailable,
 } from '@/lib/integrations/availability.server'
+import { createLogger } from '@/lib/logger'
 import { intersectIntegrationAllowlists } from '@/lib/permission-groups/integration-allowlist'
 import { trackChatUpload } from '@/lib/uploads/contexts/workspace/workspace-file-manager'
 import { buildArchiveExtractGuidance, isArchiveFileName } from '@/lib/uploads/utils/file-utils'
+import { toError } from '@/lib/utils/errors'
 
 const logger = createLogger('CopilotChatPayload')
 const INTEGRATION_TOOL_SCHEMA_CACHE_TTL_MS = 5_000
@@ -201,7 +201,7 @@ async function buildIntegrationToolSchemasUncached(
     const { getUserPermissionConfig } = await import('@/ee/access-control/utils/permission-check')
     const permissionConfig = await getUserPermissionConfig(userId, workspaceId)
     allowedIntegrations = intersectIntegrationAllowlists(
-      permissionConfig?.allowedIntegrations ?? null,
+      permissionConfig?.config.allowedIntegrations ?? null,
       allowedIntegrations
     )
   }

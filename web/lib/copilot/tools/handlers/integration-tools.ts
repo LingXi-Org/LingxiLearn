@@ -26,7 +26,7 @@ export async function executeListIntegrationTools(
     ? await getUserPermissionConfig(context.userId, context.workspaceId)
     : null
   const allowedIntegrations = intersectIntegrationAllowlists(
-    permissionConfig?.allowedIntegrations ?? null,
+    permissionConfig?.config.allowedIntegrations ?? null,
     getAllowedIntegrationsFromEnv()
   )
   const all = filterExposedIntegrationTools(

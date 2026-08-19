@@ -188,14 +188,13 @@ export function isLingxiCapabilityIntegrated(capability: LingxiCapabilityKey): b
  * route availability can never drift: a workspace route segment exists in the
  * product if and only if an integrated capability declares it.
  */
-export const LINGXI_WORKSPACE_ROUTE_ALLOWLIST: readonly string[] = Object.values(
-  LingxiCapabilityManifest
+export const LINGXI_WORKSPACE_ROUTE_ALLOWLIST: readonly string[] = (
+  Object.values(LingxiCapabilityManifest) as LingxiCapability[]
+).flatMap((capability) =>
+  capability.status === 'integrated' && typeof capability.routeSegment === 'string'
+    ? [capability.routeSegment]
+    : []
 )
-  .filter(
-    (capability): capability is LingxiCapability & { routeSegment: string } =>
-      capability.status === 'integrated' && typeof capability.routeSegment === 'string'
-  )
-  .map((capability) => capability.routeSegment)
 
 export function lingxiNotIntegratedError(method: string, path: string): Error {
   return new Error(`未接入：${method} ${path} 不属于当前 LingxiGraph 后端能力`)

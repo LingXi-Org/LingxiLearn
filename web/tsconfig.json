@@ -66,6 +66,7 @@
     "lib/logger/**/*.ts",
     "lib/ui/**/*.ts",
     "lib/utils/**/*.ts",
+    "types/**/*.d.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": ["node_modules", ".next", "out", "dist", "**/*.test.ts", "**/*.test.tsx"]

@@ -16,7 +16,6 @@ import {
   Label,
   Trash,
 } from '@sim/emcn'
-import { createLogger } from '@/lib/logger'
 import {
   type AllTagSlot,
   FIELD_TYPE_LABELS,
@@ -25,6 +24,7 @@ import {
 } from '@/lib/knowledge/constants'
 import type { DocumentTag } from '@/lib/knowledge/tags/types'
 import type { DocumentData } from '@/lib/knowledge/types'
+import { createLogger } from '@/lib/logger'
 import {
   buildDocumentTags,
   buildTagSlotPayload,
@@ -364,7 +364,7 @@ export function DocumentTagsModal({
                               ...editTagForm,
                               displayName: value,
                               fieldType: newFieldType,
-                              value: getValueForFieldType(
+                              value: getValueForFieldTypeChange(
                                 newFieldType,
                                 editTagForm.fieldType,
                                 editTagForm.value

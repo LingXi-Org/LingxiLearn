@@ -307,8 +307,12 @@ export function isAgentTaskTerminal(task: AgentTaskSnapshot | null | undefined):
   if (!task) return false
   return (
     TERMINAL_AGENT_TASK_STATUSES.has(task.status) ||
-    ['delivered', 'failed', 'cancelled'].includes(task.turnStatus) ||
-    ['completed', 'failed', 'cancelled'].includes(task.goalStatus)
+    task.turnStatus === 'delivered' ||
+    task.turnStatus === 'failed' ||
+    task.turnStatus === 'cancelled' ||
+    task.goalStatus === 'completed' ||
+    task.goalStatus === 'failed' ||
+    task.goalStatus === 'cancelled'
   )
 }
 

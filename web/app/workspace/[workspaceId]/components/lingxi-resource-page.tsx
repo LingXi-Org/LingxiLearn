@@ -243,7 +243,7 @@ export function TablesPage() {
   const reload = useCallback(() => {
     void api
       .workspaceTables()
-      .then((result) => setTables(result.tables || result.data?.tables || []))
+      .then((result) => setTables(result.tables))
       .catch(() => setTables([]))
   }, [])
   useEffect(() => {
