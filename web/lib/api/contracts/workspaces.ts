@@ -250,34 +250,6 @@ export const workspaceOwnerBillingSchema = z.object({
 
 export type WorkspaceOwnerBilling = z.output<typeof workspaceOwnerBillingSchema>
 
-export const workspaceHostContextSchema = z.object({
-  workspace: z.object({
-    id: nonEmptyIdSchema,
-    name: z.string().min(1),
-    workspaceMode: workspaceModeSchema,
-    billedAccountUserId: nonEmptyIdSchema,
-  }),
-  hostOrganizationId: nonEmptyIdSchema.nullable(),
-  ownerBilling: workspaceOwnerBillingSchema,
-  viewer: z.object({
-    permission: workspacePermissionSchema,
-    isHostOrganizationMember: z.boolean(),
-    isHostOrganizationAdmin: z.boolean(),
-  }),
-})
-
-export type WorkspaceHostContext = z.output<typeof workspaceHostContextSchema>
-
-export const getWorkspaceHostContextContract = defineRouteContract({
-  method: 'GET',
-  path: '/api/workspaces/[id]/host-context',
-  params: workspaceParamsSchema,
-  response: {
-    mode: 'json',
-    schema: workspaceHostContextSchema,
-  },
-})
-
 export const workspaceCreditAvailabilitySchema = z.object({
   remainingDollars: z.number().nonnegative().nullable(),
   scope: z.enum(['payer', 'member', 'effective']),

@@ -13,16 +13,21 @@ Core ownership boundaries:
 - `execution`, `tools`, `workflows`: retained workflow/runtime compatibility.
 - `core`, `environment`, `logger`, `monitoring`, `utils`: shared platform code.
 
-Directories reported as `test-only` or `unreachable`—currently including
-`organizations`, `resources`, `skills`, and `ui`—are pending deletion-closure
-review and are not considered retained ownership merely because they exist.
-
 Run `bun run audit:lib-reachability` to produce the current machine-readable
 inventory. The graph starts from Next special entry files, Trigger background
-jobs, proxy/instrumentation files, and deployment configs. It follows static
+jobs, proxy/instrumentation files, deployment configs, and separately reported
+operational scripts. It follows static
 imports, literal dynamic imports (including webpack-commented imports), and
 CommonJS `require`/`require.resolve` calls. The report includes unresolved
 dynamic imports so they cannot silently justify deletion.
+
+Known non-literal imports are allowlisted by file and expression with a reason;
+the audit fails closed when a new unresolved dynamic import appears.
+
+Every surviving top-level directory must also have an entry in
+`ownership.json`. The audit fails when an owner/capability entry is missing or
+stale, so adding a new upstream-shaped directory cannot silently expand the
+application boundary.
 
 Classifications mean:
 
@@ -40,3 +45,6 @@ Migration readers must state an owner and executable deletion condition beside
 their implementation. Currently `lingxi/legacy/v0` is owned by Lingxi chat; its
 deletion condition is documented in that module and its production usage is
 recorded by the AgentTask event API.
+
+Top-level compatibility domains must also declare a concrete deletion condition
+in `ownership.json`. This is a migration ledger, not permanent ownership.

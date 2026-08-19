@@ -2,13 +2,13 @@
  * @vitest-environment node
  */
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceHostContext } from '@/lib/api/contracts/workspaces'
+import type { LingxiWorkspaceHostContext } from '@/lib/lingxi/types'
 import {
   canManageWorkspaceBilling,
   getWorkspaceUsageLimitAction,
 } from '@/lib/billing/workspace-permissions'
 
-const HOST_CONTEXT: WorkspaceHostContext = {
+const HOST_CONTEXT: LingxiWorkspaceHostContext = {
   workspace: {
     id: 'workspace-b',
     name: 'Workspace B',
@@ -76,7 +76,7 @@ describe('canManageWorkspaceBilling', () => {
 
 describe('getWorkspaceUsageLimitAction', () => {
   it('offers host billing management only to target-organization admins', () => {
-    const adminContext: WorkspaceHostContext = {
+    const adminContext: LingxiWorkspaceHostContext = {
       ...HOST_CONTEXT,
       viewer: {
         ...HOST_CONTEXT.viewer,

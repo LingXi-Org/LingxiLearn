@@ -1,5 +1,6 @@
-import type { WorkspaceHostContext, WorkspaceUsageGate } from '@/lib/api/contracts/workspaces'
+import type { WorkspaceUsageGate } from '@/lib/api/contracts/workspaces'
 import { isBillingEnabled } from '@/lib/core/config/env-flags'
+import type { LingxiWorkspaceHostContext } from '@/lib/lingxi/types'
 
 export type WorkspaceUsageLimitAction =
   | { type: 'manage-billing'; message: null }
@@ -9,7 +10,7 @@ export type WorkspaceUsageLimitAction =
  * Returns whether the viewer can change the routed workspace's payer billing.
  */
 export function canManageWorkspaceBilling(
-  hostContext: WorkspaceHostContext,
+  hostContext: LingxiWorkspaceHostContext,
   viewerUserId?: string | null
 ): boolean {
   if (hostContext.hostOrganizationId) {
@@ -29,7 +30,7 @@ export function canManageWorkspaceBilling(
  * offering a destination the server will refuse.
  */
 export function canViewWorkspaceBillingSettings(
-  hostContext: WorkspaceHostContext,
+  hostContext: LingxiWorkspaceHostContext,
   viewerUserId?: string | null
 ): boolean {
   return isBillingEnabled && canManageWorkspaceBilling(hostContext, viewerUserId)
@@ -41,7 +42,7 @@ export function canViewWorkspaceBillingSettings(
  * payer so they never receive a misleading personal upgrade instruction.
  */
 export function getWorkspaceUsageLimitAction(
-  hostContext: WorkspaceHostContext,
+  hostContext: LingxiWorkspaceHostContext,
   viewerUserId: string | null | undefined,
   gate: Pick<WorkspaceUsageGate, 'message' | 'scope'>
 ): WorkspaceUsageLimitAction {
