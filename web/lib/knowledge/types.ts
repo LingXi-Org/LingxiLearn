@@ -19,8 +19,8 @@ export interface KnowledgeBaseWithCounts {
   name: string
   description: string | null
   tokenCount: number
-  embeddingModel: string
-  embeddingDimension: number
+  embeddingModel?: string
+  embeddingDimension?: number
   chunkingConfig: ChunkingConfig
   createdAt: Date
   updatedAt: Date
@@ -110,8 +110,8 @@ export interface KnowledgeBaseData {
   name: string
   description: string | null
   tokenCount: number
-  embeddingModel: string
-  embeddingDimension: number
+  embeddingModel?: string
+  embeddingDimension?: number
   chunkingConfig: ExtendedChunkingConfig
   createdAt: string
   updatedAt: string

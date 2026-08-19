@@ -2039,16 +2039,6 @@
             "title": "Documentcount",
             "type": "integer"
           },
-          "embeddingDimension": {
-            "default": 0,
-            "title": "Embeddingdimension",
-            "type": "integer"
-          },
-          "embeddingModel": {
-            "default": "none",
-            "title": "Embeddingmodel",
-            "type": "string"
-          },
           "fileCount": {
             "default": 0,
             "title": "Filecount",
@@ -5194,11 +5184,6 @@
             "title": "Data",
             "type": "object"
           },
-          "executions": {
-            "additionalProperties": true,
-            "title": "Executions",
-            "type": "object"
-          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -6391,11 +6376,6 @@
             ],
             "title": "Folderid"
           },
-          "folderPath": {
-            "default": "/",
-            "title": "Folderpath",
-            "type": "string"
-          },
           "height": {
             "anyOf": [
               {
@@ -6474,14 +6454,15 @@
             "title": "Uploadedat"
           },
           "uploadedBy": {
-            "default": "learner",
-            "title": "Uploadedby",
-            "type": "string"
-          },
-          "uploadedByEmail": {
-            "default": "learner@lingxilearn.local",
-            "title": "Uploadedbyemail",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadedby"
           },
           "url": {
             "title": "Url",
@@ -7052,9 +7033,15 @@
             "title": "Createdat"
           },
           "createdBy": {
-            "default": "lingxi-user",
-            "title": "Createdby",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdby"
           },
           "description": {
             "default": "",
@@ -7078,11 +7065,6 @@
           },
           "locks": {
             "$ref": "#/components/schemas/TableLocksInfo"
-          },
-          "maxRows": {
-            "default": 100000,
-            "title": "Maxrows",
-            "type": "integer"
           },
           "metadata": {
             "additionalProperties": true,
