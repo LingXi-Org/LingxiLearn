@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from .api.account_routes import router as account_router
+from .api.artifacts import router as artifacts_router
 from .api.catalog import router as catalog_router
 from .api.health import router as health_router
 from .api.internal_runtime import router as internal_runtime_router
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    app.include_router(artifacts_router)
     app.include_router(health_router)
     app.include_router(catalog_router)
     app.include_router(internal_runtime_router)
