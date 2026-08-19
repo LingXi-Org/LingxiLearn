@@ -8,6 +8,8 @@ interface DetailPresentationProps {
   loading: boolean
   error: string | null
   onRetry: () => void
+  selectedRowId?: string | null
+  onRowClick?: (rowId: string) => void
 }
 
 /** Presentation-only surface: no fetching, grid lifecycle, or modal FSM. */
@@ -17,6 +19,8 @@ export function DetailPresentation({
   loading,
   error,
   onRetry,
+  selectedRowId,
+  onRowClick,
 }: DetailPresentationProps) {
   if (loading) {
     return <p className='p-8 text-center text-[13px] text-[var(--text-muted)]'>正在加载学习记录…</p>
@@ -38,6 +42,8 @@ export function DetailPresentation({
     <Resource.Table
       columns={columns.map((column) => ({ id: column.id, header: column.label }))}
       rows={rows}
+      selectedRowId={selectedRowId}
+      onRowClick={onRowClick}
     />
   )
 }

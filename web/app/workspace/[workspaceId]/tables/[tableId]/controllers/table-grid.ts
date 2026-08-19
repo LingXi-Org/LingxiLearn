@@ -28,6 +28,8 @@ const COLUMN_LABELS: Readonly<Record<string, string>> = {
   summary: '学习摘要',
 }
 
+const LEGACY_SIM_COLUMNS = new Set(['workflow_id', 'workflow_group_id', 'enrichment_id'])
+
 function cellText(value: unknown): string {
   if (value === null || value === undefined) return ''
   if (typeof value === 'string') return value
@@ -44,8 +46,9 @@ export function projectTableColumns(table: WorkspaceTableItem | null): TableDeta
   const columns = table?.columns ?? table?.schema?.columns ?? []
   return columns.flatMap((column) => {
     const key = typeof column.key === 'string' ? column.key : ''
-    const label = COLUMN_LABELS[key]
-    if (!key || !label) return []
+    if (!key || LEGACY_SIM_COLUMNS.has(key)) return []
+    const name = typeof column.name === 'string' ? column.name.trim() : ''
+    const label = (COLUMN_LABELS[key] ?? name) || key
     return [{ id: String(column.id ?? key), key, label }]
   })
 }
@@ -77,4 +80,27 @@ export function createTableGridProjection(
 ) {
   const columns = projectTableColumns(table)
   return { columns, rows: projectTableRows(rows, columns) }
+}
+
+export function filterAndSortTableRows(
+  rows: ReadonlyArray<Record<string, unknown>>,
+  query: string,
+  sortKey: string,
+  descending: boolean
+): Array<Record<string, unknown>> {
+  const needle = query.trim().toLocaleLowerCase()
+  const filtered = needle
+    ? rows.filter((row) => JSON.stringify(row).toLocaleLowerCase().includes(needle))
+    : [...rows]
+  if (!sortKey) return filtered
+  return filtered.sort((left, right) => {
+    const leftValues = (left.data ?? left.values ?? left) as Record<string, unknown>
+    const rightValues = (right.data ?? right.values ?? right) as Record<string, unknown>
+    const comparison = String(leftValues[sortKey] ?? '').localeCompare(
+      String(rightValues[sortKey] ?? ''),
+      'zh-CN',
+      { numeric: true }
+    )
+    return descending ? -comparison : comparison
+  })
 }
