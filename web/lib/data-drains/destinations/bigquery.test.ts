@@ -33,7 +33,7 @@ vi.mock('@/lib/logger', () => ({
   runWithRequestContext: <T>(_ctx: unknown, fn: () => T): T => fn(),
   getRequestContext: () => undefined,
 }))
-vi.mock('@sim/utils/helpers', () => ({
+vi.mock('@/lib/utils/helpers', () => ({
   sleep: vi.fn(async () => {}),
 }))
 

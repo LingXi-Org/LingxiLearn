@@ -1,4 +1,4 @@
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { McpTool } from '@/lib/mcp/types'
 import { MemoryMcpCache } from './memory-cache'

@@ -2,7 +2,7 @@
  * Sim Telemetry - Client-side Instrumentation
  */
 
-import { randomFloat } from '@sim/utils/random'
+import { randomFloat } from '@/lib/utils/random'
 import { env } from './lib/core/config/env'
 import { sanitizeEventData } from './lib/core/security/redaction'
 

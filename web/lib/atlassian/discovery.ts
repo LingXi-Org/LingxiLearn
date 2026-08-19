@@ -1,5 +1,4 @@
 import { sha256Hex } from '@sim/security/hash'
-import { parseRetryAfter } from '@sim/utils/retry'
 import { LRUCache } from 'lru-cache'
 import {
   type HTTPError,
@@ -7,6 +6,7 @@ import {
   type RetryOptions,
   retryWithExponentialBackoff,
 } from '@/lib/knowledge/documents/utils'
+import { parseRetryAfter } from '@/lib/utils/retry'
 
 const ACCESSIBLE_RESOURCES_URL = 'https://api.atlassian.com/oauth/token/accessible-resources'
 

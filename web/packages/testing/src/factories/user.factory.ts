@@ -1,4 +1,4 @@
-import { generateRandomString } from '@sim/utils/random'
+import { generateRandomString } from '@/lib/utils/random'
 import type { User, Workflow, WorkflowState, Workspace } from '../types'
 import { createWorkflowState } from './workflow.factory'
 

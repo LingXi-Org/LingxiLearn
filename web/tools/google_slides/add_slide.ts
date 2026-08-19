@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { generateRandomString } from '@sim/utils/random'
+import { generateRandomString } from '@/lib/utils/random'
 import type { ToolConfig } from '@/tools/types'
 
 const logger = createLogger('GoogleSlidesAddSlideTool')

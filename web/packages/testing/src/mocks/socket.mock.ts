@@ -1,5 +1,5 @@
-import { generateRandomString } from '@sim/utils/random'
 import { type Mock, vi } from 'vitest'
+import { generateRandomString } from '@/lib/utils/random'
 
 /**
  * Mock socket interface for type safety.

@@ -15,7 +15,7 @@ vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 
-vi.mock('@sim/utils/helpers', () => ({
+vi.mock('@/lib/utils/helpers', () => ({
   sleep: vi.fn().mockResolvedValue(undefined),
 }))
 

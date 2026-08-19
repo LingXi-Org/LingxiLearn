@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { describe, expect, it, vi } from 'vitest'
 import { runDetached } from '@/lib/core/utils/background'
 

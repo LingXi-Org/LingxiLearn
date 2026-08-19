@@ -1,5 +1,3 @@
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter, parseRetryAfter } from '@sim/utils/retry'
 import type { GuardrailsMaskBatchResult } from '@/lib/api/contracts'
 import { generateInternalToken } from '@/lib/auth/internal'
 import { env } from '@/lib/core/config/env'
@@ -7,6 +5,8 @@ import { mapWithConcurrency } from '@/lib/core/utils/concurrency'
 import { getInternalApiBaseUrl } from '@/lib/core/utils/urls'
 import { chunkIndicesByBudget } from '@/lib/guardrails/pii-batching'
 import type { CustomPiiPattern } from '@/lib/guardrails/pii-entities'
+import { sleep } from '@/lib/utils/helpers'
+import { backoffWithJitter, parseRetryAfter } from '@/lib/utils/retry'
 
 /**
  * Max in-flight mask-batch requests per call. Each request is a CPU-heavy NER

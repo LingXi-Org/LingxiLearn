@@ -67,10 +67,6 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'packages/workflow-renderer/src'),
       },
       {
-        find: '@sim/utils',
-        replacement: path.resolve(__dirname, 'packages/utils/src'),
-      },
-      {
         find: '@sim/db',
         replacement: path.resolve(__dirname, 'packages/db'),
       },

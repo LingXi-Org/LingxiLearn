@@ -1,7 +1,5 @@
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
 import { readSSEEvents } from '@/lib/core/utils/sse'
+import { createLogger } from '@/lib/logger'
 import {
   type AnthropicSessionEvent,
   type CreateSessionInput,
@@ -15,6 +13,8 @@ import {
   sendSessionEvents,
   sendUserMessage,
 } from '@/lib/managed-agents/session-client'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
 
 /**
  * Runs a Claude Platform Managed Agent session end-to-end and returns the

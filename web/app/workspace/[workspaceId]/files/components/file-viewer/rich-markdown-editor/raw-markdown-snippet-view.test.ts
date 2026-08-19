@@ -9,7 +9,7 @@
  * back to markdown.
  */
 
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { Editor } from '@tiptap/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMarkdownEditorExtensions } from './editor-extensions'

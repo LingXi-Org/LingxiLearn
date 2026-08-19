@@ -17,13 +17,13 @@
  */
 
 import { defaultBuildLogger, Template, waitForTimeout } from '@e2b/code-interpreter'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { immutableE2BTemplateRef, isValidE2BTemplateName } from '@sim/utils/sandbox-references'
 import {
   FUNCTION_SANDBOX_CPU_COUNT,
   FUNCTION_SANDBOX_MEMORY_MB,
 } from '@/lib/execution/remote-sandbox/function-resources'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { immutableE2BTemplateRef, isValidE2BTemplateName } from '@/lib/utils/sandbox-references'
 import {
   functionE2BBaseTemplate,
   functionE2BReleaseGeneration,

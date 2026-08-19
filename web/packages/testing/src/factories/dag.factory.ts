@@ -3,7 +3,7 @@
  * These are used in executor tests for DAG construction and edge management
  */
 
-import { generateRandomString } from '@sim/utils/random'
+import { generateRandomString } from '@/lib/utils/random'
 import { createSerializedBlock, type SerializedBlock } from './serialized-block.factory'
 
 /**

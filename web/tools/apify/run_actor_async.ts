@@ -1,5 +1,5 @@
-import { sleep } from '@sim/utils/helpers'
 import { DEFAULT_EXECUTION_TIMEOUT_MS } from '@/lib/core/execution-limits'
+import { sleep } from '@/lib/utils/helpers'
 import type { ApifyRun, RunActorParams, RunActorResult } from '@/tools/apify/types'
 import type { ToolConfig } from '@/tools/types'
 

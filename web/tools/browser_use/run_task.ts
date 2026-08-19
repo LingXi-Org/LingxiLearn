@@ -1,6 +1,6 @@
-import { createLogger } from '@/lib/logger'
-import { sleep } from '@sim/utils/helpers'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'
+import { createLogger } from '@/lib/logger'
+import { sleep } from '@/lib/utils/helpers'
 import type { BrowserUseRunTaskParams, BrowserUseRunTaskResponse } from '@/tools/browser_use/types'
 import type { ToolConfig, ToolResponse } from '@/tools/types'
 

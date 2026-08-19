@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createLogger } from '@/lib/logger'
-import { noop } from '@sim/utils/helpers'
 import { useParams } from 'next/navigation'
 import { getFolderPath } from '@/lib/folders/tree'
+import { createLogger } from '@/lib/logger'
+import { noop } from '@/lib/utils/helpers'
 import { useReorderFolders } from '@/hooks/queries/folders'
 import { getFolderMap } from '@/hooks/queries/utils/folder-cache'
 import { getWorkflows } from '@/hooks/queries/utils/workflow-cache'
@@ -301,7 +301,8 @@ export function useDragDrop(options: UseDragDropOptions = {}) {
       ].sort(compareSiblingItems)
 
       if (!isDraggingRef.current) {
-        const cache = (siblingsCacheRef.current ??= new Map())
+        siblingsCacheRef.current ??= new Map()
+        const cache = siblingsCacheRef.current
         cache.set(cacheKey, siblings)
       }
       return siblings

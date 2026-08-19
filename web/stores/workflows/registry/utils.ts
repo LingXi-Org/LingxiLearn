@@ -1,4 +1,4 @@
-import { randomItem } from '@sim/utils/random'
+import { randomItem } from '@/lib/utils/random'
 
 // Cosmos-themed adjectives and nouns for creative workflow names (max 9 chars each)
 const ADJECTIVES = [

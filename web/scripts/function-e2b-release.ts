@@ -3,7 +3,7 @@ import {
   isImmutableE2BTemplateRef,
   isValidSandboxReleaseGeneration,
   SANDBOX_RELEASE_GENERATION_ERROR,
-} from '@sim/utils/sandbox-references'
+} from '@/lib/utils/sandbox-references'
 
 export const FUNCTION_E2B_DEFAULT_BASE_TEMPLATE = 'code-interpreter-v1'
 

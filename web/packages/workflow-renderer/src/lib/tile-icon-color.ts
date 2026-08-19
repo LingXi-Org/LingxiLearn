@@ -1,9 +1,9 @@
-import { perceivedBrightness } from '@sim/utils/color'
+import { perceivedBrightness } from '@/lib/utils/color'
 
 /**
  * Foreground class for a brand icon rendered inside its colored block tile.
  *
- * The brightness maths is `@sim/utils/color`, shared with `@/blocks/icon-color`,
+ * The brightness maths is `@/lib/utils/color`, shared with `@/blocks/icon-color`,
  * so the canvas and the rest of the app can never disagree about which tiles are
  * light. Only the threshold lives here, and it matches that helper's.
  *

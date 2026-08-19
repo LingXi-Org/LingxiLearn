@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { isRecordLike } from '@/lib/utils/object'
 
 export const FALAI_HOSTED_KEY_MARKUP_MULTIPLIER = 1.5

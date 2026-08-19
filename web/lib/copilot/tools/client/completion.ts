@@ -1,13 +1,13 @@
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { isRecordLike } from '@/lib/utils/object'
 import type {
   AsyncCompletionData,
   AsyncConfirmationStatus,
 } from '@/lib/copilot/async-runs/lifecycle'
 import { COPILOT_CONFIRM_API_PATH } from '@/lib/copilot/constants'
 import { traceparentHeader } from '@/lib/copilot/tools/client/trace-context'
+import { createLogger } from '@/lib/logger'
+import { toError } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
+import { isRecordLike } from '@/lib/utils/object'
 
 const logger = createLogger('CopilotClientToolCompletion')
 

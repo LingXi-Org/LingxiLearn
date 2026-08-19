@@ -2,8 +2,8 @@
  * Limits and constants for user-defined tables.
  */
 
-import { randomInt, randomItem } from '@sim/utils/random'
 import { env, envNumber } from '@/lib/core/config/env'
+import { randomInt, randomItem } from '@/lib/utils/random'
 
 export const TABLE_LIMITS = {
   MAX_TABLES_PER_WORKSPACE: 100,

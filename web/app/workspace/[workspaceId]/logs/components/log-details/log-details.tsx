@@ -23,7 +23,6 @@ import {
   useCopyToClipboard,
 } from '@sim/emcn'
 import { ArrowDown, ArrowUp, Check, ChevronUp, Clipboard, Search, Wrench, X } from '@sim/emcn/icons'
-import { formatDuration } from '@sim/utils/formatting'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { createPortal } from 'react-dom'
@@ -33,6 +32,7 @@ import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import { filterHiddenOutputKeys } from '@/lib/logs/execution/trace-spans/trace-spans'
 import type { TraceSpan } from '@/lib/logs/types'
 import { sendMothershipMessage } from '@/lib/mothership/events'
+import { formatDuration } from '@/lib/utils/formatting'
 import {
   ExecutionSnapshot,
   FileCards,

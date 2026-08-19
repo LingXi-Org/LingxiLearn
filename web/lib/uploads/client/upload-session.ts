@@ -1,15 +1,15 @@
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter, parseRetryAfter } from '@sim/utils/retry'
 import type {
   V2MultipartUploadTransfer,
   V2PutUploadTransfer,
   V2UploadPartUrl,
 } from '@/lib/api/contracts/v2/uploads'
+import { createLogger } from '@/lib/logger'
 import { runWithConcurrency } from '@/lib/uploads/client/concurrency'
 import type { UploadProgressEvent } from '@/lib/uploads/client/types'
 import { isAbortError } from '@/lib/uploads/utils/file-utils'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
+import { backoffWithJitter, parseRetryAfter } from '@/lib/utils/retry'
 
 const BASE_TIMEOUT_MS = 2 * 60 * 1000
 const TIMEOUT_PER_MB_MS = 1500

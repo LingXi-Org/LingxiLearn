@@ -9,7 +9,7 @@ import {
   useMemo,
   useRef,
 } from 'react'
-import { noop } from '@sim/utils/helpers'
+import { noop } from '@/lib/utils/helpers'
 import type { WorkspaceResourceRef } from '@/app/workspace/[workspaceId]/home/types'
 import type { ChatContext } from '@/stores/panel'
 

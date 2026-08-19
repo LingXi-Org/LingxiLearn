@@ -1,10 +1,5 @@
 import { db } from '@sim/db'
 import { sandboxImage } from '@sim/db/schema'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { generateId } from '@/lib/utils/id'
-import { backoffWithJitter } from '@sim/utils/retry'
 import { and, eq, inArray, lt, notInArray, or, type SQL, sql } from 'drizzle-orm'
 import { isTriggerDevEnabled } from '@/lib/core/config/env-flags'
 import {
@@ -29,6 +24,11 @@ import {
   type SandboxImageStatus,
   type SandboxProviderId,
 } from '@/lib/execution/remote-sandbox/types'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
+import { sleep } from '@/lib/utils/helpers'
+import { generateId } from '@/lib/utils/id'
+import { backoffWithJitter } from '@/lib/utils/retry'
 
 const logger = createLogger('SandboxImageRegistry')
 

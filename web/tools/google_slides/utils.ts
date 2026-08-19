@@ -1,4 +1,4 @@
-import { generateRandomString } from '@sim/utils/random'
+import { generateRandomString } from '@/lib/utils/random'
 
 /** 1 point = 12700 EMU (English Metric Units). */
 export const PT_TO_EMU = 12700

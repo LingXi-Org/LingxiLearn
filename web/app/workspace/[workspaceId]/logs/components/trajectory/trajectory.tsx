@@ -26,10 +26,10 @@ import {
   Workflow,
   Wrench,
 } from '@sim/emcn/icons'
-import { formatDuration } from '@sim/utils/formatting'
 import { useParams } from 'next/navigation'
 import type { LogTraceSpan } from '@/lib/api/contracts/logs'
 import type { TraceSpan } from '@/lib/logs/types'
+import { formatDuration } from '@/lib/utils/formatting'
 import {
   adjustBgForContrast,
   formatCostAmount,

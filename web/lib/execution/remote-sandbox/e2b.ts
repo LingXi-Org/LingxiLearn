@@ -1,16 +1,5 @@
 import { createHash } from 'node:crypto'
 import type { Sandbox as E2BSandbox, Template as E2BTemplate } from '@e2b/code-interpreter'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { generateShortId } from '@/lib/utils/id'
-import { isRecordLike } from '@/lib/utils/object'
-import {
-  IMMUTABLE_E2B_TEMPLATE_REF_ERROR,
-  immutableE2BTemplateRef,
-  isImmutableE2BTemplateRef,
-  isValidSandboxReleaseGeneration,
-  SANDBOX_RELEASE_GENERATION_ERROR,
-} from '@sim/utils/sandbox-references'
 import { env } from '@/lib/core/config/env'
 import { recordSandboxProviderLimit } from '@/lib/core/execution-limits/metrics'
 import {
@@ -58,6 +47,17 @@ import type {
   SandboxKind,
   SandboxProvider,
 } from '@/lib/execution/remote-sandbox/types'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
+import { isRecordLike } from '@/lib/utils/object'
+import {
+  IMMUTABLE_E2B_TEMPLATE_REF_ERROR,
+  immutableE2BTemplateRef,
+  isImmutableE2BTemplateRef,
+  isValidSandboxReleaseGeneration,
+  SANDBOX_RELEASE_GENERATION_ERROR,
+} from '@/lib/utils/sandbox-references'
 
 const logger = createLogger('E2BSandboxProvider')
 

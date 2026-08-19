@@ -2,8 +2,6 @@
 
 import { useEffect, useRef } from 'react'
 import { toast } from '@sim/emcn'
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
 import { type QueryClient, useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import { requestJson } from '@/lib/api/client/request'
@@ -23,6 +21,8 @@ import {
 } from '@/lib/credentials/oauth-chat-attempt'
 import { getDesktopBridge } from '@/lib/desktop'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
+import { sleep } from '@/lib/utils/helpers'
+import { backoffWithJitter } from '@/lib/utils/retry'
 import { oauthConnectionsKeys } from '@/hooks/queries/oauth/oauth-connections'
 import { workspaceCredentialKeys } from '@/hooks/queries/utils/credential-keys'
 

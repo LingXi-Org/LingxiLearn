@@ -36,7 +36,7 @@ vi.mock('@/lib/utils/id', () => ({
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
 }))
 
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { AuditAction, AuditResourceType, recordAudit, recordAuditBatch } from './index'
 
 const flush = () => sleep(10)

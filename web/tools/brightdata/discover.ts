@@ -1,7 +1,7 @@
+import { DEFAULT_EXECUTION_TIMEOUT_MS } from '@/lib/core/execution-limits'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { DEFAULT_EXECUTION_TIMEOUT_MS } from '@/lib/core/execution-limits'
+import { sleep } from '@/lib/utils/helpers'
 import type { BrightDataDiscoverParams, BrightDataDiscoverResponse } from '@/tools/brightdata/types'
 import type { ToolConfig } from '@/tools/types'
 

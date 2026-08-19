@@ -11,7 +11,7 @@ import {
   isImmutableE2BTemplateRef,
   isValidSandboxReleaseGeneration,
   SANDBOX_RELEASE_GENERATION_ERROR,
-} from '@sim/utils/sandbox-references'
+} from '@/lib/utils/sandbox-references'
 
 export type EnvCapabilityValue = string | number | boolean | null | undefined
 

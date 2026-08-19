@@ -1,4 +1,4 @@
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { enrowHosting } from '@/tools/enrow/hosting'
 import type {
   EnrowFindEmailParams,

@@ -23,9 +23,7 @@
     "format": "biome format --write .",
     "format:check": "biome format ."
   },
-  "dependencies": {
-    "@sim/utils": "workspace:*"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@sim/tsconfig": "workspace:*",
     "@types/node": "24.2.1",

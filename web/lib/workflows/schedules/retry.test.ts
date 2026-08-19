@@ -7,7 +7,7 @@ const { mockBackoffWithJitter } = vi.hoisted(() => ({
   mockBackoffWithJitter: vi.fn(),
 }))
 
-vi.mock('@sim/utils/retry', () => ({
+vi.mock('@/lib/utils/retry', () => ({
   backoffWithJitter: mockBackoffWithJitter,
 }))
 

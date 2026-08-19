@@ -36,7 +36,6 @@
   },
   "peerDependencies": {
     "@sim/emcn": "workspace:*",
-    "@sim/utils": "workspace:*",
     "@sim/workflow-types": "workspace:*",
     "react": "^19",
     "reactflow": "^11.11.4",
@@ -47,7 +46,6 @@
   "devDependencies": {
     "@sim/emcn": "workspace:*",
     "@sim/tsconfig": "workspace:*",
-    "@sim/utils": "workspace:*",
     "@sim/workflow-types": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",
     "@types/react": "^19",

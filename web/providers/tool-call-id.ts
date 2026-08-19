@@ -3,7 +3,7 @@
  * Ensures `${blockId}:${toolCallId}` cannot collide within a run.
  */
 
-import { randomFloat } from '@sim/utils/random'
+import { randomFloat } from '@/lib/utils/random'
 
 let localToolIdCounter = 0
 

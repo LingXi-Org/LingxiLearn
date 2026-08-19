@@ -3,9 +3,9 @@
 import { useCallback, useMemo } from 'react'
 import { Badge, ChipInput, ChipSelect, Search } from '@sim/emcn'
 import { ArrowRight, Paperclip } from '@sim/emcn/icons'
-import { formatRelativeTime } from '@sim/utils/formatting'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryStates } from 'nuqs'
+import { formatRelativeTime } from '@/lib/utils/formatting'
 import {
   type InboxStatusFilter,
   inboxTaskParsers,

@@ -1,5 +1,5 @@
-import { generateRandomString } from '@sim/utils/random'
 import { convert } from 'html-to-text'
+import { generateRandomString } from '@/lib/utils/random'
 import type {
   GmailAttachment,
   GmailMessage,

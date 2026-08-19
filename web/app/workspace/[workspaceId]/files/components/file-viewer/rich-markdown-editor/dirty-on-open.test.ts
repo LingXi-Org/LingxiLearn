@@ -14,7 +14,7 @@
  *    the canonical form; this asserts that normalized form equals what the live editor emits.
  */
 
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { Editor } from '@tiptap/core'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createMarkdownEditorExtensions } from './editor-extensions'

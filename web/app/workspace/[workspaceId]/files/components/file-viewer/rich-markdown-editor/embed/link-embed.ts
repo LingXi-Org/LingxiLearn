@@ -1,8 +1,8 @@
-import { getEmbedInfo } from '@sim/utils/media-embed'
 import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { getEmbedInfo } from '@/lib/utils/media-embed'
 import { createEmbedDom } from './embed-dom'
 
 const LINK_EMBED_PLUGIN_KEY = new PluginKey('linkEmbed')

@@ -1,5 +1,5 @@
-import { generateRandomString } from '@sim/utils/random'
 import { vi } from 'vitest'
+import { generateRandomString } from '@/lib/utils/random'
 
 interface ConsoleEntryLike {
   id?: string

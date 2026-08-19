@@ -61,7 +61,5 @@
     "typescript": "^7.0.2",
     "vitest": "^4.1.0"
   },
-  "dependencies": {
-    "@sim/utils": "workspace:*"
-  }
+  "dependencies": {}
 }

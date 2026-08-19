@@ -45,12 +45,12 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 import { appendFileSync, readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
-import { sleep } from '@sim/utils/helpers'
-import { generateId } from '@/lib/utils/id'
 import { eq, sql } from 'drizzle-orm'
 import { index, json, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
+import { sleep } from '@/lib/utils/helpers'
+import { generateId } from '@/lib/utils/id'
 
 // ---------- CLI ----------
 const DRY_RUN = process.argv.includes('--dry-run')

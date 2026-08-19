@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
 import { fetchWorkflowEnvelope } from '@/hooks/queries/utils/fetch-workflow-envelope'
 import { workflowKeys } from '@/hooks/queries/utils/workflow-keys'

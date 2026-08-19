@@ -1,5 +1,3 @@
-import { createLogger } from '@/lib/logger'
-import { chunkArray } from '@sim/utils/helpers'
 import { getBYOKKey } from '@/lib/api-key/byok'
 import { getRotatingApiKey } from '@/lib/core/config/api-keys'
 import { env, envNumber } from '@/lib/core/config/env'
@@ -28,7 +26,9 @@ import type {
   OpenRouterEmbedOptions,
 } from '@/lib/embeddings/types'
 import { isRetryableError, retryWithExponentialBackoff } from '@/lib/knowledge/documents/utils'
+import { createLogger } from '@/lib/logger'
 import { batchByTokenLimit, estimateTokenCount, truncateToTokenLimit } from '@/lib/tokenization'
+import { chunkArray } from '@/lib/utils/helpers'
 
 const logger = createLogger('EmbeddingClient')
 

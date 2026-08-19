@@ -7,7 +7,7 @@ import {
   isImmutableDaytonaSnapshotRef,
   isImmutableE2BTemplateRef,
   isValidSandboxReleaseGeneration,
-} from '@sim/utils/sandbox-references'
+} from '@/lib/utils/sandbox-references'
 import {
   ENTERPRISE_FEATURE_LEGACY_DEFAULTS,
   type EnterpriseFeature,

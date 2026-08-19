@@ -6,7 +6,7 @@ import {
   NATIVE_SURFACE_OCCLUSION_PREPARE_EVENT,
   type NativeSurfaceOcclusionPrepareDetail,
 } from '@sim/emcn'
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@/lib/utils/helpers'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

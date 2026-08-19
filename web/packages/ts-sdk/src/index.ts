@@ -622,7 +622,7 @@ export class SimStudioClient {
             ? this.rateLimitInfo.retryAfter
             : Math.min(delay, maxDelay)
 
-        // standalone package — cannot depend on @sim/utils
+        // standalone package — cannot depend on application-level utilities
         const jitter = waitTime * (0.75 + Math.random() * 0.5)
 
         await new Promise((resolve) => setTimeout(resolve, jitter))

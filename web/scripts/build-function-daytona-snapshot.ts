@@ -13,16 +13,16 @@
  */
 
 import { Daytona, Image } from '@daytona/sdk'
+import {
+  FUNCTION_SANDBOX_CPU_COUNT,
+  FUNCTION_SANDBOX_MEMORY_GB,
+} from '@/lib/execution/remote-sandbox/function-resources'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import {
   IMMUTABLE_DAYTONA_SNAPSHOT_REF_ERROR,
   isImmutableDaytonaSnapshotRef,
-} from '@sim/utils/sandbox-references'
-import {
-  FUNCTION_SANDBOX_CPU_COUNT,
-  FUNCTION_SANDBOX_MEMORY_GB,
-} from '@/lib/execution/remote-sandbox/function-resources'
+} from '@/lib/utils/sandbox-references'
 import {
   FUNCTION_APT_PACKAGES,
   FUNCTION_COMMAND_ALIASES_ASSERT,

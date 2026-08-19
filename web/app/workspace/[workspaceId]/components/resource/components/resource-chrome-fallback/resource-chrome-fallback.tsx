@@ -1,7 +1,7 @@
 'use client'
 
 import type { ComponentType } from 'react'
-import { noop } from '@sim/utils/helpers'
+import { noop } from '@/lib/utils/helpers'
 import type { BreadcrumbItem } from '@/app/workspace/[workspaceId]/components/resource/components/resource-header'
 import {
   Resource,

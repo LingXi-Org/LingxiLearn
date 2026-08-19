@@ -6,9 +6,9 @@
  *   cd packages/db && bun run scripts/seed-stress-test-users.ts
  */
 
-import { generateId } from '@/lib/utils/id'
-import { randomFloat, randomInt, randomItem } from '@sim/utils/random'
 import { eq, type InferInsertModel } from 'drizzle-orm'
+import { generateId } from '@/lib/utils/id'
+import { randomFloat, randomInt, randomItem } from '@/lib/utils/random'
 import { db, userTableDefinitions, userTableRows } from '../index'
 
 const WORKSPACE_ID = '098d71e1-6a36-47e3-874d-818faee0bfe8'

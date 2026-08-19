@@ -1,7 +1,7 @@
 import type { ConverseStreamOutput } from '@aws-sdk/client-bedrock-runtime'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
-import { randomFloat } from '@sim/utils/random'
+import { randomFloat } from '@/lib/utils/random'
 import type { AgentStreamEvent } from '@/providers/stream-events'
 import { trackForcedToolUsage } from '@/providers/utils'
 

@@ -11,7 +11,7 @@ import type { Sql } from 'postgres'
  *   resolves; a crash mid-run means the whole migration re-runs from the top
  *   on the next upgrade. Guard with cheap preconditions (`WHERE x IS NULL`,
  *   `ON CONFLICT DO NOTHING`) so re-runs are near-free.
- * - **db-level imports only** (`postgres`, `drizzle-orm`, `@sim/utils`). The
+ * - **db-level imports only** (`postgres`, `drizzle-orm`, native utilities). The
  *   migrations docker image ships `packages/db` + `utils` + `logger` and
  *   nothing from `apps/*`.
  * - **Runs at whatever schema HEAD the release ships** — scripts are not

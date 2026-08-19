@@ -1,3 +1,5 @@
+import { createEnv } from '@t3-oss/env-nextjs'
+import { z } from 'zod'
 import {
   IMMUTABLE_DAYTONA_SNAPSHOT_REF_ERROR,
   IMMUTABLE_E2B_TEMPLATE_REF_ERROR,
@@ -6,9 +8,7 @@ import {
   isValidSandboxReleaseGeneration,
   SANDBOX_PROVIDER_IDS,
   SANDBOX_RELEASE_GENERATION_ERROR,
-} from '@sim/utils/sandbox-references'
-import { createEnv } from '@t3-oss/env-nextjs'
-import { z } from 'zod'
+} from '@/lib/utils/sandbox-references'
 
 /**
  * Reads NEXT_PUBLIC_* env vars in both client and server contexts.
