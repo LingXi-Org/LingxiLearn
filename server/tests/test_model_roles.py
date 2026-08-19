@@ -136,30 +136,30 @@ async def test_startup_builds_a_model_for_every_role_it_will_be_asked_for() -> N
     import os
     from uuid import uuid4
 
+    from lingxilearn.application import ApplicationServices
     from lingxilearn.config import Settings
-    from lingxilearn.service import Service
 
     path = VAR_DIR / f"test-roles-{uuid4().hex}.sqlite3"
     previous = os.environ.get("DS_API_KEY")
     os.environ["DS_API_KEY"] = "test-key-never-called"
     try:
-        service = Service(
+        services = ApplicationServices(
             Settings(_env_file="", database_url=f"sqlite+aiosqlite:///./var/{path.name}")
         )
-        assert service.settings.agents_configured, "the fixture failed to supply a credential"
-        await service.db.create_all()
-        await service.startup()
+        assert services.settings.agents_configured, "the fixture failed to supply a credential"
+        await services.db.create_all()
+        await services.startup()
         try:
-            assert service.agent_model, "startup built no per-role models"
+            assert services.agent_model, "startup built no per-role models"
             load_all()
             unresolved = [
                 role
                 for role in (*names(), *RUNTIME_MODEL_ROLES)
-                if agent_model(service.agent_model, role) is None
+                if agent_model(services.agent_model, role) is None
             ]
             assert not unresolved, f"roles resolving to None after startup: {unresolved}"
         finally:
-            await service.shutdown()
+            await services.shutdown()
     finally:
         if previous is None:
             os.environ.pop("DS_API_KEY", None)

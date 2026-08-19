@@ -39,7 +39,7 @@ from ..learner import LearnerContext
 from ..store.models.agent import AgentTask
 from ..store.models.identity import Learner, LearnerProfile
 from ..store.models.workspace import Workspace, WorkspaceFile
-from .routes import current_learner_context, not_found, service_of
+from .routes import current_learner_context, not_found, services_of
 
 router = APIRouter(prefix="/api")
 
@@ -250,8 +250,8 @@ async def update_user_profile(
             image.startswith("http://") or image.startswith("https://") or image.startswith("/api/")
         ):
             raise HTTPException(status_code=422, detail="invalid_profile_image")
-    svc = service_of(request)
-    async with svc.db.session() as session:
+    services = services_of(request)
+    async with services.db.session() as session:
         learner = await session.get(Learner, context.learner_id)
         profile = await session.get(LearnerProfile, context.learner_id)
         if learner is None or profile is None:
@@ -366,7 +366,7 @@ async def update_user_settings(
         if value < 0 or value > 50:
             raise HTTPException(status_code=422, detail="invalid_snap_to_grid_size")
         patch["snapToGridSize"] = value
-    await service_of(request).learners.update_preference(context, patch)
+    await services_of(request).learners.update_preference(context, patch)
     context.preferences = {**(context.preferences or {}), **patch}
     return {"success": True, "data": _settings_public(context)}
 
@@ -555,7 +555,7 @@ async def _usage_rows(
             offset = max(0, int(cursor))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail="invalid_usage_cursor") from exc
-    async with service_of(request).db.session() as session:
+    async with services_of(request).db.session() as session:
         query = (
             select(AgentTask)
             .where(
@@ -661,7 +661,7 @@ async def v2_billing_status(
 
     if workspaceId not in {None, "lingxi"}:
         raise not_found()
-    async with service_of(request).db.session() as session:
+    async with services_of(request).db.session() as session:
         used_bytes = (
             await session.scalar(
                 select(func.coalesce(func.sum(WorkspaceFile.size), 0))
