@@ -135,7 +135,6 @@ class ApplicationServices:
             runtime_repository=self.runtime_repository,
             work_ledger=self.work_ledger,
             runtime_state=self.runtime_state,
-            session_repository=self.session_repository,
         )
         self.runtime = LingxiGraphRuntimeAdapter(
             agent_task_repository=self.agent_task_repository,
@@ -155,7 +154,6 @@ class ApplicationServices:
             runtime_repository=self.runtime_repository,
             runtime_state=self.runtime_state,
             learner_repository=self.learner_repository,
-            session_repository=self.session_repository,
             db=self.db,
             artifact_service=self.artifacts,
             event_service=self.agent_events,

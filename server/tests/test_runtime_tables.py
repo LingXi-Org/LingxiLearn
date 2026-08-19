@@ -13,6 +13,7 @@ from lingxilearn.store.learner import LearnerRepository
 from lingxilearn.store.models.table import WorkspaceTable, WorkspaceTableRow
 from lingxilearn.store.models.workspace import Workspace
 from lingxilearn.store.repositories.agent_tasks import AgentTaskRepository
+from lingxilearn.store.repositories.runtime import RuntimeRepository
 from lingxilearn.store.repositories.sessions import SessionRepository
 
 
@@ -72,6 +73,7 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
     database = Database(settings)
     await database.create_all()
     agent_task_repository = AgentTaskRepository(database)
+    runtime_repository = RuntimeRepository(database)
     session_repository = SessionRepository(database)
     learner_repository = LearnerRepository(database)
     learner_id = f"learner-{suffix}"
@@ -119,7 +121,7 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
             total_score=1,
             total_points=1,
         )
-        await session_repository.project_runtime_event(
+        await runtime_repository.project_runtime_event(
             learner_id=learner_id,
             record_key=f"assessment:{task_id}:submission-1",
             task_id=task_id,
@@ -182,7 +184,7 @@ async def test_agent_and_session_runtime_events_are_projected_to_tables() -> Non
             assert all(row.values["learner_id"] == learner_id for row in rows)
 
         # Replaying through the public projection path updates the same row.
-        result = await session_repository.project_runtime_event(
+        result = await runtime_repository.project_runtime_event(
             learner_id=learner_id,
             record_key=f"task:{task_id}:1",
             task_id=task_id,

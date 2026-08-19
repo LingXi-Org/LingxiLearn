@@ -128,45 +128,6 @@ class SessionRepository:
             await s.commit()
             return highest + len(events)
 
-    async def project_runtime_event(
-        self,
-        *,
-        learner_id: str,
-        record_key: str,
-        kind: str,
-        task_id: str = "",
-        session_id: str = "",
-        sequence: int = 0,
-        agent: str = "",
-        payload: dict[str, Any] | None = None,
-        runtime: dict[str, Any] | None = None,
-        execution_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Project an externally replayed event using the same runtime path."""
-
-        async with self.db.session() as s:
-            workspace = await s.scalar(select(Workspace).where(Workspace.learner_id == learner_id))
-            result = await project_runtime_events(
-                s,
-                learner_id=learner_id,
-                records=[
-                    {
-                        "record_key": record_key,
-                        "task_id": task_id,
-                        "session_id": session_id,
-                        "sequence": sequence,
-                        "kind": kind,
-                        "agent": agent,
-                        "payload": payload or {},
-                        "runtime": runtime or {},
-                        "execution_id": execution_id,
-                    }
-                ],
-                workspace=workspace,
-            )
-            await s.commit()
-            return result[0]
-
     async def events_after(
         self, session_id: str, after: int = 0, limit: int = 500
     ) -> list[dict[str, Any]]:
