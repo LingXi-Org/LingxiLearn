@@ -676,10 +676,8 @@ class WorkspaceFileInfo(BaseModel):
     mimeType: str
     width: int | None = None
     height: int | None = None
-    uploadedBy: str = "learner"
+    uploadedBy: str | None = None
     folderId: str | None = None
-    folderPath: str = "/"
-    uploadedByEmail: str = "learner@lingxilearn.local"
     deletedAt: str | None = None
     uploadedAt: str | None = None
     updatedAt: str | None = None
@@ -857,8 +855,7 @@ class WorkspaceTableInfo(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     rowCount: int = 0
     totalRows: int = 0
-    maxRows: int = 100_000
-    createdBy: str = "lingxi-user"
+    createdBy: str | None = None
     locks: TableLocksInfo = Field(default_factory=TableLocksInfo)
     archivedAt: str | None = None
     archived: bool = False
@@ -903,7 +900,6 @@ class TableRowInfo(BaseModel):
     id: str
     data: dict[str, Any] = Field(default_factory=dict)
     values: dict[str, Any] = Field(default_factory=dict)
-    executions: dict[str, Any] = Field(default_factory=dict)
     position: int = 0
     createdAt: str | None = None
     updatedAt: str | None = None
@@ -1079,8 +1075,6 @@ class KnowledgeBaseInfo(BaseModel):
     docCount: int = 0
     fileCount: int = 0
     tokenCount: int = 0
-    embeddingModel: str = "none"
-    embeddingDimension: int = 0
     chunkingConfig: KnowledgeChunkingConfigInfo = Field(
         default_factory=KnowledgeChunkingConfigInfo
     )

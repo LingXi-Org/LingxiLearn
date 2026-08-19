@@ -443,11 +443,12 @@ export interface TableDefinition {
   schema: TableSchema
   metadata?: TableMetadata | null
   rowCount: number
-  maxRows: number
+  /** Optional server-enforced limit; absent when the domain has no configured cap. */
+  maxRows?: number
   workspaceId: string
   /** Folder the table lives in, or `null` at the workspace root. */
   folderId?: string | null
-  createdBy: string
+  createdBy: string | null
   /** Per-table mutation locks; absent-as-all-false is normalized on read. */
   locks: TableLocks
   archivedAt?: Date | string | null
@@ -476,7 +477,7 @@ export interface TableSummary {
 export interface TableRow {
   id: string
   data: RowData
-  /** Per-group execution state for this row. Empty `{}` if nothing has run. */
+  /** Per-group execution state used by workflow-backed table implementations. */
   executions: RowExecutions
   position: number
   /**

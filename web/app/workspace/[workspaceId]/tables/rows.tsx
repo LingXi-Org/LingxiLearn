@@ -72,7 +72,7 @@ export function filterTables(
     })
   }
   if (filters.ownerFilter.length > 0) {
-    result = result.filter((t) => filters.ownerFilter.includes(t.createdBy))
+    result = result.filter((t) => Boolean(t.createdBy && filters.ownerFilter.includes(t.createdBy)))
   }
   return result
 }
@@ -142,7 +142,9 @@ export function buildSortableEntries(
               : sortColumn === 'updated'
                 ? new Date(table.updatedAt).getTime()
                 : sortColumn === 'owner'
-                  ? (membersById.get(table.createdBy)?.name ?? null)
+                  ? table.createdBy
+                    ? (membersById.get(table.createdBy)?.name ?? null)
+                    : null
                   : table.name,
     })
   }
@@ -174,7 +176,9 @@ export function tableRow(table: TableDefinition, options: TableRowOptions): Reso
         label: String(table.rowCount),
       },
       created: timeCell(table.createdAt),
-      owner: ownerCell(table.createdBy, options.membersById),
+      owner: table.createdBy
+        ? ownerCell(table.createdBy, options.membersById)
+        : { label: EMPTY_CELL_PLACEHOLDER },
       updated: timeCell(table.updatedAt),
     },
   }

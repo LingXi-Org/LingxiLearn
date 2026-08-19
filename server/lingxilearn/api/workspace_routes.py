@@ -130,6 +130,9 @@ router = APIRouter(prefix="/api")
 MAX_FILE_SIZE = 20 * 1024 * 1024
 ALLOWED_COLUMN_TYPES = {"string", "number", "currency", "boolean", "date", "json", "select"}
 PINNED_RESOURCE_TYPES = {"workflow", "file", "knowledge_base", "table", "folder", "workspace"}
+# Stable public alias for a learner's single personal workspace. Database IDs
+# remain internal; accepting either form at the API boundary is intentional.
+PUBLIC_WORKSPACE_ID = "lingxi"
 
 
 def _utc_datetime(value: datetime | None) -> datetime | None:
@@ -163,19 +166,19 @@ async def _workspace_for_id(
     request: Request, workspace_id: str, context: LearnerContext
 ) -> Workspace:
     row = await _workspace(request, context)
-    if workspace_id not in {"lingxi", row.id}:
+    if workspace_id not in {PUBLIC_WORKSPACE_ID, row.id}:
         raise not_found()
     return row
 
 
 def _public_workspace(row: Workspace) -> dict[str, Any]:
     return {
-        "id": "lingxi",
-        "workspaceId": "lingxi",
+        "id": PUBLIC_WORKSPACE_ID,
+        "workspaceId": PUBLIC_WORKSPACE_ID,
         "name": row.name,
         "ownerId": row.learner_id,
         "organizationId": None,
-        "slug": "lingxi",
+        "slug": PUBLIC_WORKSPACE_ID,
         "workspaceMode": "personal",
         "role": "admin",
         "membershipId": f"membership:{row.learner_id}",
@@ -239,7 +242,7 @@ def _mime_type(name: str, supplied: Any) -> str:
 def _file_public(row: WorkspaceFile, workspace_id: str) -> dict[str, Any]:
     return {
         "id": row.id,
-        "workspaceId": "lingxi",
+        "workspaceId": PUBLIC_WORKSPACE_ID,
         "name": row.name,
         "key": row.storage_key,
         "path": row.path or row.name,
@@ -249,15 +252,8 @@ def _file_public(row: WorkspaceFile, workspace_id: str) -> dict[str, Any]:
         "mimeType": row.mime_type,
         "width": row.width,
         "height": row.height,
-        "uploadedBy": row.metadata_payload.get("uploadedBy", "learner")
-        if row.metadata_payload
-        else "learner",
+        "uploadedBy": (row.metadata_payload or {}).get("uploadedBy"),
         "folderId": row.folder_id,
-        # v2 upload/file contracts require a canonical folder path and a
-        # public uploader address. LingxiIdentity remains the source of the
-        # real profile; this local address is deliberately non-identifying.
-        "folderPath": "/",
-        "uploadedByEmail": "learner@lingxilearn.local",
         "deletedAt": row.updated_at.isoformat() if row.archived and row.updated_at else None,
         "uploadedAt": row.created_at.isoformat() if row.created_at else None,
         "updatedAt": row.updated_at.isoformat() if row.updated_at else None,
@@ -313,15 +309,14 @@ def _table_public(
         "id": row.id,
         "name": row.name,
         "description": row.description,
-        "workspaceId": "lingxi",
+        "workspaceId": PUBLIC_WORKSPACE_ID,
         "folderId": metadata.get("folderId"),
         "schema": {"columns": public_columns},
         "columns": public_columns,
         "metadata": metadata,
         "rowCount": count,
         "totalRows": count,
-        "maxRows": 100_000,
-        "createdBy": str(metadata.get("createdBy") or "lingxi-user"),
+        "createdBy": str(metadata["createdBy"]) if metadata.get("createdBy") else None,
         "locks": locks,
         "archivedAt": row.updated_at.isoformat() if row.archived and row.updated_at else None,
         "archived": row.archived,
@@ -331,18 +326,12 @@ def _table_public(
 
 
 def _table_row_public(row: WorkspaceTableRow) -> dict[str, Any]:
-    """Return the row shape consumed by the reused Sim table grid.
-
-    Lingxi rows do not execute workflow groups, but the shared grid expects the
-    execution map to be present so it can safely render ordinary data rows.
-    """
-
+    """Return native persisted row facts without workflow execution placeholders."""
     values = row.values or {}
     return {
         "id": row.id,
         "data": values,
         "values": values,
-        "executions": {},
         "position": row.position,
         "createdAt": row.created_at.isoformat() if row.created_at else None,
         "updatedAt": row.updated_at.isoformat() if row.updated_at else None,
@@ -390,13 +379,11 @@ def _knowledge_base_public(row: KnowledgeBase, document_count: int = 0) -> dict[
         "userId": row.learner_id,
         "name": row.name,
         "description": row.description,
-        "workspaceId": "lingxi",
+        "workspaceId": PUBLIC_WORKSPACE_ID,
         "documentCount": document_count,
         "docCount": document_count,
         "fileCount": document_count,
         "tokenCount": 0,
-        "embeddingModel": "none",
-        "embeddingDimension": 0,
         "chunkingConfig": {"maxSize": 1200, "minSize": 1, "overlap": 0, "strategy": "text"},
         "folderId": None,
         "deletedAt": row.updated_at.isoformat() if row.archived and row.updated_at else None,

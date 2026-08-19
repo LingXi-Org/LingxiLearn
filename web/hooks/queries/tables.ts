@@ -191,7 +191,12 @@ async function fetchTableRows({
   if (workspaceId === LINGXI_WORKSPACE_ID) {
     const response = await lingxiApi.workspaceTableRows(tableId)
     return {
-      rows: response.data.rows as TableRow[],
+      // Compatibility stays at the old shared-grid boundary: the native API
+      // deliberately does not publish a fake workflow execution map.
+      rows: response.data.rows.map((row) => ({
+        ...row,
+        executions: {},
+      })) as TableRow[],
       totalCount: response.data.totalCount,
     }
   }
