@@ -1,16 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ComboboxOption } from '@sim/emcn'
-import { ChipCombobox, ChipConfirmModal, Plus, toast, Upload } from '@sim/emcn'
-import { Columns3, FolderPlus, Pencil, Rows3, Table as TableIcon, Trash } from '@sim/emcn/icons'
+import { ChipConfirmModal, Plus, Upload } from '@sim/emcn'
+import { FolderPlus, Pencil, Trash } from '@sim/emcn/icons'
 import { createLogger } from '@sim/logger'
-import { getErrorMessage } from '@sim/utils/errors'
 import { useParams, useRouter } from 'next/navigation'
-import { useQueryStates } from 'nuqs'
 import type { TableDefinition } from '@/lib/table'
-import { generateUniqueTableName } from '@/lib/table/constants'
-import { SEARCH_DEBOUNCE_MS } from '@/lib/url-state'
 import type {
   DropdownOption,
   FilterTag,
@@ -20,66 +16,40 @@ import type {
   SearchConfig,
   SortConfig,
 } from '@/app/workspace/[workspaceId]/components'
+import { Resource } from '@/app/workspace/[workspaceId]/components'
 import {
-  EMPTY_CELL_PLACEHOLDER,
-  Resource,
-} from '@/app/workspace/[workspaceId]/components'
-import { ownerCell } from '@/app/workspace/[workspaceId]/components/resource/components/owner-cell'
-import { timeCell } from '@/app/workspace/[workspaceId]/components/resource/components/time-cell'
-import type {
-  MoveOptionNode,
-  SortableResource,
-} from '@/app/workspace/[workspaceId]/components/folders'
-import {
-  buildDescendantIndex,
-  buildMoveOptions,
   FOLDERED_RESOURCE_HEADERS,
   FolderContextMenu,
   folderBreadcrumbItems,
-  folderRow,
-  folderRowId,
-  nextUntitledFolderName,
   parseFolderedRowId,
-  parseMoveOptionValue,
-  sortResources,
   useFolderNavigation,
-  useFolderRowDragDrop,
 } from '@/app/workspace/[workspaceId]/components/folders'
+import { useContextMenu } from '@/app/workspace/[workspaceId]/components/hooks'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import {
   ImportCsvDialog,
   ImportProgressMenu,
+  TableContextMenu,
+  TablesFilterPanel,
   TablesListContextMenu,
 } from '@/app/workspace/[workspaceId]/tables/components'
-import { TableContextMenu } from '@/app/workspace/[workspaceId]/tables/components/table-context-menu'
+import { useCsvImport } from '@/app/workspace/[workspaceId]/tables/hooks/use-csv-import'
+import { useExportTable } from '@/app/workspace/[workspaceId]/tables/hooks/use-table-export'
+import { useTablesActions } from '@/app/workspace/[workspaceId]/tables/hooks/use-tables-actions'
+import { useTablesListState } from '@/app/workspace/[workspaceId]/tables/hooks/use-tables-list-state'
 import { useWorkspaceTablesRoom } from '@/app/workspace/[workspaceId]/tables/hooks/use-workspace-tables-room'
 import {
-  tablesParsers,
-  tablesSortParams,
-  tablesUrlKeys,
-} from '@/app/workspace/[workspaceId]/tables/search-params'
-import { useContextMenu } from '@/app/workspace/[workspaceId]/components/hooks'
-import { useCreateFolder, useDeleteFolderMutation, useUpdateFolder } from '@/hooks/queries/folders'
-import { usePinItem, usePinnedIds, useUnpinItem } from '@/hooks/queries/pinned-items'
-import {
-  exportTable,
-  useCreateTable,
-  useDeleteTable,
-  useImportCsv,
-  useMoveTable,
-  useRenameTable,
-  useTablesList,
-} from '@/hooks/queries/tables'
+  applyListRename,
+  type TableResourceItem,
+  toResourceRows,
+} from '@/app/workspace/[workspaceId]/tables/rows'
+import { usePinnedIds } from '@/hooks/queries/pinned-items'
+import { useTablesList } from '@/hooks/queries/tables'
 import { getCanonicalFolderPath } from '@/hooks/queries/utils/folder-tree'
 import { useWorkspaceMembersQuery, type WorkspaceMember } from '@/hooks/queries/workspace'
-import { useDebounce } from '@/hooks/use-debounce'
-import { useDebouncedSearchSetter } from '@/hooks/use-debounced-search-setter'
-import { useInlineRename } from '@/hooks/use-inline-rename'
 import { usePermissionConfig } from '@/hooks/use-permission-config'
-import { useUrlSort } from '@/hooks/use-url-sort'
 import type { WorkspaceFolder } from '@/stores/folders/types'
-import { useImportTrayStore } from '@/stores/table/import-tray/store'
 
 const logger = createLogger('Tables')
 
@@ -97,11 +67,11 @@ const ROOT_LABEL = FOLDERED_RESOURCE_HEADERS.table.rootLabel
 
 const EMPTY_TABLES: TableDefinition[] = []
 
-/** A list row (and the right-clicked row), resolved to the entity it refers to. */
-type TableResourceItem =
-  | { kind: 'table'; table: TableDefinition }
-  | { kind: 'folder'; folder: WorkspaceFolder }
-
+/**
+ * Tables page: pure composition. URL view state lives in {@link useTablesListState}, row
+ * mapping in `rows.tsx`, table/folder mutations in {@link useTablesActions}, and CSV
+ * import/export in their own controllers — this component wires them together and renders.
+ */
 export function Tables() {
   const params = useParams()
   const router = useRouter()
@@ -127,8 +97,6 @@ export function Tables() {
   // Folder pins live in their own `resourceType` namespace, so a page listing
   // folders alongside tables resolves two sets.
   const pinnedFolderIds = usePinnedIds(workspaceId, 'folder')
-  const pinItem = usePinItem()
-  const unpinItem = useUnpinItem()
 
   const {
     currentFolderId,
@@ -150,99 +118,49 @@ export function Tables() {
     if (error) logger.error('Failed to load tables:', error)
   }, [error])
 
-  const deleteTable = useDeleteTable(workspaceId)
-  const renameTable = useRenameTable(workspaceId)
-  const createTable = useCreateTable(workspaceId)
-  const moveTable = useMoveTable(workspaceId)
-  const importCsv = useImportCsv()
-  const createFolder = useCreateFolder()
-  const updateFolder = useUpdateFolder()
-  const deleteFolder = useDeleteFolderMutation()
-
   const membersById = useMemo(() => {
     const map = new Map<string, WorkspaceMember>()
     for (const member of members ?? []) map.set(member.userId, member)
     return map
   }, [members])
 
-  /**
-   * One rename session multiplexed over both row kinds — the shared `Resource`
-   * table has a single editing cell, so the id it carries has to resolve to
-   * either a folder or a table. Both mutations toast their own failure; the hook
-   * restores the original name and keeps the field open.
-   */
-  const listRename = useInlineRename({
-    onSave: (rowId, name) => {
-      const parsed = parseFolderedRowId(rowId)
-      if (parsed.kind === 'folder') {
-        return updateFolder
-          .mutateAsync({
-            workspaceId,
-            resourceType: 'table',
-            id: parsed.id,
-            updates: { name },
-          })
-          .catch((err: unknown) => {
-            toast.error(getErrorMessage(err, 'Failed to rename folder'), { duration: 5000 })
-            throw err
-          })
-      }
-      return renameTable.mutateAsync({ tableId: parsed.id, name })
-    },
+  const listState = useTablesListState({
+    tables,
+    folders,
+    folderById,
+    foldersResolved,
+    currentFolderId,
+    membersById,
+    pinnedFolderIds,
+    pinnedTableIds,
   })
 
-  const breadcrumbRename = useInlineRename({
-    onSave: (folderId, name) =>
-      updateFolder
-        .mutateAsync({ workspaceId, resourceType: 'table', id: folderId, updates: { name } })
-        .catch((err: unknown) => {
-          toast.error(getErrorMessage(err, 'Failed to rename folder'), { duration: 5000 })
-          throw err
-        }),
+  const actions = useTablesActions({
+    workspaceId,
+    canEdit,
+    tables,
+    folders,
+    folderById,
+    currentFolderId,
+    setCurrentFolderId,
+    pinnedFolderIds,
+    pinnedTableIds,
+    // Stable setter identity keeps `createFolder` memoized across renders.
+    clearSearch: listState.setSearchTerm,
   })
+  const { listRename, breadcrumbRename } = actions
+
+  const csvImport = useCsvImport({
+    workspaceId,
+    getFolderPath: () => getCanonicalFolderPath(currentFolderId, folderById),
+  })
+  const exportTableCsv = useExportTable(workspaceId)
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDeleteFolderDialogOpen, setIsDeleteFolderDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [activeTable, setActiveTable] = useState<TableDefinition | null>(null)
   const [activeFolder, setActiveFolder] = useState<WorkspaceFolder | null>(null)
-
-  const [{ search: urlSearchTerm, rows: rowCountFilter, owner: ownerFilter }, setTableFilters] =
-    useQueryStates(tablesParsers, tablesUrlKeys)
-
-  const {
-    sort: sortColumn,
-    dir: sortDirection,
-    activeSort,
-    onSort,
-    onClear,
-  } = useUrlSort(tablesSortParams, tablesUrlKeys)
-
-  /**
-   * The input is controlled directly by the instant nuqs value; only the URL
-   * write is debounced. The in-memory filter below still reads a debounced value
-   * so it doesn't recompute on every keystroke.
-   */
-  const setSearchTerm = useDebouncedSearchSetter((value, options) =>
-    setTableFilters({ search: value }, options)
-  )
-  const debouncedSearchTerm = useDebounce(urlSearchTerm, SEARCH_DEBOUNCE_MS)
-
-  const setRowCountFilter = useCallback(
-    (next: string[]) => setTableFilters({ rows: next }),
-    [setTableFilters]
-  )
-  const setOwnerFilter = useCallback(
-    (next: string[]) => setTableFilters({ owner: next }),
-    [setTableFilters]
-  )
-
-  const [uploadProgress, setUploadProgress] = useState({ completed: 0, total: 0 })
-  const uploading = uploadProgress.total > 0
-  const csvInputRef = useRef<HTMLInputElement>(null)
-
-  const tablesRef = useRef(tables)
-  tablesRef.current = tables
 
   const {
     isOpen: isListContextMenuOpen,
@@ -260,203 +178,26 @@ export function Tables() {
 
   const [contextMenuKind, setContextMenuKind] = useState<'table' | 'folder'>('table')
 
-  /**
-   * Descendants of every folder, so a move destination that sits inside the moved folder can
-   * be excluded — reparenting a folder under its own child would close a cycle (the server
-   * rejects it; this keeps it out of the menu, and out of a valid drop target, entirely).
-   */
-  const descendantFolderIds = useMemo(() => buildDescendantIndex(folders), [folders])
-
-  const visibleFolders = useMemo(() => {
-    const siblings = folders.filter((folder) => (folder.parentId ?? null) === currentFolderId)
-    const needle = debouncedSearchTerm.trim().toLowerCase()
-    return needle
-      ? siblings.filter((folder) => folder.name.toLowerCase().includes(needle))
-      : siblings
-  }, [folders, currentFolderId, debouncedSearchTerm])
-
-  const processedTables = useMemo(() => {
-    const query = debouncedSearchTerm.trim().toLowerCase()
-    /**
-     * A `folderId` that no longer names an active folder — restored on its own out
-     * of Recently Deleted while its folder stayed archived — would otherwise match
-     * no level at all and leave the table unreachable from every view. Fall it back
-     * to the root instead — but only once `foldersResolved` says the index is the complete
-     * set for THIS workspace. Gating on a loading flag instead would treat an errored fetch,
-     * a disabled query, or the previous workspace's cached folders as "no such folder" and
-     * drag every foldered table to the root.
-     */
-    let result = tables.filter((t) => {
-      const folderId = t.folderId ?? null
-      const effectiveFolderId =
-        !foldersResolved || !folderId || folderById.has(folderId) ? folderId : null
-      return effectiveFolderId === currentFolderId
-    })
-    if (query) result = result.filter((t) => t.name.toLowerCase().includes(query))
-
-    if (rowCountFilter.length > 0) {
-      result = result.filter((t) => {
-        if (rowCountFilter.includes('empty') && t.rowCount === 0) return true
-        if (rowCountFilter.includes('small') && t.rowCount >= 1 && t.rowCount <= 100) return true
-        if (rowCountFilter.includes('large') && t.rowCount > 100) return true
-        return false
-      })
-    }
-    if (ownerFilter.length > 0) {
-      result = result.filter((t) => ownerFilter.includes(t.createdBy))
-    }
-    return result
-  }, [
-    tables,
-    currentFolderId,
-    folderById,
-    foldersResolved,
-    debouncedSearchTerm,
-    rowCountFilter,
-    ownerFilter,
-  ])
-
-  /**
-   * Folders and tables sort as ONE list — a folder never outranks a table it ties with, so a
-   * pinned table reaches the top of the list rather than the top of the table section.
-   *
-   * Decorate-sort: each row's key + pinned flag is computed ONCE (O(N)) so the comparator
-   * never re-runs Date parsing or member lookups per comparison. Folders carry no column or
-   * row count, so those keys are `null` and land the folders last in both directions —
-   * matching the em-dash they show in those cells.
-   */
-  const sortedEntries = useMemo(() => {
-    const entries: SortableResource<TableResourceItem>[] = []
-
-    for (const folder of visibleFolders) {
-      entries.push({
-        item: { kind: 'folder', folder },
-        pinned: pinnedFolderIds.has(folder.id),
-        name: folder.name,
-        key:
-          sortColumn === 'columns' || sortColumn === 'rows'
-            ? null
-            : sortColumn === 'created'
-              ? new Date(folder.createdAt).getTime()
-              : sortColumn === 'updated'
-                ? new Date(folder.updatedAt).getTime()
-                : sortColumn === 'owner'
-                  ? (membersById.get(folder.userId)?.name ?? null)
-                  : folder.name,
-      })
-    }
-
-    for (const table of processedTables) {
-      entries.push({
-        item: { kind: 'table', table },
-        pinned: pinnedTableIds.has(table.id),
-        name: table.name,
-        key:
-          sortColumn === 'columns'
-            ? table.schema.columns.length
-            : sortColumn === 'rows'
-              ? table.rowCount
-              : sortColumn === 'created'
-                ? new Date(table.createdAt).getTime()
-                : sortColumn === 'updated'
-                  ? new Date(table.updatedAt).getTime()
-                  : sortColumn === 'owner'
-                    ? (membersById.get(table.createdBy)?.name ?? null)
-                    : table.name,
-      })
-    }
-
-    return sortResources(entries, sortDirection)
-  }, [
-    visibleFolders,
-    processedTables,
-    sortColumn,
-    sortDirection,
-    membersById,
-    pinnedFolderIds,
-    pinnedTableIds,
-  ])
-
   const baseRows: ResourceRow[] = useMemo(
-    () =>
-      sortedEntries.map(({ item, pinned }): ResourceRow => {
-        if (item.kind === 'folder') {
-          return folderRow(item.folder, {
-            pinned,
-            cells: {
-              columns: { label: EMPTY_CELL_PLACEHOLDER },
-              rows: { label: EMPTY_CELL_PLACEHOLDER },
-              created: timeCell(item.folder.createdAt),
-              owner: ownerCell(item.folder.userId, membersById),
-              updated: timeCell(item.folder.updatedAt),
-            },
-          })
-        }
-
-        const { table } = item
-        return {
-          id: table.id,
-          cells: {
-            name: {
-              icon: <TableIcon className='size-[14px]' />,
-              label: table.name,
-              pinned,
-            },
-            columns: {
-              icon: <Columns3 className='size-[14px]' />,
-              label: String(table.schema.columns.length),
-            },
-            rows: {
-              icon: <Rows3 className='size-[14px]' />,
-              label: String(table.rowCount),
-            },
-            created: timeCell(table.createdAt),
-            owner: ownerCell(table.createdBy, membersById),
-            updated: timeCell(table.updatedAt),
-          },
-        }
-      }),
-    [sortedEntries, membersById]
+    () => toResourceRows(listState.sortedEntries, membersById),
+    [listState.sortedEntries, membersById]
   )
 
   /**
    * Layered on top of {@link baseRows} rather than folded into it so a keystroke
    * in the rename field rebuilds one cell instead of every row's cells.
    */
-  const rows: ResourceRow[] = useMemo(() => {
-    if (!listRename.editingId) return baseRows
-    return baseRows.map((row) => {
-      if (row.id !== listRename.editingId) return row
-      return {
-        ...row,
-        cells: {
-          ...row.cells,
-          name: {
-            ...row.cells.name,
-            editing: {
-              value: listRename.editValue,
-              onChange: listRename.setEditValue,
-              onSubmit: listRename.submitRename,
-              onCancel: listRename.cancelRename,
-              disabled: listRename.isSaving,
-            },
-          },
-        },
-      }
-    })
-  }, [
-    baseRows,
-    listRename.editingId,
-    listRename.editValue,
-    listRename.isSaving,
-    listRename.setEditValue,
-    listRename.submitRename,
-    listRename.cancelRename,
-  ])
-
-  const startFolderRename = useCallback(
-    (folder: WorkspaceFolder) => listRename.startRename(folderRowId(folder.id), folder.name),
-    [listRename.startRename]
+  const rows: ResourceRow[] = useMemo(
+    () => applyListRename(baseRows, listRename),
+    [
+      baseRows,
+      listRename.editingId,
+      listRename.editValue,
+      listRename.isSaving,
+      listRename.setEditValue,
+      listRename.submitRename,
+      listRename.cancelRename,
+    ]
   )
 
   const currentFolderActions: DropdownOption[] | undefined = useMemo(() => {
@@ -521,12 +262,12 @@ export function Tables() {
 
   const searchConfig: SearchConfig = useMemo(
     () => ({
-      value: urlSearchTerm,
-      onChange: setSearchTerm,
-      onClearAll: () => setSearchTerm(''),
+      value: listState.searchValue,
+      onChange: listState.setSearchTerm,
+      onClearAll: () => listState.setSearchTerm(''),
       placeholder: 'Search tables...',
     }),
-    [urlSearchTerm, setSearchTerm]
+    [listState.searchValue, listState.setSearchTerm]
   )
 
   const sortConfig: SortConfig = useMemo(
@@ -539,31 +280,12 @@ export function Tables() {
         { id: 'owner', label: '所有者' },
         { id: 'updated', label: 'Last Updated' },
       ],
-      active: activeSort,
-      onSort,
-      onClear,
+      active: listState.activeSort,
+      onSort: listState.onSort,
+      onClear: listState.onClear,
     }),
-    [activeSort, onSort, onClear]
+    [listState.activeSort, listState.onSort, listState.onClear]
   )
-
-  const rowCountDisplayLabel = useMemo(() => {
-    if (rowCountFilter.length === 0) return 'All'
-    if (rowCountFilter.length === 1) {
-      const labels: Record<string, string> = {
-        empty: 'Empty',
-        small: 'Small (1–100)',
-        large: 'Large (101+)',
-      }
-      return labels[rowCountFilter[0]] ?? rowCountFilter[0]
-    }
-    return `${rowCountFilter.length} selected`
-  }, [rowCountFilter])
-
-  const ownerDisplayLabel = useMemo(() => {
-    if (ownerFilter.length === 0) return 'All'
-    if (ownerFilter.length === 1) return membersById.get(ownerFilter[0])?.name ?? '1 member'
-    return `${ownerFilter.length} members`
-  }, [ownerFilter, membersById])
 
   const memberOptions: ComboboxOption[] = useMemo(
     () =>
@@ -586,94 +308,50 @@ export function Tables() {
     [members]
   )
 
-  const hasActiveFilters = rowCountFilter.length > 0 || ownerFilter.length > 0
-
-  const filterContent = useMemo(
-    () => (
-      <div className='flex w-[240px] flex-col gap-3 p-3'>
-        <div className='flex flex-col gap-1.5'>
-          <span className='text-[var(--text-secondary)] text-caption'>行数</span>
-          <ChipCombobox
-            options={[
-              { value: 'empty', label: 'Empty' },
-              { value: 'small', label: 'Small (1–100 rows)' },
-              { value: 'large', label: 'Large (101+ rows)' },
-            ]}
-            multiSelect
-            multiSelectValues={rowCountFilter}
-            onMultiSelectChange={setRowCountFilter}
-            overlayContent={
-              <span className='truncate text-[var(--text-primary)]'>{rowCountDisplayLabel}</span>
-            }
-            showAllOption
-            allOptionLabel='All'
-            className='w-full'
-          />
-        </div>
-        {memberOptions.length > 0 && (
-          <div className='flex flex-col gap-1.5'>
-          <span className='text-[var(--text-secondary)] text-caption'>所有者</span>
-            <ChipCombobox
-              options={memberOptions}
-              multiSelect
-              multiSelectValues={ownerFilter}
-              onMultiSelectChange={setOwnerFilter}
-              overlayContent={
-                <span className='truncate text-[var(--text-primary)]'>{ownerDisplayLabel}</span>
-              }
-              searchable
-              searchPlaceholder='Search members...'
-              showAllOption
-              allOptionLabel='All'
-              className='w-full'
-            />
-          </div>
-        )}
-        {hasActiveFilters && (
-          <button
-            type='button'
-            onClick={() => {
-              setRowCountFilter([])
-              setOwnerFilter([])
-            }}
-            className='flex h-[32px] w-full items-center justify-center rounded-md text-[var(--text-secondary)] text-caption transition-colors hover-hover:bg-[var(--surface-active)]'
-          >
-            Clear all filters
-          </button>
-        )}
-      </div>
-    ),
-    [
-      rowCountFilter,
-      ownerFilter,
-      memberOptions,
-      rowCountDisplayLabel,
-      ownerDisplayLabel,
-      hasActiveFilters,
-      setRowCountFilter,
-      setOwnerFilter,
-    ]
-  )
-
   const filterTags: FilterTag[] = useMemo(() => {
     const tags: FilterTag[] = []
-    if (rowCountFilter.length > 0) {
+    if (listState.rowCountFilter.length > 0) {
       const rowLabels: Record<string, string> = { empty: 'Empty', small: 'Small', large: 'Large' }
       const label =
-        rowCountFilter.length === 1
-          ? `Rows: ${rowLabels[rowCountFilter[0]]}`
-          : `Rows: ${rowCountFilter.length} selected`
-      tags.push({ label, onRemove: () => setRowCountFilter([]) })
+        listState.rowCountFilter.length === 1
+          ? `Rows: ${rowLabels[listState.rowCountFilter[0]]}`
+          : `Rows: ${listState.rowCountFilter.length} selected`
+      tags.push({ label, onRemove: () => listState.setRowCountFilter([]) })
     }
-    if (ownerFilter.length > 0) {
+    if (listState.ownerFilter.length > 0) {
       const label =
-        ownerFilter.length === 1
-          ? `所有者：${membersById.get(ownerFilter[0])?.name ?? '1 名成员'}`
-          : `所有者：${ownerFilter.length} 名成员`
-      tags.push({ label, onRemove: () => setOwnerFilter([]) })
+        listState.ownerFilter.length === 1
+          ? `所有者：${membersById.get(listState.ownerFilter[0])?.name ?? '1 名成员'}`
+          : `所有者：${listState.ownerFilter.length} 名成员`
+      tags.push({ label, onRemove: () => listState.setOwnerFilter([]) })
     }
     return tags
-  }, [rowCountFilter, ownerFilter, membersById, setRowCountFilter, setOwnerFilter])
+  }, [
+    listState.rowCountFilter,
+    listState.ownerFilter,
+    listState.setRowCountFilter,
+    listState.setOwnerFilter,
+    membersById,
+  ])
+
+  const filterPanel = useMemo(
+    () => (
+      <TablesFilterPanel
+        rowCountFilter={listState.rowCountFilter}
+        ownerFilter={listState.ownerFilter}
+        memberOptions={memberOptions}
+        onRowCountFilterChange={listState.setRowCountFilter}
+        onOwnerFilterChange={listState.setOwnerFilter}
+      />
+    ),
+    [
+      listState.rowCountFilter,
+      listState.ownerFilter,
+      listState.setRowCountFilter,
+      listState.setOwnerFilter,
+      memberOptions,
+    ]
+  )
 
   const handleContentContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -733,95 +411,45 @@ export function Tables() {
     [resolveRowItem, handleRowCtxMenu]
   )
 
-  const tableMoveOptions: MoveOptionNode[] = useMemo(
-    () => buildMoveOptions({ folders, rootLabel: ROOT_LABEL }),
-    [folders]
-  )
-
-  const folderMoveOptions: MoveOptionNode[] = useMemo(() => {
-    if (!activeFolder) return []
-    const excluded = new Set<string>([activeFolder.id])
-    for (const id of descendantFolderIds.get(activeFolder.id) ?? []) excluded.add(id)
-    return buildMoveOptions({ folders, rootLabel: ROOT_LABEL, excludedFolderIds: excluded })
-  }, [activeFolder, folders, descendantFolderIds])
-
   const handleMoveTable = useCallback(
     (optionValue: string) => {
       if (!activeTable) return
-      const folderId = parseMoveOptionValue(optionValue)
-      /**
-       * Placement is re-read from the live list rather than trusted from `activeTable`, which
-       * is a snapshot taken when the menu opened. A refetch or a concurrent move since then
-       * would make the no-op check compare against a stale location and skip a write the user
-       * asked for. Matches the knowledge-base move.
-       */
-      const current = tablesRef.current.find((table) => table.id === activeTable.id) ?? activeTable
-      if ((current.folderId ?? null) === folderId) {
-        closeRowContextMenu()
-        return
-      }
-      moveTable.mutate({ tableId: activeTable.id, folderId })
+      actions.moveTableTo(optionValue, activeTable)
       closeRowContextMenu()
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mutation objects are unstable; mutate is stable in v5
-    [activeTable, closeRowContextMenu]
-  )
-
-  /** Shared by the "Move to" submenu and by dropping a folder row onto another folder. */
-  const moveFolderTo = useCallback(
-    (folderId: string, parentId: string | null) => {
-      updateFolder.mutate(
-        { workspaceId, resourceType: 'table', id: folderId, updates: { parentId } },
-        {
-          onError: (err) =>
-            toast.error(getErrorMessage(err, 'Failed to move folder'), { duration: 5000 }),
-        }
-      )
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mutation objects are unstable; mutate is stable in v5
-    [workspaceId]
+    [actions, activeTable, closeRowContextMenu]
   )
 
   const handleMoveFolder = useCallback(
     (optionValue: string) => {
       if (!activeFolder) return
-      const parentId = parseMoveOptionValue(optionValue)
-      // Same reasoning as `handleMoveTable`: compare against the live row, not the snapshot.
-      const current = folderById.get(activeFolder.id) ?? activeFolder
-      if ((current.parentId ?? null) !== parentId) moveFolderTo(activeFolder.id, parentId)
+      actions.moveFolderByOption(optionValue, activeFolder)
       closeRowContextMenu()
     },
-    [activeFolder, folderById, moveFolderTo, closeRowContextMenu]
+    [actions, activeFolder, closeRowContextMenu]
   )
 
-  const rowDragDropConfig = useFolderRowDragDrop({
-    canEdit,
-    editingRowId: listRename.editingId,
-    descendantsByFolderId: descendantFolderIds,
-    getFolderParentId: (folderId) => folderById.get(folderId)?.parentId ?? null,
-    getResourceFolderId: (tableId) =>
-      tablesRef.current.find((table) => table.id === tableId)?.folderId ?? null,
-    getRowLabel: (rowId) => {
-      const parsed = parseFolderedRowId(rowId)
-      return parsed.kind === 'folder'
-        ? (folderById.get(parsed.id)?.name ?? 'Folder')
-        : (tablesRef.current.find((table) => table.id === parsed.id)?.name ?? 'Table')
-    },
-    onMoveFolder: (folderId, targetFolderId) => moveFolderTo(folderId, targetFolderId),
-    onMoveResource: (tableId, targetFolderId) =>
-      moveTable.mutate({ tableId, folderId: targetFolderId }),
-  })
-
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!activeTable) return
     try {
-      await deleteTable.mutateAsync(activeTable.id)
+      await actions.deleteTable(activeTable.id)
       setIsDeleteDialogOpen(false)
       setActiveTable(null)
-    } catch (err) {
-      logger.error('Failed to delete table:', err)
+    } catch {
+      // Logged by the actions hook; keep the confirm dialog open so the user can retry.
     }
-  }
+  }, [actions, activeTable])
+
+  const handleDeleteFolder = useCallback(async () => {
+    if (!activeFolder) return
+    try {
+      await actions.deleteFolder(activeFolder)
+      setIsDeleteFolderDialogOpen(false)
+      setActiveFolder(null)
+    } catch {
+      // Toasted and logged by the actions hook; keep the confirm dialog open.
+    }
+  }, [actions, activeFolder])
 
   const handleTogglePin = useCallback(() => {
     const target =
@@ -829,167 +457,22 @@ export function Tables() {
         ? activeFolder && { resourceType: 'folder' as const, id: activeFolder.id }
         : activeTable && { resourceType: 'table' as const, id: activeTable.id }
     if (!target) return
-    const pinned =
-      target.resourceType === 'folder'
-        ? pinnedFolderIds.has(target.id)
-        : pinnedTableIds.has(target.id)
-    const mutation = pinned ? unpinItem : pinItem
-    mutation.mutate({ workspaceId, resourceType: target.resourceType, resourceId: target.id })
+    actions.togglePin(target)
     closeRowContextMenu()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mutation objects are unstable; mutate is stable in v5
-  }, [
-    workspaceId,
-    contextMenuKind,
-    activeFolder,
-    activeTable,
-    pinnedFolderIds,
-    pinnedTableIds,
-    closeRowContextMenu,
-  ])
-
-  const handleDeleteFolder = async () => {
-    if (!activeFolder) return
-    try {
-      await deleteFolder.mutateAsync({
-        workspaceId,
-        resourceType: 'table',
-        id: activeFolder.id,
-      })
-      // The open folder just disappeared — fall back to its parent rather than
-      // leaving a `?folderId=` pointing at an archived folder.
-      if (currentFolderId === activeFolder.id) {
-        setCurrentFolderId(activeFolder.parentId)
-      }
-      setIsDeleteFolderDialogOpen(false)
-      setActiveFolder(null)
-    } catch (err) {
-      logger.error('Failed to delete folder:', err)
-      toast.error(getErrorMessage(err, 'Failed to delete folder'), { duration: 5000 })
-    }
-  }
-
-  const handleCsvChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const list = e.target.files
-    if (!list || list.length === 0 || !workspaceId) return
-
-    const csvFiles = Array.from(list).filter((f) => {
-      const ext = f.name.split('.').pop()?.toLowerCase()
-      return ext === 'csv' || ext === 'tsv'
-    })
-
-    if (csvFiles.length === 0) {
-      toast.error('No CSV or TSV files selected')
-      if (csvInputRef.current) csvInputRef.current.value = ''
-      return
-    }
-
-    try {
-      setUploadProgress({ completed: 0, total: csvFiles.length })
-      for (let index = 0; index < csvFiles.length; index++) {
-        const file = csvFiles[index]
-        let importId: string | null = null
-        toast.success(`Importing "${file.name}" in the background`)
-        try {
-          await importCsv.mutateAsync({
-            workspaceId,
-            folderPath: getCanonicalFolderPath(currentFolderId, folderById),
-            file,
-            onCreated: (createdImportId) => {
-              importId = createdImportId
-              useImportTrayStore.getState().startUpload({
-                uploadId: createdImportId,
-                workspaceId,
-                title: file.name,
-              })
-            },
-            onProgress: (percent) => {
-              if (importId) useImportTrayStore.getState().setUploadPercent(importId, percent)
-            },
-          })
-          if (importId) {
-            useImportTrayStore.getState().endUpload(importId)
-            useImportTrayStore.getState().consumeCanceled(importId)
-          }
-        } catch {
-          if (importId) useImportTrayStore.getState().endUpload(importId)
-        } finally {
-          setUploadProgress({ completed: index + 1, total: csvFiles.length })
-        }
-      }
-    } catch (err) {
-      logger.error('Error uploading CSV:', err)
-      toast.error('Failed to import CSV')
-    } finally {
-      setUploadProgress({ completed: 0, total: 0 })
-      if (csvInputRef.current) {
-        csvInputRef.current.value = ''
-      }
-    }
-  }
+  }, [actions, contextMenuKind, activeFolder, activeTable, closeRowContextMenu])
 
   const handleListUploadCsv = useCallback(() => {
-    csvInputRef.current?.click()
+    csvImport.openFilePicker()
     closeListContextMenu()
-  }, [closeListContextMenu])
-
-  const uploadButtonLabel = uploading
-    ? `${uploadProgress.completed}/${uploadProgress.total}`
-    : 'Import CSV'
-
-  // `mutateAsync` is stable in TanStack Query v5 — extract it so the callback
-  // can list it as a dep instead of the unstable mutation object.
-  const createTableAsync = createTable.mutateAsync
-  const handleCreateTable = useCallback(async () => {
-    const existingNames = tables.map((t) => t.name)
-    const name = generateUniqueTableName(existingNames)
-    try {
-      const result = await createTableAsync({
-        name,
-        folderId: currentFolderId,
-        schema: {
-          columns: [{ name: 'name', type: 'string' }],
-        },
-        initialRowCount: 1,
-      })
-      const tableId = result?.data?.table?.id
-      if (tableId) {
-        router.push(`/workspace/${workspaceId}/tables/${tableId}`)
-      }
-    } catch (err) {
-      logger.error('Failed to create table:', err)
-    }
-  }, [tables, router, workspaceId, currentFolderId, createTableAsync])
-
-  const createFolderAsync = createFolder.mutateAsync
-  const handleCreateFolder = useCallback(async () => {
-    try {
-      const folder = await createFolderAsync({
-        workspaceId,
-        resourceType: 'table',
-        name: nextUntitledFolderName(folders, currentFolderId),
-        parentId: currentFolderId ?? undefined,
-      })
-      /**
-       * A live search term filters the folder list too, so a brand-new "New folder" would not
-       * match it — the row never renders, the rename field never appears, and the create reads
-       * as a no-op even though it succeeded. Clear the search so the thing just created is on
-       * screen to be named.
-       */
-      setSearchTerm('')
-      startFolderRename(folder)
-    } catch (err) {
-      logger.error('Failed to create folder:', err)
-      toast.error(getErrorMessage(err, 'Failed to create folder'), { duration: 5000 })
-    }
-  }, [workspaceId, folders, currentFolderId, createFolderAsync, setSearchTerm, startFolderRename])
+  }, [csvImport.openFilePicker, closeListContextMenu])
 
   useRegisterGlobalCommands(() => [
-    { id: 'tables-new-table', handler: () => void handleCreateTable() },
-    { id: 'tables-new-folder', handler: () => void handleCreateFolder() },
+    { id: 'tables-new-table', handler: () => void actions.createTable() },
+    { id: 'tables-new-folder', handler: () => void actions.createFolder() },
     {
       id: 'tables-import-csv',
       handler: () => {
-        if (!uploading) csvInputRef.current?.click()
+        if (!csvImport.uploading) csvImport.openFilePicker()
       },
     },
   ])
@@ -997,40 +480,45 @@ export function Tables() {
   const headerActions: ResourceAction[] = useMemo(
     () => [
       {
-        text: uploadButtonLabel,
+        text: csvImport.uploadButtonLabel,
         icon: Upload,
-        onSelect: () => csvInputRef.current?.click(),
-        disabled: uploading || !canEdit,
+        onSelect: csvImport.openFilePicker,
+        disabled: csvImport.uploading || !canEdit,
       },
       {
         text: 'New folder',
         icon: FolderPlus,
-        onSelect: handleCreateFolder,
-        disabled: !canEdit || createFolder.isPending,
+        onSelect: actions.createFolder,
+        disabled: !canEdit || actions.isCreatingFolder,
       },
       {
         text: 'New table',
         icon: Plus,
-        onSelect: handleCreateTable,
-        disabled: uploading || !canEdit || createTable.isPending,
+        onSelect: actions.createTable,
+        disabled: csvImport.uploading || !canEdit || actions.isCreatingTable,
         variant: 'primary',
       },
     ],
     [
-      uploadButtonLabel,
-      uploading,
+      csvImport.uploadButtonLabel,
+      csvImport.openFilePicker,
+      csvImport.uploading,
       canEdit,
-      handleCreateFolder,
-      handleCreateTable,
-      createFolder.isPending,
-      createTable.isPending,
+      actions.createFolder,
+      actions.createTable,
+      actions.isCreatingFolder,
+      actions.isCreatingTable,
     ]
   )
 
   // Stable identities so the memoized Resource.Header / Resource.Options can
   // actually bail — inline object/element props would defeat their memo.
   const headerAside = useMemo(() => <ImportProgressMenu workspaceId={workspaceId} />, [workspaceId])
-  const filterConfig = useMemo(() => ({ content: filterContent }), [filterContent])
+  const filterConfig = useMemo(() => ({ content: filterPanel }), [filterPanel])
+  const folderMoveOptions = useMemo(
+    () => actions.folderMoveOptions(activeFolder),
+    [actions.folderMoveOptions, activeFolder]
+  )
 
   return (
     <>
@@ -1051,18 +539,18 @@ export function Tables() {
         <Resource.Table
           columns={COLUMNS}
           rows={rows}
-          rowDragDrop={rowDragDropConfig}
+          rowDragDrop={actions.rowDragDrop}
           onRowClick={handleRowClick}
           onRowContextMenu={handleRowContextMenu}
         />
       </Resource>
 
       <input
-        ref={csvInputRef}
+        ref={csvImport.csvInputRef}
         type='file'
         className='hidden'
-        onChange={handleCsvChange}
-        disabled={uploading}
+        onChange={csvImport.handleCsvChange}
+        disabled={csvImport.uploading}
         accept='.csv,.tsv'
         multiple
       />
@@ -1071,12 +559,12 @@ export function Tables() {
         isOpen={isListContextMenuOpen}
         position={listContextMenuPosition}
         onClose={closeListContextMenu}
-        onCreateTable={handleCreateTable}
-        onCreateFolder={handleCreateFolder}
+        onCreateTable={actions.createTable}
+        onCreateFolder={actions.createFolder}
         onUploadCsv={handleListUploadCsv}
-        disableCreate={!canEdit || createTable.isPending}
-        disableCreateFolder={!canEdit || createFolder.isPending}
-        disableUpload={uploading || !canEdit}
+        disableCreate={!canEdit || actions.isCreatingTable}
+        disableCreateFolder={!canEdit || actions.isCreatingFolder}
+        disableUpload={csvImport.uploading || !canEdit}
       />
 
       <TableContextMenu
@@ -1091,20 +579,13 @@ export function Tables() {
           if (activeTable) listRename.startRename(activeTable.id, activeTable.name)
         }}
         onImportCsv={() => setIsImportDialogOpen(true)}
-        onExportCsv={async () => {
-          if (!activeTable) return
-          try {
-            const status = await exportTable(workspaceId, activeTable.id)
-            if (status === 'processing') toast.success('Export started')
-          } catch (err) {
-            logger.error('Failed to export table:', err)
-            toast.error('Failed to export table')
-          }
+        onExportCsv={() => {
+          if (activeTable) void exportTableCsv(activeTable.id)
         }}
         onTogglePin={handleTogglePin}
         pinned={activeTable ? pinnedTableIds.has(activeTable.id) : false}
         onMove={canEdit ? handleMoveTable : undefined}
-        moveOptions={canEdit ? tableMoveOptions : undefined}
+        moveOptions={canEdit ? actions.tableMoveOptions : undefined}
         disableDelete={!canEdit}
         disableRename={!canEdit}
         disableImport={!canEdit}
@@ -1119,7 +600,7 @@ export function Tables() {
           closeRowContextMenu()
         }}
         onRename={() => {
-          if (activeFolder) startFolderRename(activeFolder)
+          if (activeFolder) actions.startFolderRename(activeFolder)
         }}
         onCopyId={() => {
           if (activeFolder) navigator.clipboard.writeText(activeFolder.id)
@@ -1162,7 +643,7 @@ export function Tables() {
         confirm={{
           label: 'Delete',
           onClick: handleDelete,
-          pending: deleteTable.isPending,
+          pending: actions.isDeletingTable,
           pendingLabel: 'Deleting...',
         }}
       />
@@ -1185,7 +666,7 @@ export function Tables() {
         confirm={{
           label: 'Delete',
           onClick: handleDeleteFolder,
-          pending: deleteFolder.isPending,
+          pending: actions.isDeletingFolder,
           pendingLabel: 'Deleting...',
         }}
       />

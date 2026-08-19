@@ -347,3 +347,88 @@ export interface ArtifactSnapshot {
   url: string
   metadata?: Record<string, unknown>
 }
+
+// ---------------------------------------------------------------------------
+// Workspace domain types (issue #40: extracted from api.ts)
+// ---------------------------------------------------------------------------
+
+export interface WorkspaceFileItem {
+  id: string
+  workspaceId?: string
+  name: string
+  key?: string
+  path?: string
+  url?: string
+  size: number
+  type?: string
+  mimeType?: string
+  width?: number | null
+  height?: number | null
+  folderId?: string | null
+  folderPath?: string | null
+  uploadedBy?: string
+  uploadedAt?: string | null
+  deletedAt?: string | null
+  storageContext?: 'workspace' | 'mothership'
+  archived?: boolean
+  readOnly?: boolean
+  metadata?: Record<string, unknown>
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface WorkspaceFolderItem {
+  id: string
+  name: string
+  parentId?: string | null
+  path?: string
+  userId?: string
+  sortOrder?: number
+  createdAt?: string | null
+  updatedAt?: string | null
+  deletedAt?: string | null
+  archived?: boolean
+}
+
+export interface WorkspaceTableItem {
+  id: string
+  name: string
+  description?: string
+  schema?: { columns: Array<Record<string, unknown>> }
+  columns?: Array<Record<string, unknown>>
+  rowCount?: number
+  totalRows?: number
+  archived?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface WorkspaceTableViewItem {
+  id: string
+  tableId: string
+  name: string
+  config: Record<string, unknown>
+  isDefault?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge domain types (issue #40: extracted from api.ts)
+// ---------------------------------------------------------------------------
+
+export interface KnowledgeBaseItem {
+  id: string
+  name: string
+  description?: string
+  documentCount?: number
+  archived?: boolean
+}
+
+export interface KnowledgeDocumentItem {
+  id: string
+  knowledgeBaseId: string
+  name: string
+  mimeType?: string
+  content?: string
+  archived?: boolean
+  readOnly?: boolean
+  metadata?: Record<string, unknown>
+}
