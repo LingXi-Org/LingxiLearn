@@ -17,7 +17,6 @@ import {
   projectLingxiGraphEvents,
 } from '@/lib/lingxi/lingxi-graph-adapter'
 import {
-  buildInteractionAnswerRequest,
   buildV1ThreadModel,
   decodeInteractionOptionId,
   emptyV1ThreadModel,
@@ -42,14 +41,25 @@ import type {
   FileAttachmentForApi,
   GenericResourceData,
 } from '../types'
-import { attachmentRefs, contextOptions, requestMessage } from './controllers/context-controller'
 import {
   mergeAgentTaskEvent,
   RUNTIME_GRAPH_REFRESH_EVENTS,
   reduceV1TurnState,
 } from './controllers/event-controller'
-import { lingxiIdempotencyKey, queueKeyFor, queueMigration } from './controllers/queue-controller'
+import {
+  lingxiIdempotencyKey,
+  queueHead,
+  queueKeyFor,
+  queueKeysContaining,
+  queueMigration,
+} from './controllers/queue-controller'
 import { artifactResourceId, artifactResources } from './controllers/resource-controller'
+import { createStreamController } from './controllers/stream-controller'
+import {
+  buildInteractionAnswerCommand,
+  executeInteractionAnswerCommand,
+  runTaskCommand,
+} from './controllers/task-controller'
 import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './use-chat'
 
 function userMessage(
@@ -117,8 +127,6 @@ export function useLingxiGraphChat(
   )
   const [activeResourceId, setActiveResourceId] =
     options?.activeResourceState ?? internalActiveResourceState
-  const unsubscribeRef = useRef<(() => void) | null>(null)
-  const unsubscribeV1Ref = useRef<(() => void) | null>(null)
   const v1ModelRef = useRef<LingxiV1ThreadModel | null>(null)
   // SSE Last-Event-ID belongs to the durable AgentTaskEvent table.  Never use
   // LingxiV1ThreadModel.lastSeq here: that is the protocol envelope sequence.
@@ -191,10 +199,6 @@ export function useLingxiGraphChat(
     const currentAdapter = adapterRef.current
     const taskId = resolvedChatIdRef.current
     if (!currentAdapter || currentAdapter.kind !== 'lingxigraph' || !taskId || locallyStopped) {
-      unsubscribeRef.current?.()
-      unsubscribeRef.current = null
-      unsubscribeV1Ref.current?.()
-      unsubscribeV1Ref.current = null
       return
     }
 
@@ -301,28 +305,13 @@ export function useLingxiGraphChat(
     // a window where the run could emit its opening response before the page
     // was listening.  Starting from zero is safe because the reducer is
     // idempotent and the durable stream replays in order.
-    unsubscribeV1Ref.current = subscribeAgentV1Events(taskId, applyV1Event, { from: 0 })
-
-    // Some production proxies/CDNs buffer fetch-based SSE even when the origin
-    // sets X-Accel-Buffering: no.  A cheap cursor-based JSON catch-up keeps the
-    // mounted page live in that environment, rather than making refresh the
-    // only way to observe already-persisted replies.
-    let v1CatchUpInFlight = false
-    const catchUpV1 = async () => {
-      if (cancelled || v1CatchUpInFlight) return
-      v1CatchUpInFlight = true
-      try {
-        const page = await agentTaskV1Events(taskId, v1RowSequenceRef.current)
-        for (const row of page.events.sort((a, b) => a.sequence - b.sequence)) {
-          applyV1Event(row)
-        }
-      } catch {
-        /* SSE remains the primary transport; retry on the next tick. */
-      } finally {
-        v1CatchUpInFlight = false
-      }
-    }
-    const v1CatchUpTimer = globalThis.setInterval(() => void catchUpV1(), 1000)
+    const stream = createStreamController({
+      subscribeV0: (from, onEvent, onEnd) =>
+        currentAdapter.subscribe(taskId, { from, onEvent, onEnd }),
+      subscribeV1: (from, onEvent) => subscribeAgentV1Events(taskId, onEvent, { from }),
+      catchUpV1: async (from) => (await agentTaskV1Events(taskId, from)).events,
+    })
+    stream.startV1(applyV1Event)
 
     const start = async () => {
       try {
@@ -385,29 +374,25 @@ export function useLingxiGraphChat(
         )
         requestIdRef.current = loaded.id
         setIsReconnecting(false)
-        unsubscribeRef.current = currentAdapter.subscribe(taskId, {
-          from: historyEvents.at(-1)?.sequence ?? 0,
-          onEvent: appendEvent,
-          onEnd: async () => {
-            try {
-              const refreshed = await currentAdapter.loadTask(taskId)
-              if (!cancelled) {
-                setTask(refreshed)
-                optimisticActiveRef.current = false
-                applyTurnState(turnStateFromTask(refreshed))
-                void api
-                  .runtimeGraph(taskId)
-                  .then((graph) => setWorkflowState(graph.workflowState))
-                  .catch(() => {})
-                onStreamEndRef.current?.(taskId, messagesRef.current)
-                if (turnStateFromTask(refreshed) === 'awaiting_user') {
-                  void drainQueueRef.current()
-                }
+        stream.startV0(historyEvents.at(-1)?.sequence ?? 0, appendEvent, async () => {
+          try {
+            const refreshed = await currentAdapter.loadTask(taskId)
+            if (!cancelled) {
+              setTask(refreshed)
+              optimisticActiveRef.current = false
+              applyTurnState(turnStateFromTask(refreshed))
+              void api
+                .runtimeGraph(taskId)
+                .then((graph) => setWorkflowState(graph.workflowState))
+                .catch(() => {})
+              onStreamEndRef.current?.(taskId, messagesRef.current)
+              if (turnStateFromTask(refreshed) === 'awaiting_user') {
+                void drainQueueRef.current()
               }
-            } finally {
-              if (!cancelled) setIsReconnecting(false)
             }
-          },
+          } finally {
+            if (!cancelled) setIsReconnecting(false)
+          }
         })
         // V1 was subscribed before hydration above.  Keep that one
         // long-lived subscription; catch-up polling shares the durable row
@@ -421,11 +406,7 @@ export function useLingxiGraphChat(
     void start()
     return () => {
       cancelled = true
-      unsubscribeRef.current?.()
-      unsubscribeRef.current = null
-      unsubscribeV1Ref.current?.()
-      unsubscribeV1Ref.current = null
-      globalThis.clearInterval(v1CatchUpTimer)
+      stream.stop()
       if (runtimeGraphRefreshTimer !== null) globalThis.clearTimeout(runtimeGraphRefreshTimer)
     }
   }, [applyTurnState, locallyStopped, resolvedChatId, subscriptionEpoch])
@@ -571,10 +552,7 @@ export function useLingxiGraphChat(
         }
       }
 
-      const prompt = requestMessage(content, contexts)
-      const attachments = attachmentRefs(fileAttachments)
       const idempotencyKey = explicitIdempotencyKey ?? lingxiIdempotencyKey(userMessageId)
-      const context = { ...contextOptions(contexts), idempotencyKey }
       const previousTurnState = turnStateRef.current
       optimisticActiveRef.current = true
       applyTurnState('active')
@@ -589,10 +567,19 @@ export function useLingxiGraphChat(
       )
 
       try {
-        let taskId = resolvedChatIdRef.current
-        if (!taskId) {
-          const created = await currentAdapter.createTask(prompt, attachments, context)
-          taskId = created.id
+        const result = await runTaskCommand(
+          {
+            taskId: resolvedChatIdRef.current,
+            message: content,
+            attachments: fileAttachments,
+            contexts,
+            idempotencyKey,
+          },
+          currentAdapter
+        )
+        if (!result) return false
+        const taskId = result.taskId
+        if (result.kind === 'created') {
           const migration = queueMigration(workspaceId, taskId)
           migrateQueuedMessages(migration.from, migration.to)
           resolvedChatIdRef.current = taskId
@@ -603,7 +590,6 @@ export function useLingxiGraphChat(
           onResourceEventRef.current?.(`runtime-graph:${taskId}`)
         } else {
           requestIdRef.current = taskId
-          await currentAdapter.sendMessage(taskId, prompt, attachments, context)
           onRequestStartedRef.current?.({ requestId: taskId, userMessageId })
         }
         return true
@@ -640,11 +626,14 @@ export function useLingxiGraphChat(
       const taskId = resolvedChatIdRef.current
       const model = v1ModelRef.current
       if (!taskId || !model) return false
-      const request = buildInteractionAnswerRequest(model, submitted)
-      if (!request) return false
-      const { interactionId, answers } = request
-
       const answerId = generateLingxiId('lingxi-interaction-answer')
+      const command = buildInteractionAnswerCommand({
+        taskId,
+        model,
+        submitted,
+        idempotencyKey: lingxiIdempotencyKey(answerId),
+      })
+      if (!command) return false
       const previousTurnState = turnStateRef.current
       optimisticActiveRef.current = true
       applyTurnState('active')
@@ -653,12 +642,9 @@ export function useLingxiGraphChat(
 
       return (async () => {
         try {
-          await answerAgentInteraction(
-            taskId,
-            interactionId,
-            answers,
-            lingxiIdempotencyKey(answerId)
-          )
+          await executeInteractionAnswerCommand(command, {
+            answerInteraction: answerAgentInteraction,
+          })
           onRequestStartedRef.current?.({ requestId: taskId, userMessageId: answerId })
           return true
         } catch (cause) {
@@ -699,10 +685,8 @@ export function useLingxiGraphChat(
         // retried, so the backend command ledger makes it exactly-once.
         if (sent) {
           const currentQueues = useMothershipQueueStore.getState().queues
-          for (const [chatKey, queue] of Object.entries(currentQueues)) {
-            if (queue.some((candidate) => candidate.id === liveMessage.id)) {
-              removeQueuedMessage(chatKey, liveMessage.id)
-            }
+          for (const chatKey of queueKeysContaining(currentQueues, liveMessage.id)) {
+            removeQueuedMessage(chatKey, liveMessage.id)
           }
         }
         return sent
@@ -715,16 +699,19 @@ export function useLingxiGraphChat(
   )
 
   const drainQueue = useCallback(async () => {
-    if (dispatchingHeadIdRef.current) return
     // A native interrupt is a resumable learner turn. An SSE stream remains
     // open in this state, so queue draining must be triggered by the event or
     // snapshot transition rather than by stream end.
-    if (!['idle', 'awaiting_user'].includes(turnStateRef.current)) return
     const dispatchKey = queueKeyRef.current
     const state = useMothershipQueueStore.getState()
     const queue = state.queues[dispatchKey] ?? EMPTY_LINGXI_QUEUE
-    const next = queue[0]
-    if (!next || state.editing[dispatchKey] === next.id) return
+    const next = queueHead(
+      queue,
+      state.editing[dispatchKey],
+      dispatchingHeadIdRef.current,
+      turnStateRef.current
+    )
+    if (!next) return
     await dispatchQueuedMessage(next)
   }, [dispatchQueuedMessage])
   drainQueueRef.current = drainQueue
