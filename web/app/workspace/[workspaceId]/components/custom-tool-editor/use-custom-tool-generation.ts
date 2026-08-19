@@ -3,17 +3,33 @@
 import { useMemo, useState } from 'react'
 import type { SchemaParameter } from '@/app/workspace/[workspaceId]/components/custom-tool-editor/custom-tool-schema'
 
-function useWand({ currentValue, onStreamStart, onGeneratedContent }: any) {
+interface UseWandOptions {
+  currentValue: string
+  onStreamStart?: () => void
+  onGeneratedContent?: (content: string) => void
+  onStreamChunk?: (chunk: string) => void
+  wandConfig?: {
+    enabled: boolean
+    maintainHistory: boolean
+    prompt: string
+    placeholder: string
+    generationType: string
+  }
+}
+
+function useWand({ currentValue, onStreamStart, onGeneratedContent }: UseWandOptions) {
   const [isLoading, setIsLoading] = useState(false)
+  const generateStream = async (_options: { prompt: string }) => {
+    setIsLoading(true)
+    onStreamStart?.()
+    onGeneratedContent?.(currentValue)
+    setIsLoading(false)
+  }
   return {
     isLoading,
     isStreaming: false,
-    generate: async () => {
-      setIsLoading(true)
-      onStreamStart?.()
-      onGeneratedContent?.(currentValue)
-      setIsLoading(false)
-    },
+    generate: generateStream,
+    generateStream,
   }
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ComponentType, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Button } from '@sim/emcn'
 
 export { ConversationListItem } from './conversation-list-item'
@@ -83,9 +83,4 @@ export function ErrorState({ title, description, reset, children }: ErrorStatePr
   )
 }
 
-export interface ChromeActionSpec {
-  text: string
-  icon?: ComponentType<{ className?: string }>
-  variant?: string
-  active?: boolean
-}
+export type { ChromeActionSpec } from './resource/components/resource-chrome-fallback'

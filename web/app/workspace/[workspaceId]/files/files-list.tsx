@@ -213,6 +213,8 @@ export function FilesList({
     onBulkDelete: handleBulkDelete,
     downloads,
     deleteFlow,
+    pinnedFolderIds,
+    pinnedFileIds,
     togglePin: handleTogglePin,
     descendantIndex,
     onMoved: selection.clearSelection,

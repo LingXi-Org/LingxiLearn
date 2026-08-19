@@ -5,6 +5,12 @@ import { Chip, useNativeSurfaceOcclusionReady } from '@sim/emcn'
 import { useSession } from '@/lib/auth/auth-client'
 import { recoverFromStaleSession } from '@/lib/auth/stale-session-recovery'
 
+function hasImpersonator(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || !('impersonatedBy' in value)) return false
+  const impersonatedBy = value.impersonatedBy
+  return typeof impersonatedBy === 'string' && impersonatedBy.length > 0
+}
+
 /**
  * Cleanly logs out when the session dies while the app is mounted.
  *
@@ -36,7 +42,7 @@ export function SessionExpired() {
   if (!sawSession && session?.user) {
     setSawSession(true)
   }
-  if (!wasImpersonation && session?.session?.impersonatedBy) {
+  if (!wasImpersonation && hasImpersonator(session?.session)) {
     setWasImpersonation(true)
   }
 

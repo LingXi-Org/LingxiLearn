@@ -1,11 +1,9 @@
 import { db } from '@sim/db'
 import { workflow as workflowTable } from '@sim/db/schema'
-import { createLogger } from '@/lib/logger'
 import {
   assertWorkflowMutable,
   authorizeWorkflowByWorkspacePermission,
 } from '@sim/platform-authz/workflow'
-import { toError } from '@/lib/utils/errors'
 import { eq } from 'drizzle-orm'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'
 import { getBlockVisibilityForCopilot } from '@/lib/copilot/block-visibility'
@@ -19,6 +17,8 @@ import {
 import { env } from '@/lib/core/config/env'
 import { getSocketServerUrl } from '@/lib/core/utils/urls'
 import { MAX_PLAN_REQUIRED } from '@/lib/execution/remote-sandbox/workspace-sandboxes'
+import { createLogger } from '@/lib/logger'
+import { toError } from '@/lib/utils/errors'
 import {
   applyTargetedLayout,
   getTargetedLayoutImpact,
@@ -174,7 +174,7 @@ export const editWorkflowServerTool: BaseServerTool<EditWorkflowParams, unknown>
       validationErrors,
       skippedItems,
     } = await withBlockVisibility(blockVisibility, async () =>
-      applyOperationsToWorkflowState(workflowState, operationsToApply, permissionConfig)
+      applyOperationsToWorkflowState(workflowState, operationsToApply, permissionConfig?.config)
     )
 
     // Add credential validation errors

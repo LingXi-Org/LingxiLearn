@@ -17,10 +17,10 @@ import {
   ChatMessageContainer,
   EmailAuth,
   PasswordAuth,
+  SSOAuth,
 } from '@/app/(interfaces)/chat/components'
 import { CHAT_ERROR_MESSAGES, CHAT_REQUEST_TIMEOUT_MS } from '@/app/(interfaces)/chat/constants'
 import { useChatStreaming } from '@/app/(interfaces)/chat/hooks'
-import SSOAuth from '@/ee/sso/components/sso-auth'
 import { useDeployedChatConfig } from '@/hooks/queries/chats'
 import { useGitHubStars } from '@/hooks/queries/github-stars'
 

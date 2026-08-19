@@ -487,7 +487,7 @@ export function serializeTableMeta(table: {
   description?: string | null
   schema: unknown
   rowCount: number
-  maxRows: number
+  maxRows?: number
   createdAt: Date | string
   updatedAt: Date | string
 }): string {

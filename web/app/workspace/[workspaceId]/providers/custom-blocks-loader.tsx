@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import { buildCustomBlockConfig } from '@/blocks/custom/build-config'
 import { hydrateClientCustomBlocks } from '@/blocks/custom/client-overlay'
 import { getCustomBlockIcon } from '@/blocks/custom/custom-block-icon'
-import { useOrgBrandConfig } from '@/ee/whitelabeling/components/branding-provider'
+import { useOrgBrandConfig } from '@/compat/ee/whitelabeling/components/branding-provider'
 import { useCustomBlocks } from '@/hooks/queries/custom-blocks'
 
 /**

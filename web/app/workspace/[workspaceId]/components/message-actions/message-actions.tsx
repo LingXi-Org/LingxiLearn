@@ -50,6 +50,16 @@ const ICON_CLASS = 'size-[14px]'
 const BUTTON_CLASS =
   'flex size-[26px] items-center justify-center rounded-[6px] text-[var(--text-icon)] transition-colors hover-hover:bg-[var(--surface-hover)] focus-visible:outline-none'
 
+interface ForkResult {
+  id: string
+  failedFileCopies?: number
+}
+
+function isForkResult(value: unknown): value is ForkResult {
+  if (typeof value !== 'object' || value === null || !('id' in value)) return false
+  return typeof value.id === 'string' && value.id.length > 0
+}
+
 interface MessageActionsProps {
   content: string
   userQuery?: string
@@ -171,7 +181,8 @@ export const MessageActions = memo(function MessageActions({
 
     if (!chatId || !messageId || forkChat.isPending) return
     try {
-      const result = await forkChat.mutateAsync({ chatId, upToMessageId: messageId })
+      const result: unknown = await forkChat.mutateAsync({ chatId })
+      if (!isForkResult(result)) return
       if (result.failedFileCopies) {
         toast.warning(
           `${result.failedFileCopies} file${result.failedFileCopies === 1 ? '' : 's'} could not be copied to the fork`

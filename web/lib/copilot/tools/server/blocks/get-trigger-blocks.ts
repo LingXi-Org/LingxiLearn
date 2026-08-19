@@ -1,8 +1,8 @@
-import { createLogger } from '@/lib/logger'
 import { z } from 'zod'
 import type { BaseServerTool } from '@/lib/copilot/tools/server/base-tool'
 import { getAllowedIntegrationsFromEnv } from '@/lib/core/config/env-flags'
 import { isIntegrationDeploymentAvailableForVisibility } from '@/lib/integrations/availability.server'
+import { createLogger } from '@/lib/logger'
 import { isBlockTypeAccessControlExempt } from '@/lib/permission-groups/block-access'
 import { intersectIntegrationAllowlists } from '@/lib/permission-groups/integration-allowlist'
 import { getAllBlocks } from '@/blocks/registry'
@@ -30,7 +30,7 @@ export const getTriggerBlocksServerTool: BaseServerTool<
         ? await getUserPermissionConfig(context.userId, context.workspaceId)
         : null
     const allowedIntegrations = intersectIntegrationAllowlists(
-      permissionConfig?.allowedIntegrations ?? null,
+      permissionConfig?.config.allowedIntegrations ?? null,
       getAllowedIntegrationsFromEnv()
     )
     const visibility = overlayVisibility()

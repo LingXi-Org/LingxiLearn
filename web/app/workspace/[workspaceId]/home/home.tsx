@@ -133,7 +133,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
     () => [activeResourceParam, setActiveResourceUrl],
     [activeResourceParam, setActiveResourceUrl]
   )
-  const [greeting, setGreeting] = useState(LINGXI_GREETINGS[0])
+  const [greeting, setGreeting] = useState<(typeof LINGXI_GREETINGS)[number]>(LINGXI_GREETINGS[0])
   const { data: workspaceFiles = [] } = useWorkspaceFiles(workspaceId)
   const posthog = usePostHog()
   const posthogRef = useRef(posthog)

@@ -921,9 +921,12 @@ function buildChatHistoryHydrationKey(chatHistory: MothershipChatHistory): strin
         streamSnapshot.status,
         streamSnapshot.events.length,
         streamSnapshot.events[streamSnapshot.events.length - 1]?.eventId ?? '',
-        streamSnapshot.previewSessions
+        (Array.isArray(streamSnapshot.previewSessions)
+          ? streamSnapshot.previewSessions.filter(isFilePreviewSession)
+          : []
+        )
           .map(
-            (session) =>
+            (session: FilePreviewSession) =>
               `${session.id}:${session.previewVersion}:${session.status}:${session.updatedAt}`
           )
           .join('|'),

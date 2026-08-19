@@ -9,7 +9,10 @@
  */
 
 import type { ContentBlock, ToolCallInfo, ToolCallStatus } from '../chat-types'
-import type { LingxiMothershipEventV1 } from '../generated/mothership-stream-v1'
+import type {
+  LingxiMothershipEventV1,
+  LingxiV1EventPayload,
+} from '../generated/mothership-stream-v1'
 import { isSpanEnd, isSpanStart } from '../generated/mothership-stream-v1'
 
 export type LingxiV1TurnStatus = 'active' | 'awaiting_user' | 'delivered' | 'failed' | 'cancelled'
@@ -223,7 +226,7 @@ export function reduceV1Event(
     if (model.lastSeq >= envelope.seq && alreadyApplied(model, envelope)) return model
   }
   model.lastSeq = Math.max(model.lastSeq, envelope.seq)
-  const payload = envelope.payload as Record<string, unknown>
+  const payload = envelope.payload as LingxiV1EventPayload & Record<string, unknown>
 
   switch (envelope.type) {
     case 'turn': {
@@ -280,7 +283,7 @@ export function reduceV1Event(
           type: 'subagent_end',
           subagent: displayNameOf(model, turn, payload.agentRunId),
           spanId: payload.agentRunId,
-          endedAt: true,
+          endedAt: Date.parse(envelope.ts) || undefined,
           timestamp: Date.parse(envelope.ts) || undefined,
         })
       }

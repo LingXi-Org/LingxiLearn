@@ -2,10 +2,10 @@
 
 import { useCallback } from 'react'
 import { toast } from '@sim/emcn'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { useRouter } from 'next/navigation'
 import type { KnowledgeBaseData } from '@/lib/knowledge/types'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { parseMoveOptionValue } from '@/app/workspace/[workspaceId]/components/folders'
 import { useDeleteKnowledgeBase, useUpdateKnowledgeBase } from '@/hooks/queries/kb/knowledge'
 import type { usePinItem, useUnpinItem } from '@/hooks/queries/pinned-items'
@@ -45,7 +45,15 @@ export function useKnowledgeBaseCommands({
       knowledgeBaseId: string,
       updates: Partial<Pick<KnowledgeBaseData, 'name' | 'description'>>
     ) => {
-      await updateKnowledgeBaseMutation({ knowledgeBaseId, updates })
+      await updateKnowledgeBaseMutation({
+        knowledgeBaseId,
+        updates: {
+          ...(updates.name !== undefined ? { name: updates.name } : {}),
+          ...(updates.description !== undefined
+            ? { description: updates.description ?? undefined }
+            : {}),
+        },
+      })
       logger.info(`Knowledge base updated: ${knowledgeBaseId}`)
     },
     [updateKnowledgeBaseMutation]

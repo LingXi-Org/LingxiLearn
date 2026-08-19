@@ -140,8 +140,8 @@ export function resolveExecutionSource(wire: WireSourceFields): ExecutionRunSour
  * Extracts the owning AgentTask id from the run input payload when the runtime
  * recorded it there (`{ taskId }`). Null when the wire carries no task identity.
  */
-function extractTaskId(runInput: unknown, explicitTaskId?: string): string | null {
-  if (explicitTaskId) return explicitTaskId
+function extractTaskId(runInput: unknown, explicitTaskId?: unknown): string | null {
+  if (typeof explicitTaskId === 'string' && explicitTaskId.length > 0) return explicitTaskId
   if (!runInput || typeof runInput !== 'object' || Array.isArray(runInput)) return null
   const taskId = (runInput as Record<string, unknown>).taskId
   return typeof taskId === 'string' && taskId.length > 0 ? taskId : null

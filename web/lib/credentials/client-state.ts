@@ -69,8 +69,9 @@ export function clearPendingCredentialCreateRequest() {
 }
 
 const OAUTH_RETURN_CONTEXT_KEY = 'sim.oauth-return-context'
+export const ADD_CONNECTOR_SEARCH_PARAM = 'addConnector'
 
-export type OAuthReturnOrigin = 'workflow' | 'integrations'
+export type OAuthReturnOrigin = 'workflow' | 'integrations' | 'kb-connectors'
 
 interface OAuthReturnBase {
   displayName: string
@@ -90,7 +91,16 @@ interface OAuthReturnIntegrations extends OAuthReturnBase {
   origin: 'integrations'
 }
 
-export type OAuthReturnContext = OAuthReturnWorkflow | OAuthReturnIntegrations
+interface OAuthReturnKnowledgeBaseConnector extends OAuthReturnBase {
+  origin: 'kb-connectors'
+  knowledgeBaseId: string
+  connectorType?: string
+}
+
+export type OAuthReturnContext =
+  | OAuthReturnWorkflow
+  | OAuthReturnIntegrations
+  | OAuthReturnKnowledgeBaseConnector
 
 export function writeOAuthReturnContext(ctx: OAuthReturnContext) {
   if (typeof window === 'undefined') return

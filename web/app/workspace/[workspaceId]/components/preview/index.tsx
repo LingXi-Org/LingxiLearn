@@ -53,9 +53,7 @@ function ReadOnlyBlock({ id, data }: NodeProps) {
       isLocked
       hasRing={status === 'running' || status === 'retrying'}
       ringStyles=''
-      runPathStatus={
-        status === 'completed' ? 'success' : status === 'failed' ? 'error' : 'not-executed'
-      }
+      runPathStatus={status === 'completed' ? 'success' : status === 'failed' ? 'error' : undefined}
       isExecutionHighlighted={status !== 'not-executed'}
       Icon={Sparkles}
       iconBgColor='var(--surface-4)'

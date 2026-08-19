@@ -1,5 +1,4 @@
 import { db } from '@sim/db'
-import { createLogger } from '@/lib/logger'
 import {
   authorizeWorkflowByWorkspacePermission,
   getActiveWorkflowRecord,
@@ -32,6 +31,7 @@ import { EnvCapabilityConfigurationError } from '@/lib/core/config/env-capabilit
 import { getAllowedIntegrationsFromEnv } from '@/lib/core/config/env-flags'
 import { isIntegrationDeploymentAvailableForVisibility } from '@/lib/integrations/availability.server'
 import { readKnowledgeBase } from '@/lib/knowledge/application/knowledge-bases'
+import { createLogger } from '@/lib/logger'
 import { toOverview } from '@/lib/logs/log-views'
 import type { TraceSpan } from '@/lib/logs/types'
 import { mcpService } from '@/lib/mcp/service'
@@ -626,7 +626,7 @@ async function processBlockMetadata(
       userId ? getBlockVisibilityForCopilot(userId, workspaceId) : null,
     ])
     const allowedIntegrations = intersectIntegrationAllowlists(
-      permissionConfig?.allowedIntegrations ?? null,
+      permissionConfig?.config.allowedIntegrations ?? null,
       getAllowedIntegrationsFromEnv()
     )
     if (!isIntegrationDeploymentAvailableForVisibility(blockId, visibility)) {

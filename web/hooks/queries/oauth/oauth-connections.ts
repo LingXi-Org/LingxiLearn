@@ -1,4 +1,3 @@
-import { createLogger } from '@/lib/logger'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import {
@@ -9,9 +8,9 @@ import {
   type OAuthAccountSummary,
   type OAuthConnection,
 } from '@/lib/api/contracts/oauth-connections'
-import { client } from '@/lib/auth/auth-client'
 import { getDesktopBridge } from '@/lib/desktop'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
+import { createLogger } from '@/lib/logger'
 import { OAUTH_PROVIDERS, type OAuthServiceConfig } from '@/lib/oauth'
 
 const logger = createLogger('OAuthConnectionsQuery')
@@ -177,10 +176,17 @@ export function useConnectOAuthService() {
         return { success: true }
       }
 
-      await client.oauth2.link({
-        providerId,
-        callbackURL,
-      })
+      // The legacy auth client exposed this as `client.oauth2.link`. OAuth is
+      // now owned by the BFF, so start the same browser redirect explicitly.
+      // Derive the workspace from the route rather than accepting an
+      // untrusted caller-provided workspace id.
+      const workspaceId = window.location.pathname.match(/^\/workspace\/([^/]+)/)?.[1]
+      if (!workspaceId) throw new Error('OAuth connections require a workspace route')
+      const authorizeUrl = new URL('/api/auth/oauth2/authorize', window.location.origin)
+      authorizeUrl.searchParams.set('providerId', providerId)
+      authorizeUrl.searchParams.set('workspaceId', workspaceId)
+      authorizeUrl.searchParams.set('callbackURL', callbackURL)
+      window.location.href = authorizeUrl.toString()
 
       return { success: true }
     },

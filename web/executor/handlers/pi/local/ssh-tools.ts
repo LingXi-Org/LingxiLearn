@@ -5,9 +5,9 @@
  * All paths are sanitized and confined to the configured `repoPath` (S4).
  */
 
+import type { Client, SFTPWrapper } from 'ssh2'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
-import type { Client, SFTPWrapper } from 'ssh2'
 import {
   createSSHConnection,
   escapeShellArg,
@@ -50,7 +50,9 @@ export async function openSshSession(connection: PiSshConnection): Promise<PiSsh
   // the connection is orphaned when this function throws.
   try {
     const sftp = await new Promise<SFTPWrapper>((resolve, reject) => {
-      client.sftp((err, channel) => (err ? reject(err) : resolve(channel)))
+      client.sftp((err: Error | undefined, channel: SFTPWrapper) =>
+        err ? reject(err) : resolve(channel)
+      )
     })
     return { client, sftp, close }
   } catch (error) {
@@ -61,13 +63,15 @@ export async function openSshSession(connection: PiSshConnection): Promise<PiSsh
 
 function readRemoteFile(sftp: SFTPWrapper, path: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    sftp.readFile(path, (err, data) => (err ? reject(err) : resolve(data.toString('utf-8'))))
+    sftp.readFile(path, (err: Error | undefined, data: Buffer) =>
+      err ? reject(err) : resolve(data.toString('utf-8'))
+    )
   })
 }
 
 function writeRemoteFile(sftp: SFTPWrapper, path: string, content: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    sftp.writeFile(path, content, (err) => (err ? reject(err) : resolve()))
+    sftp.writeFile(path, content, (err: Error | undefined) => (err ? reject(err) : resolve()))
   })
 }
 

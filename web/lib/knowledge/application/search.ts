@@ -1,5 +1,3 @@
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { checkActorUsageLimits } from '@/lib/billing/calculations/usage-monitor'
 import {
   type BillingAttributionSnapshot,
@@ -27,7 +25,7 @@ import {
 } from '@/lib/knowledge/application/contexts'
 import { knowledgeOperations } from '@/lib/knowledge/application/operations'
 import { ALL_TAG_SLOTS } from '@/lib/knowledge/constants'
-import { getEmbeddingModelInfo } from '@/lib/knowledge/embedding-models'
+import { DEFAULT_EMBEDDING_MODEL, getEmbeddingModelInfo } from '@/lib/knowledge/embedding-models'
 import { runWithKnowledgeModelInputProvenance } from '@/lib/knowledge/model-input-provenance'
 import { rerank } from '@/lib/knowledge/reranker'
 import {
@@ -41,7 +39,9 @@ import { getKnowledgeBaseById } from '@/lib/knowledge/service'
 import { getDocumentTagDefinitions } from '@/lib/knowledge/tags/service'
 import { buildUndefinedTagsError, validateTagValue } from '@/lib/knowledge/tags/utils'
 import type { KnowledgeBaseWithCounts, StructuredFilter } from '@/lib/knowledge/types'
+import { createLogger } from '@/lib/logger'
 import { estimateTokenCount } from '@/lib/tokenization/estimators'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { ResolvedSecretTraceRegistry } from '@/executor/utils/resolved-secret-trace-registry'
 import { getRerankModelPricing } from '@/providers/models'
 import { calculateCost } from '@/providers/utils'
@@ -339,7 +339,13 @@ export const searchKnowledge = defineAuthorizedKnowledgeUseCase({
       definitionsByKnowledgeBase = built.definitionsByKnowledgeBase
     }
 
-    const embeddingModels = [...new Set(context.knowledgeBases.map((kb) => kb.embeddingModel))]
+    const embeddingModels = [
+      ...new Set(
+        context.knowledgeBases.map(
+          (knowledgeBase) => knowledgeBase.embeddingModel ?? DEFAULT_EMBEDDING_MODEL
+        )
+      ),
+    ]
     if (hasQuery && embeddingModels.length > 1) {
       throw new OrchestrationError(
         'validation',

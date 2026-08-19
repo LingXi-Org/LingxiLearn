@@ -244,7 +244,6 @@ const WORKSPACE_AGENT_DEFS = [
     icon: AgentIcon,
     bgColor: 'var(--text-secondary)',
     x: 1010,
-    x: 1230,
     y: 610,
   },
   {

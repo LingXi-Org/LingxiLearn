@@ -1,4 +1,3 @@
-import { createLogger } from '@/lib/logger'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { generateRequestId } from '@/lib/core/utils/request'
 import {
@@ -22,7 +21,9 @@ import {
   updateChunk,
 } from '@/lib/knowledge/chunks/service'
 import type { ChunkFilters } from '@/lib/knowledge/chunks/types'
+import { DEFAULT_EMBEDDING_MODEL } from '@/lib/knowledge/embedding-models'
 import { runWithKnowledgeModelInputProvenance } from '@/lib/knowledge/model-input-provenance'
+import { createLogger } from '@/lib/logger'
 import { calculateCost } from '@/providers/utils'
 
 const logger = createLogger('KnowledgeChunkApplication')
@@ -161,9 +162,10 @@ export const createKnowledgeChunk = defineAuthorizedKnowledgeUseCase({
         provenance
       )
     )
+    const embeddingModel = context.knowledgeBase.embeddingModel ?? DEFAULT_EMBEDDING_MODEL
     let cost: ReturnType<typeof calculateCost> | null = null
     try {
-      cost = calculateCost(context.knowledgeBase.embeddingModel, chunk.tokenCount, 0, false)
+      cost = calculateCost(embeddingModel, chunk.tokenCount, 0, false)
     } catch (error) {
       logger.warn('Failed to calculate cost for chunk upload', { error })
     }
@@ -179,7 +181,7 @@ export const createKnowledgeChunk = defineAuthorizedKnowledgeUseCase({
                 output: cost.output,
                 total: cost.total,
                 tokens: { prompt: chunk.tokenCount, completion: 0, total: chunk.tokenCount },
-                model: context.knowledgeBase.embeddingModel,
+                model: embeddingModel,
                 pricing: cost.pricing,
               },
             }
