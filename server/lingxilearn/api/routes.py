@@ -15,44 +15,77 @@ import asyncio
 import contextlib
 import json
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from lingxi_identity import Principal  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
+from ..application import ApplicationServices, agent_task_create_payload_digest
 from ..auth import get_principal
 from ..config import REPO_ROOT
+from ..contracts.rest_models import (
+    AckDeliveryResponse,
+    AgentDecisionsResponse,
+    AgentEvidenceResponse,
+    AgentMessageResponse,
+    AgentTaskCancelResponse,
+    AgentTaskCreateResponse,
+    AgentTaskDeleteResponse,
+    AgentTaskEventsResponse,
+    AgentTaskForkResponse,
+    AgentTaskListResponse,
+    AgentTaskMetaResponse,
+    AgentTaskRestoreResponse,
+    AgentTaskSnapshotResponse,
+    AnswerResponse,
+    AttachmentUploadResponse,
+    ConfirmWorkResponse,
+    ContextResponse,
+    CopilotToolPermissionResponse,
+    HealthResponse,
+    InteractionAnswerResponse,
+    LearningProfileResponse,
+    MasteryResponse,
+    PacksResponse,
+    PreferencesResponse,
+    ProfileChangeResponse,
+    QuizSubmissionResponse,
+    RuntimeGraphResponse,
+    SessionCreateResponse,
+    SessionSnapshotResponse,
+    SkillRegistryResponse,
+    SkillsResponse,
+)
 from ..learner import LearnerContext
 from ..runtime.execution_graph import build_execution_graph
-from ..service import Service, agent_task_create_payload_digest
 from ..state.capabilities import CAPABILITY_INFO
-from ..store.models.agent import AgentTask
-from ..store.models.knowledge import KnowledgeBase, KnowledgeDocument
-from ..store.models.table import WorkspaceTable
-from ..store.models.workspace import PersonalSkill, Workspace, WorkspaceFile
+from ..store.models.workspace import PersonalSkill
 
 router = APIRouter(prefix="/api")
 
 TERMINAL = {"done", "failed", "cancelled"}
 
 
-def service_of(request: Request) -> Service:
-    svc: Service | None = getattr(request.app.state, "service", None)
-    if svc is None:
+def services_of(request: Request) -> ApplicationServices:
+    """Dependency-container lookup: returns the composition root, never a god service."""
+
+    services: ApplicationServices | None = getattr(request.app.state, "services", None)
+    if services is None:
         raise HTTPException(status_code=503, detail="service_unavailable")
-    return svc
+    return services
 
 
 async def current_learner_context(
     request: Request, principal: Principal = Depends(get_principal)
 ) -> LearnerContext:
-    svc = service_of(request)
+    services = services_of(request)
     try:
-        return await svc.learners.get_learner_context(principal)
+        return await services.learners.get_learner_context(principal)
     except (LookupError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="invalid_identity") from exc
 
@@ -63,7 +96,7 @@ def not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="resource_not_found")
 
 
-@router.post("/copilot/tool-permission")
+@router.post("/copilot/tool-permission", response_model=CopilotToolPermissionResponse)
 async def copilot_tool_permission(
     body: dict[str, Any],
     request: Request,
@@ -78,50 +111,14 @@ async def copilot_tool_permission(
         or any(not isinstance(item, dict) for item in decisions)
     ):
         raise HTTPException(status_code=422, detail="At least one decision is required")
-    results: list[dict[str, Any]] = []
-    svc = service_of(request)
-    for item in decisions[:50]:
-        if not isinstance(item, dict):
-            continue
-        tool_call_id = str(item.get("toolCallId") or "")
-        decision = str(item.get("decision") or "")
-        if not tool_call_id or decision not in {"allow", "allow_chat", "always_allow", "skip"}:
-            raise HTTPException(status_code=422, detail="invalid_tool_permission_decision")
-        applied_result = await svc.agent_task_repository.decide_schedule_permission(
-            proposal_id=tool_call_id,
+    services = services_of(request)
+    try:
+        results = await services.agent_tasks.decide_schedule_permission(
             learner_id=context.learner_id,
-            decision=decision,
+            decisions=decisions,
         )
-        if (
-            applied_result
-            and applied_result.get("applied")
-            and applied_result.get("source_task_id")
-        ):
-            source_task_id = str(applied_result["source_task_id"])
-            await svc.agent_task_repository.append_agent_events(
-                source_task_id,
-                [
-                    {
-                        "kind": "schedule.permission",
-                        "agent": "coordinator",
-                        "payload": {
-                            "toolCallId": tool_call_id,
-                            "decision": decision,
-                            "status": applied_result.get("status"),
-                        },
-                    }
-                ],
-            )
-            svc._notify_agent(source_task_id)
-        results.append(
-            {
-                "toolCallId": tool_call_id,
-                "decision": decision,
-                "applied": bool(applied_result and applied_result.get("applied")),
-                "status": applied_result.get("status") if applied_result else "unknown",
-                "scope": applied_result.get("scope") if applied_result else None,
-            }
-        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"success": True, "results": results}
 
 
@@ -131,121 +128,17 @@ async def _validated_task_context(
     resource_refs: list[dict[str, Any]],
     skill_ids: list[str],
 ) -> list[dict[str, Any]]:
-    """Validate native workspace references and persist personal-skill snapshots.
+    """Transport mapping for task-resource validation; logic lives in the service."""
 
-    The Sim UI sends resource references as JSON rather than opaque backend IDs.
-    Resolve every reference against the current learner before a task starts so
-    a guessed id can never disclose another learner's files, tables, or KBs.
-    Skill snapshots are copied into the task resource list to make a later run
-    reproducible even if the editable personal skill changes.
-    """
-
-    svc = service_of(request)
-    normalized = [dict(ref) for ref in resource_refs if isinstance(ref, dict)]
-    async with svc.db.session() as session:
-        workspace = await session.scalar(
-            select(Workspace).where(Workspace.learner_id == context.learner_id)
+    services = services_of(request)
+    try:
+        return await services.agent_tasks.validate_task_resources(
+            context.learner_id, resource_refs, skill_ids
         )
-        workspace_id = workspace.id if workspace is not None else None
-        for ref in normalized:
-            kind = str(ref.get("type") or ref.get("resourceType") or ref.get("kind") or "").lower()
-            resource_id = str(
-                ref.get("id")
-                or ref.get("resourceId")
-                or ref.get("fileId")
-                or ref.get("tableId")
-                or ref.get("knowledgeBaseId")
-                or ref.get("documentId")
-                or ""
-            )
-            if not resource_id:
-                raise HTTPException(status_code=422, detail="resource_id_required")
-            if kind in {"file", "files", "workspace_file"} or ref.get("fileId"):
-                row = await session.scalar(
-                    select(WorkspaceFile).where(
-                        WorkspaceFile.id == resource_id,
-                        WorkspaceFile.workspace_id == workspace_id,
-                    )
-                )
-            elif kind in {"table", "tables", "workspace_table"} or ref.get("tableId"):
-                row = await session.scalar(
-                    select(WorkspaceTable).where(
-                        WorkspaceTable.id == resource_id,
-                        WorkspaceTable.workspace_id == workspace_id,
-                    )
-                )
-            elif (
-                kind in {"knowledge", "knowledge_base", "kb", "document"}
-                or ref.get("knowledgeBaseId")
-                or ref.get("documentId")
-            ):
-                if ref.get("documentId"):
-                    row = await session.scalar(
-                        select(KnowledgeDocument)
-                        .join(KnowledgeBase, KnowledgeBase.id == KnowledgeDocument.base_id)
-                        .where(
-                            KnowledgeDocument.id == resource_id,
-                            KnowledgeBase.learner_id == context.learner_id,
-                        )
-                    )
-                else:
-                    row = await session.scalar(
-                        select(KnowledgeBase).where(
-                            KnowledgeBase.id == resource_id,
-                            KnowledgeBase.learner_id == context.learner_id,
-                        )
-                    )
-            elif kind in {"task", "agent_task", "artifact"}:
-                # Task and artifact references are learner-scoped as well. Do
-                # not accept an opaque id here: the caller must own the task
-                # that produced the reference.
-                task_id = str(ref.get("taskId") or resource_id)
-                row = await session.scalar(
-                    select(AgentTask).where(
-                        AgentTask.id == task_id,
-                        AgentTask.learner_id == context.learner_id,
-                    )
-                )
-            elif kind == "skill":
-                skill_id = str(ref.get("skillId") or resource_id)
-                row = await session.scalar(
-                    select(PersonalSkill).where(
-                        PersonalSkill.id == skill_id,
-                        PersonalSkill.learner_id == context.learner_id,
-                    )
-                )
-            else:
-                raise HTTPException(status_code=422, detail="unsupported_resource_type")
-            if row is None:
-                raise not_found()
-
-        if skill_ids:
-            rows = (
-                (
-                    await session.execute(
-                        select(PersonalSkill).where(
-                            PersonalSkill.learner_id == context.learner_id,
-                            PersonalSkill.id.in_(skill_ids),
-                        )
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            found = {row.id for row in rows}
-            if found != set(skill_ids):
-                raise not_found()
-            normalized.extend(
-                {
-                    "type": "skill",
-                    "skillId": row.id,
-                    "name": row.name,
-                    "version": row.version,
-                    "snapshot": row.content,
-                }
-                for row in rows
-            )
-    return normalized
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise not_found() from exc
 
 
 # --------------------------------------------------------------------------
@@ -253,29 +146,29 @@ async def _validated_task_context(
 # --------------------------------------------------------------------------
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse)
 async def health(request: Request) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     try:
-        db_ok = await svc.db.ping()
+        db_ok = await services.db.ping()
     except Exception:  # noqa: BLE001 - health must answer even when the DB is down
         db_ok = False
     return {
         "status": "ok" if db_ok else "degraded",
         "database": db_ok,
-        "brain": svc.brain.name if svc.brain else "unconfigured",
+        "brain": services.brain.name if services.brain else "unconfigured",
         "agent": {
-            "configured": svc.settings.agents_configured,
-            "model": svc.settings.agent_model,
+            "configured": services.settings.agents_configured,
+            "model": services.settings.agent_model,
         },
-        "packs": sorted(svc.packs),
-        "tools": len(svc.registry.specs),
+        "packs": sorted(services.packs),
+        "tools": len(services.registry.specs),
     }
 
 
-@router.get("/packs")
+@router.get("/packs", response_model=PacksResponse)
 async def list_packs(request: Request) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     return {
         "packs": [
             {
@@ -301,12 +194,12 @@ async def list_packs(request: Request) -> dict[str, Any]:
                     for m in pack.missions.values()
                 ],
             }
-            for pack in svc.packs.values()
+            for pack in services.packs.values()
         ]
     }
 
 
-@router.get("/skills")
+@router.get("/skills", response_model=SkillsResponse)
 async def list_skills(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
@@ -319,9 +212,9 @@ async def list_skills(
     manifest's meaning, not its prose.
     """
 
-    svc = service_of(request)
+    services = services_of(request)
     skills: list[dict[str, Any]] = []
-    for entry in await svc.runtime_state.list_skills(learner_id=context.learner_id):
+    for entry in await services.learner_state.list_skills(learner_id=context.learner_id):
         manifest_path = REPO_ROOT / "skills" / entry["skill_id"] / "SKILL.md"
         skills.append(
             {
@@ -344,7 +237,7 @@ async def list_skills(
                 "enabled": entry["enabled"],
             }
         )
-    async with svc.db.session() as session:
+    async with services.db.session() as session:
         personal = (
             (
                 await session.execute(
@@ -372,7 +265,7 @@ async def list_skills(
     return {"skills": skills}
 
 
-@router.get("/skill-registry")
+@router.get("/skill-registry", response_model=SkillRegistryResponse)
 async def skill_registry(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
@@ -384,8 +277,8 @@ async def skill_registry(
     the capability vocabulary itself so a client can render the whole space.
     """
 
-    svc = service_of(request)
-    entries = await svc.runtime_state.list_skills(learner_id=context.learner_id)
+    services = services_of(request)
+    entries = await services.learner_state.list_skills(learner_id=context.learner_id)
     by_capability: dict[str, list[str]] = {}
     for entry in entries:
         if not entry["enabled"]:
@@ -490,16 +383,16 @@ class AgentConfirmation(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=192)
 
 
-@router.post("/sessions", status_code=201)
+@router.post("/sessions", status_code=201, response_model=SessionCreateResponse)
 async def create_session(
     body: CreateSession,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     session_id = f"s-{uuid.uuid4().hex[:16]}"
     try:
-        created = await svc.create_session(
+        created = await services.conversation.create_session(
             session_id=session_id,
             learner_id=context.learner_id,
             pack_id=body.pack_id,
@@ -510,37 +403,39 @@ async def create_session(
     return created
 
 
-@router.get("/sessions/{session_id}")
+@router.get("/sessions/{session_id}", response_model=SessionSnapshotResponse)
 async def get_session(
     session_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
-    if await svc.session_repository.get_session_for_learner(session_id, context.learner_id) is None:
+    services = services_of(request)
+    if await services.conversation.get_session_record(session_id, context.learner_id) is None:
         raise not_found()
     try:
-        return await svc.snapshot(session_id, learner_id=context.learner_id)
+        return await services.conversation.snapshot(session_id, learner_id=context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
 
-@router.post("/sessions/{session_id}/answer", status_code=202)
+@router.post(
+    "/sessions/{session_id}/answer", status_code=202, response_model=AnswerResponse
+)
 async def answer(
     session_id: str,
     body: AnswerBody,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
-    record = await svc.session_repository.get_session_for_learner(session_id, context.learner_id)
+    services = services_of(request)
+    record = await services.conversation.get_session_record(session_id, context.learner_id)
     if record is None:
         raise not_found()
     if record.status == "running":
         raise HTTPException(status_code=409, detail="run_in_progress")
     if record.status in TERMINAL:
         raise HTTPException(status_code=409, detail=f"session_{record.status}")
-    await svc.answer(session_id, body.answer, learner_id=context.learner_id)
+    await services.conversation.answer(session_id, body.answer, learner_id=context.learner_id)
     return {"status": "accepted"}
 
 
@@ -549,13 +444,13 @@ async def answer(
 # --------------------------------------------------------------------------
 
 
-@router.post("/agent-tasks", status_code=202)
+@router.post("/agent-tasks", status_code=202, response_model=AgentTaskCreateResponse)
 async def create_agent_task(
     body: CreateAgentTask,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     task_id = f"t-{uuid.uuid4().hex[:20]}"
     payload_digest = agent_task_create_payload_digest(
         prompt=body.prompt,
@@ -564,7 +459,7 @@ async def create_agent_task(
         skill_ids=body.skill_ids,
     )
     if body.idempotency_key:
-        existing = await svc.agent_task_repository.get_agent_task_by_create_idempotency_key(
+        existing = await services.agent_tasks.get_agent_task_by_create_idempotency_key(
             context.learner_id, body.idempotency_key
         )
         if existing is not None:
@@ -578,7 +473,7 @@ async def create_agent_task(
         task_resources = await _validated_task_context(
             request, context, body.resource_refs, body.skill_ids
         )
-        created = await svc.create_agent_task(
+        created = await services.agent_tasks.create_agent_task(
             task_id=task_id,
             learner_id=context.learner_id,
             prompt=body.prompt,
@@ -596,45 +491,47 @@ async def create_agent_task(
     return created
 
 
-@router.get("/agent-tasks")
+@router.get("/agent-tasks", response_model=AgentTaskListResponse)
 async def list_agent_tasks(
     request: Request,
+    scope: str = Query("active"),
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    scope = request.query_params.get("scope", "active")
     if scope not in {"active", "archived"}:
         raise HTTPException(status_code=400, detail="invalid_scope")
-    return {"tasks": await service_of(request).list_agent_tasks(context.learner_id, scope=scope)}
+    return {"tasks": await services_of(request).agent_tasks.list_agent_tasks(context.learner_id, scope=scope)}
 
 
-@router.get("/agent-tasks/{task_id}")
+@router.get("/agent-tasks/{task_id}", response_model=AgentTaskSnapshotResponse)
 async def get_agent_task(
     task_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     try:
-        return await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
+        return await services.agent_tasks.agent_task_snapshot(task_id, learner_id=context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
 
-@router.post("/agent-tasks/{task_id}/messages", status_code=202)
+@router.post(
+    "/agent-tasks/{task_id}/messages", status_code=202, response_model=AgentMessageResponse
+)
 async def post_agent_message(
     task_id: str,
     body: AgentMessage,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     try:
         task_resources = await _validated_task_context(
             request, context, body.resource_refs, body.skill_ids
         )
         if task_resources:
-            await svc.update_agent_task(task_id, context.learner_id, resources=task_resources)
-        result = await svc.agent_message(
+            await services.agent_tasks.update_agent_task(task_id, context.learner_id, resources=task_resources)
+        result = await services.agent_tasks.agent_message(
             task_id,
             body.message,
             attachments=body.attachments,
@@ -651,7 +548,11 @@ async def post_agent_message(
     }
 
 
-@router.post("/agent-tasks/{task_id}/interactions/{interaction_id}/answers", status_code=202)
+@router.post(
+    "/agent-tasks/{task_id}/interactions/{interaction_id}/answers",
+    status_code=202,
+    response_model=InteractionAnswerResponse,
+)
 async def answer_agent_interaction(
     task_id: str,
     interaction_id: str,
@@ -662,7 +563,7 @@ async def answer_agent_interaction(
     """Answer a blocking interaction; the server resumes the paused checkpoint."""
 
     try:
-        return await service_of(request).answer_agent_interaction(
+        return await services_of(request).agent_tasks.answer_agent_interaction(
             task_id,
             interaction_id,
             answers=body.answers,
@@ -681,7 +582,7 @@ async def answer_agent_interaction(
         ) from exc
 
 
-@router.patch("/agent-tasks/{task_id}")
+@router.patch("/agent-tasks/{task_id}", response_model=AgentTaskMetaResponse)
 async def patch_agent_task(
     task_id: str,
     body: AgentTaskMetadataPatch,
@@ -689,7 +590,7 @@ async def patch_agent_task(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).update_agent_task(
+        return await services_of(request).agent_tasks.update_agent_task(
             task_id,
             context.learner_id,
             title=body.title,
@@ -703,62 +604,62 @@ async def patch_agent_task(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/agent-tasks/{task_id}")
+@router.delete("/agent-tasks/{task_id}", response_model=AgentTaskDeleteResponse)
 async def delete_agent_task(
     task_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).delete_agent_task(task_id, context.learner_id)
+        return await services_of(request).agent_tasks.delete_agent_task(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
 
-@router.post("/agent-tasks/{task_id}/restore")
+@router.post("/agent-tasks/{task_id}/restore", response_model=AgentTaskRestoreResponse)
 async def restore_agent_task(
     task_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).restore_agent_task(task_id, context.learner_id)
+        return await services_of(request).agent_tasks.restore_agent_task(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
 
-@router.post("/agent-tasks/{task_id}/fork", status_code=202)
+@router.post("/agent-tasks/{task_id}/fork", status_code=202, response_model=AgentTaskForkResponse)
 async def fork_agent_task(
     task_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).fork_agent_task(task_id, context.learner_id)
+        return await services_of(request).agent_tasks.fork_agent_task(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
 
-@router.post("/agent-tasks/{task_id}/cancel")
+@router.post("/agent-tasks/{task_id}/cancel", response_model=AgentTaskCancelResponse)
 async def cancel_agent_task(
     task_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).cancel_agent_task(task_id, context.learner_id)
+        return await services_of(request).agent_tasks.cancel_agent_task(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
 
-@router.post("/attachments", status_code=201)
+@router.post("/attachments", status_code=201, response_model=AttachmentUploadResponse)
 async def upload_attachment(
     body: AgentAttachmentUpload,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).upload_attachment(
+        return await services_of(request).artifacts.upload_attachment(
             learner_id=context.learner_id,
             filename=body.filename,
             media_type=body.media_type,
@@ -779,22 +680,26 @@ async def get_attachment(
     if learner_id != context.learner_id:
         raise not_found()
     try:
-        path, media_type, filename = service_of(request).attachment_path(learner_id, attachment_id)
+        path, media_type, filename = services_of(request).artifacts.attachment_path(learner_id, attachment_id)
     except KeyError as exc:
         raise not_found() from exc
     return FileResponse(path, media_type=media_type, filename=filename)
 
 
-@router.post("/agent-tasks/{task_id}/quiz-submissions", status_code=202)
+@router.post(
+    "/agent-tasks/{task_id}/quiz-submissions",
+    status_code=202,
+    response_model=QuizSubmissionResponse,
+)
 async def submit_agent_quiz(
     task_id: str,
     body: QuizSubmissionBody,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     try:
-        return await svc.submit_agent_quiz(
+        return await services.agent_tasks.submit_agent_quiz(
             task_id,
             submission_id=body.submission_id,
             answers=body.answers,
@@ -814,7 +719,9 @@ async def submit_agent_quiz(
         ) from exc
 
 
-@router.post("/agent-tasks/{task_id}/confirmations", status_code=202)
+@router.post(
+    "/agent-tasks/{task_id}/confirmations", status_code=202, response_model=ConfirmWorkResponse
+)
 async def confirm_agent_work(
     task_id: str,
     body: AgentConfirmation,
@@ -822,7 +729,7 @@ async def confirm_agent_work(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).confirm_agent_work(
+        return await services_of(request).agent_tasks.confirm_agent_work(
             task_id,
             work_item_id=body.work_item_id,
             approve=body.approve,
@@ -836,7 +743,9 @@ async def confirm_agent_work(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.post("/agent-tasks/{task_id}/delivery/{artifact}/ack")
+@router.post(
+    "/agent-tasks/{task_id}/delivery/{artifact}/ack", response_model=AckDeliveryResponse
+)
 async def ack_agent_delivery(
     task_id: str,
     artifact: str,
@@ -845,7 +754,7 @@ async def ack_agent_delivery(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict[str, Any]:
     try:
-        return await service_of(request).ack_delivery(
+        return await services_of(request).agent_tasks.ack_delivery(
             task_id, artifact, learner_id=context.learner_id, idempotency_key=idempotency_key
         )
     except KeyError as exc:
@@ -861,9 +770,9 @@ async def get_agent_artifact(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> Response:
-    svc = service_of(request)
+    services = services_of(request)
     try:
-        content, media_type, filename = await svc.agent_artifact(
+        content, media_type, filename = await services.artifacts.agent_artifact(
             task_id, kind, learner_id=context.learner_id
         )
     except KeyError as exc:
@@ -879,15 +788,15 @@ async def get_agent_artifact(
     return Response(content=content, media_type=media_type, headers=headers)
 
 
-@router.get("/agent-tasks/{task_id}/events")
+@router.get("/agent-tasks/{task_id}/events", response_model=AgentTaskEventsResponse)
 async def stream_agent_events(
     task_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> Any:
-    svc = service_of(request)
+    services = services_of(request)
     try:
-        await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
+        await services.agent_tasks.agent_task_snapshot(task_id, learner_id=context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
@@ -908,7 +817,7 @@ async def stream_agent_events(
     # behind proxies that buffer a long-lived SSE response.  Respect the same
     # cursor so polling transfers only rows the client has not consumed.
     if request.query_params.get("format") == "json":
-        events = await svc.agent_task_repository.agent_events_after_for_learner(
+        events = await services.agent_events.events_after(
             task_id,
             context.learner_id,
             cursor,
@@ -918,15 +827,15 @@ async def stream_agent_events(
             content=json.dumps({"events": events}, ensure_ascii=False, separators=(",", ":")),
             media_type="application/json",
         )
-    heartbeat = svc.settings.sse_heartbeat_seconds
+    heartbeat = services.settings.sse_heartbeat_seconds
 
     async def generate():  # noqa: ANN202
         nonlocal cursor
-        waiter = svc.agent_waiter(task_id)
+        waiter = services.agent_events.waiter(task_id)
         while True:
             if await request.is_disconnected():
                 return
-            events = await svc.agent_task_repository.agent_events_after_for_learner(
+            events = await services.agent_events.events_after(
                 task_id, context.learner_id, cursor, protocol_version=protocol_version
             )
             for event in events:
@@ -934,12 +843,12 @@ async def stream_agent_events(
                 payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
                 yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
 
-            current = await svc.agent_task_snapshot(task_id, learner_id=context.learner_id)
+            current = await services.agent_tasks.agent_task_snapshot(task_id, learner_id=context.learner_id)
             # The stream ends only when the *thread* is terminal, not when a
             # single turn delivers — a long-lived chat keeps its SSE channel
             # across turns (issue #18 §15.1).
             if current.get("threadStatus") == "cancelled":
-                tail = await svc.agent_task_repository.agent_events_after_for_learner(
+                tail = await services.agent_events.events_after(
                     task_id, context.learner_id, cursor, protocol_version=protocol_version
                 )
                 for event in tail:
@@ -968,20 +877,20 @@ async def stream_agent_events(
     )
 
 
-@router.get("/sessions/{session_id}/report")
+@router.get("/sessions/{session_id}/report", response_model=dict[str, Any])
 async def get_report(
     session_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
-    if await svc.session_repository.get_session_for_learner(session_id, context.learner_id) is None:
+    services = services_of(request)
+    if await services.conversation.get_session_record(session_id, context.learner_id) is None:
         raise not_found()
-    stored = await svc.session_repository.get_report_for_learner(session_id, context.learner_id)
+    stored = await services.conversation.get_report(session_id, context.learner_id)
     if stored is not None:
         return stored
     try:
-        snapshot = await svc.snapshot(session_id, learner_id=context.learner_id)
+        snapshot = await services.conversation.snapshot(session_id, learner_id=context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
     if not snapshot.get("report"):
@@ -997,11 +906,11 @@ async def download_artifact(
     context: LearnerContext = Depends(current_learner_context),
 ) -> FileResponse:
     """Hand over the raw capture so the learner can audit us in Wireshark."""
-    svc = service_of(request)
-    record = await svc.session_repository.get_session_for_learner(session_id, context.learner_id)
+    services = services_of(request)
+    record = await services.conversation.get_session_record(session_id, context.learner_id)
     if record is None:
         raise not_found()
-    pack = svc.packs.get(record.pack_id)
+    pack = services.packs.get(record.pack_id)
     mission = pack.missions.get(record.mission_id) if pack else None
     artifact = mission.artifacts.get(artifact_id) if mission else None
     if artifact is None or not Path(artifact.path).exists():  # noqa: ASYNC240
@@ -1011,7 +920,7 @@ async def download_artifact(
     )
 
 
-@router.get("/me/context")
+@router.get("/me/context", response_model=ContextResponse)
 async def me_context(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
@@ -1029,7 +938,7 @@ class ProfileOverride(BaseModel):
     progress: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
-@router.get("/me/learning-profile")
+@router.get("/me/learning-profile", response_model=LearningProfileResponse)
 async def learning_profile(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
@@ -1040,8 +949,8 @@ async def learning_profile(
     description — POST it back to act on it.
     """
 
-    svc = service_of(request)
-    rows = await svc.runtime_state.profile_for(context.learner_id)
+    services = services_of(request)
+    rows = await services.learner_state.profile_for(context.learner_id)
     return {
         "profile": rows,
         "columns": {
@@ -1072,7 +981,11 @@ async def learning_profile(
     }
 
 
-@router.post("/me/learning-profile/{knowledge_point_id}/next-step", status_code=202)
+@router.post(
+    "/me/learning-profile/{knowledge_point_id}/next-step",
+    status_code=202,
+    response_model=AgentTaskCreateResponse,
+)
 async def take_next_step(
     knowledge_point_id: str,
     request: Request,
@@ -1084,8 +997,8 @@ async def take_next_step(
     typing it would, and the orchestrator ranks it against everything else.
     """
 
-    svc = service_of(request)
-    row = await svc.runtime_state.profile_point(context.learner_id, knowledge_point_id)
+    services = services_of(request)
+    row = await services.learner_state.profile_point(context.learner_id, knowledge_point_id)
     if row is None:
         raise not_found()
     step = dict(row.get("next_step") or {})
@@ -1094,14 +1007,16 @@ async def take_next_step(
 
     task_id = f"task-{uuid.uuid4().hex}"
     label = step.get("label") or row.get("knowledge_point") or knowledge_point_id
-    return await svc.create_agent_task(
+    return await services.agent_tasks.create_agent_task(
         task_id=task_id,
         learner_id=context.learner_id,
         prompt=str(label),
     )
 
 
-@router.patch("/me/learning-profile/{knowledge_point_id}")
+@router.patch(
+    "/me/learning-profile/{knowledge_point_id}", response_model=ProfileChangeResponse
+)
 async def override_learning_profile(
     knowledge_point_id: str,
     body: ProfileOverride,
@@ -1114,7 +1029,7 @@ async def override_learning_profile(
     learner owns, while still counting new evidence against them.
     """
 
-    svc = service_of(request)
+    services = services_of(request)
     fields = {
         name: value
         for name, value in (
@@ -1125,7 +1040,7 @@ async def override_learning_profile(
         if value is not None
     }
     try:
-        change = await svc.runtime_state.override_profile(
+        change = await services.learner_state.override_profile(
             learner_id=context.learner_id,
             knowledge_point_id=knowledge_point_id,
             enabled=body.override,
@@ -1138,7 +1053,7 @@ async def override_learning_profile(
     return change.to_dict()
 
 
-@router.get("/agent-tasks/{task_id}/decisions")
+@router.get("/agent-tasks/{task_id}/decisions", response_model=AgentDecisionsResponse)
 async def agent_task_decisions(
     task_id: str,
     request: Request,
@@ -1146,13 +1061,15 @@ async def agent_task_decisions(
 ) -> dict[str, Any]:
     """Every decision this task made: candidates, choice, reason, evidence, diff."""
 
-    svc = service_of(request)
-    if await svc.agent_task_repository.get_agent_task_for_learner(task_id, context.learner_id) is None:
+    services = services_of(request)
+    if await services.agent_tasks.get_task_record(task_id, context.learner_id) is None:
         raise not_found()
-    return {"decisions": await svc.runtime_state.decisions_for_task(task_id)}
+    return {"decisions": await services.agent_events.decisions_for_task(task_id)}
 
 
-@router.get("/agent-tasks/{task_id}/runtime-graph")
+@router.get(
+    "/agent-tasks/{task_id}/runtime-graph", response_model=RuntimeGraphResponse
+)
 async def agent_task_runtime_graph(
     task_id: str,
     request: Request,
@@ -1165,20 +1082,20 @@ async def agent_task_runtime_graph(
     remains the legacy heuristic projection for today's UI.
     """
 
-    svc = service_of(request)
-    task = await svc.agent_task_repository.get_agent_task_for_learner(task_id, context.learner_id)
+    services = services_of(request)
+    task = await services.agent_tasks.get_task_record(task_id, context.learner_id)
     if task is None:
         raise not_found()
     execution_id = task.latest_execution_id or task.current_execution_id
     execution = (
-        await svc.runtime_repository.get_agent_execution(execution_id, context.learner_id)
+        await services.agent_events.get_agent_execution(execution_id, context.learner_id)
         if execution_id
         else None
     )
     state = dict(execution.workflow_state or {}) if execution is not None else {}
-    runs = await svc.runtime_repository.agent_runs_for_task(task_id)
-    dependencies = await svc.work_ledger.work_dependencies_for_task(task_id)
-    skill_runs = await svc.runtime_repository.skill_runs_for_task(task_id)
+    runs = await services.agent_events.agent_runs_for_task(task_id)
+    dependencies = await services.agent_events.work_dependencies_for_task(task_id)
+    skill_runs = await services.agent_events.skill_runs_for_task(task_id)
     return {
         "id": f"runtime-graph:{task_id}",
         "type": "runtime-graph",
@@ -1192,13 +1109,13 @@ async def agent_task_runtime_graph(
         "executionGraph": build_execution_graph(
             runs,
             task_id=task_id,
-            work_dependencies=dependencies,
+            work_dependencies=cast(list[Mapping[str, Any]], dependencies),
             skill_runs=skill_runs,
         ),
     }
 
 
-@router.get("/agent-tasks/{task_id}/evidence")
+@router.get("/agent-tasks/{task_id}/evidence", response_model=AgentEvidenceResponse)
 async def agent_task_evidence(
     task_id: str,
     request: Request,
@@ -1206,40 +1123,40 @@ async def agent_task_evidence(
 ) -> dict[str, Any]:
     """The evidence this task produced, for drilling into a node."""
 
-    svc = service_of(request)
-    if await svc.agent_task_repository.get_agent_task_for_learner(task_id, context.learner_id) is None:
+    services = services_of(request)
+    if await services.agent_tasks.get_task_record(task_id, context.learner_id) is None:
         raise not_found()
-    return {"evidence": await svc.runtime_state.evidence_for_task(task_id)}
+    return {"evidence": await services.agent_events.evidence_for_task(task_id)}
 
 
-@router.get("/me/mastery")
+@router.get("/me/mastery", response_model=MasteryResponse)
 async def me_mastery(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     return {
-        "mastery": await svc.learners.get_mastery(context),
-        "sessions": await svc.session_repository.list_sessions(context.learner_id),
+        "mastery": await services.learners.get_mastery(context),
+        "sessions": await services.conversation.list_sessions(context.learner_id),
     }
 
 
-@router.get("/me/preferences")
+@router.get("/me/preferences", response_model=PreferencesResponse)
 async def get_preferences(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     return {"preferences": context.preferences}
 
 
-@router.patch("/me/preferences")
+@router.patch("/me/preferences", response_model=PreferencesResponse)
 async def patch_preferences(
     body: dict[str, Any],
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    svc = service_of(request)
+    services = services_of(request)
     try:
-        preference = await svc.learners.update_preference(context, body)
+        preference = await services.learners.update_preference(context, body)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"preferences": dict(preference.payload or {})}
@@ -1256,8 +1173,8 @@ async def stream_events(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> StreamingResponse:
-    svc = service_of(request)
-    record = await svc.session_repository.get_session_for_learner(session_id, context.learner_id)
+    services = services_of(request)
+    record = await services.conversation.get_session_record(session_id, context.learner_id)
     if record is None:
         raise not_found()
 
@@ -1267,28 +1184,28 @@ async def stream_events(
     except ValueError:
         cursor = 0
 
-    heartbeat = svc.settings.sse_heartbeat_seconds
+    heartbeat = services.settings.sse_heartbeat_seconds
 
     async def generate():  # noqa: ANN202
         nonlocal cursor
-        waiter = svc.waiter(session_id)
+        waiter = services.conversation.waiter(session_id)
         while True:
             if await request.is_disconnected():
                 return
-            events = await svc.session_repository.events_after_for_learner(session_id, context.learner_id, cursor)
+            events = await services.conversation.events_after(session_id, context.learner_id, cursor)
             for event in events:
                 cursor = event["sequence"]
                 payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
                 yield f"id: {cursor}\nevent: {event['kind']}\ndata: {payload}\n\n"
 
-            current = await svc.session_repository.get_session_for_learner(session_id, context.learner_id)
+            current = await services.conversation.get_session_record(session_id, context.learner_id)
             status = current.status if current else "failed"
             # Only a terminal status closes the stream. `awaiting_learner` means
             # the session is alive and will emit again the moment the learner
             # answers, so the connection is held open with heartbeats instead.
             if status in TERMINAL:
                 # Drain anything appended between the query and the status read.
-                tail = await svc.session_repository.events_after_for_learner(
+                tail = await services.conversation.events_after(
                     session_id, context.learner_id, cursor
                 )
                 for event in tail:

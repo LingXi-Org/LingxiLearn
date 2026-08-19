@@ -19,9 +19,9 @@ from fastapi.responses import JSONResponse, Response
 from .api.account_routes import router as account_router
 from .api.routes import router
 from .api.workspace_routes import router as workspace_router
+from .application import ApplicationServices
 from .auth import build_authenticator
 from .config import Settings, get_settings
-from .service import Service
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     )
     settings.var_dir.mkdir(parents=True, exist_ok=True)
 
-    service = Service(settings)
+    services = ApplicationServices(settings)
     # Build the verifier before opening graph/database resources so a strict
     # production configuration fails fast and cleanly.
     identity = await asyncio.to_thread(build_authenticator, settings)
@@ -95,15 +95,15 @@ async def lifespan(app: FastAPI):  # noqa: ANN201
     # created by older local versions in place. Postgres deployments run
     # `alembic upgrade head` in a one-shot migrate step before the app starts.
     if settings.database_url.startswith("sqlite"):
-        await service.db.ensure_sqlite_schema()
-    await service.startup()
+        await services.db.ensure_sqlite_schema()
+    await services.startup()
     app.state.identity = identity
     app.state.identity_proxy_client = proxy_client
-    app.state.service = service
+    app.state.services = services
     try:
         yield
     finally:
-        await service.shutdown()
+        await services.shutdown()
         await identity.aclose()
         await proxy_client.aclose()
 

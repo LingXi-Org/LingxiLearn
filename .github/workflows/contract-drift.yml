@@ -1,0 +1,61 @@
+name: Contract drift check
+
+on:
+  pull_request:
+    paths:
+      - 'server/lingxilearn/api/**'
+      - 'server/lingxilearn/contracts/**'
+      - 'var/openapi/**'
+      - 'web/lib/api/contracts/generated/**'
+      - 'web/scripts/generate-rest-contracts.ts'
+      - 'scripts/export_openapi.py'
+      - '.github/workflows/contract-drift.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/lingxilearn/api/**'
+      - 'server/lingxilearn/contracts/**'
+      - 'var/openapi/**'
+      - 'web/lib/api/contracts/generated/**'
+      - 'web/scripts/generate-rest-contracts.ts'
+      - 'scripts/export_openapi.py'
+      - '.github/workflows/contract-drift.yml'
+
+concurrency:
+  group: contract-drift-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: OpenAPI → Zod contract drift
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install server dependencies
+        run: pip install uv && cd server && uv sync
+
+      - name: Set up bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install web dependencies
+        working-directory: web
+        run: bun install
+
+      - name: Verify OpenAPI export is up to date
+        run: cd server && uv run python ../scripts/export_openapi.py --check
+
+      - name: Verify generated Zod contracts are up to date
+        working-directory: web
+        run: bun run check:contracts

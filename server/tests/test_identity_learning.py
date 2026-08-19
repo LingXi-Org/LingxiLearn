@@ -15,11 +15,11 @@ from fastapi import HTTPException
 from lingxi_identity import OidcDiscovery, OidcVerifier, Principal
 from sqlalchemy import func, select
 
+from lingxilearn.application import ApplicationServices
 from lingxilearn.auth import Authenticator, build_authenticator
 from lingxilearn.config import Settings, get_settings
 from lingxilearn.learner import LearnerService
 from lingxilearn.main import create_app
-from lingxilearn.service import Service
 from lingxilearn.store.database import Database
 from lingxilearn.store.learner import LearnerRepository
 from lingxilearn.store.models.learning import (
@@ -309,13 +309,13 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         insecure_dev_auth=False,
     )
     identity_issuer = "https://auth.lingxilearn.cn/oidc"
-    service = Service(settings)
-    await service.db.create_all()
+    services = ApplicationServices(settings)
+    await services.db.create_all()
 
     from lingxilearn.auth import Authenticator
 
     app = create_app()
-    app.state.service = service
+    app.state.services = services
 
     def bff(request: httpx.Request) -> httpx.Response:
         cookie = request.headers.get("cookie", "")
@@ -337,15 +337,15 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     identity_client = httpx.AsyncClient(transport=httpx.MockTransport(bff))
     authenticator = Authenticator(settings=settings, client=identity_client)
     app.state.identity = authenticator
-    first = await service.learners.get_learner_context(
+    first = await services.learners.get_learner_context(
         Principal(subject="subject-a", issuer=identity_issuer)
     )
-    second = await service.learners.get_learner_context(
+    second = await services.learners.get_learner_context(
         Principal(subject="subject-b", issuer=identity_issuer)
     )
-    session_repository = SessionRepository(service.db)
-    learner_repository = LearnerRepository(service.db)
-    agent_task_repository = AgentTaskRepository(service.db)
+    session_repository = SessionRepository(services.db)
+    learner_repository = LearnerRepository(services.db)
+    agent_task_repository = AgentTaskRepository(services.db)
     await session_repository.create_session(
         id="s-owned",
         learner_id=first.learner_id,
@@ -378,7 +378,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     async def fake_snapshot(session_id: str, learner_id: str | None = None) -> dict[str, str]:
         return {"id": session_id, "owner": learner_id or ""}
 
-    monkeypatch.setattr(service, "snapshot", fake_snapshot)
+    monkeypatch.setattr(services.conversation, "snapshot", fake_snapshot)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         first_headers = {"Cookie": "lingxi_session=session-a"}
@@ -427,7 +427,7 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         missing_auth = await client.get("/api/me/mastery")
         assert missing_auth.status_code == 401
 
-    await service.db.dispose()
+    await services.db.dispose()
     await authenticator.aclose()
     path.unlink(missing_ok=True)
 
@@ -441,11 +441,11 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
         checkpoint_url=checkpoint.as_posix(),
         insecure_dev_auth=True,
     )
-    service = Service(settings)
-    await service.db.create_all()
+    services = ApplicationServices(settings)
+    await services.db.create_all()
     await service.startup()
     app = create_app()
-    app.state.service = service
+    app.state.services = services
     app.state.identity = build_authenticator(settings)
 
     choices = {
