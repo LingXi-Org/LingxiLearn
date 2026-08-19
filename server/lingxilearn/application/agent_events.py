@@ -144,6 +144,11 @@ class AgentEventService:
             task_id, learner_id, after, protocol_version=protocol_version
         )
 
+    async def replay_protocol(self, task_id: str, learner_id: str) -> int:
+        """Return the authoritative reader protocol for this retained task."""
+
+        return await self._agent_tasks.agent_event_protocol_for_learner(task_id, learner_id)
+
     # -- execution snapshots ----------------------------------------------
 
     async def _agent_events_for_execution_snapshot(

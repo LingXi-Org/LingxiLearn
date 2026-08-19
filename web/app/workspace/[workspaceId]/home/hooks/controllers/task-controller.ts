@@ -1,5 +1,5 @@
 import type { LingxiAttachmentRef, LingxiTaskContextOptions } from '@/lib/api/domains/agent-tasks'
-import type { LingxiGraphChatAdapter } from '@/lib/lingxi/lingxi-graph-adapter'
+import type { LingxiTaskTransport } from '@/lib/lingxi/lingxi-task-transport'
 import {
   buildInteractionAnswerRequest,
   type LingxiV1InteractionAnswerRequest,
@@ -37,7 +37,7 @@ export interface TaskCommandInput {
 }
 
 /** A narrow transport boundary keeps command construction independent of React and API globals. */
-export type TaskCommandTransport = Pick<LingxiGraphChatAdapter, 'createTask' | 'sendMessage'>
+export type TaskCommandTransport = Pick<LingxiTaskTransport, 'createTask' | 'sendMessage'>
 
 export type TaskCommandResult =
   | { kind: 'created'; taskId: string; status: string }

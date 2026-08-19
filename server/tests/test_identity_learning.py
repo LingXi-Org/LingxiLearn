@@ -357,6 +357,16 @@ async def test_api_resources_are_scoped_to_authenticated_learner() -> None:
         intent={},
         lecture_result={"selected_hook": {"title": "Hook"}},
         visual_result={},
+        event_protocol_version=0,
+    )
+    await agent_task_repository.create_agent_task(
+        id="t-current",
+        learner_id=first.learner_id,
+        prompt="current prompt",
+        status="queued",
+        intent={},
+        lecture_result={},
+        visual_result={},
     )
     await agent_task_repository.append_agent_events("t-owned", [{"kind": "task.completed", "payload": {}}])
 
@@ -373,6 +383,29 @@ async def test_api_resources_are_scoped_to_authenticated_learner() -> None:
         hidden_task = await client.get("/api/agent-tasks/t-owned", headers=second_headers)
         assert task.status_code == 200
         assert hidden_task.status_code == 404
+
+        legacy_events = await client.get(
+            "/api/agent-tasks/t-owned/events?format=json&protocol=v1",
+            headers=first_headers,
+        )
+        assert legacy_events.status_code == 200
+        assert legacy_events.json() == {"events": [], "protocol": "legacy-v0"}
+        current_events = await client.get(
+            "/api/agent-tasks/t-current/events?format=json&protocol=v1",
+            headers=first_headers,
+        )
+        assert current_events.json() == {"events": [], "protocol": "v1"}
+        await agent_task_repository.append_agent_events(
+            "t-current",
+            [{"kind": "v1.turn", "payload": {"v": 1}, "protocol_version": 1}],
+        )
+        canonical_events = await client.get(
+            "/api/agent-tasks/t-current/events?format=json&protocol=v1",
+            headers=first_headers,
+        )
+        assert canonical_events.status_code == 200
+        assert canonical_events.json()["protocol"] == "v1"
+        assert len(canonical_events.json()["events"]) == 1
 
         decisions = await client.get(
             "/api/agent-tasks/t-owned/decisions", headers=first_headers

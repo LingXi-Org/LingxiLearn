@@ -19,7 +19,7 @@ from .models.base import Base
 
 logger = logging.getLogger(__name__)
 
-SQLITE_SCHEMA_HEAD = "0018_mothership_protocol_v1"
+SQLITE_SCHEMA_HEAD = "0019_task_event_protocol"
 SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "agent_tasks": {
         "create_idempotency_key": "VARCHAR(192)",
@@ -39,6 +39,8 @@ SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
         "latest_execution_id": "VARCHAR(128)",
         # 0018: the long-lived thread status alongside the legacy one-shot one.
         "thread_status": "VARCHAR(24) NOT NULL DEFAULT 'open'",
+        # 0019: one authoritative reader; new/empty tasks default to V1.
+        "event_protocol_version": "INTEGER NOT NULL DEFAULT 1",
     },
     "agent_task_events": {
         "execution_id": "VARCHAR(128)",
@@ -98,6 +100,19 @@ def repair_sqlite_schema(connection: Any) -> None:
                 f'ALTER TABLE "{table_name}" ADD COLUMN "{column_name}" {ddl}'
             )
             repaired.append(f"{table_name}.{column_name}")
+
+    if "agent_tasks.event_protocol_version" in repaired:
+        connection.exec_driver_sql(
+            """
+            UPDATE agent_tasks
+            SET event_protocol_version = 0
+            WHERE NOT EXISTS (
+                SELECT 1 FROM agent_task_events
+                WHERE agent_task_events.task_id = agent_tasks.id
+                  AND agent_task_events.protocol_version = 1
+            )
+            """
+        )
 
     # ``create_all`` does not create indexes for columns added above.  Let
     # SQLAlchemy create every declared index after the column repair; existing

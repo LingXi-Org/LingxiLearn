@@ -137,7 +137,9 @@ export function sendAgentMessage(
 // ---------------------------------------------------------------------------
 
 export function getAgentTaskEvents(id: string) {
-  return request<{ events: AgentTaskEvent[] }>(`/agent-tasks/${id}/events?format=json`)
+  return request<{ events: AgentTaskEvent[]; protocol: 'v1' | 'legacy-v0' }>(
+    `/agent-tasks/${id}/events?format=json`
+  )
 }
 
 export function getRuntimeGraph(taskId: string) {
@@ -166,7 +168,7 @@ export function subscribeAgentEvents(
 
 /** Mothership Stream V1 history: durable envelopes only (issue #18). */
 export function getAgentTaskV1Events(taskId: string, from = 0) {
-  return request<{ events: AgentTaskEvent[] }>(
+  return request<{ events: AgentTaskEvent[]; protocol: 'v1' | 'legacy-v0' }>(
     `/agent-tasks/${taskId}/events?format=json&protocol=v1&last_event_id=${Math.max(0, from)}`
   )
 }

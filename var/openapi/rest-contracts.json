@@ -472,8 +472,19 @@
             },
             "title": "Events",
             "type": "array"
+          },
+          "protocol": {
+            "enum": [
+              "v1",
+              "legacy-v0"
+            ],
+            "title": "Protocol",
+            "type": "string"
           }
         },
+        "required": [
+          "protocol"
+        ],
         "title": "AgentTaskEventsResponse",
         "type": "object"
       },
