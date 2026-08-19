@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -20,6 +21,7 @@ from ..learner import LearnerContext
 from .dependencies import current_learner_context, not_found, services_of
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 @router.get("/agent-tasks/{task_id}/events", response_model=AgentTaskEventsResponse)
@@ -54,6 +56,11 @@ async def stream_agent_events(
         replay_protocol = await services.agent_events.replay_protocol(
             task_id, context.learner_id
         )
+        if replay_protocol == 0:
+            logger.info(
+                "legacy_v0_event_replay",
+                extra={"task_id": task_id, "learner_id": context.learner_id},
+            )
         events = await services.agent_events.events_after(
             task_id,
             context.learner_id,

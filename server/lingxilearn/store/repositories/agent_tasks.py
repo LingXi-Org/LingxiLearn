@@ -608,6 +608,8 @@ class AgentTaskRepository:
                 if task is None:
                     raise KeyError(f"unknown agent task: {task_id}")
                 total = await self._write_agent_event_rows(s, task, task_id, events)
+                if any(int(event.get("protocol_version", 0) or 0) == 1 for event in events):
+                    task.event_protocol_version = 1
                 await s.commit()
                 return total
 
@@ -645,6 +647,8 @@ class AgentTaskRepository:
                     await s.rollback()
                     raise KeyError(f"unknown agent task: {task_id}")
                 await self._write_agent_event_rows(s, task, task_id, events)
+                if any(int(event.get("protocol_version", 0) or 0) == 1 for event in events):
+                    task.event_protocol_version = 1
                 await s.commit()
                 return True
 

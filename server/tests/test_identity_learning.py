@@ -13,7 +13,7 @@ import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
 from lingxi_identity import OidcDiscovery, OidcVerifier, Principal
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 
 from lingxilearn.application import ApplicationServices
 from lingxilearn.auth import Authenticator, build_authenticator
@@ -22,7 +22,6 @@ from lingxilearn.learner import LearnerService
 from lingxilearn.main import create_app
 from lingxilearn.store.database import Database
 from lingxilearn.store.learner import LearnerRepository
-from lingxilearn.store.models.agent import AgentTask
 from lingxilearn.store.models.learning import (
     LearningEvent,
     LearningEvidence,
@@ -396,13 +395,6 @@ async def test_api_resources_are_scoped_to_authenticated_learner() -> None:
             headers=first_headers,
         )
         assert current_events.json() == {"events": [], "protocol": "v1"}
-        async with services.db.session() as session:
-            await session.execute(
-                update(AgentTask)
-                .where(AgentTask.id == "t-owned")
-                .values(event_protocol_version=1)
-            )
-            await session.commit()
         await agent_task_repository.append_agent_events(
             "t-owned",
             [{"kind": "v1.turn", "payload": {"v": 1}, "protocol_version": 1}],
