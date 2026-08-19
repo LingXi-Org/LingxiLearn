@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, Response
 
 from .api.account_routes import router as account_router
 from .api.agent_interactions import router as agent_interactions_router
+from .api.agent_tasks import router as agent_tasks_router
 from .api.artifacts import router as artifacts_router
 from .api.catalog import router as catalog_router
 from .api.health import router as health_router
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(router)
     app.include_router(agent_interactions_router)
+    app.include_router(agent_tasks_router)
     app.include_router(artifacts_router)
     app.include_router(health_router)
     app.include_router(catalog_router)
