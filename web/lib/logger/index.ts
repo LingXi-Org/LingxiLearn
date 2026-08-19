@@ -52,11 +52,9 @@ const getNodeEnv = (): string => {
 /**
  * True only in a real browser.
  *
- * Server code can legitimately install a DOM — `ensureDomForTipTap` in the
- * collab-doc converter mounts a jsdom `window` so TipTap runs headless — so the
+ * Server code can legitimately install a DOM for headless rendering, so the
  * presence of `window` alone does not mean the browser. Node always exposes
- * `process.versions.node` and a browser never does, which keeps a server-side
- * DOM from silencing the logger for the rest of the process's life.
+ * `process.versions.node` and a browser never does.
  */
 const isBrowserRuntime = (): boolean => {
   if (typeof (globalThis as { window?: unknown }).window === 'undefined') return false

@@ -75,6 +75,10 @@ const rootEntries = [
   'proxy.ts',
   'telemetry.config.ts',
   'trigger.config.ts',
+  'lib/execution/isolated-vm-worker.cjs',
+  'lib/execution/sandbox/bundles/pptxgenjs.cjs',
+  'lib/execution/sandbox/bundles/docx.cjs',
+  'lib/execution/sandbox/bundles/pdf-lib.cjs',
 ]
   .map((entry) => path.join(root, entry))
   .filter(existsSync)
@@ -109,13 +113,18 @@ const inventory = readdirSync(libRoot, { withFileTypes: true })
     const files = filesUnder(path.join(libRoot, entry.name)).filter(isSource)
     const productionFiles = files.filter((file) => production.has(file)).length
     const testFiles = files.filter((file) => tests.has(file)).length
+    const unreachableFiles = files.filter((file) => !production.has(file) && !tests.has(file))
     return {
       directory: entry.name,
       sourceFiles: files.length,
       productionFiles,
       testFiles,
+      unreachableFiles: unreachableFiles.length,
       sampleProductionFiles: files
         .filter((file) => production.has(file))
+        .slice(0, 5)
+        .map((file) => path.relative(root, file).replaceAll('\\', '/')),
+      sampleUnreachableFiles: unreachableFiles
         .slice(0, 5)
         .map((file) => path.relative(root, file).replaceAll('\\', '/')),
       classification:

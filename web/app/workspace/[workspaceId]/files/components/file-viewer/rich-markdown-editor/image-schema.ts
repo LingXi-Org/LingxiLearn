@@ -3,9 +3,8 @@ import { Image } from '@tiptap/extension-image'
 
 /**
  * React-free schema half of the image node. Lives apart from {@link ./image} (its React resize node
- * view) so the shared editor schema — `createMarkdownContentExtensions` in `./extensions` — can be
- * imported by server code (the collab-doc seed converter) without pulling a client component
- * (`useEffect`) into a Server Component module. The client editor injects the node-view variant
+ * view) so the shared editor schema — `createMarkdownContentExtensions` in `./extensions` — does not
+ * pull in a client component (`useEffect`). The client editor injects the node-view variant
  * ({@link ResizableImage}) via `nodeViews`.
  */
 
