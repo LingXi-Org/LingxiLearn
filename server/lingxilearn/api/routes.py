@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from lingxi_identity import Principal  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,6 +28,39 @@ from sqlalchemy import select
 from ..application import ApplicationServices, agent_task_create_payload_digest
 from ..auth import get_principal
 from ..config import REPO_ROOT
+from ..contracts.rest_models import (
+    AckDeliveryResponse,
+    AgentDecisionsResponse,
+    AgentEvidenceResponse,
+    AgentMessageResponse,
+    AgentTaskCancelResponse,
+    AgentTaskCreateResponse,
+    AgentTaskDeleteResponse,
+    AgentTaskEventsResponse,
+    AgentTaskForkResponse,
+    AgentTaskListResponse,
+    AgentTaskMetaResponse,
+    AgentTaskRestoreResponse,
+    AgentTaskSnapshotResponse,
+    AnswerResponse,
+    AttachmentUploadResponse,
+    ConfirmWorkResponse,
+    ContextResponse,
+    CopilotToolPermissionResponse,
+    HealthResponse,
+    InteractionAnswerResponse,
+    LearningProfileResponse,
+    MasteryResponse,
+    PacksResponse,
+    PreferencesResponse,
+    ProfileChangeResponse,
+    QuizSubmissionResponse,
+    RuntimeGraphResponse,
+    SessionCreateResponse,
+    SessionSnapshotResponse,
+    SkillRegistryResponse,
+    SkillsResponse,
+)
 from ..learner import LearnerContext
 from ..runtime.execution_graph import build_execution_graph
 from ..state.capabilities import CAPABILITY_INFO
@@ -63,7 +96,7 @@ def not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="resource_not_found")
 
 
-@router.post("/copilot/tool-permission")
+@router.post("/copilot/tool-permission", response_model=CopilotToolPermissionResponse)
 async def copilot_tool_permission(
     body: dict[str, Any],
     request: Request,
@@ -113,7 +146,7 @@ async def _validated_task_context(
 # --------------------------------------------------------------------------
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthResponse)
 async def health(request: Request) -> dict[str, Any]:
     services = services_of(request)
     try:
@@ -133,7 +166,7 @@ async def health(request: Request) -> dict[str, Any]:
     }
 
 
-@router.get("/packs")
+@router.get("/packs", response_model=PacksResponse)
 async def list_packs(request: Request) -> dict[str, Any]:
     services = services_of(request)
     return {
@@ -166,7 +199,7 @@ async def list_packs(request: Request) -> dict[str, Any]:
     }
 
 
-@router.get("/skills")
+@router.get("/skills", response_model=SkillsResponse)
 async def list_skills(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
@@ -232,7 +265,7 @@ async def list_skills(
     return {"skills": skills}
 
 
-@router.get("/skill-registry")
+@router.get("/skill-registry", response_model=SkillRegistryResponse)
 async def skill_registry(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
@@ -350,7 +383,7 @@ class AgentConfirmation(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=192)
 
 
-@router.post("/sessions", status_code=201)
+@router.post("/sessions", status_code=201, response_model=SessionCreateResponse)
 async def create_session(
     body: CreateSession,
     request: Request,
@@ -370,7 +403,7 @@ async def create_session(
     return created
 
 
-@router.get("/sessions/{session_id}")
+@router.get("/sessions/{session_id}", response_model=SessionSnapshotResponse)
 async def get_session(
     session_id: str,
     request: Request,
@@ -385,7 +418,9 @@ async def get_session(
         raise not_found() from exc
 
 
-@router.post("/sessions/{session_id}/answer", status_code=202)
+@router.post(
+    "/sessions/{session_id}/answer", status_code=202, response_model=AnswerResponse
+)
 async def answer(
     session_id: str,
     body: AnswerBody,
@@ -409,7 +444,7 @@ async def answer(
 # --------------------------------------------------------------------------
 
 
-@router.post("/agent-tasks", status_code=202)
+@router.post("/agent-tasks", status_code=202, response_model=AgentTaskCreateResponse)
 async def create_agent_task(
     body: CreateAgentTask,
     request: Request,
@@ -456,18 +491,18 @@ async def create_agent_task(
     return created
 
 
-@router.get("/agent-tasks")
+@router.get("/agent-tasks", response_model=AgentTaskListResponse)
 async def list_agent_tasks(
     request: Request,
+    scope: str = Query("active"),
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    scope = request.query_params.get("scope", "active")
     if scope not in {"active", "archived"}:
         raise HTTPException(status_code=400, detail="invalid_scope")
     return {"tasks": await services_of(request).agent_tasks.list_agent_tasks(context.learner_id, scope=scope)}
 
 
-@router.get("/agent-tasks/{task_id}")
+@router.get("/agent-tasks/{task_id}", response_model=AgentTaskSnapshotResponse)
 async def get_agent_task(
     task_id: str,
     request: Request,
@@ -480,7 +515,9 @@ async def get_agent_task(
         raise not_found() from exc
 
 
-@router.post("/agent-tasks/{task_id}/messages", status_code=202)
+@router.post(
+    "/agent-tasks/{task_id}/messages", status_code=202, response_model=AgentMessageResponse
+)
 async def post_agent_message(
     task_id: str,
     body: AgentMessage,
@@ -511,7 +548,11 @@ async def post_agent_message(
     }
 
 
-@router.post("/agent-tasks/{task_id}/interactions/{interaction_id}/answers", status_code=202)
+@router.post(
+    "/agent-tasks/{task_id}/interactions/{interaction_id}/answers",
+    status_code=202,
+    response_model=InteractionAnswerResponse,
+)
 async def answer_agent_interaction(
     task_id: str,
     interaction_id: str,
@@ -541,7 +582,7 @@ async def answer_agent_interaction(
         ) from exc
 
 
-@router.patch("/agent-tasks/{task_id}")
+@router.patch("/agent-tasks/{task_id}", response_model=AgentTaskMetaResponse)
 async def patch_agent_task(
     task_id: str,
     body: AgentTaskMetadataPatch,
@@ -563,7 +604,7 @@ async def patch_agent_task(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/agent-tasks/{task_id}")
+@router.delete("/agent-tasks/{task_id}", response_model=AgentTaskDeleteResponse)
 async def delete_agent_task(
     task_id: str,
     request: Request,
@@ -575,7 +616,7 @@ async def delete_agent_task(
         raise not_found() from exc
 
 
-@router.post("/agent-tasks/{task_id}/restore")
+@router.post("/agent-tasks/{task_id}/restore", response_model=AgentTaskRestoreResponse)
 async def restore_agent_task(
     task_id: str,
     request: Request,
@@ -587,7 +628,7 @@ async def restore_agent_task(
         raise not_found() from exc
 
 
-@router.post("/agent-tasks/{task_id}/fork", status_code=202)
+@router.post("/agent-tasks/{task_id}/fork", status_code=202, response_model=AgentTaskForkResponse)
 async def fork_agent_task(
     task_id: str,
     request: Request,
@@ -599,7 +640,7 @@ async def fork_agent_task(
         raise not_found() from exc
 
 
-@router.post("/agent-tasks/{task_id}/cancel")
+@router.post("/agent-tasks/{task_id}/cancel", response_model=AgentTaskCancelResponse)
 async def cancel_agent_task(
     task_id: str,
     request: Request,
@@ -611,7 +652,7 @@ async def cancel_agent_task(
         raise not_found() from exc
 
 
-@router.post("/attachments", status_code=201)
+@router.post("/attachments", status_code=201, response_model=AttachmentUploadResponse)
 async def upload_attachment(
     body: AgentAttachmentUpload,
     request: Request,
@@ -645,7 +686,11 @@ async def get_attachment(
     return FileResponse(path, media_type=media_type, filename=filename)
 
 
-@router.post("/agent-tasks/{task_id}/quiz-submissions", status_code=202)
+@router.post(
+    "/agent-tasks/{task_id}/quiz-submissions",
+    status_code=202,
+    response_model=QuizSubmissionResponse,
+)
 async def submit_agent_quiz(
     task_id: str,
     body: QuizSubmissionBody,
@@ -674,7 +719,9 @@ async def submit_agent_quiz(
         ) from exc
 
 
-@router.post("/agent-tasks/{task_id}/confirmations", status_code=202)
+@router.post(
+    "/agent-tasks/{task_id}/confirmations", status_code=202, response_model=ConfirmWorkResponse
+)
 async def confirm_agent_work(
     task_id: str,
     body: AgentConfirmation,
@@ -696,7 +743,9 @@ async def confirm_agent_work(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.post("/agent-tasks/{task_id}/delivery/{artifact}/ack")
+@router.post(
+    "/agent-tasks/{task_id}/delivery/{artifact}/ack", response_model=AckDeliveryResponse
+)
 async def ack_agent_delivery(
     task_id: str,
     artifact: str,
@@ -739,7 +788,7 @@ async def get_agent_artifact(
     return Response(content=content, media_type=media_type, headers=headers)
 
 
-@router.get("/agent-tasks/{task_id}/events")
+@router.get("/agent-tasks/{task_id}/events", response_model=AgentTaskEventsResponse)
 async def stream_agent_events(
     task_id: str,
     request: Request,
@@ -828,7 +877,7 @@ async def stream_agent_events(
     )
 
 
-@router.get("/sessions/{session_id}/report")
+@router.get("/sessions/{session_id}/report", response_model=dict[str, Any])
 async def get_report(
     session_id: str,
     request: Request,
@@ -871,7 +920,7 @@ async def download_artifact(
     )
 
 
-@router.get("/me/context")
+@router.get("/me/context", response_model=ContextResponse)
 async def me_context(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
@@ -889,7 +938,7 @@ class ProfileOverride(BaseModel):
     progress: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
-@router.get("/me/learning-profile")
+@router.get("/me/learning-profile", response_model=LearningProfileResponse)
 async def learning_profile(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
@@ -932,7 +981,11 @@ async def learning_profile(
     }
 
 
-@router.post("/me/learning-profile/{knowledge_point_id}/next-step", status_code=202)
+@router.post(
+    "/me/learning-profile/{knowledge_point_id}/next-step",
+    status_code=202,
+    response_model=AgentTaskCreateResponse,
+)
 async def take_next_step(
     knowledge_point_id: str,
     request: Request,
@@ -961,7 +1014,9 @@ async def take_next_step(
     )
 
 
-@router.patch("/me/learning-profile/{knowledge_point_id}")
+@router.patch(
+    "/me/learning-profile/{knowledge_point_id}", response_model=ProfileChangeResponse
+)
 async def override_learning_profile(
     knowledge_point_id: str,
     body: ProfileOverride,
@@ -998,7 +1053,7 @@ async def override_learning_profile(
     return change.to_dict()
 
 
-@router.get("/agent-tasks/{task_id}/decisions")
+@router.get("/agent-tasks/{task_id}/decisions", response_model=AgentDecisionsResponse)
 async def agent_task_decisions(
     task_id: str,
     request: Request,
@@ -1012,7 +1067,9 @@ async def agent_task_decisions(
     return {"decisions": await services.agent_events.decisions_for_task(task_id)}
 
 
-@router.get("/agent-tasks/{task_id}/runtime-graph")
+@router.get(
+    "/agent-tasks/{task_id}/runtime-graph", response_model=RuntimeGraphResponse
+)
 async def agent_task_runtime_graph(
     task_id: str,
     request: Request,
@@ -1058,7 +1115,7 @@ async def agent_task_runtime_graph(
     }
 
 
-@router.get("/agent-tasks/{task_id}/evidence")
+@router.get("/agent-tasks/{task_id}/evidence", response_model=AgentEvidenceResponse)
 async def agent_task_evidence(
     task_id: str,
     request: Request,
@@ -1072,7 +1129,7 @@ async def agent_task_evidence(
     return {"evidence": await services.agent_events.evidence_for_task(task_id)}
 
 
-@router.get("/me/mastery")
+@router.get("/me/mastery", response_model=MasteryResponse)
 async def me_mastery(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
@@ -1084,14 +1141,14 @@ async def me_mastery(
     }
 
 
-@router.get("/me/preferences")
+@router.get("/me/preferences", response_model=PreferencesResponse)
 async def get_preferences(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     return {"preferences": context.preferences}
 
 
-@router.patch("/me/preferences")
+@router.patch("/me/preferences", response_model=PreferencesResponse)
 async def patch_preferences(
     body: dict[str, Any],
     request: Request,

@@ -31,6 +31,67 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlalchemy import delete, desc, false, func, or_, select, update
 
+from ..contracts.rest_models import (
+    CreateUploadResponse,
+    DocumentTagSaveResponse,
+    FileDownloadUrlResponse,
+    FolderArchiveResponse,
+    FolderRestoreResponse,
+    KnowledgeBaseResponse,
+    KnowledgeBasesResponse,
+    KnowledgeBulkChunksResponse,
+    KnowledgeBulkDocumentsResponse,
+    KnowledgeChunkResponse,
+    KnowledgeChunksResponse,
+    KnowledgeDocumentResponse,
+    KnowledgeDocumentsResponse,
+    KnowledgeDocumentUpsertResponse,
+    KnowledgeMessageResponse,
+    KnowledgeNextSlotResponse,
+    KnowledgeSearchResponse,
+    KnowledgeTagListResponse,
+    KnowledgeTagResponse,
+    KnowledgeTagsResponse,
+    KnowledgeTagUsageResponse,
+    KnowledgeUploadCreateResponse,
+    LearningRecordResponse,
+    MessageResponse,
+    MoveItemsResponse,
+    PinnedItemResponse,
+    PinnedItemsResponse,
+    SkillCreateResponse,
+    SkillUpdateResponse,
+    StorageStatusResponse,
+    SuccessResponse,
+    TableColumnsResponse,
+    TableEmptyDataResponse,
+    TableImportCsvResponse,
+    TableImportRowsResponse,
+    TableListResponse,
+    TableMessageResponse,
+    TableResponse,
+    TableRowResponse,
+    TableRowsCreateResponse,
+    TableRowsFindResponse,
+    TableRowsQueryResponse,
+    TableRowsResponse,
+    TableRowsUpsertResponse,
+    TableViewDeletedResponse,
+    TableViewResponse,
+    TableViewsResponse,
+    UploadPartsResponse,
+    UploadStateResponse,
+    UsageLimitsResponse,
+    WorkspaceFileContentResponse,
+    WorkspaceFileResponse,
+    WorkspaceFilesResponse,
+    WorkspaceFolderResponse,
+    WorkspaceFoldersResponse,
+    WorkspaceListResponse,
+    WorkspaceMembersResponse,
+    WorkspacePermissionsResponse,
+    WorkspaceResponse,
+)
 from ..learner import LearnerContext
 from ..store.models.agent import AgentTask, AgentTaskEvent
 from ..store.models.base import utcnow
@@ -562,7 +623,7 @@ def _parse_knowledge_document(body: dict[str, Any]) -> tuple[str, str, str]:
 # Workspaces -----------------------------------------------------------------
 
 
-@router.get("/workspaces")
+@router.get("/workspaces", response_model=WorkspaceListResponse)
 async def list_workspaces(
     request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -575,7 +636,7 @@ async def list_workspaces(
     }
 
 
-@router.get("/workspaces/{workspace_id}")
+@router.get("/workspaces/{workspace_id}", response_model=WorkspaceResponse)
 async def get_workspace(
     workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -583,7 +644,7 @@ async def get_workspace(
     return {"workspace": _public_workspace(row), "data": _public_workspace(row)}
 
 
-@router.get("/workspaces/{workspace_id}/members")
+@router.get("/workspaces/{workspace_id}/members", response_model=WorkspaceMembersResponse)
 async def list_workspace_members(
     workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -599,7 +660,7 @@ async def list_workspace_members(
     }
 
 
-@router.get("/workspaces/{workspace_id}/permissions")
+@router.get("/workspaces/{workspace_id}/permissions", response_model=WorkspacePermissionsResponse)
 async def get_workspace_permissions(
     workspace_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -622,7 +683,7 @@ async def get_workspace_permissions(
     }
 
 
-@router.patch("/workspaces/{workspace_id}/permissions")
+@router.patch("/workspaces/{workspace_id}/permissions", response_model=MessageResponse)
 async def update_workspace_permissions(
     workspace_id: str,
     body: dict[str, Any],
@@ -644,7 +705,7 @@ async def update_workspace_permissions(
     return {"message": "Lingxi personal workspace permissions are identity-managed"}
 
 
-@router.patch("/workspaces/{workspace_id}")
+@router.patch("/workspaces/{workspace_id}", response_model=WorkspaceResponse)
 async def update_workspace(
     workspace_id: str,
     body: dict[str, Any],
@@ -667,7 +728,7 @@ async def update_workspace(
 # Pins ----------------------------------------------------------------------
 
 
-@router.get("/pinned-items")
+@router.get("/pinned-items", response_model=PinnedItemsResponse)
 async def list_pinned_items(
     request: Request,
     workspaceId: str,
@@ -690,7 +751,7 @@ async def list_pinned_items(
     return {"pinnedItems": [_pinned_item_public(row, context.learner_id) for row in rows]}
 
 
-@router.post("/pinned-items")
+@router.post("/pinned-items", response_model=PinnedItemResponse)
 async def create_pinned_item(
     body: dict[str, Any],
     request: Request,
@@ -723,7 +784,7 @@ async def create_pinned_item(
     return {"pinnedItem": _pinned_item_public(row, context.learner_id)}
 
 
-@router.delete("/pinned-items/{resource_type}/{resource_id}")
+@router.delete("/pinned-items/{resource_type}/{resource_id}", response_model=SuccessResponse)
 async def delete_pinned_item(
     resource_type: str,
     resource_id: str,
@@ -766,8 +827,8 @@ def _folder_public(row: WorkspaceFolder, workspace_id: str) -> dict[str, Any]:
     }
 
 
-@router.get("/workspaces/{workspace_id}/files/folders")
-@router.get("/workspaces/{workspace_id}/folders")
+@router.get("/workspaces/{workspace_id}/files/folders", response_model=WorkspaceFoldersResponse)
+@router.get("/workspaces/{workspace_id}/folders", response_model=WorkspaceFoldersResponse)
 async def list_folders(
     workspace_id: str,
     request: Request,
@@ -784,8 +845,8 @@ async def list_folders(
     return {"success": True, "folders": folders, "data": folders}
 
 
-@router.post("/workspaces/{workspace_id}/files/folders", status_code=201)
-@router.post("/workspaces/{workspace_id}/folders", status_code=201)
+@router.post("/workspaces/{workspace_id}/files/folders", status_code=201, response_model=WorkspaceFolderResponse)
+@router.post("/workspaces/{workspace_id}/folders", status_code=201, response_model=WorkspaceFolderResponse)
 async def create_folder(
     workspace_id: str,
     body: dict[str, Any],
@@ -814,8 +875,8 @@ async def create_folder(
     return {"success": True, "folder": _folder_public(folder, workspace.id)}
 
 
-@router.patch("/workspaces/{workspace_id}/files/folders/{folder_id}")
-@router.patch("/workspaces/{workspace_id}/folders/{folder_id}")
+@router.patch("/workspaces/{workspace_id}/files/folders/{folder_id}", response_model=WorkspaceFolderResponse)
+@router.patch("/workspaces/{workspace_id}/folders/{folder_id}", response_model=WorkspaceFolderResponse)
 async def update_folder(
     workspace_id: str,
     folder_id: str,
@@ -854,8 +915,8 @@ async def update_folder(
     return {"success": True, "folder": result}
 
 
-@router.delete("/workspaces/{workspace_id}/files/folders/{folder_id}")
-@router.delete("/workspaces/{workspace_id}/folders/{folder_id}")
+@router.delete("/workspaces/{workspace_id}/files/folders/{folder_id}", response_model=FolderArchiveResponse)
+@router.delete("/workspaces/{workspace_id}/folders/{folder_id}", response_model=FolderArchiveResponse)
 async def archive_folder(
     workspace_id: str,
     folder_id: str,
@@ -910,7 +971,7 @@ def _descendant_folder_ids(folders: list[WorkspaceFolder], roots: set[str]) -> s
     return result
 
 
-@router.post("/workspaces/{workspace_id}/files/move")
+@router.post("/workspaces/{workspace_id}/files/move", response_model=MoveItemsResponse)
 async def move_file_items(
     workspace_id: str,
     body: dict[str, Any],
@@ -960,7 +1021,7 @@ async def move_file_items(
     return {"success": True, "movedItems": {"files": len(file_ids), "folders": len(folder_ids)}}
 
 
-@router.post("/workspaces/{workspace_id}/files/bulk-archive")
+@router.post("/workspaces/{workspace_id}/files/bulk-archive", response_model=FolderArchiveResponse)
 async def bulk_archive_file_items(
     workspace_id: str,
     body: dict[str, Any],
@@ -1008,8 +1069,8 @@ async def bulk_archive_file_items(
     return {"success": True, "deletedItems": {"folders": archived_folders, "files": archived_files}}
 
 
-@router.post("/workspaces/{workspace_id}/files/folders/{folder_id}/restore")
-@router.post("/workspaces/{workspace_id}/folders/{folder_id}/restore")
+@router.post("/workspaces/{workspace_id}/files/folders/{folder_id}/restore", response_model=FolderRestoreResponse)
+@router.post("/workspaces/{workspace_id}/folders/{folder_id}/restore", response_model=FolderRestoreResponse)
 async def restore_folder(
     workspace_id: str,
     folder_id: str,
@@ -1108,7 +1169,7 @@ async def download_file_items(
     )
 
 
-@router.get("/workspaces/{workspace_id}/files")
+@router.get("/workspaces/{workspace_id}/files", response_model=WorkspaceFilesResponse)
 async def list_files(
     workspace_id: str,
     request: Request,
@@ -1131,7 +1192,7 @@ async def list_files(
     return {"success": True, "files": [_file_public(row, workspace.id) for row in rows]}
 
 
-@router.post("/workspaces/{workspace_id}/files", status_code=201)
+@router.post("/workspaces/{workspace_id}/files", status_code=201, response_model=WorkspaceFileResponse)
 async def create_file(
     workspace_id: str,
     body: dict[str, Any],
@@ -1203,7 +1264,7 @@ async def _file_for_id(
         return workspace, row
 
 
-@router.get("/workspaces/{workspace_id}/files/{file_id}")
+@router.get("/workspaces/{workspace_id}/files/{file_id}", response_model=WorkspaceFileResponse)
 async def get_file(
     workspace_id: str,
     file_id: str,
@@ -1218,7 +1279,7 @@ async def get_file(
     }
 
 
-@router.patch("/workspaces/{workspace_id}/files/{file_id}")
+@router.patch("/workspaces/{workspace_id}/files/{file_id}", response_model=WorkspaceFileResponse)
 async def update_file(
     workspace_id: str,
     file_id: str,
@@ -1255,7 +1316,7 @@ async def update_file(
     return {"success": True, "file": _file_public(row, workspace.id)}
 
 
-@router.patch("/workspaces/{workspace_id}/files/{file_id}/dimensions")
+@router.patch("/workspaces/{workspace_id}/files/{file_id}/dimensions", response_model=SuccessResponse)
 async def update_file_dimensions(
     workspace_id: str,
     file_id: str,
@@ -1280,7 +1341,7 @@ async def update_file_dimensions(
     return {"success": True}
 
 
-@router.delete("/workspaces/{workspace_id}/files/{file_id}")
+@router.delete("/workspaces/{workspace_id}/files/{file_id}", response_model=SuccessResponse)
 async def delete_file(
     workspace_id: str,
     file_id: str,
@@ -1296,7 +1357,7 @@ async def delete_file(
     return {"success": True}
 
 
-@router.post("/workspaces/{workspace_id}/files/{file_id}/restore")
+@router.post("/workspaces/{workspace_id}/files/{file_id}/restore", response_model=SuccessResponse)
 async def restore_file(
     workspace_id: str,
     file_id: str,
@@ -1312,7 +1373,7 @@ async def restore_file(
     return {"success": True}
 
 
-@router.put("/workspaces/{workspace_id}/files/{file_id}/content")
+@router.put("/workspaces/{workspace_id}/files/{file_id}/content", response_model=WorkspaceFileResponse)
 async def update_file_content(
     workspace_id: str,
     file_id: str,
@@ -1355,7 +1416,7 @@ async def update_file_content(
     return {"success": True, "file": _file_public(row, workspace.id)}
 
 
-@router.get("/workspaces/{workspace_id}/files/{file_id}/content")
+@router.get("/workspaces/{workspace_id}/files/{file_id}/content", response_model=WorkspaceFileContentResponse)
 async def get_file_content(
     workspace_id: str,
     file_id: str,
@@ -1437,7 +1498,7 @@ async def inline_file(
     return FileResponse(target, media_type=row.mime_type, filename=row.name)
 
 
-@router.post("/workspaces/{workspace_id}/files/{file_id}/download")
+@router.post("/workspaces/{workspace_id}/files/{file_id}/download", response_model=FileDownloadUrlResponse)
 async def file_download_url(
     workspace_id: str,
     file_id: str,
@@ -1457,14 +1518,14 @@ async def file_download_url(
     }
 
 
-@router.get("/files/storage-status")
+@router.get("/files/storage-status", response_model=StorageStatusResponse)
 async def storage_status() -> dict[str, bool]:
     # LingxiLearn deliberately uses its local persistent volume; no cloud
     # provider is configured or exposed by this workspace surface.
     return {"cloudConfigured": False}
 
 
-@router.get("/users/me/usage-limits")
+@router.get("/users/me/usage-limits", response_model=UsageLimitsResponse)
 async def usage_limits(
     request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -1503,7 +1564,7 @@ async def usage_limits(
 _upload_sessions: dict[str, dict[str, Any]] = {}
 
 
-@router.post("/files/uploads")
+@router.post("/files/uploads", response_model=CreateUploadResponse)
 async def create_upload(
     body: dict[str, Any],
     request: Request,
@@ -1603,7 +1664,7 @@ async def put_upload(
     return StreamingResponse(iter(()), status_code=204)
 
 
-@router.post("/files/uploads/{upload_id}/parts")
+@router.post("/files/uploads/{upload_id}/parts", response_model=UploadPartsResponse)
 async def create_upload_part_urls(
     upload_id: str,
     body: dict[str, Any],
@@ -1672,7 +1733,7 @@ async def put_upload_part(
     return Response(status_code=204)
 
 
-@router.post("/files/uploads/{upload_id}/complete")
+@router.post("/files/uploads/{upload_id}/complete", response_model=UploadStateResponse)
 async def complete_upload(
     upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -1780,7 +1841,7 @@ async def complete_upload(
     }
 
 
-@router.delete("/files/uploads/{upload_id}")
+@router.delete("/files/uploads/{upload_id}", response_model=UploadStateResponse)
 async def abort_upload(
     upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -1828,7 +1889,7 @@ def _csv_payload(raw: str, delimiter: str = ",") -> tuple[list[str], list[dict[s
     ]
 
 
-@router.post("/table/import-csv", status_code=201)
+@router.post("/table/import-csv", status_code=201, response_model=TableImportCsvResponse)
 async def import_table_csv(
     body: dict[str, Any],
     request: Request,
@@ -1878,7 +1939,7 @@ async def import_table_csv(
     }
 
 
-@router.post("/table/{table_id}/import")
+@router.post("/table/{table_id}/import", response_model=TableImportRowsResponse)
 async def import_table_rows(
     table_id: str,
     body: dict[str, Any],
@@ -1916,7 +1977,7 @@ async def import_table_rows(
     return {"success": True, "data": {"importedRows": len(rows)}}
 
 
-@router.get("/table")
+@router.get("/table", response_model=TableListResponse)
 async def list_tables(
     request: Request,
     workspaceId: str = "lingxi",
@@ -1977,7 +2038,7 @@ async def list_tables(
     }
 
 
-@router.post("/lingxi/learning-records")
+@router.post("/lingxi/learning-records", response_model=LearningRecordResponse)
 async def record_learning_event(
     body: dict[str, Any],
     request: Request,
@@ -2024,7 +2085,7 @@ def _pinned_item_public(row: WorkspacePinnedItem, learner_id: str) -> dict[str, 
     }
 
 
-@router.post("/table")
+@router.post("/table", response_model=TableResponse)
 async def create_table(
     body: dict[str, Any],
     request: Request,
@@ -2098,7 +2159,7 @@ async def create_table(
     }
 
 
-@router.get("/table/{table_id}")
+@router.get("/table/{table_id}", response_model=TableResponse)
 async def get_table(
     table_id: str,
     request: Request,
@@ -2127,7 +2188,7 @@ async def get_table(
     return {"success": True, "data": {"table": _table_public(table, list(cols), int(count))}}
 
 
-@router.patch("/table/{table_id}")
+@router.patch("/table/{table_id}", response_model=TableResponse)
 async def update_table(
     table_id: str,
     body: dict[str, Any],
@@ -2188,7 +2249,7 @@ async def update_table(
     return {"success": True, "data": {"table": _table_public(table, list(cols), int(count))}}
 
 
-@router.delete("/table/{table_id}")
+@router.delete("/table/{table_id}", response_model=TableMessageResponse)
 async def archive_table(
     table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -2202,7 +2263,7 @@ async def archive_table(
     return {"success": True, "data": {"message": "archived"}}
 
 
-@router.post("/table/{table_id}/restore")
+@router.post("/table/{table_id}/restore", response_model=TableResponse)
 async def restore_table(
     table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -2238,7 +2299,7 @@ async def restore_table(
     }
 
 
-@router.get("/table/{table_id}/rows")
+@router.get("/table/{table_id}/rows", response_model=TableRowsResponse)
 async def list_rows(
     table_id: str,
     request: Request,
@@ -2283,7 +2344,7 @@ async def list_rows(
     }
 
 
-@router.get("/table/{table_id}/query")
+@router.get("/table/{table_id}/query", response_model=TableRowsQueryResponse)
 async def query_rows(
     table_id: str,
     request: Request,
@@ -2325,7 +2386,7 @@ async def query_rows(
     }
 
 
-@router.get("/table/{table_id}/rows/find")
+@router.get("/table/{table_id}/rows/find", response_model=TableRowsFindResponse)
 async def find_rows(
     table_id: str,
     request: Request,
@@ -2533,7 +2594,7 @@ async def _coerce_row_values(
     return normalized
 
 
-@router.post("/table/{table_id}/rows")
+@router.post("/table/{table_id}/rows", response_model=TableRowsCreateResponse)
 async def create_rows(
     table_id: str,
     body: dict[str, Any],
@@ -2570,7 +2631,7 @@ async def create_rows(
     }
 
 
-@router.patch("/table/{table_id}/rows/{row_id}")
+@router.patch("/table/{table_id}/rows/{row_id}", response_model=TableRowResponse)
 async def update_row(
     table_id: str,
     row_id: str,
@@ -2598,7 +2659,7 @@ async def update_row(
     return {"success": True, "data": {"row": public}}
 
 
-@router.post("/table/{table_id}/rows/upsert")
+@router.post("/table/{table_id}/rows/upsert", response_model=TableRowsUpsertResponse)
 async def upsert_rows(
     table_id: str,
     body: dict[str, Any],
@@ -2639,7 +2700,7 @@ async def upsert_rows(
     return {"success": True, "data": {"rows": created}}
 
 
-@router.delete("/table/{table_id}/rows/{row_id}")
+@router.delete("/table/{table_id}/rows/{row_id}", response_model=TableEmptyDataResponse)
 async def delete_row(
     table_id: str,
     row_id: str,
@@ -2661,7 +2722,7 @@ async def delete_row(
     return {"success": True, "data": {}}
 
 
-@router.post("/table/{table_id}/columns")
+@router.post("/table/{table_id}/columns", response_model=TableColumnsResponse)
 async def add_column(
     table_id: str,
     body: dict[str, Any],
@@ -2704,7 +2765,7 @@ async def add_column(
     return {"success": True, "data": {"columns": [_column_public(row)]}}
 
 
-@router.patch("/table/{table_id}/columns")
+@router.patch("/table/{table_id}/columns", response_model=TableColumnsResponse)
 async def update_column(
     table_id: str,
     body: dict[str, Any],
@@ -2743,7 +2804,7 @@ async def update_column(
     return {"success": True, "data": {"columns": [_column_public(row)]}}
 
 
-@router.delete("/table/{table_id}/columns")
+@router.delete("/table/{table_id}/columns", response_model=TableColumnsResponse)
 async def delete_column(
     table_id: str,
     body: dict[str, Any],
@@ -2769,7 +2830,7 @@ async def delete_column(
     return {"success": True, "data": {"columns": []}}
 
 
-@router.get("/table/{table_id}/views")
+@router.get("/table/{table_id}/views", response_model=TableViewsResponse)
 async def list_views(
     table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -2787,7 +2848,7 @@ async def list_views(
     return {"success": True, "data": {"views": [_view_public(row) for row in rows]}}
 
 
-@router.post("/table/{table_id}/views")
+@router.post("/table/{table_id}/views", response_model=TableViewResponse)
 async def create_view(
     table_id: str,
     body: dict[str, Any],
@@ -2808,7 +2869,7 @@ async def create_view(
     return {"success": True, "data": {"view": _view_public(row)}}
 
 
-@router.patch("/table/{table_id}/views/{view_id}")
+@router.patch("/table/{table_id}/views/{view_id}", response_model=TableViewResponse)
 async def update_view(
     table_id: str,
     view_id: str,
@@ -2846,7 +2907,7 @@ async def update_view(
     return {"success": True, "data": {"view": _view_public(row)}}
 
 
-@router.delete("/table/{table_id}/views/{view_id}")
+@router.delete("/table/{table_id}/views/{view_id}", response_model=TableViewDeletedResponse)
 async def delete_view(
     table_id: str,
     view_id: str,
@@ -2870,7 +2931,7 @@ async def delete_view(
 # Knowledge ------------------------------------------------------------------
 
 
-@router.get("/knowledge")
+@router.get("/knowledge", response_model=KnowledgeBasesResponse)
 async def list_knowledge(
     request: Request,
     includeArchived: bool = False,
@@ -2904,7 +2965,7 @@ async def list_knowledge(
     return {"success": True, "data": result, "knowledgeBases": result}
 
 
-@router.post("/knowledge")
+@router.post("/knowledge", response_model=KnowledgeBaseResponse)
 async def create_knowledge(
     body: dict[str, Any],
     request: Request,
@@ -2936,7 +2997,7 @@ async def _base_for_id(request: Request, base_id: str, context: LearnerContext) 
     return row
 
 
-@router.get("/knowledge/search")
+@router.get("/knowledge/search", response_model=KnowledgeSearchResponse)
 async def search_knowledge(
     request: Request,
     q: str = "",
@@ -2985,7 +3046,7 @@ async def search_knowledge(
     return {"success": True, "data": bounded, "results": bounded}
 
 
-@router.get("/knowledge/{base_id}/next-available-slot")
+@router.get("/knowledge/{base_id}/next-available-slot", response_model=KnowledgeNextSlotResponse)
 async def next_available_tag_slot(
     base_id: str,
     request: Request,
@@ -3028,7 +3089,7 @@ async def next_available_tag_slot(
     }
 
 
-@router.get("/knowledge/{base_id}/tag-usage")
+@router.get("/knowledge/{base_id}/tag-usage", response_model=KnowledgeTagUsageResponse)
 async def tag_usage(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -3075,7 +3136,7 @@ async def tag_usage(
     return {"success": True, "data": usages}
 
 
-@router.get("/knowledge/{base_id}")
+@router.get("/knowledge/{base_id}", response_model=KnowledgeBaseResponse)
 async def get_knowledge(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -3084,8 +3145,8 @@ async def get_knowledge(
     return {"success": True, "data": public, "knowledgeBase": public}
 
 
-@router.put("/knowledge/{base_id}")
-@router.patch("/knowledge/{base_id}")
+@router.put("/knowledge/{base_id}", response_model=KnowledgeBaseResponse)
+@router.patch("/knowledge/{base_id}", response_model=KnowledgeBaseResponse)
 async def update_knowledge(
     base_id: str,
     body: dict[str, Any],
@@ -3107,7 +3168,7 @@ async def update_knowledge(
     return {"success": True, "data": public, "knowledgeBase": public}
 
 
-@router.delete("/knowledge/{base_id}")
+@router.delete("/knowledge/{base_id}", response_model=KnowledgeMessageResponse)
 async def archive_knowledge(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -3120,7 +3181,7 @@ async def archive_knowledge(
     return {"success": True, "data": {"message": "archived"}}
 
 
-@router.post("/knowledge/{base_id}/restore")
+@router.post("/knowledge/{base_id}/restore", response_model=KnowledgeBaseResponse)
 async def restore_knowledge(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -3134,7 +3195,7 @@ async def restore_knowledge(
     return {"success": True, "data": public, "knowledgeBase": public}
 
 
-@router.get("/knowledge/{base_id}/documents")
+@router.get("/knowledge/{base_id}/documents", response_model=KnowledgeDocumentsResponse)
 async def list_documents(
     base_id: str,
     request: Request,
@@ -3205,7 +3266,7 @@ async def list_documents(
     }
 
 
-@router.get("/knowledge/{base_id}/tag-definitions")
+@router.get("/knowledge/{base_id}/tag-definitions", response_model=KnowledgeTagsResponse)
 async def list_tag_definitions(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
@@ -3226,7 +3287,7 @@ async def list_tag_definitions(
     return {"success": True, "data": tags, "tags": tags}
 
 
-@router.post("/knowledge/{base_id}/tag-definitions", status_code=201)
+@router.post("/knowledge/{base_id}/tag-definitions", status_code=201, response_model=KnowledgeTagResponse)
 async def create_tag_definition(
     base_id: str,
     body: dict[str, Any],
@@ -3251,7 +3312,7 @@ async def create_tag_definition(
     return {"success": True, "data": _tag_public(row)}
 
 
-@router.patch("/knowledge/{base_id}/tag-definitions/{tag_id}")
+@router.patch("/knowledge/{base_id}/tag-definitions/{tag_id}", response_model=KnowledgeTagResponse)
 async def update_tag_definition(
     base_id: str,
     tag_id: str,
@@ -3274,7 +3335,7 @@ async def update_tag_definition(
     return {"success": True, "data": _tag_public(row)}
 
 
-@router.delete("/knowledge/{base_id}/tag-definitions/{tag_id}")
+@router.delete("/knowledge/{base_id}/tag-definitions/{tag_id}", response_model=SuccessResponse)
 async def delete_tag_definition(
     base_id: str,
     tag_id: str,
@@ -3293,7 +3354,7 @@ async def delete_tag_definition(
     return {"success": True}
 
 
-@router.get("/knowledge/{base_id}/documents/{document_id}/tag-definitions")
+@router.get("/knowledge/{base_id}/documents/{document_id}/tag-definitions", response_model=KnowledgeTagListResponse)
 async def list_document_tag_definitions(
     base_id: str,
     document_id: str,
@@ -3324,7 +3385,7 @@ async def list_document_tag_definitions(
     return {"success": True, "data": [_tag_public(row) for row in rows]}
 
 
-@router.post("/knowledge/{base_id}/documents/{document_id}/tag-definitions")
+@router.post("/knowledge/{base_id}/documents/{document_id}/tag-definitions", response_model=DocumentTagSaveResponse)
 async def save_document_tag_definitions(
     base_id: str,
     document_id: str,
@@ -3379,7 +3440,7 @@ async def save_document_tag_definitions(
     return {"success": True, "data": {"created": created, "updated": updated, "errors": []}}
 
 
-@router.delete("/knowledge/{base_id}/documents/{document_id}/tag-definitions")
+@router.delete("/knowledge/{base_id}/documents/{document_id}/tag-definitions", response_model=SuccessResponse)
 async def delete_document_tag_definitions(
     base_id: str,
     document_id: str,
@@ -3405,7 +3466,7 @@ async def delete_document_tag_definitions(
     return {"success": True}
 
 
-@router.post("/knowledge/{base_id}/documents/uploads", status_code=201)
+@router.post("/knowledge/{base_id}/documents/uploads", status_code=201, response_model=KnowledgeUploadCreateResponse)
 async def create_knowledge_upload(
     base_id: str,
     body: dict[str, Any],
@@ -3486,7 +3547,7 @@ async def create_knowledge_upload_part_urls(
     return await create_upload_part_urls(upload_id, body, request, context)
 
 
-@router.post("/knowledge/{base_id}/documents/uploads/{upload_id}/complete")
+@router.post("/knowledge/{base_id}/documents/uploads/{upload_id}/complete", response_model=UploadStateResponse)
 async def complete_knowledge_upload(
     base_id: str,
     upload_id: str,
@@ -3611,7 +3672,7 @@ async def abort_knowledge_upload(
     return {"data": _knowledge_upload_session_public(item, status="aborted", document=None)}
 
 
-@router.post("/knowledge/{base_id}/documents")
+@router.post("/knowledge/{base_id}/documents", response_model=KnowledgeDocumentResponse)
 async def create_document(
     base_id: str,
     body: dict[str, Any],
@@ -3646,7 +3707,7 @@ async def create_document(
     return {"success": True, "data": public, "document": public}
 
 
-@router.post("/knowledge/{base_id}/documents/upsert")
+@router.post("/knowledge/{base_id}/documents/upsert", response_model=KnowledgeDocumentUpsertResponse)
 async def upsert_document(
     base_id: str,
     body: dict[str, Any],
@@ -3705,7 +3766,7 @@ async def upsert_document(
     }
 
 
-@router.patch("/knowledge/{base_id}/documents")
+@router.patch("/knowledge/{base_id}/documents", response_model=KnowledgeBulkDocumentsResponse)
 async def bulk_update_documents(
     base_id: str,
     body: dict[str, Any],
@@ -3743,7 +3804,7 @@ async def bulk_update_documents(
     }
 
 
-@router.get("/knowledge/{base_id}/documents/{document_id}")
+@router.get("/knowledge/{base_id}/documents/{document_id}", response_model=KnowledgeDocumentResponse)
 async def get_document(
     base_id: str,
     document_id: str,
@@ -3763,7 +3824,7 @@ async def get_document(
     return {"success": True, "data": public, "document": public}
 
 
-@router.get("/knowledge/{base_id}/documents/{document_id}/chunks")
+@router.get("/knowledge/{base_id}/documents/{document_id}/chunks", response_model=KnowledgeChunksResponse)
 async def list_chunks(
     base_id: str,
     document_id: str,
@@ -3841,7 +3902,7 @@ async def list_chunks(
     return {"success": True, "data": chunks, "chunks": chunks, "pagination": pagination}
 
 
-@router.post("/knowledge/{base_id}/documents/{document_id}/chunks")
+@router.post("/knowledge/{base_id}/documents/{document_id}/chunks", response_model=KnowledgeChunkResponse)
 async def create_chunk(
     base_id: str,
     document_id: str,
@@ -3883,7 +3944,7 @@ async def create_chunk(
     }
 
 
-@router.get("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}")
+@router.get("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}", response_model=KnowledgeChunkResponse)
 async def get_chunk(
     base_id: str,
     document_id: str,
@@ -3913,8 +3974,8 @@ async def get_chunk(
     }
 
 
-@router.put("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}")
-@router.patch("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}")
+@router.put("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}", response_model=KnowledgeChunkResponse)
+@router.patch("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}", response_model=KnowledgeChunkResponse)
 async def update_chunk(
     base_id: str,
     document_id: str,
@@ -3952,7 +4013,7 @@ async def update_chunk(
     }
 
 
-@router.delete("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}")
+@router.delete("/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}", response_model=KnowledgeMessageResponse)
 async def delete_chunk(
     base_id: str,
     document_id: str,
@@ -3974,7 +4035,7 @@ async def delete_chunk(
     return {"success": True, "data": {"message": "deleted"}}
 
 
-@router.patch("/knowledge/{base_id}/documents/{document_id}/chunks")
+@router.patch("/knowledge/{base_id}/documents/{document_id}/chunks", response_model=KnowledgeBulkChunksResponse)
 async def bulk_update_chunks(
     base_id: str,
     document_id: str,
@@ -4021,8 +4082,8 @@ async def bulk_update_chunks(
     }
 
 
-@router.put("/knowledge/{base_id}/documents/{document_id}")
-@router.patch("/knowledge/{base_id}/documents/{document_id}")
+@router.put("/knowledge/{base_id}/documents/{document_id}", response_model=KnowledgeDocumentResponse)
+@router.patch("/knowledge/{base_id}/documents/{document_id}", response_model=KnowledgeDocumentResponse)
 async def update_document(
     base_id: str,
     document_id: str,
@@ -4104,7 +4165,7 @@ async def update_document(
     return {"success": True, "data": public, "document": public}
 
 
-@router.delete("/knowledge/{base_id}/documents/{document_id}")
+@router.delete("/knowledge/{base_id}/documents/{document_id}", response_model=KnowledgeMessageResponse)
 async def archive_document(
     base_id: str,
     document_id: str,
@@ -4125,7 +4186,7 @@ async def archive_document(
     return {"success": True}
 
 
-@router.post("/knowledge/{base_id}/documents/{document_id}/restore")
+@router.post("/knowledge/{base_id}/documents/{document_id}/restore", response_model=KnowledgeDocumentResponse)
 async def restore_document(
     base_id: str,
     document_id: str,
@@ -4150,7 +4211,7 @@ async def restore_document(
 # Skills ---------------------------------------------------------------------
 
 
-@router.post("/skills")
+@router.post("/skills", response_model=SkillCreateResponse)
 async def create_skill(
     body: dict[str, Any],
     request: Request,
@@ -4174,7 +4235,7 @@ async def create_skill(
     return {"skills": [public], "skill": public, "data": public}
 
 
-@router.patch("/skills/{skill_id}")
+@router.patch("/skills/{skill_id}", response_model=SkillUpdateResponse)
 async def update_skill(
     skill_id: str,
     body: dict[str, Any],
@@ -4197,7 +4258,7 @@ async def update_skill(
     return {"skill": public, "data": public}
 
 
-@router.delete("/skills/{skill_id}")
+@router.delete("/skills/{skill_id}", response_model=SuccessResponse)
 async def delete_skill(
     skill_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
