@@ -2,79 +2,19 @@ import React from 'react'
 import { Badge } from '@sim/emcn'
 import { formatDuration, formatRelativeTime } from '@sim/utils/formatting'
 import { format } from 'date-fns'
-import { getIntegrationMetadata } from '@/lib/logs/get-trigger-options'
-import { getBlock } from '@/blocks/registry'
-import { CORE_TRIGGER_TYPES } from '@/stores/logs/filters/types'
+import type { RunStatus, TriggerPresentation } from './model/execution-log'
 
-export const LOG_COLUMNS = {
-  workflow: { width: 'w-[22%]', minWidth: 'min-w-[140px]', label: 'Workflow' },
-  date: { width: 'w-[18%]', minWidth: 'min-w-[140px]', label: 'Date' },
-  status: { width: 'w-[12%]', minWidth: 'min-w-[100px]', label: 'Status' },
-  cost: { width: 'w-[14%]', minWidth: 'min-w-[90px]', label: 'Cost' },
-  trigger: { width: 'w-[14%]', minWidth: 'min-w-[110px]', label: 'Trigger' },
-  duration: { width: 'w-[20%]', minWidth: 'min-w-[100px]', label: 'Duration' },
-} as const
-
-export const DELETED_WORKFLOW_LABEL = 'Deleted Workflow'
+/** Wire-compatibility fallback for historical dashboard rows with deleted sources. */
+export const DELETED_WORKFLOW_LABEL = 'Deleted source'
 
 /**
- * Resolves the workflow a log row points at, or null when there is nowhere to
- * navigate. Sim agent jobs have no workflow of their own, and a deleted
- * workflow leaves both id fields empty.
- *
- * Single source of truth for "is this log's workflow reachable" — the list row,
- * its context menu, and the details panel must agree, or a row can render as
- * "Deleted Workflow" while still linking somewhere.
+ * Presentation helpers for the logs surface. Domain facts (status, duration,
+ * source, trigger) are resolved upstream by the pure observability mapper
+ * (`model/execution-log-mapper`); these components only render them.
  */
-export function resolveLogWorkflowId(log: {
-  trigger?: string | null
-  workflowId?: string | null
-  workflow?: { id?: string } | null
-}): string | null {
-  if (log.trigger === 'mothership') return null
-  return log.workflow?.id || log.workflowId || null
-}
-
-/** Path to a workflow in the editor. */
-export function workflowEditorPath(workspaceId: string, workflowId: string): string {
-  return `/workspace/${workspaceId}/w/${workflowId}`
-}
-
-export type LogStatus =
-  | 'error'
-  | 'pending'
-  | 'running'
-  | 'redacting'
-  | 'info'
-  | 'cancelled'
-  | 'cancelling'
-
-/**
- * Maps raw status string to LogStatus for display.
- * @param status - Raw status from API
- * @returns Normalized LogStatus value
- */
-export function getDisplayStatus(status: string | null | undefined): LogStatus {
-  switch (status) {
-    case 'running':
-      return 'running'
-    case 'redacting':
-      return 'redacting'
-    case 'pending':
-      return 'pending'
-    case 'cancelling':
-      return 'cancelling'
-    case 'cancelled':
-      return 'cancelled'
-    case 'failed':
-      return 'error'
-    default:
-      return 'info'
-  }
-}
 
 export const STATUS_CONFIG: Record<
-  LogStatus,
+  RunStatus,
   {
     variant: React.ComponentProps<typeof Badge>['variant']
     label: string
@@ -111,7 +51,7 @@ const TRIGGER_VARIANT_MAP: Record<string, React.ComponentProps<typeof Badge>['va
 }
 
 interface StatusBadgeProps {
-  status: LogStatus
+  status: RunStatus
 }
 
 /**
@@ -129,75 +69,20 @@ export function StatusBadge({ status }: StatusBadgeProps) {
 }
 
 interface TriggerBadgeProps {
-  trigger: string
+  trigger: TriggerPresentation
 }
 
 /**
- * Renders a colored badge indicating the workflow trigger type.
- * Core triggers display with their designated colors; integrations show with icons.
- * @param props - Component props containing the trigger type
- * @returns A Badge with appropriate styling for the trigger type
+ * Renders a colored badge indicating the run trigger type. Trigger metadata is
+ * resolved by the observability mapper — no block-registry lookups here.
  */
 export function TriggerBadge({ trigger }: TriggerBadgeProps) {
-  const metadata = getIntegrationMetadata(trigger)
-  const isIntegration = !(CORE_TRIGGER_TYPES as readonly string[]).includes(trigger)
-  const block = isIntegration ? getBlock(trigger) : null
-  const IconComponent = block?.icon
-
-  const coreVariant = TRIGGER_VARIANT_MAP[trigger]
-  if (coreVariant) {
-    return React.createElement(
-      Badge,
-      { variant: coreVariant, size: 'sm', className: 'whitespace-nowrap' },
-      metadata.label
-    )
-  }
-
-  if (IconComponent) {
-    return React.createElement(
-      Badge,
-      {
-        variant: 'gray-secondary',
-        size: 'sm',
-        icon: IconComponent,
-        className: 'whitespace-nowrap',
-      },
-      metadata.label
-    )
-  }
-
+  const variant = TRIGGER_VARIANT_MAP[trigger.type] ?? 'gray-secondary'
   return React.createElement(
     Badge,
-    { variant: 'gray-secondary', size: 'sm', className: 'whitespace-nowrap' },
-    metadata.label
+    { variant, size: 'sm', className: 'whitespace-nowrap' },
+    trigger.label
   )
-}
-
-interface LogWithDuration {
-  totalDurationMs?: number | string
-  duration?: number | string
-}
-
-/**
- * Parse duration from various log data formats.
- * Handles both numeric and string duration values.
- * @param log - Log object containing duration information
- * @returns Duration in milliseconds or null if not available
- */
-export function parseDuration(log: LogWithDuration): number | null {
-  let durationCandidate: number | null = null
-
-  if (typeof log.totalDurationMs === 'number') {
-    durationCandidate = log.totalDurationMs
-  } else if (typeof log.duration === 'number') {
-    durationCandidate = log.duration
-  } else if (typeof log.totalDurationMs === 'string') {
-    durationCandidate = Number.parseInt(String(log.totalDurationMs).replace(/[^0-9]/g, ''), 10)
-  } else if (typeof log.duration === 'string') {
-    durationCandidate = Number.parseInt(String(log.duration).replace(/[^0-9]/g, ''), 10)
-  }
-
-  return Number.isFinite(durationCandidate) ? durationCandidate : null
 }
 
 /**

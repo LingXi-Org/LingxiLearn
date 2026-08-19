@@ -35,6 +35,7 @@ import {
 } from '@/app/workspace/[workspaceId]/components/folders'
 import { PresenceAvatars } from '@/app/workspace/[workspaceId]/components/presence/presence-avatars'
 import { LogDetails } from '@/app/workspace/[workspaceId]/logs/components'
+import { mapExecutionLogDetail } from '@/app/workspace/[workspaceId]/logs/model/execution-log-mapper'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { ImportCsvDialog } from '@/app/workspace/[workspaceId]/tables/components/import-csv-dialog'
@@ -1598,7 +1599,7 @@ function SimTable({
         onColumnRename={onColumnRename}
       />
       <LogDetails
-        log={executionLog ?? null}
+        log={executionLog ? mapExecutionLogDetail(executionLog) : null}
         isOpen={Boolean(executionId)}
         onClose={onCloseSlideout}
       />

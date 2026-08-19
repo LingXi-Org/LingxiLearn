@@ -178,10 +178,10 @@ export const executionIdParam = {
  */
 export const executionIdWriteOptions = { history: 'replace' } as const
 
-const LOG_DETAILS_TABS = ['overview', 'trace'] as const
+const LOG_DETAILS_TABS = ['overview', 'trace', 'events'] as const
 
 /**
- * Active tab of the log-details sidebar (`overview` / `trace`). Deep-linkable so
+ * Active tab of the log-details sidebar (`overview` / `trace` / `events`). Deep-linkable so
  * a shared link can land on the trace view; `replace` keeps it off the back
  * stack and `clearOnDefault` drops it from the URL when on the default tab.
  */

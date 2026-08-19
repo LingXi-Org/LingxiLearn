@@ -1,4 +1,3 @@
-import { getLatestBlock } from '@/blocks/registry'
 import { getAllTriggers } from '@/triggers'
 
 export interface TriggerOption {
@@ -19,8 +18,12 @@ export function resetTriggerOptionsCache() {
 }
 
 /**
- * Dynamically generates trigger filter options from the trigger registry and block definitions.
+ * Dynamically generates trigger filter options from the trigger registry.
  * Results are cached after first call for performance (~98% faster on subsequent calls).
+ *
+ * Integration providers use their registry id formatted as a stable label with
+ * a neutral color — observability presentation must not look up the workflow
+ * block registry (#68).
  */
 export function getTriggerOptions(): TriggerOption[] {
   if (cachedTriggerOptions) {
@@ -38,7 +41,7 @@ export function getTriggerOptions(): TriggerOption[] {
     { value: 'webhook', label: 'Webhook', color: '#ea580c' },
     { value: 'mcp', label: 'MCP', color: '#dc2626' },
     { value: 'copilot', label: 'Sim agent', color: '#ec4899' },
-    { value: 'mothership', label: 'Sim agent', color: '#ec4899' },
+    { value: 'mothership', label: 'Agent', color: '#ec4899' },
     { value: 'workflow', label: 'Workflow', color: '#0369a1' },
     { value: 'custom_block', label: 'Custom block', color: '#0369a1' },
   ]
@@ -51,12 +54,10 @@ export function getTriggerOptions(): TriggerOption[] {
       continue
     }
 
-    const block = getLatestBlock(provider)
-
     providerMap.set(provider, {
       value: provider,
-      label: block?.name || formatProviderName(provider),
-      color: block?.bgColor || '#6b7280',
+      label: formatProviderName(provider),
+      color: '#6b7280',
     })
   }
 

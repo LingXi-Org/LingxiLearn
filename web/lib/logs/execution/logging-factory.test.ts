@@ -681,7 +681,7 @@ describe('calculateCostSummary', () => {
 
   test('does not double-count nested sub-workflow roots', () => {
     // A sub-workflow call nests another synthetic { type: 'workflow' } root
-    // (captureChildWorkflowLogs runs buildTraceSpans on the child). Both the
+    // (the child-run capture builds trace spans on the child). Both the
     // outer root and the inner sub-workflow root carry aggregate costs; only the
     // leaf agent inside should be billed.
     const traceSpans = [

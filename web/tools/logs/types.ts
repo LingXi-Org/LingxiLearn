@@ -1,7 +1,7 @@
 import type {
+  ExecutionLogDetail,
+  ExecutionLogSummary,
   ExecutionSnapshotData,
-  WorkflowLogDetail,
-  WorkflowLogSummary,
 } from '@/lib/api/contracts/logs'
 import type { ToolResponse, WorkflowToolExecutionContext } from '@/tools/types'
 
@@ -57,7 +57,7 @@ export interface LogsGetRunDetailsParams {
 
 export interface LogsQueryResponse extends ToolResponse {
   output: {
-    logs: WorkflowLogSummary[]
+    logs: ExecutionLogSummary[]
     nextCursor: string | null
   }
 }
@@ -85,7 +85,7 @@ export interface LogsGetRunDetailsResponse extends ToolResponse {
 
 export interface LogsGetResponse extends ToolResponse {
   output: {
-    log: WorkflowLogDetail
+    log: ExecutionLogDetail
   }
 }
 
