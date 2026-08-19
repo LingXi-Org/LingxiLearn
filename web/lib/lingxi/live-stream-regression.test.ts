@@ -20,13 +20,15 @@ describe('Lingxi live V1 stream regressions', () => {
     expect(source).not.toContain('from: v1ModelRef.current.lastSeq')
   })
 
-  it('subscribes before history hydration and keeps a cursor catch-up fallback', () => {
+  it('selects one server-classified protocol and keeps V1 cursor catch-up', () => {
     const source = readFileSync(hookPath, 'utf-8')
-    const subscribe = source.indexOf('stream.startV1(applyV1Event)')
-    const hydrate = source.indexOf('const loaded = await currentAdapter.loadTask(taskId)')
-    expect(subscribe).toBeGreaterThan(-1)
-    expect(subscribe).toBeLessThan(hydrate)
+    expect(source).toContain("protocolHistory.protocol === 'v1'")
+    expect(source).toContain('stream.startV1(applyV1Event)')
+    expect(source).toContain('stream.startLegacyV0(')
+    expect(source).not.toContain('lingxi-graph-adapter')
+    expect(source).not.toContain('V0 projection stays authoritative')
     const controller = readFileSync(streamControllerPath, 'utf-8')
+    expect(controller).toContain('stream_protocol_already_selected')
     expect(controller).toContain('dependencies.subscribeV1(0')
     expect(controller).toContain('dependencies.catchUpV1(cursor)')
     expect(controller).toContain('catchUpIntervalMs ?? 1000')
@@ -40,7 +42,7 @@ describe('Lingxi live V1 stream regressions', () => {
 
 
 describe('Lingxi runtime graph live refresh regression', () => {
-  it('refreshes the graph from V0 lifecycle events and V1 replay/catch-up events', () => {
+  it('refreshes the graph from the selected protocol lifecycle events', () => {
     const source = readFileSync(hookPath, 'utf-8')
     expect(source).toContain('RUNTIME_GRAPH_REFRESH_EVENTS.has(event.kind)')
     expect(source).toContain("envelope.type === 'run' || envelope.type === 'span'")

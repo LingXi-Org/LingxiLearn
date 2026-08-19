@@ -129,6 +129,7 @@ export type AgentTaskDeleteResponse = z.output<typeof AgentTaskDeleteResponseSch
 /** JSON catch-up view of the durable agent event log (``format=json``). */
 export const AgentTaskEventsResponseSchema = z.object({
   events: z.array(z.record(z.string(), z.unknown())),
+  protocol: z.string(),
 });
 export type AgentTaskEventsResponse = z.output<typeof AgentTaskEventsResponseSchema>;
 

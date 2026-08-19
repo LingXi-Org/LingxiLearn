@@ -32,7 +32,7 @@ describe('createStreamController', () => {
     expect(seen).toEqual([2, 3, 4])
   })
 
-  it('owns and closes both subscriptions and the catch-up timer', () => {
+  it('owns and closes only the selected legacy subscription', () => {
     const unsubscribeV0 = vi.fn()
     const unsubscribeV1 = vi.fn()
     const clearInterval = vi.fn()
@@ -44,12 +44,25 @@ describe('createStreamController', () => {
       clearInterval: clearInterval as unknown as typeof globalThis.clearInterval,
     })
 
-    controller.startV1(vi.fn())
-    controller.startV0(9, vi.fn(), vi.fn())
+    controller.startLegacyV0(9, vi.fn(), vi.fn())
     controller.stop()
 
     expect(unsubscribeV0).toHaveBeenCalledOnce()
-    expect(unsubscribeV1).toHaveBeenCalledOnce()
-    expect(clearInterval).toHaveBeenCalledWith(7)
+    expect(unsubscribeV1).not.toHaveBeenCalled()
+    expect(clearInterval).not.toHaveBeenCalled()
+  })
+
+  it('selects exactly one protocol for a controller lifetime', () => {
+    const controller = createStreamController({
+      subscribeV0: vi.fn(() => vi.fn()),
+      subscribeV1: vi.fn(() => vi.fn()),
+      catchUpV1: vi.fn(async () => []),
+    })
+
+    controller.startV1(vi.fn())
+
+    expect(() => controller.startLegacyV0(0, vi.fn(), vi.fn())).toThrow(
+      'stream_protocol_already_selected'
+    )
   })
 })

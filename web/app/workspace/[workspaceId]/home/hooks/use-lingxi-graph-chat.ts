@@ -11,13 +11,9 @@ import {
   api,
   subscribeAgentV1Events,
 } from '@/lib/lingxi/api'
-import { decodeLingxiMothershipEvent } from '@/lib/lingxi/generated/mothership-stream-v1'
+import type { LingxiTaskTransport } from '@/lib/lingxi/lingxi-task-transport'
+import { decodeLingxiV1Event } from '@/lib/lingxi/stream/decode-v1'
 import {
-  type LingxiGraphChatAdapter,
-  projectLingxiGraphEvents,
-} from '@/lib/lingxi/lingxi-graph-adapter'
-import {
-  buildV1ThreadModel,
   decodeInteractionOptionId,
   emptyV1ThreadModel,
   interactionAnswerLabels,
@@ -97,7 +93,7 @@ export function useLingxiGraphChat(
 ): UseChatReturn {
   const router = useRouter()
   const adapter = options?.adapter
-  const adapterRef = useRef<LingxiGraphChatAdapter | undefined>(adapter)
+  const adapterRef = useRef<LingxiTaskTransport | undefined>(adapter)
   adapterRef.current = adapter
   const onResourceEventRef = useRef(options?.onResourceEvent)
   const onStreamEndRef = useRef(options?.onStreamEnd)
@@ -110,6 +106,12 @@ export function useLingxiGraphChat(
   const [task, setTask] = useState<AgentTaskSnapshot | null>(null)
   const [workflowState, setWorkflowState] = useState<Record<string, unknown> | null>(null)
   const [events, setEvents] = useState<AgentTaskEvent[]>([])
+  const [streamProtocol, setStreamProtocol] = useState<'v1' | 'legacy-v0' | null>(null)
+  const [legacyProjection, setLegacyProjection] = useState<{
+    blocks: NonNullable<ChatMessage['contentBlocks']>
+    assistantText: string
+    isTerminal: boolean
+  } | null>(null)
   const [v1Model, setV1Model] = useState<LingxiV1ThreadModel | null>(null)
   const [localUsers, setLocalUsers] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
@@ -183,6 +185,8 @@ export function useLingxiGraphChat(
     setTask(null)
     setWorkflowState(null)
     setEvents([])
+    setStreamProtocol(null)
+    setLegacyProjection(null)
     setV1Model(null)
     v1ModelRef.current = null
     v1RowSequenceRef.current = 0
@@ -198,13 +202,25 @@ export function useLingxiGraphChat(
   useEffect(() => {
     const currentAdapter = adapterRef.current
     const taskId = resolvedChatIdRef.current
-    if (!currentAdapter || currentAdapter.kind !== 'lingxigraph' || !taskId || locallyStopped) {
+    if (!currentAdapter || !taskId || locallyStopped) {
       return
     }
 
     let cancelled = false
     let runtimeGraphRefreshTimer: ReturnType<typeof globalThis.setTimeout> | null = null
     let runtimeGraphRefreshInFlight = false
+    let stream: ReturnType<typeof createStreamController> | null = null
+    let legacyTask: AgentTaskSnapshot | null = null
+    let projectLegacy:
+      | ((
+          task: AgentTaskSnapshot,
+          events: AgentTaskEvent[]
+        ) => {
+          blocks: NonNullable<ChatMessage['contentBlocks']>
+          assistantText: string
+          isTerminal: boolean
+        })
+      | null = null
     setIsReconnecting(true)
     setError(null)
 
@@ -234,7 +250,11 @@ export function useLingxiGraphChat(
       if (cancelled) return
       const eventState = reduceLingxiTurnState(turnStateRef.current, event)
       applyTurnState(eventState)
-      setEvents((current) => mergeAgentTaskEvent(current, event))
+      setEvents((current) => {
+        const next = mergeAgentTaskEvent(current, event)
+        if (legacyTask && projectLegacy) setLegacyProjection(projectLegacy(legacyTask, next))
+        return next
+      })
       void api.recordLearningEvent(taskId, event).catch(() => {})
       const eventWorkflowState =
         event.workflowState ?? (event.payload.workflowState as Record<string, unknown> | undefined)
@@ -276,13 +296,20 @@ export function useLingxiGraphChat(
 
     const applyV1Event = (row: AgentTaskEvent) => {
       if (cancelled) return
-      const envelope = decodeLingxiMothershipEvent(row.payload)
-      if (!envelope) return
+      const decoded = decodeLingxiV1Event(row.payload)
+      if (!decoded.ok) {
+        stream?.stop()
+        cancelled = true
+        setIsReconnecting(false)
+        setError(`V1 protocol error at ${decoded.error.path}: ${decoded.error.message}`)
+        return
+      }
+      const envelope = decoded.event
       if (typeof row.sequence === 'number') {
         v1RowSequenceRef.current = Math.max(v1RowSequenceRef.current, row.sequence)
       }
-      // The V1 turn/run statuses are authoritative when the protocol is
-      // available; the V0 reducer keeps serving tasks without V1 history.
+      // V1 identity is canonical. A malformed row fails this protocol session
+      // and is never reinterpreted by the historical heuristic reader.
       applyTurnState(reduceV1TurnState(turnStateRef.current, envelope))
       const model = v1ModelRef.current ?? emptyV1ThreadModel(taskId)
       reduceV1Event(model, envelope)
@@ -300,19 +327,6 @@ export function useLingxiGraphChat(
       }
     }
 
-    // Attach the live V1 transport before any task/history hydration.
-    // Previously the hook waited for several HTTP round trips first, creating
-    // a window where the run could emit its opening response before the page
-    // was listening.  Starting from zero is safe because the reducer is
-    // idempotent and the durable stream replays in order.
-    const stream = createStreamController({
-      subscribeV0: (from, onEvent, onEnd) =>
-        currentAdapter.subscribe(taskId, { from, onEvent, onEnd }),
-      subscribeV1: (from, onEvent) => subscribeAgentV1Events(taskId, onEvent, { from }),
-      catchUpV1: async (from) => (await agentTaskV1Events(taskId, from)).events,
-    })
-    stream.startV1(applyV1Event)
-
     const start = async () => {
       try {
         const loaded = await currentAdapter.loadTask(taskId)
@@ -321,40 +335,73 @@ export function useLingxiGraphChat(
         // A send can win the race with the worker's first status update. Keep
         // the optimistic active turn until an event or snapshot catches up.
         if (!optimisticActiveRef.current) applyTurnState(turnStateFromTask(loaded))
-        // Hydrate the durable event log in one state update.  Replaying old
-        // SSE frames one-by-one makes a historical chat look like it has just
-        // started running again and retriggers graph animations.
-        const historyEvents = await currentAdapter.loadEvents(taskId)
+        // The server classifies the retained task once. Empty current tasks
+        // are V1; only tasks whose durable rows are exclusively pre-V1 enter
+        // the explicit historical reader. There is no content-based fallback.
+        const protocolHistory = await agentTaskV1Events(taskId)
         if (cancelled) return
-        const orderedHistory = historyEvents.sort((left, right) => left.sequence - right.sequence)
-        setEvents(orderedHistory)
-        // V1 history hydration: one model build from durable envelopes, so a
-        // refreshed transcript is structurally identical to the live one
-        // (issue #18 §18.3).  Tasks without V1 rows keep the V0 projection.
-        try {
-          const v1History = await agentTaskV1Events(taskId)
-          if (!cancelled && v1History.events.length > 0) {
-            const model = buildV1ThreadModel(
-              taskId,
-              v1History.events.map((row) => decodeLingxiMothershipEvent(row.payload))
-            )
-            const durableHighWater = Math.max(
-              v1RowSequenceRef.current,
-              ...v1History.events.map((row) => row.sequence)
-            )
-            v1RowSequenceRef.current = durableHighWater
-            // Do not overwrite a live model that already received a newer
-            // envelope while the history request was in flight.
-            if (!v1ModelRef.current || v1ModelRef.current.lastSeq <= model.lastSeq) {
-              v1ModelRef.current = model
-              setV1Model(model)
+        setStreamProtocol(protocolHistory.protocol)
+        stream = createStreamController({
+          subscribeV0: (from, onEvent, onEnd) =>
+            currentAdapter.subscribe(taskId, { from, onEvent, onEnd }),
+          subscribeV1: (from, onEvent) => subscribeAgentV1Events(taskId, onEvent, { from }),
+          catchUpV1: async (from) => (await agentTaskV1Events(taskId, from)).events,
+        })
+
+        if (protocolHistory.protocol === 'v1') {
+          const model = emptyV1ThreadModel(taskId)
+          for (const row of protocolHistory.events.sort(
+            (left, right) => left.sequence - right.sequence
+          )) {
+            const decoded = decodeLingxiV1Event(row.payload)
+            if (!decoded.ok) {
+              throw new Error(
+                `V1 protocol error at ${decoded.error.path}: ${decoded.error.message}`
+              )
             }
+            reduceV1Event(model, decoded.event)
           }
-        } catch {
-          /* V1 unavailable — the V0 projection stays authoritative. */
-        }
-        if (!optimisticActiveRef.current) {
-          applyTurnState(reconcileLingxiTurnState(loaded, orderedHistory))
+          v1RowSequenceRef.current = Math.max(
+            0,
+            ...protocolHistory.events.map((row) => row.sequence)
+          )
+          v1ModelRef.current = model
+          setV1Model(model)
+          setEvents([])
+          setLegacyProjection(null)
+          stream.startV1(applyV1Event)
+        } else {
+          const historyEvents = await currentAdapter.loadEvents(taskId)
+          if (cancelled) return
+          const orderedHistory = historyEvents.sort((left, right) => left.sequence - right.sequence)
+          const legacy = await import('@/lib/lingxi/legacy/v0/lingxi-graph-v0')
+          legacyTask = loaded
+          projectLegacy = legacy.projectLingxiGraphV0History
+          legacy.assertV0History(orderedHistory)
+          setEvents(orderedHistory)
+          setV1Model(null)
+          v1ModelRef.current = null
+          setLegacyProjection(projectLegacy(loaded, orderedHistory))
+          if (!optimisticActiveRef.current) {
+            applyTurnState(reconcileLingxiTurnState(loaded, orderedHistory))
+          }
+          stream.startLegacyV0(orderedHistory.at(-1)?.sequence ?? 0, appendEvent, async () => {
+            try {
+              const refreshed = await currentAdapter.loadTask(taskId)
+              if (!cancelled) {
+                legacyTask = refreshed
+                setTask(refreshed)
+                optimisticActiveRef.current = false
+                applyTurnState(turnStateFromTask(refreshed))
+                onStreamEndRef.current?.(taskId, messagesRef.current)
+                if (turnStateFromTask(refreshed) === 'awaiting_user') {
+                  void drainQueueRef.current()
+                }
+              }
+            } finally {
+              if (!cancelled) setIsReconnecting(false)
+            }
+          })
         }
         void api
           .runtimeGraph(taskId)
@@ -374,29 +421,6 @@ export function useLingxiGraphChat(
         )
         requestIdRef.current = loaded.id
         setIsReconnecting(false)
-        stream.startV0(historyEvents.at(-1)?.sequence ?? 0, appendEvent, async () => {
-          try {
-            const refreshed = await currentAdapter.loadTask(taskId)
-            if (!cancelled) {
-              setTask(refreshed)
-              optimisticActiveRef.current = false
-              applyTurnState(turnStateFromTask(refreshed))
-              void api
-                .runtimeGraph(taskId)
-                .then((graph) => setWorkflowState(graph.workflowState))
-                .catch(() => {})
-              onStreamEndRef.current?.(taskId, messagesRef.current)
-              if (turnStateFromTask(refreshed) === 'awaiting_user') {
-                void drainQueueRef.current()
-              }
-            }
-          } finally {
-            if (!cancelled) setIsReconnecting(false)
-          }
-        })
-        // V1 was subscribed before hydration above.  Keep that one
-        // long-lived subscription; catch-up polling shares the durable row
-        // cursor and fills gaps if the network buffers SSE chunks.
       } catch (cause) {
         if (cancelled) return
         setIsReconnecting(false)
@@ -406,18 +430,11 @@ export function useLingxiGraphChat(
     void start()
     return () => {
       cancelled = true
-      stream.stop()
+      stream?.stop()
       if (runtimeGraphRefreshTimer !== null) globalThis.clearTimeout(runtimeGraphRefreshTimer)
     }
   }, [applyTurnState, locallyStopped, resolvedChatId, subscriptionEpoch])
 
-  const projection = useMemo(
-    () =>
-      task
-        ? (adapterRef.current?.project(task, events) ?? projectLingxiGraphEvents(task, events))
-        : null,
-    [events, task]
-  )
   const resources = useMemo(() => artifactResources(task), [task])
   // This is the same state used by the queue dispatcher and composer. The
   // task snapshot alone cannot represent a paused turn while its SSE stays
@@ -465,7 +482,23 @@ export function useLingxiGraphChat(
       }
       return [...turnMessages, ...unclaimedLocals]
     }
-    const currentProjection = projection ?? projectLingxiGraphEvents(task, events)
+    // An empty V1 thread is still V1. Never reinterpret it with the historical
+    // reader; it simply has not emitted a learner-facing turn yet.
+    if (streamProtocol !== 'legacy-v0' || !legacyProjection) {
+      return [
+        ...(localUsers.length > 0
+          ? localUsers
+          : [userMessage(`lingxi-user:${task.id}`, task.prompt)]),
+        {
+          id: `lingxi-assistant:${task.id}`,
+          role: 'assistant',
+          content: '正在连接学习图谱…',
+          contentBlocks: locallyStopped ? [{ type: 'stopped' as const }] : [],
+          requestId: task.id,
+        },
+      ]
+    }
+    const currentProjection = legacyProjection
     const assistant: ChatMessage = {
       id: `lingxi-assistant:${task.id}`,
       role: 'assistant',
@@ -482,7 +515,7 @@ export function useLingxiGraphChat(
         : [userMessage(`lingxi-user:${task.id}`, task.prompt)]),
       assistant,
     ]
-  }, [events, localUsers, locallyStopped, projection, task, v1Model])
+  }, [legacyProjection, localUsers, locallyStopped, streamProtocol, task, v1Model])
   messagesRef.current = messages
 
   const sendDirect = useCallback(
@@ -495,7 +528,7 @@ export function useLingxiGraphChat(
     ): Promise<boolean> => {
       const currentAdapter = adapterRef.current
       const content = message.trim()
-      if (!currentAdapter || currentAdapter.kind !== 'lingxigraph' || !content) return false
+      if (!currentAdapter || !content) return false
 
       // A question-card option id carries its typed interaction identity
       // (issue #18 §10.5): answer through the structured API instead of
@@ -774,7 +807,7 @@ export function useLingxiGraphChat(
     applyTurnState('terminal')
     const taskId = resolvedChatIdRef.current
     const currentAdapter = adapterRef.current
-    if (!taskId || !currentAdapter || currentAdapter.kind !== 'lingxigraph') return
+    if (!taskId || !currentAdapter) return
     try {
       await currentAdapter.cancelTask(taskId)
       const refreshed = await currentAdapter.loadTask(taskId)

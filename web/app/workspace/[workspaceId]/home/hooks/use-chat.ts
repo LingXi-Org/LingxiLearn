@@ -81,7 +81,7 @@ import {
   migrateDesktopChatScopes,
   PENDING_CHAT_KEY_PREFIX,
 } from '@/lib/desktop/chat-scope'
-import type { LingxiGraphChatAdapter } from '@/lib/lingxi/lingxi-graph-adapter'
+import type { LingxiTaskTransport } from '@/lib/lingxi/lingxi-task-transport'
 import type { LingxiV1ThreadModel } from '@/lib/lingxi/stream/turn-model'
 import type { LingxiTurnState } from '@/lib/lingxi/turn-state'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
@@ -1197,7 +1197,7 @@ function ensureWorkflowInRegistry(resourceId: string, title: string, workspaceId
 
 export interface UseChatOptions {
   /** Optional transport/projection adapter. Omitted means the native Lingxi stream. */
-  adapter?: LingxiGraphChatAdapter
+  adapter?: LingxiTaskTransport
   onResourceEvent?: (resourceId: string, eventKind?: 'artifact.ready' | 'delivery.unlocked') => void
   apiPath?: string
   stopPath?: string
@@ -1271,7 +1271,7 @@ export function getLingxiGraphUseChatOptions(
     | 'initialActiveResourceId'
     | 'activeResourceState'
     | 'onRequestStarted'
-  > & { adapter: LingxiGraphChatAdapter }
+  > & { adapter: LingxiTaskTransport }
 ): UseChatOptions {
   return { ...options }
 }

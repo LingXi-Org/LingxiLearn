@@ -45,7 +45,7 @@ import {
   UserInput,
 } from './components'
 import {
-  createLingxiGraphAdapter,
+  createLingxiTaskTransport,
   getLingxiGraphUseChatOptions,
   useChat,
   useMothershipResize,
@@ -239,7 +239,7 @@ export function Home({ chatId, userId, tableViewsEnabled }: HomeProps) {
   }
 
   const chatOptions = getLingxiGraphUseChatOptions({
-    adapter: createLingxiGraphAdapter(),
+    adapter: createLingxiTaskTransport(),
     onResourceEvent: handleResourceEvent,
     activeResourceState,
     onRequestStarted: ({ requestId, userMessageId }) => {
