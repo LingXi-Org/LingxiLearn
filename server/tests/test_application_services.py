@@ -108,6 +108,7 @@ class _StubRuntimePort:
         self.started: list[tuple[str, str, str]] = []
         self.resumed: list[tuple[str, str, dict[str, Any]]] = []
         self.enqueued: list[tuple[str, str, dict[str, Any]]] = []
+        self.running_inputs: list[tuple[str, str, dict[str, Any]]] = []
 
     def start_turn(self, task_id: str, learner_id: str, prompt: str, **kwargs: Any) -> None:
         self.started.append((task_id, learner_id, prompt))
@@ -119,6 +120,11 @@ class _StubRuntimePort:
         self, task_id: str, learner_id: str, item: dict[str, Any]
     ) -> None:
         self.enqueued.append((task_id, learner_id, item))
+
+    async def submit_running_input(
+        self, task_id: str, learner_id: str, item: dict[str, Any]
+    ) -> None:
+        self.running_inputs.append((task_id, learner_id, item))
 
     def schedule_interaction_drain(self, task_id: str, learner_id: str) -> None:
         raise AssertionError("not needed by these tests")
@@ -176,6 +182,41 @@ async def test_agent_task_service_runs_through_the_runtime_port(container) -> No
 
     assert created["status"] == "queued"
     assert port.started and port.started[0][0] == created["id"]
+
+
+@pytest.mark.asyncio
+async def test_running_message_is_submitted_once_without_queue_replay(container) -> None:
+    services = container
+    port = _StubRuntimePort()
+    focused = AgentTaskService(
+        agent_task_repository=services.agent_task_repository,
+        work_ledger=services.work_ledger,
+        runtime_repository=services.runtime_repository,
+        runtime_state=services.runtime_state,
+        learner_repository=services.learner_repository,
+        session_repository=services.session_repository,
+        db=services.db,
+        artifact_service=services.artifacts,
+        event_service=services.agent_events,
+        runtime=port,
+        board_locks=defaultdict(asyncio.Lock),
+    )
+    learner_id = f"learner-{uuid4().hex}"
+    task_id = f"task-{uuid4().hex}"
+    await services.learner_repository.ensure_learner(learner_id)
+    await services.agent_task_repository.create_agent_task(
+        id=task_id,
+        learner_id=learner_id,
+        prompt="解释拥塞窗口",
+        graph_version="test@1",
+        status="running",
+    )
+
+    await focused.agent_message(task_id, "请补充一个例子", learner_id=learner_id)
+
+    assert len(port.running_inputs) == 1
+    assert port.running_inputs[0][2]["message"] == "请补充一个例子"
+    assert port.enqueued == []
 
 
 @pytest.mark.asyncio

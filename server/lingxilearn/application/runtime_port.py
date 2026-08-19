@@ -46,6 +46,12 @@ class RuntimeInputPort(Protocol):
         """Queue a learner message for the conversation drainer to pick up."""
         ...
 
+    async def submit_running_input(
+        self, task_id: str, learner_id: str, item: dict[str, Any]
+    ) -> None:
+        """Submit input to the currently running turn without starting another turn."""
+        ...
+
     def schedule_interaction_drain(self, task_id: str, learner_id: str) -> None:
         """Schedule a drain of answered-but-unresumed interactions."""
         ...

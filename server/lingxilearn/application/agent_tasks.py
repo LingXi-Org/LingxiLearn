@@ -875,14 +875,15 @@ class AgentTaskService:
                 "created": True,
             }
         if record.status in {"queued", "running"}:
-            # Mid-turn interjection: the running graph drains it this round.
+            # Mid-turn input has one owner.  The runtime adapter decides how
+            # the live graph consumes it; it must not also become a queued
+            # conversation item and replay as a second turn.
             item = {
                 "message": message.strip(),
                 "attachments": attachment_refs,
                 "received_at": datetime.now(UTC).isoformat(),
             }
-            await self._runtime_state.push_interjection(task_id, item)
-            self._runtime.enqueue_conversation_input(task_id, record.learner_id, item)
+            await self._runtime.submit_running_input(task_id, record.learner_id, item)
             return {
                 "turnId": str((command or {}).get("turn_id") or ""),
                 "created": True,

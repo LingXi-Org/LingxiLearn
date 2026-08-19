@@ -359,6 +359,19 @@ class LingxiGraphRuntimeAdapter:
         self._conversation_queue[task_id].put_nowait(item)
         self._tasks.spawn(self._serve_conversation(task_id, learner_id))
 
+    async def submit_running_input(
+        self, task_id: str, learner_id: str, item: dict[str, Any]
+    ) -> None:
+        """Persist a mid-turn input for the live graph's interjection drain.
+
+        Running input must not also enter ``_conversation_queue``: once the
+        graph drains the interjection, queueing the same item would replay it
+        as a fresh turn after the current run releases the thread.
+        """
+
+        del learner_id  # Reserved for a future native steering implementation.
+        await self._runtime_state.push_interjection(task_id, item)
+
     def schedule_interaction_drain(self, task_id: str, learner_id: str) -> None:
         self._tasks.spawn(self._drain_interaction_continuations(task_id, learner_id))
 
