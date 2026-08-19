@@ -10,7 +10,7 @@ import {
   TraceFlags,
   trace,
 } from '@opentelemetry/api'
-import { describeError, toError } from '@sim/utils/errors'
+import { describeError, toError } from '@/lib/utils/errors'
 import { RequestTraceV1Outcome } from '@/lib/copilot/generated/request-trace-v1'
 import {
   CopilotBranchKind,

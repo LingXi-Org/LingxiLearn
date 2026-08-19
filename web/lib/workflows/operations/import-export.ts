@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { isRecordLike } from '@/lib/utils/object'
 import { ApiClientError } from '@/lib/api/client/errors'
 import { requestJson } from '@/lib/api/client/request'
 import {

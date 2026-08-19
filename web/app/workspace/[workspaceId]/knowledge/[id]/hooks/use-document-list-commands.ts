@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { DocumentData } from '@/lib/knowledge/types'
 import type { DocumentEnabledFilter } from '@/app/workspace/[workspaceId]/knowledge/[id]/hooks/use-document-list-controller'
 import { resolveBulkTargets } from '@/app/workspace/[workspaceId]/knowledge/detail/domain/documents'

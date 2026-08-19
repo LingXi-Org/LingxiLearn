@@ -1,4 +1,4 @@
-import { isRecordLike, sortObjectKeysDeep } from '@sim/utils/object'
+import { isRecordLike, sortObjectKeysDeep } from '@/lib/utils/object'
 import { normalizeWorkflowEdgeSourceHandle } from '@sim/workflow-types/workflow'
 import type { Edge } from 'reactflow'
 import { getBaseUrl } from '@/lib/core/utils/urls'

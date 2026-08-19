@@ -14,7 +14,7 @@
 
 import { Daytona, Image } from '@daytona/sdk'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   IMMUTABLE_DAYTONA_SNAPSHOT_REF_ERROR,
   isImmutableDaytonaSnapshotRef,

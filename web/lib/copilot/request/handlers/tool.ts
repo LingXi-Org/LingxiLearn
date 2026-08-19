@@ -1,7 +1,7 @@
 import { isBrowserToolName } from '@sim/browser-protocol'
 import { createLogger } from '@/lib/logger'
 import { isTerminalToolName } from '@sim/terminal-protocol'
-import { getErrorMessage, toError } from '@sim/utils/errors'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
 import type { AsyncCompletionSignal } from '@/lib/copilot/async-runs/lifecycle'
 import { upsertAsyncToolCall } from '@/lib/copilot/async-runs/repository'
 import { STREAM_TIMEOUT_MS } from '@/lib/copilot/constants'

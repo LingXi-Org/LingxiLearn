@@ -13,7 +13,7 @@ import {
   workflowMcpTool,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { and, desc, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm'
 import { listApiKeys } from '@/lib/api-key/service'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'

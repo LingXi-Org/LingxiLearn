@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { Neo4jIcon } from '@/components/icons'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'
 import { IntegrationType } from '@/blocks/types'

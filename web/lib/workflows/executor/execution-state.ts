@@ -1,6 +1,6 @@
 import { db } from '@sim/db'
 import { workflowExecutionLogs } from '@sim/db/schema'
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import { and, desc, eq, or, sql } from 'drizzle-orm'
 import { materializeExecutionData, TRACE_STORE_REF_KEY } from '@/lib/logs/execution/trace-store'
 import type { SerializableExecutionState } from '@/executor/execution/types'

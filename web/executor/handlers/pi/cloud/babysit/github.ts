@@ -1,5 +1,5 @@
-import { getErrorMessage } from '@sim/utils/errors'
-import { truncate } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { truncate } from '@/lib/utils/string'
 import type { BabysitRoundDecision } from '@/executor/handlers/pi/cloud/babysit/round'
 import {
   fetchPrSnapshot,

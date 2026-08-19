@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { assertOoxmlArchiveWithinLimits, isZipShaped } from '@/lib/file-parsers/zip-guard'
 
 const logger = createLogger('DocumentStyle')

@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { filterUndefined } from '@sim/utils/object'
-import { truncate } from '@sim/utils/string'
+import { filterUndefined } from '@/lib/utils/object'
+import { truncate } from '@/lib/utils/string'
 import {
   type SecureFetchResponse,
   secureFetchWithPinnedIP,

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { WorkflowStateContractInput } from '@/lib/api/contracts/workflows'
 import { readSSEEvents } from '@/lib/core/utils/sse'
 import type {

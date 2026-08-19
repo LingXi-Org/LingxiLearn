@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { compileLinearRegex } from '@/lib/core/security/linear-regex'
 
 const logger = createLogger('ValidateRegex')

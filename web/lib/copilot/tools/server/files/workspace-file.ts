@@ -1,7 +1,7 @@
 import type { Principal } from '@/lib/auth/principal'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
-import { truncate } from '@sim/utils/string'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
+import { truncate } from '@/lib/utils/string'
 import {
   executeCopilotFileUseCase,
   resolveCopilotWorkspaceFileReference,

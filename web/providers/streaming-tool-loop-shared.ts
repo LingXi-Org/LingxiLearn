@@ -6,8 +6,8 @@
  * provider-agnostic contract they share.
  */
 
-import { toError } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { isRecordLike } from '@/lib/utils/object'
 import type { NormalizedBlockOutput } from '@/executor/types'
 import type { AgentStreamEvent, ToolCallEndStatus } from '@/providers/stream-events'
 

@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 
 export const FALAI_HOSTED_KEY_MARKUP_MULTIPLIER = 1.5
 export const FALAI_IMAGE_FALLBACK_PROVIDER_COST_DOLLARS = 0.05

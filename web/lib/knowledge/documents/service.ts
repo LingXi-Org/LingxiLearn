@@ -11,8 +11,8 @@ import {
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
 import { sha256Hex } from '@sim/security/hash'
-import { getErrorMessage, toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { tasks } from '@trigger.dev/sdk'
 import {
   and,

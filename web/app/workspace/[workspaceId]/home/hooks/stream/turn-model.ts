@@ -1,4 +1,4 @@
-import { isRecordLike as isRecord } from '@sim/utils/object'
+import { isRecordLike as isRecord } from '@/lib/utils/object'
 import { resolveStreamToolOutcome } from '@/lib/copilot/chat/stream-tool-outcome'
 import {
   MothershipStreamV1CompletionStatus,

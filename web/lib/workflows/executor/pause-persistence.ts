@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { describeError, toError } from '@sim/utils/errors'
+import { describeError, toError } from '@/lib/utils/errors'
 import { isRetryableInfrastructureError } from '@/lib/core/errors/retryable-infrastructure'
 import type { LoggingSession } from '@/lib/logs/execution/logging-session'
 import { PauseResumeManager } from '@/lib/workflows/executor/human-in-the-loop-manager'

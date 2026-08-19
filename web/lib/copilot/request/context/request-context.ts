@@ -1,4 +1,4 @@
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { TraceCollector } from '@/lib/copilot/request/trace'
 import type { StreamingContext } from '@/lib/copilot/request/types'
 

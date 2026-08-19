@@ -2,8 +2,8 @@
  * Converters for transforming between UI builder state and API filter/sort objects.
  */
 
-import { generateShortId } from '@sim/utils/id'
-import { isRecordLike } from '@sim/utils/object'
+import { generateShortId } from '@/lib/utils/id'
+import { isRecordLike } from '@/lib/utils/object'
 import { columnMatchesRef } from '@/lib/table/column-keys'
 import { TableQueryValidationError } from '@/lib/table/errors'
 import {

@@ -1,9 +1,9 @@
 import { db } from '@sim/db'
 import { knowledgeBase, knowledgeConnector } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
-import { isRecordLike } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
+import { isRecordLike } from '@/lib/utils/object'
 import { tasks } from '@trigger.dev/sdk'
 import { eq } from 'drizzle-orm'
 import {

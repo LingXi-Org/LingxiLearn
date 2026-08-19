@@ -7,8 +7,8 @@ import {
   knowledgeConnectorSyncLog,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { randomInt } from '@sim/utils/random'
 import { and, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import { decryptApiKey } from '@/lib/api-key/crypto'

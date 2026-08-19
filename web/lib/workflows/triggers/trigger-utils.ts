@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { isInputDefinitionTrigger } from '@/lib/workflows/triggers/input-definition-triggers'
 import { generateMockPayloadFromOutputsDefinition } from '@/lib/workflows/triggers/mock-payload'
 import { type StartBlockCandidate, StartBlockPath } from '@/lib/workflows/triggers/triggers'

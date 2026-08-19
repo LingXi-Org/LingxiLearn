@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { getSessionSnapshot } from '@/lib/auth/session-snapshot'
 import { useOperationQueueStore } from '@/stores/operation-queue/store'
 import type { WorkflowState } from '@/stores/workflows/workflow/types'

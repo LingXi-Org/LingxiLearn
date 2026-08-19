@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'
 import {
   addModelInputProvenanceToRequest,

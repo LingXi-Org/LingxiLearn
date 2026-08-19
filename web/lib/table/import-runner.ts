@@ -1,8 +1,8 @@
 import { type Readable, Transform } from 'node:stream'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
-import { truncate } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
+import { truncate } from '@/lib/utils/string'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { captureServerEvent } from '@/lib/posthog/server'
 import {

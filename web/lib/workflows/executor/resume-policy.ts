@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 
 export const RESUME_ADMISSION_RETRY_DELAY_MS = 60_000
 export const AUTOMATIC_RESUME_WAITING_REASON_MAX_LENGTH = 500

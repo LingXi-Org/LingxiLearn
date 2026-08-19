@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createLogger } from '@/lib/logger'
-import { normalizeEmail } from '@sim/utils/string'
+import { normalizeEmail } from '@/lib/utils/string'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from '@/lib/auth/auth-client'
 import { identityApi } from '@/lib/auth/identity-api'

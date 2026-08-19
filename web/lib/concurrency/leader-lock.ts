@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { acquireLock, releaseLock } from '@/lib/core/config/redis'
 
 const logger = createLogger('LeaderLock')

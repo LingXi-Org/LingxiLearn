@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { isPlainRecord } from '@sim/utils/object'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { isPlainRecord } from '@/lib/utils/object'
 import {
   ASYNC_TOOL_CONFIRMATION_STATUS,
   type AsyncTerminalCompletionSnapshot,

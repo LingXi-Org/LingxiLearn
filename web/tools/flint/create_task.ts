@@ -1,4 +1,4 @@
-import { filterUndefined } from '@sim/utils/object'
+import { filterUndefined } from '@/lib/utils/object'
 import type { FlintCreateTaskParams, FlintCreateTaskResponse } from '@/tools/flint/types'
 import { FLINT_API_BASE_URL, flintBaseParamFields, flintHeaders } from '@/tools/flint/utils'
 import type { ToolConfig } from '@/tools/types'

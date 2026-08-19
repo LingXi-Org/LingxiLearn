@@ -1,5 +1,5 @@
 import { safeCompare } from '@sim/security/compare'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'

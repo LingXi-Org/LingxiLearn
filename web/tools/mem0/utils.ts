@@ -1,4 +1,4 @@
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import type { Mem0Message } from '@/tools/mem0/types'
 
 export type JsonRecord = Record<string, unknown>

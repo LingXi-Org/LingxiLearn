@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import type { GitLabGetJobLogParams, GitLabGetJobLogResponse } from '@/tools/gitlab/types'
 import { getGitLabApiBase } from '@/tools/gitlab/utils'
 import type { ToolConfig } from '@/tools/types'

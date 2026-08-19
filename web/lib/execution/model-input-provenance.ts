@@ -1,4 +1,4 @@
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import {
   PRIVATE_SECRET_PROVENANCE_BUNDLE_V1,
   PRIVATE_SECRET_PROVENANCE_FIELD,

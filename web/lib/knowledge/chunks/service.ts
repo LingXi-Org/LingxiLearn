@@ -2,7 +2,7 @@ import { db } from '@sim/db'
 import { document, embedding, knowledgeBase } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
 import { sha256Hex } from '@sim/security/hash'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, asc, desc, eq, ilike, inArray, isNull, sql } from 'drizzle-orm'
 import type { DurableSecretProvenance } from '@/lib/execution/durable-secret-provenance'
 import type {

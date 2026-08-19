@@ -7,7 +7,7 @@ const { mockGenerateId } = vi.hoisted(() => ({
   mockGenerateId: vi.fn(),
 }))
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: mockGenerateId,
 }))
 

@@ -9,8 +9,8 @@ import {
   copilotRuns,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { filterUndefined } from '@sim/utils/object'
-import { sanitizeValueForJsonb } from '@sim/utils/string'
+import { filterUndefined } from '@/lib/utils/object'
+import { sanitizeValueForJsonb } from '@/lib/utils/string'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { TraceAttr } from '@/lib/copilot/generated/trace-attributes-v1'
 import { TraceSpan } from '@/lib/copilot/generated/trace-spans-v1'

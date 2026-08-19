@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import { buildSelectorContextFromBlock } from '@/lib/workflows/subblocks/context'
 import { getBlock } from '@/blocks/registry'
 import { SELECTOR_TYPES_HYDRATION_REQUIRED, type SubBlockConfig } from '@/blocks/types'

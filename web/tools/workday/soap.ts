@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { validateWorkdayTenantUrl } from '@/lib/core/security/input-validation'
 
 const logger = createLogger('WorkdaySoapClient')

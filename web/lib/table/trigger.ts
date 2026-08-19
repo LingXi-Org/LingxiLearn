@@ -7,7 +7,7 @@
  */
 
 import { createLogger } from '@/lib/logger'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { fillMissingColumns, namedRowMapper } from '@/lib/table/cell-format'
 import { buildNameById } from '@/lib/table/column-keys'
 import type { RowData, TableRow, TableSchema } from '@/lib/table/types'

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { ChangelogActions, ChangelogTimeline } from '@/app/(landing)/changelog/components'
 import type { ChangelogEntry, GitHubRelease } from '@/app/(landing)/changelog/types'
 import { mapReleases, releasesEndpoint } from '@/app/(landing)/changelog/utils'

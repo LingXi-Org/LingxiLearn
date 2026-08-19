@@ -11,7 +11,7 @@ import {
   authorizeWorkflowByWorkspacePermission,
   FolderLockedError,
 } from '@sim/platform-authz/workflow'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import {
   normalizeWorkflowEdgeSourceHandle,
   normalizeWorkflowEdgeTargetHandle,

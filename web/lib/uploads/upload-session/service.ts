@@ -4,8 +4,8 @@ import { uploadSession } from '@sim/db/schema'
 import { safeCompare } from '@sim/security/compare'
 import { sha256Hex } from '@sim/security/hash'
 import { generateSecureToken } from '@sim/security/tokens'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { and, asc, eq, inArray, isNull, lt, or } from 'drizzle-orm'
 import {
   checkStorageQuotaForBillingContext,

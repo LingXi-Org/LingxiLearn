@@ -1,5 +1,5 @@
 import { getRequestContext } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 /**
  * Generate a short request ID for correlation. If called inside a request
  * context (see `withRouteHandler` and `runWithRequestContext`), returns the

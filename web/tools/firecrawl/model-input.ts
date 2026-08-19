@@ -1,4 +1,4 @@
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import type { FirecrawlFormat, ScrapeOptions } from '@/tools/firecrawl/types'
 
 type ProjectedFormat = Record<string, unknown>

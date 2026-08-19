@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { credential, pendingCredentialDraft, user } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, lt } from 'drizzle-orm'
 import { defaultCredentialDisplayName } from '@/lib/credentials/display-name'
 import { credentialProviderMatchesService, getAllOAuthServices } from '@/lib/oauth/utils'

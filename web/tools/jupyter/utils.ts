@@ -1,4 +1,4 @@
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 
 const PROTOCOL_PATTERN = /^https?:\/\//i
 

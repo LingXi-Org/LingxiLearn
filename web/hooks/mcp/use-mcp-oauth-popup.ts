@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { useQueryClient } from '@tanstack/react-query'
 import type { McpOauthCallbackMessage, McpOauthCallbackReason } from '@/lib/mcp/oauth'
 import { mcpKeys, useStartMcpOauth } from '@/hooks/queries/mcp'

@@ -1,6 +1,6 @@
 import { gzipSync } from 'node:zlib'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { backoffWithJitter, parseRetryAfter } from '@sim/utils/retry'
 import { z } from 'zod'
 import { parseNdjsonObjects, sleepUntilAborted } from '@/lib/data-drains/destinations/utils'

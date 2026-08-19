@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
-import { isPlainRecord } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
+import { isPlainRecord } from '@/lib/utils/object'
 import {
   BILLING_ATTRIBUTION_HEADER,
   serializeBillingAttributionHeader,

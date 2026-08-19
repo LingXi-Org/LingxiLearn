@@ -5,7 +5,7 @@ import {
   StartConfigurationSessionCommand,
 } from '@aws-sdk/client-appconfigdata'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { getAwsCredentialsFromEnv } from '@/lib/core/config/aws'
 import { env } from '@/lib/core/config/env'
 

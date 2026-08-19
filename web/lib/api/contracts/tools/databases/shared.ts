@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { z } from 'zod'
 
 export const sslModeSchema = z.enum(['disabled', 'required', 'preferred']).default('preferred')

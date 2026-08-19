@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { cn, Input, InputOTP, InputOTPGroup, InputOTPSlot, Label } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
-import { normalizeEmail } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { normalizeEmail } from '@/lib/utils/string'
 import { useRouter } from 'next/navigation'
 import { quickValidateEmail } from '@/lib/messaging/email/validation'
 import { AuthSubmitButton } from '@/app/(auth)/components'

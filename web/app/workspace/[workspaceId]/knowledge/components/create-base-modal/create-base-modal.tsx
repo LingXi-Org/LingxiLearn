@@ -21,7 +21,7 @@ import {
 } from '@sim/emcn'
 import { X } from '@sim/emcn/icons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { type FieldErrors, useForm } from 'react-hook-form'
 import { z } from 'zod'

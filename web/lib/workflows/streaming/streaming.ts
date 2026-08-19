@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { isRecordLike, omit } from '@sim/utils/object'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { isRecordLike, omit } from '@/lib/utils/object'
 import { createTimeoutAbortController, getTimeoutErrorMessage } from '@/lib/core/execution-limits'
 import {
   extractBlockIdFromOutputId,

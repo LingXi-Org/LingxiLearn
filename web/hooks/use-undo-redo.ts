@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 
 declare global {
   interface Window {

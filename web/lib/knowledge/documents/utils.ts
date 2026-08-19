@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
 import { randomFloat } from '@sim/utils/random'
 

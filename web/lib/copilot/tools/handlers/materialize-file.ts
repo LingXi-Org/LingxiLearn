@@ -8,8 +8,8 @@ import {
   getPostgresConstraintName,
   getPostgresErrorCode,
   toError,
-} from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+} from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import {
   checkStorageQuotaForBillingContext,

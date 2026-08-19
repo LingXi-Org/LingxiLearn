@@ -4,8 +4,8 @@
 
 import { organization, userStats, workspace } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
-import { isRecordLike } from '@sim/utils/object'
+import { generateId } from '@/lib/utils/id'
+import { isRecordLike } from '@/lib/utils/object'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { maybeNotifyLimit } from '@/lib/billing/core/limit-notifications'
 import type { HighestPrioritySubscription } from '@/lib/billing/core/plan'

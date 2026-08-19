@@ -3,7 +3,7 @@
 import { useCallback } from 'react'
 import { toast } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useRouter } from 'next/navigation'
 import type { KnowledgeBaseData } from '@/lib/knowledge/types'
 import { parseMoveOptionValue } from '@/app/workspace/[workspaceId]/components/folders'

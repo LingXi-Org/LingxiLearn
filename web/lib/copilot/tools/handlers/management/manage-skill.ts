@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { executeCopilotSkillUseCase } from '@/lib/copilot/application/execute-skill-use-case'
 import type { ExecutionContext, ToolCallResult } from '@/lib/copilot/request/types'
 import { asOrchestrationError } from '@/lib/core/orchestration/types'

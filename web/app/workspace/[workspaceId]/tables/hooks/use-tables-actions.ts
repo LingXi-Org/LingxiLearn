@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { toast } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useRouter } from 'next/navigation'
 import type { TableDefinition } from '@/lib/table'
 import { generateUniqueTableName } from '@/lib/table/constants'

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import { getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
 import type {
   EventMatchContext,

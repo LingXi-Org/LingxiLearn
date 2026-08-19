@@ -22,8 +22,8 @@ import {
   toast,
 } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { truncate } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { truncate } from '@/lib/utils/string'
 import {
   buildAutoMapping,
   CSV_DELIMITER_SNIFF_BYTES,

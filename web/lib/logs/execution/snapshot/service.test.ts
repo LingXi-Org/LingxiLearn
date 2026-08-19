@@ -4,7 +4,7 @@
 import { databaseMock } from '@sim/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: vi.fn(() => 'generated-uuid-1'),
   generateShortId: vi.fn(() => 'generated-short-1'),
   isValidUuid: vi.fn((v: string) =>

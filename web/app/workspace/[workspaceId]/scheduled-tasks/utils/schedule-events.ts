@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import { format } from 'date-fns'
 import type { WorkspaceScheduleRow } from '@/lib/api/contracts/schedules'
 import { zonedClockDate } from '@/lib/core/utils/timezone'

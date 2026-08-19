@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ChipModalField } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   type ParsedSkill,
   readSkillFile,

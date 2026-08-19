@@ -1,4 +1,4 @@
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import { PackageSearchIcon } from '@/components/icons'
 import { DEFAULT_RERANKER_MODEL, SUPPORTED_RERANKER_MODELS } from '@/lib/knowledge/reranker-models'
 import type { BlockConfig } from '@/blocks/types'

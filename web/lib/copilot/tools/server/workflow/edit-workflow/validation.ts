@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { omit } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { omit } from '@/lib/utils/object'
 import { validateSelectorIds } from '@/lib/copilot/validation/selector-validator'
 import { isHosted as isHostedDeployment } from '@/lib/core/config/env-flags'
 import { isIntegrationDeploymentAvailableForVisibility } from '@/lib/integrations/availability.server'

@@ -1,4 +1,4 @@
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import type { ExecutionContext } from '@/lib/copilot/request/types'
 
 function getCreateWorkflowOutput(

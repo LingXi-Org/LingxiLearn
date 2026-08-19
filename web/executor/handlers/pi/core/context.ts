@@ -7,7 +7,7 @@
  */
 
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { memoryService } from '@/executor/handlers/agent/memory'
 import { resolveSkillContentById } from '@/executor/handlers/agent/skills-resolver'
 import type { AgentInputs, Message, SkillInput } from '@/executor/handlers/agent/types'

@@ -3,7 +3,7 @@
  */
 
 import { useCallback } from 'react'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import {
   COMPARISON_OPERATORS,
   type FilterRule,

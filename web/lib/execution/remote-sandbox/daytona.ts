@@ -1,7 +1,7 @@
 import type { CreateSandboxFromSnapshotParams } from '@daytona/sdk'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateShortId } from '@sim/utils/id'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
 import {
   IMMUTABLE_DAYTONA_SNAPSHOT_REF_ERROR,
   isImmutableDaytonaSnapshotRef,

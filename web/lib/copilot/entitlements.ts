@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { LRUCache } from 'lru-cache'
 import { hasWorkspaceSandboxAccess } from '@/lib/billing/core/subscription'
 import { isCustomBlocksEligible } from '@/lib/workflows/custom-blocks/operations'

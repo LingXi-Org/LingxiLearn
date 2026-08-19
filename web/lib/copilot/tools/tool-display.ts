@@ -1,4 +1,4 @@
-import { stripVersionSuffix } from '@sim/utils/string'
+import { stripVersionSuffix } from '@/lib/utils/string'
 
 /**
  * Single source of truth for copilot tool-call display titles.

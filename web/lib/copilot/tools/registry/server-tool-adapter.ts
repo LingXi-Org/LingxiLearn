@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { messageForCopilotApplicationError } from '@/lib/copilot/application/error'
 import { projectToolErrorMessageForCopilot } from '@/lib/copilot/request/tools/resolved-secret-result'
 import type { ToolExecutionResult, ToolHandler } from '@/lib/copilot/tool-executor/types'

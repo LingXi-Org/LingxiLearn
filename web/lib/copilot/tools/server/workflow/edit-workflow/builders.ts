@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { generateId, isValidUuid } from '@sim/utils/id'
-import { sortObjectKeysDeep } from '@sim/utils/object'
+import { generateId, isValidUuid } from '@/lib/utils/id'
+import { sortObjectKeysDeep } from '@/lib/utils/object'
 import { isIntegrationDeploymentAvailableForVisibility } from '@/lib/integrations/availability.server'
 import type { PermissionGroupConfig } from '@/lib/permission-groups/types'
 import { getEffectiveBlockOutputs } from '@/lib/workflows/blocks/block-outputs'

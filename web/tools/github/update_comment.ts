@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 import type { IssueCommentResponse, UpdateCommentParams } from '@/tools/github/types'
 import { COMMENT_OUTPUT_PROPERTIES, USER_OUTPUT } from '@/tools/github/types'
 import type { ToolConfig } from '@/tools/types'

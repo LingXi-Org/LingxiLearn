@@ -1,8 +1,8 @@
 import { db } from '@sim/db'
 import { copilotChats, settings } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateShortId } from '@sim/utils/id'
+import { toError } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
 import { eq, sql } from 'drizzle-orm'
 
 const logger = createLogger('CopilotToolAutoAllow')

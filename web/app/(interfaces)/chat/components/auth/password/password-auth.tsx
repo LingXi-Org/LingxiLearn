@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { cn, Input, Label } from '@sim/emcn'
 import { Eye, EyeOff } from '@sim/emcn/icons'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { AuthSubmitButton } from '@/app/(auth)/components'
 import { useChatPasswordAuth } from '@/hooks/queries/chats'
 

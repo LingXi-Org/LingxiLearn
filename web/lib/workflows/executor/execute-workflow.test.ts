@@ -26,7 +26,7 @@ const {
   setTrustedExecutionCorrelationMock: vi.fn(),
 }))
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: () => 'execution-1',
 }))
 

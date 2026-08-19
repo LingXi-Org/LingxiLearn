@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { type JWTPayload, jwtVerify, SignJWT } from 'jose'
 import { type NextRequest, NextResponse } from 'next/server'
 import { env } from '@/lib/core/config/env'

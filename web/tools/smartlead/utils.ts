@@ -1,4 +1,4 @@
-import { filterUndefined, isRecordLike } from '@sim/utils/object'
+import { filterUndefined, isRecordLike } from '@/lib/utils/object'
 import type {
   SmartleadBaseParams,
   SmartleadCampaign,

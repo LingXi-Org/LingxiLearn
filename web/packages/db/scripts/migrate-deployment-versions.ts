@@ -4,7 +4,7 @@
 // Do not import from the main app code; duplicate minimal schema and DB setup here.
 // Workspace-internal packages (`@sim/*`) are permitted since they ship in the migrations image.
 
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'

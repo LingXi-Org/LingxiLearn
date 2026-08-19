@@ -19,8 +19,8 @@
  */
 
 import { createLogger } from '@/lib/logger'
-import { generateShortId } from '@sim/utils/id'
-import { truncate } from '@sim/utils/string'
+import { generateShortId } from '@/lib/utils/id'
+import { truncate } from '@/lib/utils/string'
 import { getMaxExecutionTimeout, getRemainingExecutionMs } from '@/lib/core/execution-limits'
 import { withPiSandbox } from '@/lib/execution/remote-sandbox'
 import {

@@ -1,4 +1,4 @@
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 
 export type UnknownRecord = Record<string, unknown>
 export type StringRecord = Record<string, string>

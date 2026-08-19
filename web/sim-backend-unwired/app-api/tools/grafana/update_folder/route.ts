@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { type NextRequest, NextResponse } from 'next/server'
 import { grafanaUpdateFolderContract } from '@/lib/api/contracts/tools/grafana'
 import { getValidationErrorMessage, parseRequest } from '@/lib/api/server'

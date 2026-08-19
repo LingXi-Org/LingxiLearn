@@ -1,4 +1,4 @@
-import { truncate } from '@sim/utils/string'
+import { truncate } from '@/lib/utils/string'
 
 /**
  * The name a freshly-created markdown file is given in `handleCreateFile`: `untitled.md`, or

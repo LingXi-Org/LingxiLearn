@@ -1,6 +1,6 @@
 import { db, workflowBlocks, workflowEdges, workflowSubflows } from '@sim/db'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import type { BlockState, WorkflowState } from '@sim/workflow-types/workflow'
 import {
   normalizeWorkflowEdgeSourceHandle,

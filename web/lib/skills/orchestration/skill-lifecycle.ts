@@ -1,6 +1,6 @@
 import type { skill } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, getPostgresErrorCode } from '@sim/utils/errors'
+import { getErrorMessage, getPostgresErrorCode } from '@/lib/utils/errors'
 import type { z } from 'zod'
 import {
   skillContentSchema,

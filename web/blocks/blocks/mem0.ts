@@ -1,4 +1,4 @@
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { Mem0Icon } from '@/components/icons'
 import { AuthMode, type BlockConfig, type BlockMeta, IntegrationType } from '@/blocks/types'
 import type { Mem0Response } from '@/tools/mem0/types'

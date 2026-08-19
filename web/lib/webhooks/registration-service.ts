@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import type { NextRequest } from 'next/server'
 import { PendingWebhookVerificationTracker } from '@/lib/webhooks/pending-verification'
 import {

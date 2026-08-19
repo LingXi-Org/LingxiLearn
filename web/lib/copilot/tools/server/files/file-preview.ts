@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { executeCopilotFileUseCase } from '@/lib/copilot/application/execute-file-use-case'
 import type { ExecutionContext } from '@/lib/copilot/request/types'
 import { readWorkspaceFileContent } from '@/lib/workspace-files/application/read-workspace-file-content'

@@ -1,7 +1,7 @@
 import { safeCompare } from '@sim/security/compare'
 import { sha256Hex } from '@sim/security/hash'
 import { hmacSha256Hex } from '@sim/security/hmac'
-import { normalizeEmail } from '@sim/utils/string'
+import { normalizeEmail } from '@/lib/utils/string'
 import type { NextResponse } from 'next/server'
 import { env } from '@/lib/core/config/env'
 import { isDev } from '@/lib/core/config/env-flags'

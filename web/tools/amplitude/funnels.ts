@@ -1,4 +1,4 @@
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import type { AmplitudeFunnelsParams, AmplitudeFunnelsResponse } from '@/tools/amplitude/types'
 import { getDashboardHost } from '@/tools/amplitude/utils'
 import type { ToolConfig } from '@/tools/types'

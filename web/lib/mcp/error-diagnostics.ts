@@ -1,4 +1,4 @@
-import { describeError } from '@sim/utils/errors'
+import { describeError } from '@/lib/utils/errors'
 import { sanitizeForLogging } from '@/lib/core/security/redaction'
 
 const MAX_DIAGNOSTIC_FIELD_LENGTH = 100

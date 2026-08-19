@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import { isColumnType } from '@/lib/table/column-types'
 import { enrichTableToolDescription, enrichTableToolParameters } from '@/lib/table/llm/enrichment'
 import type { TableSummary } from '@/lib/table/types'

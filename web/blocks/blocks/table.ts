@@ -1,4 +1,4 @@
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { TableIcon } from '@/components/icons'
 import { TABLE_LIMITS } from '@/lib/table/constants'
 import { filterRulesToFilter, sortRulesToSort } from '@/lib/table/query-builder/converters'

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
 import { secureFetchWithRetry } from '@/lib/knowledge/documents/secure-fetch.server'
 import { VALIDATE_RETRY_OPTIONS } from '@/lib/knowledge/documents/utils'
 import { DEFAULT_QUERY, sentryConnectorMeta } from '@/connectors/sentry/meta'

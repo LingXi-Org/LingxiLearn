@@ -23,7 +23,7 @@ vi.mock('@sim/audit', () => ({
   recordAudit: vi.fn(),
 }))
 
-vi.mock('@sim/utils/id', () => ({ generateId: vi.fn(() => 'generated-id') }))
+vi.mock('@/lib/utils/id', () => ({ generateId: vi.fn(() => 'generated-id') }))
 
 vi.mock('@/components/emails', () => ({
   getEmailSubject: vi.fn(() => 'Enterprise subscription'),

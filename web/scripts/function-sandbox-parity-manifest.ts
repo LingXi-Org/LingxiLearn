@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import {
   FUNCTION_NODE_MAJOR,
   FUNCTION_NPM_CLI_PACKAGE_CONTRACT,

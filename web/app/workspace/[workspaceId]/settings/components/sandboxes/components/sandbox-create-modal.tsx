@@ -10,7 +10,7 @@ import {
   ChipModalFooter,
   ChipModalHeader,
 } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'
 import type { SandboxDependencyIssue } from '@/lib/api/contracts/sandboxes'

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { ChipDropdown, Plus, toast } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { formatDate } from '@sim/utils/formatting'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'

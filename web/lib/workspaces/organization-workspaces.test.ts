@@ -44,7 +44,7 @@ vi.mock('@/lib/billing/core/usage', () => ({
   syncUsageLimitsFromSubscription: mockSyncUsageLimitsFromSubscription,
 }))
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: vi.fn().mockReturnValue('generated-id'),
   generateShortId: vi.fn().mockReturnValue('short-id'),
 }))

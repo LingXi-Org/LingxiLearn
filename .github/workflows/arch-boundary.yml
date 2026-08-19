@@ -6,7 +6,7 @@ on:
       - 'web/app/workspace/**'
       - 'web/lib/**'
       - 'web/hooks/**'
-      - 'web/scripts/check-native-logger-boundary.ts'
+      - 'web/scripts/check-native-primitives-boundary.ts'
       - 'web/package.json'
       - 'scripts/check-workspace-boundaries.sh'
       - 'scripts/test-workspace-boundaries.sh'
@@ -17,7 +17,7 @@ on:
       - 'web/app/workspace/**'
       - 'web/lib/**'
       - 'web/hooks/**'
-      - 'web/scripts/check-native-logger-boundary.ts'
+      - 'web/scripts/check-native-primitives-boundary.ts'
       - 'web/package.json'
       - 'scripts/check-workspace-boundaries.sh'
       - 'scripts/test-workspace-boundaries.sh'
@@ -49,6 +49,6 @@ jobs:
       - name: Verify no product page imports from w/**
         run: bash scripts/check-workspace-boundaries.sh web
 
-      - name: Verify deleted Sim logger cannot return
+      - name: Verify migrated Sim primitives cannot return
         working-directory: web
-        run: bun run check:native-logger-boundary
+        run: bun run check:native-primitives-boundary

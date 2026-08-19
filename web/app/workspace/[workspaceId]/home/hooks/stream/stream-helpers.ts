@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import {
   CallIntegrationTool,
   CrawlWebsite,

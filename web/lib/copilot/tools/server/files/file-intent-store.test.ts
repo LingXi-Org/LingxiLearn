@@ -1,4 +1,4 @@
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { describe, expect, it } from 'vitest'
 import {
   consumeLatestFileIntent,

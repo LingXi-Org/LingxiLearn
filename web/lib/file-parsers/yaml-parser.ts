@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import * as yaml from 'js-yaml'
 import type { FileParseResult } from '@/lib/file-parsers/types'
 

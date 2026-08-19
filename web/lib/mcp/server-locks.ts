@@ -1,4 +1,4 @@
-import { getPostgresErrorCode } from '@sim/utils/errors'
+import { getPostgresErrorCode } from '@/lib/utils/errors'
 import { sql } from 'drizzle-orm'
 import type { DbOrTx } from '@/lib/db/types'
 

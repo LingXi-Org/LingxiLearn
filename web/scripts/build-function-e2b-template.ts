@@ -18,7 +18,7 @@
 
 import { defaultBuildLogger, Template, waitForTimeout } from '@e2b/code-interpreter'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { immutableE2BTemplateRef, isValidE2BTemplateName } from '@sim/utils/sandbox-references'
 import {
   FUNCTION_SANDBOX_CPU_COUNT,

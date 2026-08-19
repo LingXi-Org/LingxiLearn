@@ -1,5 +1,5 @@
 import type { Logger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 
 /** Thrown when a `timedStep`-bounded operation doesn't settle within its budget. */
 export class OauthStepTimeoutError extends Error {

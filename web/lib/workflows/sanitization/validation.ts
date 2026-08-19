@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { toError } from '@/lib/utils/errors'
+import { isRecordLike } from '@/lib/utils/object'
 import { getBlock } from '@/blocks/registry'
 import { isCustomTool, isMcpTool } from '@/executor/constants'
 import type { BlockState, WorkflowState } from '@/stores/workflows/workflow/types'

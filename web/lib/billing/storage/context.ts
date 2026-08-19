@@ -1,4 +1,4 @@
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import { resolveWorkspaceBillingPayer } from '@/lib/billing/core/billing-attribution'
 import type { BillingEntity } from '@/lib/billing/core/usage-log'
 

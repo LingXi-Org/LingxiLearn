@@ -1,4 +1,4 @@
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import type { PersistedContentBlock } from '@/lib/copilot/chat/persisted-message'
 import {
   MothershipStreamV1EventType,

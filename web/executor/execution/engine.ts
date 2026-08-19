@@ -1,5 +1,5 @@
 import { createLogger, type Logger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { combineExecutionAbortSignals } from '@/lib/core/execution-limits'
 import {
   getCancellationChannel,

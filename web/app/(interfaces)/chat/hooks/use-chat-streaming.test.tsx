@@ -13,7 +13,7 @@ vi.mock('@/lib/core/utils/sse', () => ({
   readSSEEvents: mockReadSSEEvents,
 }))
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: () => 'msg-assistant-1',
 }))
 

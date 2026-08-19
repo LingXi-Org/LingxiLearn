@@ -1,7 +1,7 @@
 import type { Readable } from 'node:stream'
 import type { Storage } from '@google-cloud/storage'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { env } from '@/lib/core/config/env'
 import {
   assertKnownSizeWithinLimit,

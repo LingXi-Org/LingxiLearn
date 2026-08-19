@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { resolvePendingToolGates, retrieveSession } from '@/lib/managed-agents/session-client'
 import {
   ACCESS_TOKEN_PARAM,

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 
 /**
  * Scoped `'Auth'` because these lines are emitted from the OAuth callback path

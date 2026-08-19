@@ -1,6 +1,6 @@
 import { type Context, SpanStatusCode } from '@opentelemetry/api'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { ORCHESTRATION_TIMEOUT_MS } from '@/lib/copilot/constants'
 import {
   MothershipStreamV1EventType,

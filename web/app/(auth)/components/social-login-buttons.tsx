@@ -3,7 +3,7 @@
 import { type ReactNode, useState } from 'react'
 import { Chip, cn } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { GithubIcon, GoogleIcon, MicrosoftIcon } from '@/components/icons'
 import { startSocialLogin } from '@/lib/auth/auth-client'
 import { AUTH_BUTTON_CLASS } from '@/app/(auth)/components/constants'

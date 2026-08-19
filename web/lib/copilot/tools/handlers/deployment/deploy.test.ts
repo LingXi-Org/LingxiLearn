@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { resetDbChainMock } from '@sim/testing'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

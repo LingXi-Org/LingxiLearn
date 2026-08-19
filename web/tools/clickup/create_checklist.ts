@@ -1,4 +1,4 @@
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import {
   CLICKUP_API_BASE_URL,
   CLICKUP_CHECKLIST_OUTPUT_PROPERTIES,

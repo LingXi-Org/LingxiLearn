@@ -1,5 +1,5 @@
-import { isValidUuid } from '@sim/utils/id'
-import { isPlainRecord } from '@sim/utils/object'
+import { isValidUuid } from '@/lib/utils/id'
+import { isPlainRecord } from '@/lib/utils/object'
 import type {
   SnowflakeSelectorKind,
   SnowflakeSelectorScope,

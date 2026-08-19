@@ -8,7 +8,7 @@
  */
 
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { resolveCustomBlockToolBinding } from '@/lib/workflows/custom-blocks/operations'
 import { getAllBlocks } from '@/blocks/registry'
 import type { ToolInput } from '@/executor/handlers/agent/types'

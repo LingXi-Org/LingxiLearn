@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
-import { truncate } from '@sim/utils/string'
+import { generateId } from '@/lib/utils/id'
+import { truncate } from '@/lib/utils/string'
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import type { ChatMessage, ChatState } from './types'

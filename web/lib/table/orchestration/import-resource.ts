@@ -2,8 +2,8 @@ import type { Principal } from '@/lib/auth/principal'
 import { db } from '@sim/db'
 import { tableJobs } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { and, eq } from 'drizzle-orm'
 import {
   type V2CreateTableImportBody,

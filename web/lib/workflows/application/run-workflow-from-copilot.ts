@@ -1,6 +1,6 @@
 import { type Principal, requirePrincipalSubjectUserId } from '@/lib/auth/principal'
-import { toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { mergeSubblockStateWithValues } from '@sim/workflow-persistence/subblocks'
 import { releaseExecutionSlot } from '@/lib/billing/calculations/usage-reservation'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'

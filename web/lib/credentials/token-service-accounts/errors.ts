@@ -1,5 +1,5 @@
-import { getErrorMessage } from '@sim/utils/errors'
-import { truncate } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { truncate } from '@/lib/utils/string'
 
 /**
  * Discrete validation failure codes returned to the client for token

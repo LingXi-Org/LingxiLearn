@@ -1,6 +1,6 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
 import { requirePrincipalSubjectUserId, resolvePrincipalAttribution } from '@/lib/auth/principal'
-import { getPostgresErrorCode } from '@sim/utils/errors'
+import { getPostgresErrorCode } from '@/lib/utils/errors'
 import type { ListSortOrder } from '@/lib/api/list-query'
 import { defineAuthorizedWorkspaceUseCase } from '@/lib/core/application'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

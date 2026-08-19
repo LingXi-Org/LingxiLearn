@@ -1,4 +1,4 @@
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 
 export const DEFAULT_MAX_ERROR_BODY_BYTES = 64 * 1024
 

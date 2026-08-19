@@ -2,7 +2,7 @@ import { AuditAction, AuditResourceType, auditUpdatedFields, recordAudit } from 
 import { db, mcpServers } from '@sim/db'
 import { mcpServerOauth } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { NextRequest } from 'next/server'
 import { encryptSecret } from '@/lib/core/security/encryption'

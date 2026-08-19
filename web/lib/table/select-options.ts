@@ -12,7 +12,7 @@
  * Keeping the option primitives here lets both sides share one implementation.
  */
 
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import type { ColumnDefinition, JsonValue, SelectOption } from '@/lib/table/types'
 
 /** Set of valid option ids for a `select`/`multiselect` column. */

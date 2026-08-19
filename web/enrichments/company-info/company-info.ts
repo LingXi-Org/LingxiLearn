@@ -1,5 +1,5 @@
 import { Building } from '@sim/emcn/icons'
-import { filterUndefined } from '@sim/utils/object'
+import { filterUndefined } from '@/lib/utils/object'
 import { normalizeDomain, str, toolProvider } from '@/enrichments/providers'
 import type { EnrichmentConfig } from '@/enrichments/types'
 

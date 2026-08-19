@@ -1,5 +1,5 @@
-import { generateId } from '@sim/utils/id'
-import { isPlainRecord } from '@sim/utils/object'
+import { generateId } from '@/lib/utils/id'
+import { isPlainRecord } from '@/lib/utils/object'
 import type { AsyncCompletionData } from '@/lib/copilot/async-runs/lifecycle'
 import { decryptSecret, encryptSecret } from '@/lib/core/security/encryption'
 import {

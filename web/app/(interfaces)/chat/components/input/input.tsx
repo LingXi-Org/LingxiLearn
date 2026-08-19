@@ -5,7 +5,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Badge, Button, cn, Tooltip } from '@sim/emcn'
 import { ArrowUp, Paperclip, X } from '@sim/emcn/icons'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import { CHAT_ACCEPT_ATTRIBUTE } from '@/lib/uploads/utils/validation'
 
 const logger = createLogger('ChatInput')

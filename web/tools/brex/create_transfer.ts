@@ -1,4 +1,4 @@
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import type { BrexCreateTransferParams, BrexCreateTransferResponse } from '@/tools/brex/types'
 import { BREX_MONEY_PROPERTIES } from '@/tools/brex/types'
 import { BREX_API_BASE, buildBrexHeaders, parseBrexJson } from '@/tools/brex/utils'

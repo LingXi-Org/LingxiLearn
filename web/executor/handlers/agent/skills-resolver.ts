@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { skill } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { and, eq, inArray } from 'drizzle-orm'
 import { getBuiltinSkillById, getBuiltinSkillByName } from '@/lib/workflows/skills/builtin-skills'
 import type { SkillInput } from '@/executor/handlers/agent/types'

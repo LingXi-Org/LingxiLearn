@@ -2,7 +2,7 @@
 
 import { type RefObject, useCallback, useMemo, useRef, useState } from 'react'
 import { createLogger } from '@/lib/logger'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import {
   AGENT_STREAM_PROTOCOL_HEADER,
   AGENT_STREAM_PROTOCOL_V1,

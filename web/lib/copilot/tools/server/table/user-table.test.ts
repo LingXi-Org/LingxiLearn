@@ -75,7 +75,7 @@ const {
   },
 }))
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: vi.fn().mockReturnValue('deadbeefcafef00d'),
   generateShortId: vi.fn().mockReturnValue('short-id'),
 }))

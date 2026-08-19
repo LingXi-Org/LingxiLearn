@@ -12,8 +12,8 @@ import {
   getErrorMessage,
   getPostgresConstraintName,
   getPostgresErrorCode,
-} from '@sim/utils/errors'
-import { generateShortId } from '@sim/utils/id'
+} from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
 import { and, eq, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm'
 import type { ShareRecord } from '@/lib/api/contracts/public-shares'
 import type { V2FileSortBy } from '@/lib/api/contracts/v2/files'

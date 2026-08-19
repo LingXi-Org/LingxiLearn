@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { sendToolConfirmations } from '@/lib/managed-agents/session-client'
 import { normalizeStringList } from '@/tools/managed_agent/normalizers'
 import {

@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage, toError } from '@sim/utils/errors'
+import { getErrorMessage, toError } from '@/lib/utils/errors'
 import { sleep } from '@sim/utils/helpers'
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import { backoffWithJitter, parseRetryAfter } from '@sim/utils/retry'
 import { getBYOKKey } from '@/lib/api-key/byok'
 import {

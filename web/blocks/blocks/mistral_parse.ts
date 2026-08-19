@@ -1,4 +1,4 @@
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { MistralIcon } from '@/components/icons'
 import {
   AuthMode,

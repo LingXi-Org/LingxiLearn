@@ -1,8 +1,8 @@
 import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { hmacSha256Hex } from '@sim/security/hmac'
-import { generateId } from '@sim/utils/id'
-import { omit } from '@sim/utils/object'
+import { generateId } from '@/lib/utils/id'
+import { omit } from '@/lib/utils/object'
 import { NextResponse } from 'next/server'
 import { getNotificationUrl, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
 import type {

@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import { normalizeName } from '@/executor/constants'

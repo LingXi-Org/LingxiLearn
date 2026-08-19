@@ -23,7 +23,7 @@ import {
 } from '@sim/emcn'
 import { ArrowLeft, Check, Clipboard, Plus, Server } from '@sim/emcn/icons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { McpIcon } from '@/components/icons'

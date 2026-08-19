@@ -1,4 +1,4 @@
-import { filterUndefined } from '@sim/utils/object'
+import { filterUndefined } from '@/lib/utils/object'
 import type { LangsmithCreateRunParams, LangsmithCreateRunResponse } from '@/tools/langsmith/types'
 import { normalizeLangsmithRunPayload } from '@/tools/langsmith/utils'
 import type { ToolConfig } from '@/tools/types'

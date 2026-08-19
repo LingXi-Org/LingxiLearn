@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { TERMINAL_TOOL_NAME } from '@sim/terminal-protocol'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { AsyncCompletionSignal } from '@/lib/copilot/async-runs/lifecycle'
 import { ORCHESTRATION_TIMEOUT_MS } from '@/lib/copilot/constants'
 import {

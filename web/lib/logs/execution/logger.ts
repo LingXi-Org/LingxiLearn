@@ -10,8 +10,8 @@ import {
   workspace,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { describeError, getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { describeError, getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { checkUsageStatus as checkResolvedUsageStatus } from '@/lib/billing/calculations/usage-monitor'
 import {

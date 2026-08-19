@@ -61,7 +61,7 @@ vi.mock('@/executor/utils/http', () => ({
   extractAPIErrorMessage: mockExtractAPIErrorMessage,
 }))
 
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@/lib/utils/id', () => ({
   generateId: mockGenerateId,
 }))
 

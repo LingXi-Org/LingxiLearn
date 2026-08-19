@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateShortId } from '@sim/utils/id'
-import { truncate } from '@sim/utils/string'
+import { toError } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
+import { truncate } from '@/lib/utils/string'
 import { cacheLargeValue, materializeLargeValueRefSync } from '@/lib/execution/payloads/cache'
 import { collectLargeValueKeys } from '@/lib/execution/payloads/large-execution-value'
 import {

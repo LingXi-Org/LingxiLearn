@@ -1,4 +1,4 @@
-import { isValidEmailSyntax } from '@sim/utils/string'
+import { isValidEmailSyntax } from '@/lib/utils/string'
 import { describe, expect, it } from 'vitest'
 import { quickValidateEmail, validateAllowlistEntry } from '@/lib/messaging/email/validation'
 

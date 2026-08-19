@@ -1,7 +1,7 @@
 import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateShortId } from '@sim/utils/id'
+import { toError } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
 import { isAllowedCustomBlockIconUrl } from '@/lib/api/contracts/custom-blocks'
 import { isOrganizationOnEnterprisePlan } from '@/lib/billing'
 import {

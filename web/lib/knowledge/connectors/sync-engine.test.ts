@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { authOAuthUtilsMock } from '@sim/testing'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('drizzle-orm', () => ({

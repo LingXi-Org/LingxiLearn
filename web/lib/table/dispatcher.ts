@@ -1,8 +1,8 @@
 import { db } from '@sim/db'
 import { tableRowExecutions, tableRunDispatches, userTableRows } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { toError } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import {
   and,
   asc,

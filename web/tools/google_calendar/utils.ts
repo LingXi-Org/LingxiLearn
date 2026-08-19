@@ -1,4 +1,4 @@
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import type { GoogleCalendarEventRequestBody } from '@/tools/google_calendar/types'
 
 type EventDateTime = GoogleCalendarEventRequestBody['start']

@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 
 /**
  * Calendly addresses every resource both by bare UUID and by canonical URI, and users

@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { customTools } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@/lib/utils/id'
 import { and, type Column, desc, eq, isNull, or } from 'drizzle-orm'
 import { type ListSortOrder, listOrderBy, searchFilter } from '@/lib/api/list-query'
 import { generateRequestId } from '@/lib/core/utils/request'

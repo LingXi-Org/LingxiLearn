@@ -1,4 +1,4 @@
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@/lib/utils/id'
 import type { LangsmithRunPayload } from '@/tools/langsmith/types'
 
 interface NormalizedRunPayload {

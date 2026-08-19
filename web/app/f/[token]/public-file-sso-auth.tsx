@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { cn, Input, Label } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
-import { normalizeEmail } from '@sim/utils/string'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { normalizeEmail } from '@/lib/utils/string'
 import { useRouter } from 'next/navigation'
 import { requestJson } from '@/lib/api/client/request'
 import { publicFileSSOContract } from '@/lib/api/contracts/public-shares'

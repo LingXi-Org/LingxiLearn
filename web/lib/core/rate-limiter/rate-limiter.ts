@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { isOrgScopedSubscription } from '@/lib/billing/subscriptions/utils'
 import { createStorageAdapter, type RateLimitStorageAdapter } from './storage'
 import {

@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { FILE_DOC_SEED } from '@sim/realtime-protocol/file-doc'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import * as Y from 'yjs'
 import { fetchWorkspaceFileBuffer, getWorkspaceFile } from '@/lib/uploads/contexts/workspace'
 import { splitFrontmatter } from '@/app/workspace/[workspaceId]/files/components/file-viewer/rich-markdown-editor/markdown-fidelity'

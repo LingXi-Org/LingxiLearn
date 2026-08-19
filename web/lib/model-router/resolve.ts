@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { fetchGo } from '@/lib/copilot/request/go/fetch'
 import { getMothershipBaseURL } from '@/lib/copilot/server/agent-url'
 import { env } from '@/lib/core/config/env'

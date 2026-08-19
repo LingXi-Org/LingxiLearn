@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { downloadFile, uploadFile } from '@/lib/uploads/core/storage-service'
 import { isHevcHeifContainer, transcodeHeicToJpeg } from '@/lib/uploads/server/heic'
 

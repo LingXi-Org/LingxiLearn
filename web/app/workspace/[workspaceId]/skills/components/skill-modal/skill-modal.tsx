@@ -12,7 +12,7 @@ import {
   chipFieldSurfaceClass,
   cn,
 } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import dynamic from 'next/dynamic'
 import { useParams } from 'next/navigation'
 import {

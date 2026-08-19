@@ -1,4 +1,4 @@
-import { stripVersionSuffix } from '@sim/utils/string'
+import { stripVersionSuffix } from '@/lib/utils/string'
 import rawToolIds from '@/tools/generated/tool-ids'
 
 /**

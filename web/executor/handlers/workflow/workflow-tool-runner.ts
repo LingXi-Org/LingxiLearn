@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import { calculateCostSummary } from '@/lib/logs/execution/logging-factory'
 import type { TraceSpan } from '@/lib/logs/types'
 import { ChildWorkflowError } from '@/executor/errors/child-workflow-error'

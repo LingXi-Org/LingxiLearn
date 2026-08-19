@@ -1,4 +1,4 @@
-import { isPlainRecord } from '@sim/utils/object'
+import { isPlainRecord } from '@/lib/utils/object'
 import { readResponseTextWithLimit } from '@/lib/core/utils/stream-limits'
 import type {
   SnowflakeBaseParams,

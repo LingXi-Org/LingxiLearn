@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
 import { safeCompare } from '@sim/security/compare'
 import { hmacSha256Hex } from '@sim/security/hmac'
-import { isRecordLike } from '@sim/utils/object'
+import { isRecordLike } from '@/lib/utils/object'
 import type {
   EventMatchContext,
   FormatInputContext,

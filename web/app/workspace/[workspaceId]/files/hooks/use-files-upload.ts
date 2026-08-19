@@ -3,7 +3,7 @@
 import { type ChangeEvent, type DragEvent, useCallback, useRef, useState } from 'react'
 import { toast } from '@sim/emcn'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { useLimitUpgradeToast } from '@/lib/billing/client'
 import {
   FILES_ACCEPT_ATTR,

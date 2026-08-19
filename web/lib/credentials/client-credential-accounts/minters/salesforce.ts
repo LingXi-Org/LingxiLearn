@@ -1,6 +1,6 @@
 import { createPrivateKey, type KeyObject } from 'crypto'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { SignJWT } from 'jose'
 import {
   normalizeSalesforceMyDomainHost,

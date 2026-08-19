@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { OutputProperty, ToolResponse } from '@/tools/types'
 
 /** Base URL for the UptimeRobot v3 REST API. */

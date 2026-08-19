@@ -9,7 +9,7 @@ import {
   workflow,
 } from '@sim/db/schema'
 import { createLogger } from '@/lib/logger'
-import { toError } from '@sim/utils/errors'
+import { toError } from '@/lib/utils/errors'
 import { and, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm'
 import { checkWorkspaceAccess } from '@/lib/workspaces/permissions/utils'
 

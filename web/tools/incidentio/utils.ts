@@ -1,4 +1,4 @@
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { Workflow } from '@/tools/incidentio/types'
 
 function toStringValue(value: unknown): string {

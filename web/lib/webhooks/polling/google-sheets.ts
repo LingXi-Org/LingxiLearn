@@ -1,5 +1,5 @@
 import type { Logger } from '@/lib/logger'
-import { getErrorMessage } from '@sim/utils/errors'
+import { getErrorMessage } from '@/lib/utils/errors'
 import { pollingIdempotency } from '@/lib/core/idempotency/service'
 import { readCanonicalTriggerValue } from '@/lib/webhooks/polling/canonical'
 import {

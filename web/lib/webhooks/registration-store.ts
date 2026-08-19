@@ -5,8 +5,8 @@ import {
   workflowDeploymentOperation,
   workflowDeploymentVersion,
 } from '@sim/db/schema'
-import { generateShortId } from '@sim/utils/id'
-import { isPlainRecord } from '@sim/utils/object'
+import { generateShortId } from '@/lib/utils/id'
+import { isPlainRecord } from '@/lib/utils/object'
 import type { DbOrTx } from '@sim/workflow-persistence/types'
 import { and, eq, exists, gt, inArray, isNull, lt, lte, notExists, sql } from 'drizzle-orm'
 import { claimWebhookPath } from '@/lib/webhooks/path-claims'
