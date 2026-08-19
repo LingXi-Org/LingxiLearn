@@ -9,7 +9,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { requestJson } from '@/lib/api/client/request'
 import { listWorkspaceCredentialsContract } from '@/lib/api/contracts'
 import {
-  ADD_CONNECTOR_SEARCH_PARAM,
   consumeOAuthReturnContext,
   type OAuthReturnContext,
   readOAuthReturnContext,
@@ -128,7 +127,8 @@ async function verifyOAuthChatAttempt(queryClient: QueryClient, attemptId: strin
  *
  * - `integrations`: Stay on this page, show a toast notification.
  * - `workflow`: Redirect to the specific workflow. The workflow page picks up the context.
- * - `kb-connectors`: Redirect to the KB page. The KB page picks up the context.
+ *
+ * Any other (stale, removed-flow) origin is consumed and dropped.
  */
 export function useOAuthReturnRouter() {
   const router = useRouter()
@@ -194,17 +194,12 @@ export function useOAuthReturnRouter() {
       return
     }
 
-    if (ctx.origin === 'kb-connectors') {
-      try {
-        sessionStorage.removeItem(SETTINGS_RETURN_URL_KEY)
-      } catch {}
-      const kbUrl = `/workspace/${workspaceId}/knowledge/${ctx.knowledgeBaseId}`
-      const connectorParam = ctx.connectorType
-        ? `?${ADD_CONNECTOR_SEARCH_PARAM}=${encodeURIComponent(ctx.connectorType)}`
-        : ''
-      router.replace(`${kbUrl}${connectorParam}`)
-      return
-    }
+    /**
+     * A return context whose origin belongs to a removed flow (e.g. the
+     * Sim connector OAuth closure) can still sit in session storage within its
+     * freshness window. Consume and drop it so it cannot attach to anything.
+     */
+    consumeOAuthReturnContext()
   }, [queryClient, router, workspaceId])
 }
 
@@ -223,26 +218,6 @@ export function useOAuthReturnForWorkflow(workflowId: string) {
     // Kept as a compatibility hook for copied non-routable components. There
     // is no workflow editor or credential mutation surface in Lingxi.
   }, [workflowId])
-}
-
-/**
- * Post-OAuth handler for KB connectors pages.
- * Consumes the return context and shows a toast notification.
- */
-export function useOAuthReturnForKBConnectors(knowledgeBaseId: string) {
-  useEffect(() => {
-    const ctx = readOAuthReturnContext()
-    if (!ctx || ctx.origin !== 'kb-connectors') return
-    if (ctx.knowledgeBaseId !== knowledgeBaseId) return
-    consumeOAuthReturnContext()
-    if (Date.now() - ctx.requestedAt > CONTEXT_MAX_AGE_MS) return
-
-    void (async () => {
-      const message = await resolveOAuthMessage(ctx)
-      toast.success(message)
-      dispatchCredentialUpdate(ctx)
-    })()
-  }, [knowledgeBaseId])
 }
 
 /**

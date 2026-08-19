@@ -1,20 +1,14 @@
+import type { NextRequest } from 'next/server'
+import type { KnowledgeBaseData } from '@/lib/api/contracts/knowledge/base'
+import { type ChunkData, chunkDataSchema } from '@/lib/api/contracts/knowledge/chunks'
+import { type DocumentData, documentDataSchema } from '@/lib/api/contracts/knowledge/documents'
+import { type TagDefinitionData, tagDefinitionDataSchema } from '@/lib/api/contracts/knowledge/tags'
+import { AuthType, type AuthTypeValue } from '@/lib/auth/hybrid'
 import {
   type Principal,
   requirePrincipalSubjectUserId,
   type SessionPrincipal,
 } from '@/lib/auth/principal'
-import type { NextRequest } from 'next/server'
-import type { KnowledgeBaseData } from '@/lib/api/contracts/knowledge/base'
-import { type ChunkData, chunkDataSchema } from '@/lib/api/contracts/knowledge/chunks'
-import {
-  type ConnectorData,
-  type ConnectorDetailData,
-  connectorDataSchema,
-  connectorDetailDataSchema,
-} from '@/lib/api/contracts/knowledge/connectors'
-import { type DocumentData, documentDataSchema } from '@/lib/api/contracts/knowledge/documents'
-import { type TagDefinitionData, tagDefinitionDataSchema } from '@/lib/api/contracts/knowledge/tags'
-import { AuthType, type AuthTypeValue } from '@/lib/auth/hybrid'
 import {
   requireBillingAttributionHeader,
   resolveBillingAttribution,
@@ -93,43 +87,6 @@ export function toInternalKnowledgeTag<
     ...tag,
     createdAt: serializeDate(tag.createdAt),
     updatedAt: serializeDate(tag.updatedAt),
-  })
-}
-
-export function toInternalKnowledgeConnector<
-  T extends {
-    sourceConfig: unknown
-    createdAt: Date | string
-    updatedAt: Date | string
-    lastSyncAt: Date | string | null
-    nextSyncAt: Date | string | null
-  },
->(connector: T): ConnectorData {
-  return connectorDataSchema.parse({
-    ...connector,
-    createdAt: serializeDate(connector.createdAt),
-    updatedAt: serializeDate(connector.updatedAt),
-    lastSyncAt: serializeNullableDate(connector.lastSyncAt),
-    nextSyncAt: serializeNullableDate(connector.nextSyncAt),
-  })
-}
-
-export function toInternalKnowledgeConnectorDetail<
-  T extends Parameters<typeof toInternalKnowledgeConnector>[0] & {
-    syncLogs: Array<{
-      startedAt: Date | string
-      completedAt: Date | string | null
-      [key: string]: unknown
-    }>
-  },
->(connector: T): ConnectorDetailData {
-  return connectorDetailDataSchema.parse({
-    ...toInternalKnowledgeConnector(connector),
-    syncLogs: connector.syncLogs.map((log) => ({
-      ...log,
-      startedAt: serializeDate(log.startedAt),
-      completedAt: serializeNullableDate(log.completedAt),
-    })),
   })
 }
 
