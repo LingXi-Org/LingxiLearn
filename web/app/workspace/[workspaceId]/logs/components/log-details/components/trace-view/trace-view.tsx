@@ -38,7 +38,6 @@ import {
   formatTokenCount,
   formatTps,
   formatTtft,
-  getBlockIconAndColor,
   getDisplayName,
   hasErrorInTree,
   hasUnhandledErrorInTree,
@@ -46,8 +45,15 @@ import {
   isIterationType,
   parseTime,
 } from '@/app/workspace/[workspaceId]/logs/components/log-details/utils'
-import { isCustomBlockType } from '@/blocks/custom/build-config'
+import { getSpanPresentation } from '@/app/workspace/[workspaceId]/logs/model/span-presentation'
 import { useCodeViewerFeatures } from '@/hooks/use-code-viewer'
+
+/** Legacy custom-block span types carry this wire prefix. Local to keep the
+ * trace view off the workflow block registry. */
+const CUSTOM_BLOCK_SPAN_PREFIX = 'custom_block_'
+function isCustomBlockSpanType(type: string | undefined | null): type is string {
+  return typeof type === 'string' && type.startsWith(CUSTOM_BLOCK_SPAN_PREFIX)
+}
 
 const DEFAULT_TREE_PANE_WIDTH = 240
 const MIN_TREE_PANE_WIDTH = 200
@@ -269,7 +275,7 @@ const TraceTreeRow = memo(function TraceTreeRow({
   const duration = span.duration || endMs - startMs
   const isRootWorkflow = depth === 0 && span.type?.toLowerCase() === 'workflow'
   const hasError = isRootWorkflow ? hasUnhandledErrorInTree(span) : hasErrorInTree(span)
-  const { icon: BlockIcon, bgColor: rawBgColor } = getBlockIconAndColor(
+  const { icon: BlockIcon, bgColor: rawBgColor } = getSpanPresentation(
     span.type,
     span.name,
     span.provider
@@ -653,7 +659,7 @@ const TraceDetailPane = memo(function TraceDetailPane({ span }: { span: TraceSpa
   }
 
   const duration = span.duration || parseTime(span.endTime) - parseTime(span.startTime)
-  const { icon: BlockIcon, bgColor: rawBgColor } = getBlockIconAndColor(
+  const { icon: BlockIcon, bgColor: rawBgColor } = getSpanPresentation(
     span.type,
     span.name,
     span.provider
@@ -670,7 +676,7 @@ const TraceDetailPane = memo(function TraceDetailPane({ span }: { span: TraceSpa
   const metaEntries: { label: string; value: string }[] = []
   metaEntries.push({
     label: 'Type',
-    value: isCustomBlockType(span.type) ? 'custom block' : span.type,
+    value: isCustomBlockSpanType(span.type) ? 'custom block' : span.type,
   })
   metaEntries.push({ label: 'Duration', value: formatDuration(duration, { precision: 2 }) || '—' })
   if (span.tries !== undefined) metaEntries.push({ label: 'Tries', value: String(span.tries) })

@@ -26,9 +26,9 @@ vi.mock('@sim/platform-authz/workspace', () => ({
 }))
 
 vi.mock('@/lib/logs/public-queries', () => ({
-  getPublicWorkflowLogScope: mocks.getLogScope,
-  getPublicWorkflowLog: mocks.getLog,
-  listPublicWorkflowLogs: mocks.listLogs,
+  getPublicExecutionLogScope: mocks.getLogScope,
+  getPublicExecutionLog: mocks.getLog,
+  listPublicExecutionLogs: mocks.listLogs,
 }))
 
 vi.mock('@/lib/folders/queries', () => ({

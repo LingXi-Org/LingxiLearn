@@ -13,12 +13,6 @@ export interface FilterDefinition {
   customValueHint?: string
 }
 
-export interface WorkflowData {
-  id: string
-  name: string
-  description?: string
-}
-
 export interface FolderData {
   id: string
   name: string
@@ -115,27 +109,21 @@ export const FILTER_DEFINITIONS: FilterDefinition[] = [
   },
 ]
 
+/**
+ * Search suggestions for the observability filter bar. Workflow-entity
+ * suggestions were removed with the native runtime migration (#68): the logs
+ * surface no longer enumerates workflow entities to explain executions.
+ */
 export class SearchSuggestions {
-  private workflowsData: WorkflowData[]
   private foldersData: FolderData[]
   private triggersData: TriggerData[]
 
-  constructor(
-    workflowsData: WorkflowData[] = [],
-    foldersData: FolderData[] = [],
-    triggersData: TriggerData[] = []
-  ) {
-    this.workflowsData = workflowsData
+  constructor(foldersData: FolderData[] = [], triggersData: TriggerData[] = []) {
     this.foldersData = foldersData
     this.triggersData = triggersData
   }
 
-  updateData(
-    workflowsData: WorkflowData[] = [],
-    foldersData: FolderData[] = [],
-    triggersData: TriggerData[] = []
-  ) {
-    this.workflowsData = workflowsData
+  updateData(foldersData: FolderData[] = [], triggersData: TriggerData[] = []) {
     this.foldersData = foldersData
     this.triggersData = triggersData
   }
@@ -194,16 +182,6 @@ export class SearchSuggestions {
       category: 'filters',
     })
 
-    if (this.workflowsData.length > 0) {
-      suggestions.push({
-        id: 'filter-key-workflow',
-        value: 'workflow:',
-        label: 'Workflow',
-        description: 'Filter by workflow name',
-        category: 'filters',
-      })
-    }
-
     if (this.foldersData.length > 0) {
       suggestions.push({
         id: 'filter-key-folder',
@@ -213,14 +191,6 @@ export class SearchSuggestions {
         category: 'filters',
       })
     }
-
-    suggestions.push({
-      id: 'filter-key-workflowId',
-      value: 'workflowId:',
-      label: 'Workflow ID',
-      description: 'Filter by workflow ID',
-      category: 'filters',
-    })
 
     suggestions.push({
       id: 'filter-key-executionId',
@@ -297,26 +267,6 @@ export class SearchSuggestions {
         : null
     }
 
-    if (key === 'workflow') {
-      const suggestions = this.workflowsData
-        .filter((w) => !partial || w.name.toLowerCase().includes(partial.toLowerCase()))
-        .map((w) => ({
-          id: `filter-value-workflow-${w.id}`,
-          value: `workflow:"${w.name}"`,
-          label: w.name,
-          description: w.description,
-          category: 'workflow' as const,
-        }))
-
-      return suggestions.length > 0
-        ? {
-            type: 'filter-values',
-            filterKey: 'workflow',
-            suggestions,
-          }
-        : null
-    }
-
     if (key === 'folder') {
       const suggestions = this.foldersData
         .filter((f) => !partial || f.name.toLowerCase().includes(partial.toLowerCase()))
@@ -372,15 +322,6 @@ export class SearchSuggestions {
       allSuggestions.push(...matchingTriggers)
     }
 
-    const matchingWorkflows = this.getMatchingWorkflows(query)
-    if (matchingWorkflows.length > 0) {
-      sections.push({
-        title: 'WORKFLOWS',
-        suggestions: matchingWorkflows,
-      })
-      allSuggestions.push(...matchingWorkflows)
-    }
-
     const matchingFolders = this.getMatchingFolders(query)
     if (matchingFolders.length > 0) {
       sections.push({
@@ -393,7 +334,6 @@ export class SearchSuggestions {
     if (
       matchingFilterValues.length === 0 &&
       matchingTriggers.length === 0 &&
-      matchingWorkflows.length === 0 &&
       matchingFolders.length === 0
     ) {
       const filterKeys = this.getFilterKeysList()
@@ -607,42 +547,6 @@ export class SearchSuggestions {
         description: `${trigger.label}-triggered runs`,
         category: 'trigger' as const,
         color: trigger.color,
-      }))
-
-    return matches
-  }
-
-  /**
-   * Match workflows by name/description
-   */
-  private getMatchingWorkflows(query: string): Suggestion[] {
-    if (!query.trim() || this.workflowsData.length === 0) return []
-
-    const lowerQuery = query.toLowerCase()
-
-    const matches = this.workflowsData
-      .filter(
-        (workflow) =>
-          workflow.name.toLowerCase().includes(lowerQuery) ||
-          workflow.description?.toLowerCase().includes(lowerQuery)
-      )
-      .sort((a, b) => {
-        const aName = a.name.toLowerCase()
-        const bName = b.name.toLowerCase()
-
-        if (aName === lowerQuery) return -1
-        if (bName === lowerQuery) return 1
-        if (aName.startsWith(lowerQuery) && !bName.startsWith(lowerQuery)) return -1
-        if (bName.startsWith(lowerQuery) && !aName.startsWith(lowerQuery)) return 1
-        return aName.localeCompare(bName)
-      })
-      .slice(0, 8)
-      .map((workflow) => ({
-        id: `workflow-match-${workflow.id}`,
-        value: `workflow:"${workflow.name}"`,
-        label: workflow.name,
-        description: workflow.description,
-        category: 'workflow' as const,
       }))
 
     return matches

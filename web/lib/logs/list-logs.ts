@@ -25,9 +25,9 @@ import {
 } from 'drizzle-orm'
 import type { z } from 'zod'
 import type {
+  ExecutionLogSummary,
   ListLogsResponse,
   listLogsQuerySchema,
-  WorkflowLogSummary,
 } from '@/lib/api/contracts/logs'
 import { workflowExecutionOriginSql } from '@/lib/logs/execution-origin'
 import { jobCostTotal } from '@/lib/logs/fetch-log-detail'
@@ -334,7 +334,7 @@ export async function listLogs(params: ListLogsParams, userId: string): Promise<
   type RowWithSort = {
     id: string
     sortValue: unknown
-    summary: WorkflowLogSummary
+    summary: ExecutionLogSummary
   }
 
   const workflowMapped: RowWithSort[] = workflowRows.map((log) => {
@@ -344,7 +344,7 @@ export async function listLogs(params: ListLogsParams, userId: string): Promise<
       (totalPauseCount > 0 && resumedCount < totalPauseCount) ||
       (log.pausedStatus !== null && log.pausedStatus !== 'fully_resumed')
 
-    const summary: WorkflowLogSummary = {
+    const summary: ExecutionLogSummary = {
       id: log.id,
       workflowId: log.workflowId,
       executionId: log.executionId,
@@ -384,7 +384,7 @@ export async function listLogs(params: ListLogsParams, userId: string): Promise<
   })
 
   const jobMapped: RowWithSort[] = (jobRows as Awaited<typeof jobQuery>).map((log) => {
-    const summary: WorkflowLogSummary = {
+    const summary: ExecutionLogSummary = {
       id: log.id,
       workflowId: null,
       executionId: log.executionId,

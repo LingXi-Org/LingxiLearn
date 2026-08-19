@@ -12,6 +12,8 @@ import { LingxiArtifactResource } from '@/lib/lingxi/components/lingxi-artifact-
 import { LingxiRuntimeGraph } from '@/lib/lingxi/components/lingxi-runtime-graph'
 import { triggerFileDownload } from '@/lib/uploads/client/download'
 import { getFileExtension, getMimeTypeFromExtension } from '@/lib/uploads/utils/file-utils'
+import type { WorkflowsEditorRuntime } from '@/app/(landing)/workflows/components/workflows-editor-loop'
+import { WorkflowsEditorLoop } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 import {
   FileViewer,
   type PreviewMode,
@@ -32,10 +34,9 @@ import type {
 } from '@/app/workspace/[workspaceId]/home/types'
 import { KnowledgeBase } from '@/app/workspace/[workspaceId]/knowledge/[id]/base'
 import { LogDetailsContent } from '@/app/workspace/[workspaceId]/logs/components'
+import { mapExecutionLogDetail } from '@/app/workspace/[workspaceId]/logs/model/execution-log-mapper'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { Table } from '@/app/workspace/[workspaceId]/tables/[tableId]/table'
-import type { WorkflowsEditorRuntime } from '@/app/(landing)/workflows/components/workflows-editor-loop'
-import { WorkflowsEditorLoop } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 import { useFolders } from '@/hooks/queries/folders'
 import { useLogDetail } from '@/hooks/queries/logs'
 import { exportTable } from '@/hooks/queries/tables'
@@ -638,7 +639,7 @@ function EmbeddedLog({ workspaceId, logId, onNotFound }: EmbeddedLogProps) {
 
   return (
     <div className='flex h-full flex-col overflow-hidden px-3.5 pt-3'>
-      <LogDetailsContent log={log} />
+      <LogDetailsContent log={mapExecutionLogDetail(log)} />
     </div>
   )
 }

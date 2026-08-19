@@ -1,4 +1,4 @@
-import type { WorkflowLogDetail } from '@/lib/api/contracts/logs'
+import type { ExecutionLogDetail } from '@/lib/api/contracts/logs'
 import { dollarsToCredits } from '@/lib/billing/credits/conversion'
 import type { LogsGetRunDetailsParams, LogsGetRunDetailsResponse } from '@/tools/logs/types'
 import type { ToolConfig } from '@/tools/types'
@@ -40,7 +40,7 @@ export const logsGetRunDetailsTool: ToolConfig<LogsGetRunDetailsParams, LogsGetR
       if (!response.ok) {
         throw new Error(result?.error || `Request failed with status ${response.status}`)
       }
-      const detail: WorkflowLogDetail = result.data
+      const detail: ExecutionLogDetail = result.data
 
       return {
         success: true,

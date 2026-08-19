@@ -13,14 +13,14 @@ import { isApiClientError } from '@/lib/api/client/errors'
 import { requestJson } from '@/lib/api/client/request'
 import {
   type DashboardStatsResponse,
+  type ExecutionLogDetail,
+  type ExecutionLogSummary,
   type ExecutionSnapshotData,
   getDashboardStatsContract,
   getExecutionSnapshotContract,
   getLogByExecutionIdContract,
   getLogDetailContract,
   listLogsContract,
-  type WorkflowLogDetail,
-  type WorkflowLogSummary,
   type WorkflowStats,
 } from '@/lib/api/contracts/logs'
 import { cancelWorkflowExecutionContract } from '@/lib/api/contracts/workflows'
@@ -129,7 +129,7 @@ function buildListQuery(workspaceId: string, filters: LogFilters, cursor: string
 }
 
 interface LogsPage {
-  logs: WorkflowLogSummary[]
+  logs: ExecutionLogSummary[]
   nextCursor: string | null
 }
 
@@ -154,7 +154,7 @@ export async function fetchLogDetail(
   logId: string,
   workspaceId: string,
   signal?: AbortSignal
-): Promise<WorkflowLogDetail> {
+): Promise<ExecutionLogDetail> {
   const { data } = await requestJson(getLogDetailContract, {
     params: { id: logId },
     query: { workspaceId },
@@ -191,7 +191,7 @@ interface UseLogDetailOptions {
   refetchInterval?:
     | number
     | false
-    | ((query: { state: { data?: WorkflowLogDetail } }) => number | false | undefined)
+    | ((query: { state: { data?: ExecutionLogDetail } }) => number | false | undefined)
 }
 
 export function useLogDetail(
@@ -214,7 +214,7 @@ async function fetchLogByExecutionId(
   workspaceId: string,
   executionId: string,
   signal?: AbortSignal
-): Promise<WorkflowLogDetail> {
+): Promise<ExecutionLogDetail> {
   const { data } = await requestJson(getLogByExecutionIdContract, {
     params: { executionId },
     query: { workspaceId },
@@ -249,7 +249,7 @@ async function pollForTerminalExecution(params: {
   let lastPollingError: unknown
 
   for (let attempt = 0; attempt < CANCELLATION_POLL_ATTEMPTS; attempt++) {
-    let detail: WorkflowLogDetail | undefined
+    let detail: ExecutionLogDetail | undefined
     try {
       detail = await fetchLogByExecutionId(workspaceId, executionId)
       lastPollingError = undefined
@@ -399,13 +399,13 @@ export function useCancelExecution(workspaceId: string) {
         }
       })
 
-      let previousDetail: WorkflowLogDetail | undefined
+      let previousDetail: ExecutionLogDetail | undefined
       if (affectedLogId) {
-        previousDetail = queryClient.getQueryData<WorkflowLogDetail>(
+        previousDetail = queryClient.getQueryData<ExecutionLogDetail>(
           logKeys.detail(workspaceId, affectedLogId)
         )
         if (previousDetail) {
-          queryClient.setQueryData<WorkflowLogDetail>(logKeys.detail(workspaceId, affectedLogId), {
+          queryClient.setQueryData<ExecutionLogDetail>(logKeys.detail(workspaceId, affectedLogId), {
             ...previousDetail,
             status: 'cancelling',
           })

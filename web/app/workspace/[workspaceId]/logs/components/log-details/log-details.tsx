@@ -22,26 +22,12 @@ import {
   Tooltip,
   useCopyToClipboard,
 } from '@sim/emcn'
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  ChevronUp,
-  Clipboard,
-  Search,
-  SquareArrowUpRight,
-  Workflow,
-  Wrench,
-  X,
-} from '@sim/emcn/icons'
+import { ArrowDown, ArrowUp, Check, ChevronUp, Clipboard, Search, Wrench, X } from '@sim/emcn/icons'
 import { formatDuration } from '@sim/utils/formatting'
-import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { createPortal } from 'react-dom'
-import type { WorkflowLogRow } from '@/lib/api/contracts/logs'
 import { BASE_EXECUTION_CHARGE } from '@/lib/billing/constants'
-import { apportionCredits, dollarsToCredits } from '@/lib/billing/credits/conversion'
 import { isChatEnabled } from '@/lib/core/config/env-flags'
 import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import { filterHiddenOutputKeys } from '@/lib/logs/execution/trace-spans/trace-spans'
@@ -53,19 +39,13 @@ import {
   TraceView,
 } from '@/app/workspace/[workspaceId]/logs/components'
 import { useLogDetailsResize } from '@/app/workspace/[workspaceId]/logs/hooks'
+import type { ExecutionLogDetailView } from '@/app/workspace/[workspaceId]/logs/model/execution-log'
+import { projectRunCost } from '@/app/workspace/[workspaceId]/logs/model/run-cost'
 import {
   logDetailsTabParam,
   logDetailsTabUrlKeys,
 } from '@/app/workspace/[workspaceId]/logs/search-params'
-import {
-  DELETED_WORKFLOW_LABEL,
-  formatDate,
-  getDisplayStatus,
-  resolveLogWorkflowId,
-  StatusBadge,
-  TriggerBadge,
-  workflowEditorPath,
-} from '@/app/workspace/[workspaceId]/logs/utils'
+import { formatDate, StatusBadge, TriggerBadge } from '@/app/workspace/[workspaceId]/logs/utils'
 import { useCodeViewerFeatures } from '@/hooks/use-code-viewer'
 import { usePermissionConfig } from '@/hooks/use-permission-config'
 import { formatCost } from '@/providers/utils'
@@ -83,8 +63,8 @@ function creditLabel(credits: number, dollars: number): string {
   return `${credits.toLocaleString()} ${credits === 1 ? 'credit' : 'credits'}`
 }
 
-export const WorkflowOutputSection = memo(
-  function WorkflowOutputSection({ output }: { output: Record<string, unknown> }) {
+export const RunOutputSection = memo(
+  function RunOutputSection({ output }: { output: Record<string, unknown> }) {
     const contentRef = useRef<HTMLDivElement>(null)
     const { copied, copy } = useCopyToClipboard({ resetMs: 1500 })
 
@@ -281,7 +261,7 @@ export const WorkflowOutputSection = memo(
 export type LogDetailsTab = 'overview' | 'trace' | 'events'
 
 interface LogDetailsContentProps {
-  log: WorkflowLogRow
+  log: ExecutionLogDetailView
   onActiveTabChange?: (tab: LogDetailsTab) => void
 }
 
@@ -315,40 +295,31 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
       scrollAreaRef.current.scrollTop = 0
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable nuqs setter; reset tab when switching logs
-  }, [log.id])
-
-  const isLikelyExecution = !!log.executionId && log.trigger !== 'mothership'
-  const isWorkflowExecutionLog =
-    (log.trigger === 'manual' && !!log.duration) || !!log.executionData?.traceSpans
+  }, [log.identity.logId])
 
   /**
-   * The workflow this run belongs to, when it is still reachable. Null for Sim
-   * agent jobs and deleted workflows, which render their label as static text.
+   * A run "looks like an execution" when it carries a canonical execution id
+   * and isn't a legacy mothership job row (those carry no runtime trace).
    */
-  const openableWorkflowId = resolveLogWorkflowId(log)
+  const isLikelyExecution = !!log.identity.executionId && log.trigger?.type !== 'mothership'
+  const hasExecutionDetail =
+    (log.trigger?.type === 'manual' && log.durationMs != null) || !!log.traceSpans
 
-  const workflowLabel =
-    log.trigger === 'mothership'
-      ? log.jobTitle || 'Untitled Job'
-      : openableWorkflowId
-        ? log.workflow?.name || 'Unknown'
-        : DELETED_WORKFLOW_LABEL
-
-  const hasCostInfo = !!(isWorkflowExecutionLog && log.cost)
-  const showWorkflowState =
-    isWorkflowExecutionLog &&
-    !!log.executionId &&
-    log.trigger !== 'mothership' &&
+  const hasCostInfo = hasExecutionDetail && log.costTotalDollars != null
+  const showRunSnapshot =
+    hasExecutionDetail &&
+    !!log.identity.executionId &&
+    log.trigger?.type !== 'mothership' &&
     !permissionConfig.hideTraceSpans
 
   const showTraceTab = !permissionConfig.hideTraceSpans && isLikelyExecution
   // double-cast-allowed: contract schema makes duration/startTime optional for legacy persisted JSON; runtime data always supplies them.
-  const traceSpans = log.executionData?.traceSpans as unknown as TraceSpan[] | undefined
-  const runtimeEvents = (log.executionData as { runtimeEvents?: Array<Record<string, unknown>> } | undefined)?.runtimeEvents ?? []
+  const traceSpans = log.traceSpans as unknown as TraceSpan[] | undefined
+  const runtimeEvents = log.runtimeEvents
 
   const showEventsTab = isLikelyExecution && runtimeEvents.length > 0
   const resolvedTab: LogDetailsTab =
-    activeTab === 'trace' && !showTraceTab || activeTab === 'events' && !showEventsTab
+    (activeTab === 'trace' && !showTraceTab) || (activeTab === 'events' && !showEventsTab)
       ? 'overview'
       : activeTab
 
@@ -356,72 +327,29 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
     onActiveTabChange?.(resolvedTab)
   }, [resolvedTab, onActiveTabChange])
 
-  const workflowOutput = useMemo(() => {
-    const executionData = log.executionData as { finalOutput?: Record<string, unknown> } | undefined
-    if (!executionData?.finalOutput) return null
-    return filterHiddenOutputKeys(executionData.finalOutput) as Record<string, unknown>
-  }, [log.executionData])
+  const finalOutput = useMemo(() => {
+    const raw = log.finalOutput
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+    return filterHiddenOutputKeys(raw as Record<string, unknown>) as Record<string, unknown>
+  }, [log.finalOutput])
 
-  const workflowInput = useMemo(() => {
-    const executionData = log.executionData as { workflowInput?: unknown } | undefined
-    const raw = executionData?.workflowInput
+  const runInput = useMemo(() => {
+    const raw = log.runInput
     if (raw === undefined || raw === null) return null
     if (typeof raw === 'object' && !Array.isArray(raw)) {
       return raw as Record<string, unknown>
     }
     return { input: raw } as Record<string, unknown>
-  }, [log.executionData])
+  }, [log.runInput])
 
-  // Cost breakdown, sourced solely from the usage_log ledger (single source of
-  // truth). Line items (Base Run / per-model / per-integration) get integer
-  // credits apportioned with a single round at the total so rows always
-  // reconcile (never round-then-sum, which drifts). Pre-ledger runs that only
-  // have the cost_total projection show the total alone — no itemization, no
-  // parallel jsonb reconstruction.
-  const costBreakdown = useMemo((): {
-    rows: Array<{ key: string; label: string; credits: number; dollars: number }>
-    totalCredits: number
-    totalDollars: number
-    tokens: { input: number; output: number }
-  } | null => {
-    const ledger = log.costLedger
-    if (ledger && ledger.items.length > 0) {
-      const credits = apportionCredits(
-        ledger.items.map((item, i) => ({ key: String(i), dollars: item.cost }))
-      )
-      const rows = ledger.items.map((item, i) => ({
-        key: String(i),
-        label:
-          item.category === 'fixed' && item.description === 'execution_fee'
-            ? 'Base Run'
-            : item.description,
-        credits: credits[String(i)] ?? 0,
-        dollars: item.cost,
-      }))
-      return {
-        rows,
-        totalCredits: dollarsToCredits(ledger.total),
-        totalDollars: ledger.total,
-        tokens: {
-          input: ledger.items.reduce((s, it) => s + (it.inputTokens ?? 0), 0),
-          output: ledger.items.reduce((s, it) => s + (it.outputTokens ?? 0), 0),
-        },
-      }
-    }
-
-    // Total-only (pre-ledger runs with just the cost_total projection).
-    const total = log.cost?.total
-    if (total == null) return null
-    return {
-      rows: [],
-      totalCredits: dollarsToCredits(total),
-      totalDollars: total,
-      tokens: { input: 0, output: 0 },
-    }
-  }, [log.costLedger, log.cost])
+  // Cost breakdown is projected by the pure model layer from the canonical
+  // usage ledger (single source of truth) — never reconstructed here.
+  const costBreakdown = useMemo(
+    () => projectRunCost(log.costLedger, log.costTotalDollars),
+    [log.costLedger, log.costTotalDollars]
+  )
 
   const formattedTimestamp = formatDate(log.createdAt)
-  const logStatus = getDisplayStatus(log.status)
 
   /**
    * Troubleshooting hands the failed run off to Chat, tagging it by
@@ -429,7 +357,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
    * mothership-triggered logs are excluded — `isLikelyExecution` already encodes
    * "has an executionId and isn't a mothership run".
    */
-  const canTroubleshoot = isChatEnabled && log.status === 'failed' && isLikelyExecution
+  const canTroubleshoot = isChatEnabled && log.status === 'error' && isLikelyExecution
 
   /**
    * Hands the failed run to Chat. When a chat is already mounted (e.g. the run
@@ -439,21 +367,21 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
    * successful store, so a failed write never strands the user on an empty chat.
    */
   const handleTroubleshoot = useCallback(() => {
-    if (!log.executionId) return
-    const workflowName = log.workflow?.name?.trim() || null
+    if (!log.identity.executionId) return
+    const sourceTitle = log.source.kind === 'workflow' ? log.source.title.trim() || null : null
     const context: ChatContext = {
       kind: 'logs',
-      executionId: log.executionId,
-      label: workflowName ?? 'this run',
+      executionId: log.identity.executionId,
+      label: sourceTitle ?? log.source.title,
     }
-    const message = workflowName
-      ? `The "${workflowName}" workflow run failed. Investigate the error in this run and help me fix it.`
-      : 'This workflow run failed. Investigate the error in this run and help me fix it.'
+    const message = sourceTitle
+      ? `The "${sourceTitle}" run failed. Investigate the error in this run and help me fix it.`
+      : 'This run failed. Investigate the error in this run and help me fix it.'
     if (sendMothershipMessage(message, [context])) return
     if (MothershipHandoffStorage.store({ message, contexts: [context] }, workspaceId)) {
       router.push(`/workspace/${workspaceId}/home`)
     }
-  }, [log.executionId, log.workflow?.name, workspaceId, router])
+  }, [log.identity.executionId, log.source.kind, log.source.title, workspaceId, router])
 
   return (
     <>
@@ -472,7 +400,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
         {resolvedTab === 'overview' && (
           <div ref={scrollAreaRef} className='mt-4 min-h-0 flex-1 overflow-y-auto'>
             <div className='flex flex-col gap-2.5 pb-4'>
-              {/* Timestamp + Workflow header */}
+              {/* Timestamp + Source header */}
               <div className='grid grid-cols-2 gap-x-3 pb-0.5'>
                 <div className='flex min-w-0 flex-col gap-0.5'>
                   <span className='text-[var(--text-tertiary)] text-caption'>Timestamp</span>
@@ -484,55 +412,48 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
                 </div>
                 <div className='flex min-w-0 flex-col gap-0.5'>
                   <span className='text-[var(--text-tertiary)] text-caption'>
-                    {log.trigger === 'mothership' ? 'Job' : 'Workflow'}
+                    {log.source.kind === 'agent-task' ? 'Task' : 'Source'}
                   </span>
-                  {openableWorkflowId ? (
-                    <Link
-                      href={workflowEditorPath(workspaceId, openableWorkflowId)}
-                      target='_blank'
-                      rel='noopener noreferrer'
-                      prefetch={false}
-                      className='-mx-1.5 -my-0.5 group flex w-fit min-w-0 max-w-[calc(100%+0.75rem)] items-center gap-1.5 rounded-[5px] px-1.5 py-0.5 transition-colors hover-hover:bg-[var(--surface-active)] focus-visible:bg-[var(--surface-active)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--text-muted)_30%,transparent)]'
-                    >
-                      <span className='inline-grid size-[14px] shrink-0 place-items-center'>
-                        <Workflow className='col-start-1 row-start-1 size-[14px] text-[var(--text-icon)] opacity-100 blur-0 transition-[opacity,filter,transform] duration-200 ease-in-out group-hover:scale-[0.25] group-hover:opacity-0 group-hover:blur-[2px] group-focus-visible:scale-[0.25] group-focus-visible:opacity-0 group-focus-visible:blur-[2px] motion-reduce:transition-none' />
-                        <SquareArrowUpRight className='col-start-1 row-start-1 size-[14px] scale-[0.25] text-[var(--text-icon)] opacity-0 blur-[2px] transition-[opacity,filter,transform] duration-200 ease-in-out group-hover:scale-100 group-hover:opacity-100 group-hover:blur-0 group-focus-visible:scale-100 group-focus-visible:opacity-100 group-focus-visible:blur-0 motion-reduce:transition-none' />
-                      </span>
-                      <span className='min-w-0 truncate text-[var(--text-secondary)] text-sm transition-colors group-hover:text-[var(--text-primary)] group-focus-visible:text-[var(--text-primary)]'>
-                        {workflowLabel}
-                      </span>
-                      <span className='sr-only'>(opens in a new tab)</span>
-                    </Link>
-                  ) : (
-                    <div className='flex min-w-0 items-center gap-1.5'>
-                      <Workflow className='size-[14px] flex-shrink-0 text-[var(--text-icon)]' />
-                      <span className='min-w-0 truncate text-[var(--text-secondary)] text-sm'>
-                        {workflowLabel}
-                      </span>
-                    </div>
-                  )}
+                  {/* No navigation: the workflow editor is not a run source surface. */}
+                  <div className='flex min-w-0 items-center gap-1.5'>
+                    <span className='min-w-0 truncate text-[var(--text-secondary)] text-sm'>
+                      {log.source.title}
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* Details Section */}
               <div className='divide-y divide-[var(--border)] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface-2)] dark:bg-transparent'>
                 {/* Run ID — click to copy */}
-                {log.executionId && (
+                {log.identity.executionId && (
                   <div
                     role='button'
                     tabIndex={0}
                     aria-label='Copy run ID'
                     className='flex h-10 min-w-0 cursor-pointer items-center justify-between gap-4 px-3 transition-colors hover-hover:bg-[var(--surface-active)]'
-                    onClick={() => copyRunId(log.executionId!)}
+                    onClick={() => copyRunId(log.identity.executionId!)}
                     onKeyDown={(event) =>
-                      handleKeyboardActivation(event, () => copyRunId(log.executionId!))
+                      handleKeyboardActivation(event, () => copyRunId(log.identity.executionId!))
                     }
                   >
                     <span className='flex-shrink-0 text-[var(--text-tertiary)] text-caption'>
                       Run ID
                     </span>
                     <span className='min-w-0 truncate text-[var(--text-secondary)] text-caption tabular-nums'>
-                      {copiedRunId ? 'Copied!' : log.executionId}
+                      {copiedRunId ? 'Copied!' : log.identity.executionId}
+                    </span>
+                  </div>
+                )}
+
+                {/* Task ID — the owning AgentTask, when the runtime recorded one */}
+                {log.taskId && (
+                  <div className='flex h-10 min-w-0 items-center justify-between gap-4 px-3'>
+                    <span className='flex-shrink-0 text-[var(--text-tertiary)] text-caption'>
+                      Task ID
+                    </span>
+                    <span className='min-w-0 truncate text-[var(--text-secondary)] text-caption tabular-nums'>
+                      {log.taskId}
                     </span>
                   </div>
                 )}
@@ -540,7 +461,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
                 {/* Level */}
                 <div className='flex h-10 items-center justify-between px-3'>
                   <span className='text-[var(--text-tertiary)] text-caption'>Level</span>
-                  <StatusBadge status={logStatus} />
+                  <StatusBadge status={log.status} />
                 </div>
 
                 {/* Trigger */}
@@ -557,26 +478,28 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
                 <div className='flex h-10 items-center justify-between px-3'>
                   <span className='text-[var(--text-tertiary)] text-caption'>Duration</span>
                   <span className='text-[var(--text-secondary)] text-caption tabular-nums'>
-                    {formatDuration(log.duration, { precision: 2 }) || '—'}
+                    {log.durationMs != null
+                      ? formatDuration(log.durationMs, { precision: 2 }) || '—'
+                      : '—'}
                   </span>
                 </div>
 
                 {/* Version */}
-                {log.deploymentVersion && (
+                {log.deploymentVersionLabel && (
                   <div className='flex h-10 items-center gap-2 px-3'>
                     <span className='flex-shrink-0 text-[var(--text-tertiary)] text-caption'>
                       Version
                     </span>
                     <div className='flex w-0 flex-1 justify-end'>
                       <Badge variant='green' size='sm' className='max-w-full truncate'>
-                        {log.deploymentVersionName || `v${log.deploymentVersion}`}
+                        {log.deploymentVersionLabel}
                       </Badge>
                     </div>
                   </div>
                 )}
 
                 {/* Snapshot */}
-                {showWorkflowState && (
+                {showRunSnapshot && (
                   <div className='flex h-10 items-center justify-between px-3'>
                     <span className='text-[var(--text-tertiary)] text-caption'>Snapshot</span>
                     <Chip leftIcon={Eye} onClick={() => setIsExecutionSnapshotOpen(true)}>
@@ -596,28 +519,26 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
                 )}
               </div>
 
-              {/* Workflow Input */}
-              {isWorkflowExecutionLog && workflowInput && !permissionConfig.hideTraceSpans && (
+              {/* Run Input */}
+              {hasExecutionDetail && runInput && !permissionConfig.hideTraceSpans && (
                 <div className='flex flex-col gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 dark:bg-transparent'>
-                  <span className='text-[var(--text-tertiary)] text-caption'>Workflow Input</span>
-                  <WorkflowOutputSection output={workflowInput} />
+                  <span className='text-[var(--text-tertiary)] text-caption'>Run Input</span>
+                  <RunOutputSection output={runInput} />
                 </div>
               )}
 
-              {/* Workflow Output */}
-              {isWorkflowExecutionLog && workflowOutput && !permissionConfig.hideTraceSpans && (
+              {/* Run Output */}
+              {hasExecutionDetail && finalOutput && !permissionConfig.hideTraceSpans && (
                 <div className='flex flex-col gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 dark:bg-transparent'>
                   <span
                     className={cn(
                       'text-caption',
-                      workflowOutput.error
-                        ? 'text-[var(--text-error)]'
-                        : 'text-[var(--text-tertiary)]'
+                      finalOutput.error ? 'text-[var(--text-error)]' : 'text-[var(--text-tertiary)]'
                     )}
                   >
-                    Workflow Output
+                    Run Output
                   </span>
-                  <WorkflowOutputSection output={workflowOutput} />
+                  <RunOutputSection output={finalOutput} />
                 </div>
               )}
 
@@ -667,8 +588,11 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
         {showTraceTab && resolvedTab === 'trace' && (
           <div className='mt-3 min-h-0 flex-1 overflow-hidden focus-visible:outline-none'>
             {traceSpans?.length ? (
-              <TraceView traceSpans={traceSpans} runCostDollars={log.cost?.total} />
-            ) : log.executionData ? (
+              <TraceView
+                traceSpans={traceSpans}
+                runCostDollars={log.costTotalDollars ?? undefined}
+              />
+            ) : log.hasDetailPayload ? (
               <div className='flex h-full items-center justify-center px-4 text-center'>
                 <span className='text-[var(--text-tertiary)] text-sm'>
                   No trace data available for this run
@@ -683,16 +607,34 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
         )}
 
         {showEventsTab && resolvedTab === 'events' && (
-          <div ref={scrollAreaRef} className='mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border-subtle)]'>
+          <div
+            ref={scrollAreaRef}
+            className='mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border-subtle)]'
+          >
             <div className='divide-y divide-[var(--border-subtle)]'>
               {runtimeEvents.map((event, index) => (
-                <details key={`${String(event.sequence ?? index)}-${String(event.kind)}`} className='group p-3'>
+                <details
+                  key={`${String(event.sequence ?? index)}-${String(event.kind)}`}
+                  className='group p-3'
+                >
                   <summary className='flex cursor-pointer list-none items-center justify-between gap-3 text-sm'>
-                    <span className='font-mono text-[var(--text-primary)]'>{String(event.kind ?? 'runtime.event')}</span>
-                    <span className='text-xs text-[var(--text-tertiary)]'>{String(event.agent ?? 'coordinator')} · {String(event.sequence ?? index + 1)}</span>
+                    <span className='font-mono text-[var(--text-primary)]'>
+                      {String(event.kind ?? 'runtime.event')}
+                    </span>
+                    <span className='text-xs text-[var(--text-tertiary)]'>
+                      {String(event.agent ?? 'coordinator')} · {String(event.sequence ?? index + 1)}
+                    </span>
                   </summary>
                   <pre className='mt-2 overflow-x-auto rounded-md bg-[var(--surface-secondary)] p-2 text-xs text-[var(--text-secondary)]'>
-                    {JSON.stringify({ payload: event.payload, runtime: event.runtime, createdAt: event.createdAt }, null, 2)}
+                    {JSON.stringify(
+                      {
+                        payload: event.payload,
+                        runtime: event.runtime,
+                        createdAt: event.createdAt,
+                      },
+                      null,
+                      2
+                    )}
                   </pre>
                 </details>
               ))}
@@ -702,9 +644,9 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
       </div>
 
       {/* Frozen Canvas Modal */}
-      {log.executionId && (
+      {log.identity.executionId && (
         <ExecutionSnapshot
-          executionId={log.executionId}
+          executionId={log.identity.executionId}
           traceSpans={traceSpans}
           isModal
           isOpen={isExecutionSnapshotOpen}
@@ -716,7 +658,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
 }
 
 interface LogDetailsProps {
-  log: WorkflowLogRow | null
+  log: ExecutionLogDetailView | null
   isOpen: boolean
   onClose: () => void
   onNavigateNext?: () => void
@@ -810,24 +752,22 @@ export const LogDetails = memo(function LogDetails({
             <div className='flex items-center justify-between'>
               <h2 className='text-[var(--text-primary)] text-sm'>Log Details</h2>
               <div className='flex items-center gap-[1px]'>
-                {log.status === 'failed' &&
-                  (log.workflow?.id || log.workflowId) &&
-                  log.trigger !== 'mothership' && (
-                    <Tooltip.Root>
-                      <Tooltip.Trigger asChild>
-                        <Button
-                          variant='ghost'
-                          className='!p-1'
-                          onClick={() => onRetryExecution?.()}
-                          disabled={isRetryPending}
-                          aria-label='Retry execution'
-                        >
-                          <Redo className='size-[14px]' />
-                        </Button>
-                      </Tooltip.Trigger>
-                      <Tooltip.Content side='bottom'>Retry</Tooltip.Content>
-                    </Tooltip.Root>
-                  )}
+                {log.status === 'error' && log.source.kind !== 'unknown' && (
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <Button
+                        variant='ghost'
+                        className='!p-1'
+                        onClick={() => onRetryExecution?.()}
+                        disabled={isRetryPending}
+                        aria-label='Retry execution'
+                      >
+                        <Redo className='size-[14px]' />
+                      </Button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Content side='bottom'>Retry</Tooltip.Content>
+                  </Tooltip.Root>
+                )}
                 <Button
                   variant='ghost'
                   className='!p-1'

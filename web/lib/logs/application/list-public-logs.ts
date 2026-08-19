@@ -6,10 +6,10 @@ import { loadActiveFolderPathIndex } from '@/lib/folders/queries'
 import { logOperations } from '@/lib/logs/application/operations'
 import { materializeExecutionDataForDisplay } from '@/lib/logs/execution/trace-store'
 import type { LogFilters } from '@/lib/logs/public-filters'
-import { listPublicWorkflowLogs } from '@/lib/logs/public-queries'
+import { listPublicExecutionLogs } from '@/lib/logs/public-queries'
 import { loadActiveWorkspaceApplicationContext } from '@/lib/workspaces/application/workspace-context'
 
-type PublicLogRow = Awaited<ReturnType<typeof listPublicWorkflowLogs>>['data'][number]
+type PublicLogRow = Awaited<ReturnType<typeof listPublicExecutionLogs>>['data'][number]
 
 export interface ListPublicLogsInput {
   workspaceId: string
@@ -58,7 +58,7 @@ export const listPublicLogs = defineAuthorizedWorkspaceUseCase({
     )
     const includesRoot = resolvedFolderIds?.includes(null) ?? false
     const needsMaterialization = input.includeFinalOutput || input.includeTraceSpans
-    const { data, nextCursor } = await listPublicWorkflowLogs({
+    const { data, nextCursor } = await listPublicExecutionLogs({
       filters: { ...input.filters, workspaceId: context.workspaceId, folderIds },
       limit: input.limit,
       includeExecutionData: needsMaterialization,

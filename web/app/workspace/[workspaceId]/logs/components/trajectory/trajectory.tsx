@@ -28,16 +28,21 @@ import {
 } from '@sim/emcn/icons'
 import { formatDuration } from '@sim/utils/formatting'
 import { useParams } from 'next/navigation'
-import type { LogTraceSpan, WorkflowLogDetail, WorkflowLogSummary } from '@/lib/api/contracts/logs'
+import type { LogTraceSpan } from '@/lib/api/contracts/logs'
 import type { TraceSpan } from '@/lib/logs/types'
 import {
   adjustBgForContrast,
   formatCostAmount,
-  getBlockIconAndColor,
   getDisplayName,
   iconColorClass,
 } from '@/app/workspace/[workspaceId]/logs/components/log-details/utils'
-import { DELETED_WORKFLOW_LABEL, parseDuration } from '@/app/workspace/[workspaceId]/logs/utils'
+import type {
+  ExecutionLogDetailView,
+  ExecutionLogSummaryView,
+  RunStatus,
+} from '@/app/workspace/[workspaceId]/logs/model/execution-log'
+import { mapExecutionLogDetail } from '@/app/workspace/[workspaceId]/logs/model/execution-log-mapper'
+import { getSpanPresentation } from '@/app/workspace/[workspaceId]/logs/model/span-presentation'
 import { useLogDetail } from '@/hooks/queries/logs'
 import {
   buildTrajectoryModel,
@@ -55,7 +60,7 @@ const EMPTY_COLLAPSED_IDS = new Set<string>()
 const DETAIL_PREVIEW_LIMIT = 20_000
 
 interface TrajectoryProps {
-  logs: WorkflowLogSummary[]
+  logs: ExecutionLogSummaryView[]
   isLoading: boolean
 }
 
@@ -67,9 +72,9 @@ function getSpanName(span: LogTraceSpan): string {
   return getDisplayName(asTraceSpan(span))
 }
 
-function getSpanPresentation(span: LogTraceSpan) {
+function getSpanVisual(span: LogTraceSpan) {
   const richSpan = asTraceSpan(span)
-  const presentation = getBlockIconAndColor(
+  const presentation = getSpanPresentation(
     span.type,
     span.name,
     typeof richSpan.provider === 'string' ? richSpan.provider : undefined
@@ -88,13 +93,7 @@ function formatOffset(value: number): string {
   return value <= 0 ? '0 ms' : `+${formatMs(value)}`
 }
 
-function getWorkflowName(log: WorkflowLogSummary | WorkflowLogDetail): string {
-  if (log.trigger === 'mothership') return log.jobTitle || 'Untitled Job'
-  if (!log.workflow?.id && !log.workflowId) return DELETED_WORKFLOW_LABEL
-  return log.workflow?.name || 'Untitled workflow'
-}
-
-function getRunLabel(log: WorkflowLogSummary): string {
+function getRunLabel(log: ExecutionLogSummaryView): string {
   const date = new Date(log.createdAt)
   const timestamp = Number.isFinite(date.getTime())
     ? date.toLocaleString([], {
@@ -105,12 +104,12 @@ function getRunLabel(log: WorkflowLogSummary): string {
         second: '2-digit',
       })
     : log.createdAt
-  return `${getWorkflowName(log)} · ${timestamp}`
+  return `${log.source.title} · ${timestamp}`
 }
 
-function getRunBadge(status: string | null) {
+function getRunBadge(status: RunStatus | null) {
   switch (status) {
-    case 'failed':
+    case 'error':
       return { label: 'Error', variant: 'red' as const }
     case 'running':
       return { label: 'Running', variant: 'amber' as const }
@@ -139,9 +138,26 @@ function StatCard({ label, value }: { label: string; value: string }) {
 function TrajectorySummaryCards({ model }: { model: TrajectoryModel }) {
   const summary = useMemo(() => summarizeTrajectory(model), [model])
   const cards = [
-    { label: 'Rounds', value: String(summary.roundCount ?? model.lanes.find((lane) => lane.id === 'control')?.entries.length ?? 0) },
-    { label: 'Tasks', value: String(summary.taskCount ?? model.lanes.find((lane) => lane.id === 'task')?.entries.length ?? 0) },
-    { label: 'Actions', value: String(summary.actionCount ?? model.lanes.find((lane) => lane.id === 'action')?.entries.length ?? summary.spanCount) },
+    {
+      label: 'Rounds',
+      value: String(
+        summary.roundCount ?? model.lanes.find((lane) => lane.id === 'control')?.entries.length ?? 0
+      ),
+    },
+    {
+      label: 'Tasks',
+      value: String(
+        summary.taskCount ?? model.lanes.find((lane) => lane.id === 'task')?.entries.length ?? 0
+      ),
+    },
+    {
+      label: 'Actions',
+      value: String(
+        summary.actionCount ??
+          model.lanes.find((lane) => lane.id === 'action')?.entries.length ??
+          summary.spanCount
+      ),
+    },
     { label: 'Failures', value: String(summary.failureCount) },
     { label: 'Tokens', value: summary.tokenCount.toLocaleString() },
     { label: 'Duration', value: formatMs(model.totalDurationMs) },
@@ -167,7 +183,7 @@ function TimelineBar({
   selected: boolean
   onSelect: (entry: TrajectoryEntry) => void
 }) {
-  const { bgColor } = getSpanPresentation(entry.span)
+  const { bgColor } = getSpanVisual(entry.span)
   const scale = Math.max(1, totalDurationMs)
   const left = Math.min(100, (entry.offsetMs / scale) * 100)
   const width = Math.max(0, Math.min(100 - left, (entry.durationMs / scale) * 100))
@@ -268,7 +284,7 @@ function TrajectoryTimeline({
 }
 
 function SpanIcon({ span }: { span: LogTraceSpan }) {
-  const { icon: Icon, bgColor } = getSpanPresentation(span)
+  const { icon: Icon, bgColor } = getSpanVisual(span)
   return (
     <div
       className='flex size-[16px] flex-shrink-0 items-center justify-center overflow-hidden rounded-sm [&_img]:size-full'
@@ -646,7 +662,13 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
   )
 }
 
-function TrajectoryContent({ log, model }: { log: WorkflowLogDetail; model: TrajectoryModel }) {
+function TrajectoryContent({
+  log,
+  model,
+}: {
+  log: ExecutionLogDetailView
+  model: TrajectoryModel
+}) {
   const [searchQuery, setSearchQuery] = useState('')
   const [type, setType] = useState('all')
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
@@ -657,7 +679,7 @@ function TrajectoryContent({ log, model }: { log: WorkflowLogDetail; model: Traj
     setType('all')
     setCollapsedIds(new Set())
     setSelectedId(null)
-  }, [log.id])
+  }, [log.identity.logId])
 
   const childIds = useMemo(
     () => new Set(model.entries.map((entry) => entry.parentId).filter((id): id is string => !!id)),
@@ -826,10 +848,10 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
   const { workspaceId } = useParams<{ workspaceId: string }>()
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null)
   const effectiveLogId =
-    selectedLogId && logs.some((log) => log.id === selectedLogId)
+    selectedLogId && logs.some((log) => log.identity.logId === selectedLogId)
       ? selectedLogId
-      : (logs[0]?.id ?? null)
-  const selectedSummary = logs.find((log) => log.id === effectiveLogId) ?? null
+      : (logs[0]?.identity.logId ?? null)
+  const selectedSummary = logs.find((log) => log.identity.logId === effectiveLogId) ?? null
   const isActiveRun =
     selectedSummary?.status === 'running' ||
     selectedSummary?.status === 'pending' ||
@@ -837,18 +859,16 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
   const detailQuery = useLogDetail(effectiveLogId ?? undefined, workspaceId, {
     refetchInterval: isActiveRun ? ACTIVE_RUN_REFRESH_MS : false,
   })
-  const detail = detailQuery.data
-  const traceSpans = detail?.executionData?.traceSpans
-  const trajectory = detail?.executionData?.trajectory
-  const fallbackDuration = parseDuration({
-    duration: detail?.duration ?? selectedSummary?.duration ?? undefined,
-  })
+  const detail = detailQuery.data ? mapExecutionLogDetail(detailQuery.data) : null
+  const traceSpans = detail?.traceSpans
+  const trajectory = detail?.trajectory
+  const fallbackDuration = detail?.durationMs ?? selectedSummary?.durationMs ?? 0
   const model = useMemo(
     () => buildTrajectoryModel(traceSpans, fallbackDuration ?? 0, trajectory),
     [traceSpans, fallbackDuration, trajectory]
   )
   const runOptions = useMemo(
-    () => logs.map((log) => ({ value: log.id, label: getRunLabel(log) })),
+    () => logs.map((log) => ({ value: log.identity.logId, label: getRunLabel(log) })),
     [logs]
   )
   const selectedRunBadge = getRunBadge(detail?.status ?? selectedSummary?.status ?? null)

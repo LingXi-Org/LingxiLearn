@@ -10,24 +10,19 @@ import {
   Duplicate,
   Eye,
   Link,
-  ListFilter,
   Redo,
-  SquareArrowUpRight,
   X,
 } from '@sim/emcn'
-import type { WorkflowLogSummary } from '@/lib/api/contracts/logs'
-import { resolveLogWorkflowId } from '@/app/workspace/[workspaceId]/logs/utils'
+import type { ExecutionLogSummaryView } from '@/app/workspace/[workspaceId]/logs/model/execution-log'
 
 interface LogRowContextMenuProps {
   isOpen: boolean
   position: { x: number; y: number }
   onClose: () => void
-  log: WorkflowLogSummary | null
+  log: ExecutionLogSummaryView | null
   onCopyExecutionId: () => void
   onCopyLink: () => void
-  onOpenWorkflow: () => void
   onOpenPreview: () => void
-  onToggleWorkflowFilter: () => void
   onClearAllFilters: () => void
   onCancelExecution: () => void
   onRetryExecution: () => void
@@ -35,7 +30,6 @@ interface LogRowContextMenuProps {
   isCancelPending?: boolean
   cancelPendingExecutionId?: string
   isRetryPending?: boolean
-  isFilteredByThisWorkflow: boolean
   hasActiveFilters: boolean
 }
 
@@ -50,9 +44,7 @@ export const LogRowContextMenu = memo(function LogRowContextMenu({
   log,
   onCopyExecutionId,
   onCopyLink,
-  onOpenWorkflow,
   onOpenPreview,
-  onToggleWorkflowFilter,
   onClearAllFilters,
   onCancelExecution,
   onRetryExecution,
@@ -60,25 +52,15 @@ export const LogRowContextMenu = memo(function LogRowContextMenu({
   isCancelPending = false,
   cancelPendingExecutionId,
   isRetryPending = false,
-  isFilteredByThisWorkflow,
   hasActiveFilters,
 }: LogRowContextMenuProps) {
-  const hasExecutionId = Boolean(log?.executionId)
-  const hasWorkflow = Boolean(log?.workflow?.id || log?.workflowId)
-  /**
-   * "Open Workflow" needs a navigable target, which is stricter than
-   * `hasWorkflow`: Sim agent jobs have no workflow of their own. Cancel/retry
-   * keep using `hasWorkflow` so their gating is unchanged.
-   */
-  const hasOpenableWorkflow = Boolean(log && resolveLogWorkflowId(log))
-  const isCancellable =
-    (log?.status === 'running' || log?.status === 'pending') && hasExecutionId && hasWorkflow
+  const hasExecutionId = Boolean(log?.identity.executionId)
+  const isCancellable = (log?.status === 'running' || log?.status === 'pending') && hasExecutionId
   const isStopping =
     log?.status === 'cancelling' ||
-    (isCancelPending && cancelPendingExecutionId === log?.executionId)
-  const showCancelAction =
-    canCancelExecution && hasExecutionId && hasWorkflow && (isCancellable || isStopping)
-  const isRetryable = log?.status === 'failed' && hasWorkflow && log?.trigger !== 'mothership'
+    (isCancelPending && cancelPendingExecutionId === log?.identity.executionId)
+  const showCancelAction = canCancelExecution && hasExecutionId && (isCancellable || isStopping)
+  const isRetryable = log?.status === 'error' && log.source.kind !== 'unknown'
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={(open) => !open && onClose()} modal={false}>
@@ -130,22 +112,12 @@ export const LogRowContextMenu = memo(function LogRowContextMenu({
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={!hasOpenableWorkflow} onSelect={onOpenWorkflow}>
-          <SquareArrowUpRight />
-          Open Workflow
-        </DropdownMenuItem>
         <DropdownMenuItem disabled={!hasExecutionId} onSelect={onOpenPreview}>
           <Eye />
           Open Snapshot
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
-        {!isFilteredByThisWorkflow && (
-          <DropdownMenuItem disabled={!hasWorkflow} onSelect={onToggleWorkflowFilter}>
-            <ListFilter />
-            Filter by Workflow
-          </DropdownMenuItem>
-        )}
         {hasActiveFilters && (
           <DropdownMenuItem onSelect={onClearAllFilters}>
             <X />

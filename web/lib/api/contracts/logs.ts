@@ -318,7 +318,14 @@ const executionDataDetailSchema = z
   })
   .passthrough()
 
-export const workflowLogSummarySchema = z.object({
+/**
+ * Wire schema for one execution-log row. The Lingxi domain model is
+ * execution-centric (`ExecutionLog*`); legacy wire field names (`workflowId`,
+ * `workflow`, `jobTitle`) are kept for backend wire compatibility and are
+ * translated into the native observability view model by the logs mapper —
+ * UI code must not treat them as a workflow identity.
+ */
+export const executionLogSummarySchema = z.object({
   id: z.string(),
   workflowId: z.string().nullable(),
   executionId: z.string().nullable(),
@@ -341,7 +348,7 @@ export const workflowLogSummarySchema = z.object({
   hasPendingPause: z.boolean(),
 })
 
-export const workflowLogDetailSchema = workflowLogSummarySchema.extend({
+export const executionLogDetailSchema = executionLogSummarySchema.extend({
   executionData: executionDataDetailSchema,
   files: z.array(userFileSchema).nullable(),
   // Itemized, ledger-sourced cost breakdown. Null for legacy/pre-ledger runs,
@@ -349,18 +356,18 @@ export const workflowLogDetailSchema = workflowLogSummarySchema.extend({
   costLedger: costLedgerSchema.nullable().optional(),
 })
 
-export type WorkflowLogSummary = z.output<typeof workflowLogSummarySchema>
-export type WorkflowLogDetail = z.output<typeof workflowLogDetailSchema>
+export type ExecutionLogSummary = z.output<typeof executionLogSummarySchema>
+export type ExecutionLogDetail = z.output<typeof executionLogDetailSchema>
 
 /**
  * A row that may be either a list-view summary or a fully loaded detail. Used by
  * UI surfaces that render the same log before and after its detail query resolves.
  */
-export type WorkflowLogRow = WorkflowLogSummary &
-  Partial<Pick<WorkflowLogDetail, 'executionData' | 'files' | 'costLedger'>>
+export type ExecutionLogRow = ExecutionLogSummary &
+  Partial<Pick<ExecutionLogDetail, 'executionData' | 'files' | 'costLedger'>>
 
 export const listLogsResponseSchema = z.object({
-  data: z.array(workflowLogSummarySchema),
+  data: z.array(executionLogSummarySchema),
   nextCursor: z.string().nullable(),
 })
 
@@ -444,7 +451,7 @@ export const getLogDetailContract = defineRouteContract({
   response: {
     mode: 'json',
     schema: z.object({
-      data: workflowLogDetailSchema,
+      data: executionLogDetailSchema,
     }),
   },
 })
@@ -457,7 +464,7 @@ export const getLogByExecutionIdContract = defineRouteContract({
   response: {
     mode: 'json',
     schema: z.object({
-      data: workflowLogDetailSchema,
+      data: executionLogDetailSchema,
     }),
   },
 })

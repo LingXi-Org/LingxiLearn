@@ -2,7 +2,6 @@
 
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { Loader } from '@sim/emcn'
-import { useParams } from 'next/navigation'
 import {
   DashboardSegmentsContext,
   type SegmentSelectionMode,
@@ -10,7 +9,6 @@ import {
 import { useLogFilters } from '@/app/workspace/[workspaceId]/logs/hooks/use-log-filters'
 import { formatLatency } from '@/app/workspace/[workspaceId]/logs/utils'
 import type { DashboardStatsResponse, WorkflowStats } from '@/hooks/queries/logs'
-import { useWorkflows } from '@/hooks/queries/workflows'
 import { LineChart, WorkflowsList } from './components'
 
 interface WorkflowExecution {
@@ -72,9 +70,6 @@ function DashboardInner({ stats, isLoading, error, searchQuery }: DashboardProps
   const lastAnchorIndicesRef = useRef<Record<string, number>>({})
 
   const { workflowIds, toggleWorkflowId, timeRange } = useLogFilters()
-
-  const { workspaceId } = useParams<{ workspaceId: string }>()
-  const { data: allWorkflowList = [], isPending: isWorkflowsPending } = useWorkflows(workspaceId)
 
   const expandedWorkflowId = workflowIds.length === 1 ? workflowIds[0] : null
 
@@ -384,7 +379,7 @@ function DashboardInner({ stats, isLoading, error, searchQuery }: DashboardProps
     )
   }
 
-  if (!isWorkflowsPending && allWorkflowList.length === 0) {
+  if (!isLoading && stats?.workflows.length === 0) {
     return (
       <div className='mt-6 flex flex-1 items-center justify-center'>
         <div className='text-center text-[var(--text-secondary)]'>

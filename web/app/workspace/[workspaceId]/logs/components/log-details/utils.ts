@@ -1,13 +1,8 @@
-import type React from 'react'
 import { perceivedBrightness } from '@sim/utils/color'
-import { AgentSkillsIcon, WorkflowIcon } from '@/components/icons'
 import { formatCreditCost } from '@/lib/billing/credits/conversion'
 import { hasUnhandledError } from '@/lib/logs/execution/trace-spans/trace-spans'
 import type { TraceSpan } from '@/lib/logs/types'
-import { LoopTool } from '@/app/workspace/[workspaceId]/components/subflows/loop-config'
-import { ParallelTool } from '@/app/workspace/[workspaceId]/components/subflows/parallel-config'
-import { getBlock, getBlockByToolName } from '@/blocks'
-import { PROVIDER_DEFINITIONS } from '@/providers/models'
+import { getSpanPresentation } from '@/app/workspace/[workspaceId]/logs/model/span-presentation'
 import { normalizeToolId } from '@/tools/normalize'
 
 /**
@@ -22,13 +17,6 @@ function tryParseMcpToolName(toolId: string): string | null {
   if (parts.length < 3) return null
   const toolName = parts.slice(2).join('-')
   return toolName.length > 0 ? toolName : null
-}
-
-export const DEFAULT_BLOCK_COLOR = '#6b7280'
-
-export interface BlockIconAndColor {
-  icon: React.ComponentType<{ className?: string }> | null
-  bgColor: string
 }
 
 export function isIterationType(type: string): boolean {
@@ -47,36 +35,16 @@ export function hasUnhandledErrorInTree(span: TraceSpan): boolean {
   return hasUnhandledError(span, { includeToolCalls: true })
 }
 
+/**
+ * Compatibility presentation helper for non-Logs consumers. Metadata comes
+ * from the Lingxi-native span registry, never from the workflow editor graph.
+ */
 export function getBlockIconAndColor(
   type: string,
   toolName?: string,
   provider?: string
-): BlockIconAndColor {
-  const lowerType = type.toLowerCase()
-  if (lowerType === 'tool' && toolName) {
-    if (tryParseMcpToolName(toolName)) {
-      const mcpBlock = getBlock('mcp')
-      if (mcpBlock) return { icon: mcpBlock.icon, bgColor: mcpBlock.bgColor }
-    }
-    const normalized = normalizeToolId(toolName)
-    if (normalized === 'load_skill') return { icon: AgentSkillsIcon, bgColor: '#8B5CF6' }
-    const toolBlock = getBlockByToolName(normalized)
-    if (toolBlock) return { icon: toolBlock.icon, bgColor: toolBlock.bgColor }
-  }
-  if (lowerType === 'loop' || lowerType === 'loop-iteration')
-    return { icon: LoopTool.icon, bgColor: LoopTool.bgColor }
-  if (lowerType === 'parallel' || lowerType === 'parallel-iteration')
-    return { icon: ParallelTool.icon, bgColor: ParallelTool.bgColor }
-  if (lowerType === 'workflow') return { icon: WorkflowIcon, bgColor: '#6366F1' }
-  if (lowerType === 'model' && provider) {
-    const providerDef = PROVIDER_DEFINITIONS[provider]
-    if (providerDef?.icon)
-      return { icon: providerDef.icon, bgColor: providerDef.color ?? DEFAULT_BLOCK_COLOR }
-  }
-  const blockType = lowerType === 'model' ? 'agent' : lowerType
-  const blockConfig = getBlock(blockType)
-  if (blockConfig) return { icon: blockConfig.icon, bgColor: blockConfig.bgColor }
-  return { icon: null, bgColor: DEFAULT_BLOCK_COLOR }
+): { icon: React.ComponentType<{ className?: string }> | null; bgColor: string } {
+  return getSpanPresentation(type, toolName, provider)
 }
 
 /**
@@ -99,7 +67,7 @@ export function iconColorClass(bgColor: string): string {
  */
 export function adjustBgForContrast(bgColor: string): string {
   const brightness = perceivedBrightness(bgColor)
-  return brightness !== null && brightness < 30_000 / MAX_YIQ_SUM ? DEFAULT_BLOCK_COLOR : bgColor
+  return brightness !== null && brightness < 30_000 / MAX_YIQ_SUM ? '#6b7280' : bgColor
 }
 
 export function parseTime(value?: string | number | null): number {
@@ -159,3 +127,5 @@ export function formatTokensSummary(tokens: TraceSpan['tokens']): string | undef
   if (total) parts.push(`${total} total`)
   return parts.length > 0 ? parts.join(' · ') : undefined
 }
+
+import type React from 'react'

@@ -44,7 +44,7 @@ export function decodePublicLogCursor(
   }
 }
 
-export interface ListPublicWorkflowLogsInput {
+export interface ListPublicExecutionLogsInput {
   filters: LogFilters
   limit: number
   includeExecutionData: boolean
@@ -59,7 +59,7 @@ export interface ListPublicWorkflowLogsInput {
  * adapters. Folder path resolution remains an adapter concern; this query takes
  * the resulting ids and applies one coherent root/non-root predicate.
  */
-export async function listPublicWorkflowLogs(input: ListPublicWorkflowLogsInput) {
+export async function listPublicExecutionLogs(input: ListPublicExecutionLogsInput) {
   const filters = input.folderScope ? { ...input.filters, folderIds: undefined } : input.filters
   const conditions = buildLogFilters(filters)
   const folderCondition = input.folderScope
@@ -117,7 +117,7 @@ export async function listPublicWorkflowLogs(input: ListPublicWorkflowLogsInput)
   return { data, nextCursor }
 }
 
-export type PublicWorkflowLogLookup =
+export type PublicExecutionLogLookup =
   | { column: 'id'; value: string }
   | { column: 'executionId'; value: string }
 
@@ -125,7 +125,7 @@ export type PublicWorkflowLogLookup =
  * Resolves only the canonical resource scope needed to authorize a public run
  * lookup. Protected log content is loaded separately after authorization.
  */
-export async function getPublicWorkflowLogScope(executionId: string) {
+export async function getPublicExecutionLogScope(executionId: string) {
   const [scope] = await db
     .select({
       executionId: workflowExecutionLogs.executionId,
@@ -144,7 +144,10 @@ export async function getPublicWorkflowLogScope(executionId: string) {
  * is deliberately left-sided: a missing snapshot does not make an otherwise
  * valid execution disappear from the log resource.
  */
-export async function getPublicWorkflowLog(lookup: PublicWorkflowLogLookup, workspaceId?: string) {
+export async function getPublicExecutionLog(
+  lookup: PublicExecutionLogLookup,
+  workspaceId?: string
+) {
   const lookupCondition =
     lookup.column === 'id'
       ? eq(workflowExecutionLogs.id, lookup.value)

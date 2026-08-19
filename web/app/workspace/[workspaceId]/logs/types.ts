@@ -11,9 +11,7 @@ export interface Suggestion {
     | 'cost'
     | 'date'
     | 'duration'
-    | 'workflow'
     | 'folder'
-    | 'workflowId'
     | 'executionId'
     | 'show-all'
 }
