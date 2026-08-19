@@ -91,7 +91,7 @@ Follow `.claude/rules/constitution.md` exactly: Sim is "the open-source AI works
                                          #   solutions-visual-frame, solutions-structured-data
 ```
 
-Each section component's TSDoc carries its layout spec - read it before implementing. Section components own their landmark (Navbar → `<header>`, Footer → `<footer>`, the rest → `<section>`); the shared `LandingShell` owns the page frame (light wrapper, skip link, navbar, footer, GitHub stars via `@/lib/github/stars` - fetched at build/revalidate time, never client-fetched), and the page's `<main>` owns the section order and rhythm. Platform and solutions routes consume `SolutionsPage` with a single content `config` - see the TSDoc on `solutions-page.tsx`. Sub-components of a section go in `components/<section>/components/`.
+Each section component's TSDoc carries its layout spec - read it before implementing. Section components own their landmark (Navbar → `<header>`, Footer → `<footer>`, the rest → `<section>`); the shared `LandingShell` owns the page frame (light wrapper, skip link, navbar, footer), and the page's `<main>` owns the section order and rhythm. Platform and solutions routes consume `SolutionsPage` with a single content `config` - see the TSDoc on `solutions-page.tsx`. Sub-components of a section go in `components/<section>/components/`.
 
 Absolute imports only in component code (`@/app/(landing)/components/...`); `index.ts` barrels use relative re-exports (`export { X } from './x'`), matching the workspace convention. Props interfaces for every component. No `utils.ts` until two files share a helper.
 
