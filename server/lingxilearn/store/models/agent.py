@@ -72,6 +72,11 @@ class AgentTask(Base):
     # ``status`` keeps its historical per-run terminal semantics until every
     # caller has moved to the thread model (issue #18 Stage 4).
     thread_status: Mapped[str] = mapped_column(String(24), default="open", index=True)
+    # Authoritative frontend reader. Migration 0019 marks retained V0-only
+    # tasks as 0; all newly-created tasks are V1 even before their first event.
+    event_protocol_version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

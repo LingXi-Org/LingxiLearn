@@ -723,6 +723,23 @@ class AgentTaskRepository:
             ).scalars()
             return [_agent_event_dict(r) for r in rows]
 
+    async def agent_event_protocol_for_learner(self, task_id: str, learner_id: str) -> int:
+        """Choose one replay protocol for a learner-owned task.
+
+        Migration 0019 marks retained V0-only tasks explicitly. A brand-new
+        empty task defaults to V1, so an empty history can never be mistaken
+        for legacy data or trigger content-based protocol fallback.
+        """
+
+        async with self.db.session() as s:
+            version = await s.scalar(
+                select(AgentTask.event_protocol_version).where(
+                    AgentTask.id == task_id,
+                    AgentTask.learner_id == learner_id,
+                )
+            )
+            return 1 if version is None else int(version)
+
 
 def _quiz_submission_dict(row: QuizSubmission) -> dict[str, Any]:
     return {

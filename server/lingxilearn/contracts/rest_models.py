@@ -507,6 +507,7 @@ class AgentTaskEventsResponse(BaseModel):
     """JSON catch-up view of the durable agent event log (``format=json``)."""
 
     events: list[dict[str, Any]] = Field(default_factory=list)
+    protocol: Literal["v1", "legacy-v0"]
 
 
 class RuntimeGraphResponse(BaseModel):

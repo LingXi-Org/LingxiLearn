@@ -51,6 +51,9 @@ async def stream_agent_events(
     # behind proxies that buffer a long-lived SSE response.  Respect the same
     # cursor so polling transfers only rows the client has not consumed.
     if request.query_params.get("format") == "json":
+        replay_protocol = await services.agent_events.replay_protocol(
+            task_id, context.learner_id
+        )
         events = await services.agent_events.events_after(
             task_id,
             context.learner_id,
@@ -58,7 +61,14 @@ async def stream_agent_events(
             protocol_version=protocol_version,
         )
         return Response(
-            content=json.dumps({"events": events}, ensure_ascii=False, separators=(",", ":")),
+            content=json.dumps(
+                {
+                    "events": events,
+                    "protocol": "v1" if replay_protocol == 1 else "legacy-v0",
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
             media_type="application/json",
         )
     heartbeat = services.settings.sse_heartbeat_seconds

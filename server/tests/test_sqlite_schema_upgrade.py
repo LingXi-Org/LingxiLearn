@@ -145,6 +145,7 @@ async def test_existing_0017_sqlite_file_upgrades_without_data_loss(legacy_sqlit
             for row in (await conn.exec_driver_sql("PRAGMA table_info('agent_tasks')")).fetchall()
         }
         assert "thread_status" in columns
+        assert "event_protocol_version" in columns
         event_columns = {
             row[1]
             for row in (
@@ -172,9 +173,15 @@ async def test_existing_0017_sqlite_file_upgrades_without_data_loss(legacy_sqlit
             await conn.exec_driver_sql("SELECT prompt FROM agent_tasks WHERE id = 'task_legacy'")
         ).scalar()
         assert preserved == "什么是量子叠加？"
+        protocol = (
+            await conn.exec_driver_sql(
+                "SELECT event_protocol_version FROM agent_tasks WHERE id = 'task_legacy'"
+            )
+        ).scalar()
+        assert protocol == 0
 
         marker = (await conn.exec_driver_sql("SELECT version_num FROM alembic_version")).scalar()
-        assert marker == SQLITE_SCHEMA_HEAD == "0018_mothership_protocol_v1"
+        assert marker == SQLITE_SCHEMA_HEAD == "0019_task_event_protocol"
 
 
 async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) -> None:
