@@ -6,7 +6,11 @@ const hookPath = path.resolve(
   process.cwd(),
   'app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts'
 )
-const apiPath = path.resolve(process.cwd(), 'lib/lingxi/api.ts')
+const apiPath = path.resolve(process.cwd(), 'lib/api/domains/agent-tasks.ts')
+const streamControllerPath = path.resolve(
+  process.cwd(),
+  'app/workspace/[workspaceId]/home/hooks/controllers/stream-controller.ts'
+)
 
 describe('Lingxi live V1 stream regressions', () => {
   it('tracks durable row sequence separately from protocol envelope seq', () => {
@@ -18,11 +22,14 @@ describe('Lingxi live V1 stream regressions', () => {
 
   it('subscribes before history hydration and keeps a cursor catch-up fallback', () => {
     const source = readFileSync(hookPath, 'utf-8')
-    const subscribe = source.indexOf('subscribeAgentV1Events(taskId, applyV1Event, { from: 0 })')
+    const subscribe = source.indexOf('stream.startV1(applyV1Event)')
     const hydrate = source.indexOf('const loaded = await currentAdapter.loadTask(taskId)')
     expect(subscribe).toBeGreaterThan(-1)
     expect(subscribe).toBeLessThan(hydrate)
-    expect(source).toContain('setInterval(() => void catchUpV1(), 1000)')
+    const controller = readFileSync(streamControllerPath, 'utf-8')
+    expect(controller).toContain('dependencies.subscribeV1(0')
+    expect(controller).toContain('dependencies.catchUpV1(cursor)')
+    expect(controller).toContain('catchUpIntervalMs ?? 1000')
   })
 
   it('requests only V1 rows after the durable cursor', () => {
