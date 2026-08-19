@@ -532,11 +532,6 @@ export const env = createEnv({
     // Organizations - for self-hosted deployments
     ORGANIZATIONS_ENABLED:                 z.boolean().optional(),                 // Enable organizations on self-hosted (bypasses plan requirements)
 
-    // Instance-tier organization - every user auto-joins this one org
-    INSTANCE_ORG_NAME:                     z.string().min(1).optional(),           // Display name of the instance organization; setting it turns instance-org mode on
-    INSTANCE_ORG_SLUG:                     z.string().min(1).optional(),           // Slug for the instance organization (derived from the name when omitted)
-    INSTANCE_ORG_OWNER_EMAIL:              z.string().min(1).optional(),           // Email of the user who owns the instance organization (defaults to the first user who triggers provisioning)
-
     // Invitations - for self-hosted deployments
     DISABLE_INVITATIONS:                   z.boolean().optional(),                 // Disable workspace invitations globally (for self-hosted deployments)
     DISABLE_PUBLIC_API:                    z.boolean().optional(),                 // Disable public API access globally (for self-hosted deployments)

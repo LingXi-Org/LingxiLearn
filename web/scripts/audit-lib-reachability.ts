@@ -3,6 +3,18 @@ import path from 'node:path'
 
 const root = process.cwd()
 const libRoot = path.join(root, 'lib')
+type Ownership = Record<
+  string,
+  {
+    owner: string
+    capability: string
+    status: 'owned' | 'compatibility'
+    deletionCondition?: string
+  }
+>
+const ownership = JSON.parse(
+  readFileSync(path.join(libRoot, 'ownership.json'), 'utf8')
+) as Ownership
 const sourceExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
 const importPattern =
   /(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]|import\(\s*(?:\/\*[\s\S]*?\*\/\s*)?['"]([^'"]+)['"]\s*\)|require(?:\.resolve)?\(\s*['"]([^'"]+)['"]\s*\)/g
@@ -87,37 +99,59 @@ const productionEntries = [
   ...filesUnder(path.join(root, 'background')).filter(isSource),
   ...rootEntries,
 ].filter((file) => !isTest(file))
+const operationalEntries = filesUnder(path.join(root, 'scripts')).filter(
+  (file) => isSource(file) && !isTest(file)
+)
 const testEntries = filesUnder(root).filter(
   (file) => isSource(file) && isTest(file) && !file.includes(`${path.sep}node_modules${path.sep}`)
 )
 const production = reachableFrom(productionEntries)
+const operational = reachableFrom(operationalEntries)
 const tests = reachableFrom(testEntries)
+const allowedDynamicImports = new Map([
+  [
+    'bootstrap.ts:import(standaloneServer)',
+    'Standalone server artifact path is selected from the build environment.',
+  ],
+  [
+    'lib/pptx-renderer/utils/pdf-renderer.ts:import(pdfjsUrl)',
+    'PDF.js worker module is loaded from its configured external URL.',
+  ],
+])
 const unresolvedDynamicImports = [...production].flatMap((file) => {
   const source = readFileSync(file, 'utf8')
   return [...source.matchAll(dynamicImportPattern)].flatMap((match) => {
     const argument = match[1].trim().replace(/^(?:\/\*[\s\S]*?\*\/\s*)+/, '')
     if (argument.length === 0) return []
     if (argument.startsWith("'") || argument.startsWith('"')) return []
-    return [
-      {
-        file: path.relative(root, file).replaceAll('\\', '/'),
-        expression: match[0],
-      },
-    ]
+    const relativeFile = path.relative(root, file).replaceAll('\\', '/')
+    const key = `${relativeFile}:${match[0].replace(/\s+/g, ' ')}`
+    return [{ file: relativeFile, expression: match[0], reason: allowedDynamicImports.get(key) }]
   })
 })
+const unknownDynamicImports = unresolvedDynamicImports.filter((entry) => !entry.reason)
+if (unknownDynamicImports.length > 0) {
+  throw new Error(
+    `Unreviewed non-literal dynamic imports: ${unknownDynamicImports
+      .map((entry) => `${entry.file}:${entry.expression}`)
+      .join(', ')}`
+  )
+}
 
 const inventory = readdirSync(libRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => {
     const files = filesUnder(path.join(libRoot, entry.name)).filter(isSource)
     const productionFiles = files.filter((file) => production.has(file)).length
+    const operationalFiles = files.filter((file) => operational.has(file)).length
     const testFiles = files.filter((file) => tests.has(file)).length
     const unreachableFiles = files.filter((file) => !production.has(file) && !tests.has(file))
     return {
       directory: entry.name,
+      ownership: ownership[entry.name],
       sourceFiles: files.length,
       productionFiles,
+      operationalFiles,
       testFiles,
       unreachableFiles: unreachableFiles.length,
       sampleProductionFiles: files
@@ -134,10 +168,33 @@ const inventory = readdirSync(libRoot, { withFileTypes: true })
   .filter((entry) => entry.sourceFiles > 0)
   .sort((left, right) => left.directory.localeCompare(right.directory))
 
+const inventoryDirectories = new Set(inventory.map((entry) => entry.directory))
+const missingOwnership = inventory
+  .filter((entry) => !entry.ownership)
+  .map((entry) => entry.directory)
+const staleOwnership = Object.keys(ownership).filter(
+  (directory) => !inventoryDirectories.has(directory)
+)
+const compatibilityWithoutDeletionCondition = Object.entries(ownership)
+  .filter(([, entry]) => entry.status === 'compatibility' && !entry.deletionCondition?.trim())
+  .map(([directory]) => directory)
+if (
+  missingOwnership.length > 0 ||
+  staleOwnership.length > 0 ||
+  compatibilityWithoutDeletionCondition.length > 0
+) {
+  throw new Error(
+    `web/lib ownership mismatch: missing=[${missingOwnership.join(',')}], stale=[${staleOwnership.join(',')}], compatibilityWithoutDeletionCondition=[${compatibilityWithoutDeletionCondition.join(',')}]`
+  )
+}
+
 process.stdout.write(
   `${JSON.stringify(
     {
       productionEntrypoints: productionEntries.map((file) =>
+        path.relative(root, file).replaceAll('\\', '/')
+      ),
+      operationalEntrypoints: operationalEntries.map((file) =>
         path.relative(root, file).replaceAll('\\', '/')
       ),
       unresolvedDynamicImports,
