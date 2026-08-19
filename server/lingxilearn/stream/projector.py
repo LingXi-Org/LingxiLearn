@@ -29,7 +29,8 @@ from lingxigraph import Event, EventKind
 STREAM_CHANNEL = "tutor"
 
 # State keys that are large, redundant on the wire, or already delivered as
-# their own domain events. The UI reads these from GET /sessions/{id}.
+# their own domain events. Consumers receive those values from the persisted
+# domain-event stream rather than repeated runtime-state snapshots.
 _BULKY_STATE_KEYS = frozenset(
     {"evidence", "transcript", "tool_outputs", "report", "current_step", "stage", "move"}
 )

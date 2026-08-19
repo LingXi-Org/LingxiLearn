@@ -301,7 +301,7 @@ def test_production_authenticator_allows_lingxiidentity_es384() -> None:
 
 
 @pytest.mark.asyncio
-async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monkeypatch) -> None:
+async def test_api_resources_are_scoped_to_authenticated_learner() -> None:
     path = Path("var") / f"test-api-ownership-{uuid4().hex}.sqlite3"
     settings = Settings(
         database_url=f"sqlite+aiosqlite:///{path.as_posix()}",
@@ -345,27 +345,10 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     second = await services.learners.get_learner_context(
         Principal(subject="subject-b", issuer=identity_issuer)
     )
-    session_repository = SessionRepository(services.db)
     learner_repository = LearnerRepository(services.db)
     agent_task_repository = AgentTaskRepository(services.db)
-    await session_repository.create_session(
-        id="s-owned",
-        learner_id=first.learner_id,
-        pack_id="pack",
-        pack_version="1",
-        mission_id="mission",
-        checkpoint_ns="",
-        status="done",
-    )
-    await session_repository.append_events("s-owned", [{"kind": "run.ended", "payload": {}}])
     await learner_repository.save_mastery(first.learner_id, {"concept-a": 0.9})
     await learner_repository.save_mastery(second.learner_id, {"concept-b": 0.4})
-    await session_repository.save_report(
-        session_id="s-owned",
-        learner_id=first.learner_id,
-        mission_id="mission",
-        report={"headline": "owned"},
-    )
     await agent_task_repository.create_agent_task(
         id="t-owned",
         learner_id=first.learner_id,
@@ -377,40 +360,14 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     )
     await agent_task_repository.append_agent_events("t-owned", [{"kind": "task.completed", "payload": {}}])
 
-    async def fake_snapshot(session_id: str, learner_id: str | None = None) -> dict[str, str]:
-        return {"id": session_id, "owner": learner_id or ""}
-
-    monkeypatch.setattr(services.conversation, "snapshot", fake_snapshot)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         first_headers = {"Cookie": "lingxi_session=session-a"}
         second_headers = {"Cookie": "lingxi_session=session-b"}
-        rejected = await client.post(
-            "/api/sessions",
-            headers=first_headers,
-            json={"mission_id": "mission", "learner_id": "client-owned"},
-        )
-        assert rejected.status_code == 422
-
-        owned = await client.get("/api/sessions/s-owned", headers=first_headers)
-        hidden = await client.get("/api/sessions/s-owned", headers=second_headers)
-        assert owned.status_code == 200
-        assert hidden.status_code == 404
-
-        report = await client.get("/api/sessions/s-owned/report", headers=first_headers)
-        hidden_report = await client.get("/api/sessions/s-owned/report", headers=second_headers)
-        assert report.status_code == 200 and report.json()["headline"] == "owned"
-        assert hidden_report.status_code == 404
-
         first_mastery = await client.get("/api/me/mastery", headers=first_headers)
         second_mastery = await client.get("/api/me/mastery", headers=second_headers)
         assert first_mastery.json()["mastery"] == {"concept-a": 0.9}
         assert second_mastery.json()["mastery"] == {"concept-b": 0.4}
-
-        stream = await client.get("/api/sessions/s-owned/events", headers=first_headers)
-        hidden_stream = await client.get("/api/sessions/s-owned/events", headers=second_headers)
-        assert stream.status_code == 200 and "run.ended" in stream.text
-        assert hidden_stream.status_code == 404
 
         task = await client.get("/api/agent-tasks/t-owned", headers=first_headers)
         hidden_task = await client.get("/api/agent-tasks/t-owned", headers=second_headers)
@@ -456,135 +413,3 @@ async def test_api_resources_are_scoped_and_client_learner_ids_are_rejected(monk
     await services.db.dispose()
     await authenticator.aclose()
     path.unlink(missing_ok=True)
-
-
-"""legacy graph test retained only as historical inert text"""
-"""
-    path = Path("var") / f"test-graph-learning-{uuid4().hex}.sqlite3"
-    checkpoint = Path("var") / f"test-graph-checkpoint-{uuid4().hex}.sqlite3"
-    settings = Settings(
-        database_url=f"sqlite+aiosqlite:///{path.as_posix()}",
-        checkpoint_url=checkpoint.as_posix(),
-        insecure_dev_auth=True,
-    )
-    services = ApplicationServices(settings)
-    await services.db.create_all()
-    await service.startup()
-    app = create_app()
-    app.state.services = services
-    app.state.identity = build_authenticator(settings)
-
-    choices = {
-        "mission-1": {
-            "p1": "a",
-            "p2": "b",
-            "p3": "b",
-            "v1": "c",
-            "v2": "b",
-            "orient": "b",
-            "stall": "b",
-        },
-    }
-
-    def answer_for(pending: dict) -> dict:
-        value = pending["value"]
-        table = choices["mission-1"]
-        if value.get("kind") in {"probe", "verify"}:
-            return {item["id"]: {"choice": table.get(item["id"], "a")} for item in value["items"]}
-        expects = (value.get("prompt") or {}).get("expects", "text")
-        if expects == "attribution":
-            return {
-                "allocations": {
-                    "dns": 121.4,
-                    "tcp_connect": 31.9,
-                    "ttfb": 188.6,
-                    "transfer": 19.2,
-                    "retransmission": 225.8,
-                },
-                "pins": {
-                    "dns": [1, 2],
-                    "tcp_connect": [3, 4, 5],
-                    "ttfb": [6, 7],
-                    "transfer": [8, 9, 10],
-                    "retransmission": [12, 13, 14],
-                },
-            }
-        return {"choice": table.get(value.get("step_id", ""), "b")}
-
-    try:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            created = await client.post(
-                "/api/sessions",
-                json={"mission_id": "mission-1", "pack_id": "course-pack"},
-            )
-            assert created.status_code == 201
-            session_id = created.json()["id"]
-            snapshot = (await client.get(f"/api/sessions/{session_id}")).json()
-            turns = 0
-            while snapshot["status"] == "running" or (
-                snapshot["status"] == "awaiting_learner" and turns < 30
-            ):
-                if snapshot["status"] == "running":
-                    await asyncio.sleep(0.03)
-                else:
-                    turns += 1
-                    response = await client.post(
-                        f"/api/sessions/{session_id}/answer",
-                        json={"answer": answer_for(snapshot["pending"])},
-                    )
-                    assert response.status_code == 202
-                snapshot = (await client.get(f"/api/sessions/{session_id}")).json()
-            assert snapshot["status"] == "done"
-
-        record = await service.session_repository.get_session(session_id)
-        assert record is not None
-        async with service.db.session() as session:
-            before = {
-                "events": await session.scalar(
-                    select(func.count(LearningEvent.id)).where(
-                        LearningEvent.session_id == session_id
-                    )
-                ),
-                "evidence": await session.scalar(
-                    select(func.count(LearningEvidence.id)).where(
-                        LearningEvidence.session_id == session_id
-                    )
-                ),
-                "reports": await session.scalar(
-                    select(func.count(ReportRecord.session_id)).where(
-                        ReportRecord.session_id == session_id
-                    )
-                ),
-            }
-        await service._finalize(
-            session_id,
-            service.packs[record.pack_id],
-            record.learner_id,
-            service.config_for(session_id, service.packs[record.pack_id]),
-        )
-        async with service.db.session() as session:
-            after = {
-                "events": await session.scalar(
-                    select(func.count(LearningEvent.id)).where(
-                        LearningEvent.session_id == session_id
-                    )
-                ),
-                "evidence": await session.scalar(
-                    select(func.count(LearningEvidence.id)).where(
-                        LearningEvidence.session_id == session_id
-                    )
-                ),
-                "reports": await session.scalar(
-                    select(func.count(ReportRecord.session_id)).where(
-                        ReportRecord.session_id == session_id
-                    )
-                ),
-            }
-        assert before == after
-        assert before["events"] == before["reports"] == 1
-        assert before["evidence"] > 0
-    finally:
-        await service.shutdown()
-        path.unlink(missing_ok=True)
-        checkpoint.unlink(missing_ok=True)"""

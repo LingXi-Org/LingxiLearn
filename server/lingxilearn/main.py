@@ -25,7 +25,6 @@ from .api.catalog import router as catalog_router
 from .api.health import router as health_router
 from .api.internal_runtime import router as internal_runtime_router
 from .api.learner_profile import router as learner_profile_router
-from .api.routes import router
 from .api.workspace_routes import router as workspace_router
 from .application import ApplicationServices
 from .auth import build_authenticator
@@ -131,7 +130,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(router)
     app.include_router(agent_interactions_router)
     app.include_router(agent_events_router)
     app.include_router(agent_tasks_router)
