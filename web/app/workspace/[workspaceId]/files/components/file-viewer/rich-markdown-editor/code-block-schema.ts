@@ -3,9 +3,8 @@ import { CodeBlock } from '@tiptap/extension-code-block'
 
 /**
  * React-free schema half of the code-block node. Lives apart from {@link ./code-block} (its React
- * node view) so the shared editor schema — `createMarkdownContentExtensions` in `./extensions` — can
- * be imported by server code (the collab-doc seed converter) without pulling a client component
- * (`useEffect`) into a Server Component module. The client editor injects the node-view variant
+ * node view) so the shared editor schema — `createMarkdownContentExtensions` in `./extensions` — does
+ * not pull in a client component (`useEffect`). The client editor injects the node-view variant
  * ({@link CodeBlockWithLanguage}) via `nodeViews`.
  */
 

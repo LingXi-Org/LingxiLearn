@@ -191,9 +191,8 @@ export function serializeMarkdownBody(body: string): string {
 /**
  * Serialize a ProseMirror document (as TipTap {@link JSONContent}) to the editor's canonical
  * markdown. Loaded via `setContent` so it passes through the same schema normalization the live
- * editor applies — output identical to `editor.getMarkdown()`. The server-side collab-doc converter
- * uses this to project a Yjs doc back to markdown through the exact client engine (parity by
- * construction), so it must stay the single serialize path (do not inline `getMarkdown` elsewhere).
+ * editor applies — output identical to `editor.getMarkdown()`. Keep this as the single serialize
+ * path so callers do not drift from the client engine (do not inline `getMarkdown` elsewhere).
  */
 export function serializeDocToMarkdown(doc: JSONContent): string {
   const editor = parserEditor()

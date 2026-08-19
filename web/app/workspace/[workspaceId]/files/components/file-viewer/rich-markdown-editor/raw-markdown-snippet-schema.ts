@@ -1,8 +1,7 @@
 /**
  * React-free schema half of the raw-HTML/footnote nodes. Lives apart from {@link ./raw-markdown-snippet}
  * (their React node views) so the shared editor schema — `createMarkdownContentExtensions` in
- * `./extensions` — can be imported by server code (the collab-doc seed converter) without pulling a
- * client component (`useEffect`) into a Server Component module. The client editor injects the
+ * `./extensions` — can be reused without pulling in a client component (`useEffect`). The client editor injects the
  * node-view variants ({@link RawHtmlBlockWithView}, {@link FootnoteDefWithView}) via `nodeViews`.
  */
 import type { JSONContent, MarkdownToken } from '@tiptap/core'
