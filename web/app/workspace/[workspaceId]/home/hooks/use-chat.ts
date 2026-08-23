@@ -7,9 +7,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import { isBrowserToolName } from '@/lib/browser-agent/protocol'
-import { isPendingDesktopScopeId } from '@/lib/desktop/bridge'
-import { isTerminalToolName } from '@/lib/terminal/protocol'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePathname, useRouter } from 'next/navigation'
 import { requestJson } from '@/lib/api/client/request'
@@ -20,6 +17,7 @@ import {
 } from '@/lib/api/contracts/mothership-chats'
 import { buildResourceAttachments } from '@/lib/browser-agent/attachments'
 import { onOpenInBrowserPanel } from '@/lib/browser-agent/open-in-panel'
+import { isBrowserToolName } from '@/lib/browser-agent/protocol'
 import {
   cancelActiveBrowserTools,
   initBrowserAgentTransport,
@@ -74,6 +72,7 @@ import { isUserLocalVfsToolCall } from '@/lib/copilot/tools/local-filesystem'
 import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import { readSSELines } from '@/lib/core/utils/sse'
 import { getDesktopBridge, getDesktopChatCapabilities } from '@/lib/desktop'
+import { isPendingDesktopScopeId } from '@/lib/desktop/bridge'
 import {
   activateDesktopChatScopes,
   desktopChatScopeId,
@@ -87,6 +86,7 @@ import type { LingxiTurnState } from '@/lib/lingxi/turn-state'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import { createLogger } from '@/lib/logger'
 import { sendMothershipMessage } from '@/lib/mothership/events'
+import { isTerminalToolName } from '@/lib/terminal/protocol'
 import { initTerminalTransport } from '@/lib/terminal/transport'
 import { getErrorMessage, toError } from '@/lib/utils/errors'
 import { sleep } from '@/lib/utils/helpers'
