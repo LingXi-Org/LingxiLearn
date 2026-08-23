@@ -43,8 +43,6 @@ vi.mock('@/lib/table', () => ({
   renameTable: vi.fn(),
   updateTableDescription: vi.fn(),
 }))
-vi.mock('@/lib/table/events', () => ({ signalTableSchemaChanged: vi.fn() }))
-
 import { MAX_FOLDERS_PER_WORKSPACE } from '@/lib/folders/constants'
 import { listTableFoldersUseCase } from '@/lib/table/application/folders'
 import { listTablesUseCase } from '@/lib/table/application/tables'

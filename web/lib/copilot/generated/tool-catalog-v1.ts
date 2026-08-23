@@ -2409,11 +2409,6 @@ export const FunctionExecute: ToolCatalogEntry = {
           },
         },
       },
-      sandboxId: {
-        type: 'string',
-        description:
-          'Optional Sim sandbox id from agent/sandboxes/{name}.json. DEFAULT-FIRST: omit this whenever the documented default function_execute environment can do the job. Select a ready existing Sim sandbox only when a required third-party dependency, Debian system package, or managed CLI is known to be absent, or a default attempt failed specifically because it was missing. Never guess an id.',
-      },
       timeout: {
         type: 'number',
         description:

@@ -35,7 +35,6 @@ describe('unified settings navigation', () => {
       { id: 'mcp', label: 'MCP tools', section: 'workspace' },
       { id: 'workflow-mcp-servers', label: 'MCP servers', section: 'workspace' },
       { id: 'byok', label: 'BYOK', section: 'workspace' },
-      { id: 'sandboxes', label: 'Sandboxes', section: 'workspace' },
       { id: 'inbox', label: 'Sim Mailer', section: 'workspace' },
       { id: 'recently-deleted', label: 'Recently deleted', section: 'workspace' },
       { id: 'self-host', label: 'Self hosting', section: 'platform' },
@@ -70,7 +69,6 @@ describe('unified settings navigation', () => {
       'byok',
       'inbox',
       'workflow-mcp-servers',
-      'sandboxes',
       'recently-deleted',
     ])
     expect(idsForSection('organization')).toEqual([

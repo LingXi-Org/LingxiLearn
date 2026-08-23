@@ -74,7 +74,7 @@ export function twilioSmsStatusInstructions(): string {
 /**
  * Trigger outputs for Twilio SMS webhooks. Shared by both the inbound-message
  * and status-callback triggers. Keys MUST stay aligned with the `formatInput`
- * implementation in `apps/sim/lib/webhooks/providers/twilio.ts`.
+ * implementation in the trigger provider integration.
  * @see https://www.twilio.com/docs/messaging/guides/webhook-request
  * @see https://www.twilio.com/docs/messaging/guides/track-outbound-message-status
  */

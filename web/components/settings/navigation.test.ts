@@ -54,7 +54,6 @@ describe('settings navigation boundaries', () => {
       'mcp',
       'workflow-mcp-servers',
       'byok',
-      'sandboxes',
       'inbox',
       'recently-deleted',
       'self-host',
@@ -82,7 +81,6 @@ describe('settings navigation boundaries', () => {
       'teammates',
       'secrets',
       'byok',
-      'sandboxes',
       'custom-tools',
       'mcp',
       'workflow-mcp-servers',
@@ -92,25 +90,6 @@ describe('settings navigation boundaries', () => {
       'custom-blocks',
       'self-host',
     ])
-  })
-
-  it('keeps the Sandboxes section in the legacy self-hosted defaults', () => {
-    setEnv({ NEXT_PUBLIC_SANDBOXES_ENABLED: undefined, NEXT_PUBLIC_E2B_ENABLED: undefined })
-
-    expect(buildUnifiedSettingsNavigation().map(({ id }) => id)).toContain('sandboxes')
-    expect(
-      resolveWorkspaceNavigation({
-        permission: 'admin',
-        permissionConfig: {},
-        entitlements: {
-          byok: true,
-          inbox: true,
-          customBlocks: true,
-          forks: true,
-          sandboxes: true,
-        },
-      }).map(({ id }) => id)
-    ).toContain('sandboxes')
   })
 
   /**
@@ -132,7 +111,6 @@ describe('settings navigation boundaries', () => {
           inbox: true,
           customBlocks: true,
           forks: true,
-          sandboxes: true,
         },
       }).map(({ id }) => id)
     ).toContain('self-host')
@@ -151,7 +129,6 @@ describe('settings navigation boundaries', () => {
           inbox: true,
           customBlocks: true,
           forks: true,
-          sandboxes: true,
         },
       }).map(({ id }) => id)
     ).not.toContain('self-host')
@@ -397,7 +374,6 @@ describe('settings navigation boundaries', () => {
         'teammates',
         'secrets',
         'byok',
-        'sandboxes',
         'custom-tools',
         'mcp',
         'workflow-mcp-servers',
@@ -414,7 +390,6 @@ describe('settings navigation boundaries', () => {
         'teammates',
         'secrets',
         'byok',
-        'sandboxes',
         'custom-tools',
         'mcp',
         'workflow-mcp-servers',
@@ -441,7 +416,6 @@ describe('settings navigation boundaries', () => {
           customBlocks: true,
           forks: true,
           inbox: true,
-          sandboxes: true,
         },
       })
 
@@ -464,14 +438,12 @@ describe('settings navigation boundaries', () => {
         customBlocks: true,
         forks: true,
         inbox: true,
-        sandboxes: true,
       },
     })
 
     expect(items.map(({ id }) => id)).toEqual([
       'teammates',
       'byok',
-      'sandboxes',
       'workflow-mcp-servers',
       'recently-deleted',
       'forks',

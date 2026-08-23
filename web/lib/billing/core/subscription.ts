@@ -1,7 +1,3 @@
-import { db } from '@/lib/db'
-import { member, organization, subscription, user } from '@/lib/db/schema'
-import { createLogger } from '@/lib/logger'
-import { isOrgAdminRole } from '@/lib/permissions/native/workspace'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { getEffectiveBillingStatus, isOrganizationBillingBlocked } from '@/lib/billing/core/access'
 import {
@@ -30,11 +26,13 @@ import {
   isBillingEnabled,
   isHosted,
   isInboxEnabled,
-  isSandboxDeploymentEntitled,
-  isSandboxesEnabled,
   isSsoEnabled,
 } from '@/lib/core/config/env-flags'
 import { getBaseUrl } from '@/lib/core/utils/urls'
+import { db } from '@/lib/db'
+import { member, organization, subscription, user } from '@/lib/db/schema'
+import { createLogger } from '@/lib/logger'
+import { isOrgAdminRole } from '@/lib/permissions/native/workspace'
 
 const logger = createLogger('SubscriptionCore')
 
@@ -610,8 +608,8 @@ async function hasWorkspaceTierAccess(
 
 /**
  * Whether the workspace's payer is on a usable Max-or-Enterprise subscription.
- * Shared by the inbox (Sim Mailer), live sync, and custom sandboxes, which all
- * sit on the same entitlement tier.
+ * Shared by the inbox (Sim Mailer) and live sync, which sit on the same
+ * entitlement tier.
  */
 async function hasMaxTierWorkspaceAccess(workspaceId: string): Promise<boolean> {
   return hasWorkspaceTierAccess(workspaceId, isMaxTier)
@@ -684,34 +682,6 @@ export async function hasWorkspaceLiveSyncAccess(workspaceId: string): Promise<b
     return await hasMaxTierWorkspaceAccess(workspaceId)
   } catch (error) {
     logger.error('Error checking workspace live sync access', { error, workspaceId })
-    return false
-  }
-}
-
-/**
- * Checks whether the exact workspace payer can discover, author, or directly
- * select custom Sim sandboxes through Copilot.
- *
- * A configured remote Function provider is mandatory. On billing-free
- * deployments, the Enterprise pair or Sandbox-specific pair grants access. With
- * billing enabled, an explicit Sandbox deployment override wins; otherwise the
- * workspace payer must hold a usable Max or Enterprise subscription. Builds cost
- * provider compute and storage, so this deliberately sits above the plain paid
- * tier.
- *
- * Existing Function execution deliberately does not consult it (see
- * `resolveWorkspaceSandbox`), so a workspace that downgrades keeps running the
- * sandboxes it already built. New Copilot discovery, mutations, attachments,
- * and direct function_execute selections do re-check it.
- */
-export async function hasWorkspaceSandboxAccess(workspaceId: string): Promise<boolean> {
-  try {
-    if (!isSandboxesEnabled) return false
-    if (isSandboxDeploymentEntitled) return true
-    if (!isBillingEnabled) return false
-    return await hasMaxTierWorkspaceAccess(workspaceId)
-  } catch (error) {
-    logger.error('Error checking workspace sandbox access', { error, workspaceId })
     return false
   }
 }

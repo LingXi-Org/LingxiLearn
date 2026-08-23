@@ -1,4 +1,3 @@
-import { isRecordLike } from '@/lib/utils/object'
 import { z } from 'zod'
 import { requiredFieldSchema, workspaceIdSchema } from '@/lib/api/contracts/primitives'
 import {
@@ -18,8 +17,9 @@ import {
   upsertTableRowBodySchema,
 } from '@/lib/api/contracts/tables'
 import { defineRouteContract } from '@/lib/api/contracts/types'
-import type { Filter, Sort } from '@/lib/table'
 import { TABLE_LIMITS } from '@/lib/table/constants'
+import type { Filter, Sort } from '@/lib/table/types'
+import { isRecordLike } from '@/lib/utils/object'
 
 const domainObjectSchema = <T>() => z.custom<T>(isRecordLike)
 

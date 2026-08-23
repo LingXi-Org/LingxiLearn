@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from 'react'
 import { useQueryStates } from 'nuqs'
-import type { TableDefinition } from '@/lib/table'
+import type { TableDefinition } from '@/lib/table/types'
 import { SEARCH_DEBOUNCE_MS, type SortDirection } from '@/lib/url-state'
 import type { SortableResource } from '@/app/workspace/[workspaceId]/components/folders'
 import { sortResources } from '@/app/workspace/[workspaceId]/components/folders'

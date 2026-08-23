@@ -81,13 +81,6 @@ const FEATURE_FLAGS = {
       'writable, so the executor is never flag-gated at runtime (avoiding a fail-open leak).',
     fallback: 'PII_GRANULAR_REDACTION',
   },
-  'trigger-eu-region': {
-    description:
-      'Route Trigger.dev runs to eu-central-1 instead of the default us-east-1. Global on/off ' +
-      'only — resolved without user/org context at every task-trigger call site via ' +
-      'resolveTriggerRegion, so the whole deployment switches regions together.',
-    fallback: 'TRIGGER_EU_REGION',
-  },
   'workspace-forking': {
     description:
       'Runtime rollout gate for workspace forking (fork/promote/rollback), layered on top of ' +

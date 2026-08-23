@@ -42,22 +42,18 @@ export interface SandboxExecutionRequest {
   outputSandboxPaths?: string[]
   /**
    * Which sandbox image to run in. Defaults to 'code' (the Function base).
-   * Trusted Mothership calls pass 'mothership'; workspace callers cannot select it.
+   * Trusted Mothership calls pass 'mothership'.
    * Document generation passes 'doc' so it runs in the doc image
    * (mothership-docs) that has python-pptx/docx/openpyxl/reportlab installed.
    */
   sandboxKind?: 'code' | 'mothership' | 'doc'
-  /** Scope for {@link sandboxId}; a sandbox from another workspace is rejected. */
-  workspaceId?: string
-  /** Workspace sandbox whose dependency set this execution runs against. */
-  sandboxId?: string
   /** Cancels the provider sandbox when the caller's execution budget expires. */
   signal?: AbortSignal
 }
 
 export interface SandboxShellExecutionRequest {
   code: string
-  envs: Record<string, string>
+  envs?: Record<string, string>
   timeoutMs: number
   sandboxFiles?: SandboxFile[]
   privateInputs?: SandboxPrivateInput[]
@@ -65,15 +61,11 @@ export interface SandboxShellExecutionRequest {
   outputSandboxPaths?: string[]
   /**
    * Which sandbox image to run in. Defaults to 'shell' (the Function base).
-   * Trusted Mothership calls pass 'mothership'; workspace callers cannot select it.
+   * Trusted Mothership calls pass 'mothership'.
    * The Node document engines (pptxgenjs/docx + react-icons/sharp) pass 'doc' so
    * they run in the doc image (mothership-docs).
    */
   sandboxKind?: 'shell' | 'mothership' | 'doc'
-  /** Scope for {@link sandboxId}; a sandbox from another workspace is rejected. */
-  workspaceId?: string
-  /** Workspace sandbox whose dependency set this execution runs against. */
-  sandboxId?: string
   /** Cancels the provider sandbox when the caller's execution budget expires. */
   signal?: AbortSignal
 }

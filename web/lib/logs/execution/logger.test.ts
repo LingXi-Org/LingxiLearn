@@ -11,7 +11,6 @@ import { recordUsage } from '@/lib/billing/core/usage-log'
 import { ExecutionLogger } from '@/lib/logs/execution/logger'
 import { SECRET_PROJECTION_VERSION } from '@/lib/logs/execution/trace-store'
 import type { WorkflowExecutionLog } from '@/lib/logs/types'
-import { emitExecutionCompletedEvent } from '@/lib/workspace-events/emitter'
 import type { SerializableExecutionState } from '@/executor/execution/types'
 
 afterAll(resetDbChainMock)
@@ -110,11 +109,6 @@ vi.mock('@/lib/core/security/redaction', () => ({
 // Mock display filters
 vi.mock('@/lib/core/utils/display-filters', () => ({
   filterForDisplay: vi.fn((data) => data),
-}))
-
-// Mock workspace event emission
-vi.mock('@/lib/workspace-events/emitter', () => ({
-  emitExecutionCompletedEvent: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('@/lib/logs/execution/progress-markers', () => ({
@@ -286,7 +280,6 @@ describe('ExecutionLogger', () => {
         )
       expect(completionGuard).toBeDefined()
       expect(result.executionData).toEqual(cancelledLog.executionData)
-      expect(emitExecutionCompletedEvent).not.toHaveBeenCalled()
     })
 
     const EMPTY_STATE = {

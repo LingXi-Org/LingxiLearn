@@ -1,12 +1,12 @@
 'use client'
 
 import { useCallback, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { useRouter } from 'next/navigation'
-import type { TableDefinition } from '@/lib/table'
 import { generateUniqueTableName } from '@/lib/table/constants'
+import type { TableDefinition } from '@/lib/table/types'
+import { getErrorMessage } from '@/lib/utils/errors'
 import type { RowDragDropConfig } from '@/app/workspace/[workspaceId]/components'
 import type { MoveOptionNode } from '@/app/workspace/[workspaceId]/components/folders'
 import {

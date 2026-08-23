@@ -1,11 +1,7 @@
 import { CodeIcon } from '@/components/icons'
 import { isSandboxesEnabled } from '@/lib/core/config/env-flags'
 import { CodeLanguage, getLanguageDisplayName } from '@/lib/execution/languages'
-import {
-  fetchWorkspaceSandboxOption,
-  fetchWorkspaceSandboxOptions,
-  fetchWorkspaceSecretNameOptions,
-} from '@/lib/workflows/subblocks/options'
+import { fetchWorkspaceSecretNameOptions } from '@/lib/workflows/subblocks/options'
 import type { BlockConfig } from '@/blocks/types'
 import type { CodeExecutionOutput } from '@/tools/function/types'
 
@@ -20,7 +16,7 @@ export const FunctionBlock: BlockConfig<CodeExecutionOutput> = {
   - JavaScript code with import/require statements runs in a remote sandbox.
   - Python code always runs in a remote sandbox.
   - Shell code runs CLI commands in a remote sandbox.
-  - To import third-party packages or add curated CLI tools, create a sandbox in Settings > Sandboxes and select it under the block's advanced options. Without one, only the default image's packages and commands are available.
+  - Third-party packages and curated CLI tools are available in the configured Function image.
   - Can reference workflow variables using <blockName.output> syntax as usual within code. Avoid XML/HTML tags.
   `,
   docsLink: 'https://docs.sim.ai/workflows/blocks/function',
@@ -104,27 +100,6 @@ try {
       },
     },
     {
-      id: 'sandboxId',
-      title: 'Sandbox',
-      type: 'combobox',
-      mode: 'advanced',
-      searchable: true,
-      // Empty means the default image — the picker must never auto-select for us.
-      emptyIsValid: true,
-      clearOnMissingOption: true,
-      createAction: 'sandbox',
-      // Refetched whenever `language` changes, so the list is always scoped to
-      // sandboxes this block can actually run in.
-      dependsOn: ['language'],
-      showWhenEnvSet: 'NEXT_PUBLIC_SANDBOXES_ENABLED',
-      placeholder: 'Default image',
-      description:
-        'Sim sandbox dependencies, system packages, and managed CLIs available to this block. Shell can use Sim sandboxes from either language. Manage them in Settings > Sandboxes. Leaving this empty runs on the default image.',
-      options: [],
-      fetchOptions: (blockId) => fetchWorkspaceSandboxOptions(blockId),
-      fetchOptionById: (blockId, optionId) => fetchWorkspaceSandboxOption(blockId, optionId),
-    },
-    {
       id: 'secretScope',
       title: 'Secret access',
       type: 'dropdown',
@@ -165,11 +140,6 @@ try {
     code: { type: 'string', description: 'JavaScript, Python, or Shell code to execute' },
     language: { type: 'string', description: 'Language (javascript, python, or shell)' },
     timeout: { type: 'number', description: 'Execution timeout' },
-    sandboxId: {
-      type: 'string',
-      description:
-        'Sim sandbox providing dependencies, system packages, and managed CLIs. Selecting or clearing it requires an active Max or Enterprise plan.',
-    },
     secretScope: { type: 'string', description: 'Secret access mode: all or selected' },
     mountedSecrets: {
       type: 'json',

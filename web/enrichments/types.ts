@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { ColumnDefinition } from '@/lib/table'
+import type { ColumnDefinition } from '@/lib/table/types'
 import type { ResolvedSecretTraceRegistry } from '@/executor/utils/resolved-secret-trace-registry'
 
 /** One per-row input an enrichment needs. Mapped to a table column by the user. */

@@ -2,7 +2,7 @@
  * Type definitions for table undo/redo actions.
  */
 
-import type { ColumnDefinition } from '@/lib/table'
+import type { ColumnDefinition } from '@/lib/table/types'
 
 export interface DeletedRowSnapshot {
   rowId: string

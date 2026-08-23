@@ -30,11 +30,6 @@ const Forks = (_props: any) => <NotIntegratedSection title='工作区分支' />
 const Secrets = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/secrets/secrets').then((m) => m.Secrets)
 )
-const Sandboxes = dynamic(() =>
-  import('@/app/workspace/[workspaceId]/settings/components/sandboxes/sandboxes').then(
-    (m) => m.Sandboxes
-  )
-)
 const CustomTools = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/custom-tools/custom-tools').then(
     (m) => m.CustomTools
@@ -162,9 +157,7 @@ export function SettingsPage({ section }: SettingsPageProps) {
       )}
       {effectiveSection === 'teammates' && <Teammates />}
       {isBillingEnabled && effectiveSection === 'organization' && organizationId && (
-        <TeamManagement
-          billingHref={`/workspace/${hostContext.workspace.id}/settings/billing`}
-        />
+        <TeamManagement billingHref={`/workspace/${hostContext.workspace.id}/settings/billing`} />
       )}
       {effectiveSection === 'sso' && organizationId && <SSO organizationId={organizationId} />}
       {effectiveSection === 'sessions' && organizationId && (
@@ -180,7 +173,6 @@ export function SettingsPage({ section }: SettingsPageProps) {
         <WhitelabelingSettings organizationId={organizationId} />
       )}
       {effectiveSection === 'byok' && <BYOK />}
-      {effectiveSection === 'sandboxes' && <Sandboxes />}
       {effectiveSection === 'mcp' && <MCP />}
       {effectiveSection === 'forks' && <Forks />}
       {effectiveSection === 'custom-tools' && <CustomTools />}

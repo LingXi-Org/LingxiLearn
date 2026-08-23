@@ -13,16 +13,6 @@
  *     - `docx-generate`  → `apps/sim/sandbox-tasks/docx-generate.ts`
  *     - `pdf-generate`   → `apps/sim/sandbox-tasks/pdf-generate.ts`
  *
- * Tier 2 — Raw isolated-vm consumers.
- *   Value-producing executions where the user supplies arbitrary JS and the
- *   host consumes whatever the code returns. Different contract (no finalize,
- *   no bundles, no broker allowlist — just the built-in fetch bridge) so they
- *   call `executeInIsolatedVM` directly rather than going through
- *   `runSandboxTask`. If you add a new Tier 2 caller, record it here so the
- *   set of sandbox entry points stays grep-able from one place.
- *     - `apps/sim/app/api/function/execute/route.ts` — user function blocks
- *     - `apps/sim/executor/orchestrators/loop.ts`    — loop-condition eval
- *
  * E2B-routed executions (untrusted workflow runs) are a separate runtime
  * entirely and are not part of this registry.
  */

@@ -1,5 +1,5 @@
-import { generateId } from '@/lib/utils/id'
 import { isInternalFileUrl, parseInternalFileUrl } from '@/lib/uploads/utils/file-utils'
+import { generateId } from '@/lib/utils/id'
 import { isInputDefinitionTrigger } from '@/lib/workflows/triggers/input-definition-triggers'
 import type { InputFormatField } from '@/lib/workflows/types'
 import type { UserFile } from '@/executor/types'
@@ -63,7 +63,7 @@ export function createDefaultInputFormatField(): InputFormatFieldState {
  * Whether an input-format field type denotes a file input. Matches the canonical
  * `file[]` written by the field-type dropdown — the same literal the execution
  * and webhook file paths already key off (`lib/execution/files.ts`,
- * `lib/webhooks/providers/generic.ts`) — so the editor and runtime agree and no
+ * the trigger's provider payload mapping — so the editor and runtime agree and no
  * existing non-`file[]` field changes behavior.
  */
 export function isFileFieldType(type: string | null | undefined): boolean {
