@@ -1,4 +1,3 @@
-import { isRecordLike } from '@/lib/utils/object'
 import { z } from 'zod'
 import {
   folderIdSchema,
@@ -9,6 +8,20 @@ import {
 import { type ContractJsonResponse, defineRouteContract } from '@/lib/api/contracts/types'
 import { ianaTimezoneSchema } from '@/lib/api/contracts/user'
 import { PRIVATE_SECRET_PROVENANCE_FIELD } from '@/lib/execution/private-tool-metadata'
+import {
+  COLUMN_TYPES,
+  FILTER_OPS,
+  MAX_SELECT_OPTIONS,
+  NAME_PATTERN,
+  SORT_DIRECTIONS,
+  TABLE_LIMITS,
+} from '@/lib/table/constants'
+import { CSV_SYNC_MAX_FILE_SIZE_BYTES, CSV_SYNC_MAX_FILE_SIZE_MESSAGE } from '@/lib/table/import'
+import {
+  getTablePredicateTreeSizeError,
+  MAX_PREDICATE_GROUP_SIZE,
+  normalizeTablePredicate,
+} from '@/lib/table/query-builder/predicate'
 import type {
   CsvHeaderMapping,
   EnrichmentRunDetail,
@@ -25,21 +38,8 @@ import type {
   TableRow,
   TableRowsCursor,
   TableViewConfig,
-} from '@/lib/table'
-import {
-  COLUMN_TYPES,
-  FILTER_OPS,
-  MAX_SELECT_OPTIONS,
-  NAME_PATTERN,
-  SORT_DIRECTIONS,
-  TABLE_LIMITS,
-} from '@/lib/table/constants'
-import { CSV_SYNC_MAX_FILE_SIZE_BYTES, CSV_SYNC_MAX_FILE_SIZE_MESSAGE } from '@/lib/table/import'
-import {
-  getTablePredicateTreeSizeError,
-  MAX_PREDICATE_GROUP_SIZE,
-  normalizeTablePredicate,
-} from '@/lib/table/query-builder/predicate'
+} from '@/lib/table/types'
+import { isRecordLike } from '@/lib/utils/object'
 
 export const domainObjectSchema = <T>() => z.custom<T>(isRecordLike)
 

@@ -1,3 +1,7 @@
+import type { InferSelectModel } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
+import { LRUCache } from 'lru-cache'
+import type { Edge } from 'reactflow'
 import {
   db,
   runOutsideTransactionContext,
@@ -10,20 +14,9 @@ import { createLogger } from '@/lib/logger'
 import { getActiveWorkflowContext } from '@/lib/permissions/native/workflow'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'
-import {
-  loadWorkflowFromNormalizedTablesRaw,
-  persistMigratedBlocks,
-} from '@/lib/workflows/persistence/native/load'
-import { saveWorkflowToNormalizedTables as saveWorkflowToNormalizedTablesRaw } from '@/lib/workflows/persistence/native/save'
-import type { DbOrTx, NormalizedWorkflowData } from '@/lib/workflows/persistence/native/types'
+import { remapConditionBlockIds, remapConditionEdgeHandle } from '@/lib/workflows/condition-ids'
 import type { BlockState, Loop, Parallel, WorkflowState } from '@/lib/workflows/domain/workflow'
 import { normalizeWorkflowEdgeHandles } from '@/lib/workflows/domain/workflow'
-import type { InferSelectModel } from 'drizzle-orm'
-import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
-import { LRUCache } from 'lru-cache'
-import type { Edge } from 'reactflow'
-import { releaseWebhookPathClaims } from '@/lib/webhooks/path-claims'
-import { remapConditionBlockIds, remapConditionEdgeHandle } from '@/lib/workflows/condition-ids'
 import { isDynamicHandleSubblock } from '@/lib/workflows/dynamic-handle-topology'
 import {
   backfillCanonicalModes,
@@ -31,6 +24,12 @@ import {
 } from '@/lib/workflows/migrations/subblock-migrations'
 import { backfillWhatsAppInteractiveType } from '@/lib/workflows/migrations/whatsapp-interactive-type'
 import { supersedeInFlightDeploymentOperations } from '@/lib/workflows/persistence/deployment-operations'
+import {
+  loadWorkflowFromNormalizedTablesRaw,
+  persistMigratedBlocks,
+} from '@/lib/workflows/persistence/native/load'
+import { saveWorkflowToNormalizedTables as saveWorkflowToNormalizedTablesRaw } from '@/lib/workflows/persistence/native/save'
+import type { DbOrTx, NormalizedWorkflowData } from '@/lib/workflows/persistence/native/types'
 import { sanitizeAgentToolsInBlocks } from '@/lib/workflows/sanitization/validation'
 
 const logger = createLogger('WorkflowDBHelpers')
@@ -860,8 +859,6 @@ export async function undeployWorkflow(params: {
     await supersedeInFlightDeploymentOperations(dbCtx, workflowId)
     const { deleteSchedulesForWorkflow } = await import('@/lib/workflows/schedules/deploy')
     await deleteSchedulesForWorkflow(workflowId, dbCtx)
-    await releaseWebhookPathClaims(dbCtx, workflowId)
-
     await dbCtx
       .update(workflowDeploymentVersion)
       .set({ isActive: false })

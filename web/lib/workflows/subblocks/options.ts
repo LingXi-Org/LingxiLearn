@@ -2,7 +2,6 @@ import { selectRawMountableSecretNames } from '@/lib/credentials/secret-mount-op
 import { fetchWorkspaceEnvironment } from '@/lib/environment/api'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
 import { environmentKeys, WORKSPACE_ENVIRONMENT_STALE_TIME } from '@/hooks/queries/environment'
-import { getSandboxListQueryOptions, type SandboxListResponse } from '@/hooks/queries/sandboxes'
 import { workspaceCredentialKeys } from '@/hooks/queries/utils/credential-keys'
 import {
   fetchWorkspaceCredentialList,
@@ -10,7 +9,6 @@ import {
 } from '@/hooks/queries/utils/fetch-workspace-credentials'
 import { getWorkflowListQueryOptions } from '@/hooks/queries/utils/workflow-list-query'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
-import { useSubBlockStore } from '@/stores/workflows/subblock/store'
 
 interface SubBlockOption {
   label: string
@@ -89,57 +87,4 @@ export async function fetchWorkspaceRawSecretNameOptions(): Promise<SubBlockOpti
   })
 
   return selectRawMountableSecretNames(credentials).map((name) => ({ id: name, label: name }))
-}
-
-/** Sandbox names are workspace-unique, so the picker needs no language suffix. */
-function toSandboxOption(sandbox: { id: string; name: string }): SubBlockOption {
-  return { id: sandbox.id, label: sandbox.name }
-}
-
-async function loadWorkspaceSandboxes(): Promise<SandboxListResponse['sandboxes']> {
-  const workspaceId = useWorkflowRegistry.getState().hydration.workspaceId
-  if (!workspaceId) {
-    throw new Error('Workspace sandbox options are unavailable until workspace hydration completes')
-  }
-  const data = await getQueryClient().fetchQuery(getSandboxListQueryOptions(workspaceId))
-  return data.sandboxes
-}
-
-/**
- * Loads the sandboxes a Function block can run in, scoped to the language its
- * sibling `language` subblock selects — a Python block must never be offered an
- * npm sandbox. The block re-fetches when `language` changes (`dependsOn`).
- */
-export async function fetchWorkspaceSandboxOptions(blockId: string): Promise<SubBlockOption[]> {
-  const language = useSubBlockStore.getState().getValue(blockId, 'language')
-  const sandboxes = await loadWorkspaceSandboxes()
-  return sandboxes
-    .filter((sandbox) => !language || language === 'shell' || sandbox.language === language)
-    .map(toSandboxOption)
-}
-
-/**
- * Hydrates a stored sandbox id to its label before the option list loads.
- *
- * A selection left over from before a language switch is still shown, flagged
- * rather than hidden. Returning `null` here would drop the field back to its
- * "Default image" placeholder while the value stayed stored
- * and stayed fatal at execution — the field would read as cleared and the run
- * would still fail, with nothing to point at. Labelling it is what lets the
- * author see what to fix.
- */
-export async function fetchWorkspaceSandboxOption(
-  blockId: string,
-  optionId: string
-): Promise<SubBlockOption | null> {
-  const language = useSubBlockStore.getState().getValue(blockId, 'language')
-  const sandboxes = await loadWorkspaceSandboxes()
-  const sandbox = sandboxes.find((candidate) => candidate.id === optionId)
-  if (!sandbox) return null
-
-  const option = toSandboxOption(sandbox)
-  if ((language === 'python' || language === 'javascript') && sandbox.language !== language) {
-    return { ...option, label: `${option.label} · wrong language for this block` }
-  }
-  return option
 }

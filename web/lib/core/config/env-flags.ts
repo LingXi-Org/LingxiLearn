@@ -232,11 +232,6 @@ export const isSlackExtendedScopesEnabled =
     : isTruthy(getEnv('NEXT_PUBLIC_SLACK_EXTENDED_SCOPES'))
 
 /**
- * Is Trigger.dev enabled for async job processing
- */
-export const isTriggerDevEnabled = isTruthy(env.TRIGGER_DEV_ENABLED)
-
-/**
  * Turns on the whole enterprise suite for a deployment that does not run
  * billing. Individual feature flags below still win where they are set, so an
  * operator can enable everything and then switch one feature back off.

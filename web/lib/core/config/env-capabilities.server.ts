@@ -5,7 +5,6 @@
  */
 import { env } from '@/lib/core/config/env'
 import {
-  ASYNC_JOBS_CAPABILITY,
   CACHE_CAPABILITY,
   type ConfiguredOAuthClient,
   type FallbackCapabilityDefinition,
@@ -39,10 +38,6 @@ export function getSelectedSandboxProviderId() {
   if (inspection.providerId !== null) return inspection.providerId
   if (inspection.error) throw inspection.error
   throw new Error('Remote sandbox has no selected provider')
-}
-
-export function getConfiguredAsyncJobsProvider() {
-  return requireCapability(ASYNC_JOBS_CAPABILITY, env).providerId
 }
 
 export function getConfiguredCacheProvider() {

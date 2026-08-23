@@ -1,17 +1,3 @@
-import { db, dbFor } from '@/lib/db'
-import {
-  member,
-  organization,
-  usageLog,
-  userStats,
-  user as userTable,
-  workflow,
-  workflowExecutionLogs,
-  workspace,
-} from '@/lib/db/schema'
-import { createLogger } from '@/lib/logger'
-import { describeError, getErrorMessage } from '@/lib/utils/errors'
-import { generateId } from '@/lib/utils/id'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { checkUsageStatus as checkResolvedUsageStatus } from '@/lib/billing/calculations/usage-monitor'
 import {
@@ -35,10 +21,22 @@ import { checkAndBillPayerOverageThreshold } from '@/lib/billing/threshold-billi
 import { isBillingEnabled } from '@/lib/core/config/env-flags'
 import { redactApiKeys } from '@/lib/core/security/redaction'
 import { filterForDisplay } from '@/lib/core/utils/display-filters'
+import { db, dbFor } from '@/lib/db'
+import {
+  member,
+  organization,
+  usageLog,
+  userStats,
+  user as userTable,
+  workflow,
+  workflowExecutionLogs,
+  workspace,
+} from '@/lib/db/schema'
 import {
   collectLargeValueReferenceKeys,
   replaceLargeValueReferenceKeysWithClient,
 } from '@/lib/execution/payloads/large-value-metadata'
+import { createLogger } from '@/lib/logger'
 import { redactLargeValueRefs } from '@/lib/logs/execution/pii-large-values'
 import { type RedactablePayload, redactPIIFromExecution } from '@/lib/logs/execution/pii-redaction'
 import {
@@ -69,7 +67,8 @@ import type {
   WorkflowExecutionSnapshot,
   WorkflowState,
 } from '@/lib/logs/types'
-import { emitExecutionCompletedEvent } from '@/lib/workspace-events/emitter'
+import { describeError, getErrorMessage } from '@/lib/utils/errors'
+import { generateId } from '@/lib/utils/id'
 import type { SerializableExecutionState } from '@/executor/execution/types'
 
 const logger = createLogger('ExecutionLogger')
@@ -1420,7 +1419,7 @@ export class ExecutionLogger implements IExecutionLoggerService {
       totalDurationMs: updatedLog.totalDurationMs || totalDurationMs,
       // Return the full in-memory execution data (cost-stripped, with traceSpans
       // and finalOutput), not the slim externalized row — downstream consumers
-      // (notification delivery, events) need the complete payload without an
+      // (notification delivery) need the complete payload without an
       // extra storage round-trip.
       executionData: completionPersisted
         ? (completedExecutionData as WorkflowExecutionLog['executionData'])
@@ -1428,12 +1427,6 @@ export class ExecutionLogger implements IExecutionLoggerService {
       // From the in-memory cost summary (not the deprecated cost jsonb column).
       cost: executionCost as WorkflowExecutionLog['cost'],
       createdAt: updatedLog.createdAt.toISOString(),
-    }
-
-    if (completionPersisted) {
-      emitExecutionCompletedEvent(completedLog).catch((error) => {
-        execLog.error('Failed to emit workspace execution event', { error })
-      })
     }
 
     return {

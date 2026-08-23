@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  ASYNC_JOBS_CAPABILITY,
   CACHE_CAPABILITY,
   DEPLOYMENT_CONFIGURATION_KEYS,
   defineCapability,
@@ -679,26 +678,6 @@ describe('env capabilities', () => {
   })
 
   describe('jobs and cache selection', () => {
-    it('uses database jobs unless Trigger.dev is enabled and configured', () => {
-      expect(requireCapability(ASYNC_JOBS_CAPABILITY, {}).providerId).toBe('database')
-      expect(
-        requireCapability(ASYNC_JOBS_CAPABILITY, { TRIGGER_DEV_ENABLED: 'false' }).providerId
-      ).toBe('database')
-      expect(
-        requireCapability(ASYNC_JOBS_CAPABILITY, {
-          TRIGGER_DEV_ENABLED: 'true',
-          TRIGGER_PROJECT_ID: 'project-id',
-          TRIGGER_SECRET_KEY: 'secret-key',
-        }).providerId
-      ).toBe('trigger-dev')
-      expect(() =>
-        requireCapability(ASYNC_JOBS_CAPABILITY, {
-          TRIGGER_DEV_ENABLED: 'true',
-          TRIGGER_PROJECT_ID: 'project-id',
-        })
-      ).toThrow(/TRIGGER_SECRET_KEY/)
-    })
-
     it('uses Redis only when REDIS_URL is present and valid', () => {
       expect(requireCapability(CACHE_CAPABILITY, {}).providerId).toBe('database')
       expect(

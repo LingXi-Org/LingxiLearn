@@ -25,9 +25,9 @@ const ALL_PLANS = [
 
 /**
  * `isMaxTier` is the sole definition of the Max entitlement. It is consumed by the
- * server gates (`hasWorkspaceInboxAccess`, `hasWorkspaceLiveSyncAccess`,
- * `hasWorkspaceSandboxAccess`) and by the client `hasUsableMaxAccess` that decides
- * whether the settings sidebar renders Sandboxes and Sim Mailer unlocked.
+ * server gates (`hasWorkspaceInboxAccess`, `hasWorkspaceLiveSyncAccess`) and by
+ * the client `hasUsableMaxAccess` that decides whether the settings sidebar
+ * renders Sim Mailer unlocked.
  *
  * Those two must agree for every plan. When they disagreed, the sidebar offered
  * features the API answered 403 for, and the personal-workspace cap inverted so

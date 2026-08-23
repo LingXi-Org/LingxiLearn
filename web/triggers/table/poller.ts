@@ -1,7 +1,7 @@
 import { TableIcon } from '@/components/icons'
 import { requestJson } from '@/lib/api/client/request'
 import { listTablesContract } from '@/lib/api/contracts/tables'
-import type { TableDefinition } from '@/lib/table'
+import type { TableDefinition } from '@/lib/table/types'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
 import { tableKeys } from '@/hooks/queries/utils/table-keys'
 import { readActiveWorkflowContext, readBlockValues } from '@/triggers/editor-state'

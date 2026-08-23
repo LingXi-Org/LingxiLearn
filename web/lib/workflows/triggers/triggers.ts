@@ -12,7 +12,6 @@ export const TRIGGER_TYPES = {
   WEBHOOK: 'webhook',
   GENERIC_WEBHOOK: 'generic_webhook',
   SCHEDULE: 'schedule',
-  SIM: 'sim_workspace_event',
   START: 'start_trigger',
   STARTER: 'starter', // Legacy
 } as const
@@ -97,7 +96,6 @@ export function classifyStartBlockType(
       return StartBlockPath.SPLIT_MANUAL
     case TRIGGER_TYPES.WEBHOOK:
     case TRIGGER_TYPES.SCHEDULE:
-    case TRIGGER_TYPES.SIM:
       return StartBlockPath.EXTERNAL_TRIGGER
     default:
       if (opts?.category === 'triggers' || opts?.triggerModeEnabled) {

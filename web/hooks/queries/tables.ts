@@ -4,7 +4,6 @@
  * React Query hooks for managing user-defined tables.
  */
 
-import { toast } from '@/components/ui-kit'
 import {
   type InfiniteData,
   infiniteQueryOptions,
@@ -15,6 +14,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
+import { toast } from '@/components/ui-kit'
 import {
   extractValidationIssues,
   isApiClientError,
@@ -91,6 +91,14 @@ import { api as lingxiApi } from '@/lib/lingxi/api'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type { WorkspaceTableItem } from '@/lib/lingxi/types'
 import { createLogger } from '@/lib/logger'
+import { getColumnId } from '@/lib/table/column-keys'
+import { COLUMN_TYPES, TABLE_LIMITS } from '@/lib/table/constants'
+import {
+  areGroupDepsSatisfied,
+  isExecInFlight,
+  optimisticallyScheduleNewlyEligibleGroups,
+} from '@/lib/table/deps'
+import { sanitizeName } from '@/lib/table/import'
 import type {
   CsvHeaderMapping,
   EnrichmentRunDetail,
@@ -105,15 +113,7 @@ import type {
   WorkflowGroup,
   WorkflowGroupDependencies,
   WorkflowGroupOutput,
-} from '@/lib/table'
-import { getColumnId } from '@/lib/table/column-keys'
-import { COLUMN_TYPES, TABLE_LIMITS } from '@/lib/table/constants'
-import {
-  areGroupDepsSatisfied,
-  isExecInFlight,
-  optimisticallyScheduleNewlyEligibleGroups,
-} from '@/lib/table/deps'
-import { sanitizeName } from '@/lib/table/import'
+} from '@/lib/table/types'
 import { type ColumnDefinition, UNLOCKED_TABLE_LOCKS } from '@/lib/table/types'
 import type { UploadProgressEvent } from '@/lib/uploads/client/types'
 import { uploadFileSession } from '@/lib/uploads/client/upload-session'

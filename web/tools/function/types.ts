@@ -35,8 +35,6 @@ export interface CodeExecutionInput {
       mimeType?: string
     }>
   }
-  /** Workspace sandbox whose dependency set this execution runs against. */
-  sandboxId?: string
   /**
    * Which workspace secrets the code may read. Unset and `'all'` both mean every
    * secret, resolved at execution so ones added later are included.

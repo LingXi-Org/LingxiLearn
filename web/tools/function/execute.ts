@@ -90,12 +90,6 @@ export const functionExecuteTool: ToolConfig<CodeExecutionInput, CodeExecutionOu
       description:
         'Overwrite this existing workspace file ID instead of creating a duplicate output file.',
     },
-    sandboxId: {
-      type: 'string',
-      required: false,
-      visibility: 'user-only',
-      description: 'Workspace sandbox providing importable packages and CLI tools',
-    },
     secretScope: {
       type: 'string',
       required: false,
@@ -170,7 +164,6 @@ export const functionExecuteTool: ToolConfig<CodeExecutionInput, CodeExecutionOu
         outputTable: params.outputTable,
         outputSandboxPath: params.outputSandboxPath,
         outputMimeType: params.outputMimeType,
-        sandboxId: params.sandboxId,
         secretScope: params.secretScope,
         mountedSecrets: params.mountedSecrets,
         overwriteFileId: params.overwriteFileId,

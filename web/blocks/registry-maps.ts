@@ -279,7 +279,6 @@ import { SESBlock, SESBlockMeta } from '@/blocks/blocks/ses'
 import { SftpBlock, SftpBlockMeta } from '@/blocks/blocks/sftp'
 import { SharepointBlock, SharepointBlockMeta, SharepointV2Block } from '@/blocks/blocks/sharepoint'
 import { ShopifyBlock, ShopifyBlockMeta } from '@/blocks/blocks/shopify'
-import { SimWorkspaceEventBlock } from '@/blocks/blocks/sim_workspace_event'
 import { SimilarwebBlock, SimilarwebBlockMeta } from '@/blocks/blocks/similarweb'
 import { SixtyfourBlock, SixtyfourBlockMeta } from '@/blocks/blocks/sixtyfour'
 import { SlackBlock, SlackBlockMeta, SlackV2Block } from '@/blocks/blocks/slack'
@@ -603,7 +602,6 @@ export const BLOCK_REGISTRY: Record<string, BlockConfig> = {
   sharepoint: SharepointBlock,
   sharepoint_v2: SharepointV2Block,
   shopify: ShopifyBlock,
-  sim_workspace_event: SimWorkspaceEventBlock,
   similarweb: SimilarwebBlock,
   sixtyfour: SixtyfourBlock,
   slack: SlackBlock,

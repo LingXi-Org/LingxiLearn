@@ -1,4 +1,4 @@
-import { vi } from "vitest";
+import { vi } from 'vitest'
 
 /**
  * Mutable value-export state for the shared `@/lib/core/config/env-flags` mock.
@@ -8,105 +8,103 @@ import { vi } from "vitest";
  * is an opt-out flag, on unless `NEXT_PUBLIC_CHAT_DISABLED` is set.
  */
 export interface EnvFlagsMockState {
-	isProd: boolean;
-	isDev: boolean;
-	isTest: boolean;
-	isHosted: boolean;
-	isCopilotBillingAttributionV1Enabled: boolean;
-	isCopilotBillingProtocolRequired: boolean;
-	isChatEnabled: boolean;
-	isCopilotToolPermissionsEnabled: boolean;
-	isBillingEnabled: boolean;
-	isEmailVerificationEnabled: boolean;
-	isAuthDisabled: boolean;
-	isPrivateDatabaseHostsAllowed: boolean;
-	isRegistrationDisabled: boolean;
-	isEmailPasswordEnabled: boolean;
-	isSignupMxValidationEnabled: boolean;
-	isAppConfigEnabled: boolean;
-	isSlackExtendedScopesEnabled: boolean;
-	isTriggerDevEnabled: boolean;
-	isEnterpriseEnabled: boolean;
-	isSsoEnabled: boolean;
-	isAccessControlEnabled: boolean;
-	isOrganizationsEnabled: boolean;
-	isInboxEnabled: boolean;
-	isSandboxDeploymentEntitled: boolean;
-	isSandboxesEnabled: boolean;
-	isWhitelabelingEnabled: boolean;
-	isAuditLogsEnabled: boolean;
-	isDataRetentionEnabled: boolean;
-	isDataDrainsEnabled: boolean;
-	isSessionPoliciesEnabled: boolean;
-	isForkingEnabled: boolean;
-	isRemoteSandboxEnabled: boolean;
-	isMothershipSandboxEnabled: boolean;
-	isDocSandboxEnabled: boolean;
-	isOllamaConfigured: boolean;
-	isAzureConfigured: boolean;
-	isCohereConfigured: boolean;
-	isInvitationsDisabled: boolean;
-	isPublicApiDisabled: boolean;
-	isGoogleAuthDisabled: boolean;
-	isGithubAuthDisabled: boolean;
-	isMicrosoftAuthDisabled: boolean;
-	isEmailSignupDisabled: boolean;
-	isReactGrabEnabled: boolean;
-	isReactScanEnabled: boolean;
+  isProd: boolean
+  isDev: boolean
+  isTest: boolean
+  isHosted: boolean
+  isCopilotBillingAttributionV1Enabled: boolean
+  isCopilotBillingProtocolRequired: boolean
+  isChatEnabled: boolean
+  isCopilotToolPermissionsEnabled: boolean
+  isBillingEnabled: boolean
+  isEmailVerificationEnabled: boolean
+  isAuthDisabled: boolean
+  isPrivateDatabaseHostsAllowed: boolean
+  isRegistrationDisabled: boolean
+  isEmailPasswordEnabled: boolean
+  isSignupMxValidationEnabled: boolean
+  isAppConfigEnabled: boolean
+  isSlackExtendedScopesEnabled: boolean
+  isEnterpriseEnabled: boolean
+  isSsoEnabled: boolean
+  isAccessControlEnabled: boolean
+  isOrganizationsEnabled: boolean
+  isInboxEnabled: boolean
+  isSandboxDeploymentEntitled: boolean
+  isSandboxesEnabled: boolean
+  isWhitelabelingEnabled: boolean
+  isAuditLogsEnabled: boolean
+  isDataRetentionEnabled: boolean
+  isDataDrainsEnabled: boolean
+  isSessionPoliciesEnabled: boolean
+  isForkingEnabled: boolean
+  isRemoteSandboxEnabled: boolean
+  isMothershipSandboxEnabled: boolean
+  isDocSandboxEnabled: boolean
+  isOllamaConfigured: boolean
+  isAzureConfigured: boolean
+  isCohereConfigured: boolean
+  isInvitationsDisabled: boolean
+  isPublicApiDisabled: boolean
+  isGoogleAuthDisabled: boolean
+  isGithubAuthDisabled: boolean
+  isMicrosoftAuthDisabled: boolean
+  isEmailSignupDisabled: boolean
+  isReactGrabEnabled: boolean
+  isReactScanEnabled: boolean
 }
 
 const defaultEnvFlagsState: EnvFlagsMockState = {
-	isProd: false,
-	isDev: false,
-	isTest: true,
-	isHosted: false,
-	isCopilotBillingAttributionV1Enabled: false,
-	isCopilotBillingProtocolRequired: false,
-	isChatEnabled: true,
-	isCopilotToolPermissionsEnabled: false,
-	isBillingEnabled: false,
-	isEmailVerificationEnabled: false,
-	isAuthDisabled: false,
-	isPrivateDatabaseHostsAllowed: false,
-	isRegistrationDisabled: false,
-	isEmailPasswordEnabled: true,
-	isSignupMxValidationEnabled: false,
-	isAppConfigEnabled: false,
-	isSlackExtendedScopesEnabled: false,
-	isTriggerDevEnabled: false,
-	isEnterpriseEnabled: false,
-	isSsoEnabled: false,
-	isAccessControlEnabled: false,
-	isOrganizationsEnabled: false,
-	// True with billing off and no flags set — these carry a legacy default of
-	// `true` so upgrades do not remove a feature. See
-	// ENTERPRISE_FEATURE_LEGACY_DEFAULTS.
-	isInboxEnabled: true,
-	isSandboxDeploymentEntitled: false,
-	isSandboxesEnabled: false,
-	isWhitelabelingEnabled: true,
-	isSessionPoliciesEnabled: true,
-	isAuditLogsEnabled: false,
-	isDataRetentionEnabled: false,
-	isDataDrainsEnabled: false,
-	isForkingEnabled: false,
-	isRemoteSandboxEnabled: false,
-	isMothershipSandboxEnabled: false,
-	isDocSandboxEnabled: false,
-	isOllamaConfigured: false,
-	isAzureConfigured: false,
-	isCohereConfigured: false,
-	isInvitationsDisabled: false,
-	isPublicApiDisabled: false,
-	isGoogleAuthDisabled: false,
-	isGithubAuthDisabled: false,
-	isMicrosoftAuthDisabled: false,
-	isEmailSignupDisabled: false,
-	isReactGrabEnabled: false,
-	isReactScanEnabled: false,
-};
+  isProd: false,
+  isDev: false,
+  isTest: true,
+  isHosted: false,
+  isCopilotBillingAttributionV1Enabled: false,
+  isCopilotBillingProtocolRequired: false,
+  isChatEnabled: true,
+  isCopilotToolPermissionsEnabled: false,
+  isBillingEnabled: false,
+  isEmailVerificationEnabled: false,
+  isAuthDisabled: false,
+  isPrivateDatabaseHostsAllowed: false,
+  isRegistrationDisabled: false,
+  isEmailPasswordEnabled: true,
+  isSignupMxValidationEnabled: false,
+  isAppConfigEnabled: false,
+  isSlackExtendedScopesEnabled: false,
+  isEnterpriseEnabled: false,
+  isSsoEnabled: false,
+  isAccessControlEnabled: false,
+  isOrganizationsEnabled: false,
+  // True with billing off and no flags set — these carry a legacy default of
+  // `true` so upgrades do not remove a feature. See
+  // ENTERPRISE_FEATURE_LEGACY_DEFAULTS.
+  isInboxEnabled: true,
+  isSandboxDeploymentEntitled: false,
+  isSandboxesEnabled: false,
+  isWhitelabelingEnabled: true,
+  isSessionPoliciesEnabled: true,
+  isAuditLogsEnabled: false,
+  isDataRetentionEnabled: false,
+  isDataDrainsEnabled: false,
+  isForkingEnabled: false,
+  isRemoteSandboxEnabled: false,
+  isMothershipSandboxEnabled: false,
+  isDocSandboxEnabled: false,
+  isOllamaConfigured: false,
+  isAzureConfigured: false,
+  isCohereConfigured: false,
+  isInvitationsDisabled: false,
+  isPublicApiDisabled: false,
+  isGoogleAuthDisabled: false,
+  isGithubAuthDisabled: false,
+  isMicrosoftAuthDisabled: false,
+  isEmailSignupDisabled: false,
+  isReactGrabEnabled: false,
+  isReactScanEnabled: false,
+}
 
-const envFlagsState: EnvFlagsMockState = { ...defaultEnvFlagsState };
+const envFlagsState: EnvFlagsMockState = { ...defaultEnvFlagsState }
 
 /**
  * Controllable mock functions for the function exports of
@@ -115,12 +113,12 @@ const envFlagsState: EnvFlagsMockState = { ...defaultEnvFlagsState };
  * {@link resetEnvFlagsMock} restores the default implementations.
  */
 export const envFlagsMockFns = {
-	getAllowedIntegrationsFromEnv: vi.fn<() => string[] | null>(() => null),
-	getPreviewBlocksFromEnv: vi.fn<() => string[]>(() => []),
-	getBlacklistedProvidersFromEnv: vi.fn<() => string[]>(() => []),
-	getAllowedMcpDomainsFromEnv: vi.fn<() => string[] | null>(() => null),
-	getCostMultiplier: vi.fn<() => number>(() => 1),
-};
+  getAllowedIntegrationsFromEnv: vi.fn<() => string[] | null>(() => null),
+  getPreviewBlocksFromEnv: vi.fn<() => string[]>(() => []),
+  getBlacklistedProvidersFromEnv: vi.fn<() => string[]>(() => []),
+  getAllowedMcpDomainsFromEnv: vi.fn<() => string[] | null>(() => null),
+  getCostMultiplier: vi.fn<() => number>(() => 1),
+}
 
 /**
  * Applies per-test overrides to the shared env-flags mock state.
@@ -135,7 +133,7 @@ export const envFlagsMockFns = {
  * ```
  */
 export function setEnvFlags(overrides: Partial<EnvFlagsMockState>): void {
-	Object.assign(envFlagsState, overrides);
+  Object.assign(envFlagsState, overrides)
 }
 
 /**
@@ -143,20 +141,12 @@ export function setEnvFlags(overrides: Partial<EnvFlagsMockState>): void {
  * default implementations for the function exports.
  */
 export function resetEnvFlagsMock(): void {
-	Object.assign(envFlagsState, defaultEnvFlagsState);
-	envFlagsMockFns.getAllowedIntegrationsFromEnv
-		.mockReset()
-		.mockImplementation(() => null);
-	envFlagsMockFns.getPreviewBlocksFromEnv
-		.mockReset()
-		.mockImplementation(() => []);
-	envFlagsMockFns.getBlacklistedProvidersFromEnv
-		.mockReset()
-		.mockImplementation(() => []);
-	envFlagsMockFns.getAllowedMcpDomainsFromEnv
-		.mockReset()
-		.mockImplementation(() => null);
-	envFlagsMockFns.getCostMultiplier.mockReset().mockImplementation(() => 1);
+  Object.assign(envFlagsState, defaultEnvFlagsState)
+  envFlagsMockFns.getAllowedIntegrationsFromEnv.mockReset().mockImplementation(() => null)
+  envFlagsMockFns.getPreviewBlocksFromEnv.mockReset().mockImplementation(() => [])
+  envFlagsMockFns.getBlacklistedProvidersFromEnv.mockReset().mockImplementation(() => [])
+  envFlagsMockFns.getAllowedMcpDomainsFromEnv.mockReset().mockImplementation(() => null)
+  envFlagsMockFns.getCostMultiplier.mockReset().mockImplementation(() => 1)
 }
 
 /**
@@ -165,13 +155,13 @@ export function resetEnvFlagsMock(): void {
  * delegate to the shared mutable state.
  */
 function flagAccessor(key: keyof EnvFlagsMockState): PropertyDescriptor {
-	return {
-		enumerable: true,
-		get: () => envFlagsState[key],
-		set: (value: boolean) => {
-			envFlagsState[key] = value;
-		},
-	};
+  return {
+    enumerable: true,
+    get: () => envFlagsState[key],
+    set: (value: boolean) => {
+      envFlagsState[key] = value
+    },
+  }
 }
 
 /**
@@ -180,12 +170,12 @@ function flagAccessor(key: keyof EnvFlagsMockState): PropertyDescriptor {
  * present. Flag reads are live: override via {@link setEnvFlags} (or direct
  * property assignment) and restore with {@link resetEnvFlagsMock}.
  */
-export const envFlagsMock: EnvFlagsMockState & typeof envFlagsMockFns =
-	Object.defineProperties(
-		{ ...envFlagsMockFns } as EnvFlagsMockState & typeof envFlagsMockFns,
-		Object.fromEntries(
-			(Object.keys(defaultEnvFlagsState) as (keyof EnvFlagsMockState)[]).map(
-				(key) => [key, flagAccessor(key)],
-			),
-		),
-	);
+export const envFlagsMock: EnvFlagsMockState & typeof envFlagsMockFns = Object.defineProperties(
+  { ...envFlagsMockFns } as EnvFlagsMockState & typeof envFlagsMockFns,
+  Object.fromEntries(
+    (Object.keys(defaultEnvFlagsState) as (keyof EnvFlagsMockState)[]).map((key) => [
+      key,
+      flagAccessor(key),
+    ])
+  )
+)

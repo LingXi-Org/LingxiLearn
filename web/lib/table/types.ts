@@ -638,7 +638,7 @@ export interface QueryResult {
    * Opaque cursor for the next page — non-null whenever more matching rows
    * exist beyond this page, whether the page was cut by `limit` or by the
    * response byte budget. Callers echo it back as `cursor` and never construct
-   * keyset/offset state themselves. See `rows/cursor.ts`.
+   * keyset/offset state themselves.
    */
   nextCursor: string | null
 }

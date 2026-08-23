@@ -1,6 +1,3 @@
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { generateShortId } from '@/lib/utils/id'
 import {
   createTimeoutAbortController,
   getRemainingExecutionMs,
@@ -18,13 +15,6 @@ import {
 } from '@/lib/execution/remote-sandbox/output-limits'
 import { resolvePiSandboxLifetimeMs } from '@/lib/execution/remote-sandbox/pi-lifetime'
 import { resolveProvider } from '@/lib/execution/remote-sandbox/provider'
-import {
-  provisionRuntimeDependencies,
-  type ResolvedSandbox,
-  RUNTIME_INSTALL_TIMEOUT_MS,
-  repairMissingSandboxImage,
-  resolveWorkspaceSandbox,
-} from '@/lib/execution/remote-sandbox/resolve'
 import type {
   CreateSandboxOptions,
   SandboxCodeResult,
@@ -37,6 +27,9 @@ import type {
   SandboxPrivateInput,
   SandboxShellExecutionRequest,
 } from '@/lib/execution/remote-sandbox/types'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
 
 export type {
   SandboxExecutionRequest,
@@ -56,33 +49,6 @@ async function createSandbox(
   const sandbox = await provider.create(kind, options)
   logger.info('Created sandbox', { provider: provider.id, kind, sandboxId: sandbox.sandboxId })
   return sandbox
-}
-
-/**
- * Creates a sandbox, turning "that image is gone" into a rebuild rather than a
- * failure the author has to resolve by hand.
- *
- * Create is the only step that observes whether the provider image really exists,
- * which is why the repair hangs off it: the registry row and the remote template
- * are two systems with no shared transaction, so keeping them in step is always
- * best-effort, while checking at the point of use is not. Any other failure is
- * rethrown untouched.
- */
-async function createSelectedSandbox(
-  kind: SandboxKind,
-  options: CreateSandboxOptions,
-  selected: ResolvedSandbox | null,
-  signal: AbortSignal
-): Promise<SandboxHandle> {
-  try {
-    return await createSandbox(kind, options)
-  } catch (error) {
-    throwIfAborted(signal)
-    if (!selected) throw error
-    const rebuilding = await repairMissingSandboxImage(selected, error)
-    if (!rebuilding) throw error
-    throw new Error(rebuilding)
-  }
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
@@ -490,45 +456,6 @@ async function collectExportedFiles(
   }
 }
 
-/**
- * Floor on what is left for the user's code after a runtime install. Below this
- * the run is not worth attempting — but reporting "your code timed out" would
- * still be the wrong story, so the install's own budget is capped to leave it.
- */
-const MIN_CODE_BUDGET_MS = 15_000
-
-/**
- * How long a runtime dependency install may take before it must yield to the
- * code it is installing for. Capped by {@link RUNTIME_INSTALL_TIMEOUT_MS} and by
- * whatever the caller's budget leaves after reserving {@link MIN_CODE_BUDGET_MS}.
- */
-function installBudgetMs(timeoutMs: number): number {
-  return Math.max(0, Math.min(RUNTIME_INSTALL_TIMEOUT_MS, timeoutMs - MIN_CODE_BUDGET_MS))
-}
-
-/**
- * Installs a runtime sandbox's dependencies out of the caller's budget and
- * uses the shared wall-clock budget, so creation and every later phase consume
- * the same deadline rather than receiving independent timeout allowances.
- */
-async function provisionWithinBudget(
-  sandbox: SandboxHandle,
-  selected: ResolvedSandbox | null,
-  signal: AbortSignal
-): Promise<void> {
-  if (!selected) return
-  try {
-    await provisionRuntimeDependencies(sandbox, selected, {
-      timeoutMs: installBudgetMs(remainingSandboxBudgetMs(signal)),
-      signal,
-    })
-  } catch (error) {
-    throwIfAborted(signal)
-    throw error
-  }
-  throwIfAborted(signal)
-}
-
 async function executeInSandboxWithinBudget(
   req: SandboxExecutionRequest
 ): Promise<SandboxExecutionResult> {
@@ -536,49 +463,22 @@ async function executeInSandboxWithinBudget(
   const signal = req.signal as AbortSignal
   const kind = req.sandboxKind ?? 'code'
   throwIfAborted(signal)
-
-  // Resolved before the sandbox is created so a selection that cannot be honored
-  // fails without spending a provider create.
-  const selected = await resolveWorkspaceSandbox({
-    kind,
+  const sandbox = await createSandbox(kind, {
     language,
-    workspaceId: req.workspaceId,
-    sandboxId: req.sandboxId,
+    lifetimeMs: remainingSandboxBudgetMs(signal),
   })
-  throwIfAborted(signal)
-
-  const sandbox = await createSelectedSandbox(
-    kind,
-    {
-      language,
-      imageRef: selected?.imageRef,
-      lifetimeMs: remainingSandboxBudgetMs(signal),
-    },
-    selected,
-    signal
-  )
   const sandboxId = sandbox.sandboxId
   const abortBinding = bindSandboxAbort(sandbox, signal)
 
   try {
     throwIfAborted(signal)
-    // Inside the try so a failed install or mount still kills the sandbox via the
-    // finally below. Dependencies land before the inputs so user code and its
-    // mounts always see a complete environment.
-    //
-    await provisionWithinBudget(sandbox, selected, signal)
     await writeSandboxInputs(sandbox, req.sandboxFiles, { signal })
     const privateInputEnvironment = await writeSandboxPrivateInputs(
       sandbox,
       req.privateInputs,
       signal
     )
-    const executionEnvironment = {
-      ...selected?.envs,
-      ...privateInputEnvironment,
-    }
-    const hasExecutionEnvironment =
-      selected?.envs !== undefined || Object.keys(privateInputEnvironment).length > 0
+    const hasExecutionEnvironment = Object.keys(privateInputEnvironment).length > 0
 
     let execution: SandboxCodeResult
     try {
@@ -587,7 +487,7 @@ async function executeInSandboxWithinBudget(
         javascriptPreload: buildJavaScriptRuntimeBindingsSource(req.runtimeBindings ?? []),
         maxOutputBytes: MAX_SANDBOX_PROCESS_OUTPUT_BYTES,
         signal,
-        ...(hasExecutionEnvironment ? { envs: executionEnvironment } : {}),
+        ...(hasExecutionEnvironment ? { envs: privateInputEnvironment } : {}),
       })
     } catch (error) {
       throwIfAborted(signal)
@@ -663,35 +563,16 @@ export function executeInSandbox(req: SandboxExecutionRequest): Promise<SandboxE
 async function executeShellInSandboxWithinBudget(
   req: SandboxShellExecutionRequest
 ): Promise<SandboxExecutionResult> {
-  const { code, envs } = req
+  const { code, envs = {} } = req
   const signal = req.signal as AbortSignal
   const kind = req.sandboxKind ?? 'shell'
   throwIfAborted(signal)
-
-  // No language is passed: a shell execution runs commands rather than a language
-  // runtime, so whichever language the sandbox carries is the one it installs.
-  const selected = await resolveWorkspaceSandbox({
-    kind,
-    workspaceId: req.workspaceId,
-    sandboxId: req.sandboxId,
-  })
-  throwIfAborted(signal)
-
-  const sandbox = await createSelectedSandbox(
-    kind,
-    { imageRef: selected?.imageRef, lifetimeMs: remainingSandboxBudgetMs(signal) },
-    selected,
-    signal
-  )
+  const sandbox = await createSandbox(kind, { lifetimeMs: remainingSandboxBudgetMs(signal) })
   const sandboxId = sandbox.sandboxId
   const abortBinding = bindSandboxAbort(sandbox, signal)
 
   try {
     throwIfAborted(signal)
-    // Inside the try so a failed install or mount still kills the sandbox via the
-    // finally below. The install shares the caller's budget rather than adding to
-    // it — see the note in `executeInSandbox`.
-    await provisionWithinBudget(sandbox, selected, signal)
     await writeSandboxInputs(sandbox, req.sandboxFiles, {
       rootUser: true,
       signal,
@@ -706,9 +587,8 @@ async function executeShellInSandboxWithinBudget(
     try {
       result = await sandbox.runCommand(code, {
         envs: {
-          ...selected?.envs,
           ...envs,
-          PATH: selected?.envs?.PATH ?? SANDBOX_SYSTEM_PATH,
+          PATH: envs.PATH ?? SANDBOX_SYSTEM_PATH,
           ...privateInputEnvironment,
         },
         timeoutMs: remainingSandboxBudgetMs(signal),

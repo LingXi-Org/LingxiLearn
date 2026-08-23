@@ -11,8 +11,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CodeLanguage } from '@/lib/execution/languages'
 
 const {
-  mockResolveSandbox,
-  mockProvisionRuntime,
   mockEnv,
   mockE2BCreate,
   mockE2BRunCode,
@@ -41,8 +39,6 @@ const {
   mockRecordSandboxProviderLimit,
   mockRecordSandboxTeardownFailure,
 } = vi.hoisted(() => ({
-  mockResolveSandbox: vi.fn(),
-  mockProvisionRuntime: vi.fn(),
   mockEnv: {
     SANDBOX_PROVIDER: 'e2b' as string | undefined,
     PI_SANDBOX_LIFETIME_MS: undefined as string | undefined,
@@ -100,13 +96,6 @@ vi.mock('@/lib/core/execution-limits/metrics', () => ({
   recordSandboxProviderLimit: mockRecordSandboxProviderLimit,
   recordSandboxTeardownFailure: mockRecordSandboxTeardownFailure,
 }))
-vi.mock('@/lib/execution/remote-sandbox/resolve', () => ({
-  resolveWorkspaceSandbox: mockResolveSandbox,
-  provisionRuntimeDependencies: mockProvisionRuntime,
-  invalidateSandboxResolution: vi.fn(),
-  RUNTIME_INSTALL_TIMEOUT_MS: 240_000,
-}))
-
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'
 import {
   executeInSandbox,
@@ -288,8 +277,6 @@ beforeEach(() => {
   mockCreateSession.mockResolvedValue(undefined)
   mockGetSessionCommandLogs.mockResolvedValue(undefined)
   mockDelete.mockResolvedValue(undefined)
-  mockResolveSandbox.mockResolvedValue(null)
-  mockProvisionRuntime.mockResolvedValue(undefined)
   mockExecuteSessionCommand.mockResolvedValue({ cmdId: 'cmd_1' })
   mockGetSessionCommand.mockResolvedValue({ exitCode: 0 })
 })
@@ -584,18 +571,6 @@ describe.each(PROVIDERS)('sandbox conformance [%s]', (provider) => {
   it('materializes private code inputs after dependencies and user files', async () => {
     const privateText = 'line one\n"quoted"\\slash\0tail'
     const privateBytes = Uint8Array.from([0, 10, 34, 92, 255]).buffer
-    mockResolveSandbox.mockResolvedValue({
-      id: 'sbx-private-code',
-      name: 'private-code',
-      language: CodeLanguage.Python,
-      dependencies: ['requests'],
-      strategy: 'runtime',
-      envs: {
-        PRIVATE_TEXT_PATH: 'selected-text-path',
-        PRIVATE_BYTES_PATH: 'selected-bytes-path',
-        SELECTED_ONLY: 'selected-value',
-      },
-    })
     stubCodeRun(provider, `${SIM_RESULT_PREFIX}null`)
 
     await executeInSandbox({
@@ -628,7 +603,6 @@ describe.each(PROVIDERS)('sandbox conformance [%s]', (provider) => {
     const expectedEnvironment = {
       PRIVATE_TEXT_PATH: privateTextWrite?.path,
       PRIVATE_BYTES_PATH: privateBytesWrite?.path,
-      SELECTED_ONLY: 'selected-value',
     }
     let executionOrder: number
     if (provider === 'e2b') {
@@ -642,29 +616,16 @@ describe.each(PROVIDERS)('sandbox conformance [%s]', (provider) => {
       const environmentFile = sandboxWriteBuffer(environmentWrite?.content).toString()
       expect(environmentFile).toContain(`PRIVATE_TEXT_PATH='${privateTextWrite?.path ?? ''}'`)
       expect(environmentFile).toContain(`PRIVATE_BYTES_PATH='${privateBytesWrite?.path ?? ''}'`)
-      expect(environmentFile).toContain("SELECTED_ONLY='selected-value'")
       expect(environmentFile).not.toContain(privateText)
       executionOrder = mockExecuteSessionCommand.mock.invocationCallOrder[0]
     }
-    expect(mockProvisionRuntime.mock.invocationCallOrder[0]).toBeLessThan(userWrite?.order ?? 0)
     expect(userWrite?.order).toBeLessThan(privateTextWrite?.order ?? 0)
     expect(privateBytesWrite?.order).toBeLessThan(executionOrder)
     expect(provider === 'e2b' ? mockE2BKill : mockDelete).toHaveBeenCalledTimes(1)
   })
 
-  it('passes private shell input paths after selected and caller environment values', async () => {
+  it('passes private shell input paths after caller environment values', async () => {
     const privateContent = 'quoted heredoc\nwith \0 and "quotes"'
-    mockResolveSandbox.mockResolvedValue({
-      id: 'sbx-private-shell',
-      name: 'private-shell',
-      language: CodeLanguage.Shell,
-      dependencies: ['jq'],
-      strategy: 'runtime',
-      envs: {
-        PRIVATE_HEREDOC_PATH: 'selected-path',
-        SELECTED_ONLY: 'selected-value',
-      },
-    })
     stubShellCommand(provider, '', '', 0)
 
     await executeShellInSandbox({
@@ -687,14 +648,12 @@ describe.each(PROVIDERS)('sandbox conformance [%s]', (provider) => {
     expect(privateWrite).toBeDefined()
     expect(sandboxWriteBuffer(userWrite?.content).toString()).toBe('shell-user-input')
     expect(sandboxWriteBuffer(privateWrite?.content)).toEqual(Buffer.from(privateContent))
-    expect(mockProvisionRuntime.mock.invocationCallOrder[0]).toBeLessThan(userWrite?.order ?? 0)
     expect(userWrite?.order).toBeLessThan(privateWrite?.order ?? 0)
 
     if (provider === 'e2b') {
       const [, options] = mockE2BCommandsRun.mock.calls[0]
       expect(options.envs).toMatchObject({
         PRIVATE_HEREDOC_PATH: privateWrite?.path,
-        SELECTED_ONLY: 'selected-value',
         CALLER_ONLY: 'caller-value',
       })
       expect(JSON.stringify(options.envs)).not.toContain(privateContent)
@@ -704,7 +663,6 @@ describe.each(PROVIDERS)('sandbox conformance [%s]', (provider) => {
       expect(environmentWrite).toBeDefined()
       const environmentFile = sandboxWriteBuffer(environmentWrite?.content).toString()
       expect(environmentFile).toContain(`PRIVATE_HEREDOC_PATH='${privateWrite?.path ?? ''}'`)
-      expect(environmentFile).toContain("SELECTED_ONLY='selected-value'")
       expect(environmentFile).toContain("CALLER_ONLY='caller-value'")
       expect(environmentFile).not.toContain(privateContent)
       expect(privateWrite?.order).toBeLessThan(environmentWrite?.order ?? 0)
@@ -1089,22 +1047,6 @@ describe.each(PROVIDERS)('sandbox conformance [%s]', (provider) => {
     expect(provider === 'e2b' ? mockE2BKill : mockDelete).toHaveBeenCalledTimes(1)
   })
 
-  it('enforces the wall-clock budget while provisioning dependencies', async () => {
-    mockResolveSandbox.mockResolvedValue({
-      id: 'sbx-budget',
-      name: 'budget',
-      language: CodeLanguage.Python,
-      dependencies: ['requests'],
-      strategy: 'runtime',
-    })
-    mockProvisionRuntime.mockImplementationOnce(() => new Promise<void>(() => {}))
-
-    await expect(
-      executeInSandbox({ code: 'x', language: CodeLanguage.Python, timeoutMs: 25 })
-    ).rejects.toMatchObject({ name: 'AbortError', message: 'timeout' })
-    expect(provider === 'e2b' ? mockE2BKill : mockDelete).toHaveBeenCalledTimes(1)
-  })
-
   it('enforces the wall-clock budget while collecting output files', async () => {
     stubCodeRun(provider, `${SIM_RESULT_PREFIX}null`)
     const stalledInspection = () => new Promise<unknown>(() => {})
@@ -1184,131 +1126,6 @@ describe('E2B streamed output safety', () => {
 })
 
 describe('custom dependency sets', () => {
-  it.each(PROVIDERS)('honors imageRef for code executions [%s]', async (provider) => {
-    useProvider(provider)
-    stubCodeRun(provider, `${SIM_RESULT_PREFIX}null`)
-    mockResolveSandbox.mockResolvedValue({
-      id: 'sbx-1',
-      name: 'etl',
-      language: CodeLanguage.Python,
-      dependencies: ['pandas'],
-      strategy: 'prebuilt',
-      imageRef: 'sim-sbx-abc',
-    })
-
-    await executeInSandbox({
-      code: 'x',
-      language: CodeLanguage.Python,
-      timeoutMs: 1000,
-      workspaceId: 'ws-1',
-      sandboxId: 'sbx-1',
-    })
-
-    if (provider === 'e2b') {
-      expect(mockE2BCreate).toHaveBeenCalledWith('sim-sbx-abc', expect.anything())
-    } else {
-      expect(mockDaytonaCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ snapshot: 'sim-sbx-abc' })
-      )
-    }
-  })
-
-  it.each(PROVIDERS)('refuses to let a sandbox displace the doc image [%s]', async (provider) => {
-    useProvider(provider)
-    stubCodeRun(provider, `${SIM_RESULT_PREFIX}null`)
-    // Even if resolution somehow yields a ref, the provider gates on the kind.
-    mockResolveSandbox.mockResolvedValue({
-      id: 'sbx-1',
-      name: 'etl',
-      language: CodeLanguage.Python,
-      dependencies: ['pandas'],
-      strategy: 'prebuilt',
-      imageRef: 'sim-sbx-abc',
-    })
-
-    await executeInSandbox({
-      code: 'x',
-      language: CodeLanguage.Python,
-      timeoutMs: 1000,
-      sandboxKind: 'doc',
-      workspaceId: 'ws-1',
-      sandboxId: 'sbx-1',
-    })
-
-    if (provider === 'e2b') {
-      expect(mockE2BCreate).toHaveBeenCalledWith('mothership-docs', expect.anything())
-    } else {
-      expect(mockDaytonaCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ snapshot: 'mothership-docs:v1' })
-      )
-    }
-  })
-
-  it.each(PROVIDERS)(
-    'spends the runtime install out of the caller budget, not on top of it [%s]',
-    async (provider) => {
-      useProvider(provider)
-      stubCodeRun(provider, `${SIM_RESULT_PREFIX}null`)
-      mockResolveSandbox.mockResolvedValue({
-        id: 'sbx-1',
-        name: 'etl',
-        language: CodeLanguage.Python,
-        dependencies: ['pandas'],
-        strategy: 'runtime',
-      })
-
-      // Well under the 240s ceiling, so the caller's budget is what binds.
-      await executeInSandbox({
-        code: 'x',
-        language: CodeLanguage.Python,
-        timeoutMs: 60_000,
-        workspaceId: 'ws-1',
-        sandboxId: 'sbx-1',
-      })
-
-      // 60s budget minus the 15s reserved for the code itself.
-      expect(mockProvisionRuntime).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        expect.objectContaining({ timeoutMs: expect.any(Number) })
-      )
-      const runtimeOptions = mockProvisionRuntime.mock.calls.at(-1)?.[2] as
-        | { timeoutMs: number }
-        | undefined
-      expect(runtimeOptions?.timeoutMs).toBeGreaterThan(44_000)
-      expect(runtimeOptions?.timeoutMs).toBeLessThanOrEqual(45_000)
-    }
-  )
-
-  it.each(PROVIDERS)(
-    'caps the install at its own ceiling when the budget is generous [%s]',
-    async (provider) => {
-      useProvider(provider)
-      stubCodeRun(provider, `${SIM_RESULT_PREFIX}null`)
-      mockResolveSandbox.mockResolvedValue({
-        id: 'sbx-1',
-        name: 'etl',
-        language: CodeLanguage.Python,
-        dependencies: ['pandas'],
-        strategy: 'runtime',
-      })
-
-      await executeInSandbox({
-        code: 'x',
-        language: CodeLanguage.Python,
-        timeoutMs: 900_000,
-        workspaceId: 'ws-1',
-        sandboxId: 'sbx-1',
-      })
-
-      expect(mockProvisionRuntime).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        expect.objectContaining({ timeoutMs: 240_000 })
-      )
-    }
-  )
-
   it.each(PROVIDERS)('uses the env template when nothing is selected [%s]', async (provider) => {
     useProvider(provider)
     stubCodeRun(provider, `${SIM_RESULT_PREFIX}null`)
@@ -1325,9 +1142,7 @@ describe('custom dependency sets', () => {
         expect.objectContaining({ snapshot: '7d9d12d6-5f2a-44df-9cc2-a20203f3813b' })
       )
     }
-    // No selection means no install step, on either strategy. Code itself now
-    // deliberately runs through the bounded process stream.
-    expect(mockProvisionRuntime).not.toHaveBeenCalled()
+    // Code itself runs through the bounded process stream.
     expect(mockExecuteCommand).not.toHaveBeenCalled()
   })
 
@@ -1362,14 +1177,6 @@ describe('custom dependency sets', () => {
           expect.objectContaining({ snapshot: 'mothership-shell:v1' })
         )
       }
-      expect(mockResolveSandbox).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({ kind: 'mothership' })
-      )
-      expect(mockResolveSandbox).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({ kind: 'mothership' })
-      )
     }
   )
 

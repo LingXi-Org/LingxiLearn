@@ -1105,26 +1105,6 @@ export const SANDBOX_CAPABILITY = defineCapability({
   ],
 } as const)
 
-export const ASYNC_JOBS_CAPABILITY = defineCapability({
-  strategy: 'selected',
-  id: 'jobs',
-  label: 'Async jobs',
-  whenUnset: 'first-ready',
-  defaultProvider: {
-    id: 'database',
-    kind: 'built-in',
-    label: 'Database queue',
-  },
-  providers: [
-    {
-      id: 'trigger-dev',
-      label: 'Trigger.dev',
-      activation: { mode: 'enabled', key: 'TRIGGER_DEV_ENABLED' },
-      requires: allOf(envField('TRIGGER_PROJECT_ID'), envField('TRIGGER_SECRET_KEY')),
-    },
-  ],
-} as const)
-
 /** Validates the one provider dependency that cannot be expressed as a field-shape rule. */
 function validateRedisProvider(values: EnvCapabilityValues): readonly EnvProviderValidationIssue[] {
   if (!hasValue(values, 'REDIS_URL')) return []
@@ -1298,7 +1278,6 @@ export const ENV_CAPABILITIES = [
   EMAIL_CAPABILITY,
   STORAGE_CAPABILITY,
   SANDBOX_CAPABILITY,
-  ASYNC_JOBS_CAPABILITY,
   CACHE_CAPABILITY,
   OCR_CAPABILITY,
   KNOWLEDGE_EMBEDDINGS_CAPABILITY,

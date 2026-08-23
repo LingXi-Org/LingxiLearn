@@ -30,7 +30,7 @@ export const linearTriggerOptions = [
 
 /**
  * Maps trigger IDs to Linear resource types for webhook creation.
- * Used by the automatic webhook registration in provider-subscriptions.
+ * Used by the trigger configuration's provider-specific setup.
  */
 export const LINEAR_RESOURCE_TYPE_MAP: Record<string, string[]> = {
   linear_issue_created_v2: ['Issue'],
