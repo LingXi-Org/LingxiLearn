@@ -35,7 +35,6 @@ export type JobType =
   | 'webhook-execution'
   | 'resume-execution'
   | 'workflow-group-cell'
-  | 'run-data-drain'
 
 export type AsyncExecutionCorrelationSource =
   | 'workflow'
