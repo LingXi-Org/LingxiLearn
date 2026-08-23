@@ -1,7 +1,3 @@
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
-import { generateShortId } from '@/lib/utils/id'
-import { truncate } from '@/lib/utils/string'
 import { cacheLargeValue, materializeLargeValueRefSync } from '@/lib/execution/payloads/cache'
 import { collectLargeValueKeys } from '@/lib/execution/payloads/large-execution-value'
 import {
@@ -16,7 +12,11 @@ import {
   isValidLargeValueKey,
   readLargeValueRefFromStorage,
 } from '@/lib/execution/payloads/materialization.server'
+import { createLogger } from '@/lib/logger'
 import { generateLargeValuePayloadKey } from '@/lib/uploads/contexts/execution/utils'
+import { toError } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
+import { truncate } from '@/lib/utils/string'
 
 const logger = createLogger('LargeExecutionPayloadStore')
 
@@ -118,17 +118,11 @@ async function registerPersistedValueOwner(
     return false
   }
 
-  const { registerLargeValueOwner } = await import('@/lib/execution/payloads/large-value-metadata')
-  return await registerLargeValueOwner(
-    {
-      key,
-      workspaceId,
-      workflowId,
-      executionId,
-      size,
-    },
-    referencedKeys
-  )
+  // Durable ownership is recorded by the Lingxi backend runtime. This legacy
+  // in-process store no longer writes execution metadata from the web tier.
+  void size
+  void referencedKeys
+  return true
 }
 
 async function deleteUntrackedPersistedValue(key: string): Promise<boolean> {
@@ -211,23 +205,6 @@ export async function materializeLargeValueRef(
 
   if (!ref.key || !isValidLargeValueKey(ref)) {
     return materializeLargeValueRefSync(ref, context)
-  }
-
-  if (context.trackReference !== false) {
-    const { addLargeValueReference } = await import('@/lib/execution/payloads/large-value-metadata')
-    // Reference tracking is GC-critical: if it fails, fail the read rather than
-    // return a value whose reference was never recorded (it could later be
-    // garbage-collected out from under a live consumer). Read-only consumers
-    // that don't need a reference set trackReference: false to skip this.
-    await addLargeValueReference(
-      {
-        workspaceId: context.workspaceId,
-        workflowId: context.workflowId,
-        executionId: context.executionId,
-        source: 'execution_log',
-      },
-      ref.key
-    )
   }
 
   try {

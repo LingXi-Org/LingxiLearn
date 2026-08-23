@@ -4,7 +4,6 @@ import {
   databaseMock,
   drizzleOrmMock,
   envFlagsMock,
-  environmentUtilsMock,
   envMock,
   hybridAuthMock,
   loggerMock,
@@ -42,7 +41,6 @@ vi.mock('@/lib/core/config/env-flags', () => envFlagsMock)
 vi.mock('@/lib/core/config/env', () => envMock)
 vi.mock('@/lib/core/utils/urls', () => urlsMock)
 vi.mock('@/lib/core/config/redis', () => redisConfigMock)
-vi.mock('@/lib/environment/utils', () => environmentUtilsMock)
 
 vi.mock('@/stores/console/store', () => ({
   useConsoleStore: {

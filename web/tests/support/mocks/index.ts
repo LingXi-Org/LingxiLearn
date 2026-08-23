@@ -16,8 +16,6 @@
  * ```
  */
 
-// Audit mocks
-export { auditMock, auditMockFns } from './audit.mock'
 // Auth mocks
 export { authMock, authMockFns, type MockUser } from './auth.mock'
 // Auth OAuth utils mocks (for @/app/api/auth/oauth/utils)
@@ -72,12 +70,6 @@ export {
   resetEnvFlagsMock,
   setEnvFlags,
 } from './env-flags.mock'
-// Environment utils mocks (for @/lib/environment/utils)
-export {
-  environmentUtilsMock,
-  environmentUtilsMockFns,
-  resetEnvironmentUtilsMock,
-} from './environment-utils.mock'
 // Executor mocks - use side-effect import: import '@/tests/support/mocks/executor'
 // Fetch mocks
 export {
@@ -112,20 +104,6 @@ export {
   getLoggerCalls,
   loggerMock,
 } from './logger.mock'
-// Logging session mocks (for @/lib/logs/execution/logging-session)
-export {
-  LoggingSessionMock,
-  loggingSessionMock,
-  loggingSessionMockFns,
-} from './logging-session.mock'
-// MCP OAuth mocks (for @/lib/mcp/oauth)
-export {
-  McpOauthInsecureUrlErrorMock,
-  McpOauthRedirectRequiredMock,
-  mcpOauthMock,
-  mcpOauthMockFns,
-  OauthStepTimeoutErrorMock,
-} from './mcp-oauth.mock'
 // Permission mocks
 export { permissionsMock, permissionsMockFns } from './permissions.mock'
 // PostHog server mocks (for @/lib/posthog/server)
@@ -209,8 +187,3 @@ export {
   workflowsOrchestrationMock,
   workflowsOrchestrationMockFns,
 } from './workflows-orchestration.mock'
-// Workflows persistence utils mocks (for @/lib/workflows/persistence/utils)
-export {
-  workflowsPersistenceUtilsMock,
-  workflowsPersistenceUtilsMockFns,
-} from './workflows-persistence-utils.mock'

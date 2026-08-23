@@ -2,7 +2,7 @@ import { createLogger } from '@/lib/logger'
 import { getRedisClient, onRedisReconnect } from '@/lib/core/config/redis'
 import { getStorageMethod, type StorageMethod } from '@/lib/core/storage'
 import type { RateLimitStorageAdapter } from './adapter'
-import { DbTokenBucket } from './db-token-bucket'
+import { MemoryTokenBucket } from './memory-token-bucket'
 import { RedisTokenBucket } from './redis-token-bucket'
 
 const logger = createLogger('RateLimitStorage')
@@ -36,16 +36,16 @@ export function createStorageAdapter(): RateLimitStorageAdapter {
     const redis = getRedisClient()
     if (!redis) {
       logger.warn(
-        'Redis configured but client unavailable - falling back to PostgreSQL for rate limiting'
+        'Redis configured but client unavailable - falling back to process-local rate limiting'
       )
-      g._rlCachedAdapter = new DbTokenBucket()
+      g._rlCachedAdapter = new MemoryTokenBucket()
     } else {
       logger.info('Rate limiting: Using Redis')
       g._rlCachedAdapter = new RedisTokenBucket(redis)
     }
   } else {
-    logger.info('Rate limiting: Using PostgreSQL')
-    g._rlCachedAdapter = new DbTokenBucket()
+    logger.info('Rate limiting: Using process-local memory')
+    g._rlCachedAdapter = new MemoryTokenBucket()
   }
 
   return g._rlCachedAdapter!

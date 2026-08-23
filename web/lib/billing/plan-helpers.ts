@@ -1,17 +1,3 @@
-/**
- * Plan type helpers for the credit-tier billing system.
- *
- * Plan names follow the convention `{type}_{credits}`:
- *   - `pro_6000` (Pro), `pro_25000` (Max)
- *   - `team_6000` (Team Pro), `team_25000` (Team Max)
- *   - `free`, `enterprise` (unchanged)
- *
- * Legacy plan names (`pro`, `team`) are also recognized for backward compat
- * and map to their original dollar amounts ($20 / $40).
- */
-
-import type { AnyColumn } from 'drizzle-orm'
-import { eq, like, or, type SQL } from 'drizzle-orm'
 import {
   CREDIT_TIERS,
   DEFAULT_PRO_TIER_COST_LIMIT,
@@ -21,87 +7,36 @@ import {
 
 export type PlanCategory = 'free' | 'pro' | 'team' | 'enterprise'
 
-export function isPro(plan: string | null | undefined): boolean {
-  if (!plan) return false
-  return plan === 'pro' || plan.startsWith('pro_')
-}
+export const isPro = (plan: string | null | undefined): boolean =>
+  plan === 'pro' || Boolean(plan?.startsWith('pro_'))
+export const isTeam = (plan: string | null | undefined): boolean =>
+  plan === 'team' || Boolean(plan?.startsWith('team_'))
+export const isFree = (plan: string | null | undefined): boolean => !plan || plan === 'free'
+export const isEnterprise = (plan: string | null | undefined): boolean => plan === 'enterprise'
+export const isPaid = (plan: string | null | undefined): boolean =>
+  isPro(plan) || isTeam(plan) || isEnterprise(plan)
+export const isOrgPlan = (plan: string | null | undefined): boolean =>
+  isTeam(plan) || isEnterprise(plan)
 
-/**
- * Whether a plan is Max tier or above: any paid plan at or above the Max credit
- * allocation (covering both `pro_25000` and `team_25000`), or any enterprise plan.
- *
- * Tier-only — subscription status and billing-blocked state are the caller's
- * responsibility. This is the single definition of "Max" in the codebase: the
- * server feature gates (inbox, live sync, sandboxes), the client
- * `hasUsableMaxAccess` derivation, and the personal-workspace cap all route
- * through it, so a Max-gated surface can never render unlocked against a server
- * that will refuse it.
- */
-export function isMaxTier(plan: string | null | undefined): boolean {
-  return getPlanTierCredits(plan) >= MAX_TIER_CREDITS || isEnterprise(plan)
-}
-
-export function isTeam(plan: string | null | undefined): boolean {
-  if (!plan) return false
-  return plan === 'team' || plan.startsWith('team_')
-}
-
-export function isFree(plan: string | null | undefined): boolean {
-  return !plan || plan === 'free'
-}
-
-export function isEnterprise(plan: string | null | undefined): boolean {
-  return plan === 'enterprise'
-}
-
-export function isPaid(plan: string | null | undefined): boolean {
-  return isPro(plan) || isTeam(plan) || isEnterprise(plan)
-}
-
-/**
- * True when the plan **name** is a team/enterprise plan — the only plans
- * that may be referenced to an organization (org-referenced subscriptions
- * never hold `pro_*` plans; checkout authorization and the Stripe plan
- * sync both enforce this). This is a plan-name check, NOT a scope check:
- * a team plan can be transiently user-referenced between checkout and
- * webhook re-homing. For scope decisions use `isOrgScopedSubscription`
- * (sync) or `isSubscriptionOrgScoped` (async).
- */
-export function isOrgPlan(plan: string | null | undefined): boolean {
-  return isTeam(plan) || isEnterprise(plan)
-}
-
-/**
- * Extract the credit count from a plan name (e.g. `'pro_6000'` => `6000`).
- * Legacy names map to their original dollar values:
- *   `'pro'` => 4000 credits ($20 at 1:200), `'team'` => 8000 credits ($40 at 1:200).
- */
 export function getPlanTierCredits(plan: string | null | undefined): number {
-  if (!plan) return 0
-  const match = plan.match(/_(\d+)$/)
+  const match = plan?.match(/_(\d+)$/)
   if (match) return Number.parseInt(match[1], 10)
   if (plan === 'pro') return 4000
   if (plan === 'team') return 8000
   return 0
 }
 
-/**
- * Get the dollar value of a plan's credit tier.
- * Looks up from CREDIT_TIERS for exact mapping, with legacy plan fallbacks.
- */
+export const isMaxTier = (plan: string | null | undefined): boolean =>
+  getPlanTierCredits(plan) >= MAX_TIER_CREDITS || isEnterprise(plan)
+
 export function getPlanTierDollars(plan: string | null | undefined): number {
-  if (!plan) return 0
-  const credits = getPlanTierCredits(plan)
-  const tier = CREDIT_TIERS.find((t) => t.credits === credits)
+  const tier = CREDIT_TIERS.find((item) => item.credits === getPlanTierCredits(plan))
   if (tier) return tier.dollars
   if (plan === 'pro') return DEFAULT_PRO_TIER_COST_LIMIT
   if (plan === 'team') return DEFAULT_TEAM_TIER_COST_LIMIT
   return 0
 }
 
-/**
- * Return the broad plan category regardless of tier suffix.
- */
 export function getPlanType(plan: string | null | undefined): PlanCategory {
   if (isPro(plan)) return 'pro'
   if (isTeam(plan)) return 'team'
@@ -109,70 +44,23 @@ export function getPlanType(plan: string | null | undefined): PlanCategory {
   return 'free'
 }
 
-/**
- * Return the plan category used for plan-based limits (rate limits, storage,
- * execution timeouts, concurrency, tables). Modern plans bucket by paid tier:
- * Pro and Pro for Teams share `pro`, while Max and Max for Teams (>= 25K
- * credits) share `team`. Legacy `pro`/`team` plan names keep their original
- * categories.
- */
 export function getPlanTypeForLimits(plan: string | null | undefined): PlanCategory {
   if (plan === 'pro' || plan === 'team') return getPlanType(plan)
-  if (isPro(plan) || isTeam(plan)) {
-    return getPlanTierCredits(plan) >= MAX_TIER_CREDITS ? 'team' : 'pro'
-  }
+  if (isPro(plan) || isTeam(plan)) return isMaxTier(plan) ? 'team' : 'pro'
   return getPlanType(plan)
 }
 
-/**
- * Build the canonical plan name for a given type and credit tier.
- * @example buildPlanName('pro', 6000) => 'pro_6000'
- */
-export function buildPlanName(type: 'pro' | 'team', credits: number): string {
-  return `${type}_${credits}`
-}
-
-/**
- * Get the list of valid plan names for a given category.
- */
-export function getValidPlanNames(type: 'pro' | 'team'): string[] {
-  return CREDIT_TIERS.map((t) => buildPlanName(type, t.credits))
-}
-
-/**
- * Get the user-facing display name for a plan.
- * @example getDisplayPlanName('pro_25000') => 'Max'
- * @example getDisplayPlanName('team_6000') => 'Pro for Teams'
- * @example getDisplayPlanName('pro') => 'Legacy Pro'
- */
-/**
- * SQL-level plan filters for Drizzle queries.
- * These are the SQL equivalents of the JS helpers above.
- *
- * The `_` in the plan-name separator is escaped because it is a single-character
- * wildcard in SQL `LIKE`. Unescaped, `'pro_%'` would also match `proX…`, making
- * these filters admit a wider set than their JS counterparts.
- */
-export function sqlIsPro(column: AnyColumn): SQL | undefined {
-  return or(eq(column, 'pro'), like(column, 'pro\\_%'))
-}
-
-export function sqlIsTeam(column: AnyColumn): SQL | undefined {
-  return or(eq(column, 'team'), like(column, 'team\\_%'))
-}
-
-export function sqlIsPaid(column: AnyColumn): SQL | undefined {
-  return or(sqlIsPro(column)!, sqlIsTeam(column)!, eq(column, 'enterprise'))
-}
+export const buildPlanName = (type: 'pro' | 'team', credits: number): string =>
+  `${type}_${credits}`
+export const getValidPlanNames = (type: 'pro' | 'team'): string[] =>
+  CREDIT_TIERS.map((tier) => buildPlanName(type, tier.credits))
 
 export function getDisplayPlanName(plan: string | null | undefined): string {
-  if (!plan || isFree(plan)) return 'Free'
+  if (isFree(plan)) return 'Free'
   if (isEnterprise(plan)) return 'Enterprise'
-  const credits = getPlanTierCredits(plan)
-  const tier = CREDIT_TIERS.find((t) => t.credits === credits)
-  const isLegacy = plan === 'pro' || plan === 'team'
+  const tier = CREDIT_TIERS.find((item) => item.credits === getPlanTierCredits(plan))
   const tierName = tier?.name ?? (plan === 'team' ? 'Max' : 'Pro')
-  const prefix = isLegacy ? 'Legacy ' : ''
-  const suffix = isTeam(plan) ? ' for Teams' : ''
-  return `${prefix}${tierName}${suffix}`
+  return `${plan === 'pro' || plan === 'team' ? 'Legacy ' : ''}${tierName}${
+    isTeam(plan) ? ' for Teams' : ''
+  }`
 }

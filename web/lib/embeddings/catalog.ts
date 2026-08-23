@@ -6,9 +6,9 @@ import type {
 import type { BYOKProviderId } from '@/tools/types'
 
 /**
- * Single source of truth for embedding models across the platform: the
- * knowledge-base indexing path, the Embeddings block, and pricing lookups all
- * resolve model metadata from here.
+ * Client-safe source of truth for embedding model metadata. The Web block and
+ * transport contracts use it for validation and display; provider execution
+ * and knowledge-base indexing are owned by the API service.
  */
 
 export const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small'

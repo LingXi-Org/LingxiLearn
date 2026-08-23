@@ -1,6 +1,3 @@
-import { createLogger, type Logger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { omit } from '@/lib/utils/object'
 import type OpenAI from 'openai'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import { formatCreditCost } from '@/lib/billing/credits/conversion'
@@ -11,7 +8,9 @@ import {
   normalizeStringRecord,
   normalizeWorkflowVariables,
 } from '@/lib/core/utils/records'
-import type { CustomBlockToolBinding } from '@/lib/workflows/custom-blocks/operations'
+import { createLogger, type Logger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { omit } from '@/lib/utils/object'
 import { isFileFieldType, type WorkflowInputField } from '@/lib/workflows/input-format'
 import {
   buildCanonicalIndex,
@@ -61,6 +60,12 @@ import { mergeToolParameters } from '@/tools/merge-params'
 import type { WorkflowToolExecutionContext } from '@/tools/types'
 
 const logger = createLogger('ProviderUtils')
+
+interface CustomBlockToolBinding {
+  workflowId: string
+  inputFields: WorkflowInputField[]
+  requiredInputIds: string[]
+}
 
 /**
  * Checks if a workflow description is a default/placeholder description

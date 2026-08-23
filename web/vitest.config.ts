@@ -27,15 +27,11 @@ export default defineConfig({
     testTimeout: 10000,
   },
   resolve: {
-    // Keep application-local test and database aliases explicit for Vitest.
+    // Keep application-local aliases explicit for Vitest.
     alias: [
       {
         find: '@/tests/support',
         replacement: path.resolve(__dirname, 'tests/support'),
-      },
-      {
-        find: '@/lib/db',
-        replacement: path.resolve(__dirname, 'lib/db'),
       },
       {
         find: '@/stores/console/store',

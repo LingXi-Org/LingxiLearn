@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { getAccessControlConfig, isEmailBlockedByAccessControl } from '@/lib/auth/access-control'
-import { processEmailData, shouldSkipForUnsubscribe } from '@/lib/messaging/email/prepare'
+import { processEmailData } from '@/lib/messaging/email/prepare'
 import { activeProviders, emailFallback } from '@/lib/messaging/email/providers'
 import type {
   BatchEmailOptions,
@@ -24,12 +24,6 @@ export type {
 } from '@/lib/messaging/email/types'
 
 const logger = createLogger('Mailer')
-
-const SKIPPED_UNSUBSCRIBED_RESULT: SendEmailResult = {
-  success: true,
-  message: 'Email skipped (user unsubscribed)',
-  data: { id: 'skipped-unsubscribed' },
-}
 
 const MOCK_EMAIL_RESULT: SendEmailResult = {
   success: true,
@@ -73,15 +67,6 @@ export async function sendEmail(options: EmailOptions): Promise<SendEmailResult>
         emailType: options.emailType,
       })
       return SKIPPED_BANNED_RESULT
-    }
-
-    if (await shouldSkipForUnsubscribe(allowed)) {
-      logger.info('Email not sent (user unsubscribed):', {
-        to: allowed.to,
-        subject: allowed.subject,
-        emailType: allowed.emailType,
-      })
-      return SKIPPED_UNSUBSCRIBED_RESULT
     }
 
     const data = processEmailData(allowed)
@@ -128,9 +113,6 @@ async function prepareBatch(emails: EmailOptions[]): Promise<PreparedBatchEntry[
         if (!allowed) {
           return { index, data: null, skippedResult: SKIPPED_BANNED_RESULT }
         }
-        if (await shouldSkipForUnsubscribe(allowed)) {
-          return { index, data: null, skippedResult: SKIPPED_UNSUBSCRIBED_RESULT }
-        }
         return { index, data: processEmailData(allowed), skippedResult: null }
       } catch (error) {
         return {
@@ -154,17 +136,13 @@ export async function sendBatchEmails(options: BatchEmailOptions): Promise<Batch
     )
 
     if (sendable.length === 0) {
-      const results = entries.map((e) => e.skippedResult ?? SKIPPED_UNSUBSCRIBED_RESULT)
-      const allUnsubscribed =
-        entries.length > 0 && entries.every((e) => e.skippedResult === SKIPPED_UNSUBSCRIBED_RESULT)
+      const results = entries.map((e) => e.skippedResult ?? SKIPPED_BANNED_RESULT)
       return {
         success: results.every((r) => r.success),
         message:
           options.emails.length === 0
             ? 'No emails to send'
-            : allUnsubscribed
-              ? 'All batch emails skipped (users unsubscribed)'
-              : 'No emails sent (all entries skipped or failed validation)',
+            : 'No emails sent (all entries skipped or failed validation)',
         results,
         data: { count: 0 },
       }
@@ -201,11 +179,10 @@ function mergeBatchResults(
   })
 
   const results = entries.map(
-    (entry) => resultsByIndex.get(entry.index) ?? entry.skippedResult ?? SKIPPED_UNSUBSCRIBED_RESULT
+    (entry) => resultsByIndex.get(entry.index) ?? entry.skippedResult ?? SKIPPED_BANNED_RESULT
   )
 
-  // sentCount excludes both unsubscribe-skipped (success but not delivered)
-  // and prepare-failed entries — only counts what actually went out the wire.
+  // Only provider-successful entries count as delivered; skipped/invalid entries do not.
   const sentCount = sentResults.filter((r) => r.success).length
   const skippedCount = entries.length - sendable.length
   const allSucceeded = sentCount === sendable.length && skippedCount === 0

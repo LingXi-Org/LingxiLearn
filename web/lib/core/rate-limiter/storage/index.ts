@@ -4,7 +4,7 @@ export type {
   TokenBucketConfig,
   TokenStatus,
 } from './adapter'
-export { DbTokenBucket } from './db-token-bucket'
+export { MemoryTokenBucket } from './memory-token-bucket'
 export {
   createStorageAdapter,
   getAdapterType,
