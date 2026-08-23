@@ -9,18 +9,18 @@
  * table (R+1 of the dual-write rollout), or after a known dual-write outage.
  *
  * Usage:
- *   DATABASE_URL=... bun apps/sim/scripts/copilot-messages-reconcile.ts [--since=<interval>]
+ *   DATABASE_URL=... bun scripts/copilot-messages-reconcile.ts [--since=<interval>]
  *
  * Examples:
- *   bun apps/sim/scripts/copilot-messages-reconcile.ts
- *   bun apps/sim/scripts/copilot-messages-reconcile.ts --since='7 days'
- *   bun apps/sim/scripts/copilot-messages-reconcile.ts --since='1 hour'
+ *   bun scripts/copilot-messages-reconcile.ts
+ *   bun scripts/copilot-messages-reconcile.ts --since='7 days'
+ *   bun scripts/copilot-messages-reconcile.ts --since='1 hour'
  *
  * Omit --since to reconcile the entire table.
  */
 
 import { sql } from 'drizzle-orm'
-import { db } from '../../../packages/db/db.js'
+import { db } from '../lib/db/db.js'
 
 function parseSinceArg(argv: string[]): string | null {
   const arg = argv.find((a) => a.startsWith('--since='))

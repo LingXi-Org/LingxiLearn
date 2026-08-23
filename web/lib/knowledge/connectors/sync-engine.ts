@@ -1,11 +1,11 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   document,
   embedding,
   knowledgeBase,
   knowledgeConnector,
   knowledgeConnectorSyncLog,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { and, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm'
 import { decryptApiKey } from '@/lib/api-key/crypto'
 import {

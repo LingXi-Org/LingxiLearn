@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@sim/testing'
+import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TableRowNotFoundError } from '@/lib/table/rows/errors'
 import type { RowExecutionMetadata, TableDefinition, WorkflowGroup } from '@/lib/table/types'

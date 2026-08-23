@@ -1,7 +1,7 @@
 'use client'
 
 import { type ChangeEvent, type RefObject, useCallback, useRef, useState } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { pickCsvFiles } from '@/app/workspace/[workspaceId]/tables/csv'
 import { useImportCsv } from '@/hooks/queries/tables'

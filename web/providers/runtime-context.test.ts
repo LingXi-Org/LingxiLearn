@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { createExecutionContext } from '@sim/testing'
+import { createExecutionContext } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockExecuteTool } = vi.hoisted(() => ({

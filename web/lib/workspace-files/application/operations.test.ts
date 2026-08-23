@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { permissionSatisfies } from '@sim/platform-authz/workspace'
+import { permissionSatisfies } from '@/lib/permissions/native/workspace'
 import { describe, expect, it } from 'vitest'
 import { fileOperations } from '@/lib/workspace-files/application/operations'
 

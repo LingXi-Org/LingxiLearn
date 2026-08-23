@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import {
   BLOCK_OPERATIONS,
@@ -10,10 +10,10 @@ import {
   SUBFLOW_OPERATIONS,
   VARIABLE_OPERATIONS,
   WORKFLOW_OPERATIONS,
-} from '@sim/realtime-protocol/constants'
+} from '@/lib/realtime/protocol/constants'
 import { generateId } from '@/lib/utils/id'
-import type { BlockRetryConfig } from '@sim/workflow-types/workflow'
-import { filterAcyclicEdges, getWorkflowBlockNameConflict } from '@sim/workflow-types/workflow'
+import type { BlockRetryConfig } from '@/lib/workflows/domain/workflow'
+import { filterAcyclicEdges, getWorkflowBlockNameConflict } from '@/lib/workflows/domain/workflow'
 import { useQueryClient } from '@tanstack/react-query'
 import { isEqual } from 'es-toolkit'
 import type { Edge } from 'reactflow'

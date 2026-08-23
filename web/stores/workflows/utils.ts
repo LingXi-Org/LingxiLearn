@@ -1,6 +1,6 @@
 import { generateId } from '@/lib/utils/id'
-import { mergeSubblockStateWithValues } from '@sim/workflow-persistence/subblocks'
-import { filterUniqueWorkflowEdges } from '@sim/workflow-types/workflow'
+import { mergeSubblockStateWithValues } from '@/lib/workflows/persistence/native/subblocks'
+import { filterUniqueWorkflowEdges } from '@/lib/workflows/domain/workflow'
 import type { Edge } from 'reactflow'
 import { DEFAULT_DUPLICATE_OFFSET } from '@/lib/workflows/autolayout/constants'
 import { getEffectiveBlockOutputs } from '@/lib/workflows/blocks/block-outputs'

@@ -3,14 +3,14 @@
  *
  * @vitest-environment node
  */
-import { dbChainMock, dbChainMockFns, resetDbChainMock, schemaMock } from '@sim/testing'
+import { dbChainMock, dbChainMockFns, resetDbChainMock, schemaMock } from '@/tests/support'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockRandomUUID } = vi.hoisted(() => ({
   mockRandomUUID: vi.fn(),
 }))
 
-vi.mock('@sim/db', () => ({ ...dbChainMock, ...schemaMock }))
+vi.mock('@/lib/db', () => ({ ...dbChainMock, ...schemaMock }))
 
 vi.mock('@/lib/webhooks/deploy', () => ({
   cleanupWebhooksForWorkflow: vi.fn().mockResolvedValue(undefined),

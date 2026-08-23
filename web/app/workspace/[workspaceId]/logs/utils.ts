@@ -1,5 +1,5 @@
 import React from 'react'
-import { Badge } from '@sim/emcn'
+import { Badge } from '@/components/ui-kit'
 import { format } from 'date-fns'
 import { formatDuration, formatRelativeTime } from '@/lib/utils/formatting'
 import type { RunStatus, TriggerPresentation } from './model/execution-log'

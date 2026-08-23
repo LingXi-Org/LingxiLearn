@@ -1,6 +1,6 @@
 'use client'
 
-import { TerminalWindow } from '@sim/emcn/icons'
+import { TerminalWindow } from '@/components/ui-kit/icons'
 import { ThinkingLoader } from '@/components/ui'
 import { useStableFlag } from '@/hooks/use-stable-flag'
 

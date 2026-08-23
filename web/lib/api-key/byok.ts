@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { workspaceBYOKKeys } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { workspaceBYOKKeys } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, asc, eq } from 'drizzle-orm'
 import { getRotatingApiKey } from '@/lib/core/config/api-keys'

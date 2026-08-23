@@ -1,7 +1,7 @@
 'use client'
 
 import { forwardRef, memo, useCallback, useImperativeHandle, useRef, useState } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import './document-table.css'
 
 interface EditConfig {

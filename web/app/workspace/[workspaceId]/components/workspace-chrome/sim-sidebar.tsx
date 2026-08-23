@@ -9,7 +9,7 @@ import {
   Expandable,
   ExpandableContent,
   Tooltip,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   ChevronDown,
   Database,
@@ -22,7 +22,7 @@ import {
   Sparkles,
   Table,
   Task,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'

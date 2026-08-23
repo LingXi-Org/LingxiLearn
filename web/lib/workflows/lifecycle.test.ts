@@ -11,7 +11,7 @@ import {
   urlsMockFns,
   workflowsUtilsMock,
   workflowsUtilsMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 beforeAll(() => {
@@ -27,7 +27,7 @@ const { mockCleanupExternalWebhook, mockWorkflowDeleted } = vi.hoisted(() => ({
 
 const mockGetWorkflowById = workflowsUtilsMockFns.mockGetWorkflowById
 
-vi.mock('@sim/db', () => ({ ...dbChainMock, ...schemaMock }))
+vi.mock('@/lib/db', () => ({ ...dbChainMock, ...schemaMock }))
 
 vi.mock('@/lib/workflows/utils', () => workflowsUtilsMock)
 

@@ -1,4 +1,4 @@
-import type { CopilotAsyncToolStatus, CopilotToolPermissionDecision } from '@sim/db/schema'
+import type { CopilotAsyncToolStatus, CopilotToolPermissionDecision } from '@/lib/db/schema'
 import {
   MothershipStreamV1AsyncToolRecordStatus,
   MothershipStreamV1ToolOutcome,

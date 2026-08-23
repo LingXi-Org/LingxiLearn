@@ -1,5 +1,5 @@
-import type { BrowserKnownSession } from '@sim/browser-protocol'
-import type { BrowserCredentialMetadata, BrowserSiteInfo } from '@sim/desktop-bridge'
+import type { BrowserKnownSession } from '@/lib/browser-agent/protocol'
+import type { BrowserCredentialMetadata, BrowserSiteInfo } from '@/lib/desktop/bridge'
 import { fuzzyMatch } from '@/lib/search/fuzzy-match'
 
 /** Rows the omnibox will show at once. */

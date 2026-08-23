@@ -8,7 +8,7 @@ import {
   resetEnvFlagsMock,
   schemaMock,
   setEnvFlags,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TableRowNotFoundError } from '@/lib/table/rows/errors'
 import type {

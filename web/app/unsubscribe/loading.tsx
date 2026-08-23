@@ -1,4 +1,4 @@
-import { Skeleton } from '@sim/emcn'
+import { Skeleton } from '@/components/ui-kit'
 
 export default function UnsubscribeLoading() {
   return (

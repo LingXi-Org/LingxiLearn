@@ -1,6 +1,6 @@
-import { db } from '@sim/db'
-import type { CustomPiiPattern, DataRetentionSettings, PiiStagePolicy } from '@sim/db/schema'
-import { workspace } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import type { CustomPiiPattern, DataRetentionSettings, PiiStagePolicy } from '@/lib/db/schema'
+import { workspace } from '@/lib/db/schema'
 import { and, eq, inArray } from 'drizzle-orm'
 import {
   coercePiiLanguage,

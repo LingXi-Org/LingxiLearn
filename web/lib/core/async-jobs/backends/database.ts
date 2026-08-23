@@ -1,4 +1,4 @@
-import { asyncJobs, db } from '@sim/db'
+import { asyncJobs, db } from '@/lib/db'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateShortId } from '@/lib/utils/id'

@@ -1,6 +1,6 @@
 'use client'
 
-import { Table as TableIcon } from '@sim/emcn/icons'
+import { Table as TableIcon } from '@/components/ui-kit/icons'
 import { noop } from '@/lib/utils/helpers'
 import {
   type BreadcrumbItem,

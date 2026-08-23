@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act } from 'react'
-import { TERMINAL_DARK_THEME, type TerminalThemeProfile } from '@sim/desktop-bridge'
+import { TERMINAL_DARK_THEME, type TerminalThemeProfile } from '@/lib/desktop/bridge'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -21,7 +21,7 @@ const { capturedComboboxProps } = vi.hoisted(() => ({
   capturedComboboxProps: { current: null as CapturedComboboxProps | null },
 }))
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   ChipCombobox: (props: CapturedComboboxProps) => {
     capturedComboboxProps.current = props
     return <div data-testid='terminal-theme-combobox' />

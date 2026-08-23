@@ -1,4 +1,4 @@
-import { Library } from '@sim/emcn/icons'
+import { Library } from '@/components/ui-kit/icons'
 import { fetchWorkspaceWorkflowOptions } from '@/lib/workflows/subblocks/options'
 import type { BlockConfig } from '@/blocks/types'
 

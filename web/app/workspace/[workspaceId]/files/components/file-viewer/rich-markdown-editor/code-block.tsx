@@ -7,8 +7,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   useCopyToClipboard,
-} from '@sim/emcn'
-import { Check, ChevronDown, Code, Duplicate, Eye, Wrap } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Check, ChevronDown, Code, Duplicate, Eye, Wrap } from '@/components/ui-kit/icons'
 import type { ReactNodeViewProps } from '@tiptap/react'
 import { NodeViewContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import { looksLikeMermaid, MermaidDiagram } from '../mermaid-diagram'

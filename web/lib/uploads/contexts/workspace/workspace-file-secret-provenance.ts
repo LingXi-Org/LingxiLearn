@@ -1,10 +1,10 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   type StoredWorkspaceFileSecretProvenanceEntry,
   type WorkspaceFileSecretProvenanceEntry,
   workspaceFileSecretProvenance,
   workspaceFiles,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { and, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
 import { encryptSecret } from '@/lib/core/security/encryption'
 import type { DbTransaction } from '@/lib/db/types'

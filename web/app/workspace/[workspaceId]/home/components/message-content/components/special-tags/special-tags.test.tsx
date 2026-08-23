@@ -61,7 +61,7 @@ vi.mock('@/lib/browser-agent/transport', () => ({
   sendBrowserPanelAction: mockSendBrowserPanelAction,
 }))
 
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import {
   createOAuthChatAttempt,
   setOAuthChatAttemptStatus,

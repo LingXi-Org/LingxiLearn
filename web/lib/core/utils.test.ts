@@ -1,5 +1,5 @@
-import { cn } from '@sim/emcn'
-import { resetEnvMock, setEnv } from '@sim/testing'
+import { cn } from '@/components/ui-kit'
+import { resetEnvMock, setEnv } from '@/tests/support'
 import {
   formatDate,
   formatDateTime,

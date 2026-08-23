@@ -1,9 +1,9 @@
 'use client'
 
 import { type RefObject, useCallback, useEffect, useState } from 'react'
-import type { BrowserFindResult } from '@sim/browser-protocol'
-import { Button, ChipInput } from '@sim/emcn'
-import { ArrowDown, ArrowUp, Search, X } from '@sim/emcn/icons'
+import type { BrowserFindResult } from '@/lib/browser-agent/protocol'
+import { Button, ChipInput } from '@/components/ui-kit'
+import { ArrowDown, ArrowUp, Search, X } from '@/components/ui-kit/icons'
 import {
   findInBrowserPage,
   onBrowserFindResult,

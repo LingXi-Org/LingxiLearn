@@ -8,7 +8,7 @@ import {
   Rows3,
   Table as TableIcon,
   Trash,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import { PluginKey } from '@tiptap/pm/state'
 import type { Editor } from '@tiptap/react'
 import { useEditorState } from '@tiptap/react'

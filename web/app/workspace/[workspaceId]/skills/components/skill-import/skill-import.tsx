@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChipModalField } from '@sim/emcn'
+import { ChipModalField } from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import {
   type ParsedSkill,

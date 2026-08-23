@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act, type ReactNode } from 'react'
-import type { BrowserCredentialMetadata } from '@sim/desktop-bridge'
+import type { BrowserCredentialMetadata } from '@/lib/desktop/bridge'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,7 +14,7 @@ const { mockBridge, mockSearch, mockToast } = vi.hoisted(() => ({
   mockToast: { error: vi.fn(), success: vi.fn() },
 }))
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   /** `SettingsResourceRow` composes its tile classes with `cn`. */
   cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
   ArrowLeft: () => <span />,

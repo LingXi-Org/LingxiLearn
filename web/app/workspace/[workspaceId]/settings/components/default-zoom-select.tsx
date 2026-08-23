@@ -4,8 +4,8 @@ import {
   DESKTOP_ZOOM_PERCENTS,
   type DesktopZoomPercent,
   isDesktopZoomPercent,
-} from '@sim/desktop-bridge'
-import { ChipSelect } from '@sim/emcn'
+} from '@/lib/desktop/bridge'
+import { ChipSelect } from '@/components/ui-kit'
 
 const OPTIONS = DESKTOP_ZOOM_PERCENTS.map((zoom) => ({
   label: `${zoom}%`,

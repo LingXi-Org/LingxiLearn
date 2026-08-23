@@ -1,5 +1,5 @@
 import type React from 'react'
-import { Repeat, Rows3 } from '@sim/emcn/icons'
+import { Repeat, Rows3 } from '@/components/ui-kit/icons'
 import { AgentIcon, AgentSkillsIcon, McpIcon, WorkflowIcon } from '@/components/icons'
 import { PROVIDER_DEFINITIONS } from '@/providers/models'
 import { normalizeToolId } from '@/tools/normalize'

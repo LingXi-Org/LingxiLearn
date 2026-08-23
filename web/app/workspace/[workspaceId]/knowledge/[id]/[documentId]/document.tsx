@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { ChipConfirmModal } from '@sim/emcn'
+import { ChipConfirmModal } from '@/components/ui-kit'
 import {
   ChevronDown,
   ChevronUp,
@@ -11,7 +11,7 @@ import {
   Plus,
   TagIcon,
   Trash,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import { useParams, useRouter } from 'next/navigation'
 import type { ChunkData } from '@/lib/knowledge/types'
 import type {

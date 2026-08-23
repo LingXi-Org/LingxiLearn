@@ -21,7 +21,7 @@ import {
   queueTableRows,
   resetDbChainMock,
   schemaMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   BlockState as AppBlockState,
@@ -54,7 +54,7 @@ function legacySubBlocks(subBlocks: Record<string, any>): any {
   return subBlocks
 }
 
-vi.mock('@sim/db', () => ({ ...dbChainMock, ...schemaMock }))
+vi.mock('@/lib/db', () => ({ ...dbChainMock, ...schemaMock }))
 
 const { mockSanitizeAgentToolsInBlocks } = vi.hoisted(() => ({
   mockSanitizeAgentToolsInBlocks: vi.fn(),

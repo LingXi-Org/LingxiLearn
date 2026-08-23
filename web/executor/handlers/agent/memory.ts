@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { memory, memorySecretProvenance } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { memory, memorySecretProvenance } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { generateId } from '@/lib/utils/id'
 import { isPlainRecord } from '@/lib/utils/object'

@@ -10,8 +10,8 @@ import {
   ChipModalFooter,
   ChipModalHeader,
   SecretReveal,
-} from '@sim/emcn'
-import { Plus } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Plus } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { formatDate } from '@/lib/utils/formatting'
 import { RowActionsMenu } from '@/app/workspace/[workspaceId]/settings/components/row-actions-menu'

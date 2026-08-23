@@ -1,4 +1,4 @@
-import type { db } from '@sim/db'
+import type { db } from '@/lib/db'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import { enqueueOutboxEvent } from '@/lib/core/outbox/service'
 import type { ProcessingOptions } from '@/lib/knowledge/documents/service'

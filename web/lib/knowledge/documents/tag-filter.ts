@@ -1,4 +1,4 @@
-import { document } from '@sim/db/schema'
+import { document } from '@/lib/db/schema'
 import { and, eq, gt, gte, lt, lte, ne, type SQL, sql } from 'drizzle-orm'
 import { parseBooleanValue } from '@/lib/knowledge/tags/utils'
 

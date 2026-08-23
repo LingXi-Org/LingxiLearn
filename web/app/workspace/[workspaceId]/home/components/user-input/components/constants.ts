@@ -1,4 +1,4 @@
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import type {
   MothershipResource,
   MothershipResourceType,

@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Music } from '@sim/emcn/icons'
+import { Music } from '@/components/ui-kit/icons'
 import dynamic from 'next/dynamic'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
 import { resolveMediaMimeType } from '@/lib/uploads/utils/file-utils'

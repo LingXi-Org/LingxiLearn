@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { envFlagsMockFns, resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { envFlagsMockFns, resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockDnsLookup } = vi.hoisted(() => ({

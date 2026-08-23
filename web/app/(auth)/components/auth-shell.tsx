@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { ChipLink } from '@sim/emcn'
+import { ChipLink } from '@/components/ui-kit'
 import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
 
 export function AuthShell({

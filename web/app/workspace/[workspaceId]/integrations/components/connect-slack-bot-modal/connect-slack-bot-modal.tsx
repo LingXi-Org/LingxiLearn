@@ -11,8 +11,8 @@ import {
   Label,
   SecretInput,
   Wizard,
-} from '@sim/emcn'
-import { Loader } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Loader } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

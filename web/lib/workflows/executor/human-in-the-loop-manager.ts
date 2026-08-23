@@ -1,5 +1,5 @@
-import { dbFor } from '@sim/db'
-import { pausedExecutions, resumeQueue, workflowExecutionLogs } from '@sim/db/schema'
+import { dbFor } from '@/lib/db'
+import { pausedExecutions, resumeQueue, workflowExecutionLogs } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

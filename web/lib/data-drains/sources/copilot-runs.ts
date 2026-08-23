@@ -1,5 +1,5 @@
-import { dbReplica } from '@sim/db'
-import { copilotRuns } from '@sim/db/schema'
+import { dbReplica } from '@/lib/db'
+import { copilotRuns } from '@/lib/db/schema'
 import { and, inArray, isNotNull } from 'drizzle-orm'
 import {
   decodeTimeCursor,

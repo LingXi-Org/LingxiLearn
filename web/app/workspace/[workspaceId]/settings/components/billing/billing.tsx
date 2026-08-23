@@ -11,8 +11,8 @@ import {
   Switch,
   Tooltip,
   toast,
-} from '@sim/emcn'
-import { isOrgAdminRole } from '@sim/platform-authz/predicates'
+} from '@/components/ui-kit'
+import { isOrgAdminRole } from '@/lib/permissions/native/predicates'
 import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/auth/auth-client'
 import { ON_DEMAND_UNLIMITED } from '@/lib/billing/constants'

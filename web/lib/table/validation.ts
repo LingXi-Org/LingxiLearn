@@ -2,8 +2,8 @@
  * Validation utilities for table schemas and row data.
  */
 
-import { db } from '@sim/db'
-import { userTableRows } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { userTableRows } from '@/lib/db/schema'
 import { and, eq, or, type SQL, sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { getColumnId } from '@/lib/table/column-keys'

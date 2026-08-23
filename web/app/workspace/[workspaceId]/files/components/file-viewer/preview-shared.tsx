@@ -1,8 +1,8 @@
 'use client'
 
 import { Component, type ErrorInfo, memo, type ReactNode } from 'react'
-import { cn } from '@sim/emcn'
-import { Loader } from '@sim/emcn/icons'
+import { cn } from '@/components/ui-kit'
+import { Loader } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
 

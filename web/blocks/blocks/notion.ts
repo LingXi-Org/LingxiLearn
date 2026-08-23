@@ -1,4 +1,4 @@
-import { Send } from '@sim/emcn/icons'
+import { Send } from '@/components/ui-kit/icons'
 import { toError } from '@/lib/utils/errors'
 import { NotionIcon } from '@/components/icons'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'

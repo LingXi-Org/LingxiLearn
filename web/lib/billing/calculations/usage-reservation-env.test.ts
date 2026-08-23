@@ -7,7 +7,7 @@ import {
   resetEnvMock,
   setEnv,
   setEnvFlags,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { evalMock } = vi.hoisted(() => ({

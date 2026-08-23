@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { BrowserImportProfile } from '@sim/desktop-bridge'
+import type { BrowserImportProfile } from '@/lib/desktop/bridge'
 import {
   ChipModal,
   ChipModalBody,
   ChipModalField,
   ChipModalFooter,
   ChipModalHeader,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 
 interface ImportModalProps {
   open: boolean

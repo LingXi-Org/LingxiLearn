@@ -1,14 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { BROWSER_DATA_KINDS, type BrowserDataKind } from '@sim/browser-protocol'
+import { BROWSER_DATA_KINDS, type BrowserDataKind } from '@/lib/browser-agent/protocol'
 import type {
   BrowserCredentialMetadata,
   DesktopAppearanceTheme,
   DesktopPreferences,
   DesktopZoomPercent,
-} from '@sim/desktop-bridge'
-import { Chip, ChipConfirmModal, Label, Switch, toast } from '@sim/emcn'
+} from '@/lib/desktop/bridge'
+import { Chip, ChipConfirmModal, Label, Switch, toast } from '@/components/ui-kit'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { getDesktopBridge } from '@/lib/desktop'
 import { AppearanceThemeSelect } from '@/app/workspace/[workspaceId]/settings/components/appearance-theme-select'

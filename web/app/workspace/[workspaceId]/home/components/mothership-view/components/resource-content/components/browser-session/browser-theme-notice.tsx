@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Banner, Button } from '@sim/emcn'
-import { X } from '@sim/emcn/icons'
+import { Banner, Button } from '@/components/ui-kit'
+import { X } from '@/components/ui-kit/icons'
 import { sendBrowserPanelAction } from '@/lib/browser-agent/transport'
 
 interface BrowserThemeNoticeProps {

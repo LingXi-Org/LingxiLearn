@@ -1,4 +1,4 @@
-import { loggerMock } from '@sim/testing'
+import { loggerMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockDecryptSecret, mockRedactObjectStrings, mockIsEnforced, mockReportUnrecorded } =

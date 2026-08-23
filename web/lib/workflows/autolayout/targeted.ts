@@ -1,4 +1,4 @@
-import { CONTAINER_DIMENSIONS } from '@sim/workflow-renderer'
+import { CONTAINER_DIMENSIONS } from '@/components/workflow'
 import {
   CONTAINER_PADDING,
   DEFAULT_HORIZONTAL_SPACING,

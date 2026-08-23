@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Chip, ChipConfirmModal, cn, Tooltip } from '@sim/emcn'
-import { ChevronLeft } from '@sim/emcn/icons'
+import { Chip, ChipConfirmModal, cn, Tooltip } from '@/components/ui-kit'
+import { ChevronLeft } from '@/components/ui-kit/icons'
 import { useRouter } from 'next/navigation'
 import {
   SETTINGS_PLANE_CHROME,

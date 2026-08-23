@@ -1,4 +1,4 @@
-import { db, workflowSchedule } from '@sim/db'
+import { db, workflowSchedule } from '@/lib/db'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

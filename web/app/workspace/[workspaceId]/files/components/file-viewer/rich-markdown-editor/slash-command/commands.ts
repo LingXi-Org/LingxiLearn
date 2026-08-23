@@ -12,7 +12,7 @@ import {
   Pilcrow,
   Table as TableIcon,
   TextQuote,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import type { Editor, Range } from '@tiptap/core'
 
 export interface SlashCommandContext {

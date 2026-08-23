@@ -1,4 +1,4 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import { sql } from 'drizzle-orm'
 import type { FolderResourceType } from '@/lib/api/contracts/folders'
 import type { DbOrTx } from '@/lib/db/types'

@@ -12,7 +12,7 @@ import {
   loggingSessionMock,
   loggingSessionMockFns,
   resetEnvironmentUtilsMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

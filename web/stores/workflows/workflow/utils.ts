@@ -1,7 +1,7 @@
 import {
   isWorkflowBlockAncestorLocked,
   isWorkflowBlockProtected,
-} from '@sim/workflow-types/workflow'
+} from '@/lib/workflows/domain/workflow'
 import type { BlockState, Loop, Parallel } from '@/stores/workflows/workflow/types'
 
 const DEFAULT_LOOP_ITERATIONS = 5

@@ -1,8 +1,8 @@
 'use client'
 
 import { type ReactNode, useEffect } from 'react'
-import { Button } from '@sim/emcn'
-import { TriangleAlert } from '@sim/emcn/icons'
+import { Button } from '@/components/ui-kit'
+import { TriangleAlert } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 
 /** Props shape required by Next.js error boundary files (`error.tsx`). */

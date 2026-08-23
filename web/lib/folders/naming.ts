@@ -1,5 +1,5 @@
-import type { db } from '@sim/db'
-import { folder as folderTable } from '@sim/db/schema'
+import type { db } from '@/lib/db'
+import { folder as folderTable } from '@/lib/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { FolderResourceType } from '@/lib/api/contracts/folders'
 

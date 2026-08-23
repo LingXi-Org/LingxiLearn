@@ -10,8 +10,8 @@
  * Re-exported through the `@/lib/table` barrel.
  */
 
-import { db } from '@sim/db'
-import { tableJobs, userTableRows } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { tableJobs, userTableRows } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

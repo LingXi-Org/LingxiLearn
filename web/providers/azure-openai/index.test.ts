@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { resetEnvMock, setEnv } from '@sim/testing'
+import { resetEnvMock, setEnv } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStreamEvent } from '@/providers/stream-events'
 import type { ProviderRequest, ProviderToolConfig } from '@/providers/types'

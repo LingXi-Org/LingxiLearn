@@ -1,8 +1,8 @@
 'use client'
 
 import { memo, type SVGProps } from 'react'
-import { cn } from '@sim/emcn'
-import { Box } from '@sim/emcn/icons'
+import { cn } from '@/components/ui-kit'
+import { Box } from '@/components/ui-kit/icons'
 import type { BlockIcon } from '@/blocks/types'
 
 const cache = new Map<string, BlockIcon>()

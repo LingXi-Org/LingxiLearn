@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import {
   RESOURCE_TILE_BASE,
   RESOURCE_TILE_PLAIN,

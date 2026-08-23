@@ -20,7 +20,7 @@ import {
   expectEdgeCount,
   expectNoEdgeBetween,
   WorkflowBuilder,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import { useSubBlockStore } from '@/stores/workflows/subblock/store'

@@ -8,7 +8,7 @@ const { mockOnConflictDoUpdate, mockReturning } = vi.hoisted(() => ({
   mockReturning: vi.fn(),
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@/lib/db', () => ({
   db: {
     insert: () => ({
       values: () => ({ onConflictDoUpdate: mockOnConflictDoUpdate }),

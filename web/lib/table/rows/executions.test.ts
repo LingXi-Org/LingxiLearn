@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMock, dbChainMockFns, resetDbChainMock } from '@sim/testing'
+import { dbChainMock, dbChainMockFns, resetDbChainMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeExecutionsPatch } from '@/lib/table/rows/executions'
 import type { RowExecutionMetadata } from '@/lib/table/types'

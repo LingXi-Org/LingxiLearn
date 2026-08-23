@@ -8,8 +8,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@sim/emcn'
-import { ChevronLeft, ChevronRight } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { ChevronLeft, ChevronRight } from '@/components/ui-kit/icons'
 import { format, parseISO } from 'date-fns'
 import type { CalendarScope } from '@/app/workspace/[workspaceId]/scheduled-tasks/utils/calendar-grid'
 

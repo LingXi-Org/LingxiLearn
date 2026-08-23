@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { redisConfigMockFns } from '@sim/testing'
+import { redisConfigMockFns } from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockHasAbortMarker, mockClearAbortMarker, mockWriteAbortMarker } = vi.hoisted(() => ({

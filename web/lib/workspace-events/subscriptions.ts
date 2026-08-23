@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { webhook, workflow, workflowDeploymentVersion } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { webhook, workflow, workflowDeploymentVersion } from '@/lib/db/schema'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import { deliverableWebhookPredicate } from '@/lib/webhooks/delivery-predicate'
 import {

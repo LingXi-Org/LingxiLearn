@@ -5,7 +5,7 @@ import {
   resetEnvFlagsMock,
   schemaMock,
   setEnvFlags,
-} from '@sim/testing'
+} from '@/tests/support'
 import {
   afterAll,
   afterEach,

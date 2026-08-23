@@ -15,7 +15,7 @@ import {
   handleKeyboardActivation,
   Label,
   Trash,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   type AllTagSlot,
   FIELD_TYPE_LABELS,

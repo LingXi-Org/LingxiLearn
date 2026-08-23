@@ -12,8 +12,8 @@ import {
   PopoverAnchor,
   PopoverContent,
   RefreshCw,
-} from '@sim/emcn'
-import { Download } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Download } from '@/components/ui-kit/icons'
 import { useParams } from 'next/navigation'
 import { formatDateShort } from '@/lib/core/utils/date-display'
 import { hasActiveFilters } from '@/lib/logs/filters'

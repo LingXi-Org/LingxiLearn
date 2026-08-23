@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { account, webhook, workflow, workflowDeploymentVersion } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { account, webhook, workflow, workflowDeploymentVersion } from '@/lib/db/schema'
 import type { Logger } from '@/lib/logger'
 import { and, eq, isNull, ne, or, sql } from 'drizzle-orm'
 import {

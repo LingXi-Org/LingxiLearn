@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Tooltip,
   toast,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import { schedulePermissionContract } from '@/lib/api/contracts/agent-interactions'

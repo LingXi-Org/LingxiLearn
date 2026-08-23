@@ -7,7 +7,7 @@ import {
   resetDbChainMock,
   resetEnvFlagsMock,
   setEnvFlags,
-} from '@sim/testing'
+} from '@/tests/support'
 
 const mockGetEnv = envMockFns.getEnv
 
@@ -18,7 +18,7 @@ const { mockEq, mockGetHighestPrioritySubscription } = vi.hoisted(() => ({
   mockGetHighestPrioritySubscription: vi.fn(),
 }))
 
-vi.mock('@sim/db/schema', () => ({
+vi.mock('@/lib/db/schema', () => ({
   organization: {
     id: 'organization.id',
     storageUsedBytes: 'organization.storageUsedBytes',

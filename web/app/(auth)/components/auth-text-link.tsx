@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import Link from 'next/link'
 
 const AUTH_TEXT_LINK_CLASS =

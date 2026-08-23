@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { credential, permissions, workspace } from '@sim/db/schema'
-import { dbChainMock, dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { credential, permissions, workspace } from '@/lib/db/schema'
+import { dbChainMock, dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DbOrTx } from '@/lib/db/types'
 

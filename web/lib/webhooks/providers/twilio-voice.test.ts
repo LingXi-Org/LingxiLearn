@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import crypto from 'crypto'
-import { createMockRequest } from '@sim/testing'
+import { createMockRequest } from '@/tests/support'
 import { describe, expect, it } from 'vitest'
 import { twilioVoiceHandler } from '@/lib/webhooks/providers/twilio-voice'
 

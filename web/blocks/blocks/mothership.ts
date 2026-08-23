@@ -1,4 +1,4 @@
-import { Blimp } from '@sim/emcn'
+import { Blimp } from '@/components/ui-kit'
 import { fetchWorkspaceRawSecretNameOptions } from '@/lib/workflows/subblocks/options'
 import type { BlockConfig } from '@/blocks/types'
 import type { ToolResponse } from '@/tools/types'

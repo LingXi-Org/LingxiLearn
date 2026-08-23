@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { useRouter } from 'next/navigation'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'

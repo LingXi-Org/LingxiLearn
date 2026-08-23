@@ -14,8 +14,8 @@ import {
   DropdownMenuTrigger,
   NATIVE_SURFACE_OCCLUSION_PREPARE_EVENT,
   Tooltip,
-} from '@sim/emcn'
-import { Folder, Plus } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Folder, Plus } from '@/components/ui-kit/icons'
 import { isBrowserAgentAvailable } from '@/lib/browser-agent/transport'
 import {
   BROWSER_SESSION_RESOURCE_ID,

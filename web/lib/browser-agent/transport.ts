@@ -25,7 +25,7 @@ import type {
   BrowserTabsState,
   BrowserTheme,
   BrowserToolName,
-} from '@sim/browser-protocol'
+} from '@/lib/browser-agent/protocol'
 import type {
   BrowserAddToChatPayload,
   BrowserCredentialMetadata,
@@ -34,8 +34,8 @@ import type {
   BrowserToolbarCommand,
   DesktopAppearanceTheme,
   SimDesktopBrowserAgentApi,
-} from '@sim/desktop-bridge'
-import { isPendingDesktopScopeId } from '@sim/desktop-bridge'
+} from '@/lib/desktop/bridge'
+import { isPendingDesktopScopeId } from '@/lib/desktop/bridge'
 import { getDesktopBridge, isBrowserAgentEnabled } from '@/lib/desktop'
 import { useBrowserSessionStore } from '@/stores/browser-session/store'
 

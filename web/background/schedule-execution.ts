@@ -5,7 +5,7 @@ import {
   workflowDeploymentVersion,
   workflowExecutionLogs,
   workflowSchedule,
-} from '@sim/db'
+} from '@/lib/db'
 import { createLogger, runWithRequestContext } from '@/lib/logger'
 import { describeError, toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

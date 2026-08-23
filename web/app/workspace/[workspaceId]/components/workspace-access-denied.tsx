@@ -1,5 +1,5 @@
-import { ChipLink } from '@sim/emcn'
-import { CircleAlert } from '@sim/emcn/icons'
+import { ChipLink } from '@/components/ui-kit'
+import { CircleAlert } from '@/components/ui-kit/icons'
 import { DesktopTitleBarLane } from '@/app/_shell/desktop-title-bar'
 
 export function WorkspaceAccessDenied() {

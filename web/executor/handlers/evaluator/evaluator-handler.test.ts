@@ -1,7 +1,7 @@
-import '@sim/testing/mocks/executor'
+import '@/tests/support/mocks/executor'
 
 import { createLogger } from '@/lib/logger'
-import { authOAuthUtilsMock, authOAuthUtilsMockFns } from '@sim/testing'
+import { authOAuthUtilsMock, authOAuthUtilsMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 const { mockResolveAutoModel } = vi.hoisted(() => ({
@@ -814,7 +814,7 @@ describe('EvaluatorBlockHandler', () => {
     mockGetProviderFromModel.mockReturnValue('vertex')
 
     // Mock the database query for Vertex credential
-    const mockDb = await import('@sim/db')
+    const mockDb = await import('@/lib/db')
     const mockAccount = {
       id: 'test-vertex-credential-id',
       accessToken: 'mock-access-token',

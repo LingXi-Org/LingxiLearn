@@ -9,7 +9,7 @@ import {
   ChipModalFooter,
   ChipModalHeader,
   SecretInput,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { isApiClientError } from '@/lib/api/client/errors'

@@ -1,4 +1,4 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   apiKey,
   chat,
@@ -9,7 +9,7 @@ import {
   workflowMcpTool,
   workflowSchedule,
   workspace,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { env } from '@/lib/core/config/env'

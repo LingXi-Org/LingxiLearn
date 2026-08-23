@@ -1,7 +1,7 @@
 /**
  * Pure dep-satisfaction helpers shared by the server-side scheduler and the
  * client UI. Lives in its own file (not `workflow-columns.ts`) so the client
- * can import it without pulling in `@sim/db` and other server-only deps.
+ * can import it without pulling in `@/lib/db` and other server-only deps.
  */
 
 import { createLogger } from '@/lib/logger'

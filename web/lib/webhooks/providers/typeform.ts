@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { safeCompare } from '@sim/security/compare'
-import { hmacSha256Base64 } from '@sim/security/hmac'
+import { safeCompare } from '@/lib/security/compare'
+import { hmacSha256Base64 } from '@/lib/security/hmac'
 import { getNotificationUrl, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
 import type {
   DeleteSubscriptionContext,

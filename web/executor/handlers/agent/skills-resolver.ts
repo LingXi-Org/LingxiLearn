@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { skill } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { skill } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { and, eq, inArray } from 'drizzle-orm'

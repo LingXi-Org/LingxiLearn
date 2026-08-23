@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChipCombobox, type ComboboxOption, Loader } from '@sim/emcn'
+import { ChipCombobox, type ComboboxOption, Loader } from '@/components/ui-kit'
 import { SEARCH_DEBOUNCE_MS } from '@/lib/url-state'
 import { SELECTOR_CONTEXT_FIELDS } from '@/lib/workflows/subblocks/context'
 import type {

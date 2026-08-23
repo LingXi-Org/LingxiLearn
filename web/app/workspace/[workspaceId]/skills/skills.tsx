@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Chip, ChipInput, Search } from '@sim/emcn'
-import { Plus } from '@sim/emcn/icons'
+import { Chip, ChipInput, Search } from '@/components/ui-kit'
+import { Plus } from '@/components/ui-kit/icons'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'

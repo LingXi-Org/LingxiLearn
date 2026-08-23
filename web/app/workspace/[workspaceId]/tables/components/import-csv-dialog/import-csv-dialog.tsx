@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
   toast,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { truncate } from '@/lib/utils/string'

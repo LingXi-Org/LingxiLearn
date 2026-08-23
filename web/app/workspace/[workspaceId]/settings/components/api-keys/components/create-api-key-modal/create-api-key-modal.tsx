@@ -11,7 +11,7 @@ import {
   ChipModalFooter,
   ChipModalHeader,
   SecretReveal,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { type CreatedApiKey, useCreateApiKey } from '@/hooks/queries/api-keys'

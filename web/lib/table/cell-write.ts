@@ -9,8 +9,8 @@
  * next write.
  */
 
-import { db } from '@sim/db'
-import { userTableRows } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { userTableRows } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, eq } from 'drizzle-orm'
 import { appendTableEvent } from '@/lib/table/events'

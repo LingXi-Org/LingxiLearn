@@ -13,7 +13,7 @@ this split correct:
 
 - The structure's `subBlocks[*].value` is stale after any edit. Never read it directly
   for a current value — merge via `mergeSubblockState`/`mergeSubblockStateWithValues`
-  (single implementation in `@sim/workflow-persistence/subblocks`) or read the
+  (single implementation in `@/lib/workflows/persistence/native/subblocks`) or read the
   subblock store. Exception: condition/router dynamic-handle subblocks dual-write the
   structure (`syncDynamicHandleSubblockValue`) and may be read from either source.
 - Merge semantics are tri-state: a key present in the subblock store wins — including

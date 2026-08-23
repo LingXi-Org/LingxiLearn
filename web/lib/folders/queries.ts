@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { folder } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { folder } from '@/lib/db/schema'
 import { and, type Column, count, eq, isNotNull, isNull } from 'drizzle-orm'
 import type { FolderApi, FolderResourceType } from '@/lib/api/contracts/folders'
 import { type ListSortOrder, listOrderBy, searchFilter } from '@/lib/api/list-query'

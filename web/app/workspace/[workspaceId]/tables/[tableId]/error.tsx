@@ -1,7 +1,7 @@
 'use client'
 
-import { Button } from '@sim/emcn'
-import { ArrowLeft } from '@sim/emcn/icons'
+import { Button } from '@/components/ui-kit'
+import { ArrowLeft } from '@/components/ui-kit/icons'
 import { useParams, useRouter } from 'next/navigation'
 import { type ErrorBoundaryProps, ErrorState } from '@/app/workspace/[workspaceId]/components'
 

@@ -3,7 +3,7 @@
  */
 
 import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
-import { dbChainMockFns, loggerMock, resetDbChainMock } from '@sim/testing'
+import { dbChainMockFns, loggerMock, resetDbChainMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

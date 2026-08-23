@@ -1,4 +1,4 @@
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import { getDocumentIcon } from '@/components/icons/document-icons'
 import type { ChatMessageAttachment } from '@/app/workspace/[workspaceId]/home/types'
 

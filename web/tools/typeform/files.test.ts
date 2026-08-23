@@ -6,7 +6,7 @@ import {
   hybridAuthMockFns,
   inputValidationMock,
   inputValidationMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockUploadCopilotFile, mockUploadExecutionFile } = vi.hoisted(() => ({

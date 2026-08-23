@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { user } from '@sim/db/schema'
+import { user } from '@/lib/db/schema'
 import {
   dbChainMock,
   dbChainMockFns,
@@ -10,10 +10,10 @@ import {
   resetEnvMock,
   schemaMock,
   setEnv,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@sim/db', () => ({ ...dbChainMock, ...schemaMock }))
+vi.mock('@/lib/db', () => ({ ...dbChainMock, ...schemaMock }))
 vi.mock('@/lib/core/config/appconfig', () => ({ fetchAppConfigProfile: vi.fn() }))
 
 import { getActivelyBannedUserIds, isBanActive, isEmailBlocked } from '@/lib/auth/ban'

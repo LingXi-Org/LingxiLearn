@@ -7,7 +7,7 @@ import {
   queueTableRows,
   resetDbChainMock,
   schemaMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MAX_FOLDERS_PER_WORKSPACE } from '@/lib/folders/constants'
 import { FolderCollectionFullError, FolderCollectionLimitExceededError } from '@/lib/folders/errors'

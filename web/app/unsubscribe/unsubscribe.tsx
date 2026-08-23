@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
-import { Chip, cn, Loader } from '@sim/emcn'
+import { Chip, cn, Loader } from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useSearchParams } from 'next/navigation'
 import type { UnsubscribeType } from '@/lib/api/contracts/user'

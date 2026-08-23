@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act } from 'react'
-import { resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 

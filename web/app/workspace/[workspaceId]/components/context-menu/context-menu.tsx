@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   Download,
   Duplicate,
@@ -25,7 +25,7 @@ import {
   Trash,
   Unlock,
   X,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 
 interface ContextMenuProps {
   isOpen: boolean

@@ -1,4 +1,4 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   checkWorkspaceAccess,

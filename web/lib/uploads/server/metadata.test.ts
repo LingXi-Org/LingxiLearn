@@ -1,14 +1,14 @@
 /**
  * @vitest-environment node
  */
-import { workspaceFiles } from '@sim/db/schema'
-import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { workspaceFiles } from '@/lib/db/schema'
+import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import type { SQL } from 'drizzle-orm'
 import { PgDialect } from 'drizzle-orm/pg-core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DbTransaction } from '@/lib/db/types'
 
-vi.unmock('@sim/db/schema')
+vi.unmock('@/lib/db/schema')
 vi.unmock('drizzle-orm')
 
 import {

@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { member, organization, subscription } from '@sim/db/schema'
-import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { member, organization, subscription } from '@/lib/db/schema'
+import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**

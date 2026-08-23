@@ -5,7 +5,7 @@
  * directly from `@/lib/table/rows/executions`.
  */
 
-import { tableRowExecutions, userTableRows } from '@sim/db/schema'
+import { tableRowExecutions, userTableRows } from '@/lib/db/schema'
 import { and, eq, inArray, type SQL, sql } from 'drizzle-orm'
 import type { DbOrTx } from '@/lib/db/types'
 import { getColumnId } from '@/lib/table/column-keys'

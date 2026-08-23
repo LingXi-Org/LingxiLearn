@@ -49,7 +49,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
 }))
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   toast: { success: vi.fn(), error: (...args: unknown[]) => toastError(...args) },
 }))
 

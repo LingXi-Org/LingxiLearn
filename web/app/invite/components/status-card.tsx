@@ -1,5 +1,5 @@
 'use client'
-import { Chip, cn, Loader } from '@sim/emcn'
+import { Chip, cn, Loader } from '@/components/ui-kit'
 import { useRouter } from 'next/navigation'
 import { AuthSubmitButton } from '@/app/(auth)/components'
 import { AUTH_BUTTON_CLASS } from '@/app/(auth)/components/constants'

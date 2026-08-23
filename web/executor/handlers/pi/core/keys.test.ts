@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { envFlagsMockFns, resetEnvFlagsMock } from '@sim/testing'
+import { envFlagsMockFns, resetEnvFlagsMock } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockGetApiKeyWithBYOK, mockGetBYOKKey, mockCalculateCost, mockShouldBill } = vi.hoisted(

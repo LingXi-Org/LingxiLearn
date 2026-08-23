@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { cn, Input, InputOTP, InputOTPGroup, InputOTPSlot, Label } from '@sim/emcn'
+import { cn, Input, InputOTP, InputOTPGroup, InputOTPSlot, Label } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { quickValidateEmail } from '@/lib/messaging/email/validation'

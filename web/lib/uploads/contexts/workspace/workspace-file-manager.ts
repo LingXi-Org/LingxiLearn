@@ -4,8 +4,8 @@
  */
 
 import { randomBytes } from 'crypto'
-import { db } from '@sim/db'
-import { uploadSession, workspace, workspaceFiles } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { uploadSession, workspace, workspaceFiles } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import {
   describeError,

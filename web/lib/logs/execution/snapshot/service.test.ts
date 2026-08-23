@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { databaseMock } from '@sim/testing'
+import { databaseMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/utils/id', () => ({

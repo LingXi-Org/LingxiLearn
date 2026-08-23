@@ -1,4 +1,4 @@
-import { Repeat, Split } from '@sim/emcn/icons'
+import { Repeat, Split } from '@/components/ui-kit/icons'
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import { toSearchToken } from '@/lib/search/tokens'

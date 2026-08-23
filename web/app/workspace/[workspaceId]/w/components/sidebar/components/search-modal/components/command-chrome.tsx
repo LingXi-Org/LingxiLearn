@@ -1,5 +1,5 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 
 interface CommandListProps {
   children: ReactNode

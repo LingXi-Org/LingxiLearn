@@ -5,7 +5,7 @@ import {
   FILE_DOC_EVENTS,
   FILE_DOC_MESSAGE_TYPE,
   FILE_DOC_SEED,
-} from '@sim/realtime-protocol/file-doc'
+} from '@/lib/realtime/protocol/file-doc'
 import * as encoding from 'lib0/encoding'
 import type { Socket } from 'socket.io-client'
 import { describe, expect, it, vi } from 'vitest'

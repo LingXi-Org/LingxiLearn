@@ -1,5 +1,5 @@
-import { isBrowserToolName } from '@sim/browser-protocol'
-import { isTerminalToolName } from '@sim/terminal-protocol'
+import { isBrowserToolName } from '@/lib/browser-agent/protocol'
+import { isTerminalToolName } from '@/lib/terminal/protocol'
 import {
   MothershipStreamV1ToolPhase,
   MothershipStreamV1ToolStatus,

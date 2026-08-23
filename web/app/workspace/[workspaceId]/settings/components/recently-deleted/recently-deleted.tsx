@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Chip, ChipInput, ChipModalTabs } from '@sim/emcn'
-import { Search } from '@sim/emcn/icons'
+import { Chip, ChipInput, ChipModalTabs } from '@/components/ui-kit'
+import { Search } from '@/components/ui-kit/icons'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryStates } from 'nuqs'
 import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'

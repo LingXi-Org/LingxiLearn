@@ -11,8 +11,8 @@ import {
   ChipModalHeader,
   cn,
   Loader,
-} from '@sim/emcn'
-import { RefreshCw, X } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { RefreshCw, X } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
 import {

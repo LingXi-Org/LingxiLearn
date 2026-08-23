@@ -1,14 +1,14 @@
 /**
  * @vitest-environment node
  */
-import { environment, workspaceEnvironment } from '@sim/db/schema'
+import { environment, workspaceEnvironment } from '@/lib/db/schema'
 import {
   dbChainMockFns,
   encryptionMock,
   encryptionMockFns,
   queueTableRows,
   resetDbChainMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -31,7 +31,7 @@ const {
 vi.unmock('@/lib/environment/utils')
 
 vi.mock('@/lib/core/security/encryption', () => encryptionMock)
-vi.mock('@sim/audit', () => ({
+vi.mock('@/lib/audit', () => ({
   AuditAction: { ENVIRONMENT_UPDATED: 'environment.updated' },
   AuditResourceType: { ENVIRONMENT: 'environment' },
   recordAudit: mockRecordAudit,

@@ -10,7 +10,7 @@ import {
   PopoverItem,
   PopoverScrollArea,
   PopoverSection,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import {
   CODE_PLACEHOLDER,

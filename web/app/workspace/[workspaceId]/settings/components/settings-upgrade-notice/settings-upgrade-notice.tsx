@@ -1,7 +1,7 @@
 'use client'
 
-import { Chip, cn } from '@sim/emcn'
-import { ArrowRight } from '@sim/emcn/icons'
+import { Chip, cn } from '@/components/ui-kit'
+import { ArrowRight } from '@/components/ui-kit/icons'
 import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 
 interface SettingsUpgradeNoticeProps {

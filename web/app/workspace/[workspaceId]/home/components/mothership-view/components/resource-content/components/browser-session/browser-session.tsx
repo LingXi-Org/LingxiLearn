@@ -7,13 +7,13 @@ import type {
   BrowserPanelBounds,
   BrowserPanelSnapshot,
   BrowserTabState,
-} from '@sim/browser-protocol'
-import { isBrowserTheme } from '@sim/browser-protocol'
+} from '@/lib/browser-agent/protocol'
+import { isBrowserTheme } from '@/lib/browser-agent/protocol'
 import type {
   BrowserAddToChatPayload,
   BrowserCredentialMetadata,
   DesktopAppearanceTheme,
-} from '@sim/desktop-bridge'
+} from '@/lib/desktop/bridge'
 import {
   Button,
   ChipInput,
@@ -31,8 +31,8 @@ import {
   PopoverContent,
   PopoverItem,
   toast,
-} from '@sim/emcn'
-import { ArrowLeft, ArrowRight, Globe, Key, Link, RefreshCw, Search } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { ArrowLeft, ArrowRight, Globe, Key, Link, RefreshCw, Search } from '@/components/ui-kit/icons'
 import { useTheme } from 'next-themes'
 import { createPortal } from 'react-dom'
 import { onFocusVisibleBrowserOmnibox } from '@/lib/browser-agent/renderer-shortcuts'

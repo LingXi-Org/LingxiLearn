@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   resolvePermission: vi.fn(),
 }))
 
-vi.mock('@sim/platform-authz/workspace', () => ({
+vi.mock('@/lib/permissions/native/workspace', () => ({
   permissionSatisfies: (actual: string, required: string) => {
     const rank = { read: 1, write: 2, admin: 3 } as const
     return rank[actual as keyof typeof rank] >= rank[required as keyof typeof rank]

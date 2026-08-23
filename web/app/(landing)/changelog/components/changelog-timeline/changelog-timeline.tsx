@@ -3,7 +3,7 @@
 import { type ReactNode, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
 import 'streamdown/styles.css'
-import { Avatar, AvatarFallback, AvatarImage, Chip, cn } from '@sim/emcn'
+import { Avatar, AvatarFallback, AvatarImage, Chip, cn } from '@/components/ui-kit'
 import { formatDate } from '@/lib/utils/formatting'
 import type { ChangelogEntry, GitHubRelease } from '@/app/(landing)/changelog/types'
 import { mapReleases, releasesEndpoint } from '@/app/(landing)/changelog/utils'

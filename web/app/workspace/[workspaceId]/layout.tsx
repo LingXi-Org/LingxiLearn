@@ -1,4 +1,4 @@
-import { ToastProvider } from '@sim/emcn'
+import { ToastProvider } from '@/components/ui-kit'
 import { cookies } from 'next/headers'
 import type { LingxiWorkspaceHostContext } from '@/lib/lingxi/types'
 import { WorkspaceChrome } from './components/workspace-chrome'

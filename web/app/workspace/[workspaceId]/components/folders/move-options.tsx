@@ -5,8 +5,8 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from '@sim/emcn'
-import { Folder } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Folder } from '@/components/ui-kit/icons'
 
 /**
  * The minimal folder shape these builders need — an id, a parent link, a display name, and an

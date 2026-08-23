@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMockFns } from '@sim/testing'
+import { dbChainMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluateRule, excludeSimExecutionsCondition } from '@/lib/workspace-events/rules'
 import type { ExecutionEventContext, SimSubscriptionConfig } from '@/lib/workspace-events/types'

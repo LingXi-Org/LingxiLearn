@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Label } from '@sim/emcn'
+import { Label } from '@/components/ui-kit'
 
 interface AuthFieldProps {
   /** Matches the `id` set on the control rendered as {@link children}. */

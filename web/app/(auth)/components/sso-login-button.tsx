@@ -1,5 +1,5 @@
 'use client'
-import { Chip, cn } from '@sim/emcn'
+import { Chip, cn } from '@/components/ui-kit'
 import { useRouter } from 'next/navigation'
 import { isSsoEnabled } from '@/lib/core/config/env-flags'
 import { AUTH_BUTTON_CLASS } from '@/app/(auth)/components/constants'

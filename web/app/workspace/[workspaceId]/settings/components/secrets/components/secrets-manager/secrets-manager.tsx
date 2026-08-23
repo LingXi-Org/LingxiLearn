@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChipInput, cn, toast } from '@sim/emcn'
+import { ChipInput, cn, toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'

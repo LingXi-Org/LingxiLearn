@@ -15,13 +15,13 @@ const mocks = vi.hoisted(() => ({
   resolvePermission: vi.fn(),
 }))
 
-vi.mock('@sim/audit', () => ({
+vi.mock('@/lib/audit', () => ({
   AuditAction: { FILE_UPDATED: 'file.updated' },
   AuditResourceType: { FILE: 'file' },
   recordAudit: mocks.recordAudit,
 }))
 
-vi.mock('@sim/platform-authz/workspace', () => ({
+vi.mock('@/lib/permissions/native/workspace', () => ({
   permissionSatisfies: (actual: string | null, required: string) => {
     const rank = { read: 1, write: 2, admin: 3 } as const
     return (
@@ -31,7 +31,7 @@ vi.mock('@sim/platform-authz/workspace', () => ({
   resolveEffectiveWorkspacePermission: mocks.resolvePermission,
 }))
 
-import { AuditAction, AuditResourceType } from '@sim/audit'
+import { AuditAction, AuditResourceType } from '@/lib/audit'
 import { defineAuthorizedWorkspaceUseCase, defineWorkspaceOperation } from '@/lib/core/application'
 import type { OrchestrationError } from '@/lib/core/orchestration/types'
 

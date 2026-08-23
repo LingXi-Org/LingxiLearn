@@ -47,7 +47,7 @@ vi.mock('@/hooks/selectors/resolution', () => ({
   resolveSelectorForSubBlock: vi.fn(),
 }))
 
-import { WorkflowBuilder } from '@sim/testing'
+import { WorkflowBuilder } from '@/tests/support'
 import type { WorkflowDiffSummary } from '@/lib/workflows/comparison/compare'
 import {
   formatDiffSummaryForDescription,

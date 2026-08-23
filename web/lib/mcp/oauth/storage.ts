@@ -3,8 +3,8 @@ import type {
   OAuthClientInformationMixed,
   OAuthTokens,
 } from '@modelcontextprotocol/sdk/shared/auth.js'
-import { db } from '@sim/db'
-import { mcpServerOauth } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { mcpServerOauth } from '@/lib/db/schema'
 import { and, eq, gt } from 'drizzle-orm'
 import { acquireLock, extendLock, releaseLock } from '@/lib/core/config/redis'
 import { decryptSecret, encryptSecret } from '@/lib/core/security/encryption'

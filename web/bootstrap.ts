@@ -1,9 +1,9 @@
 /**
  * Container entrypoint. Hydrates `process.env` from the runtime secret before
  * loading the Next.js standalone server, so application modules that read env at
- * import time see the full configuration. See `@sim/runtime-secrets`.
+ * import time see the full configuration. See `@/lib/environment/runtime-secrets`.
  */
-import { loadRuntimeSecrets } from '@sim/runtime-secrets'
+import { loadRuntimeSecrets } from '@/lib/environment/runtime-secrets'
 
 await loadRuntimeSecrets()
 // `server.js` is the Next standalone build artifact, a sibling of this file in

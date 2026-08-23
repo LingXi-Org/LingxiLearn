@@ -1,4 +1,4 @@
-import '@sim/testing/mocks/executor'
+import '@/tests/support/mocks/executor'
 
 import { createLogger } from '@/lib/logger'
 import {
@@ -6,7 +6,7 @@ import {
   authOAuthUtilsMockFns,
   encryptionMock,
   encryptionMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 const { mockResolveAutoModel } = vi.hoisted(() => ({
@@ -592,7 +592,7 @@ describe('RouterBlockHandler', () => {
 
     mockGetProviderFromModel.mockReturnValue('vertex')
 
-    const mockDb = await import('@sim/db')
+    const mockDb = await import('@/lib/db')
     const mockAccount = {
       id: 'test-vertex-credential-id',
       accessToken: 'mock-access-token',

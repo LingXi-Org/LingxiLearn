@@ -1,4 +1,4 @@
-import { resetEnvMock, setEnv } from '@sim/testing'
+import { resetEnvMock, setEnv } from '@/tests/support'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { instantlyHandler } from '@/lib/webhooks/providers/instantly'

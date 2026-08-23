@@ -1,4 +1,4 @@
-import { isLoopbackHostname } from '@sim/security/hostnames'
+import { isLoopbackHostname } from '@/lib/security/hostnames'
 import { env, getEnv } from '@/lib/core/config/env'
 import { isProd } from '@/lib/core/config/env-flags'
 

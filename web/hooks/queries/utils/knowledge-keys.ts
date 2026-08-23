@@ -6,7 +6,7 @@ import type { KnowledgeScope } from '@/lib/api/contracts/knowledge/base'
  * Lives in this standalone (non-`'use client'`) module — like
  * {@link file://./folder-keys.ts} and {@link file://./table-keys.ts} — so a server component
  * or another query module can invalidate knowledge caches without importing
- * `@/hooks/queries/kb/knowledge`, a ~1000-line hook module that pulls the `@sim/emcn` barrel
+ * `@/hooks/queries/kb/knowledge`, a ~1000-line hook module that pulls the `@/components/ui-kit` barrel
  * in with it. That import edge is exactly the kind that lands a UI bundle in every workspace
  * route's server prefetch.
  */

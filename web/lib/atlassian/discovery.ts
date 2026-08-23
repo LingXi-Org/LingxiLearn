@@ -1,4 +1,4 @@
-import { sha256Hex } from '@sim/security/hash'
+import { sha256Hex } from '@/lib/security/hash'
 import { LRUCache } from 'lru-cache'
 import {
   type HTTPError,

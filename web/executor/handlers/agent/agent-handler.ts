@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { mcpServers } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { mcpServers } from '@/lib/db/schema'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { normalizeStringRecord, normalizeWorkflowVariables } from '@/lib/core/utils/records'
 import {

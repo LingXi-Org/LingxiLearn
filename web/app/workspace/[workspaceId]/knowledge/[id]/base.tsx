@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Database, DatabaseX, Pencil, Plus, TagIcon, Trash } from '@sim/emcn/icons'
+import { Database, DatabaseX, Pencil, Plus, TagIcon, Trash } from '@/components/ui-kit/icons'
 import { useParams, useRouter } from 'next/navigation'
 import { usePostHog } from 'posthog-js/react'
 import type { DocumentData } from '@/lib/knowledge/types'

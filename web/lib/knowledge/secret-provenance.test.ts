@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { document } from '@sim/db/schema'
-import { queueTableRows, resetDbChainMock } from '@sim/testing'
+import { document } from '@/lib/db/schema'
+import { queueTableRows, resetDbChainMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashDurableSecretProvenanceValue } from '@/lib/execution/durable-secret-provenance'
 import {

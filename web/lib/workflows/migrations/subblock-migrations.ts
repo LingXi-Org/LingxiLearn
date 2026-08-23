@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { isPlainRecord } from '@/lib/utils/object'
-import { DEFAULT_SUBBLOCK_TYPE } from '@sim/workflow-persistence/subblocks'
+import { DEFAULT_SUBBLOCK_TYPE } from '@/lib/workflows/persistence/native/subblocks'
 import { sanitizeMalformedSubBlocks } from '@/lib/workflows/sanitization/subblocks'
 import {
   buildCanonicalIndex,

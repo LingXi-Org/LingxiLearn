@@ -2,14 +2,14 @@
  * @vitest-environment jsdom
  */
 import { act, type ReactNode } from 'react'
-import type { BrowserImportProfile } from '@sim/desktop-bridge'
+import type { BrowserImportProfile } from '@/lib/desktop/bridge'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 /** ChipSelect stands in as a native select so options are inspectable. */
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   ChipModal: ({ open, children }: { open: boolean; children: ReactNode }) =>
     open ? <div role='dialog'>{children}</div> : null,
   ChipModalHeader: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,

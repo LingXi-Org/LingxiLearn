@@ -1,8 +1,8 @@
 'use client'
 
 import { memo } from 'react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@sim/emcn'
-import { FolderPlus, Plus, Upload } from '@sim/emcn/icons'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui-kit'
+import { FolderPlus, Plus, Upload } from '@/components/ui-kit/icons'
 
 interface FilesListContextMenuProps {
   isOpen: boolean

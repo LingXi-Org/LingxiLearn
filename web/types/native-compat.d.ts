@@ -1,6 +1,6 @@
 interface Window {
   __ENV?: Record<string, string | undefined>
-  simDesktop?: import('@sim/desktop-bridge').SimDesktopApi
+  simDesktop?: import('@/lib/desktop/bridge').SimDesktopApi
 }
 
 declare module 'lru-cache' {

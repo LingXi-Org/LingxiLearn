@@ -1,6 +1,6 @@
 'use client'
 
-import { File as FilesIcon, FolderPlus, Plus, Upload } from '@sim/emcn'
+import { File as FilesIcon, FolderPlus, Plus, Upload } from '@/components/ui-kit'
 import {
   type ChromeActionSpec,
   ResourceChromeFallback,

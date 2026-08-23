@@ -10,7 +10,7 @@ import {
   ChipModalHeader,
   Label,
   Switch,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
 import { useInboxConfig, useToggleInbox } from '@/hooks/queries/inbox'

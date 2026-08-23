@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { cn } from '@sim/emcn'
-import { Check, ChevronDown, Circle, Square, X } from '@sim/emcn/icons'
+import { cn } from '@/components/ui-kit'
+import { Check, ChevronDown, Circle, Square, X } from '@/components/ui-kit/icons'
 import type {
   AgentStreamToolCall,
   AgentStreamToolStatus,

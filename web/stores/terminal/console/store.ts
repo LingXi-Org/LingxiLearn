@@ -1,4 +1,4 @@
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { generateId } from '@/lib/utils/id'
 import { create } from 'zustand'

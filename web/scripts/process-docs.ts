@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
 import path from 'path'
-import { db } from '@sim/db'
-import { docsEmbeddings } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { docsEmbeddings } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { sql } from 'drizzle-orm'
 import { type DocChunk, DocsChunker } from '@/lib/chunkers'

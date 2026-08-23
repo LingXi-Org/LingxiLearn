@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback } from 'react'
-import { Chip, ChipTag, Tooltip } from '@sim/emcn'
-import { Credit } from '@sim/emcn/icons'
+import { Chip, ChipTag, Tooltip } from '@/components/ui-kit'
+import { Credit } from '@/components/ui-kit/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from '@/lib/auth/auth-client'

@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
-import { decrypt, encrypt } from '@sim/security/encryption'
-import { sha256Hex } from '@sim/security/hash'
-import { generateSecureToken } from '@sim/security/tokens'
+import { decrypt, encrypt } from '@/lib/security/encryption'
+import { sha256Hex } from '@/lib/security/hash'
+import { generateSecureToken } from '@/lib/security/tokens'
 import { toError } from '@/lib/utils/errors'
 import { env } from '@/lib/core/config/env'
 

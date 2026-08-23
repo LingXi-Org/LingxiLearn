@@ -1,10 +1,10 @@
 import type { DelegatedPrincipal, Principal } from '@/lib/auth/principal'
-import type { db } from '@sim/db'
+import type { db } from '@/lib/db'
 import {
   type PermissionType,
   permissionSatisfies,
   resolveEffectiveWorkspacePermission,
-} from '@sim/platform-authz/workspace'
+} from '@/lib/permissions/native/workspace'
 import type {
   PrincipalForOperation,
   WorkspaceOperation,

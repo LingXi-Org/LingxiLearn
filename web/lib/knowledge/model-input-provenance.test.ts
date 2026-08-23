@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { encryptionMockFns, environmentUtilsMockFns, resetEnvironmentUtilsMock } from '@sim/testing'
+import { encryptionMockFns, environmentUtilsMockFns, resetEnvironmentUtilsMock } from '@/tests/support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { internalKnowledgeSearchBodySchema } from '@/lib/api/contracts/knowledge/search'
 import { PRIVATE_MODEL_INPUT_PROVENANCE_HEADER } from '@/lib/execution/model-input-provenance'

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { isLoopbackIp, isPrivateIp, unwrapIpv6Brackets } from '@sim/security/ssrf'
+import { isLoopbackIp, isPrivateIp, unwrapIpv6Brackets } from '@/lib/security/ssrf'
 import * as ipaddr from 'ipaddr.js'
 import { isHosted } from '@/lib/core/config/env-flags'
 import { getBaseUrl } from '@/lib/core/utils/urls'

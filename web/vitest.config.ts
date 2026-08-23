@@ -1,5 +1,6 @@
-import path from 'path'
 /// <reference types="vitest" />
+
+import path from 'node:path'
 import react from '@vitejs/plugin-react'
 import { configDefaults, defineConfig } from 'vitest/config'
 
@@ -26,65 +27,15 @@ export default defineConfig({
     testTimeout: 10000,
   },
   resolve: {
-    // `resolve.tsconfigPaths` is not a real Vitest option — the @sim/* scopes
-    // only resolve through these explicit aliases, which must mirror the paths
-    // block in tsconfig.json.
+    // Keep application-local test and database aliases explicit for Vitest.
     alias: [
       {
-        find: '@sim/testing',
-        replacement: path.resolve(__dirname, 'packages/testing/src'),
+        find: '@/tests/support',
+        replacement: path.resolve(__dirname, 'tests/support'),
       },
       {
-        find: '@sim/audit',
-        replacement: path.resolve(__dirname, 'packages/audit/src'),
-      },
-      {
-        find: '@sim/browser-protocol',
-        replacement: path.resolve(__dirname, 'packages/browser-protocol/src'),
-      },
-      {
-        find: '@sim/platform-authz',
-        replacement: path.resolve(__dirname, 'packages/platform-authz/src'),
-      },
-      {
-        find: '@sim/realtime-protocol',
-        replacement: path.resolve(__dirname, 'packages/realtime-protocol/src'),
-      },
-      {
-        find: '@sim/runtime-secrets',
-        replacement: path.resolve(__dirname, 'packages/runtime-secrets/src'),
-      },
-      {
-        find: '@sim/terminal-protocol',
-        replacement: path.resolve(__dirname, 'packages/terminal-protocol/src'),
-      },
-      {
-        find: '@sim/workflow-persistence',
-        replacement: path.resolve(__dirname, 'packages/workflow-persistence/src'),
-      },
-      {
-        find: '@sim/workflow-renderer',
-        replacement: path.resolve(__dirname, 'packages/workflow-renderer/src'),
-      },
-      {
-        find: '@sim/db',
-        replacement: path.resolve(__dirname, 'packages/db'),
-      },
-      {
-        find: '@sim/emcn',
-        replacement: path.resolve(__dirname, 'packages/emcn/src'),
-      },
-      {
-        find: '@sim/desktop-bridge',
-        replacement: path.resolve(__dirname, 'packages/desktop-bridge/src'),
-      },
-      {
-        find: /^@sim\/workflow-types\/(.*)$/,
-        replacement: `${path.resolve(__dirname, 'packages/workflow-types/src')}/$1`,
-      },
-      {
-        find: /^@sim\/security\/(.*)$/,
-        replacement: `${path.resolve(__dirname, 'packages/security/src')}/$1`,
+        find: '@/lib/db',
+        replacement: path.resolve(__dirname, 'lib/db'),
       },
       {
         find: '@/stores/console/store',

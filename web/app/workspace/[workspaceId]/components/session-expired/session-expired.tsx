@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Chip, useNativeSurfaceOcclusionReady } from '@sim/emcn'
+import { Chip, useNativeSurfaceOcclusionReady } from '@/components/ui-kit'
 import { useSession } from '@/lib/auth/auth-client'
 import { recoverFromStaleSession } from '@/lib/auth/stale-session-recovery'
 

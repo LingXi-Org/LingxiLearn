@@ -9,7 +9,7 @@
  * @vitest-environment node
  */
 import { randomBytes } from 'crypto'
-import { resetEnvMock, setEnv } from '@sim/testing'
+import { resetEnvMock, setEnv } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 beforeAll(() => {

@@ -2,7 +2,7 @@ import { EmbeddingsIcon } from '@/components/icons'
 /**
  * Imported from the catalog module directly rather than the `@/lib/embeddings`
  * barrel: the barrel re-exports the client, which reaches BYOK key lookup and
- * `@sim/db`. Block configs are bundled for the browser, so only the pure
+ * `@/lib/db`. Block configs are bundled for the browser, so only the pure
  * catalog data may cross this boundary.
  */
 import {

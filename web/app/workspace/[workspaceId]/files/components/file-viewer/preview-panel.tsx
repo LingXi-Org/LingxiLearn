@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import '@sim/emcn/components/code/code.css'
+import '@/components/ui-kit/components/code/code.css'
 import { CSV_PREVIEW_MAX_ROWS } from '@/lib/api/contracts/workspace-file-table'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
 import { useHorizontalWheelScroll } from '@/app/workspace/[workspaceId]/files/components/file-viewer/use-horizontal-wheel-scroll'

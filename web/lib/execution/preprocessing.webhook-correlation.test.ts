@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { loggingSessionMock, workflowAuthzMockFns } from '@sim/testing'
+import { loggingSessionMock, workflowAuthzMockFns } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockResolveSystemBillingAttribution } = vi.hoisted(() => ({

@@ -14,8 +14,8 @@ import {
   Folder,
   FolderInput,
   Pencil,
-} from '@sim/emcn'
-import { Download, Link, Pin, Trash } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Download, Link, Pin, Trash } from '@/components/ui-kit/icons'
 import type { MoveOptionNode } from '@/app/workspace/[workspaceId]/components/folders'
 import { renderMoveOption } from '@/app/workspace/[workspaceId]/components/folders'
 

@@ -9,9 +9,9 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { BrowserTabState } from '@sim/browser-protocol'
-import { cn, TabStrip, type TabStripItem, toast } from '@sim/emcn'
-import { Globe, Loader } from '@sim/emcn/icons'
+import type { BrowserTabState } from '@/lib/browser-agent/protocol'
+import { cn, TabStrip, type TabStripItem, toast } from '@/components/ui-kit'
+import { Globe, Loader } from '@/components/ui-kit/icons'
 import { ThinkingLoader } from '@/components/ui'
 import { SIM_RESOURCE_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import { faviconUrl } from '@/lib/core/utils/favicon'

@@ -1,4 +1,4 @@
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import {

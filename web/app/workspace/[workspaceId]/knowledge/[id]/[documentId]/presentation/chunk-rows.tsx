@@ -1,7 +1,7 @@
 'use client'
 
-import { Badge } from '@sim/emcn'
-import { FileText } from '@sim/emcn/icons'
+import { Badge } from '@/components/ui-kit'
+import { FileText } from '@/components/ui-kit/icons'
 import type { ChunkData } from '@/lib/knowledge/types'
 import { formatTokenCount } from '@/lib/tokenization'
 import type { ResourceRow } from '@/app/workspace/[workspaceId]/components'

@@ -35,7 +35,7 @@
  *   DATABASE_URL=... bun run apps/sim/scripts/repair-table-order-key-collation.ts --dry-run
  */
 
-import { userTableRows } from '@sim/db/schema'
+import { userTableRows } from '@/lib/db/schema'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { asc, eq, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'

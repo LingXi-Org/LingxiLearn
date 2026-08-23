@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { member, organization, subscription, userStats } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { member, organization, subscription, userStats } from '@/lib/db/schema'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { defaultBillingPeriod } from '@/lib/billing/core/billing-period'
 import {

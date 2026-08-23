@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const resolvePermission = vi.hoisted(() => vi.fn())
 
-vi.mock('@sim/platform-authz/workspace', () => ({
+vi.mock('@/lib/permissions/native/workspace', () => ({
   permissionSatisfies: (actual: string | null, required: string) => {
     const rank = { read: 1, write: 2, admin: 3 } as const
     return (

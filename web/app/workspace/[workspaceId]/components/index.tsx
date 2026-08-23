@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Button } from '@sim/emcn'
+import { Button } from '@/components/ui-kit'
 
 export { ConversationListItem } from './conversation-list-item'
 export { InlineRenameInput } from './inline-rename-input'

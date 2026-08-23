@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { document } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { document } from '@/lib/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 
 export const KNOWLEDGE_DOCUMENT_PROCESSING_STALE_THRESHOLD_MS = 10 * 60 * 1000

@@ -1,5 +1,5 @@
 import type { DelegatedPrincipal, DelegatedServiceId, Principal } from '@/lib/auth/principal'
-import type { PermissionType } from '@sim/platform-authz/workspace'
+import type { PermissionType } from '@/lib/permissions/native/workspace'
 import type { ApplicationOperation } from '@/lib/core/application/operation'
 
 type WorkspaceApiKeyPolicy<R extends PermissionType> = R extends 'admin' ? 'deny' : 'allow' | 'deny'

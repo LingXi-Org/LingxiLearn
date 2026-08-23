@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { isLoopbackHostname } from '@sim/security/hostnames'
+import { isLoopbackHostname } from '@/lib/security/hostnames'
 import {
   keepPreviousData,
   useMutation,

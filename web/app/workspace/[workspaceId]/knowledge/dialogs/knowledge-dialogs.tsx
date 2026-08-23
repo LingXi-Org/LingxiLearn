@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChipConfirmModal } from '@sim/emcn'
+import { ChipConfirmModal } from '@/components/ui-kit'
 import type { KnowledgeBaseData } from '@/lib/knowledge/types'
 import { BaseTagsModal } from '@/app/workspace/[workspaceId]/knowledge/[id]/components'
 import {

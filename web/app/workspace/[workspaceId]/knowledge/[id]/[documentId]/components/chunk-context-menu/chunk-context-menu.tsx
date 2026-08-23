@@ -6,8 +6,8 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@sim/emcn'
-import { Duplicate, Eye, Pencil, Plus, SquareArrowUpRight, Trash } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Duplicate, Eye, Pencil, Plus, SquareArrowUpRight, Trash } from '@/components/ui-kit/icons'
 
 interface ChunkContextMenuProps {
   isOpen: boolean

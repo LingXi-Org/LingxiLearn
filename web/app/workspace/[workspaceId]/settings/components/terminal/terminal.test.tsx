@@ -8,7 +8,7 @@ import {
   TERMINAL_DARK_THEME,
   type TerminalAppearanceTheme,
   type TerminalThemeProfile,
-} from '@sim/desktop-bridge'
+} from '@/lib/desktop/bridge'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -21,7 +21,7 @@ const { mockBridge, mockRouter, mockSnapshot, mockToast } = vi.hoisted(() => ({
   mockToast: { error: vi.fn(), success: vi.fn() },
 }))
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   ChipSelect: ({
     value,
     onChange,

@@ -10,8 +10,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { cn } from '@sim/emcn'
 import { defaultRangeExtractor, type Range, useVirtualizer } from '@tanstack/react-virtual'
+import { cn } from '@/components/ui-kit'
 import type { MothershipResourceType } from '@/lib/copilot/resources/types'
 import { SMOOTH_CHASE_RATE } from '@/lib/core/utils/smooth-bottom-chase'
 import { MessageActions } from '@/app/workspace/[workspaceId]/components'

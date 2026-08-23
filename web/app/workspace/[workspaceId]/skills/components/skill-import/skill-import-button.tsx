@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Chip, Loader, toast } from '@sim/emcn'
+import { Chip, Loader, toast } from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import {
   type ParsedSkill,

@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { tableViews } from '@sim/db/schema'
-import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { tableViews } from '@/lib/db/schema'
+import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ColumnDefinition, TableViewConfig } from '@/lib/table/types'
 

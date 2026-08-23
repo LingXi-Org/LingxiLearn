@@ -57,7 +57,7 @@ jobs:
       # by migrate.ts; when the secret is unset it resolves to empty and the
       # script falls back to DATABASE_URL.
       - name: Apply database schema changes
-        working-directory: ./packages/db
+        working-directory: .
         env:
           DATABASE_URL: ${{ inputs.environment == 'production' && secrets.DATABASE_URL || inputs.environment == 'staging' && secrets.STAGING_DATABASE_URL || inputs.environment == 'dev' && secrets.DEV_DATABASE_URL || '' }}
           MIGRATION_DATABASE_URL: ${{ inputs.environment == 'production' && secrets.MIGRATION_DATABASE_URL || inputs.environment == 'staging' && secrets.STAGING_MIGRATION_DATABASE_URL || '' }}
@@ -82,5 +82,5 @@ jobs:
             fi
           else
             echo "Applying versioned migrations (db:migrate)"
-            bun run ./scripts/migrate.ts
+            bun run db:migrate
           fi

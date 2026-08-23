@@ -10,8 +10,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   Upload,
-} from '@sim/emcn'
-import { Database, Download, Duplicate, FolderInput, Pencil, Pin, Trash } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Database, Download, Duplicate, FolderInput, Pencil, Pin, Trash } from '@/components/ui-kit/icons'
 import type { MoveOptionNode } from '@/app/workspace/[workspaceId]/components/folders'
 import { renderMoveOptions } from '@/app/workspace/[workspaceId]/components/folders'
 

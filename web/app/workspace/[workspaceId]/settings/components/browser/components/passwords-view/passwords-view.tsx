@@ -6,8 +6,8 @@ import type {
   BrowserCredentialMetadata,
   BrowserImportError,
   BrowserImportProfile,
-} from '@sim/desktop-bridge'
-import { ArrowLeft, ChipConfirmModal, Key, Plus, toast } from '@sim/emcn'
+} from '@/lib/desktop/bridge'
+import { ArrowLeft, ChipConfirmModal, Key, Plus, toast } from '@/components/ui-kit'
 import { getDesktopBridge } from '@/lib/desktop'
 import { ImportModal } from '@/app/workspace/[workspaceId]/settings/components/browser/components/import-modal/import-modal'
 import { PasswordDetail } from '@/app/workspace/[workspaceId]/settings/components/browser/components/password-detail/password-detail'

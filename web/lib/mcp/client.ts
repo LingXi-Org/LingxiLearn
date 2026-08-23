@@ -8,7 +8,7 @@ import {
   ToolListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { createLogger } from '@/lib/logger'
-import { isPrivateIp } from '@sim/security/ssrf'
+import { isPrivateIp } from '@/lib/security/ssrf'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'
 import { getMcpSafeErrorDiagnostics } from '@/lib/mcp/error-diagnostics'

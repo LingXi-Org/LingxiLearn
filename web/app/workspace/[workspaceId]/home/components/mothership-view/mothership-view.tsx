@@ -1,7 +1,7 @@
 'use client'
 
 import { forwardRef, memo, useCallback, useMemo, useRef, useState } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import type { FilePreviewSession } from '@/lib/copilot/request/session'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
 import type { PreviewMode } from '@/app/workspace/[workspaceId]/files/components/file-viewer'

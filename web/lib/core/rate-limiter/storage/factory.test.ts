@@ -1,4 +1,4 @@
-import { redisConfigMockFns } from '@sim/testing'
+import { redisConfigMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockGetStorageMethod, reconnectCallbacks } = vi.hoisted(() => {

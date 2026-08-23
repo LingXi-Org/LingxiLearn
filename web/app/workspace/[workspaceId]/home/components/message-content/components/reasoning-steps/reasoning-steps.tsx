@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, cn, Expandable, ExpandableContent } from '@sim/emcn'
+import { ChevronDown, cn, Expandable, ExpandableContent } from '@/components/ui-kit'
 import { ShimmerText } from '@/components/ui'
 import type { ReasoningStep, ReasoningStepStatus } from '../../../../types'
 

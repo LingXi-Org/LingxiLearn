@@ -1,7 +1,7 @@
-import { db, workflow, workflowDeploymentOperation, workflowDeploymentVersion } from '@sim/db'
+import { db, workflow, workflowDeploymentOperation, workflowDeploymentVersion } from '@/lib/db'
 import { generateId } from '@/lib/utils/id'
-import type { DbOrTx } from '@sim/workflow-persistence/types'
-import type { WorkflowState } from '@sim/workflow-types/workflow'
+import type { DbOrTx } from '@/lib/workflows/persistence/native/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 import type { InferSelectModel } from 'drizzle-orm'
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import {

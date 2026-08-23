@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { simTriggerState } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { simTriggerState } from '@/lib/db/schema'
 import { and, eq, sql } from 'drizzle-orm'
 
 /**

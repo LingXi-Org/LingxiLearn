@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { ArrowUp, Button, cn } from '@sim/emcn'
+import { ArrowUp, Button, cn } from '@/components/ui-kit'
 import {
   SEND_BUTTON_ACTIVE,
   SEND_BUTTON_BASE,

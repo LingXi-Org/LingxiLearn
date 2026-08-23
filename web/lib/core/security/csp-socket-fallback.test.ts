@@ -8,7 +8,7 @@
  * retries forever. Its own file because vi.mock is hoisted per-module and the
  * sibling suite needs NEXT_PUBLIC_SOCKET_URL set.
  */
-import { createEnvMock } from '@sim/testing'
+import { createEnvMock } from '@/tests/support'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/core/config/env', () =>

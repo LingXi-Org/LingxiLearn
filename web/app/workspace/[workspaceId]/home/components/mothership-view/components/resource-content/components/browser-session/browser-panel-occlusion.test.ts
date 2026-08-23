@@ -5,7 +5,7 @@ import { act, createElement } from 'react'
 import {
   NATIVE_SURFACE_OCCLUSION_PREPARE_EVENT,
   type NativeSurfaceOcclusionPrepareDetail,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { sleep } from '@/lib/utils/helpers'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

@@ -1,4 +1,4 @@
-import { isPrivateIpHost } from '@sim/security/ssrf'
+import { isPrivateIpHost } from '@/lib/security/ssrf'
 import { z } from 'zod'
 import { genericToolResponseSchema } from '@/lib/api/contracts/tools/shared'
 import { defineRouteContract } from '@/lib/api/contracts/types'

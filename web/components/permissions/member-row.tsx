@@ -1,6 +1,6 @@
 'use client'
 
-import { Avatar, AvatarFallback, Chip, ChipDropdown, cn } from '@sim/emcn'
+import { Avatar, AvatarFallback, Chip, ChipDropdown, cn } from '@/components/ui-kit'
 import { getUserColor } from '@/lib/workspaces/colors'
 import type { MemberRole } from './member-role-options'
 import { RoleLockTooltip } from './role-lock'

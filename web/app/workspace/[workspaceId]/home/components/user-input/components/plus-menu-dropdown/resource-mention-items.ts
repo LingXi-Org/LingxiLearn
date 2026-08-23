@@ -1,5 +1,5 @@
-import type { BrowserTabState } from '@sim/browser-protocol'
-import type { TerminalTabState } from '@sim/terminal-protocol'
+import type { BrowserTabState } from '@/lib/browser-agent/protocol'
+import type { TerminalTabState } from '@/lib/terminal/protocol'
 import {
   BROWSER_SESSION_RESOURCE_ID,
   TERMINAL_SESSION_RESOURCE_ID,

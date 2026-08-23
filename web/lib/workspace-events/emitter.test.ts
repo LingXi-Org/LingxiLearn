@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { workflowAuthzMockFns } from '@sim/testing'
+import { workflowAuthzMockFns } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockGetActiveWorkflowContext } = workflowAuthzMockFns

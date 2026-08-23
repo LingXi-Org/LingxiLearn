@@ -24,7 +24,7 @@ vi.mock('react', () => ({
   useState: (init: unknown) => [init, vi.fn()],
 }))
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   toast: {
     success: (...args: unknown[]) => toastSuccess(...args),
     error: (...args: unknown[]) => toastError(...args),

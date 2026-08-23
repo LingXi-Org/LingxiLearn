@@ -4,7 +4,7 @@ import {
   isDesktopAppearanceTheme,
   type TerminalAppearanceTheme,
   type TerminalThemeProfile,
-} from '@sim/desktop-bridge'
+} from '@/lib/desktop/bridge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +17,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   Check,
   Clipboard,
@@ -28,7 +28,7 @@ import {
   Settings,
   Trash,
   X,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import { ResourceZoomMenuItems } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/resource-zoom-menu-items'
 import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 

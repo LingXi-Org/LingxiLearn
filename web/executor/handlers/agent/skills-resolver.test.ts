@@ -8,7 +8,7 @@ import {
   queueTableRows,
   resetDbChainMock,
   schemaMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveSkillContent,

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { exportTable } from '@/hooks/queries/tables'
 

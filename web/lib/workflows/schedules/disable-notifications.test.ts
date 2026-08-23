@@ -8,7 +8,7 @@ import {
   resetUrlsMock,
   schemaMock,
   urlsMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sendEmailSpy, renderMock, subjectMock, getUsersWithPermissionsMock } = vi.hoisted(() => ({

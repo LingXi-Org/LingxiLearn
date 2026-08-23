@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { hmacSha256Hex } from '@sim/security/hmac'
+import { hmacSha256Hex } from '@/lib/security/hmac'
 import { NextRequest, NextResponse } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

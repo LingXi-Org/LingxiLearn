@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { useParams } from 'next/navigation'
 import {
   addOAuthChatAttemptToAuthorizeUrl,

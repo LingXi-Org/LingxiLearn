@@ -1,4 +1,4 @@
-import { Badge, ChipLink, cn } from '@sim/emcn'
+import { Badge, ChipLink, cn } from '@/components/ui-kit'
 import { checkEnterprisePlan } from '@/lib/billing/subscriptions/utils'
 import { SettingsSection } from '@/app/workspace/[workspaceId]/settings/components/settings-section/settings-section'
 

@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { idempotencyKey } from '@sim/db/schema'
-import { resetDbChainMock } from '@sim/testing'
+import { idempotencyKey } from '@/lib/db/schema'
+import { resetDbChainMock } from '@/tests/support'
 import { like, notLike } from 'drizzle-orm'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 

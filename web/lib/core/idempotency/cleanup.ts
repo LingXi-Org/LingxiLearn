@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { idempotencyKey } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { idempotencyKey } from '@/lib/db/schema'
 import { and, count, inArray, like, lt, max, min, notLike, sql } from 'drizzle-orm'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'

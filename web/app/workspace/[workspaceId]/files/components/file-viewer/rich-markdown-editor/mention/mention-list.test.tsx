@@ -7,7 +7,7 @@
  * The second test drives the real `ReactRenderer` path the suggestion plugin actually uses.
  */
 import { act, createRef } from 'react'
-import { File } from '@sim/emcn/icons'
+import { File } from '@/components/ui-kit/icons'
 import { Editor } from '@tiptap/core'
 import { EditorContent, ReactRenderer } from '@tiptap/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

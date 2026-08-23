@@ -1,4 +1,4 @@
-import { memory, memorySecretProvenance } from '@sim/db/schema'
+import { memory, memorySecretProvenance } from '@/lib/db/schema'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import type { DbTransaction } from '@/lib/db/types'
 import {

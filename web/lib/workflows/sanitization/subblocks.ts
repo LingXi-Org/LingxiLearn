@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { isPlainRecord } from '@/lib/utils/object'
-import { DEFAULT_SUBBLOCK_TYPE } from '@sim/workflow-persistence/subblocks'
+import { DEFAULT_SUBBLOCK_TYPE } from '@/lib/workflows/persistence/native/subblocks'
 import { getBlock } from '@/blocks'
 import { isCustomBlockType } from '@/blocks/custom/build-config'
 import type { BlockState } from '@/stores/workflows/workflow/types'

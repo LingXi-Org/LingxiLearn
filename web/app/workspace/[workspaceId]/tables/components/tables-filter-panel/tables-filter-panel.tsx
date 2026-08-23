@@ -1,5 +1,5 @@
-import type { ComboboxOption } from '@sim/emcn'
-import { ChipCombobox } from '@sim/emcn'
+import type { ComboboxOption } from '@/components/ui-kit'
+import { ChipCombobox } from '@/components/ui-kit'
 
 export interface TablesFilterPanelProps {
   rowCountFilter: string[]

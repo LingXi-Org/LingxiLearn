@@ -1,7 +1,7 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { Chip, ChipLink } from '@sim/emcn'
+import { Chip, ChipLink } from '@/components/ui-kit'
 import {
   startLogin,
   startRegistration,

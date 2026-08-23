@@ -1,5 +1,5 @@
 import { type ReactNode, type RefObject, useEffect } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import type { Editor } from '@tiptap/core'
 import {
   SUGGESTION_GROUP_LABEL_CLASS,

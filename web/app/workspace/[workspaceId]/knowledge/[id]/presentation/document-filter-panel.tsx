@@ -1,8 +1,8 @@
 'use client'
 
 import { type ReactNode, useEffect, useMemo, useRef } from 'react'
-import { Button, ChipDatePicker, ChipDropdown, type ChipDropdownOption, ChipInput } from '@sim/emcn'
-import { Plus, X } from '@sim/emcn/icons'
+import { Button, ChipDatePicker, ChipDropdown, type ChipDropdownOption, ChipInput } from '@/components/ui-kit'
+import { Plus, X } from '@/components/ui-kit/icons'
 import { generateId } from '@/lib/utils/id'
 import { getOperatorsForFieldType } from '@/lib/knowledge/filters/types'
 import type { DocumentEnabledFilter } from '@/app/workspace/[workspaceId]/knowledge/[id]/hooks/use-document-list-controller'

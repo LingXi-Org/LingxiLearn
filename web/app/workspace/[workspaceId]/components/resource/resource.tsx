@@ -20,8 +20,8 @@ import {
   chipContentLabelClass,
   cn,
   Loader,
-} from '@sim/emcn'
-import { ChevronLeft, ChevronRight, Pin } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { ChevronLeft, ChevronRight, Pin } from '@/components/ui-kit/icons'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { InlineRenameInput } from '@/app/workspace/[workspaceId]/components/inline-rename-input'
 import { FloatingOverflowText } from '@/app/workspace/[workspaceId]/components/resource/components/floating-overflow-text'

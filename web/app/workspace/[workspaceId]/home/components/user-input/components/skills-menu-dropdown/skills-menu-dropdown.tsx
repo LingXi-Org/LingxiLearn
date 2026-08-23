@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { cn, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@sim/emcn'
+import { cn, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui-kit'
 import { AgentSkillsIcon, McpIcon } from '@/components/icons'
 import type { McpServer } from '@/hooks/queries/mcp'
 import type { SkillDefinition } from '@/hooks/queries/skills'

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
-import type { DesktopPreferences, SimDesktopApi } from '@sim/desktop-bridge'
-import { toast } from '@sim/emcn'
+import type { DesktopPreferences, SimDesktopApi } from '@/lib/desktop/bridge'
+import { toast } from '@/components/ui-kit'
 import { getDesktopBridge, setDesktopPreferencesSnapshot } from '@/lib/desktop'
 
 /**

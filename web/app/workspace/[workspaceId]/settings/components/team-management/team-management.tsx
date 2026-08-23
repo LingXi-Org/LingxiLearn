@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Plus } from '@sim/emcn'
+import { Plus } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
-import { isOrgAdminRole } from '@sim/platform-authz/workspace'
+import { isOrgAdminRole } from '@/lib/permissions/native/predicates'
 import { useSession } from '@/lib/auth/auth-client'
 import { getSubscriptionAccessState } from '@/lib/billing/client/utils'
 import { getBaseUrl } from '@/lib/core/utils/urls'

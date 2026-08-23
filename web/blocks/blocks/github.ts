@@ -1,4 +1,4 @@
-import { Calendar } from '@sim/emcn/icons'
+import { Calendar } from '@/components/ui-kit/icons'
 import { GithubIcon } from '@/components/icons'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'
 import { AuthMode, IntegrationType } from '@/blocks/types'

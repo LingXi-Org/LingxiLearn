@@ -19,7 +19,7 @@ import {
   createMoveBlockEntry,
   createRemoveBlockEntry,
   createUpdateParentEntry,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { runWithUndoRedoRecordingSuspended, useUndoRedoStore } from '@/stores/undo-redo/store'
 import type { UpdateParentOperation } from '@/stores/undo-redo/types'

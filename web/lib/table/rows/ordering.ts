@@ -6,8 +6,8 @@
  * `@/lib/table` barrel.
  */
 
-import { db } from '@sim/db'
-import { userTableRows } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { userTableRows } from '@/lib/db/schema'
 import { and, asc, desc, eq, gt, inArray, lt, lte, type SQL, sql } from 'drizzle-orm'
 import type { DbOrTx } from '@/lib/db/types'
 import { TABLE_LIMITS } from '@/lib/table/constants'

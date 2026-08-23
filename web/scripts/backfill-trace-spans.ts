@@ -19,8 +19,8 @@
  *   DATABASE_URL=... bun apps/sim/scripts/backfill-trace-spans.ts [--max-batches=<n>]
  */
 
-import { db } from '@sim/db'
-import { workflowExecutionLogs } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { workflowExecutionLogs } from '@/lib/db/schema'
 import { toError } from '@/lib/utils/errors'
 import { and, asc, eq, gt, sql } from 'drizzle-orm'
 import {

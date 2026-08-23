@@ -1,7 +1,7 @@
 'use client'
 
-import type { DesktopAppearanceTheme } from '@sim/desktop-bridge'
-import { ChipSelect } from '@sim/emcn'
+import type { DesktopAppearanceTheme } from '@/lib/desktop/bridge'
+import { ChipSelect } from '@/components/ui-kit'
 
 const OPTIONS = [
   { label: 'Sim', value: 'app' },

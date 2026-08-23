@@ -1,8 +1,8 @@
 'use client'
 
 import { type ReactNode, useState } from 'react'
-import { cn } from '@sim/emcn'
-import { ChevronDown } from '@sim/emcn/icons'
+import { cn } from '@/components/ui-kit'
+import { ChevronDown } from '@/components/ui-kit/icons'
 import { FloatingOverflowText } from '@/app/workspace/[workspaceId]/components'
 
 /**

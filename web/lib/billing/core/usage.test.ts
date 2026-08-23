@@ -15,7 +15,7 @@ import {
   resetEnvFlagsMock,
   schemaMock,
   setEnvFlags,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 afterAll(() => {
@@ -102,7 +102,7 @@ vi.mock('@/lib/messaging/email/unsubscribe', () => ({
   getEmailPreferences: mockGetEmailPreferences,
 }))
 
-vi.mock('@sim/platform-authz/workspace', () => ({ isOrgAdminRole: mockIsOrgAdminRole }))
+vi.mock('@/lib/permissions/native/workspace', () => ({ isOrgAdminRole: mockIsOrgAdminRole }))
 
 import {
   getUserUsageLimit,

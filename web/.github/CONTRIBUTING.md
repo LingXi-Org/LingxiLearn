@@ -1,16 +1,15 @@
-# Contributing to Sim
+# Contributing to LingxiLearn
 
-Thank you for your interest in contributing to Sim! Our goal is to provide developers with a powerful, user-friendly platform for building, testing, and optimizing agentic workflows. We welcome contributions in all forms—from bug fixes and design improvements to brand-new features.
+Thank you for your interest in LingxiLearn. We welcome bug fixes, design improvements, and learning-platform features.
 
 > **Project Overview:**
-> Sim is a Turborepo monorepo with two deployable apps and a set of shared packages:
+> LingxiLearn has an application-owned Web architecture:
 >
-> - `apps/sim/` — the main Next.js application (App Router, ReactFlow, Zustand, Shadcn, Tailwind CSS).
-> - `apps/realtime/` — a small Bun + Socket.IO server that powers the collaborative canvas. Shares DB and Better Auth secrets with `apps/sim` via `@sim/*` packages.
-> - `apps/docs/` — Fumadocs-based documentation site.
-> - `packages/` — shared workspace packages (`@sim/db`, `@sim/auth`, `@sim/audit`, `@sim/workflow-types`, `@sim/workflow-persistence`, `@sim/platform-authz`, `@sim/realtime-protocol`, `@sim/security`, `@sim/logger`, `@sim/utils`, `@sim/testing`, `@sim/tsconfig`).
+> - `app/` and `components/` own Next.js routes and presentation.
+> - `lib/` owns application domains, persistence, protocols, and integration boundaries.
+> - `tests/support/` — Lingxi-native test factories, builders, assertions, and mocks for this application.
 >
-> Strict one-way dependency flow: `apps/* → packages/*`. Packages never import from apps. Please ensure your contributions follow this and our best practices for clarity, maintainability, and consistency.
+> Keep dependencies directed from routes and UI into owned domain modules; do not recreate a parallel shared-package application.
 
 ---
 
@@ -269,7 +268,7 @@ If you prefer not to use Docker or Dev Containers. **All commands run from the r
    cp apps/realtime/.env.example apps/realtime/.env
 
    # DB tooling (drizzle-kit, db:migrate)
-   cp packages/db/.env.example packages/db/.env
+   cp lib/db/.env.example lib/db/.env
    ```
 
    At minimum, each `.env` needs `DATABASE_URL`. `apps/sim/.env` and `apps/realtime/.env` additionally need matching values for `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and `NEXT_PUBLIC_APP_URL`. `apps/sim/.env` also needs `ENCRYPTION_KEY` and `API_ENCRYPTION_KEY`. Generate any 32-char secrets with `openssl rand -hex 32`.
@@ -278,18 +277,18 @@ If you prefer not to use Docker or Dev Containers. **All commands run from the r
 
    ```bash
    grep -E '^(DATABASE_URL|BETTER_AUTH_URL|BETTER_AUTH_SECRET|INTERNAL_API_SECRET|NEXT_PUBLIC_APP_URL|REDIS_URL)=' apps/sim/.env > apps/realtime/.env
-   grep -E '^DATABASE_URL=' apps/sim/.env > packages/db/.env
+   grep -E '^DATABASE_URL=' apps/sim/.env > lib/db/.env
    ```
 
 3. **Run Database Migrations:**
 
-   Migrations live in `packages/db/migrations/`. Run them via the dedicated workspace script:
+   Migrations live in `lib/db/migrations/`. Run them via the dedicated workspace script:
 
    ```bash
-   cd packages/db && bun run db:migrate && cd ../..
+   bun run db:migrate
    ```
 
-   For ad-hoc schema iteration during development you can also use `bun run db:push` from `packages/db`, but `db:migrate` is the canonical command for both local and CI/CD setups.
+   For ad-hoc schema iteration during development you can also use `bun run db:push` from the web root, but `db:migrate` is the canonical command for both local and CI/CD setups.
 
 4. **Run the Development Servers:**
 

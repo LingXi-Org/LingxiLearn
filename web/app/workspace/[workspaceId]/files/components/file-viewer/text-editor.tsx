@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { OnMount } from '@monaco-editor/react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import type { editor as MonacoEditorTypes } from 'monaco-editor'
 import dynamic from 'next/dynamic'
 import {

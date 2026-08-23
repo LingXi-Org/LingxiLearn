@@ -1,4 +1,4 @@
-import { createMockResponse, inputValidationMock, inputValidationMockFns } from '@sim/testing'
+import { createMockResponse, inputValidationMock, inputValidationMockFns } from '@/tests/support'
 import type { QueryClient } from '@tanstack/react-query'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as getQueryClientModule from '@/app/_shell/providers/get-query-client'

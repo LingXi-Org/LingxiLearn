@@ -10,8 +10,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Button, cn, Tooltip, tabStripWheelPosition } from '@sim/emcn'
-import { Columns3, Eye, Pencil } from '@sim/emcn/icons'
+import { Button, cn, Tooltip, tabStripWheelPosition } from '@/components/ui-kit'
+import { Columns3, Eye, Pencil } from '@/components/ui-kit/icons'
 import { sendBrowserPanelAction } from '@/lib/browser-agent/transport'
 import { SIM_RESOURCE_DRAG_TYPE, SIM_RESOURCES_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import { isEphemeralResource } from '@/lib/copilot/resources/types'

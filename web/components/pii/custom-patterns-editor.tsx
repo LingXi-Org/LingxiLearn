@@ -1,7 +1,7 @@
 'use client'
 
-import { Chip, ChipInput } from '@sim/emcn'
-import { Plus, Trash } from '@sim/emcn/icons'
+import { Chip, ChipInput } from '@/components/ui-kit'
+import { Plus, Trash } from '@/components/ui-kit/icons'
 import type { CustomPiiPattern } from '@/lib/guardrails/pii-entities'
 import { validateRegexPattern } from '@/lib/guardrails/validate_regex'
 

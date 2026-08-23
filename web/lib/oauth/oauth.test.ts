@@ -1,4 +1,4 @@
-import { createMockFetch, resetEnvMock, setEnv } from '@sim/testing'
+import { createMockFetch, resetEnvMock, setEnv } from '@/tests/support'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 beforeAll(() => {

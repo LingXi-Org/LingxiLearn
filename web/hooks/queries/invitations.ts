@@ -1,4 +1,4 @@
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { extractValidationIssues } from '@/lib/api/client/errors'

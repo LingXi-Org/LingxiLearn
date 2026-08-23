@@ -15,7 +15,7 @@ const APP_ROOT = join(__dirname, '../../..')
 
 const globalsCss = readFileSync(join(APP_ROOT, 'app/_styles/globals.css'), 'utf8')
 const chipChrome = readFileSync(
-  join(APP_ROOT, '../../packages/emcn/src/components/chip/chip-chrome.ts'),
+  join(APP_ROOT, 'components/ui-kit/components/chip/chip-chrome.ts'),
   'utf8'
 )
 

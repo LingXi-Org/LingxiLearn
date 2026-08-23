@@ -8,7 +8,7 @@
  * raw `fetch`.
  */
 
-import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@sim/testing'
+import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const BLOCKED_ENDPOINT = 'http://169.254.170.2/v2/credentials/'
@@ -40,7 +40,7 @@ vi.mock('@/lib/core/security/input-validation.server', () => ({
  * The real classifier treats TEST-NET-3 as reserved, which would route every
  * "public IP" case down the pinned-private branch instead.
  */
-vi.mock('@sim/security/ssrf', () => ({
+vi.mock('@/lib/security/ssrf', () => ({
   isPrivateIp: (ip: string) => ip.startsWith('127.') || ip.startsWith('10.') || ip === '::1',
 }))
 vi.mock('@/lib/mcp/domain-check', () => ({

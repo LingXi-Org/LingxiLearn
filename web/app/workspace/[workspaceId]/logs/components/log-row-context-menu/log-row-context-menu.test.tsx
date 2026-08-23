@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionLogSummaryView } from '@/app/workspace/[workspaceId]/logs/model/execution-log'
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   DropdownMenu: ({ children, open }: { children: ReactNode; open: boolean }) =>
     open ? <>{children}</> : null,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,

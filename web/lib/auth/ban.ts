@@ -1,4 +1,4 @@
-import { db, user } from '@sim/db'
+import { db, user } from '@/lib/db'
 import { inArray, sql } from 'drizzle-orm'
 import { getAccessControlConfig, isEmailBlockedByAccessControl } from '@/lib/auth/access-control'
 

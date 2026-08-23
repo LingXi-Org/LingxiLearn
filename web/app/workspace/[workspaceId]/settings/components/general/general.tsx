@@ -14,8 +14,8 @@ import {
   Label,
   Switch,
   Tooltip,
-} from '@sim/emcn'
-import { Camera, Check, CircleInfo, Pencil } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Camera, Check, CircleInfo, Pencil } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'

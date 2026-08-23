@@ -14,7 +14,7 @@ import {
   expectWorkflowAccessDenied,
   expectWorkflowAccessGranted,
   workflowAuthzMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockAuthorizeWorkflowByWorkspacePermission: mockAuthorizeWorkflow } = workflowAuthzMockFns

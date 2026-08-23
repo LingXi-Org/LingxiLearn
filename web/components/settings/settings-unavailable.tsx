@@ -1,4 +1,4 @@
-import { ChipLink, cn } from '@sim/emcn'
+import { ChipLink, cn } from '@/components/ui-kit'
 
 interface SettingsUnavailableProps {
   title?: string

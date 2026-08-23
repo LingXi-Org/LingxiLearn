@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { envFlagsMockFns, resetEnvFlagsMock, resetEnvMock, setEnv, setEnvFlags } from '@sim/testing'
+import { envFlagsMockFns, resetEnvFlagsMock, resetEnvMock, setEnv, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockFetch, mockIsPlatformAdmin } = vi.hoisted(() => ({

@@ -1,6 +1,6 @@
 'use client'
 
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
+import { ROOM_TYPES } from '@/lib/realtime/protocol/rooms'
 import { useQueryClient } from '@tanstack/react-query'
 import { useWorkspaceInvalidationRoom } from '@/app/workspace/[workspaceId]/hooks/use-workspace-invalidation-room'
 import { invalidateWorkspaceFileBrowsers } from '@/hooks/queries/workspace-file-folders'

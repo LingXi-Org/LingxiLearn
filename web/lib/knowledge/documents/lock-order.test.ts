@@ -7,8 +7,8 @@
  * (chunks/service.ts). The opposite order deadlocks a document tag edit against
  * a concurrent chunk edit of the same document.
  */
-import { document, embedding } from '@sim/db/schema'
-import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { document, embedding } from '@/lib/db/schema'
+import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { updateDocument } from '@/lib/knowledge/documents/service'
 

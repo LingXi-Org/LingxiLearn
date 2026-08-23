@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BrowserDownloadInfo } from '@sim/desktop-bridge'
+import type { BrowserDownloadInfo } from '@/lib/desktop/bridge'
 import {
   Button,
   cn,
@@ -10,8 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from '@sim/emcn'
-import { CircleAlert, CircleCheck, Download, File, Loader } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { CircleAlert, CircleCheck, Download, File, Loader } from '@/components/ui-kit/icons'
 import {
   loadBrowserDownloads,
   onBrowserDownloadsState,

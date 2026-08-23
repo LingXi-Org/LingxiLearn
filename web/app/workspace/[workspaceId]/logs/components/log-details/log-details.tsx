@@ -21,8 +21,8 @@ import {
   Search as SearchIcon,
   Tooltip,
   useCopyToClipboard,
-} from '@sim/emcn'
-import { ArrowDown, ArrowUp, Check, ChevronUp, Clipboard, Search, Wrench, X } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { ArrowDown, ArrowUp, Check, ChevronUp, Clipboard, Search, Wrench, X } from '@/components/ui-kit/icons'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { createPortal } from 'react-dom'

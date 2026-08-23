@@ -1,5 +1,5 @@
 'use client'
-import { chipContentGap, chipPrimaryFillTokens, cn } from '@sim/emcn'
+import { chipContentGap, chipPrimaryFillTokens, cn } from '@/components/ui-kit'
 import { format } from 'date-fns'
 import type {
   CalendarEvent,

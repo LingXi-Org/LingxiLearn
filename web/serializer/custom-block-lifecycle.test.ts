@@ -7,7 +7,7 @@
  *  - a deleted *input* on a live custom block no longer leaks its stale value into
  *    the child `inputMapping` (Bug 1).
  */
-import { toolsMetadataMock, toolsUtilsMock } from '@sim/testing/mocks'
+import { toolsMetadataMock, toolsUtilsMock } from '@/tests/support/mocks'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Build the custom-block configs INSIDE the factory (hoisted) so no top-level
@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // `custom_block_deleted` is absent, so getBlock returns null for it.
 vi.mock('@/blocks', async () => {
   const { buildCustomBlockConfig } = await import('@/blocks/custom/build-config')
-  const { createMockGetBlock, mockBlockConfigs } = await import('@sim/testing/mocks')
+  const { createMockGetBlock, mockBlockConfigs } = await import('@/tests/support/mocks')
   const icon = () => null
   const getBlock = createMockGetBlock({
     custom_block_live: buildCustomBlockConfig(

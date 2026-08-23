@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { createLogger } from '@/lib/logger'
-import type { RoomType } from '@sim/realtime-protocol/rooms'
+import type { RoomType } from '@/lib/realtime/protocol/rooms'
 import { useSocket } from '@/app/workspace/providers/socket-provider'
 
 const logger = createLogger('WorkspaceInvalidationRoom')

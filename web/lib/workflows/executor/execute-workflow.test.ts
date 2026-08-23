@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { loggerMock } from '@sim/testing'
+import { loggerMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import type { ExecutionSnapshot } from '@/executor/execution/snapshot'

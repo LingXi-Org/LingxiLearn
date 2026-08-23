@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { resetUrlsMock, urlsMockFns } from '@sim/testing'
+import { resetUrlsMock, urlsMockFns } from '@/tests/support'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 afterAll(resetUrlsMock)

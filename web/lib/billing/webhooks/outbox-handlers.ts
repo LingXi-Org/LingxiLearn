@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { member, subscription as subscriptionTable, user } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { member, subscription as subscriptionTable, user } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { and, eq } from 'drizzle-orm'

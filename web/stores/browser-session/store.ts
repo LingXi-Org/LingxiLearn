@@ -1,4 +1,4 @@
-import type { BrowserPageState, BrowserTabState, BrowserTabsState } from '@sim/browser-protocol'
+import type { BrowserPageState, BrowserTabState, BrowserTabsState } from '@/lib/browser-agent/protocol'
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import {

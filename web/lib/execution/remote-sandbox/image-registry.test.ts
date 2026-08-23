@@ -6,7 +6,7 @@
  * guard down, plus the failure modes that must leave the retention sweep a job to
  * finish rather than losing the image silently.
  */
-import { createMockSql } from '@sim/testing'
+import { createMockSql } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -48,7 +48,7 @@ const {
   mockRendererRevision: { current: 1 },
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@/lib/db', () => ({
   db: { delete: mockDelete, insert: mockInsert, select: mockSelect, update: mockUpdate },
 }))
 
@@ -61,7 +61,7 @@ vi.mock('@/lib/core/utils/background', () => ({ runDetached: mockRunDetached }))
 
 vi.mock('@/lib/utils/helpers', () => ({ sleep: mockSleep }))
 
-vi.mock('@sim/db/schema', () => ({
+vi.mock('@/lib/db/schema', () => ({
   sandboxImage: {
     id: 'id',
     provider: 'provider',

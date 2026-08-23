@@ -1,5 +1,5 @@
-import { user } from '@sim/db/schema'
-import { queueTableRows, resetDbChainMock } from '@sim/testing'
+import { user } from '@/lib/db/schema'
+import { queueTableRows, resetDbChainMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getMothershipBaseURL,

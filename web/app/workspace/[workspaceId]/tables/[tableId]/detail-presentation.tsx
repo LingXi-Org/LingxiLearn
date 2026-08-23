@@ -1,4 +1,4 @@
-import { Chip } from '@sim/emcn'
+import { Chip } from '@/components/ui-kit'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
 import type { TableDetailGridRow } from './controllers/table-grid'
 

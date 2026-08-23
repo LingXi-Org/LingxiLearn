@@ -1,5 +1,5 @@
-import { db, dbReplica } from '@sim/db'
-import { settings, user } from '@sim/db/schema'
+import { db, dbReplica } from '@/lib/db'
+import { settings, user } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 
 /**

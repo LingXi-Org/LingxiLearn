@@ -10,7 +10,7 @@ vi.mock('@/stores/workflows/utils', () => ({
   mergeSubblockState: vi.fn(),
 }))
 
-import { UNDO_REDO_OPERATIONS } from '@sim/realtime-protocol/constants'
+import { UNDO_REDO_OPERATIONS } from '@/lib/realtime/protocol/constants'
 import { mergeSubblockState } from '@/stores/workflows/utils'
 import { captureLatestEdges, captureLatestSubBlockValues, createInverseOperation } from './utils'
 

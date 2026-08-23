@@ -7,7 +7,7 @@
  * 1. Early validation (serialization) - user-only required fields
  * 2. Late validation (tool execution) - user-or-llm required fields
  */
-import { blocksMock } from '@sim/testing/mocks'
+import { blocksMock } from '@/tests/support/mocks'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import * as subblockVisibility from '@/lib/workflows/subblocks/visibility'
 import { Serializer } from '@/serializer/index'

@@ -5,12 +5,12 @@
  * just filled, upstream group just `completed`) and enqueues per-cell jobs.
  */
 
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   pausedExecutions,
   tableRowExecutions,
   userTableRows as userTableRowsTable,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import {
   findCause,

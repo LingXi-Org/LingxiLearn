@@ -1,4 +1,4 @@
-import { FormInput } from '@sim/emcn/icons'
+import { FormInput } from '@/components/ui-kit/icons'
 import type { BlockConfig } from '@/blocks/types'
 
 export const InputTriggerBlock: BlockConfig = {

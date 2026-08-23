@@ -1,4 +1,4 @@
-import { ClipboardList, Download, File, Search, Server, Wrench } from '@sim/emcn/icons'
+import { ClipboardList, Download, File, Search, Server, Wrench } from '@/components/ui-kit/icons'
 import { SshIcon, SshTerminalIcon } from '@/components/icons'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'
 import { AuthMode, IntegrationType } from '@/blocks/types'

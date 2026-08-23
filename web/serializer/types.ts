@@ -1,4 +1,4 @@
-import type { BlockRetryConfig } from '@sim/workflow-types/workflow'
+import type { BlockRetryConfig } from '@/lib/workflows/domain/workflow'
 import type { OutputFieldDefinition, ParamType } from '@/blocks/types'
 import type { Position } from '@/stores/workflows/workflow/types'
 

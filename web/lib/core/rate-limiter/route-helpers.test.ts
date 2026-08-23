@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { createMockRequest, requestUtilsMockFns } from '@sim/testing'
+import { createMockRequest, requestUtilsMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 const { mockAdapter } = vi.hoisted(() => ({

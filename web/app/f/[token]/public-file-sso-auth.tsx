@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { cn, Input, Label } from '@sim/emcn'
+import { cn, Input, Label } from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { normalizeEmail } from '@/lib/utils/string'
 import { useRouter } from 'next/navigation'

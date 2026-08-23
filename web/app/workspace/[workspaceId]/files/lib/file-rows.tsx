@@ -1,4 +1,4 @@
-import { Folder } from '@sim/emcn'
+import { Folder } from '@/components/ui-kit'
 import { getDocumentIcon } from '@/components/icons/document-icons'
 import { formatFileSize } from '@/lib/uploads/utils/file-utils'
 import { EMPTY_CELL_PLACEHOLDER, type ResourceRow } from '@/app/workspace/[workspaceId]/components'

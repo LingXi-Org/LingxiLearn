@@ -1,4 +1,4 @@
-import { Columns3, Rows3, Table as TableIcon } from '@sim/emcn/icons'
+import { Columns3, Rows3, Table as TableIcon } from '@/components/ui-kit/icons'
 import type { TableDefinition } from '@/lib/table'
 import type { ResourceRow } from '@/app/workspace/[workspaceId]/components'
 import { EMPTY_CELL_PLACEHOLDER } from '@/app/workspace/[workspaceId]/components'

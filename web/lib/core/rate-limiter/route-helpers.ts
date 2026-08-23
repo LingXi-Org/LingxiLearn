@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { sha256Hex } from '@sim/security/hash'
+import { sha256Hex } from '@/lib/security/hash'
 import { normalizeEmail } from '@/lib/utils/string'
 import { type NextRequest, NextResponse } from 'next/server'
 import { RateLimiter } from '@/lib/core/rate-limiter/rate-limiter'

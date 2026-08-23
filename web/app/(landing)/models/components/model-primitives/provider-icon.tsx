@@ -1,4 +1,4 @@
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import type { CatalogProvider } from '@/app/(landing)/models/utils'
 
 export function ProviderIcon({

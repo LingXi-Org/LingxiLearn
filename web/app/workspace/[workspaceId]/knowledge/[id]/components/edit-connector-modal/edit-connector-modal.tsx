@@ -14,8 +14,8 @@ import {
   ChipModalTabs,
   Skeleton,
   Tooltip,
-} from '@sim/emcn'
-import { RefreshCw, SquareArrowUpRight } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { RefreshCw, SquareArrowUpRight } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { ConnectorConfigFields } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/connector-config-fields'
 import { hasWorkspaceMaxConnectorAccess } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/connector-entitlements'

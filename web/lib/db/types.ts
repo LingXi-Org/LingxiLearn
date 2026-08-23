@@ -1,20 +1,20 @@
-import type { db } from '@sim/db'
-import type * as schema from '@sim/db/schema'
-import type { ExtractTablesWithRelations } from 'drizzle-orm'
-import type { PgTransaction } from 'drizzle-orm/pg-core'
-import type { PostgresJsQueryResultHKT } from 'drizzle-orm/postgres-js'
+import type { ExtractTablesWithRelations } from "drizzle-orm";
+import type { PgTransaction } from "drizzle-orm/pg-core";
+import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
+import type { db } from "./db";
+import type * as schema from "./schema";
 
 /**
  * Type for database or transaction context.
  * Allows functions to work with either the db instance or a transaction.
  */
 export type DbTransaction = PgTransaction<
-  PostgresJsQueryResultHKT,
-  typeof schema,
-  ExtractTablesWithRelations<typeof schema>
->
+	PostgresJsQueryResultHKT,
+	typeof schema,
+	ExtractTablesWithRelations<typeof schema>
+>;
 
-export type DbOrTx = typeof db | DbTransaction
+export type DbOrTx = typeof db | DbTransaction;
 
 /**
  * Read-routing client: the primary `db` or the read replica `dbReplica`.
@@ -26,4 +26,4 @@ export type DbOrTx = typeof db | DbTransaction
  * `DbOrTx` only for helpers genuinely designed to join a caller's
  * transaction.
  */
-export type DbClient = typeof db
+export type DbClient = typeof db;

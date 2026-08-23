@@ -8,7 +8,7 @@ import {
   redisConfigMockFns,
   resetDbChainMock,
   resetRedisConfigMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockAcquireLock, mockReleaseLock, mockExtendLock } = redisConfigMockFns

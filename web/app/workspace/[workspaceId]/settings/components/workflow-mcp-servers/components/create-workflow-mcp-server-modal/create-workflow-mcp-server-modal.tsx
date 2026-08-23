@@ -12,7 +12,7 @@ import {
   ChipModalHeader,
   ChipSelect,
   type ComboboxOption,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { useCreateWorkflowMcpServer } from '@/hooks/queries/workflow-mcp-servers'
 

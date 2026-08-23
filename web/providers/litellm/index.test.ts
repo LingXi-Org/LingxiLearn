@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { resetEnvMock, setEnv } from '@sim/testing'
+import { resetEnvMock, setEnv } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockCreate, mockExecuteTool } = vi.hoisted(() => ({

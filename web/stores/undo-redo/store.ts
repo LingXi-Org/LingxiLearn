@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { UNDO_REDO_OPERATIONS } from '@sim/realtime-protocol/constants'
+import { UNDO_REDO_OPERATIONS } from '@/lib/realtime/protocol/constants'
 import type { Edge } from 'reactflow'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'

@@ -37,13 +37,13 @@ const logger = createLogger('SandboxResolve')
  * The DB is reached lazily so the sandbox barrel stays importable without one.
  * `withPiSandbox`, the copilot doc compilers, and `verify-sandbox-parity.ts` all
  * pull in this module through `remote-sandbox/index.ts` but never select a
- * workspace sandbox — a static `@sim/db` import would make every one of them
+ * workspace sandbox — a static `@/lib/db` import would make every one of them
  * throw at module load when `DATABASE_URL` is unset.
  */
 async function sandboxDb() {
   const [{ db }, schema, orm] = await Promise.all([
-    import('@sim/db'),
-    import('@sim/db/schema'),
+    import('@/lib/db'),
+    import('@/lib/db/schema'),
     import('drizzle-orm'),
   ])
   return {
@@ -399,7 +399,7 @@ async function readImage(
  * during a healthy build enqueue nothing either way.
  *
  * Imported dynamically for the same reason as {@link sandboxDb} — the registry
- * pulls `@sim/db` into the static import graph, which this module keeps out of
+ * pulls `@/lib/db` into the static import graph, which this module keeps out of
  * the executor bundle. A repair that fails must never replace the caller's
  * message, which is the one naming the sandbox and its build error.
  */

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockResolve } = vi.hoisted(() => ({ mockResolve: vi.fn() }))
 
-vi.mock('@sim/security/dns', () => ({
+vi.mock('@/lib/security/dns', () => ({
   resolveHostAddresses: mockResolve,
   preferIpv4: (addresses: string[]) =>
     addresses.find((address) => address.includes('.')) ?? addresses[0],

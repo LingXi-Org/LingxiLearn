@@ -1,6 +1,6 @@
 'use client'
 
-import { ChipConfirmModal, type ChipConfirmTextSegment } from '@sim/emcn'
+import { ChipConfirmModal, type ChipConfirmTextSegment } from '@/components/ui-kit'
 import type { DocumentData, KnowledgeBaseData } from '@/lib/knowledge/types'
 import { DocumentTagsModal } from '@/app/workspace/[workspaceId]/knowledge/[id]/[documentId]/components'
 import {

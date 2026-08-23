@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { loggerMock } from '@sim/testing'
+import { loggerMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BlockType } from '@/executor/constants'
 import { ConditionBlockHandler } from '@/executor/handlers/condition/condition-handler'

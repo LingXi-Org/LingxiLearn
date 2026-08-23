@@ -9,7 +9,7 @@ import {
   ChipModalFooter,
   ChipModalHeader,
   Info,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import {
   useOrganizationMemberUsageLimit,

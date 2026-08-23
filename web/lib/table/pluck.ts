@@ -3,7 +3,7 @@
  *
  * Lives in its own leaf file (no server-only imports) so client components
  * can import it without dragging in the rest of `lib/table` (which transitively
- * pulls `@sim/db` and `next/headers`).
+ * pulls `@/lib/db` and `next/headers`).
  */
 
 /**

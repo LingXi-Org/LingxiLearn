@@ -22,8 +22,8 @@ import {
   Upload,
   Users,
   Wrench,
-} from '@sim/emcn/icons'
-import { type PermissionType, permissionSatisfies } from '@sim/platform-authz/workspace'
+} from '@/components/ui-kit/icons'
+import { type PermissionType, permissionSatisfies } from '@/lib/permissions/native/predicates'
 import { CodeIcon, McpIcon } from '@/components/icons'
 import { getEnv, isTruthy } from '@/lib/core/config/env'
 import {

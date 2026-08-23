@@ -11,7 +11,7 @@ import {
   ChipModalFooter,
   ChipModalHeader,
   toast,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import type { BatchInvitationResult } from '@/lib/api/contracts/invitations'
 import { useSession } from '@/lib/auth/auth-client'

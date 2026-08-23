@@ -14,7 +14,7 @@ import {
   type ComboboxOption,
   handleKeyboardActivation,
   Trash,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import type { TagUsageData } from '@/lib/api/contracts/knowledge'
 import {

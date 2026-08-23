@@ -74,8 +74,11 @@ jobs:
           lib/lingxi/chat-types.ts
           lib/lingxi/generated/mothership-stream-v1.test.ts
           lib/lingxi/generated/mothership-stream-v1.ts
-          lib/lingxi/lingxi-graph-adapter.test.ts
-          lib/lingxi/lingxi-graph-adapter.ts
+          lib/lingxi/legacy/v0/lingxi-graph-v0.test.ts
+          lib/lingxi/legacy/v0/lingxi-graph-v0.ts
+          lib/lingxi/lingxi-task-transport.ts
+          lib/lingxi/stream/decode-v1.test.ts
+          lib/lingxi/stream/decode-v1.ts
           lib/lingxi/stream/turn-model.test.ts
           lib/lingxi/stream/turn-model.ts
           lib/lingxi/supported-contexts.ts

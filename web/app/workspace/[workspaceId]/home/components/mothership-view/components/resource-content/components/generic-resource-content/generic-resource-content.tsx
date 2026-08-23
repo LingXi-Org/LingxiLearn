@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { PillsRing } from '@sim/emcn'
+import { PillsRing } from '@/components/ui-kit'
 import { getToolStatusDisplayTitle } from '@/lib/copilot/tools/tool-display'
 import type { GenericResourceData } from '@/app/workspace/[workspaceId]/home/types'
 

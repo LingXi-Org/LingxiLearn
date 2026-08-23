@@ -3,7 +3,7 @@ import {
   BLOCK_RETRY_MAX_WAIT_MS,
   BLOCK_RETRY_MIN_TRIES,
   BLOCK_RETRY_MIN_WAIT_MS,
-} from '@sim/workflow-types/workflow'
+} from '@/lib/workflows/domain/workflow'
 import { z } from 'zod'
 import {
   privateSecretProvenanceBundleSchema,
@@ -148,7 +148,7 @@ const workflowParallelSchema = z.object({
  * Persisting `workflowId` per-variable would be redundant.
  *
  * `value` is `unknown` to match the canonical client-side `Variable` type
- * from `@sim/workflow-types/workflow`. Variables are free-form on the
+ * from `@/lib/workflows/domain/workflow`. Variables are free-form on the
  * editor (the user enters a string that may parse as any of the declared
  * types) and validation is done per-`type` at use-time by
  * `validateVariable` in `apps/sim/stores/variables/store.ts`.

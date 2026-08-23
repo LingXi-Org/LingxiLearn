@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { BLOCK_DIMENSIONS } from '@sim/workflow-renderer'
+import { BLOCK_DIMENSIONS } from '@/components/workflow'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_VERTICAL_SPACING } from '@/lib/workflows/autolayout/constants'
 import { getBlockMetrics, resolveNoteOverlaps } from '@/lib/workflows/autolayout/utils'

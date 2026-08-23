@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChipDropdown, toast } from '@sim/emcn'
-import { isOrgAdminRole } from '@sim/platform-authz/predicates'
+import { ChipDropdown, toast } from '@/components/ui-kit'
+import { isOrgAdminRole } from '@/lib/permissions/native/predicates'
 import {
   type OrgRole,
   type PermissionType,

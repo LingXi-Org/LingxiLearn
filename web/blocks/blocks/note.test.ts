@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { DEFAULT_NOTE_COLOR, isNoteColor, NOTE_COLOR_OPTIONS } from '@sim/workflow-renderer'
+import { DEFAULT_NOTE_COLOR, isNoteColor, NOTE_COLOR_OPTIONS } from '@/components/workflow'
 import { describe, expect, it } from 'vitest'
 import { NoteBlock } from '@/blocks/blocks/note'
 

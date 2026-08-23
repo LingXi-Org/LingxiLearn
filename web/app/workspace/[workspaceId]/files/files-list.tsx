@@ -1,7 +1,7 @@
 'use client'
 
 import { type MouseEvent, useCallback, useMemo, useRef } from 'react'
-import { type ComboboxOption, FolderPlus, Pencil, Plus, Upload } from '@sim/emcn'
+import { type ComboboxOption, FolderPlus, Pencil, Plus, Upload } from '@/components/ui-kit'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
 import type {
   BreadcrumbItem,

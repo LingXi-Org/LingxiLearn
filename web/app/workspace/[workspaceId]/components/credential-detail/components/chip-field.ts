@@ -1,4 +1,4 @@
-import { chipFieldSurfaceClass, chipFieldTextClass, cn } from '@sim/emcn'
+import { chipFieldSurfaceClass, chipFieldTextClass, cn } from '@/components/ui-kit'
 
 /** Pill wrapper. Override height/alignment (e.g. a textarea) via `cn`. */
 export const CHIP_FIELD_SHELL = cn('flex h-[30px] items-center gap-1.5 px-2', chipFieldSurfaceClass)

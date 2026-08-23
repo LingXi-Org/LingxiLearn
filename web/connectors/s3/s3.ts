@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { createLogger } from '@/lib/logger'
-import { isLoopbackHostname } from '@sim/security/ssrf'
+import { isLoopbackHostname } from '@/lib/security/ssrf'
 import { getErrorMessage, toError } from '@/lib/utils/errors'
 import { isHosted } from '@/lib/core/config/env-flags'
 import { secureFetchWithRetry } from '@/lib/knowledge/documents/secure-fetch.server'

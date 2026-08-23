@@ -1,6 +1,7 @@
 'use client'
 
 import { memo, useEffect, useRef, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import {
   Check,
   ChipModal,
@@ -15,8 +16,7 @@ import {
   ThumbsUp,
   Tooltip,
   toast,
-} from '@sim/emcn'
-import { useParams, useRouter } from 'next/navigation'
+} from '@/components/ui-kit'
 import { isLiveAssistantMessageId } from '@/lib/copilot/chat/effective-transcript'
 import { api } from '@/lib/lingxi/api'
 import { useChatSurface } from '@/app/workspace/[workspaceId]/home/components/chat-surface-context'

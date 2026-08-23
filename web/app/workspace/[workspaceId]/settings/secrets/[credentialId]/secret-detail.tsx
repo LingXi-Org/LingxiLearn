@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Chip, ChipCopyInput, ChipLink, Send } from '@sim/emcn'
-import { ArrowLeft, Key } from '@sim/emcn/icons'
+import { Chip, ChipCopyInput, ChipLink, Send } from '@/components/ui-kit'
+import { ArrowLeft, Key } from '@/components/ui-kit/icons'
 import { SaveDiscardChips } from '@/components/settings/save-discard-actions'
 import { ResourceTile } from '@/app/workspace/[workspaceId]/components'
 import {

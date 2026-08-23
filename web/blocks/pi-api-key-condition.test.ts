@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { evaluateSubBlockCondition } from '@/lib/workflows/subblocks/visibility'
 import { PiBlock } from '@/blocks/blocks/pi'

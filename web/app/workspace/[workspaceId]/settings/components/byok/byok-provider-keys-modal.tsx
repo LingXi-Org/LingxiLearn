@@ -1,6 +1,6 @@
 'use client'
 
-import { Chip, ChipModal, ChipModalBody, ChipModalFooter, ChipModalHeader } from '@sim/emcn'
+import { Chip, ChipModal, ChipModalBody, ChipModalFooter, ChipModalHeader } from '@/components/ui-kit'
 import type {
   BYOKManagerKey,
   BYOKManagerProvider,

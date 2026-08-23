@@ -1,73 +1,59 @@
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": false,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": ["./*"],
-      "@sim/audit": ["./packages/audit/src/index.ts"],
-      "@sim/audit/*": ["./packages/audit/src/*"],
-      "@sim/browser-protocol": ["./packages/browser-protocol/src/index.ts"],
-      "@sim/browser-protocol/*": ["./packages/browser-protocol/src/*"],
-      "@sim/db": ["./packages/db/index.ts"],
-      "@sim/db/*": ["./packages/db/*"],
-      "@sim/desktop-bridge": ["./packages/desktop-bridge/src/index.ts"],
-      "@sim/desktop-bridge/*": ["./packages/desktop-bridge/src/*"],
-      "@sim/emcn": ["./packages/emcn/src/index.ts"],
-      "@sim/emcn/*": ["./packages/emcn/src/*"],
-      "@sim/platform-authz/*": ["./packages/platform-authz/src/*"],
-      "@sim/realtime-protocol/*": ["./packages/realtime-protocol/src/*"],
-      "@sim/runtime-secrets": ["./packages/runtime-secrets/src/index.ts"],
-      "@sim/security/*": ["./packages/security/src/*"],
-      "@sim/terminal-protocol": ["./packages/terminal-protocol/src/index.ts"],
-      "@sim/testing/*": ["./packages/testing/src/*"],
-      "@sim/workflow-persistence/*": ["./packages/workflow-persistence/src/*"],
-      "@sim/workflow-renderer": ["./packages/workflow-renderer/src/index.ts"],
-      "@sim/workflow-renderer/*": ["./packages/workflow-renderer/src/*"],
-      "@sim/workflow-renderer/note-colors": [
-        "./packages/workflow-renderer/src/note/note-colors.ts"
-      ],
-      "@sim/workflow-types/*": ["./packages/workflow-types/src/*"]
-    }
-  },
-  "include": [
-    "next-env.d.ts",
-    ".next/types/**/*.ts",
-    "app/**/*.ts",
-    "app/**/*.tsx",
-    "components/**/*.ts",
-    "components/**/*.tsx",
-    "content/**/*.ts",
-    "content/**/*.tsx",
-    "lib/ashby/**/*.ts",
-    "lib/blog/**/*.ts",
-    "lib/colors/**/*.ts",
-    "lib/content/**/*.ts",
-    "lib/landing/**/*.ts",
-    "lib/landing/**/*.tsx",
-    "lib/lingxi/**/*.ts",
-    "lib/lingxi/**/*.tsx",
-    "lib/logger/**/*.ts",
-    "lib/ui/**/*.ts",
-    "lib/utils/**/*.ts",
-    "types/**/*.d.ts",
-    ".next/dev/types/**/*.ts"
-  ],
-  "exclude": ["node_modules", ".next", "out", "dist", "**/*.test.ts", "**/*.test.tsx"]
+	"compilerOptions": {
+		"target": "ES2020",
+		"lib": ["dom", "dom.iterable", "esnext"],
+		"allowJs": false,
+		"skipLibCheck": true,
+		"strict": true,
+		"noEmit": true,
+		"esModuleInterop": true,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"jsx": "react-jsx",
+		"incremental": true,
+		"plugins": [
+			{
+				"name": "next"
+			}
+		],
+		"paths": {
+			"@/*": ["./*"],
+			"@/lib/db": ["./lib/db/index.ts"],
+			"@/lib/db/*": ["./lib/db/*"]
+		}
+	},
+	"include": [
+		"next-env.d.ts",
+		".next/types/**/*.ts",
+		"app/**/*.ts",
+		"app/**/*.tsx",
+		"components/**/*.ts",
+		"components/**/*.tsx",
+		"content/**/*.ts",
+		"content/**/*.tsx",
+		"lib/ashby/**/*.ts",
+		"lib/blog/**/*.ts",
+		"lib/colors/**/*.ts",
+		"lib/content/**/*.ts",
+		"lib/landing/**/*.ts",
+		"lib/landing/**/*.tsx",
+		"lib/lingxi/**/*.ts",
+		"lib/lingxi/**/*.tsx",
+		"lib/logger/**/*.ts",
+		"lib/ui/**/*.ts",
+		"lib/utils/**/*.ts",
+		"types/**/*.d.ts",
+		".next/dev/types/**/*.ts"
+	],
+	"exclude": [
+		"node_modules",
+		".next",
+		"out",
+		"dist",
+		"**/*.test.ts",
+		"**/*.test.tsx"
+	]
 }

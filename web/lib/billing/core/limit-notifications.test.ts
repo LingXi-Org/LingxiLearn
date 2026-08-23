@@ -10,7 +10,7 @@ import {
   schemaMock,
   setEnvFlags,
   urlsMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sendEmailSpy, getEmailPreferencesMock, renderMock, subjectMock, isOrgAdminRoleMock } =
@@ -30,7 +30,7 @@ vi.mock('@/components/emails', () => ({
   renderLimitThresholdEmail: renderMock,
   getLimitEmailSubject: subjectMock,
 }))
-vi.mock('@sim/platform-authz/workspace', () => ({ isOrgAdminRole: isOrgAdminRoleMock }))
+vi.mock('@/lib/permissions/native/workspace', () => ({ isOrgAdminRole: isOrgAdminRoleMock }))
 
 import { maybeSendLimitThresholdEmail } from '@/lib/billing/core/limit-notifications'
 

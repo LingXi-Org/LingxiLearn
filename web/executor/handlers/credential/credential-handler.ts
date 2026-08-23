@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { credential } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { credential } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { BlockOutput } from '@/blocks/types'
