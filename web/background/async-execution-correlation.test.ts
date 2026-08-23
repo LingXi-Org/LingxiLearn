@@ -7,86 +7,9 @@ import {
   describeRetryableInfrastructureError,
   isRetryableInfrastructureError,
 } from '@/lib/core/errors/retryable-infrastructure'
-import {
-  buildScheduleCorrelation,
-  scheduleExecutionTaskOptions,
-} from '@/background/schedule-execution'
 import { buildWebhookCorrelation } from '@/background/webhook-execution'
-import { buildWorkflowCorrelation } from '@/background/workflow-execution'
 
 describe('async execution correlation fallbacks', () => {
-  it('falls back for legacy workflow payloads missing correlation fields', () => {
-    const correlation = buildWorkflowCorrelation({
-      workflowId: 'workflow-1',
-      userId: 'user-1',
-      triggerType: 'api',
-      executionId: 'execution-legacy',
-    })
-
-    expect(correlation).toEqual({
-      executionId: 'execution-legacy',
-      requestId: 'executio',
-      source: 'workflow',
-      workflowId: 'workflow-1',
-      triggerType: 'api',
-    })
-  })
-
-  it('preserves a trusted Copilot workflow tool binding', () => {
-    const correlation = buildWorkflowCorrelation({
-      workflowId: 'workflow-1',
-      userId: 'user-1',
-      triggerType: 'copilot',
-      executionId: 'execution-copilot',
-      correlation: {
-        executionId: 'execution-copilot',
-        requestId: 'request-copilot',
-        source: 'workflow',
-        workflowId: 'workflow-1',
-        triggerType: 'copilot',
-        copilotToolCallId: 'tool-call-1',
-      },
-    })
-
-    expect(correlation).toEqual({
-      executionId: 'execution-copilot',
-      requestId: 'request-copilot',
-      source: 'workflow',
-      workflowId: 'workflow-1',
-      triggerType: 'copilot',
-      copilotToolCallId: 'tool-call-1',
-    })
-  })
-
-  it('falls back for legacy schedule payloads missing preassigned request id', () => {
-    const correlation = buildScheduleCorrelation({
-      scheduleId: 'schedule-1',
-      workflowId: 'workflow-1',
-      executionId: 'schedule-exec-1',
-      now: '2025-01-01T00:00:00.000Z',
-      scheduledFor: '2025-01-01T00:00:00.000Z',
-    })
-
-    expect(correlation).toEqual({
-      executionId: 'schedule-exec-1',
-      requestId: 'schedule',
-      source: 'schedule',
-      workflowId: 'workflow-1',
-      scheduleId: 'schedule-1',
-      triggerType: 'schedule',
-      scheduledFor: '2025-01-01T00:00:00.000Z',
-    })
-  })
-
-  it('caps schedule execution concurrency at the task queue', () => {
-    expect(scheduleExecutionTaskOptions).toMatchObject({
-      queue: {
-        name: 'schedule-execution',
-        concurrencyLimit: 30,
-      },
-    })
-  })
-
   it('classifies retryable driver causes without treating every failed query as retryable', () => {
     const driverError = Object.assign(new Error('remaining connection slots are reserved'), {
       code: '53300',

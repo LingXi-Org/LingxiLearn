@@ -1,15 +1,7 @@
-import { asyncJobs, db } from '@/lib/db'
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
-import { generateShortId } from '@/lib/utils/id'
-import { omit } from '@/lib/utils/object'
-import { and, eq, inArray, or, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import {
   AsyncJobEnqueueError,
   type EnqueueOptions,
-  EXECUTION_JOB_TYPES_BY_CANCELLATION_SCOPE,
-  type ExecutionJobBinding,
-  type ExecutionJobCancellationScope,
   JOB_STATUS,
   type Job,
   type JobMetadata,
@@ -18,7 +10,11 @@ import {
   type JobType,
   validateMaxDurationSeconds,
 } from '@/lib/core/async-jobs/types'
-import { recordExecutionCancellationBackendResult } from '@/lib/core/execution-limits/metrics'
+import { asyncJobs, db } from '@/lib/db'
+import { createLogger } from '@/lib/logger'
+import { toError } from '@/lib/utils/errors'
+import { generateShortId } from '@/lib/utils/id'
+import { omit } from '@/lib/utils/object'
 
 const logger = createLogger('DatabaseJobQueue')
 
@@ -43,7 +39,6 @@ function rowToJob(row: AsyncJobRow): Job {
 }
 
 const inlineAbortControllers = new Map<string, AbortController>()
-const inlineExecutionControllers = new Map<string, Map<AbortController, JobType>>()
 
 /**
  * Per-cancel-key abort controllers for the `batchEnqueueAndWait` direct-call
@@ -52,70 +47,6 @@ const inlineExecutionControllers = new Map<string, Map<AbortController, JobType>
  * path skips `async_jobs` entirely and has no jobId to cancel by.
  */
 const inlineCancelKeyControllers = new Map<string, AbortController>()
-
-function getExecutionBinding<TPayload>(
-  payload: TPayload,
-  options?: EnqueueOptions
-): ExecutionJobBinding | undefined {
-  const metadataExecutionId = options?.metadata?.executionId
-  const metadataWorkflowId = options?.metadata?.workflowId
-  const correlation = options?.metadata?.correlation
-  let executionId =
-    typeof metadataExecutionId === 'string' ? metadataExecutionId : correlation?.executionId
-  let workflowId =
-    typeof metadataWorkflowId === 'string' ? metadataWorkflowId : correlation?.workflowId
-
-  if (typeof payload !== 'object' || payload === null) {
-    return executionId && workflowId ? { executionId, workflowId } : undefined
-  }
-
-  const record = payload as Record<string, unknown>
-  const payloadCorrelation =
-    typeof record.correlation === 'object' && record.correlation !== null
-      ? (record.correlation as Record<string, unknown>)
-      : undefined
-  if (typeof record.parentExecutionId === 'string') {
-    executionId = record.parentExecutionId
-  } else if (!executionId) {
-    const payloadExecutionId =
-      record.executionId ??
-      record.parentExecutionId ??
-      record.resumeExecutionId ??
-      payloadCorrelation?.executionId
-    if (typeof payloadExecutionId === 'string') executionId = payloadExecutionId
-  }
-  if (!workflowId) {
-    const payloadWorkflowId = record.workflowId ?? payloadCorrelation?.workflowId
-    if (typeof payloadWorkflowId === 'string') workflowId = payloadWorkflowId
-  }
-  return executionId && workflowId ? { executionId, workflowId } : undefined
-}
-
-function executionBindingKey(binding: ExecutionJobBinding): string {
-  return JSON.stringify([binding.workflowId, binding.executionId])
-}
-
-function trackExecutionController(
-  binding: ExecutionJobBinding,
-  controller: AbortController,
-  type: JobType
-): void {
-  const key = executionBindingKey(binding)
-  const controllers = inlineExecutionControllers.get(key) ?? new Map<AbortController, JobType>()
-  controllers.set(controller, type)
-  inlineExecutionControllers.set(key, controllers)
-}
-
-function untrackExecutionController(
-  binding: ExecutionJobBinding,
-  controller: AbortController
-): void {
-  const key = executionBindingKey(binding)
-  const controllers = inlineExecutionControllers.get(key)
-  if (!controllers) return
-  controllers.delete(controller)
-  if (controllers.size === 0) inlineExecutionControllers.delete(key)
-}
 
 function buildJobMetadata(options?: EnqueueOptions): Record<string, unknown> {
   const maxDurationSeconds = validateMaxDurationSeconds(options?.maxDurationSeconds)
@@ -224,7 +155,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
         jobId,
         payload,
         options.runner,
-        getExecutionBinding(payload, options),
         options.concurrencyKey,
         options.concurrencyLimit
       )
@@ -262,7 +192,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
           rows[i].id,
           payload,
           options.runner,
-          getExecutionBinding(payload, options),
           options.concurrencyKey,
           options.concurrencyLimit
         )
@@ -283,10 +212,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
       validateMaxDurationSeconds(options?.maxDurationSeconds)
     }
     const tracked: Array<{ key: string; controller: AbortController }> = []
-    const trackedExecutions: Array<{
-      binding: ExecutionJobBinding
-      controller: AbortController
-    }> = []
     const runs = items.map((item) => {
       const runner = item.options?.runner
       if (!runner) return Promise.resolve()
@@ -295,11 +220,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
       if (cancelKey) {
         inlineCancelKeyControllers.set(cancelKey, controller)
         tracked.push({ key: cancelKey, controller })
-      }
-      const binding = getExecutionBinding(item.payload, item.options)
-      if (binding) {
-        trackExecutionController(binding, controller, type)
-        trackedExecutions.push({ binding, controller })
       }
       // Same shared-key semaphore as `runInline`: without it, overlapping
       // batches on one concurrencyKey (e.g. two dispatches on one table) would
@@ -336,9 +256,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
         if (inlineCancelKeyControllers.get(t.key) === t.controller) {
           inlineCancelKeyControllers.delete(t.key)
         }
-      }
-      for (const trackedExecution of trackedExecutions) {
-        untrackExecutionController(trackedExecution.binding, trackedExecution.controller)
       }
     }
     return items.map(() => '')
@@ -441,76 +358,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
     logger.debug('Marked job as cancelled (DB queue)', { jobId, abortedInline: aborted })
   }
 
-  async cancelByExecution(
-    binding: ExecutionJobBinding,
-    scope: ExecutionJobCancellationScope
-  ): Promise<number> {
-    try {
-      const key = executionBindingKey(binding)
-      const controllers = inlineExecutionControllers.get(key)
-      const allowedJobTypes = EXECUTION_JOB_TYPES_BY_CANCELLATION_SCOPE[scope]
-      let abortedControllers = 0
-      if (controllers) {
-        for (const [controller, type] of controllers) {
-          if (!(allowedJobTypes as readonly JobType[]).includes(type)) continue
-          controller.abort(new DOMException('user', 'AbortError'))
-          controllers.delete(controller)
-          abortedControllers++
-        }
-        if (controllers.size === 0) inlineExecutionControllers.delete(key)
-      }
-
-      const now = new Date()
-      const cancellationResult = await db
-        .update(asyncJobs)
-        .set({
-          status: JOB_STATUS.CANCELLED,
-          completedAt: now,
-          error: 'Cancelled',
-          updatedAt: now,
-        })
-        .where(
-          and(
-            inArray(asyncJobs.status, [JOB_STATUS.PENDING, JOB_STATUS.PROCESSING]),
-            inArray(asyncJobs.type, [...allowedJobTypes]),
-            and(
-              or(
-                sql`${asyncJobs.metadata}->>'executionId' = ${binding.executionId}`,
-                sql`${asyncJobs.metadata}->'correlation'->>'executionId' = ${binding.executionId}`,
-                sql`${asyncJobs.payload}->>'executionId' = ${binding.executionId}`,
-                sql`${asyncJobs.payload}->>'parentExecutionId' = ${binding.executionId}`,
-                sql`${asyncJobs.payload}->>'resumeExecutionId' = ${binding.executionId}`,
-                sql`${asyncJobs.payload}->'correlation'->>'executionId' = ${binding.executionId}`
-              ),
-              or(
-                sql`${asyncJobs.metadata}->>'workflowId' = ${binding.workflowId}`,
-                sql`${asyncJobs.metadata}->'correlation'->>'workflowId' = ${binding.workflowId}`,
-                sql`${asyncJobs.payload}->>'workflowId' = ${binding.workflowId}`,
-                sql`${asyncJobs.payload}->'correlation'->>'workflowId' = ${binding.workflowId}`
-              )
-            )
-          )
-        )
-
-      const cancelledRows = cancellationResult.count
-      const cancelledJobs = Math.max(cancelledRows, abortedControllers)
-      recordExecutionCancellationBackendResult({
-        backend: 'database',
-        result: cancelledJobs > 0 ? 'cancelled' : 'not_found',
-      })
-      logger.info('Cancelled database jobs for execution', {
-        ...binding,
-        scope,
-        cancelledJobs: cancelledRows,
-        abortedControllers,
-      })
-      return cancelledJobs
-    } catch (error) {
-      recordExecutionCancellationBackendResult({ backend: 'database', result: 'error' })
-      throw error
-    }
-  }
-
   cancelByKey(cancelKey: string): boolean {
     const controller = inlineCancelKeyControllers.get(cancelKey)
     if (!controller) return false
@@ -530,7 +377,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
     jobId: string,
     payload: TPayload,
     runner: Runner,
-    binding?: ExecutionJobBinding,
     concurrencyKey?: string,
     concurrencyLimit?: number
   ): void {
@@ -540,7 +386,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
     }
     const abortController = new AbortController()
     inlineAbortControllers.set(jobId, abortController)
-    if (binding) trackExecutionController(binding, abortController, type)
     void (async () => {
       if (concurrencyKey && concurrencyLimit && concurrencyLimit > 0) {
         await acquireSlot(concurrencyKey, concurrencyLimit)
@@ -566,7 +411,6 @@ export class DatabaseJobQueue implements JobQueueBackend {
         if (inlineAbortControllers.get(jobId) === abortController) {
           inlineAbortControllers.delete(jobId)
         }
-        if (binding) untrackExecutionController(binding, abortController)
         if (concurrencyKey && concurrencyLimit && concurrencyLimit > 0) {
           releaseSlot(concurrencyKey)
         }

@@ -29,12 +29,7 @@ export const JOB_STATUS = {
 
 export type JobStatus = (typeof JOB_STATUS)[keyof typeof JOB_STATUS]
 
-export type JobType =
-  | 'workflow-execution'
-  | 'schedule-execution'
-  | 'webhook-execution'
-  | 'resume-execution'
-  | 'workflow-group-cell'
+export type JobType = 'webhook-execution' | 'workflow-group-cell'
 
 export type AsyncExecutionCorrelationSource =
   | 'workflow'
@@ -135,18 +130,6 @@ export interface EnqueueOptions {
    */
   cancelKey?: string
 }
-
-export interface ExecutionJobBinding {
-  workflowId: string
-  executionId: string
-}
-
-export type ExecutionJobCancellationScope = 'standalone' | 'resume'
-
-export const EXECUTION_JOB_TYPES_BY_CANCELLATION_SCOPE = {
-  standalone: ['workflow-execution', 'schedule-execution', 'webhook-execution'],
-  resume: ['resume-execution'],
-} as const satisfies Record<ExecutionJobCancellationScope, readonly JobType[]>
 
 export type AsyncJobEnqueueAcceptance = 'rejected' | 'unknown'
 
@@ -264,16 +247,6 @@ export interface JobQueueBackend {
    * should resolve quietly so callers can drive cancel from possibly-stale state.
    */
   cancelJob(jobId: string): Promise<void>
-
-  /**
-   * Cancel queued or running jobs owned by an execution within the explicit
-   * dedicated-job scope. Shared workflow-group carriers are never included.
-   * Backends return the number of jobs or in-process runners they targeted.
-   */
-  cancelByExecution(
-    binding: ExecutionJobBinding,
-    scope: ExecutionJobCancellationScope
-  ): Promise<number>
 
   /**
    * Cancel an in-flight job by its `cancelKey` (the domain identity callers

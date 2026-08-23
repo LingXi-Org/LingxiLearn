@@ -54,7 +54,7 @@ const migrated = new Map([
   [`${legacyScope}/security/hmac`, '@/lib/security/hmac'],
   [`${legacyScope}/security/hostnames`, '@/lib/security/hostnames'],
   [`${legacyScope}/security/ssrf`, '@/lib/security/ssrf'],
-  [`${legacyScope}/security/tokens`, '@/lib/security/tokens'],
+  [`${legacyScope}/security/tokens`, 'deleted (no current caller)'],
   [`${legacyScope}/terminal-protocol`, '@/lib/terminal/protocol'],
   [`${legacyScope}/testing`, '@/tests/support'],
   [`${legacyScope}/testing/assertions`, '@/tests/support/assertions'],

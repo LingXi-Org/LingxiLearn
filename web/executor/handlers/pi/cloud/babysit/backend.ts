@@ -4,16 +4,16 @@
  * delimited untrusted PR feedback, but no GitHub or Sim tools.
  */
 
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { truncate } from '@/lib/utils/string'
-import { sleepUntilAborted } from '@/lib/data-drains/destinations/utils'
+import { sleepUntilAborted } from '@/lib/core/utils/abortable-sleep'
 import { isExecutionCancelled, isRedisCancellationEnabled } from '@/lib/execution/cancellation'
 import { type PiSandboxRunner, withPiSandbox } from '@/lib/execution/remote-sandbox'
 import {
   resolvePiRunLifetimeMs,
   resolvePiSandboxLifetimeMs,
 } from '@/lib/execution/remote-sandbox/pi-lifetime'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { truncate } from '@/lib/utils/string'
 import {
   assertBabysitPinned,
   type BabysitCheck,

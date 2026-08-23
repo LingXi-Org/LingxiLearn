@@ -88,11 +88,6 @@
 		"capability": "workspace-credentials",
 		"status": "owned"
 	},
-	"data-drains": {
-		"owner": "observability",
-		"capability": "enterprise-data-export",
-		"status": "owned"
-	},
 	"db": { "owner": "platform", "capability": "persistence", "status": "owned" },
 	"desktop": {
 		"owner": "desktop",

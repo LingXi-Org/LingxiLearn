@@ -5,14 +5,6 @@ import { dbChainMock, dbChainMockFns, resetDbChainMock } from '@/tests/support'
 import { sleep } from '@/lib/utils/helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockRecordCancellationResult } = vi.hoisted(() => ({
-  mockRecordCancellationResult: vi.fn(),
-}))
-
-vi.mock('@/lib/core/execution-limits/metrics', () => ({
-  recordExecutionCancellationBackendResult: mockRecordCancellationResult,
-}))
-
 vi.mock('@/lib/db', () => ({
   asyncJobs: {
     attempts: 'attempts',
@@ -34,7 +26,7 @@ import {
 
 const EXISTING_JOB = {
   id: 'workflow:1',
-  type: 'workflow-execution',
+  type: 'webhook-execution',
   payload: { executionId: 'execution-1' },
   status: 'pending',
   createdAt: new Date('2026-07-10T00:00:00.000Z'),
@@ -59,7 +51,7 @@ describe('DatabaseJobQueue enqueue', () => {
     const queue = new DatabaseJobQueue()
 
     await expect(
-      queue.enqueue('workflow-execution', { executionId: 'execution-1' }, { jobId: 'workflow:1' })
+      queue.enqueue('webhook-execution', { executionId: 'execution-1' }, { jobId: 'workflow:1' })
     ).resolves.toBe('workflow:1')
   })
 
@@ -69,7 +61,7 @@ describe('DatabaseJobQueue enqueue', () => {
     const queue = new DatabaseJobQueue()
 
     const error = await queue
-      .enqueue('workflow-execution', {}, { jobId: 'workflow:1' })
+      .enqueue('webhook-execution', {}, { jobId: 'workflow:1' })
       .catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(AsyncJobEnqueueError)
@@ -85,7 +77,7 @@ describe('DatabaseJobQueue enqueue', () => {
     const queue = new DatabaseJobQueue()
 
     const error = await queue
-      .enqueue('workflow-execution', {}, { jobId: 'workflow:1' })
+      .enqueue('webhook-execution', {}, { jobId: 'workflow:1' })
       .catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(AsyncJobEnqueueError)
@@ -99,7 +91,7 @@ describe('DatabaseJobQueue enqueue', () => {
     const queue = new DatabaseJobQueue()
 
     await queue.enqueue(
-      'workflow-execution',
+      'webhook-execution',
       { executionId: 'execution-1' },
       {
         maxDurationSeconds: 3600,
@@ -124,7 +116,7 @@ describe('DatabaseJobQueue enqueue', () => {
       const queue = new DatabaseJobQueue()
 
       const error = await queue
-        .enqueue('workflow-execution', {}, { maxDurationSeconds })
+        .enqueue('webhook-execution', {}, { maxDurationSeconds })
         .catch((cause: unknown) => cause)
 
       expect(error).toMatchObject({ acceptance: 'rejected', retryable: false })
@@ -136,7 +128,7 @@ describe('DatabaseJobQueue enqueue', () => {
     const queue = new DatabaseJobQueue()
 
     await queue.enqueue(
-      'workflow-execution',
+      'webhook-execution',
       {},
       {
         maxDurationSeconds: MIN_JOB_DURATION_SECONDS,
@@ -154,7 +146,7 @@ describe('DatabaseJobQueue enqueue', () => {
     const queue = new DatabaseJobQueue()
 
     await queue.enqueue(
-      'workflow-execution',
+      'webhook-execution',
       {},
       {
         metadata: { maxDurationSeconds: -1 },
@@ -202,7 +194,7 @@ describe('DatabaseJobQueue batchEnqueueAndWait', () => {
     const runner = vi.fn()
 
     await expect(
-      queue.batchEnqueueAndWait('workflow-execution', [
+      queue.batchEnqueueAndWait('webhook-execution', [
         { payload: {}, options: { maxDurationSeconds: 60, runner } },
         { payload: {}, options: { maxDurationSeconds: 1.5, runner } },
       ])
@@ -211,95 +203,7 @@ describe('DatabaseJobQueue batchEnqueueAndWait', () => {
     expect(runner).not.toHaveBeenCalled()
   })
 
-  it('aborts an in-process runner by execution ID', async () => {
-    const queue = new DatabaseJobQueue()
-    let resolveStarted: (() => void) | undefined
-    const started = new Promise<void>((resolve) => {
-      resolveStarted = resolve
-    })
-    let observedSignal: AbortSignal | undefined
-
-    const batch = queue.batchEnqueueAndWait('workflow-execution', [
-      {
-        payload: { workflowId: 'workflow-1', executionId: 'execution-1' },
-        options: {
-          runner: async (_payload, signal) => {
-            observedSignal = signal
-            resolveStarted?.()
-            await new Promise<void>((resolve) => {
-              signal.addEventListener('abort', () => resolve(), { once: true })
-            })
-          },
-        },
-      },
-    ])
-    await started
-    dbChainMockFns.where.mockResolvedValueOnce({ count: 0 })
-
-    await expect(
-      queue.cancelByExecution(
-        { workflowId: 'workflow-1', executionId: 'execution-1' },
-        'standalone'
-      )
-    ).resolves.toBe(1)
-    await batch
-
-    expect(observedSignal?.aborted).toBe(true)
-  })
-
-  it('correlates legacy resume runners through their parent execution ID', async () => {
-    const queue = new DatabaseJobQueue()
-    let resolveStarted: (() => void) | undefined
-    const started = new Promise<void>((resolve) => {
-      resolveStarted = resolve
-    })
-    let observedSignal: AbortSignal | undefined
-
-    const batch = queue.batchEnqueueAndWait('resume-execution', [
-      {
-        payload: {
-          workflowId: 'workflow-1',
-          parentExecutionId: 'parent-execution-1',
-          resumeExecutionId: 'resume-attempt-1',
-        },
-        options: {
-          metadata: {
-            workflowId: 'workflow-1',
-            correlation: {
-              executionId: 'resume-attempt-1',
-              requestId: 'request-1',
-              source: 'workflow',
-              workflowId: 'workflow-1',
-            },
-          },
-          runner: async (_payload, signal) => {
-            observedSignal = signal
-            resolveStarted?.()
-            await new Promise<void>((resolve) => {
-              signal.addEventListener('abort', () => resolve(), { once: true })
-            })
-          },
-        },
-      },
-    ])
-    await started
-    dbChainMockFns.where.mockResolvedValueOnce({ count: 0 })
-
-    await expect(
-      queue.cancelByExecution(
-        {
-          workflowId: 'workflow-1',
-          executionId: 'parent-execution-1',
-        },
-        'resume'
-      )
-    ).resolves.toBe(1)
-    await batch
-
-    expect(observedSignal?.aborted).toBe(true)
-  })
-
-  it('does not abort a shared workflow-group carrier through standalone cancellation', async () => {
+  it('aborts an in-process runner by cancel key', async () => {
     const queue = new DatabaseJobQueue()
     let resolveStarted: (() => void) | undefined
     const started = new Promise<void>((resolve) => {
@@ -323,52 +227,11 @@ describe('DatabaseJobQueue batchEnqueueAndWait', () => {
       },
     ])
     await started
-    dbChainMockFns.where.mockResolvedValueOnce({ count: 0 })
-
-    await expect(
-      queue.cancelByExecution(
-        { workflowId: 'workflow-1', executionId: 'execution-1' },
-        'standalone'
-      )
-    ).resolves.toBe(0)
-    expect(observedSignal?.aborted).toBe(false)
-
     expect(queue.cancelByKey('table-1:row-1:group-1')).toBe(true)
     await batch
     expect(observedSignal?.aborted).toBe(true)
   })
 
-  it('does not misclassify an abort rejection as a failed job', async () => {
-    dbChainMockFns.returning.mockResolvedValueOnce([{ id: 'job-1' }])
-    const queue = new DatabaseJobQueue()
-    const markJobFailed = vi.spyOn(queue, 'markJobFailed')
-    let resolveStarted: (() => void) | undefined
-    const started = new Promise<void>((resolve) => {
-      resolveStarted = resolve
-    })
-
-    await queue.enqueue(
-      'workflow-execution',
-      { workflowId: 'workflow-1', executionId: 'execution-1' },
-      {
-        runner: async (_payload, signal) => {
-          resolveStarted?.()
-          await new Promise<void>((_resolve, reject) => {
-            signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-          })
-        },
-      }
-    )
-    await started
-    dbChainMockFns.where.mockResolvedValueOnce({ count: 1 })
-    await queue.cancelByExecution(
-      { workflowId: 'workflow-1', executionId: 'execution-1' },
-      'standalone'
-    )
-    await sleep(1)
-
-    expect(markJobFailed).not.toHaveBeenCalled()
-  })
 })
 
 describe('DatabaseJobQueue batchEnqueue', () => {
@@ -381,7 +244,7 @@ describe('DatabaseJobQueue batchEnqueue', () => {
     const queue = new DatabaseJobQueue()
 
     await expect(
-      queue.batchEnqueue('workflow-execution', [
+      queue.batchEnqueue('webhook-execution', [
         { payload: {}, options: { maxDurationSeconds: 60 } },
         { payload: {}, options: { maxDurationSeconds: 1.5 } },
       ])
@@ -404,7 +267,7 @@ describe('DatabaseJobQueue inline claims', () => {
     const runner = vi.fn()
 
     await queue.enqueue(
-      'workflow-execution',
+      'webhook-execution',
       { workflowId: 'workflow-1', executionId: 'execution-1' },
       { runner }
     )
@@ -414,15 +277,15 @@ describe('DatabaseJobQueue inline claims', () => {
     expect(runner).not.toHaveBeenCalled()
   })
 
-  it('marks an inline resume timeout as a failed job', async () => {
-    dbChainMockFns.returning.mockResolvedValueOnce([{ id: 'resume-job-1' }])
+  it('marks an inline runner timeout as a failed job', async () => {
+    dbChainMockFns.returning.mockResolvedValueOnce([{ id: 'job-1' }])
     const queue = new DatabaseJobQueue()
     const timeoutError = Object.assign(new Error('Execution timed out after 5 minutes'), {
       name: 'TimeoutError',
     })
 
     await queue.enqueue(
-      'resume-execution',
+      'webhook-execution',
       { workflowId: 'workflow-1', parentExecutionId: 'execution-1' },
       {
         runner: async () => {
@@ -442,109 +305,4 @@ describe('DatabaseJobQueue inline claims', () => {
     )
   })
 
-  it('does not execute after cancellation wins while the start claim is pending', async () => {
-    const queue = new DatabaseJobQueue()
-    let resolveClaim: ((claimed: boolean) => void) | undefined
-    const claimPending = new Promise<boolean>((resolve) => {
-      resolveClaim = resolve
-    })
-    const startJob = vi.spyOn(queue, 'startJob').mockReturnValue(claimPending)
-    const runner = vi.fn()
-
-    await queue.enqueue(
-      'webhook-execution',
-      { workflowId: 'workflow-1', executionId: 'execution-1' },
-      { runner }
-    )
-    await vi.waitFor(() => expect(startJob).toHaveBeenCalledOnce())
-    dbChainMockFns.where.mockResolvedValueOnce({ count: 1 })
-
-    await queue.cancelByExecution(
-      { workflowId: 'workflow-1', executionId: 'execution-1' },
-      'standalone'
-    )
-    resolveClaim?.(true)
-    await claimPending
-    await sleep(1)
-
-    expect(runner).not.toHaveBeenCalled()
-  })
-})
-
-describe('DatabaseJobQueue cancellation', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resetDbChainMock()
-  })
-
-  it('marks active database jobs as cancelled by execution ID', async () => {
-    dbChainMockFns.where.mockResolvedValueOnce({ count: 1 })
-    const queue = new DatabaseJobQueue()
-
-    await expect(
-      queue.cancelByExecution(
-        { workflowId: 'workflow-1', executionId: 'execution-1' },
-        'standalone'
-      )
-    ).resolves.toBe(1)
-
-    expect(dbChainMockFns.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'cancelled',
-        completedAt: expect.any(Date),
-        error: 'Cancelled',
-      })
-    )
-    expect(dbChainMockFns.returning).not.toHaveBeenCalled()
-    expect(mockRecordCancellationResult).toHaveBeenCalledWith({
-      backend: 'database',
-      result: 'cancelled',
-    })
-  })
-
-  it('records not-found when no active database job matches', async () => {
-    dbChainMockFns.where.mockResolvedValueOnce({ count: 0 })
-    const queue = new DatabaseJobQueue()
-
-    await expect(
-      queue.cancelByExecution(
-        { workflowId: 'workflow-1', executionId: 'execution-1' },
-        'standalone'
-      )
-    ).resolves.toBe(0)
-    expect(mockRecordCancellationResult).toHaveBeenCalledWith({
-      backend: 'database',
-      result: 'not_found',
-    })
-  })
-
-  it('returns the exact affected-row count without materializing job IDs', async () => {
-    dbChainMockFns.where.mockResolvedValueOnce({ count: 37 })
-    const queue = new DatabaseJobQueue()
-
-    await expect(
-      queue.cancelByExecution(
-        { workflowId: 'workflow-1', executionId: 'execution-1' },
-        'standalone'
-      )
-    ).resolves.toBe(37)
-
-    expect(dbChainMockFns.returning).not.toHaveBeenCalled()
-  })
-
-  it('records an error when database cancellation fails', async () => {
-    dbChainMockFns.where.mockRejectedValueOnce(new Error('database unavailable'))
-    const queue = new DatabaseJobQueue()
-
-    await expect(
-      queue.cancelByExecution(
-        { workflowId: 'workflow-1', executionId: 'execution-1' },
-        'standalone'
-      )
-    ).rejects.toThrow('database unavailable')
-    expect(mockRecordCancellationResult).toHaveBeenCalledWith({
-      backend: 'database',
-      result: 'error',
-    })
-  })
 })
