@@ -1,5 +1,6 @@
 /** Prevent migrated Sim primitives from returning to application code. */
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
@@ -96,27 +97,32 @@ const moduleSpecifier = /(?:from\s*|import\s*|require\s*\(|import\s*\(\s*)['"]([
 const violations: string[] = []
 
 function scanSourceImports(): void {
-  const args = ['-n', '--no-heading']
-  for (const extension of ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs']) args.push('--glob', `*.${extension}`)
-  for (const directory of skipped) args.push('--glob', `!${directory}/**`)
-  for (const directory of skippedRelativeDirectories) args.push('--glob', `!${directory}/**`)
-  args.push(`${legacyScope}/`, root)
-  const result = spawnSync('rg', args, { encoding: 'utf8' })
-  if (result.status !== 0 && result.status !== 1) {
-    throw new Error(result.stderr || `ripgrep failed with status ${result.status}`)
+  const result = spawnSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8' })
+  if (result.status !== 0) {
+    throw new Error(result.stderr || `git ls-files failed with status ${result.status}`)
   }
-  for (const match of result.stdout.split(/\r?\n/).filter(Boolean)) {
-    const firstColon = match.indexOf(':')
-    const secondColon = match.indexOf(':', firstColon + 1)
-    if (firstColon < 0 || secondColon < 0) continue
-    const file = match.slice(0, firstColon)
-    const lineNumber = match.slice(firstColon + 1, secondColon)
-    const line = match.slice(secondColon + 1)
-    const specifier = moduleSpecifier.exec(line)?.[1]
-    if (specifier && migrated.has(specifier)) {
-      violations.push(
-        `${relative(root, file)}:${lineNumber}: ${specifier} → ${migrated.get(specifier)}`
-      )
+
+  const sourceExtension = /\.(?:[cm]?[jt]sx?)$/
+  for (const trackedPath of result.stdout.split('\0').filter(Boolean)) {
+    const relativePath = trackedPath.replace(/^web\//, '')
+    const segments = relativePath.split('/')
+    if (!sourceExtension.test(relativePath) || segments.some((part) => skipped.has(part))) continue
+    if ([...skippedRelativeDirectories].some((directory) => relativePath.startsWith(`${directory}/`))) {
+      continue
+    }
+
+    const file = resolve(root, relativePath)
+    // Alternate worktree metadata can briefly list a path removed by the active index.
+    if (!existsSync(file)) continue
+    const lines = readFileSync(file, 'utf8').split(/\r?\n/)
+    for (const [index, line] of lines.entries()) {
+      if (!line.includes(`${legacyScope}/`)) continue
+      const specifier = moduleSpecifier.exec(line)?.[1]
+      if (specifier && migrated.has(specifier)) {
+        violations.push(
+          `${relative(root, file)}:${index + 1}: ${specifier} → ${migrated.get(specifier)}`
+        )
+      }
     }
   }
 }
