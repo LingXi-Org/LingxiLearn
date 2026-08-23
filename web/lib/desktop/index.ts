@@ -3,7 +3,7 @@
  *
  * The web app is served identically to browsers and to the desktop shell; the
  * only difference is the preload bridge the shell injects
- * (`window.simDesktop`, typed in `@sim/desktop-bridge`). Desktop features are
+ * (`window.simDesktop`, typed in `@/lib/desktop/bridge`). Desktop features are
  * progressive enhancements: check for the bridge here, never assume it.
  *
  * Rules for scaling desktop features without scattering gates:
@@ -21,8 +21,8 @@
  *   {@link getDesktopChatCapabilities} so every chat surface reports
  *   capabilities consistently.
  */
-import type { BrowserKnownSession } from '@sim/browser-protocol'
-import type { DesktopPreferences, SimDesktopApi } from '@sim/desktop-bridge'
+import type { BrowserKnownSession } from '@/lib/browser-agent/protocol'
+import type { DesktopPreferences, SimDesktopApi } from '@/lib/desktop/bridge'
 
 /** The preload bridge, or undefined outside the desktop app (and on the server). */
 export function getDesktopBridge(): SimDesktopApi | undefined {

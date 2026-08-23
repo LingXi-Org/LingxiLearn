@@ -11,8 +11,8 @@ import {
   Loader,
   Tooltip,
   useFloatingTooltip,
-} from '@sim/emcn'
-import { CircleAlert } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { CircleAlert } from '@/components/ui-kit/icons'
 import { format } from 'date-fns'
 import type { DocumentData } from '@/lib/knowledge/types'
 import { formatFileSize } from '@/lib/uploads/utils/file-utils'

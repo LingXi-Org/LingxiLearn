@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { useRouter } from 'next/navigation'
 import type { KnowledgeBaseData } from '@/lib/knowledge/types'
 import { createLogger } from '@/lib/logger'

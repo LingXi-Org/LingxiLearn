@@ -51,7 +51,7 @@ function parseVisibilityConfig(json: unknown): Record<string, AppConfigGateRule>
 
 /**
  * Resolve platform-admin status lazily. Dynamically imported so the DB-backed
- * helper (and `@sim/db`) stay out of this config module's load graph for callers
+ * helper (and `@/lib/db`) stay out of this config module's load graph for callers
  * that never reach an admin-gated rule.
  */
 async function resolveAdmin(userId: string): Promise<boolean> {

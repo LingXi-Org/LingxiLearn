@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { redisConfigMockFns, resetRedisConfigMock } from '@sim/testing'
+import { redisConfigMockFns, resetRedisConfigMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cleanupExecutionBase64Cache,

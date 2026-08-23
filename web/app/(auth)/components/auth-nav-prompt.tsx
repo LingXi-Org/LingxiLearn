@@ -1,4 +1,4 @@
-import { ChipLink } from '@sim/emcn'
+import { ChipLink } from '@/components/ui-kit'
 
 interface AuthNavPromptProps {
   /** 链接前的提示文案。 */

@@ -1,6 +1,6 @@
 'use client'
 
-import { Avatar, AvatarFallback, AvatarImage, cn, Tooltip } from '@sim/emcn'
+import { Avatar, AvatarFallback, AvatarImage, cn, Tooltip } from '@/components/ui-kit'
 import { getUserColor } from '@/lib/workspaces/colors'
 
 /** Minimal presence shape the avatar stack renders — shared by workflow and files. */

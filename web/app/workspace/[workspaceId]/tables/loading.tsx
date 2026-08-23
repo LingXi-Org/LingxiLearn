@@ -1,7 +1,7 @@
 'use client'
 
-import { Plus, Upload } from '@sim/emcn'
-import { FolderPlus, Table as TableIcon } from '@sim/emcn/icons'
+import { Plus, Upload } from '@/components/ui-kit'
+import { FolderPlus, Table as TableIcon } from '@/components/ui-kit/icons'
 import {
   type ChromeActionSpec,
   ResourceChromeFallback,

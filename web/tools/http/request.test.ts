@@ -7,8 +7,8 @@
  * to make HTTP requests to external APIs and services.
  */
 
-import { ToolTester } from '@sim/testing/builders'
-import { mockHttpResponses } from '@sim/testing/factories'
+import { ToolTester } from '@/tests/support/builders'
+import { mockHttpResponses } from '@/tests/support/factories'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestTool } from '@/tools/http/request'
 

@@ -13,8 +13,8 @@ import {
   createParallelWorkflow,
   createStarterBlock,
   WorkflowBuilder,
-} from '@sim/testing'
-import { toolsUtilsMock } from '@sim/testing/mocks'
+} from '@/tests/support'
+import { toolsUtilsMock } from '@/tests/support/mocks'
 import { describe, expect, it, vi } from 'vitest'
 import { Serializer, WorkflowValidationError } from '@/serializer/index'
 import type { SerializedWorkflow } from '@/serializer/types'
@@ -22,7 +22,7 @@ import type { BlockState } from '@/stores/workflows/workflow/types'
 
 /**
  * Type helper to convert testing package workflow to app workflow types.
- * Needed because @sim/testing has simplified types for test ergonomics.
+ * Needed because @/tests/support has simplified types for test ergonomics.
  */
 function asAppBlocks<T>(blocks: T): Record<string, BlockState> {
   return blocks as unknown as Record<string, BlockState>
@@ -863,7 +863,7 @@ describe('Serializer Extended Tests', () => {
     })
   })
 
-  describe('using WorkflowBuilder from @sim/testing', () => {
+  describe('using WorkflowBuilder from @/tests/support', () => {
     it('should serialize a linear workflow built with WorkflowBuilder', () => {
       const serializer = new Serializer()
       const workflow = WorkflowBuilder.linear(3).build()
@@ -925,7 +925,7 @@ describe('Serializer Extended Tests', () => {
     })
   })
 
-  describe('using factory functions from @sim/testing', () => {
+  describe('using factory functions from @/tests/support', () => {
     it('should serialize workflow created with createLinearWorkflow', () => {
       const serializer = new Serializer()
       const workflow = createLinearWorkflow(4)
@@ -1301,7 +1301,7 @@ describe('Serializer Extended Tests', () => {
     })
   })
 
-  describe('round-trip serialization with @sim/testing workflows', () => {
+  describe('round-trip serialization with @/tests/support workflows', () => {
     it('should preserve data through round-trip with linear workflow', () => {
       const serializer = new Serializer()
       const workflow = createLinearWorkflow(3)

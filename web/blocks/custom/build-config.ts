@@ -1,4 +1,4 @@
-import type { SubBlockType } from '@sim/workflow-types/blocks'
+import type { SubBlockType } from '@/lib/workflows/domain/blocks'
 import type { WorkflowInputField } from '@/lib/workflows/input-format'
 import type { BlockConfig, BlockIcon, SubBlockConfig } from '@/blocks/types'
 

@@ -18,7 +18,7 @@ export interface SubBlockStore extends SubBlockStoreState {
    * "explicitly cleared" into `null` (`?? null` on the raw map) — fine for
    * rendering, where both states look empty. Consumers that need the
    * tri-state distinction (present-null means cleared, absent means unknown;
-   * see the merge semantics in `@sim/workflow-persistence/subblocks`) must
+   * see the merge semantics in `@/lib/workflows/persistence/native/subblocks`) must
    * read `workflowValues` directly and use key presence, as
    * `mergeSubblockStateWithValues` does.
    */

@@ -1,4 +1,4 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   apiKey,
   document,
@@ -11,7 +11,7 @@ import {
   workflowMcpServer,
   workspace,
   workspaceFiles,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { mcpPubSub } from '@/lib/mcp/pubsub'

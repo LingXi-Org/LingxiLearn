@@ -1,4 +1,4 @@
-import type { ScopedTerminalTabsState, TerminalTabState } from '@sim/terminal-protocol'
+import type { ScopedTerminalTabsState, TerminalTabState } from '@/lib/terminal/protocol'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getCopilotTerminalSession, useCopilotTerminalStore } from '@/stores/copilot-terminal/store'
 

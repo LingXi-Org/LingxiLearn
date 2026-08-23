@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import type { webhook, workflow } from '@sim/db/schema'
+import type { webhook, workflow } from '@/lib/db/schema'
 import {
   createMockRequest,
   dbChainMock,
@@ -13,7 +13,7 @@ import {
   schemaMock,
   workflowsPersistenceUtilsMock,
   workflowsPersistenceUtilsMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import type { NextRequest } from 'next/server'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -52,7 +52,7 @@ const {
 
 const mockPreprocessExecution = executionPreprocessingMockFns.mockPreprocessExecution
 
-vi.mock('@sim/db', () => ({ ...dbChainMock, ...schemaMock }))
+vi.mock('@/lib/db', () => ({ ...dbChainMock, ...schemaMock }))
 
 vi.mock('@/lib/utils/id', () => ({
   generateId: mockGenerateId,
@@ -81,7 +81,7 @@ vi.mock('@/lib/core/admission/gate', () => ({
   tryAdmit: vi.fn(() => ({ release: mockAdmissionRelease })),
 }))
 
-vi.mock('@sim/security/compare', () => ({
+vi.mock('@/lib/security/compare', () => ({
   safeCompare: vi.fn().mockReturnValue(true),
 }))
 

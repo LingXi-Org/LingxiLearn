@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import type { ChipDropdownOption } from '@sim/emcn'
-import { Button, ChipDropdown } from '@sim/emcn'
+import type { ChipDropdownOption } from '@/components/ui-kit'
+import { Button, ChipDropdown } from '@/components/ui-kit'
 import type { WorkspaceMember } from '@/hooks/queries/workspace'
 import type { KnowledgeListFilters } from '../list/types'
 

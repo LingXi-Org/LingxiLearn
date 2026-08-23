@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { ChipDropdown, Plus, toast } from '@sim/emcn'
+import { ChipDropdown, Plus, toast } from '@/components/ui-kit'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import {

@@ -3,7 +3,7 @@ import type {
   ScopedTerminalTabsState,
   TerminalTabState,
   TerminalTabsState,
-} from '@sim/terminal-protocol'
+} from '@/lib/terminal/protocol'
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
 import {

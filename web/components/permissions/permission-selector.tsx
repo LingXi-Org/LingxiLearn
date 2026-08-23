@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { ButtonGroup, ButtonGroupItem, cn } from '@sim/emcn'
+import { ButtonGroup, ButtonGroupItem, cn } from '@/components/ui-kit'
 import type { PermissionType } from '@/lib/workspaces/permissions/utils'
 
 export type { PermissionType }

@@ -4,7 +4,7 @@
  * React Query hooks for managing user-defined tables.
  */
 
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import {
   type InfiniteData,
   infiniteQueryOptions,

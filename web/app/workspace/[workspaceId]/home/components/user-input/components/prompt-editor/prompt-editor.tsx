@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import { ContextMentionIcon } from '@/app/workspace/[workspaceId]/home/components/context-mention-icon'
 import {
   OVERLAY_CLASSES,

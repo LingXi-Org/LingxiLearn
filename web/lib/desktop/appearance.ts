@@ -9,7 +9,7 @@ import {
   type TerminalAppearanceTheme,
   type TerminalThemePalette,
   type TerminalThemeProfile,
-} from '@sim/desktop-bridge'
+} from '@/lib/desktop/bridge'
 import { getDesktopBridge } from '@/lib/desktop'
 
 export type ResolvedDesktopTheme = 'system' | 'light' | 'dark'

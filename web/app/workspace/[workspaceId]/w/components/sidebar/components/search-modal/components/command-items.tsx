@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 import { memo } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import { Command } from 'cmdk'
 
 interface ActionItemProps {

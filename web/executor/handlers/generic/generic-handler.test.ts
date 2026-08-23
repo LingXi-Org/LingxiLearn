@@ -1,4 +1,4 @@
-import '@sim/testing/mocks/executor'
+import '@/tests/support/mocks/executor'
 
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { KnowledgeBlock } from '@/blocks/blocks/knowledge'

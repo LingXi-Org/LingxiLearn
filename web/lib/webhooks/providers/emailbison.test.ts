@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { inputValidationMock, inputValidationMockFns } from '@sim/testing'
+import { inputValidationMock, inputValidationMockFns } from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/core/security/input-validation.server', () => inputValidationMock)

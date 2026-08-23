@@ -20,7 +20,7 @@
  * import statements in code count as production dependencies.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 
 const WEB_ROOT = resolve(import.meta.dirname, '..')
@@ -36,6 +36,8 @@ const SKIP_DIRS = new Set([
   'node_modules',
   '.next',
   '.turbo',
+  '.venv',
+  '.pytest_cache',
   '.git',
   '.github',
   '.husky',
@@ -116,10 +118,22 @@ function scanFile(absolutePath: string): Violation[] {
 }
 
 function* walkCodeFiles(dir: string): Generator<string> {
-  for (const entry of readdirSync(dir)) {
+  let entries: string[]
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return
+  }
+  for (const entry of entries) {
     if (entry === '.DS_Store' || entry.startsWith('bun.lock')) continue
     const full = join(dir, entry)
-    const stats = statSync(full)
+    let stats
+    try {
+      stats = lstatSync(full)
+    } catch {
+      continue
+    }
+    if (stats.isSymbolicLink()) continue
     if (stats.isDirectory()) {
       if (!SKIP_DIRS.has(entry)) yield* walkCodeFiles(full)
       continue

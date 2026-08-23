@@ -2,8 +2,8 @@
 
 import type React from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Badge, Button, cn, Tooltip } from '@sim/emcn'
-import { ArrowUp, Paperclip, X } from '@sim/emcn/icons'
+import { Badge, Button, cn, Tooltip } from '@/components/ui-kit'
+import { ArrowUp, Paperclip, X } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { generateId } from '@/lib/utils/id'
 import { CHAT_ACCEPT_ATTRIBUTE } from '@/lib/uploads/utils/validation'

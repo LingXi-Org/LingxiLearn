@@ -1,14 +1,14 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMock, dbChainMockFns, resetDbChainMock, schemaMock } from '@sim/testing'
+import { dbChainMock, dbChainMockFns, resetDbChainMock, schemaMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockGenerateId } = vi.hoisted(() => ({
   mockGenerateId: vi.fn(),
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@/lib/db', () => ({
   ...dbChainMock,
   workflow: schemaMock.workflow,
   workflowDeploymentOperation: schemaMock.workflowDeploymentOperation,

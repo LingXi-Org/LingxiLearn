@@ -23,7 +23,7 @@ import {
   resetUrlsMock,
   setEnv,
   setEnvFlags,
-} from '@sim/testing'
+} from '@/tests/support'
 import { sleep } from '@/lib/utils/helpers'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'

@@ -1,130 +1,81 @@
-import path from 'path'
 /// <reference types="vitest" />
-import react from '@vitejs/plugin-react'
-import { configDefaults, defineConfig } from 'vitest/config'
 
-const nextEnv = require('@next/env')
-const { loadEnvConfig } = nextEnv.default || nextEnv
+import path from "node:path";
+import react from "@vitejs/plugin-react";
+import { configDefaults, defineConfig } from "vitest/config";
 
-const projectDir = process.cwd()
-loadEnvConfig(projectDir)
+const nextEnv = require("@next/env");
+const { loadEnvConfig } = nextEnv.default || nextEnv;
+
+const projectDir = process.cwd();
+loadEnvConfig(projectDir);
 
 export default defineConfig({
-  plugins: [react()],
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['**/*.test.{ts,tsx}'],
-    exclude: [...configDefaults.exclude, '**/node_modules/**', '**/dist/**'],
-    setupFiles: ['./vitest.setup.ts'],
-    pool: 'threads',
-    isolate: true,
-    unstubEnvs: true,
-    unstubGlobals: true,
-    fileParallelism: true,
-    maxConcurrency: 10,
-    testTimeout: 10000,
-  },
-  resolve: {
-    // `resolve.tsconfigPaths` is not a real Vitest option — the @sim/* scopes
-    // only resolve through these explicit aliases, which must mirror the paths
-    // block in tsconfig.json.
-    alias: [
-      {
-        find: '@sim/testing',
-        replacement: path.resolve(__dirname, 'packages/testing/src'),
-      },
-      {
-        find: '@sim/audit',
-        replacement: path.resolve(__dirname, 'packages/audit/src'),
-      },
-      {
-        find: '@sim/browser-protocol',
-        replacement: path.resolve(__dirname, 'packages/browser-protocol/src'),
-      },
-      {
-        find: '@sim/platform-authz',
-        replacement: path.resolve(__dirname, 'packages/platform-authz/src'),
-      },
-      {
-        find: '@sim/realtime-protocol',
-        replacement: path.resolve(__dirname, 'packages/realtime-protocol/src'),
-      },
-      {
-        find: '@sim/runtime-secrets',
-        replacement: path.resolve(__dirname, 'packages/runtime-secrets/src'),
-      },
-      {
-        find: '@sim/terminal-protocol',
-        replacement: path.resolve(__dirname, 'packages/terminal-protocol/src'),
-      },
-      {
-        find: '@sim/workflow-persistence',
-        replacement: path.resolve(__dirname, 'packages/workflow-persistence/src'),
-      },
-      {
-        find: '@sim/workflow-renderer',
-        replacement: path.resolve(__dirname, 'packages/workflow-renderer/src'),
-      },
-      {
-        find: '@sim/db',
-        replacement: path.resolve(__dirname, 'packages/db'),
-      },
-      {
-        find: '@sim/emcn',
-        replacement: path.resolve(__dirname, 'packages/emcn/src'),
-      },
-      {
-        find: '@sim/desktop-bridge',
-        replacement: path.resolve(__dirname, 'packages/desktop-bridge/src'),
-      },
-      {
-        find: /^@sim\/workflow-types\/(.*)$/,
-        replacement: `${path.resolve(__dirname, 'packages/workflow-types/src')}/$1`,
-      },
-      {
-        find: /^@sim\/security\/(.*)$/,
-        replacement: `${path.resolve(__dirname, 'packages/security/src')}/$1`,
-      },
-      {
-        find: '@/stores/console/store',
-        replacement: path.resolve(__dirname, 'stores/console/store.ts'),
-      },
-      {
-        find: '@/stores/execution/store',
-        replacement: path.resolve(__dirname, 'stores/execution/store.ts'),
-      },
-      {
-        find: '@/blocks/types',
-        replacement: path.resolve(__dirname, 'blocks/types.ts'),
-      },
-      {
-        find: '@/serializer/types',
-        replacement: path.resolve(__dirname, 'serializer/types.ts'),
-      },
-      { find: '@/lib', replacement: path.resolve(__dirname, 'lib') },
-      { find: '@/stores', replacement: path.resolve(__dirname, 'stores') },
-      {
-        find: '@/components',
-        replacement: path.resolve(__dirname, 'components'),
-      },
-      { find: '@/app', replacement: path.resolve(__dirname, 'app') },
-      { find: '@/api', replacement: path.resolve(__dirname, 'app/api') },
-      {
-        find: '@/executor',
-        replacement: path.resolve(__dirname, 'executor'),
-      },
-      {
-        find: '@/providers',
-        replacement: path.resolve(__dirname, 'providers'),
-      },
-      { find: '@/tools', replacement: path.resolve(__dirname, 'tools') },
-      { find: '@/blocks', replacement: path.resolve(__dirname, 'blocks') },
-      {
-        find: '@/serializer',
-        replacement: path.resolve(__dirname, 'serializer'),
-      },
-      { find: '@', replacement: path.resolve(__dirname) },
-    ],
-  },
-})
+	plugins: [react()],
+	test: {
+		globals: true,
+		environment: "node",
+		include: ["**/*.test.{ts,tsx}"],
+		exclude: [...configDefaults.exclude, "**/node_modules/**", "**/dist/**"],
+		setupFiles: ["./vitest.setup.ts"],
+		pool: "threads",
+		isolate: true,
+		unstubEnvs: true,
+		unstubGlobals: true,
+		fileParallelism: true,
+		maxConcurrency: 10,
+		testTimeout: 10000,
+	},
+	resolve: {
+		// Keep application-local test and database aliases explicit for Vitest.
+		alias: [
+			{
+				find: "@/tests/support",
+				replacement: path.resolve(__dirname, "tests/support"),
+			},
+			{
+				find: "@/lib/db",
+				replacement: path.resolve(__dirname, "lib/db"),
+			},
+			{
+				find: "@/stores/console/store",
+				replacement: path.resolve(__dirname, "stores/console/store.ts"),
+			},
+			{
+				find: "@/stores/execution/store",
+				replacement: path.resolve(__dirname, "stores/execution/store.ts"),
+			},
+			{
+				find: "@/blocks/types",
+				replacement: path.resolve(__dirname, "blocks/types.ts"),
+			},
+			{
+				find: "@/serializer/types",
+				replacement: path.resolve(__dirname, "serializer/types.ts"),
+			},
+			{ find: "@/lib", replacement: path.resolve(__dirname, "lib") },
+			{ find: "@/stores", replacement: path.resolve(__dirname, "stores") },
+			{
+				find: "@/components",
+				replacement: path.resolve(__dirname, "components"),
+			},
+			{ find: "@/app", replacement: path.resolve(__dirname, "app") },
+			{ find: "@/api", replacement: path.resolve(__dirname, "app/api") },
+			{
+				find: "@/executor",
+				replacement: path.resolve(__dirname, "executor"),
+			},
+			{
+				find: "@/providers",
+				replacement: path.resolve(__dirname, "providers"),
+			},
+			{ find: "@/tools", replacement: path.resolve(__dirname, "tools") },
+			{ find: "@/blocks", replacement: path.resolve(__dirname, "blocks") },
+			{
+				find: "@/serializer",
+				replacement: path.resolve(__dirname, "serializer"),
+			},
+			{ find: "@", replacement: path.resolve(__dirname) },
+		],
+	},
+});

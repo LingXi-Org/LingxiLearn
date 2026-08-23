@@ -1,6 +1,6 @@
 'use client'
 
-import { Table as TableIcon } from '@sim/emcn/icons'
+import { Table as TableIcon } from '@/components/ui-kit/icons'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
 import { apiUrl } from '@/lib/lingxi/api'
 import { useTableDetailController } from './controllers/table-detail'

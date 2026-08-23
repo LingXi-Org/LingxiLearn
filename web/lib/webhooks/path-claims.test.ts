@@ -14,7 +14,7 @@ vi.mock('drizzle-orm', () => ({
   lte: (column: string, value: unknown) => ({ kind: 'lte', column, value }),
 }))
 
-import type { DbOrTx } from '@sim/workflow-persistence/types'
+import type { DbOrTx } from '@/lib/workflows/persistence/native/types'
 import {
   claimWebhookPath,
   StaleWebhookPathClaimGenerationError,

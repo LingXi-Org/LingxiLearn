@@ -18,8 +18,8 @@ import {
   Settings,
   TerminalWindow,
   Wrench,
-} from '@sim/emcn'
-import { Calendar, Clock, Cursor, Globe, Table as TableIcon } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Calendar, Clock, Cursor, Globe, Table as TableIcon } from '@/components/ui-kit/icons'
 import { AgentIcon, ImageIcon, TTSIcon, VideoIcon } from '@/components/icons'
 import type { ToolCallStatus } from '@/app/workspace/[workspaceId]/home/types'
 

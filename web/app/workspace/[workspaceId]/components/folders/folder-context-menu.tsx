@@ -10,8 +10,8 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@sim/emcn'
-import { Duplicate, Eye, FolderInput, Pencil, Pin, Trash } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Duplicate, Eye, FolderInput, Pencil, Pin, Trash } from '@/components/ui-kit/icons'
 import type { MoveOptionNode } from '@/app/workspace/[workspaceId]/components/folders/move-options'
 import { renderMoveOptions } from '@/app/workspace/[workspaceId]/components/folders/move-options'
 

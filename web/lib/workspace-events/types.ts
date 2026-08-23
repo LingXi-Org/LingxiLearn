@@ -1,4 +1,4 @@
-import type { webhook, workflow } from '@sim/db/schema'
+import type { webhook, workflow } from '@/lib/db/schema'
 import type { SimEventPayloadFieldKey, SimEventType } from '@/lib/workspace-events/constants'
 
 /** A deployed Sim-trigger block subscribed to workspace events. */

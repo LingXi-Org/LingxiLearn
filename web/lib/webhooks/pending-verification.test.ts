@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { redisConfigMockFns } from '@sim/testing'
+import { redisConfigMockFns } from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   clearPendingWebhookVerification,

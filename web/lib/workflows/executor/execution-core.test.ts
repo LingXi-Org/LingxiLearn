@@ -6,7 +6,7 @@ import {
   workflowsPersistenceUtilsMockFns,
   workflowsUtilsMock,
   workflowsUtilsMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -82,7 +82,7 @@ vi.mock('@/lib/workflows/custom-blocks/operations', () => ({
   getCustomBlockRowsForWorkspace: vi.fn().mockResolvedValue([]),
 }))
 
-vi.mock('@sim/workflow-persistence/subblocks', () => ({
+vi.mock('@/lib/workflows/persistence/native/subblocks', () => ({
   mergeSubblockStateWithValues: mergeSubblockStateWithValuesMock,
 }))
 

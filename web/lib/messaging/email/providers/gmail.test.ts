@@ -3,7 +3,7 @@
  *
  * @vitest-environment node
  */
-import { resetEnvMock, setEnv } from '@sim/testing'
+import { resetEnvMock, setEnv } from '@/tests/support'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 afterAll(resetEnvMock)

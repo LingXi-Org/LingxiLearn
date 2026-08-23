@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { createMockResponse } from '@sim/testing'
+import { createMockResponse } from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearAtlassianCloudIdCache,

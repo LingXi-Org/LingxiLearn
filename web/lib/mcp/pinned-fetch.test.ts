@@ -27,7 +27,7 @@ vi.mock('@/lib/core/security/input-validation.server', () => ({
  * The real classifier treats TEST-NET-3 as reserved, which would route every
  * "public IP" case down the pinned-private branch instead.
  */
-vi.mock('@sim/security/ssrf', () => ({
+vi.mock('@/lib/security/ssrf', () => ({
   isPrivateIp: (ip: string) => ip.startsWith('127.') || ip.startsWith('10.') || ip === '::1',
 }))
 vi.mock('@/lib/mcp/domain-check', () => ({

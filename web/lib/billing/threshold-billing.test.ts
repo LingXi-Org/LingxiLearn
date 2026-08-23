@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@sim/testing'
+import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -36,7 +36,7 @@ const {
   mockCaptureServerEvent: vi.fn(),
 }))
 
-vi.mock('@sim/audit', () => ({
+vi.mock('@/lib/audit', () => ({
   AuditAction: { OVERAGE_BILLED: 'overage.billed' },
   AuditResourceType: { BILLING: 'billing' },
   recordAudit: mockRecordAudit,

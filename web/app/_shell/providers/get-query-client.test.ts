@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import type { SimDesktopApi } from '@sim/desktop-bridge'
+import type { SimDesktopApi } from '@/lib/desktop/bridge'
 import { afterEach, describe, expect, it } from 'vitest'
 import { makeQueryClient } from '@/app/_shell/providers/get-query-client'
 

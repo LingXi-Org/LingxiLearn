@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMockFns, drizzleOrmMock } from '@sim/testing'
+import { dbChainMockFns, drizzleOrmMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('drizzle-orm', () => {

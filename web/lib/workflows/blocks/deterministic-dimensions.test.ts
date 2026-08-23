@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { BLOCK_DIMENSIONS } from '@sim/workflow-renderer'
+import { BLOCK_DIMENSIONS } from '@/components/workflow'
 import { describe, expect, it } from 'vitest'
 import { calculateWorkflowBlockDimensions } from '@/lib/workflows/blocks/deterministic-dimensions'
 

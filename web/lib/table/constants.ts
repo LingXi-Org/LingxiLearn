@@ -173,7 +173,7 @@ export function getTablePlanLimits(): TablePlanLimitsByPlan {
  *
  * Points at `types` rather than `registry` on purpose: this module is re-
  * exported by the `@/lib/table` barrel that 44 server modules import, and the
- * registry pulls in `@sim/emcn/icons`.
+ * registry pulls in `@/components/ui-kit/icons`.
  */
 export { COLUMN_TYPES } from '@/lib/table/column-types/types'
 

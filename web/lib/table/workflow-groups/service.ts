@@ -7,8 +7,8 @@
  * the per-table advisory lock from `withLockedTable`.
  */
 
-import { db } from '@sim/db'
-import { userTableDefinitions, userTableRows } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { userTableDefinitions, userTableRows } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, eq, isNull } from 'drizzle-orm'
 import { OrchestrationError } from '@/lib/core/orchestration/types'

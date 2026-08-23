@@ -3,12 +3,12 @@
  * This is the SINGLE source of truth for workflow execution
  */
 
-import { db } from '@sim/db'
-import { organization, workspace } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { organization, workspace } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { filterUndefined, isPlainRecord, isRecordLike } from '@/lib/utils/object'
-import { mergeSubblockStateWithValues } from '@sim/workflow-persistence/subblocks'
+import { mergeSubblockStateWithValues } from '@/lib/workflows/persistence/native/subblocks'
 import { eq } from 'drizzle-orm'
 import type { Edge } from 'reactflow'
 import { z } from 'zod'

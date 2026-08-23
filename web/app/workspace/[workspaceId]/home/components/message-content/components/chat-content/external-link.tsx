@@ -1,6 +1,6 @@
 'use client'
 
-import { Tooltip } from '@sim/emcn'
+import { Tooltip } from '@/components/ui-kit'
 import { openInBrowserPanel, shouldOpenInBrowserPanel } from '@/lib/browser-agent/open-in-panel'
 import { faviconUrl } from '@/lib/core/utils/favicon'
 import { useLinkPreview } from '@/hooks/queries/link-preview'

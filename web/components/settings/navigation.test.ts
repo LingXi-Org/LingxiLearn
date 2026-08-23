@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { createElement } from 'react'
-import { resetEnvFlagsMock, resetEnvMock, setEnv, setEnvFlags } from '@sim/testing'
+import { resetEnvFlagsMock, resetEnvMock, setEnv, setEnvFlags } from '@/tests/support'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import {

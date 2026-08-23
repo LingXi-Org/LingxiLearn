@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import { Command } from 'cmdk'
 import type { SearchEntry, SearchEntryHandlers } from '../utils'
 

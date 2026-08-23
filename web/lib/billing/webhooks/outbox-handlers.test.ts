@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { queueTableRows, resetDbChainMock, schemaMock } from '@sim/testing'
+import { queueTableRows, resetDbChainMock, schemaMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockGetPlanByName, mockResolveDefaultPaymentMethod, stripeMock } = vi.hoisted(() => {

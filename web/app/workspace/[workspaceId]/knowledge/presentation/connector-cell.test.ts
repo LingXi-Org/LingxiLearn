@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { describe, expect, it } from 'vitest'
-import { Integration } from '@sim/emcn/icons'
+import { Integration } from '@/components/ui-kit/icons'
 import { getConnectorMeta } from '@/connectors/registry'
 import { resolveConnectorBadges } from '@/app/workspace/[workspaceId]/knowledge/presentation/connector-cell'
 

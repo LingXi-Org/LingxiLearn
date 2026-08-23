@@ -1,4 +1,4 @@
-import { resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 /**

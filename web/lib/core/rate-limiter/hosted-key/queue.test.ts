@@ -1,4 +1,4 @@
-import { redisConfigMockFns } from '@sim/testing'
+import { redisConfigMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { HostedKeyQueue } from './queue'
 

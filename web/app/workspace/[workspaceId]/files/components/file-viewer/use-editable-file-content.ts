@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
 import { GENERATED_DOCUMENT_SOURCE_TYPES } from '@/lib/uploads/utils/file-utils'
 import {

@@ -13,7 +13,7 @@ vi.mock('react', () => ({
 const mockMutate = vi.fn()
 const mockMutateAsync = vi.fn()
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
 }))
 

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { redisConfigMockFns, resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { redisConfigMockFns, resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   refreshExecutionSlotExpiry,

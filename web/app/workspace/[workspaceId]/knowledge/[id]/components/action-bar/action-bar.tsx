@@ -1,5 +1,5 @@
-import { Button, cn, Tooltip, Trash } from '@sim/emcn'
-import { Ban, Circle } from '@sim/emcn/icons'
+import { Button, cn, Tooltip, Trash } from '@/components/ui-kit'
+import { Ban, Circle } from '@/components/ui-kit/icons'
 import { domAnimation, LazyMotion, m } from 'framer-motion'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 

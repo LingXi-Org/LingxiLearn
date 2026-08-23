@@ -17,7 +17,7 @@ import {
   SUBBLOCK_OPERATIONS,
   SUBFLOW_OPERATIONS,
   UNDO_REDO_OPERATIONS,
-} from '@sim/realtime-protocol/constants'
+} from '@/lib/realtime/protocol/constants'
 import type { Edge } from 'reactflow'
 import { useSession } from '@/lib/auth/auth-client'
 import { enqueueReplaceWorkflowState } from '@/lib/workflows/operations/socket-operations'

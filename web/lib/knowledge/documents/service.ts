@@ -1,4 +1,4 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   document,
   documentSecretProvenance,
@@ -8,9 +8,9 @@ import {
   knowledgeBaseTagDefinitions,
   knowledgeConnector,
   workspace as workspaceTable,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
-import { sha256Hex } from '@sim/security/hash'
+import { sha256Hex } from '@/lib/security/hash'
 import { getErrorMessage, toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'
 import { tasks } from '@trigger.dev/sdk'

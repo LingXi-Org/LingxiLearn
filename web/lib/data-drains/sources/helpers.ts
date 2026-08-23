@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { workspace } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { workspace } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 
 /**

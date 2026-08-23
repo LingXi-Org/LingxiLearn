@@ -1,5 +1,5 @@
 import type { ComponentPropsWithoutRef, ElementType } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import styles from '@/components/ui/shimmer-text.module.css'
 
 type ShimmerTextProps<T extends ElementType = 'span'> = {

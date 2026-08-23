@@ -5,7 +5,7 @@ import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@sim/security/dns', () => ({
+vi.mock('@/lib/security/dns', () => ({
   resolveHostAddresses: vi.fn(),
   preferIpv4: (addresses: string[]) => addresses[0],
 }))

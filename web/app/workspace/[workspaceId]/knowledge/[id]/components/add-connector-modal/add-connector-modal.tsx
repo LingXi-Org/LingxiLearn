@@ -19,8 +19,8 @@ import {
   cn,
   handleKeyboardActivation,
   Search,
-} from '@sim/emcn'
-import { ArrowLeft, Plus } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { ArrowLeft, Plus } from '@/components/ui-kit/icons'
 import { useParams } from 'next/navigation'
 import { consumeOAuthReturnContext } from '@/lib/credentials/client-state'
 import {

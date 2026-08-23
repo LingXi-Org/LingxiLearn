@@ -10,7 +10,7 @@ const { mockToastError, mockUploadInternalFileSession } = vi.hoisted(() => ({
   mockUploadInternalFileSession: vi.fn(),
 }))
 
-vi.mock('@sim/emcn', () => ({ toast: { error: mockToastError } }))
+vi.mock('@/components/ui-kit', () => ({ toast: { error: mockToastError } }))
 
 vi.mock('@/lib/uploads/client/session-upload', () => ({
   uploadInternalFileSession: mockUploadInternalFileSession,

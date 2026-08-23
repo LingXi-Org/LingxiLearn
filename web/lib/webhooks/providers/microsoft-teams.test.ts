@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { hmacSha256Base64 } from '@sim/security/hmac'
-import { authOAuthUtilsMock, inputValidationMock } from '@sim/testing'
+import { hmacSha256Base64 } from '@/lib/security/hmac'
+import { authOAuthUtilsMock, inputValidationMock } from '@/tests/support'
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 

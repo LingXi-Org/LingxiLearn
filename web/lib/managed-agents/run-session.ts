@@ -25,7 +25,7 @@ import { sleep } from '@/lib/utils/helpers'
  * Completion is driven only by real terminal signals — a `session.status_idle`
  * (`end_turn`) event, or the authoritative session `status` when the event
  * stream is quiet — never by a heuristic timer. Pure with respect to Sim (no
- * `@sim/db`, no executor types); the caller supplies the decrypted API key.
+ * `@/lib/db`, no executor types); the caller supplies the decrypted API key.
  */
 
 const logger = createLogger('ManagedAgentRunSession')

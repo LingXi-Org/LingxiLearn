@@ -7,7 +7,7 @@ import {
   DropdownMenuContent,
   DropdownMenuSearchInput,
   DropdownMenuTrigger,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   ResourceMenuSections,
   useAvailableResources,

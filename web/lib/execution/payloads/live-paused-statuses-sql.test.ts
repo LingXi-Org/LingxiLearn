@@ -8,8 +8,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.unmock('drizzle-orm')
-vi.unmock('@sim/db')
-vi.unmock('@sim/db/schema')
+vi.unmock('@/lib/db')
+vi.unmock('@/lib/db/schema')
 
 process.env.DATABASE_URL ??= 'postgresql://user:pass@localhost:5432/test'
 

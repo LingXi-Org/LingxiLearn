@@ -20,8 +20,8 @@ import {
   type ComboboxOption,
   Label,
   useCopyToClipboard,
-} from '@sim/emcn'
-import { ArrowLeft, Check, Clipboard, Plus, Server } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { ArrowLeft, Check, Clipboard, Plus, Server } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'

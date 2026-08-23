@@ -14,7 +14,7 @@ import {
   resetDbChainMock,
   workflowsPersistenceUtilsMock,
   workflowsPersistenceUtilsMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ADMISSION_ERROR_CODE } from '@/lib/core/admission/transient-failure'
 
@@ -43,7 +43,7 @@ const mockLoadDeployedWorkflowState = workflowsPersistenceUtilsMockFns.mockLoadD
 
 vi.mock('@trigger.dev/sdk', () => ({ task: mockTask, timeout: { None: 'none' } }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@/lib/db', () => ({
   ...dbChainMock,
   workflow: {},
   workflowSchedule: {},

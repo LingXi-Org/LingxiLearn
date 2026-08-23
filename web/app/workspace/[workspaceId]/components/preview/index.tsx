@@ -4,8 +4,8 @@ import type { ReactNode } from 'react'
 import { useMemo } from 'react'
 import ReactFlow, { type Node, type NodeProps, ReactFlowProvider } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { Sparkles } from '@sim/emcn/icons'
-import { WorkflowBlockView } from '@sim/workflow-renderer'
+import { Sparkles } from '@/components/ui-kit/icons'
+import { WorkflowBlockView } from '@/components/workflow'
 import type { WorkflowState } from '@/stores/workflows/workflow/types'
 
 /** Read-only compatibility surface for log/table consumers. The editable

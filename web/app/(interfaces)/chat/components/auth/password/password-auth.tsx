@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { cn, Input, Label } from '@sim/emcn'
-import { Eye, EyeOff } from '@sim/emcn/icons'
+import { cn, Input, Label } from '@/components/ui-kit'
+import { Eye, EyeOff } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { AuthSubmitButton } from '@/app/(auth)/components'

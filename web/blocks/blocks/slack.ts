@@ -1,4 +1,4 @@
-import { BookOpen, ClipboardList, File, Table, Users } from '@sim/emcn/icons'
+import { BookOpen, ClipboardList, File, Table, Users } from '@/components/ui-kit/icons'
 import { GoogleTranslateIcon, GreptileIcon, SlackIcon } from '@/components/icons'
 import { getScopesForService } from '@/lib/oauth/utils'
 import type { BlockConfig, BlockMeta, SubBlockConfig } from '@/blocks/types'

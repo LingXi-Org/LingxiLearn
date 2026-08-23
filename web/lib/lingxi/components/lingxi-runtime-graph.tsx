@@ -15,7 +15,7 @@ import {
   SubBlockRowView,
   WorkflowBlockView,
   WorkflowEdgeView,
-} from '@sim/workflow-renderer'
+} from '@/components/workflow'
 import { AgentIcon, CodeIcon, SlackIcon, StartIcon, TableIcon } from '@/components/icons'
 import { applyAutoLayout } from '@/lib/workflows/autolayout'
 import {

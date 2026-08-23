@@ -15,8 +15,8 @@ import {
   ModalContent,
   ModalDescription,
   ModalHeader,
-} from '@sim/emcn'
-import { CircleAlert } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { CircleAlert } from '@/components/ui-kit/icons'
 import { createPortal } from 'react-dom'
 import { Preview } from '@/app/workspace/[workspaceId]/components/preview'
 import { useExecutionSnapshot } from '@/hooks/queries/logs'

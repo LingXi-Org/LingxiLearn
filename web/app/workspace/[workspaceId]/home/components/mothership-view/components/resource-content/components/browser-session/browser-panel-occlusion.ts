@@ -8,11 +8,11 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { BrowserPanelSnapshot } from '@sim/browser-protocol'
+import type { BrowserPanelSnapshot } from '@/lib/browser-agent/protocol'
 import {
   NATIVE_SURFACE_OCCLUSION_PREPARE_EVENT,
   type NativeSurfaceOcclusionPrepareDetail,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   captureBrowserPanelSnapshot,
   setBrowserPanelOccluded,

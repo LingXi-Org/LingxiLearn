@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { createEnvMock } from '@sim/testing'
+import { createEnvMock } from '@/tests/support'
 import type { NextRequest } from 'next/server'
 import { describe, expect, it, vi } from 'vitest'
 

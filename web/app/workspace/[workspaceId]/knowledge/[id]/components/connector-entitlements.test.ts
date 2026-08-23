@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import type { WorkspaceOwnerBilling } from '@/lib/api/contracts/workspaces'
 import { hasWorkspaceMaxConnectorAccess } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/connector-entitlements'

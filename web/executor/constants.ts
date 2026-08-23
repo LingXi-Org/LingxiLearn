@@ -1,7 +1,7 @@
 import {
   normalizeWorkflowBlockName,
   RESERVED_WORKFLOW_BLOCK_NAMES,
-} from '@sim/workflow-types/workflow'
+} from '@/lib/workflows/domain/workflow'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'
 import type { LoopType, ParallelType } from '@/lib/workflows/types'
 
@@ -156,7 +156,7 @@ export const SPECIAL_REFERENCE_PREFIXES = [
 ] as const
 
 /**
- * Delegates to the shared implementation in `@sim/workflow-types` so the
+ * Delegates to the shared implementation in `@/lib/workflows/domain` so the
  * client store and the realtime persistence layer agree on the same reserved
  * names. Values intentionally mirror REFERENCE.PREFIX.{LOOP,PARALLEL,VARIABLE} above.
  */
@@ -478,7 +478,7 @@ export function escapeRegExp(value: string): string {
  * spaces and dots. Used for both block names and variable names to ensure
  * consistent matching.
  *
- * Delegates to the shared implementation in `@sim/workflow-types` so the
+ * Delegates to the shared implementation in `@/lib/workflows/domain` so the
  * client store and the realtime persistence layer normalize block names
  * identically when checking for reserved/duplicate names.
  */

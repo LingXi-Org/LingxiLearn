@@ -16,7 +16,7 @@ import {
   cn,
   Loader,
   Tooltip,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   ChevronDown,
   ChevronsDownUp,
@@ -25,7 +25,7 @@ import {
   Search,
   Workflow,
   Wrench,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import { useParams } from 'next/navigation'
 import type { LogTraceSpan } from '@/lib/api/contracts/logs'
 import type { TraceSpan } from '@/lib/logs/types'

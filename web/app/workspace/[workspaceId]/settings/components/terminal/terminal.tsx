@@ -6,8 +6,8 @@ import type {
   DesktopPreferences,
   DesktopZoomPercent,
   TerminalThemeProfile,
-} from '@sim/desktop-bridge'
-import { Label, Switch, toast } from '@sim/emcn'
+} from '@/lib/desktop/bridge'
+import { Label, Switch, toast } from '@/components/ui-kit'
 import { useParams, useRouter } from 'next/navigation'
 import { getDesktopBridge } from '@/lib/desktop'
 import { loadDesktopTerminalThemeProfiles } from '@/lib/desktop/appearance'

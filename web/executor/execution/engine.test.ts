@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { loggerMock } from '@sim/testing'
+import { loggerMock } from '@/tests/support'
 import { sleep } from '@/lib/utils/helpers'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { createTimeoutAbortController, getRemainingExecutionMs } from '@/lib/core/execution-limits'

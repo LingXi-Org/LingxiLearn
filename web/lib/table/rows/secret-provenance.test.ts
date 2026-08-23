@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { userTableDefinitions, userTableRows } from '@sim/db/schema'
-import { dbChainMock, dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { userTableDefinitions, userTableRows } from '@/lib/db/schema'
+import { dbChainMock, dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 

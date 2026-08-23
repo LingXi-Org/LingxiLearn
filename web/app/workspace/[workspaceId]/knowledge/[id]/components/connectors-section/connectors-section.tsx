@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
   Loader,
   Tooltip,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   ChevronDown,
   CircleAlert,
@@ -25,7 +25,7 @@ import {
   Settings,
   Trash,
   TriangleAlert,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { format, formatDistanceToNow, isPast } from 'date-fns'
 import { consumeOAuthReturnContext, writeOAuthReturnContext } from '@/lib/credentials/client-state'

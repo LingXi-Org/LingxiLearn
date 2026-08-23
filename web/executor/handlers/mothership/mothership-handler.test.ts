@@ -1,6 +1,6 @@
-import '@sim/testing/mocks/executor'
+import '@/tests/support/mocks/executor'
 
-import { loggerMock, resetEnvMock, setEnv } from '@sim/testing'
+import { loggerMock, resetEnvMock, setEnv } from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BlockType } from '@/executor/constants'
 import { MothershipBlockHandler } from '@/executor/handlers/mothership/mothership-handler'

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { envFlagsMock, resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { envFlagsMock, resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -55,7 +55,7 @@ const mockTx = {
   update: mockTxUpdate,
 }
 
-vi.mock('@sim/db/schema', () => ({
+vi.mock('@/lib/db/schema', () => ({
   organization: {
     id: 'organization.id',
     storageUsedBytes: 'organization.storageUsedBytes',

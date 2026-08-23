@@ -1,4 +1,4 @@
-import { DEFAULT_NOTE_COLOR } from '@sim/workflow-renderer/note-colors'
+import { DEFAULT_NOTE_COLOR } from '@/components/workflow/note/note-colors'
 import { NoteIcon } from '@/components/icons'
 import type { BlockConfig } from '@/blocks/types'
 

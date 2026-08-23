@@ -1,4 +1,4 @@
-import { createEnvMock } from '@sim/testing'
+import { createEnvMock } from '@/tests/support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/core/config/env', () =>

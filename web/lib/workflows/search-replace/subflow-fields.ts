@@ -1,4 +1,4 @@
-import type { SubBlockType } from '@sim/workflow-types/blocks'
+import type { SubBlockType } from '@/lib/workflows/domain/blocks'
 
 export const WORKFLOW_SEARCH_SUBFLOW_FIELD_IDS = {
   type: 'subflowType',

@@ -4,8 +4,8 @@
  * `import.ts` (CSV parsing) and `import-runner.ts` (the job runner).
  */
 
-import { db } from '@sim/db'
-import { userTableDefinitions, userTableRows } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { userTableDefinitions, userTableRows } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { generateId } from '@/lib/utils/id'
 import { and, eq } from 'drizzle-orm'

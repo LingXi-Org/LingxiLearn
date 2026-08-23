@@ -1,6 +1,6 @@
 import type { Principal } from '@/lib/auth/principal'
 import { createLogger } from '@/lib/logger'
-import { sha256Hex } from '@sim/security/hash'
+import { sha256Hex } from '@/lib/security/hash'
 import { DocCompileUserError } from '@/lib/copilot/tools/server/files/doc-compile-error'
 import { isDocSandboxEnabled } from '@/lib/core/config/env-flags'
 import { CodeLanguage } from '@/lib/execution/languages'

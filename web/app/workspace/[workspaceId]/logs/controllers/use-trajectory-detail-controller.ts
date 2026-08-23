@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import type { ExecutionLogDetail, ExecutionLogRow } from '@/lib/api/contracts/logs'
 import type { ExecutionLogDetailView } from '@/app/workspace/[workspaceId]/logs/model/execution-log'

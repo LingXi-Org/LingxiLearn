@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { settings, user } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { settings, user } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { eq, inArray } from 'drizzle-orm'

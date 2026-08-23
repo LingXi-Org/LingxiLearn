@@ -8,7 +8,7 @@ import {
   Task,
   TerminalWindow,
   Workflow,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import { AgentSkillsIcon, McpIcon } from '@/components/icons'
 import { getDocumentIcon } from '@/components/icons/document-icons'
 import type { ChatContextKind, ChatMessageContext } from '@/app/workspace/[workspaceId]/home/types'

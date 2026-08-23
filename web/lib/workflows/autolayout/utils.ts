@@ -4,7 +4,7 @@ import {
   clampNoteBlockTotalHeight,
   getNoteBlockHeight,
   isNoteContentEmpty,
-} from '@sim/workflow-renderer'
+} from '@/components/workflow'
 import {
   AUTO_LAYOUT_EXCLUDED_TYPES,
   CONTAINER_BLOCK_TYPES,

@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ToastProvider } from '@sim/emcn'
+import { ToastProvider } from '@/components/ui-kit'
 import { usePathname } from 'next/navigation'
 import {
   ACCOUNT_SETTINGS_GROUPS,

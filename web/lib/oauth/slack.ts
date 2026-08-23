@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { account } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { account } from '@/lib/db/schema'
 import { and, eq, gt, isNotNull, like, max, sql } from 'drizzle-orm'
 
 /**

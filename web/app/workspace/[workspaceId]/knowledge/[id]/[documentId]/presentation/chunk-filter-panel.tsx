@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ChipCombobox } from '@sim/emcn'
+import { ChipCombobox } from '@/components/ui-kit'
 
 export interface ChunkFilterPanelProps {
   /** Multi-select view of the scalar enabled filter (`[]` = all). */

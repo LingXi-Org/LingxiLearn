@@ -1,4 +1,4 @@
-import { Folder } from '@sim/emcn/icons'
+import { Folder } from '@/components/ui-kit/icons'
 import { folderRowId } from '@/app/workspace/[workspaceId]/components/folders/folder-row-id'
 import type {
   ResourceCell,

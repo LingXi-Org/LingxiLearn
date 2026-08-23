@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ChipInput, type ChipInputProps, cn } from '@sim/emcn'
+import { ChipInput, type ChipInputProps, cn } from '@/components/ui-kit'
 import { AUTH_CONTROL_HEIGHT } from '@/app/(auth)/components/constants'
 
 /**

@@ -1,11 +1,11 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   customBlock,
   workflow,
   workflowBlocks,
   workflowDeploymentVersion,
   workspace,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { generateId, generateShortId } from '@/lib/utils/id'
 import { and, eq, isNull, sql } from 'drizzle-orm'

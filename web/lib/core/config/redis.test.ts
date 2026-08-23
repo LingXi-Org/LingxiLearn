@@ -1,4 +1,4 @@
-import { createMockRedis } from '@sim/testing'
+import { createMockRedis } from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockEnv, MockRedisConstructor } = vi.hoisted(() => ({

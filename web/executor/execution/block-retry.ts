@@ -1,5 +1,5 @@
 import { findCause } from '@/lib/utils/errors'
-import { type BlockRetryConfig, resolveBlockRetryConfig } from '@sim/workflow-types/workflow'
+import { type BlockRetryConfig, resolveBlockRetryConfig } from '@/lib/workflows/domain/workflow'
 import { isRetryEligibleBlock } from '@/lib/workflows/blocks/retry-eligibility'
 import { ChildWorkflowError } from '@/executor/errors/child-workflow-error'
 import type { SerializedBlock } from '@/serializer/types'

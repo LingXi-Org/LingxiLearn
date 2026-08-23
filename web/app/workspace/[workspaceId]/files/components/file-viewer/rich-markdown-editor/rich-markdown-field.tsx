@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ChipTextarea, chipFieldSurfaceClass, cn } from '@sim/emcn'
+import { ChipTextarea, chipFieldSurfaceClass, cn } from '@/components/ui-kit'
 import type { JSONContent } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { createMarkdownEditorExtensions } from './editor-extensions'
@@ -18,7 +18,7 @@ import { EditorBubbleMenu } from './menus/bubble-menu'
 import { LinkHoverCard } from './menus/link-hover-card'
 import { normalizeMarkdownContent } from './normalize-content'
 import { isRoundTripSafe } from './round-trip-safety'
-import '@sim/emcn/components/code/code.css'
+import '@/components/ui-kit/components/code/code.css'
 import '../document-table.css'
 import './rich-markdown-editor.css'
 

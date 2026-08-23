@@ -1,7 +1,7 @@
 /**
  * Public surface of the embeddings module. Kept to what callers outside this
  * directory actually use — the block imports `catalog` directly, because this
- * barrel re-exports the client and would drag BYOK lookup and `@sim/db` into the
+ * barrel re-exports the client and would drag BYOK lookup and `@/lib/db` into the
  * browser bundle.
  */
 export {

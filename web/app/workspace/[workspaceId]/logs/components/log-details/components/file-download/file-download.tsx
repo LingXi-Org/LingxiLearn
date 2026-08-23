@@ -1,7 +1,7 @@
 'use client'
 
-import { Button } from '@sim/emcn'
-import { Download } from '@sim/emcn/icons'
+import { Button } from '@/components/ui-kit'
+import { Download } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { useRouter } from 'next/navigation'
 import { API_BASE } from '@/lib/lingxi/api'

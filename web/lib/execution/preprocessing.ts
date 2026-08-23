@@ -1,6 +1,6 @@
-import type { workflow } from '@sim/db/schema'
+import type { workflow } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getActiveWorkflowRecord } from '@sim/platform-authz/workflow'
+import { getActiveWorkflowRecord } from '@/lib/permissions/native/workflow'
 import { getActivelyBannedUserIds } from '@/lib/auth/ban'
 import {
   reserveExecutionSlot,

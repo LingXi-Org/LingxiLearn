@@ -53,7 +53,7 @@ vi.mock('@/app/workspace/providers/socket-provider', () => ({
   useSocket: vi.fn(() => ({ socket: null })),
 }))
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }))
 

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act, type ReactNode } from 'react'
-import { resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,7 +20,7 @@ const { hostContext, mockUseOrganizationBilling, mockUseAdminWorkspaces, mockMut
   })
 )
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   ChipDropdown: () => <div />,
   ChipModal: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ChipModalBody: ({ children }: { children: ReactNode }) => <div>{children}</div>,

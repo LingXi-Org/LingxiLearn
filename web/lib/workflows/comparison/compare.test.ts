@@ -4,7 +4,7 @@
 import {
   createBlock as createTestBlock,
   createWorkflowState as createTestWorkflowState,
-} from '@sim/testing'
+} from '@/tests/support'
 import { describe, expect, it } from 'vitest'
 import type { WorkflowState } from '@/stores/workflows/workflow/types'
 import {
@@ -21,14 +21,14 @@ function asAppState<T>(state: T): WorkflowState {
 }
 
 /**
- * Helper to create a minimal valid workflow state using @sim/testing factory.
+ * Helper to create a minimal valid workflow state using @/tests/support factory.
  */
 function createWorkflowState(overrides: Partial<WorkflowState> = {}): WorkflowState {
   return asAppState(createTestWorkflowState(overrides as any))
 }
 
 /**
- * Helper to create a block with common fields using @sim/testing factory.
+ * Helper to create a block with common fields using @/tests/support factory.
  */
 function createBlock(id: string, overrides: Record<string, any> = {}): any {
   return createTestBlock({

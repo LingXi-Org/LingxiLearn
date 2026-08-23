@@ -1,4 +1,4 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import { sql } from 'drizzle-orm'
 
 export type DbExecutor = typeof db | DbTransaction

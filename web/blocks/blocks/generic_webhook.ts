@@ -1,4 +1,4 @@
-import { Webhook } from '@sim/emcn/icons'
+import { Webhook } from '@/components/ui-kit/icons'
 import type { BlockConfig } from '@/blocks/types'
 import { getTrigger } from '@/triggers'
 

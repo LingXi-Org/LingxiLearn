@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, cn } from '@sim/emcn'
+import { Button, cn } from '@/components/ui-kit'
 import { generateShortId } from '@/lib/utils/id'
 import { formatDate, formatLatency } from '@/app/workspace/[workspaceId]/logs/utils'
 

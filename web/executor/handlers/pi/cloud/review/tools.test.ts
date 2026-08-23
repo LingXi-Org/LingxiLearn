@@ -12,7 +12,7 @@ import {
   hasRipgrep,
   PYTHON_SKIP_REASON,
   RIPGREP_SKIP_REASON,
-} from '@sim/testing/environment'
+} from '@/tests/support/environment'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PiSandboxRunner } from '@/lib/execution/remote-sandbox'
 import {

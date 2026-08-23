@@ -1,7 +1,7 @@
 'use client'
 
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
-import type { BrowserCredentialMetadata } from '@sim/desktop-bridge'
+import type { BrowserCredentialMetadata } from '@/lib/desktop/bridge'
 import {
   ArrowLeft,
   Button,
@@ -15,7 +15,7 @@ import {
   Key,
   Tooltip,
   toast,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { getDesktopBridge } from '@/lib/desktop'
 import {
   RESOURCE_TILE_BASE,

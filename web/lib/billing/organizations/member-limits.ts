@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { organizationMemberUsageLimit, usageLog, workspace } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { organizationMemberUsageLimit, usageLog, workspace } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { generateId } from '@/lib/utils/id'
 import { and, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'

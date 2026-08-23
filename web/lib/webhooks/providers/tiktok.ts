@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { safeCompare } from '@sim/security/compare'
-import { hmacSha256Hex } from '@sim/security/hmac'
+import { safeCompare } from '@/lib/security/compare'
+import { hmacSha256Hex } from '@/lib/security/hmac'
 import { NextResponse } from 'next/server'
 import { env } from '@/lib/core/config/env'
 import type {

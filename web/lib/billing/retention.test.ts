@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import type { DataRetentionSettings, PiiRedactionRule } from '@sim/db/schema'
-import { queueTableRows, resetDbChainMock, schemaMock } from '@sim/testing'
+import type { DataRetentionSettings, PiiRedactionRule } from '@/lib/db/schema'
+import { queueTableRows, resetDbChainMock, schemaMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   DEFAULT_PII_REDACTION,

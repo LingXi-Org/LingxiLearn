@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChipConfirmModal, toast } from '@sim/emcn'
-import { ArrowLeft } from '@sim/emcn/icons'
+import { ChipConfirmModal, toast } from '@/components/ui-kit'
+import { ArrowLeft } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { saveDiscardActions } from '@/components/settings/save-discard-actions'

@@ -15,7 +15,7 @@ import {
   ThumbsUp,
   Tooltip,
   toast,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { useParams, useRouter } from 'next/navigation'
 import { isLiveAssistantMessageId } from '@/lib/copilot/chat/effective-transcript'
 import { api } from '@/lib/lingxi/api'

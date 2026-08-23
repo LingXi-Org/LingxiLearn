@@ -2,7 +2,7 @@
  * Pure `select`-option helpers, with no database dependency.
  *
  * These live in their own leaf module rather than in `validation.ts` on
- * purpose. `validation.ts` imports `@sim/db`, `drizzle-orm`, and `next/server`,
+ * purpose. `validation.ts` imports `@/lib/db`, `drizzle-orm`, and `next/server`,
  * so anything importing it — `select-values.ts`, and transitively
  * `cell-format.ts` and `export-format.ts` — becomes server-only. That taint is
  * the sole reason the tables grid used to hand-roll its own copy of the

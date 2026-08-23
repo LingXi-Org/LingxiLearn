@@ -13,7 +13,7 @@ import {
   queueTableRows,
   resetDbChainMock,
   schemaMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/billing/storage', () => ({

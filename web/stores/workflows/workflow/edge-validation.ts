@@ -1,7 +1,7 @@
 import {
   getWorkflowEdgeScopeDropReason,
   isWorkflowAnnotationOnlyBlockType,
-} from '@sim/workflow-types/workflow'
+} from '@/lib/workflows/domain/workflow'
 import type { Edge } from 'reactflow'
 import { TriggerUtils } from '@/lib/workflows/triggers/triggers'
 import type { BlockState } from '@/stores/workflows/workflow/types'

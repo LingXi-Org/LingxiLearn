@@ -12,7 +12,7 @@ import {
   cn,
   Search,
   Skeleton,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { getUserColor } from '@/lib/workspaces/colors'
 import type { RosterMember } from '@/hooks/queries/organization'

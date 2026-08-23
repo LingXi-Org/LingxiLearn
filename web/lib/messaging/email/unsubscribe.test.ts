@@ -1,4 +1,4 @@
-import { databaseMock, resetEnvMock, setEnv } from '@sim/testing'
+import { databaseMock, resetEnvMock, setEnv } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 beforeAll(() => {

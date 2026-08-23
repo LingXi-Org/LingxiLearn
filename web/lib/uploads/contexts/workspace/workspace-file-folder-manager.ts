@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { folder as folderTable, workspaceFiles, workspace as workspaceTable } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { folder as folderTable, workspaceFiles, workspace as workspaceTable } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage, getPostgresErrorCode } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

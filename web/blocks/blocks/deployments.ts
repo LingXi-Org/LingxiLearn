@@ -1,4 +1,4 @@
-import { Rocket } from '@sim/emcn/icons'
+import { Rocket } from '@/components/ui-kit/icons'
 import type { BlockConfig } from '@/blocks/types'
 
 const WORKFLOW_FIELD = ['workflowSelector', 'manualWorkflowId'] as const

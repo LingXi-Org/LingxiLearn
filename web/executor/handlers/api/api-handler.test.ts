@@ -1,6 +1,6 @@
-import '@sim/testing/mocks/executor'
+import '@/tests/support/mocks/executor'
 
-import { inputValidationMock, inputValidationMockFns } from '@sim/testing'
+import { inputValidationMock, inputValidationMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { BlockType } from '@/executor/constants'
 import { ApiBlockHandler } from '@/executor/handlers/api/api-handler'

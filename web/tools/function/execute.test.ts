@@ -7,7 +7,7 @@
  * which runs JavaScript code in a secure sandbox.
  */
 
-import { ToolTester } from '@sim/testing/builders'
+import { ToolTester } from '@/tests/support/builders'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_EXECUTION_TIMEOUT_MS } from '@/lib/execution/constants'
 import {

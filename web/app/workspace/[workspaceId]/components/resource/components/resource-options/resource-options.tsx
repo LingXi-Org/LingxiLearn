@@ -17,7 +17,7 @@ import {
   POPOVER_ANIMATION_CLASSES,
   Search,
   X,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { FloatingOverflowText } from '@/app/workspace/[workspaceId]/components/resource/components/floating-overflow-text'
 
 const SEARCH_ICON = (

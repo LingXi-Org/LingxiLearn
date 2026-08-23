@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { safeCompare } from '@sim/security/compare'
+import { safeCompare } from '@/lib/security/compare'
 import { generateId } from '@/lib/utils/id'
 import { NextResponse } from 'next/server'
 import { secureFetchWithValidation } from '@/lib/core/security/input-validation.server'

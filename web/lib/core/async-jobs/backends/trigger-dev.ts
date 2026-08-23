@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { sha256Hex } from '@sim/security/hash'
+import { sha256Hex } from '@/lib/security/hash'
 import { toError } from '@/lib/utils/errors'
 import { taskContext } from '@trigger.dev/core/v3'
 import { ApiError, runs, type TriggerOptions, tasks } from '@trigger.dev/sdk'

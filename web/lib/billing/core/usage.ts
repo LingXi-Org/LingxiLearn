@@ -1,7 +1,7 @@
-import { db } from '@sim/db'
-import { member, organization, settings, user, userStats } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { member, organization, settings, user, userStats } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
-import { isOrgAdminRole } from '@sim/platform-authz/workspace'
+import { isOrgAdminRole } from '@/lib/permissions/native/workspace'
 import { generateId } from '@/lib/utils/id'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import {

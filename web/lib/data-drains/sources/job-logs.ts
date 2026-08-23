@@ -1,5 +1,5 @@
-import { dbReplica } from '@sim/db'
-import { jobExecutionLogs } from '@sim/db/schema'
+import { dbReplica } from '@/lib/db'
+import { jobExecutionLogs } from '@/lib/db/schema'
 import { and, inArray, isNotNull } from 'drizzle-orm'
 import { MATERIALIZE_CONCURRENCY, mapWithConcurrency } from '@/lib/core/utils/concurrency'
 import {

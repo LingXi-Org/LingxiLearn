@@ -7,7 +7,7 @@
  * browser and reports the outcome via the confirm endpoint, which wakes the
  * server-side waiter.
  */
-import type { BrowserToolName } from '@sim/browser-protocol'
+import type { BrowserToolName } from '@/lib/browser-agent/protocol'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { isRecordLike } from '@/lib/utils/object'

@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { tableRowExecutions, workflow as workflowTable } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { tableRowExecutions, workflow as workflowTable } from '@/lib/db/schema'
 import { task, timeout } from '@trigger.dev/sdk'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import {

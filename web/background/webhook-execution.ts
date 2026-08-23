@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { account, webhook } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { account, webhook } from '@/lib/db/schema'
 import { createLogger, runWithRequestContext } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

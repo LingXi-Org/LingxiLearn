@@ -1,4 +1,4 @@
-import type { folder } from '@sim/db/schema'
+import type { folder } from '@/lib/db/schema'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 
 export const ROOT_FOLDER_PATH = '/'

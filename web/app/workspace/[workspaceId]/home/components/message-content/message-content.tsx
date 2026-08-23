@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import { Read as ReadTool, WorkspaceFile } from '@/lib/copilot/generated/tool-catalog-v1'
 import { isToolHiddenInUi } from '@/lib/copilot/tools/client/hidden-tools'
 import { resolveToolDisplay } from '@/lib/copilot/tools/client/store-utils'

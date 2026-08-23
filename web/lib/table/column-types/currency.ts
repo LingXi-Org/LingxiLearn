@@ -1,4 +1,4 @@
-import { TypeCurrency } from '@sim/emcn/icons'
+import { TypeCurrency } from '@/components/ui-kit/icons'
 import type { ColumnTypeDefinition } from '@/lib/table/column-types/types'
 import {
   formatCurrencyDisplay,

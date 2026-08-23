@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { workspaceFileSecretProvenance, workspaceFiles } from '@sim/db/schema'
-import { dbChainMock, dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { workspaceFileSecretProvenance, workspaceFiles } from '@/lib/db/schema'
+import { dbChainMock, dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DbTransaction } from '@/lib/db/types'
 import {

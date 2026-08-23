@@ -1,11 +1,11 @@
-import { db, dbFor } from '@sim/db'
+import { db, dbFor } from '@/lib/db'
 import {
   executionLargeValueDependencies,
   executionLargeValueReferences,
   executionLargeValues,
   pausedExecutions,
   workflowExecutionLogs,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import { collectLargeValueKeys } from '@/lib/execution/payloads/large-execution-value'
 import { createLogger } from '@/lib/logger'

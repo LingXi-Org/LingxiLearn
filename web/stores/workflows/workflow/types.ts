@@ -16,7 +16,7 @@ import type {
   SubflowType,
   Variable,
   WorkflowState,
-} from '@sim/workflow-types/workflow'
+} from '@/lib/workflows/domain/workflow'
 import type { Edge } from 'reactflow'
 
 export type {
@@ -38,7 +38,7 @@ export type {
   Variable,
   WorkflowState,
 }
-export { isValidSubflowType, SUBFLOW_TYPES } from '@sim/workflow-types/workflow'
+export { isValidSubflowType, SUBFLOW_TYPES } from '@/lib/workflows/domain/workflow'
 
 export interface WorkflowActions {
   updateNodeDimensions: (id: string, dimensions: { width: number; height: number }) => void

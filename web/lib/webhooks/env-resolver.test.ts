@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { environmentUtilsMockFns, resetEnvironmentUtilsMock } from '@sim/testing'
+import { environmentUtilsMockFns, resetEnvironmentUtilsMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockGetEffectiveDecryptedEnv } = environmentUtilsMockFns

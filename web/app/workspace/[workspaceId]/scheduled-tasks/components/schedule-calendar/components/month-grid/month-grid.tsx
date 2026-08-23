@@ -1,5 +1,5 @@
 'use client'
-import { chipPrimaryFillTokens, cn } from '@sim/emcn'
+import { chipPrimaryFillTokens, cn } from '@/components/ui-kit'
 import { format } from 'date-fns'
 import { CalendarEventChip } from '@/app/workspace/[workspaceId]/scheduled-tasks/components/schedule-calendar/components/calendar-event-chip'
 import {

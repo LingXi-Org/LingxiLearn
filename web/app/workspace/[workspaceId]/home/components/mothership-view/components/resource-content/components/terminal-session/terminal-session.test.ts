@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { resolveDesktopZoom } from '@sim/desktop-bridge'
+import { resolveDesktopZoom } from '@/lib/desktop/bridge'
 import { describe, expect, it } from 'vitest'
 import {
   shouldRemoveTerminalResource,

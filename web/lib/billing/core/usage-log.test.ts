@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { usageLog } from '@sim/db/schema'
-import { dbChainMockFns, resetDbChainMock, resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { usageLog } from '@/lib/db/schema'
+import { dbChainMockFns, resetDbChainMock, resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -45,7 +45,7 @@ import {
 
 /**
  * Re-wires the shared db mocks (`dbChainMockFns`, backing the single shared
- * `@sim/db` mock instance) to this file's insert/transaction chain.
+ * `@/lib/db` mock instance) to this file's insert/transaction chain.
  */
 function installSharedDbMocks(): void {
   resetDbChainMock()

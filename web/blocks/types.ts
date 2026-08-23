@@ -4,12 +4,12 @@ import type {
   OutputFieldDefinition,
   PrimitiveValueType,
   SubBlockType,
-} from '@sim/workflow-types/blocks'
+} from '@/lib/workflows/domain/blocks'
 import type { SelectorKey } from '@/hooks/selectors/types'
 import type { ToolResponse } from '@/tools/types'
 
 export type { OutputCondition, OutputFieldDefinition, PrimitiveValueType, SubBlockType }
-export { isHiddenFromDisplay } from '@sim/workflow-types/blocks'
+export { isHiddenFromDisplay } from '@/lib/workflows/domain/blocks'
 
 export type BlockIcon = (props: SVGProps<SVGSVGElement>) => JSX.Element
 export type ParamType = 'string' | 'number' | 'boolean' | 'json' | 'array' | 'file'

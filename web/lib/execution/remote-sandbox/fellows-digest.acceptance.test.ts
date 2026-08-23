@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { hasPython3, PYTHON_SKIP_REASON } from '@sim/testing/environment'
+import { hasPython3, PYTHON_SKIP_REASON } from '@/tests/support/environment'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CodeLanguage } from '@/lib/execution/languages'
 import {

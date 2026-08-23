@@ -1,5 +1,5 @@
-import { dbReplica } from '@sim/db'
-import { auditLog } from '@sim/db/schema'
+import { dbReplica } from '@/lib/db'
+import { auditLog } from '@/lib/db/schema'
 import { and, inArray, isNull, or, sql } from 'drizzle-orm'
 import {
   decodeTimeCursor,

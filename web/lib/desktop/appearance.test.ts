@@ -1,4 +1,4 @@
-import { TERMINAL_DARK_THEME, TERMINAL_LIGHT_THEME } from '@sim/desktop-bridge'
+import { TERMINAL_DARK_THEME, TERMINAL_LIGHT_THEME } from '@/lib/desktop/bridge'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { mockBridge } = vi.hoisted(() => ({ mockBridge: { current: undefined as unknown } }))

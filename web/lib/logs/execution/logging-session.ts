@@ -1,5 +1,5 @@
-import { dbFor } from '@sim/db'
-import { workflowExecutionLogs } from '@sim/db/schema'
+import { dbFor } from '@/lib/db'
+import { workflowExecutionLogs } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { describeError, toError } from '@/lib/utils/errors'
 import { and, eq, sql } from 'drizzle-orm'

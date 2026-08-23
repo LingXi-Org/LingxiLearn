@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   resolvePermission: vi.fn(),
 }))
 
-vi.mock('@sim/platform-authz/workspace', () => ({
+vi.mock('@/lib/permissions/native/workspace', () => ({
   permissionSatisfies: () => true,
   resolveEffectiveWorkspacePermission: mocks.resolvePermission,
 }))

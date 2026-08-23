@@ -9,8 +9,8 @@ import {
   ChipModalField,
   ChipModalFooter,
   ChipModalHeader,
-} from '@sim/emcn'
-import { Send } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Send } from '@/components/ui-kit/icons'
 import { generateShortId } from '@/lib/utils/id'
 import { GeneratedPasswordInput } from '@/components/ui'
 import type { ShareAuthType, ShareRecord } from '@/lib/api/contracts/public-shares'

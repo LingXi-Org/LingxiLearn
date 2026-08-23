@@ -1,4 +1,4 @@
-import { Mail } from '@sim/emcn/icons'
+import { Mail } from '@/components/ui-kit/icons'
 import { filterUndefined } from '@/lib/utils/object'
 import { normalizeDomain, splitName, str, toolProvider } from '@/enrichments/providers'
 import type { EnrichmentConfig } from '@/enrichments/types'

@@ -12,8 +12,8 @@ import {
   SquareArrowUpRight,
   Tooltip,
   toast,
-} from '@sim/emcn'
-import { TerminalWindow } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { TerminalWindow } from '@/components/ui-kit/icons'
 import { useParams } from 'next/navigation'
 import { ThinkingLoader } from '@/components/ui'
 import { useSession } from '@/lib/auth/auth-client'

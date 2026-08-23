@@ -1,5 +1,5 @@
-import { webhookPathClaim } from '@sim/db/schema'
-import type { DbOrTx } from '@sim/workflow-persistence/types'
+import { webhookPathClaim } from '@/lib/db/schema'
+import type { DbOrTx } from '@/lib/workflows/persistence/native/types'
 import { and, eq, lte } from 'drizzle-orm'
 import { normalizeWebhookRegistrationPath } from '@/lib/webhooks/registration-identity'
 

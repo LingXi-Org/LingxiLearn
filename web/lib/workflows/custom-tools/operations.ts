@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { customTools } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { customTools } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { generateShortId } from '@/lib/utils/id'
 import { and, type Column, desc, eq, isNull, or } from 'drizzle-orm'

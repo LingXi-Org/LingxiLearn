@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { rateLimitBucket } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { rateLimitBucket } from '@/lib/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import type {
   ConsumeResult,

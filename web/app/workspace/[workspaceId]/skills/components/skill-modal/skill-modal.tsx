@@ -11,7 +11,7 @@ import {
   ChipModalTabs,
   chipFieldSurfaceClass,
   cn,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import dynamic from 'next/dynamic'
 import { useParams } from 'next/navigation'

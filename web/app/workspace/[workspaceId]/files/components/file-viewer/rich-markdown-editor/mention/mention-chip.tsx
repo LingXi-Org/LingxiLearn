@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import type { ReactNodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import { useParams, useRouter } from 'next/navigation'

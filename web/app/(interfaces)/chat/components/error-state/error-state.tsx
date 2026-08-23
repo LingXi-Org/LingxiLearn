@@ -1,6 +1,6 @@
 'use client'
 
-import { Button } from '@sim/emcn'
+import { Button } from '@/components/ui-kit'
 import { useRouter } from 'next/navigation'
 
 interface ChatErrorStateProps {

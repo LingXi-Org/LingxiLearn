@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { resetEnvMock } from '@sim/testing'
+import { resetEnvMock } from '@/tests/support'
 import { decodeJwt } from 'jose'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 

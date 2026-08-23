@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockStartOauth } = vi.hoisted(() => ({ mockStartOauth: vi.fn() }))
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 

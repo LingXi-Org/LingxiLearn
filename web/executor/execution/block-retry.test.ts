@@ -8,7 +8,7 @@ import {
   BLOCK_RETRY_MAX_WAIT_MS,
   BLOCK_RETRY_MIN_TRIES,
   resolveBlockRetryConfig,
-} from '@sim/workflow-types/workflow'
+} from '@/lib/workflows/domain/workflow'
 import { describe, expect, it } from 'vitest'
 import { BlockType } from '@/executor/constants'
 import { ChildWorkflowError } from '@/executor/errors/child-workflow-error'

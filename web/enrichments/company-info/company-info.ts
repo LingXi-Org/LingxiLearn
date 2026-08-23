@@ -1,4 +1,4 @@
-import { Building } from '@sim/emcn/icons'
+import { Building } from '@/components/ui-kit/icons'
 import { filterUndefined } from '@/lib/utils/object'
 import { normalizeDomain, str, toolProvider } from '@/enrichments/providers'
 import type { EnrichmentConfig } from '@/enrichments/types'

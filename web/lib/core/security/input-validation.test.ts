@@ -1,4 +1,4 @@
-import { defaultMockEnv, envFlagsMock, resetEnvFlagsMock, resetEnvMock, setEnv } from '@sim/testing'
+import { defaultMockEnv, envFlagsMock, resetEnvFlagsMock, resetEnvMock, setEnv } from '@/tests/support'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   validateAirtableId,

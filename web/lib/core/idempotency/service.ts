@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { idempotencyKey } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { idempotencyKey } from '@/lib/db/schema'
 import { and, eq, lt, or, sql } from 'drizzle-orm'
 import { getRedisClient } from '@/lib/core/config/redis'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'

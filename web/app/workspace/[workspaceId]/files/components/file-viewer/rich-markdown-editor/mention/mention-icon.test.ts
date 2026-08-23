@@ -1,5 +1,5 @@
 /** @vitest-environment node */
-import { Workflow } from '@sim/emcn/icons'
+import { Workflow } from '@/components/ui-kit/icons'
 import { describe, expect, it } from 'vitest'
 import { AgentSkillsIcon } from '@/components/icons'
 import { getDocumentIcon } from '@/components/icons/document-icons'

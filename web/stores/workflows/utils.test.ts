@@ -1,11 +1,11 @@
-import type { BlockFactoryOptions } from '@sim/testing'
+import type { BlockFactoryOptions } from '@/tests/support'
 import {
   createAgentBlock,
   createBlock,
   createFunctionBlock,
   createLoopBlock,
   createStarterBlock,
-} from '@sim/testing'
+} from '@/tests/support'
 import type { Edge } from 'reactflow'
 import { describe, expect, it } from 'vitest'
 import { normalizeName } from '@/executor/constants'

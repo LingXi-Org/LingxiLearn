@@ -11,8 +11,8 @@
  * This is subtracted from `currentPeriodCost` to derive "effective billable usage".
  */
 
-import { db } from '@sim/db'
-import { member, usageLog, userStats } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { member, usageLog, userStats } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, eq, gte, inArray, lt, or, sql, sum } from 'drizzle-orm'
 import { DAILY_REFRESH_RATE } from '@/lib/billing/constants'

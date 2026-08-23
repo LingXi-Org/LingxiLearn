@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { Database } from '@sim/emcn/icons'
+import { Database } from '@/components/ui-kit/icons'
 import type { ResourceColumn, ResourceRow } from '@/app/workspace/[workspaceId]/components'
 import { EMPTY_CELL_PLACEHOLDER } from '@/app/workspace/[workspaceId]/components'
 import type { SortableResource } from '@/app/workspace/[workspaceId]/components/folders'

@@ -5,8 +5,8 @@ import type {
   DesktopPreferenceKey,
   DesktopPreferences,
   DesktopUpdateState,
-} from '@sim/desktop-bridge'
-import { Label, Switch, toast } from '@sim/emcn'
+} from '@/lib/desktop/bridge'
+import { Label, Switch, toast } from '@/components/ui-kit'
 import { useParams, useRouter } from 'next/navigation'
 import { getDesktopBridge, getDesktopShellVersion, getDesktopUpdates } from '@/lib/desktop'
 import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'

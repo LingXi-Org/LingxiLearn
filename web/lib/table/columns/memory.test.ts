@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { resetEnvMock, setEnv } from '@sim/testing'
+import { resetEnvMock, setEnv } from '@/tests/support'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getColumnRetypeScanBatchSize } from '@/lib/table/columns/service'
 import { TABLE_LIMITS } from '@/lib/table/constants'

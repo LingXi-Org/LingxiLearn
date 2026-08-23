@@ -4,8 +4,8 @@ import type {
   OAuthClientMetadata,
   OAuthTokens,
 } from '@modelcontextprotocol/sdk/shared/auth.js'
-import { db } from '@sim/db'
-import { mcpServers } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { mcpServers } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

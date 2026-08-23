@@ -1,4 +1,4 @@
-import type { BrowserTabState } from '@sim/browser-protocol'
+import type { BrowserTabState } from '@/lib/browser-agent/protocol'
 
 export function browserTabHostname(url: string): string | null {
   if (!/^https?:\/\//i.test(url)) return null

@@ -7,7 +7,7 @@ import {
   resetDbChainMock,
   resetEnvFlagsMock,
   setEnvFlags,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import { env } from '@/lib/core/config/env'

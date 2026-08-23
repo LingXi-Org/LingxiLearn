@@ -12,7 +12,7 @@ import {
   InfoCard,
   InfoCardItem,
   InfoCardList,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useSession } from '@/lib/auth/auth-client'

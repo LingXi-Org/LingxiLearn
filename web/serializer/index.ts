@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'
-import { resolveBlockRetryConfig } from '@sim/workflow-types/workflow'
+import { resolveBlockRetryConfig } from '@/lib/workflows/domain/workflow'
 import type { Edge } from 'reactflow'
 import type { CanonicalModeOverrides } from '@/lib/workflows/subblocks/visibility'
 import {

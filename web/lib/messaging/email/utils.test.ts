@@ -1,4 +1,4 @@
-import { resetEnvMock, resetUrlsMock, setEnv, urlsMockFns } from '@sim/testing'
+import { resetEnvMock, resetUrlsMock, setEnv, urlsMockFns } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   EMAIL_HEADER_CONTROL_CHARS_REGEX,

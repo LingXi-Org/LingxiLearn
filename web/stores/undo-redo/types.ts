@@ -1,4 +1,4 @@
-import type { UNDO_REDO_OPERATIONS, UndoRedoOperation } from '@sim/realtime-protocol/constants'
+import type { UNDO_REDO_OPERATIONS, UndoRedoOperation } from '@/lib/realtime/protocol/constants'
 import type { Edge } from 'reactflow'
 import type { BlockState } from '@/stores/workflows/workflow/types'
 

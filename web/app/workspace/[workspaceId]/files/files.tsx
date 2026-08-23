@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Loader } from '@sim/emcn'
+import { Loader } from '@/components/ui-kit'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryStates } from 'nuqs'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'

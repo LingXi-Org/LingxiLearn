@@ -1,5 +1,5 @@
-import type { BrowserKnownSession, BrowserSessionEvidence } from '@sim/browser-protocol'
-import type { BrowserCredentialMetadata, BrowserSiteInfo } from '@sim/desktop-bridge'
+import type { BrowserKnownSession, BrowserSessionEvidence } from '@/lib/browser-agent/protocol'
+import type { BrowserCredentialMetadata, BrowserSiteInfo } from '@/lib/desktop/bridge'
 import { describe, expect, it } from 'vitest'
 import {
   mergeSuggestionSources,

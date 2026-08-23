@@ -1,6 +1,6 @@
 'use client'
 
-import { ChipConfirmModal } from '@sim/emcn'
+import { ChipConfirmModal } from '@/components/ui-kit'
 import type { ChunkData } from '@/lib/knowledge/types'
 import { useDeleteChunk } from '@/hooks/queries/kb/knowledge'
 

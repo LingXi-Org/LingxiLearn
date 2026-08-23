@@ -30,8 +30,8 @@ import {
   PopoverSection,
   useFloatingTooltip,
   useIsOverflowing,
-} from '@sim/emcn'
-import { ArrowUpLeft } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { ArrowUpLeft } from '@/components/ui-kit/icons'
 import { createPortal } from 'react-dom'
 import { HEADER_ACTION_CLUSTER, TITLE_BAR_LANE_PT } from '@/components/page-header-bar'
 import { orderHeaderActions } from '@/components/settings/settings-header'

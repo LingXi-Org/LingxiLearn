@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FILE_DOC_EVENTS, type FileDocPresence } from '@sim/realtime-protocol/file-doc'
+import { FILE_DOC_EVENTS, type FileDocPresence } from '@/lib/realtime/protocol/file-doc'
 import { Awareness } from 'y-protocols/awareness'
 import * as Y from 'yjs'
 import { getUserColor } from '@/lib/workspaces/colors'

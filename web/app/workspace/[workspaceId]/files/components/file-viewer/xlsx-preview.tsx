@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useEffect, useRef, useState } from 'react'
-import { Chip } from '@sim/emcn'
+import { Chip } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import type { WorkBook } from 'xlsx'

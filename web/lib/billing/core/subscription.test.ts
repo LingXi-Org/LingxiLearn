@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMockFns, resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { dbChainMockFns, resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

@@ -12,7 +12,7 @@ import {
   Link,
   Redo,
   X,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import type { ExecutionLogSummaryView } from '@/app/workspace/[workspaceId]/logs/model/execution-log'
 
 interface LogRowContextMenuProps {

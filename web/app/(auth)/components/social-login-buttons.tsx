@@ -1,7 +1,7 @@
 'use client'
 
 import { type ReactNode, useState } from 'react'
-import { Chip, cn } from '@sim/emcn'
+import { Chip, cn } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { GithubIcon, GoogleIcon, MicrosoftIcon } from '@/components/icons'

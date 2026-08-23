@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { workflowBlocks } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { workflowBlocks } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, eq } from 'drizzle-orm'
 import { extractInputFieldsFromBlocks } from '@/lib/workflows/input-format'

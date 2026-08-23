@@ -12,8 +12,8 @@ import {
   ChipModalField,
   ChipModalFooter,
   ChipModalHeader,
-} from '@sim/emcn'
-import { Eye, EyeOff, Search } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Eye, EyeOff, Search } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import {

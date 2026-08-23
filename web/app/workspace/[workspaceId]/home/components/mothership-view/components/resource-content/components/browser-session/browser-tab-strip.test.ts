@@ -6,7 +6,7 @@ import {
 } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/browser-session/browser-tab-label'
 
 // Drop-index and title-truncation behaviour moved to the shared TabStrip in
-// @sim/emcn along with the component; see its own tests. Only the browser's
+// @/components/ui-kit along with the component; see its own tests. Only the browser's
 // favicon lookup stays here.
 describe('browserTabHostname', () => {
   it('extracts hostnames from browser URLs', () => {

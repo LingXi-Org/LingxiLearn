@@ -14,13 +14,13 @@ import {
   isPendingDesktopScopeId,
   type SimDesktopTerminalApi,
   type TerminalShortcutCommand,
-} from '@sim/desktop-bridge'
+} from '@/lib/desktop/bridge'
 import type {
   ScopedTerminalTabsState,
   TerminalOperation,
   TerminalStartOptions,
   TerminalToolArgs,
-} from '@sim/terminal-protocol'
+} from '@/lib/terminal/protocol'
 import { getDesktopBridge, isTerminalEnabled } from '@/lib/desktop'
 import { useCopilotTerminalStore } from '@/stores/copilot-terminal/store'
 

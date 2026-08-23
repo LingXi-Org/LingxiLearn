@@ -12,8 +12,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Button, cn, toast } from '@sim/emcn'
-import { PanelLeft } from '@sim/emcn/icons'
+import { Button, cn, toast } from '@/components/ui-kit'
+import { PanelLeft } from '@/components/ui-kit/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'

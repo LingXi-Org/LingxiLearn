@@ -1,10 +1,10 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   type TableRowSecretProvenanceEntry,
   userTableDefinitions,
   userTableRowSecretProvenance,
   userTableRows,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { and, asc, eq, gt, inArray, type SQL, sql } from 'drizzle-orm'
 import {
   isDurableSecretProvenanceEnforced,

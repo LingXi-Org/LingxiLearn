@@ -2,7 +2,7 @@
  * Storage usage tracking for durable workspace and payer ledgers.
  */
 
-import { organization, userStats, workspace } from '@sim/db/schema'
+import { organization, userStats, workspace } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { generateId } from '@/lib/utils/id'
 import { isRecordLike } from '@/lib/utils/object'

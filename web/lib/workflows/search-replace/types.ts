@@ -1,4 +1,4 @@
-import type { SubBlockType } from '@sim/workflow-types/blocks'
+import type { SubBlockType } from '@/lib/workflows/domain/blocks'
 import type {
   WorkflowSearchSubflowEditableValue,
   WorkflowSearchSubflowFieldId,

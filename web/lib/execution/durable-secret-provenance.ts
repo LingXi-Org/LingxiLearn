@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { DurableSecretProvenanceEntry } from '@sim/db/schema'
+import type { DurableSecretProvenanceEntry } from '@/lib/db/schema'
 import {
   type DurableSecretProvenanceSurface,
   isDurableSecretProvenanceEnforced,

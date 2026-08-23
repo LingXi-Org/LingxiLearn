@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto'
 import { createLogger } from '@/lib/logger'
-import { sha256Hex } from '@sim/security/hash'
+import { sha256Hex } from '@/lib/security/hash'
 import { eq } from 'drizzle-orm'
 import { env } from '@/lib/core/config/env'
 import type { EmailType } from '@/lib/messaging/email/mailer'
@@ -15,8 +15,8 @@ const logger = createLogger('Unsubscribe')
  */
 async function loadPreferenceStore() {
   const [{ db }, { settings, user }] = await Promise.all([
-    import('@sim/db'),
-    import('@sim/db/schema'),
+    import('@/lib/db'),
+    import('@/lib/db/schema'),
   ])
   return { db, settings, user }
 }

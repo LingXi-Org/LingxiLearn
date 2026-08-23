@@ -1,4 +1,4 @@
-import { db, workflow } from '@sim/db'
+import { db, workflow } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import { BASE_EXECUTION_CHARGE } from '@/lib/billing/constants'
 import type {

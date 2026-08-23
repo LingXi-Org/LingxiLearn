@@ -1,7 +1,7 @@
-import { db } from '@sim/db'
-import { member, organization, subscription, user } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { member, organization, subscription, user } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
-import { isOrgAdminRole } from '@sim/platform-authz/workspace'
+import { isOrgAdminRole } from '@/lib/permissions/native/workspace'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { getEffectiveBillingStatus, isOrganizationBillingBlocked } from '@/lib/billing/core/access'
 import {

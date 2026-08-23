@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { resetEnvMock, setEnv } from '@sim/testing'
+import { resetEnvMock, setEnv } from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   EmbeddingAPIError,

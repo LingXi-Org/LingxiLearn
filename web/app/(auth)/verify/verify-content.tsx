@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
-import { cn, InputOTP, InputOTPGroup, InputOTPSlot } from '@sim/emcn'
+import { cn, InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui-kit'
 import { POST_AUTH_REDIRECT_STORAGE_KEY } from '@/app/(auth)/auth-redirect'
 import {
   AuthFormMessage,

@@ -9,7 +9,7 @@ import {
   ChipModalFooter,
   ChipModalHeader,
   toast,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { KNOWLEDGE_BASE_DESCRIPTION_MAX_LENGTH } from '@/lib/knowledge/constants'

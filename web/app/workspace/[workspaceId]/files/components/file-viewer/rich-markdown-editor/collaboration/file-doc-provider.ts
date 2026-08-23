@@ -1,7 +1,7 @@
 import {
   ROOM_ACCESS_REVOKED_EVENT,
   type RoomAccessRevokedBroadcast,
-} from '@sim/realtime-protocol/events'
+} from '@/lib/realtime/protocol/events'
 import {
   FILE_DOC_EVENTS,
   FILE_DOC_MESSAGE_TYPE,
@@ -10,8 +10,8 @@ import {
   type JoinFileDocError,
   type JoinFileDocSuccess,
   toFileDocBytes,
-} from '@sim/realtime-protocol/file-doc'
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
+} from '@/lib/realtime/protocol/file-doc'
+import { ROOM_TYPES } from '@/lib/realtime/protocol/rooms'
 import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
 import { ObservableV2 } from 'lib0/observable'

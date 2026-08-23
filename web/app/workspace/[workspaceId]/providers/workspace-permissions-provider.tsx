@@ -2,7 +2,7 @@
 
 import type React from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react'
-import { useToast } from '@sim/emcn'
+import { useToast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'

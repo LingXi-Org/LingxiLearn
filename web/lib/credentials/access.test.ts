@@ -1,5 +1,5 @@
-import { account, credential, credentialMember } from '@sim/db/schema'
-import { queueTableRows, resetDbChainMock } from '@sim/testing'
+import { account, credential, credentialMember } from '@/lib/db/schema'
+import { queueTableRows, resetDbChainMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockCheckWorkspaceAccess, mockGetUserEntityPermissions } = vi.hoisted(() => ({

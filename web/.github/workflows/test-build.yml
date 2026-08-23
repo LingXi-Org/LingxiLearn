@@ -133,7 +133,7 @@ jobs:
           fi
           bun run check:migrations "$BASE_REF"
 
-      # Every workspace, not just realtime. packages/emcn, packages/utils,
+      # Every workspace, not just realtime. packages/utils,
       # apps/desktop and apps/docs had no type check in CI at all; apps/sim's
       # source was covered only as a side effect of `next build` in the separate
       # Build App job. Note this does NOT cover apps/sim's tests — its tsconfig
@@ -159,14 +159,13 @@ jobs:
         run: bun run test
 
       - name: Check schema and migrations are in sync
-        working-directory: packages/db
         run: |
-          bunx drizzle-kit generate --config=./drizzle.config.ts
-          if [ -n "$(git status --porcelain ./migrations)" ]; then
+          bunx drizzle-kit generate --config=./lib/db/drizzle.config.ts
+          if [ -n "$(git status --porcelain ./lib/db/migrations)" ]; then
             echo "❌ Schema and migrations are out of sync!"
-            echo "Run 'cd packages/db && bunx drizzle-kit generate' and commit the new migrations."
-            git status --porcelain ./migrations
-            git diff ./migrations
+            echo "Run 'bunx drizzle-kit generate --config=./lib/db/drizzle.config.ts' and commit the new migrations."
+            git status --porcelain ./lib/db/migrations
+            git diff ./lib/db/migrations
             exit 1
           fi
           echo "✅ Schema and migrations are in sync"

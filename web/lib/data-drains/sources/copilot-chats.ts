@@ -1,5 +1,5 @@
-import { dbReplica } from '@sim/db'
-import { copilotChats, copilotMessages } from '@sim/db/schema'
+import { dbReplica } from '@/lib/db'
+import { copilotChats, copilotMessages } from '@/lib/db/schema'
 import { and, asc, inArray, isNull, sql } from 'drizzle-orm'
 import {
   decodeTimeCursor,

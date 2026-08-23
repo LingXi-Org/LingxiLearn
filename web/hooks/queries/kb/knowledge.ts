@@ -1,4 +1,4 @@
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiClientError } from '@/lib/api/client/errors'

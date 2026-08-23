@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Chip, ChipConfirmModal, ChipLink, Send, toast } from '@sim/emcn'
-import { ArrowLeft } from '@sim/emcn/icons'
+import { Chip, ChipConfirmModal, ChipLink, Send, toast } from '@/components/ui-kit'
+import { ArrowLeft } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useRouter } from 'next/navigation'

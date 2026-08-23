@@ -1,14 +1,14 @@
 /**
  * @vitest-environment node
  */
-import { pausedExecutions, resumeQueue, workflowExecutionLogs } from '@sim/db/schema'
+import { pausedExecutions, resumeQueue, workflowExecutionLogs } from '@/lib/db/schema'
 import {
   dbChainMockFns,
   flattenMockConditions,
   loggerMock,
   queueTableRows,
   resetDbChainMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTimeoutAbortController, getExecutionDeadlineAt } from '@/lib/core/execution-limits'
 import { abortManualExecution } from '@/lib/execution/manual-cancellation'

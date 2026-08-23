@@ -12,7 +12,7 @@ import {
   isTerminalOperation,
   type TerminalOperation,
   type TerminalToolArgs,
-} from '@sim/terminal-protocol'
+} from '@/lib/terminal/protocol'
 import { toError } from '@/lib/utils/errors'
 import { ASYNC_TOOL_CONFIRMATION_STATUS } from '@/lib/copilot/async-runs/lifecycle'
 import { COPILOT_CONFIRM_API_PATH } from '@/lib/copilot/constants'

@@ -6,8 +6,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Upload,
-} from '@sim/emcn'
-import { FolderPlus, Plus } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { FolderPlus, Plus } from '@/components/ui-kit/icons'
 
 interface TablesListContextMenuProps {
   isOpen: boolean

@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { webhook } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { webhook } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { eq } from 'drizzle-orm'
 import type {

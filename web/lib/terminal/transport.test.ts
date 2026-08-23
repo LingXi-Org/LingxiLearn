@@ -1,4 +1,4 @@
-import type { ScopedTerminalCommandEvent, ScopedTerminalTabsState } from '@sim/terminal-protocol'
+import type { ScopedTerminalCommandEvent, ScopedTerminalTabsState } from '@/lib/terminal/protocol'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

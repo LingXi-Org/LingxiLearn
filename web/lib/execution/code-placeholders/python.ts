@@ -1,4 +1,4 @@
-import { sha256Hex } from '@sim/security/hash'
+import { sha256Hex } from '@/lib/security/hash'
 import {
   applySourceEdits,
   CodePlaceholderCompileError,

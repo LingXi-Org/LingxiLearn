@@ -3,7 +3,7 @@ import type {
   LocalFilesystemMount,
   LocalFilesystemRequest,
   LocalFilesystemResponse,
-} from '@sim/desktop-bridge'
+} from '@/lib/desktop/bridge'
 import {
   DEFAULT_GREP_CONTEXT,
   DEFAULT_GREP_RESULTS,
@@ -11,7 +11,7 @@ import {
   MAX_GREP_CONTEXT,
   MAX_GREP_RESULTS,
   MAX_READ_LINES,
-} from '@sim/desktop-bridge/local-filesystem-limits'
+} from '@/lib/desktop/local-filesystem-limits'
 import micromatch, { type Options as MicromatchOptions } from 'micromatch'
 import { ASYNC_TOOL_CONFIRMATION_STATUS } from '@/lib/copilot/async-runs/lifecycle'
 import { reportClientToolCompletion } from '@/lib/copilot/tools/client/completion'

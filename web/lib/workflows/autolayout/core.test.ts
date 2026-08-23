@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { HANDLE_POSITIONS } from '@sim/workflow-renderer'
+import { HANDLE_POSITIONS } from '@/components/workflow'
 import { describe, expect, it, vi } from 'vitest'
 import { layoutBlocksCore } from '@/lib/workflows/autolayout/core'
 import type { Edge } from '@/lib/workflows/autolayout/types'

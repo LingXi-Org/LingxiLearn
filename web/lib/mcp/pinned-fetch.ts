@@ -1,6 +1,6 @@
 import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { createLogger } from '@/lib/logger'
-import { isPrivateIp } from '@sim/security/ssrf'
+import { isPrivateIp } from '@/lib/security/ssrf'
 import type { Agent } from 'undici'
 import {
   createPinnedFetchWithDispatcher,

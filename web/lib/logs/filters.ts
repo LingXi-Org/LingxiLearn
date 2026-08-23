@@ -1,4 +1,4 @@
-import { workflow, workflowExecutionLogs } from '@sim/db/schema'
+import { workflow, workflowExecutionLogs } from '@/lib/db/schema'
 import { and, eq, gt, gte, inArray, lt, lte, ne, type SQL, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { TimeRange } from '@/stores/logs/filters/types'

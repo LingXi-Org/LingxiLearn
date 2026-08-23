@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import { usePathname } from 'next/navigation'
 import { useSidebarStore } from '@/stores/sidebar/store'
 import { SimSidebar } from './sim-sidebar'

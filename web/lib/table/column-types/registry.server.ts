@@ -11,7 +11,7 @@
  * under any other type. `currency` needs only the inbound one.
  */
 
-import { userTableRows } from '@sim/db/schema'
+import { userTableRows } from '@/lib/db/schema'
 import { and, eq, sql } from 'drizzle-orm'
 import { COLUMN_TYPE_REGISTRY } from '@/lib/table/column-types/registry'
 import type { ColumnType } from '@/lib/table/column-types/types'

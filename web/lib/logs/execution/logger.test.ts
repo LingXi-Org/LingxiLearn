@@ -1,10 +1,10 @@
-import { usageLog, workflow, workflowExecutionLogs } from '@sim/db/schema'
+import { usageLog, workflow, workflowExecutionLogs } from '@/lib/db/schema'
 import {
   dbChainMockFns,
   flattenMockConditions,
   queueTableRows,
   resetDbChainMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { isPlainRecord } from '@/lib/utils/object'
 import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest'
 import { recordUsage } from '@/lib/billing/core/usage-log'

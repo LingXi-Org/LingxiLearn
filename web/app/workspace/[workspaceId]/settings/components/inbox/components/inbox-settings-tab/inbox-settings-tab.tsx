@@ -15,8 +15,8 @@ import {
   Label,
   Tooltip,
   useCopyToClipboard,
-} from '@sim/emcn'
-import { Check, Clipboard, Pencil, Plus, Trash } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Check, Clipboard, Pencil, Plus, Trash } from '@/components/ui-kit/icons'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { SettingsSection } from '@/app/workspace/[workspaceId]/settings/components/settings-section/settings-section'

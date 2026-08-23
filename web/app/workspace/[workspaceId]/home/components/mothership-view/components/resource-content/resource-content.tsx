@@ -1,8 +1,8 @@
 'use client'
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Skeleton, Tooltip } from '@sim/emcn'
-import { Download, FileX, Folder as FolderIcon, Library, SquareArrowUpRight } from '@sim/emcn/icons'
+import { Button, Skeleton, Tooltip } from '@/components/ui-kit'
+import { Download, FileX, Folder as FolderIcon, Library, SquareArrowUpRight } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { useRouter } from 'next/navigation'
 import { isApiClientError } from '@/lib/api/client/errors'

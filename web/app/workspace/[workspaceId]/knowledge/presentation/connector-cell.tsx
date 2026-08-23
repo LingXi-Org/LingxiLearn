@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
-import { Tooltip } from '@sim/emcn'
-import { Integration } from '@sim/emcn/icons'
+import { Tooltip } from '@/components/ui-kit'
+import { Integration } from '@/components/ui-kit/icons'
 import type { ResourceCell } from '@/app/workspace/[workspaceId]/components'
 import { EMPTY_CELL_PLACEHOLDER } from '@/app/workspace/[workspaceId]/components'
 import { getConnectorMeta } from '@/connectors/registry'

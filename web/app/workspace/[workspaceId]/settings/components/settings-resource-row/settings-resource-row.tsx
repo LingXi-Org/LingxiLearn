@@ -1,6 +1,6 @@
 import { type ReactNode, useId } from 'react'
-import { cn } from '@sim/emcn'
-import { ArrowRight } from '@sim/emcn/icons'
+import { cn } from '@/components/ui-kit'
+import { ArrowRight } from '@/components/ui-kit/icons'
 import Link from 'next/link'
 import {
   RESOURCE_TILE_BASE,

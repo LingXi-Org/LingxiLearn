@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ChevronDown, cn, Expandable, ExpandableContent } from '@sim/emcn'
+import { ChevronDown, cn, Expandable, ExpandableContent } from '@/components/ui-kit'
 import { ShimmerText } from '@/components/ui'
 import { isBrowserAgentAvailable } from '@/lib/browser-agent/transport'
 import { BrowserRequestTakeover } from '@/lib/copilot/generated/tool-catalog-v1'

@@ -9,7 +9,7 @@ import {
   ChipModalField,
   ChipModalFooter,
   ChipModalHeader,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'

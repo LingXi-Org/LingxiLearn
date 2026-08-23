@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMock, dbChainMockFns, resetDbChainMock } from '@sim/testing'
+import { dbChainMock, dbChainMockFns, resetDbChainMock } from '@/tests/support'
 import { sleep } from '@/lib/utils/helpers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,7 +13,7 @@ vi.mock('@/lib/core/execution-limits/metrics', () => ({
   recordExecutionCancellationBackendResult: mockRecordCancellationResult,
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@/lib/db', () => ({
   asyncJobs: {
     attempts: 'attempts',
     id: 'id',

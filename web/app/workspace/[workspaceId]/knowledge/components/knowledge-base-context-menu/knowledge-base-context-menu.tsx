@@ -10,7 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import {
   Duplicate,
   FolderInput,
@@ -19,7 +19,7 @@ import {
   SquareArrowUpRight,
   TagIcon,
   Trash,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import type { MoveOptionNode } from '@/app/workspace/[workspaceId]/components/folders'
 import { renderMoveOptions } from '@/app/workspace/[workspaceId]/components/folders'
 

@@ -1,5 +1,5 @@
-import { BLOCK_DIMENSIONS } from '@sim/workflow-renderer/dimensions'
-import type { BlockData, BlockState } from '@sim/workflow-types/workflow'
+import { BLOCK_DIMENSIONS } from '@/components/workflow/dimensions'
+import type { BlockData, BlockState } from '@/lib/workflows/domain/workflow'
 import type { Edge } from 'reactflow'
 import type { AgentTaskEvent } from './types'
 

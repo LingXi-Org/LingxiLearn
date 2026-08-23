@@ -1,4 +1,4 @@
-import { db, dbFor } from '@sim/db'
+import { db, dbFor } from '@/lib/db'
 import {
   member,
   organization,
@@ -8,7 +8,7 @@ import {
   workflow,
   workflowExecutionLogs,
   workspace,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { describeError, getErrorMessage } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

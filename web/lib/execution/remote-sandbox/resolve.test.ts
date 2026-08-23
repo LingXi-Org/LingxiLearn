@@ -29,14 +29,14 @@ vi.mock('@/lib/execution/remote-sandbox/image-registry', () => ({
   FAILED_BUILD_RETRY_COOLDOWN_MS: 600_000,
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@/lib/db', () => ({
   db: {
     select: mockSelect,
     update: mockUpdate,
   },
 }))
 
-vi.mock('@sim/db/schema', () => ({
+vi.mock('@/lib/db/schema', () => ({
   workspaceSandbox: {
     id: 'id',
     workspaceId: 'workspace_id',

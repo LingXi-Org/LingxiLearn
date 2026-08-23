@@ -1,4 +1,4 @@
-import { ClipboardList, Download, File, Search, Server, Trash, Upload } from '@sim/emcn/icons'
+import { ClipboardList, Download, File, Search, Server, Trash, Upload } from '@/components/ui-kit/icons'
 import { SftpIcon } from '@/components/icons'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'
 import { AuthMode, IntegrationType } from '@/blocks/types'

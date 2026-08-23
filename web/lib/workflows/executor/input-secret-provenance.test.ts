@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { encryptionMock, encryptionMockFns } from '@sim/testing'
+import { encryptionMock, encryptionMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   PRIVATE_SECRET_PROVENANCE_BUNDLE_V1,

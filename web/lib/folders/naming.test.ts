@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { flattenMockConditions, hasMockCondition } from '@sim/testing'
+import { flattenMockConditions, hasMockCondition } from '@/tests/support'
 import { describe, expect, it } from 'vitest'
 import { deduplicateFolderName } from '@/lib/folders/naming'
 

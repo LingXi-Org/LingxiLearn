@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { db, dbReplica } from '@sim/db'
-import { usageLog, workflow } from '@sim/db/schema'
+import { db, dbReplica } from '@/lib/db'
+import { usageLog, workflow } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

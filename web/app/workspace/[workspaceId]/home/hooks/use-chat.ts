@@ -7,9 +7,9 @@ import {
   useRef,
   useState,
 } from 'react'
-import { isBrowserToolName } from '@sim/browser-protocol'
-import { isPendingDesktopScopeId } from '@sim/desktop-bridge'
-import { isTerminalToolName } from '@sim/terminal-protocol'
+import { isBrowserToolName } from '@/lib/browser-agent/protocol'
+import { isPendingDesktopScopeId } from '@/lib/desktop/bridge'
+import { isTerminalToolName } from '@/lib/terminal/protocol'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePathname, useRouter } from 'next/navigation'
 import { requestJson } from '@/lib/api/client/request'

@@ -6,7 +6,7 @@
  *
  * @vitest-environment node
  */
-import { databaseMock, dbChainMockFns, resetDbChainMock, schemaMock } from '@sim/testing'
+import { databaseMock, dbChainMockFns, resetDbChainMock, schemaMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { notifyMock } = vi.hoisted(() => ({
@@ -17,9 +17,9 @@ vi.mock('@/lib/workflows/schedules/disable-notifications', () => ({
   notifyScheduleAutoDisabled: notifyMock,
 }))
 
-// This module imports its tables from `@sim/db` directly, which the global mock
+// This module imports its tables from `@/lib/db` directly, which the global mock
 // does not re-export. Widen it rather than rewriting the source's imports.
-vi.mock('@sim/db', () => ({ ...databaseMock, ...schemaMock }))
+vi.mock('@/lib/db', () => ({ ...databaseMock, ...schemaMock }))
 
 import {
   applyScheduleFailureUpdate,

@@ -1,4 +1,4 @@
-import type { webhook } from '@sim/db/schema'
+import type { webhook } from '@/lib/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 
 type WebhookDeliveryColumns = Pick<typeof webhook, 'archivedAt' | 'isActive'>

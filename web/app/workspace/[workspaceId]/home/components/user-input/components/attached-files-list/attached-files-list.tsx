@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState } from 'react'
-import { cn, Loader } from '@sim/emcn'
-import { X } from '@sim/emcn/icons'
+import { cn, Loader } from '@/components/ui-kit'
+import { X } from '@/components/ui-kit/icons'
 import { getDocumentIcon } from '@/components/icons/document-icons'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
 import type { AttachedFile } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-file-attachments'

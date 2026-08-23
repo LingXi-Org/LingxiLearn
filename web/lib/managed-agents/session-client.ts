@@ -2,7 +2,7 @@
  * Provider-neutral HTTP client for the Claude Platform Managed Agents API.
  *
  * A thin wrapper around `fetch` that speaks the Managed Agents beta. It has
- * NO Sim-domain dependencies (no `@sim/db`, no encryption, no executor
+ * NO Sim-domain dependencies (no `@/lib/db`, no encryption, no executor
  * types) so it can be unit-tested in isolation and imported from either the
  * server run route or the block-editor proxy route.
  *

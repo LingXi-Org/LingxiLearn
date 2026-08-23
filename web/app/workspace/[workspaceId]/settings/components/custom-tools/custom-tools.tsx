@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Wrench } from '@sim/emcn/icons'
+import { Plus, Wrench } from '@/components/ui-kit/icons'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { useQueryState } from 'nuqs'

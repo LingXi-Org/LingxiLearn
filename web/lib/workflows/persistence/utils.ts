@@ -4,20 +4,20 @@ import {
   workflow,
   workflowDeploymentOperation,
   workflowDeploymentVersion,
-} from '@sim/db'
-import { credential } from '@sim/db/schema'
+} from '@/lib/db'
+import { credential } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
-import { getActiveWorkflowContext } from '@sim/platform-authz/workflow'
+import { getActiveWorkflowContext } from '@/lib/permissions/native/workflow'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'
 import {
   loadWorkflowFromNormalizedTablesRaw,
   persistMigratedBlocks,
-} from '@sim/workflow-persistence/load'
-import { saveWorkflowToNormalizedTables as saveWorkflowToNormalizedTablesRaw } from '@sim/workflow-persistence/save'
-import type { DbOrTx, NormalizedWorkflowData } from '@sim/workflow-persistence/types'
-import type { BlockState, Loop, Parallel, WorkflowState } from '@sim/workflow-types/workflow'
-import { normalizeWorkflowEdgeHandles } from '@sim/workflow-types/workflow'
+} from '@/lib/workflows/persistence/native/load'
+import { saveWorkflowToNormalizedTables as saveWorkflowToNormalizedTablesRaw } from '@/lib/workflows/persistence/native/save'
+import type { DbOrTx, NormalizedWorkflowData } from '@/lib/workflows/persistence/native/types'
+import type { BlockState, Loop, Parallel, WorkflowState } from '@/lib/workflows/domain/workflow'
+import { normalizeWorkflowEdgeHandles } from '@/lib/workflows/domain/workflow'
 import type { InferSelectModel } from 'drizzle-orm'
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
 import { LRUCache } from 'lru-cache'
@@ -35,7 +35,7 @@ import { sanitizeAgentToolsInBlocks } from '@/lib/workflows/sanitization/validat
 
 const logger = createLogger('WorkflowDBHelpers')
 
-export type { DbOrTx, NormalizedWorkflowData } from '@sim/workflow-persistence/types'
+export type { DbOrTx, NormalizedWorkflowData } from '@/lib/workflows/persistence/native/types'
 
 export type WorkflowDeploymentVersion = InferSelectModel<typeof workflowDeploymentVersion>
 
@@ -623,7 +623,7 @@ export async function saveWorkflowToNormalizedTables(
 
 export async function workflowExistsInNormalizedTables(workflowId: string): Promise<boolean> {
   try {
-    const { workflowBlocks } = await import('@sim/db')
+    const { workflowBlocks } = await import('@/lib/db')
     const blocks = await db
       .select({ id: workflowBlocks.id })
       .from(workflowBlocks)
@@ -1002,7 +1002,7 @@ export async function listWorkflowVersions(
     latestOperationStatus: string | null
   }>
 }> {
-  const { user } = await import('@sim/db')
+  const { user } = await import('@/lib/db')
 
   const versionConditions = [eq(workflowDeploymentVersion.workflowId, workflowId)]
   if (options.afterVersion !== undefined) {

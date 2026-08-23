@@ -1,4 +1,4 @@
-import { Search } from '@sim/emcn/icons'
+import { Search } from '@/components/ui-kit/icons'
 import { ConfluenceIcon, PagerDutyIcon } from '@/components/icons'
 import { getScopesForService } from '@/lib/oauth/utils'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'

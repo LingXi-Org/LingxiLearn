@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
-import { safeCompare } from '@sim/security/compare'
-import { hmacSha256Hex } from '@sim/security/hmac'
+import { safeCompare } from '@/lib/security/compare'
+import { hmacSha256Hex } from '@/lib/security/hmac'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'
 import { isRecordLike } from '@/lib/utils/object'

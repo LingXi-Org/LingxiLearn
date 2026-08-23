@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { encryptionMockFns } from '@sim/testing'
+import { encryptionMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockExecuteTool } = vi.hoisted(() => ({ mockExecuteTool: vi.fn() }))

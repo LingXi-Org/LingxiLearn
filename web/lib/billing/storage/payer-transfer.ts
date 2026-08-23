@@ -5,7 +5,7 @@ import {
   userStats,
   workspace,
   workspaceFiles,
-} from '@sim/db/schema'
+} from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { BillingEntity } from '@/lib/billing/core/usage-log'

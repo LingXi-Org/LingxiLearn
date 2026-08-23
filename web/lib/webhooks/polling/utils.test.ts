@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { account } from '@sim/db/schema'
-import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { account } from '@/lib/db/schema'
+import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sqlCalls } = vi.hoisted(() => ({

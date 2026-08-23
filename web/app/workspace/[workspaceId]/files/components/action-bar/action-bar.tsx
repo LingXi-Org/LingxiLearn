@@ -10,8 +10,8 @@ import {
   Folder,
   Tooltip,
   Trash,
-} from '@sim/emcn'
-import { Download } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { Download } from '@/components/ui-kit/icons'
 import { AnimatePresence, domAnimation, LazyMotion, m } from 'framer-motion'
 import type { MoveOptionNode } from '@/app/workspace/[workspaceId]/components/folders'
 import { renderMoveOption } from '@/app/workspace/[workspaceId]/components/folders'

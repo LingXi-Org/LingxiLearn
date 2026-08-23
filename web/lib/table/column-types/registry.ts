@@ -1,7 +1,7 @@
 /**
  * The column-type registry — one entry per table column type.
  *
- * Client-safe: this module and everything it imports stay free of `@sim/db`,
+ * Client-safe: this module and everything it imports stay free of `@/lib/db`,
  * `drizzle-orm`, and `next/server`, so the tables grid can import it directly.
  * The server-only half (retype cell migrations) lives in `registry.server.ts`.
  *

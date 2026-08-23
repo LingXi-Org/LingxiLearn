@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { account, credential, credentialMember, credentialTypeEnum } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { account, credential, credentialMember, credentialTypeEnum } from '@/lib/db/schema'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { DbOrTx } from '@/lib/db/types'
 import {

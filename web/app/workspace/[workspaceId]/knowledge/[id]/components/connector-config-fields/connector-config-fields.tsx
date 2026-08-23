@@ -1,7 +1,7 @@
 'use client'
 
-import { Button, ChipCombobox, ChipInput, ChipModalField, Tooltip } from '@sim/emcn'
-import { ArrowLeftRight, CircleInfo } from '@sim/emcn/icons'
+import { Button, ChipCombobox, ChipInput, ChipModalField, Tooltip } from '@/components/ui-kit'
+import { ArrowLeftRight, CircleInfo } from '@/components/ui-kit/icons'
 import { ConnectorSelectorField } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/connector-selector-field'
 import type {
   ConfigFieldMap,

@@ -2,8 +2,8 @@
  * @vitest-environment node
  */
 
-import { outboxEvent } from '@sim/db/schema'
-import { dbChainMock, dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { outboxEvent } from '@/lib/db/schema'
+import { dbChainMock, dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type OutboxRow = {

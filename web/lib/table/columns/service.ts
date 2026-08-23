@@ -15,8 +15,8 @@
  * for it, and this refactor is not the place to change a published status.
  */
 
-import { db } from '@sim/db'
-import { userTableDefinitions, userTableRows } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { userTableDefinitions, userTableRows } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { omit } from '@/lib/utils/object'
 import { and, asc, count, eq, gt, sql } from 'drizzle-orm'

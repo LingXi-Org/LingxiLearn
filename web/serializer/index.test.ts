@@ -17,8 +17,8 @@ import {
   createLoopWorkflowState,
   createMinimalWorkflowState,
   createMissingMetadataWorkflow,
-} from '@sim/testing/factories'
-import { blocksMock, toolsMetadataMock, toolsUtilsMock } from '@sim/testing/mocks'
+} from '@/tests/support/factories'
+import { blocksMock, toolsMetadataMock, toolsUtilsMock } from '@/tests/support/mocks'
 import { describe, expect, it, vi } from 'vitest'
 import { Serializer } from '@/serializer/index'
 import type { SerializedWorkflow } from '@/serializer/types'

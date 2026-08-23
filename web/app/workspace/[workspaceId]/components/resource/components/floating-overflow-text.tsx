@@ -2,7 +2,7 @@
 
 import type React from 'react'
 import { memo } from 'react'
-import { cn, FloatingTooltip, isTextClipped, useFloatingTooltip, useIsOverflowing } from '@sim/emcn'
+import { cn, FloatingTooltip, isTextClipped, useFloatingTooltip, useIsOverflowing } from '@/components/ui-kit'
 
 interface FloatingOverflowTextProps {
   /** Full text shown in the tooltip and used as the default visible content. */

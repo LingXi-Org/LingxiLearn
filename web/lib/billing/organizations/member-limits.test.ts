@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@sim/testing'
+import { dbChainMockFns, queueTableRows, resetDbChainMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -48,7 +48,7 @@ const {
   mockGetOrganizationSubscription: vi.fn(),
 }))
 
-vi.mock('@sim/db/schema', () => schemaTables)
+vi.mock('@/lib/db/schema', () => schemaTables)
 
 vi.mock('drizzle-orm', () => ({
   and: mockAnd,

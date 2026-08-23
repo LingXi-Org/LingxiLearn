@@ -9,8 +9,8 @@
  * always reachable unfiltered even if every saved view is broken or deleted.
  */
 
-import { db } from '@sim/db'
-import { tableViews } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { tableViews } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { generateId } from '@/lib/utils/id'
 import { and, asc, eq, ne, sql } from 'drizzle-orm'

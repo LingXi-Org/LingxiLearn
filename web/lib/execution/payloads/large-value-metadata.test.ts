@@ -2,9 +2,9 @@
  * @vitest-environment node
  */
 
-import { db } from '@sim/db'
-import { executionLargeValueDependencies, executionLargeValueReferences } from '@sim/db/schema'
-import { dbChainMockFns, resetDbChainMock } from '@sim/testing'
+import { db } from '@/lib/db'
+import { executionLargeValueDependencies, executionLargeValueReferences } from '@/lib/db/schema'
+import { dbChainMockFns, resetDbChainMock } from '@/tests/support'
 import { eq, notInArray } from 'drizzle-orm'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Button, Download, Loader } from '@sim/emcn'
-import { Music } from '@sim/emcn/icons'
+import { Button, Download, Loader } from '@/components/ui-kit'
+import { Music } from '@/components/ui-kit/icons'
 import { DefaultFileIcon, getDocumentIcon } from '@/components/icons/document-icons'
 import { isSafeHttpUrl } from '@/lib/core/utils/urls'
 import { createLogger } from '@/lib/logger'

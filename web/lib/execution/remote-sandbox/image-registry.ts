@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { sandboxImage } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { sandboxImage } from '@/lib/db/schema'
 import { and, eq, inArray, lt, notInArray, or, type SQL, sql } from 'drizzle-orm'
 import { isTriggerDevEnabled } from '@/lib/core/config/env-flags'
 import {

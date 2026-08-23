@@ -1,4 +1,4 @@
-import { workflowsPersistenceUtilsMock, workflowsPersistenceUtilsMockFns } from '@sim/testing'
+import { workflowsPersistenceUtilsMock, workflowsPersistenceUtilsMockFns } from '@/tests/support'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import {
   calculateCostSummary,

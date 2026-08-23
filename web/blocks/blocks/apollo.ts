@@ -1,4 +1,4 @@
-import { Users } from '@sim/emcn/icons'
+import { Users } from '@/components/ui-kit/icons'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { ApolloIcon } from '@/components/icons'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'

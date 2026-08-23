@@ -1,4 +1,4 @@
-import { UNDO_REDO_OPERATIONS } from '@sim/realtime-protocol/constants'
+import { UNDO_REDO_OPERATIONS } from '@/lib/realtime/protocol/constants'
 import { generateId } from '@/lib/utils/id'
 import type { Edge } from 'reactflow'
 import type {

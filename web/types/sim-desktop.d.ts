@@ -1,4 +1,4 @@
-import type { SimDesktopApi } from '@sim/desktop-bridge'
+import type { SimDesktopApi } from '@/lib/desktop/bridge'
 
 declare global {
   interface Window {

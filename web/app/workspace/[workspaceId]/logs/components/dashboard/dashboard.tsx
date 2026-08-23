@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
-import { Loader } from '@sim/emcn'
+import { Loader } from '@/components/ui-kit'
 import {
   DashboardSegmentsContext,
   type SegmentSelectionMode,

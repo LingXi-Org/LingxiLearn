@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Checkbox, Chip, ChipInput, ChipSelect } from '@sim/emcn'
-import { Settings as SettingsIcon, Table as TableIcon } from '@sim/emcn/icons'
+import { Checkbox, Chip, ChipInput, ChipSelect } from '@/components/ui-kit'
+import { Settings as SettingsIcon, Table as TableIcon } from '@/components/ui-kit/icons'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {

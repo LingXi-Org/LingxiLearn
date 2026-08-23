@@ -1,4 +1,4 @@
-import { CirclePause } from '@sim/emcn/icons'
+import { CirclePause } from '@/components/ui-kit/icons'
 import type { BlockConfig } from '@/blocks/types'
 
 export const WaitBlock: BlockConfig = {

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { resetEnvFlagsMock, resetEnvMock, setEnv, setEnvFlags } from '@sim/testing'
+import { resetEnvFlagsMock, resetEnvMock, setEnv, setEnvFlags } from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AccessControlConfig } from '@/lib/auth/access-control'
 

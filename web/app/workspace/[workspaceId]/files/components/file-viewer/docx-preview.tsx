@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { sanitizeRenderedHyperlinks, stripEmbeddedFrames } from '@/lib/core/security/url-safety'

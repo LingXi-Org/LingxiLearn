@@ -1,4 +1,4 @@
-import { decrypt, encrypt } from '@sim/security/encryption'
+import { decrypt, encrypt } from '@/lib/security/encryption'
 import { env } from '@/lib/core/config/env'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'

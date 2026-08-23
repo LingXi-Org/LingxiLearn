@@ -6,7 +6,7 @@
 import {
   normalizeWorkflowEdgeSourceHandle,
   normalizeWorkflowEdgeTargetHandle,
-} from '@sim/workflow-types/workflow'
+} from '@/lib/workflows/domain/workflow'
 import type { Edge } from 'reactflow'
 import { isNonEmptyValue } from '@/lib/workflows/subblocks/visibility'
 import { isSyntheticToolSubBlockId } from '@/lib/workflows/tool-input/synthetic-subblocks'

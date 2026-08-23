@@ -1,5 +1,5 @@
 import type { ElementType } from 'react'
-import { Database, File as FileIcon, Table as TableIcon } from '@sim/emcn/icons'
+import { Database, File as FileIcon, Table as TableIcon } from '@/components/ui-kit/icons'
 import type { FolderResourceType } from '@/lib/api/contracts/folders'
 import { folderListHref } from '@/app/workspace/[workspaceId]/components/folders/search-params'
 

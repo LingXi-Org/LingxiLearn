@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { dbChainMockFns, resetDbChainMock } from '@sim/testing'
+import { dbChainMockFns, resetDbChainMock } from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTimeoutAbortController, getExecutionDeadlineAt } from '@/lib/core/execution-limits'
 import { abortManualExecution } from '@/lib/execution/manual-cancellation'

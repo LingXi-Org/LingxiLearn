@@ -1,7 +1,7 @@
 import type { Logger } from '@/lib/logger'
 import { createLogger } from '@/lib/logger'
-import { safeCompare } from '@sim/security/compare'
-import { sha256Hex } from '@sim/security/hash'
+import { safeCompare } from '@/lib/security/compare'
+import { sha256Hex } from '@/lib/security/hash'
 import { NextResponse } from 'next/server'
 import type { AuthContext, EventFilterContext } from '@/lib/webhooks/providers/types'
 

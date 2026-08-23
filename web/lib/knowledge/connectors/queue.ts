@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { knowledgeBase, knowledgeConnector } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { knowledgeBase, knowledgeConnector } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { tableRowExecutions, userTableRows, workflowExecutionLogs } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { tableRowExecutions, userTableRows, workflowExecutionLogs } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

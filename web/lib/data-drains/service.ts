@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { dataDrainRuns, dataDrains } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { dataDrainRuns, dataDrains } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

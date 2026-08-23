@@ -17,7 +17,7 @@ import {
   type TerminalAppearanceTheme,
   type TerminalShortcutCommand,
   type TerminalThemeProfile,
-} from '@sim/desktop-bridge'
+} from '@/lib/desktop/bridge'
 import {
   cn,
   NATIVE_SURFACE_OCCLUSION_PREPARE_EVENT,
@@ -25,8 +25,8 @@ import {
   type TabStripItem,
   type TabStripSelectionSource,
   toast,
-} from '@sim/emcn'
-import { TerminalWindow } from '@sim/emcn/icons'
+} from '@/components/ui-kit'
+import { TerminalWindow } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
@@ -39,7 +39,7 @@ import {
   describeRunningCommand,
   type TerminalTabState,
   type TerminalTabsState,
-} from '@sim/terminal-protocol'
+} from '@/lib/terminal/protocol'
 import { SIM_RESOURCE_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import { TERMINAL_SESSION_RESOURCE_ID } from '@/lib/copilot/resources/types'
 import { getDesktopBridge } from '@/lib/desktop'

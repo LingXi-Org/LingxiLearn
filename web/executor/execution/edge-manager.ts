@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { normalizeWorkflowEdgeSourceHandle } from '@sim/workflow-types/workflow'
+import { normalizeWorkflowEdgeSourceHandle } from '@/lib/workflows/domain/workflow'
 import { CONTROL_BACK_EDGE_HANDLES, EDGE, SUBFLOW_CONTROL_EDGE_HANDLES } from '@/executor/constants'
 import type { DAG, DAGNode } from '@/executor/dag/builder'
 import type { DAGEdge } from '@/executor/dag/types'

@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { createLogger } from '@/lib/logger'
-import { safeCompare } from '@sim/security/compare'
+import { safeCompare } from '@/lib/security/compare'
 import { isRecordLike } from '@/lib/utils/object'
 import { NextResponse } from 'next/server'
 import type {

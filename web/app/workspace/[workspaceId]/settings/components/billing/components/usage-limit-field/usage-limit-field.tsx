@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChipInput, Info, toast } from '@sim/emcn'
+import { ChipInput, Info, toast } from '@/components/ui-kit'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { ON_DEMAND_UNLIMITED } from '@/lib/billing/constants'
 import { creditsToDollars, dollarsToCredits } from '@/lib/billing/credits/conversion'

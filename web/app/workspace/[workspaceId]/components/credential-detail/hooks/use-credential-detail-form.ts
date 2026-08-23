@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useUpdateWorkspaceCredential, type WorkspaceCredential } from '@/hooks/queries/credentials'

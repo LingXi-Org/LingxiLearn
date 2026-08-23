@@ -7,9 +7,9 @@
  * Note: API routes have their own implementations for HTTP-specific concerns.
  */
 
-import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
-import { db } from '@sim/db'
-import { tableJobs, userTableDefinitions, userTableRows } from '@sim/db/schema'
+import { AuditAction, AuditResourceType, recordAudit } from '@/lib/audit'
+import { db } from '@/lib/db'
+import { tableJobs, userTableDefinitions, userTableRows } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { getPostgresErrorCode } from '@/lib/utils/errors'
 import { generateId } from '@/lib/utils/id'

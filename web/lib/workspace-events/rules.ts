@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { workflowExecutionLogs } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { workflowExecutionLogs } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { and, avg, count, desc, eq, gte, ne, type SQL, sql } from 'drizzle-orm'
 import { creditsToDollars } from '@/lib/billing/credits/conversion'

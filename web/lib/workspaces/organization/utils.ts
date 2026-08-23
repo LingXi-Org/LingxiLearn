@@ -3,7 +3,7 @@
  * These are pure functions that compute values from organization data
  */
 
-import { isOrgAdminRole } from '@sim/platform-authz/predicates'
+import { isOrgAdminRole } from '@/lib/permissions/native/predicates'
 import { normalizeEmail } from '@/lib/utils/string'
 import { quickValidateEmail } from '@/lib/messaging/email/validation'
 import type { Organization } from '@/lib/workspaces/organization/types'

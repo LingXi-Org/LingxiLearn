@@ -1,6 +1,6 @@
 import { createSign } from 'crypto'
-import { db } from '@sim/db'
-import { account, credential } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { account, credential } from '@/lib/db/schema'
 import { createLogger } from '@/lib/logger'
 import { getPostgresErrorCode, toError } from '@/lib/utils/errors'
 import { and, desc, eq } from 'drizzle-orm'

@@ -7,7 +7,7 @@ import {
   inputValidationMockFns,
   loggerMock,
   redisConfigMockFns,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type MockProc = EventEmitter & {

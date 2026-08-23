@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { usePostHog } from 'posthog-js/react'

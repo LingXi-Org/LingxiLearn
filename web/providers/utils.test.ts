@@ -1,4 +1,4 @@
-import { resetEnvFlagsMock, setEnvFlags } from '@sim/testing'
+import { resetEnvFlagsMock, setEnvFlags } from '@/tests/support'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const workflowMetadataMocks = vi.hoisted(() => ({

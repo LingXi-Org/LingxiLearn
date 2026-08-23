@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ComboboxOption } from '@sim/emcn'
-import { ChipConfirmModal, Plus, Upload } from '@sim/emcn'
-import { FolderPlus, Pencil, Trash } from '@sim/emcn/icons'
+import type { ComboboxOption } from '@/components/ui-kit'
+import { ChipConfirmModal, Plus, Upload } from '@/components/ui-kit'
+import { FolderPlus, Pencil, Trash } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { useParams, useRouter } from 'next/navigation'
 import type { TableDefinition } from '@/lib/table'

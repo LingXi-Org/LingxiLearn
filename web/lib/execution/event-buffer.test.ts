@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { redisConfigMockFns, resetEnvMock, resetRedisConfigMock, setEnv } from '@sim/testing'
+import { redisConfigMockFns, resetEnvMock, resetRedisConfigMock, setEnv } from '@/tests/support'
 import { sleep } from '@/lib/utils/helpers'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionEventEntry } from '@/lib/execution/event-buffer'

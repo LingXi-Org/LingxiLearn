@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Badge, Button, Chip, ChipConfirmModal, cn, Tooltip, toast } from '@sim/emcn'
-import { ArrowLeft, ChevronDown, Plus } from '@sim/emcn/icons'
+import { Badge, Button, Chip, ChipConfirmModal, cn, Tooltip, toast } from '@/components/ui-kit'
+import { ArrowLeft, ChevronDown, Plus } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'

@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { CONTAINER_DIMENSIONS } from '@sim/workflow-renderer'
+import { CONTAINER_DIMENSIONS } from '@/components/workflow'
 import {
   CONTAINER_PADDING_X,
   CONTAINER_PADDING_Y,

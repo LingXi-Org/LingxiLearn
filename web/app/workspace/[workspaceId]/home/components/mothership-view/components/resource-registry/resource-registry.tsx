@@ -1,7 +1,7 @@
 'use client'
 
 import type { ElementType, ReactNode } from 'react'
-import { cn } from '@sim/emcn'
+import { cn } from '@/components/ui-kit'
 import {
   Connections,
   Database,
@@ -12,7 +12,7 @@ import {
   Table as TableIcon,
   Task,
   TerminalWindow,
-} from '@sim/emcn/icons'
+} from '@/components/ui-kit/icons'
 import type { QueryClient } from '@tanstack/react-query'
 import { getDocumentIcon } from '@/components/icons/document-icons'
 import type {

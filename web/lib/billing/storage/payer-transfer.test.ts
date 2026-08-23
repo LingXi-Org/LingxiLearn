@@ -18,7 +18,7 @@ const { loggerInfo, loggerWarn, mockSql } = vi.hoisted(() => {
   }
 })
 
-vi.mock('@sim/db/schema', () => ({
+vi.mock('@/lib/db/schema', () => ({
   document: {
     __table: 'document',
     connectorId: 'document.connectorId',

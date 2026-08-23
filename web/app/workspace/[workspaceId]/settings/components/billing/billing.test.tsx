@@ -23,7 +23,7 @@ const {
   mockUseUsageLimitData: vi.fn(),
 }))
 
-vi.mock('@sim/emcn', () => ({
+vi.mock('@/components/ui-kit', () => ({
   ArrowRight: () => <span />,
   Badge: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   Chip: ({

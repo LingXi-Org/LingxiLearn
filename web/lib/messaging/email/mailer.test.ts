@@ -1,4 +1,4 @@
-import { createEnvMock } from '@sim/testing'
+import { createEnvMock } from '@/tests/support'
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 const mockSend = vi.fn()

@@ -1,4 +1,4 @@
-import { dbChainMockFns, resetDbChainMock } from '@sim/testing'
+import { dbChainMockFns, resetDbChainMock } from '@/tests/support'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const dbMocks = vi.hoisted(() => ({

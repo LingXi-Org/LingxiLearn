@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Button, cn, Paperclip, Plus, Slash, Tooltip, toast } from '@sim/emcn'
+import { Button, cn, Paperclip, Plus, Slash, Tooltip, toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'

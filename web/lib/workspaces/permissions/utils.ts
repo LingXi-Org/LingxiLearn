@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { member, permissions, user, type WorkspaceMode, workspace } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { member, permissions, user, type WorkspaceMode, workspace } from '@/lib/db/schema'
 import {
   isOrgAdminRole,
   ORG_ADMIN_ROLES,
@@ -7,7 +7,7 @@ import {
   type PermissionType,
   permissionSatisfies,
   resolveEffectiveWorkspacePermission,
-} from '@sim/platform-authz/workspace'
+} from '@/lib/permissions/native/workspace'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { HttpError } from '@/lib/core/utils/http-error'
 import type { DbOrTx } from '@/lib/db/types'
@@ -117,7 +117,7 @@ export async function getWorkspaceWithOwner(
  * grant and the org-admin derivation. The workspace owner is not special-cased —
  * they always hold an explicit `admin` row, so the resolver's lookup covers them.
  *
- * Delegates to the shared resolver in `@sim/platform-authz/workspace` so the
+ * Delegates to the shared resolver in `@/lib/permissions/native/workspace` so the
  * rule has a single source of truth shared with the realtime server.
  *
  * @param userId - The user to resolve the permission for

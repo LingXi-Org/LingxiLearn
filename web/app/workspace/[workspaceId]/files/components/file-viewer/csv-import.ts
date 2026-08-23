@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef } from 'react'
-import { toast } from '@sim/emcn'
+import { toast } from '@/components/ui-kit'
 import { useRouter } from 'next/navigation'
 import { CSV_PREVIEW_MAX_ROWS } from '@/lib/api/contracts/workspace-file-table'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'

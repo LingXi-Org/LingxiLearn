@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { authOAuthUtilsMock } from '@sim/testing'
+import { authOAuthUtilsMock } from '@/tests/support'
 import { generateShortId } from '@/lib/utils/id'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 

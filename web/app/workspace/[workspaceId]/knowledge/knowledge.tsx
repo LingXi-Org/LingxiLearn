@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
-import { Plus } from '@sim/emcn'
-import { FolderPlus, Pencil, Trash } from '@sim/emcn/icons'
+import { Plus } from '@/components/ui-kit'
+import { FolderPlus, Pencil, Trash } from '@/components/ui-kit/icons'
 import { useParams, useRouter } from 'next/navigation'
 import type {
   BreadcrumbItem,

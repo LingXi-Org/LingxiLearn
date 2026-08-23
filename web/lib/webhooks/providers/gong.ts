@@ -1,5 +1,5 @@
 import { createLogger } from '@/lib/logger'
-import { sha256Hex } from '@sim/security/hash'
+import { sha256Hex } from '@/lib/security/hash'
 import { toError } from '@/lib/utils/errors'
 import * as jose from 'jose'
 import { NextResponse } from 'next/server'

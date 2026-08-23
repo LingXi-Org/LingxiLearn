@@ -1,11 +1,11 @@
-import { db } from '@sim/db'
+import { db } from '@/lib/db'
 import {
   document,
   documentSecretProvenance,
   embedding,
   embeddingSecretProvenance,
-} from '@sim/db/schema'
-import { sha256Hex } from '@sim/security/hash'
+} from '@/lib/db/schema'
+import { sha256Hex } from '@/lib/security/hash'
 import { and, eq, inArray, isNull, type SQL } from 'drizzle-orm'
 import type { DbTransaction } from '@/lib/db/types'
 import {

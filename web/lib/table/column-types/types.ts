@@ -10,7 +10,7 @@
  * - {@link ColumnTypeDefinition} is **client-safe**. It may carry a React icon
  *   (an icon is a component *reference*; server code never calls it, and
  *   `scripts/check-client-boundary-imports.ts` only forbids calling a
- *   `'use client'` export from a server surface). It must NOT reach `@sim/db`,
+ *   `'use client'` export from a server surface). It must NOT reach `@/lib/db`,
  *   `drizzle-orm`, or `next/server` — the tables grid imports it directly.
  * - `ColumnTypeServerDefinition` (in `types.server.ts`) adds the one genuinely
  *   server-only concern: rewriting stored cells inside a transaction.

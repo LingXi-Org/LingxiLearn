@@ -8,7 +8,7 @@ import {
   ChipModalField,
   ChipModalFooter,
   ChipModalHeader,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { partitionSettledFailures, resolveAddEmail } from '@/lib/workspaces/sharing'

@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, ChipCombobox, type ComboboxOption } from '@sim/emcn'
+import { Button, ChipCombobox, type ComboboxOption } from '@/components/ui-kit'
 import type { WorkspaceMember } from '@/hooks/queries/workspace'
 
 export interface FilesFilterPanelProps {

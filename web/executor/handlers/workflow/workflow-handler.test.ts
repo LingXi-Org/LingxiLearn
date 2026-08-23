@@ -4,7 +4,7 @@ import {
   environmentUtilsMockFns,
   loggerMock,
   resetEnvironmentUtilsMock,
-} from '@sim/testing'
+} from '@/tests/support'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { createTimeoutAbortController, getExecutionDeadlineAt } from '@/lib/core/execution-limits'
 import { getBlock } from '@/blocks/registry'

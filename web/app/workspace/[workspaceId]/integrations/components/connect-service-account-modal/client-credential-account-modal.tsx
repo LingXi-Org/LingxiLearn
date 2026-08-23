@@ -10,7 +10,7 @@ import {
   ChipModalHeader,
   ChipTextarea,
   SecretInput,
-} from '@sim/emcn'
+} from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { isApiClientError } from '@/lib/api/client/errors'
 import {

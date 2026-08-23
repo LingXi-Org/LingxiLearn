@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { settings, user } from '@sim/db/schema'
+import { db } from '@/lib/db'
+import { settings, user } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { type MothershipEnvironment, mothershipEnvironmentSchema } from '@/lib/api/contracts'
 import { SIM_AGENT_API_URL, SIM_AGENT_API_URL_DEFAULT } from '@/lib/copilot/constants'
