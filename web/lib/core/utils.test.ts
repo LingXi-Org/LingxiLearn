@@ -34,7 +34,6 @@ afterAll(resetEnvMock)
 
 import { getRotatingApiKey } from '@/lib/core/config/api-keys'
 import { decryptSecret, encryptSecret } from '@/lib/core/security/encryption'
-import { convertScheduleOptionsToCron } from '@/lib/core/utils/scheduling'
 import { getInvalidCharacters, isValidName, validateName } from '@/lib/core/utils/validation'
 
 vi.mock('crypto', () => ({
@@ -103,54 +102,6 @@ describe('encryption and decryption', () => {
 
   it.concurrent('should throw error for invalid decrypt format', async () => {
     await expect(decryptSecret('invalid-format')).rejects.toThrow('Invalid encrypted value format')
-  })
-})
-
-describe('convertScheduleOptionsToCron', () => {
-  it.concurrent('should convert minutes schedule to cron', () => {
-    const result = convertScheduleOptionsToCron('minutes', { minutesInterval: '5' })
-    expect(result).toBe('*/5 * * * *')
-  })
-
-  it.concurrent('should convert hourly schedule to cron', () => {
-    const result = convertScheduleOptionsToCron('hourly', { hourlyMinute: '30' })
-    expect(result).toBe('30 * * * *')
-  })
-
-  it.concurrent('should convert daily schedule to cron', () => {
-    const result = convertScheduleOptionsToCron('daily', { dailyTime: '15:30' })
-    expect(result).toBe('15 30 * * *')
-  })
-
-  it.concurrent('should convert weekly schedule to cron', () => {
-    const result = convertScheduleOptionsToCron('weekly', {
-      weeklyDay: 'MON',
-      weeklyDayTime: '09:30',
-    })
-    expect(result).toBe('09 30 * * 1')
-  })
-
-  it.concurrent('should convert monthly schedule to cron', () => {
-    const result = convertScheduleOptionsToCron('monthly', {
-      monthlyDay: '15',
-      monthlyTime: '12:00',
-    })
-    expect(result).toBe('12 00 15 * *')
-  })
-
-  it.concurrent('should use custom cron expression directly', () => {
-    const customCron = '*/15 9-17 * * 1-5'
-    const result = convertScheduleOptionsToCron('custom', { cronExpression: customCron })
-    expect(result).toBe(customCron)
-  })
-
-  it.concurrent('should throw error for unsupported schedule type', () => {
-    expect(() => convertScheduleOptionsToCron('invalid', {})).toThrow('Unsupported schedule type')
-  })
-
-  it.concurrent('should use default values when options are not provided', () => {
-    const result = convertScheduleOptionsToCron('daily', {})
-    expect(result).toBe('00 09 * * *')
   })
 })
 

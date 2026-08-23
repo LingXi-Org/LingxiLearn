@@ -22,8 +22,18 @@ const dynamicImportPattern = /\bimport\(([\s\S]*?)\)/g
 
 function filesUnder(directory: string): string[] {
   if (!existsSync(directory)) return []
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.isDirectory() && ['node_modules', '.next', 'coverage'].includes(entry.name)) return []
+  let entries: ReturnType<typeof readdirSync>
+  try {
+    entries = readdirSync(directory, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  return entries.flatMap((entry) => {
+    if (
+      entry.isDirectory() &&
+      ['node_modules', '.next', '.pytest_cache', '.git', 'coverage'].includes(entry.name)
+    )
+      return []
     const target = path.join(directory, entry.name)
     return entry.isDirectory() ? filesUnder(target) : [target]
   })
@@ -163,6 +173,7 @@ const inventory = readdirSync(libRoot, { withFileTypes: true })
         !operational.has(file) &&
         !configuredGeneratedFiles.has(file)
     )
+    const testOnlyImplementationFiles = testOnlyFiles.filter((file) => !isTest(file))
     const unreachableFiles = files.filter(
       (file) =>
         !production.has(file) &&
@@ -179,6 +190,10 @@ const inventory = readdirSync(libRoot, { withFileTypes: true })
       testFiles,
       testOnlyFiles: testOnlyFiles.length,
       testOnlyFilePaths: testOnlyFiles.map((file) =>
+        path.relative(root, file).replaceAll('\\', '/')
+      ),
+      testOnlyImplementationFiles: testOnlyImplementationFiles.length,
+      testOnlyImplementationFilePaths: testOnlyImplementationFiles.map((file) =>
         path.relative(root, file).replaceAll('\\', '/')
       ),
       operationalOnlyFiles: operationalOnlyFiles.length,
@@ -201,6 +216,59 @@ const inventory = readdirSync(libRoot, { withFileTypes: true })
   .filter((entry) => entry.sourceFiles > 0)
   .sort((left, right) => left.directory.localeCompare(right.directory))
 
+function directoriesUnder(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (!entry.isDirectory()) return []
+    const target = path.join(directory, entry.name)
+    return [target, ...directoriesUnder(target)]
+  })
+}
+
+const testOnlyDirectories = new Set(
+  directoriesUnder(libRoot).filter((directory) => {
+    const files = filesUnder(directory).filter(isSource)
+    return (
+      files.length > 0 &&
+      files.every(
+        (file) =>
+          !production.has(file) && !operational.has(file) && !configuredGeneratedFiles.has(file)
+      )
+    )
+  })
+)
+const maximalTestOnlySubtrees = [...testOnlyDirectories]
+  .filter((directory) => !testOnlyDirectories.has(path.dirname(directory)))
+  .map((directory) => path.relative(root, directory).replaceAll('\\', '/'))
+  .sort()
+const testOnlyImplementationAbsolutePaths = new Set(
+  inventory.flatMap((entry) =>
+    entry.testOnlyImplementationFilePaths.map((file) => path.join(root, file))
+  )
+)
+const reverseTestImports = new Map<string, Set<string>>()
+for (const file of tests) {
+  for (const imported of importsOf(file)) {
+    const importers = reverseTestImports.get(imported) ?? new Set<string>()
+    importers.add(file)
+    reverseTestImports.set(imported, importers)
+  }
+}
+const testOnlyDependents = new Set(testOnlyImplementationAbsolutePaths)
+const pendingTestOnlyDependents = [...testOnlyImplementationAbsolutePaths]
+while (pendingTestOnlyDependents.length > 0) {
+  const file = pendingTestOnlyDependents.pop()
+  if (!file) continue
+  for (const importer of reverseTestImports.get(file) ?? []) {
+    if (testOnlyDependents.has(importer)) continue
+    testOnlyDependents.add(importer)
+    pendingTestOnlyDependents.push(importer)
+  }
+}
+const testEntriesDependingOnTestOnlyImplementation = testEntries
+  .filter((file) => testOnlyDependents.has(file))
+  .map((file) => path.relative(root, file).replaceAll('\\', '/'))
+  .sort()
+
 const inventoryDirectories = new Set(inventory.map((entry) => entry.directory))
 const missingOwnership = inventory
   .filter((entry) => !entry.ownership)
@@ -209,6 +277,9 @@ const staleOwnership = Object.keys(ownership).filter(
   (directory) => !inventoryDirectories.has(directory)
 )
 const unreachableSourceFiles = inventory.flatMap((entry) => entry.unreachableFilePaths)
+const testOnlyImplementationSourceFiles = inventory.flatMap(
+  (entry) => entry.testOnlyImplementationFilePaths
+)
 const compatibilityWithoutDeletionCondition = Object.entries(ownership)
   .filter(([, entry]) => entry.status === 'compatibility' && !entry.deletionCondition?.trim())
   .map(([directory]) => directory)
@@ -226,6 +297,11 @@ if (unreachableSourceFiles.length > 0) {
     `Unowned web/lib source files are not reachable from production, operational, tests, or configured generators: ${unreachableSourceFiles.join(', ')}`
   )
 }
+if (testOnlyImplementationSourceFiles.length > 0) {
+  throw new Error(
+    `Production-shaped web/lib source may not be retained solely by tests: ${testOnlyImplementationSourceFiles.join(', ')}`
+  )
+}
 
 process.stdout.write(
   `${JSON.stringify(
@@ -237,6 +313,8 @@ process.stdout.write(
         path.relative(root, file).replaceAll('\\', '/')
       ),
       unresolvedDynamicImports,
+      maximalTestOnlySubtrees,
+      testEntriesDependingOnTestOnlyImplementation,
       inventory,
     },
     null,

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { traceSpansSchema } from '@/lib/api/contracts/logs'
-import { v2ListLogsQuerySchema } from '@/lib/api/contracts/v2/logs'
 import {
   v2DeleteFolderQuerySchema,
   v2FolderPathInputSchema,
@@ -49,15 +48,6 @@ describe('v2 folder path contracts', () => {
     expect(v2DeleteFolderQuerySchema.parse({ workspaceId: WORKSPACE_ID, path: 'Reports' })).toEqual(
       { workspaceId: WORKSPACE_ID, path: '/Reports', recursive: false }
     )
-  })
-
-  it('normalizes every folder path in the logs filter', () => {
-    const query = v2ListLogsQuerySchema.parse({
-      workspaceId: WORKSPACE_ID,
-      folderPaths: 'Reports/Q1,/Archive',
-    })
-
-    expect(query.folderPaths).toBe('/Reports/Q1,/Archive')
   })
 
   it('declares persisted trace cost and error metadata', () => {

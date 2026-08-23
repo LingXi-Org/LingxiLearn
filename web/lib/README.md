@@ -43,6 +43,10 @@ under the consuming test tree. A directory with any reachable file still needs
 file-level review because the report deliberately shows sample files and counts
 rather than declaring its whole subtree live.
 
+The audit fails when a non-test implementation is reachable only from tests.
+Ordinary `*.test.*` and `*.spec.*` files remain valid, but they cannot keep a
+production-shaped business implementation alive on their own.
+
 Migration readers must state an owner and executable deletion condition beside
 their implementation. Currently `lingxi/legacy/v0` is owned by Lingxi chat; its
 deletion condition is documented in that module and its production usage is
