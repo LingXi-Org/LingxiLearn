@@ -1,15 +1,12 @@
 import { afterAll, vi } from 'vitest'
 import {
   authMock,
-  databaseMock,
-  drizzleOrmMock,
   envFlagsMock,
   envMock,
   hybridAuthMock,
   loggerMock,
   redisConfigMock,
   requestUtilsMock,
-  schemaMock,
   setupGlobalFetchMock,
   setupGlobalStorageMocks,
   terminalConsoleMock,
@@ -29,9 +26,6 @@ if (typeof document !== 'undefined') {
 setupGlobalFetchMock()
 setupGlobalStorageMocks()
 
-vi.mock('@/lib/db', () => databaseMock)
-vi.mock('@/lib/db/schema', () => schemaMock)
-vi.mock('drizzle-orm', () => drizzleOrmMock)
 vi.mock('@/lib/logger', () => loggerMock)
 vi.mock('@/lib/permissions/native/workflow', () => workflowAuthzMock)
 vi.mock('@/lib/auth', () => authMock)

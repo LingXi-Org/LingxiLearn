@@ -1,1 +1,0 @@
-ALTER TABLE "workflow_blocks" ADD COLUMN "locked" boolean DEFAULT false NOT NULL;

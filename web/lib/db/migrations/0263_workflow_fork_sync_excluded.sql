@@ -1,1 +1,0 @@
-ALTER TABLE "workflow" ADD COLUMN "fork_sync_excluded" boolean DEFAULT false NOT NULL;

@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * import { createMockLogger, setupGlobalFetchMock, databaseMock } from '@/tests/support/mocks'
+ * import { createMockLogger, setupGlobalFetchMock } from '@/tests/support/mocks'
  *
  * // Mock the logger
  * vi.mock('@/lib/logger', () => ({ createLogger: () => createMockLogger() }))
@@ -11,8 +11,6 @@
  * // Mock fetch globally
  * setupGlobalFetchMock({ json: { success: true } })
  *
- * // Mock database
- * vi.mock('@/lib/db', () => databaseMock)
  * ```
  */
 
@@ -34,20 +32,6 @@ export {
   toolsMetadataMock,
   toolsUtilsMock,
 } from './blocks.mock'
-// Database mocks
-export {
-  createMockSql,
-  createMockSqlOperators,
-  databaseMock,
-  dbChainMock,
-  dbChainMockFns,
-  drizzleOrmMock,
-  flattenMockConditions,
-  hasMockCondition,
-  type MockCondition,
-  queueTableRows,
-  resetDbChainMock,
-} from './database.mock'
 // Encryption mocks
 export { encryptionMock, encryptionMockFns } from './encryption.mock'
 // Env mocks
@@ -123,8 +107,6 @@ export {
   requestUtilsMock,
   requestUtilsMockFns,
 } from './request.mock'
-// Schema mocks
-export { schemaMock } from './schema.mock'
 // Socket mocks
 export {
   createMockSocket,

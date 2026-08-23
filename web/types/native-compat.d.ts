@@ -125,15 +125,6 @@ declare module 'heic-convert' {
   export default convert
 }
 
-declare module 'drizzle-kit' {
-  export interface Config {
-    schema: string
-    out: string
-    dialect: string
-    dbCredentials: Record<string, string>
-  }
-}
-
 declare module 'ssh2' {
   export interface Client {
     end(): void
