@@ -87,7 +87,6 @@ function reachableFrom(entries: string[]): Set<string> {
 const nextEntryPattern =
   /(?:^|[\\/])(?:page|layout|route|default|error|global-error|loading|not-found|unauthorized|forbidden|template|opengraph-image|twitter-image|sitemap|robots|manifest|icon)\.(?:ts|tsx|js|jsx)$/
 const rootEntries = [
-  'bootstrap.ts',
   'drizzle.config.ts',
   'instrumentation.ts',
   'instrumentation-client.ts',
@@ -127,10 +126,6 @@ const production = reachableFrom(productionEntries)
 const operational = reachableFrom(operationalEntries)
 const tests = reachableFrom(testEntries)
 const allowedDynamicImports = new Map([
-  [
-    'bootstrap.ts:import(standaloneServer)',
-    'Standalone server artifact path is selected from the build environment.',
-  ],
   [
     'lib/pptx-renderer/utils/pdf-renderer.ts:import(pdfjsUrl)',
     'PDF.js worker module is loaded from its configured external URL.',

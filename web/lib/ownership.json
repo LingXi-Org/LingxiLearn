@@ -5,11 +5,6 @@
     "status": "compatibility",
     "deletionCondition": "Delete after the external A2A tool registry has no production entrypoint or retained task-history decoder caller."
   },
-  "audit": {
-    "owner": "observability",
-    "capability": "audit-events",
-    "status": "owned"
-  },
   "analytics": {
     "owner": "growth",
     "capability": "landing-analytics",
@@ -20,17 +15,7 @@
     "capability": "transport-contracts",
     "status": "owned"
   },
-  "api-key": {
-    "owner": "identity",
-    "capability": "provider-credentials",
-    "status": "owned"
-  },
   "ashby": { "owner": "growth", "capability": "careers", "status": "owned" },
-  "atlassian": {
-    "owner": "integrations",
-    "capability": "atlassian-connectors",
-    "status": "owned"
-  },
   "auth": {
     "owner": "identity",
     "capability": "authentication",
@@ -60,11 +45,6 @@
   "colors": {
     "owner": "design-system",
     "capability": "color-tokens",
-    "status": "owned"
-  },
-  "concurrency": {
-    "owner": "platform",
-    "capability": "concurrency-primitives",
     "status": "owned"
   },
   "content": {
@@ -174,19 +154,9 @@
     "capability": "model-context-protocol",
     "status": "owned"
   },
-  "memory": {
-    "owner": "lingxi-chat",
-    "capability": "agent-memory",
-    "status": "owned"
-  },
   "messaging": {
     "owner": "platform",
     "capability": "transactional-messaging",
-    "status": "owned"
-  },
-  "model-router": {
-    "owner": "ai-platform",
-    "capability": "model-routing",
     "status": "owned"
   },
   "monitoring": {
@@ -209,24 +179,19 @@
     "capability": "permission-groups",
     "status": "owned"
   },
-  "permissions": {
-    "owner": "identity",
-    "capability": "authorization",
-    "status": "owned"
-  },
   "posthog": {
     "owner": "analytics",
     "capability": "product-analytics",
     "status": "owned"
   },
+  "permissions": {
+    "owner": "identity",
+    "capability": "authorization-primitives",
+    "status": "owned"
+  },
   "pptx-renderer": {
     "owner": "workspace-content",
     "capability": "presentation-rendering",
-    "status": "owned"
-  },
-  "public-shares": {
-    "owner": "workspace-content",
-    "capability": "public-file-sharing",
     "status": "owned"
   },
   "realtime": {
@@ -264,11 +229,6 @@
     "capability": "token-counting",
     "status": "owned"
   },
-  "tools": {
-    "owner": "tool-runtime",
-    "capability": "tool-execution",
-    "status": "owned"
-  },
   "uploads": {
     "owner": "workspace-content",
     "capability": "file-uploads",
@@ -277,11 +237,6 @@
   "url-state": {
     "owner": "frontend-platform",
     "capability": "navigation-state",
-    "status": "owned"
-  },
-  "users": {
-    "owner": "identity",
-    "capability": "user-profiles",
     "status": "owned"
   },
   "utils": {

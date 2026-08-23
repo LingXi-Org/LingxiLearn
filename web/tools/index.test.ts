@@ -42,7 +42,6 @@ import { workflowExecutorTool } from '@/tools/workflow/executor'
 
 // Hoisted mock state - these are available to vi.mock factories
 const {
-  mockGetBYOKKey,
   mockGetToolAsync,
   mockRateLimiterFns,
   mockGetCustomToolById,
@@ -55,7 +54,6 @@ const {
   mockGenerateInternalToken,
   mockResolveWorkspaceFileReference,
 } = vi.hoisted(() => ({
-  mockGetBYOKKey: vi.fn(),
   mockGetToolAsync: vi.fn(),
   mockRateLimiterFns: {
     acquireKey: vi.fn(),
@@ -76,11 +74,6 @@ const {
 const mockSecureFetchWithPinnedIP = inputValidationMockFns.mockSecureFetchWithPinnedIP
 const mockValidateUrlWithDNS = inputValidationMockFns.mockValidateUrlWithDNS
 const mockGetEffectiveDecryptedEnv = environmentUtilsMockFns.mockGetEffectiveDecryptedEnv
-
-// Mock getBYOKKey
-vi.mock('@/lib/api-key/byok', () => ({
-  getBYOKKey: (...args: unknown[]) => mockGetBYOKKey(...args),
-}))
 
 vi.mock('@/lib/auth/internal', () => ({
   generateInternalDelegationToken: (...args: unknown[]) =>
@@ -4981,7 +4974,6 @@ describe('Hosted Key Injection', () => {
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000'
     cleanupEnvVars = setupEnvVars({ NEXT_PUBLIC_APP_URL: 'http://localhost:3000' })
     vi.clearAllMocks()
-    mockGetBYOKKey.mockReset()
   })
 
   afterEach(() => {
@@ -5022,9 +5014,6 @@ describe('Hosted Key Injection', () => {
 
     const mockContext = createToolExecutionContext()
     await executeTool('test_no_hosting', {}, { executionContext: mockContext })
-
-    // BYOK should not be called since there's no hosting config
-    expect(mockGetBYOKKey).not.toHaveBeenCalled()
 
     Object.assign(tools, originalTools)
   })
@@ -5069,9 +5058,6 @@ describe('Hosted Key Injection', () => {
 
     const originalTools = { ...tools }
     ;(tools as any).test_with_hosting = mockTool
-
-    // Mock BYOK returning a key
-    mockGetBYOKKey.mockResolvedValue({ apiKey: 'byok-test-key', isBYOK: true })
 
     global.fetch = Object.assign(
       vi.fn().mockImplementation(async () => ({
@@ -5231,7 +5217,6 @@ describe('Rate Limiting and Retry Logic', () => {
     vi.clearAllMocks()
     setEnvFlags({ isHosted: true })
     setEnv({ TEST_HOSTED_KEY: 'test-hosted-api-key' })
-    mockGetBYOKKey.mockResolvedValue(null)
     // Set up throttler mock defaults
     mockRateLimiterFns.acquireKey.mockResolvedValue({
       success: true,
@@ -5615,7 +5600,6 @@ describe('Cost Field Handling', () => {
     vi.clearAllMocks()
     setEnvFlags({ isHosted: true })
     setEnv({ TEST_HOSTED_KEY: 'test-hosted-api-key' })
-    mockGetBYOKKey.mockResolvedValue(null)
     // Set up throttler mock defaults
     mockRateLimiterFns.acquireKey.mockResolvedValue({
       success: true,

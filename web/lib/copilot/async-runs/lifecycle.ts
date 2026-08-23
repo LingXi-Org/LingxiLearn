@@ -1,8 +1,24 @@
-import type { CopilotAsyncToolStatus, CopilotToolPermissionDecision } from '@/lib/db/schema'
 import {
   MothershipStreamV1AsyncToolRecordStatus,
   MothershipStreamV1ToolOutcome,
 } from '@/lib/copilot/generated/mothership-stream-v1'
+
+/**
+ * Protocol-owned values used by the browser lifecycle state machine.
+ *
+ * These used to be imported as types from the legacy Drizzle schema. The
+ * lifecycle is a transport/UI concern, so keeping the small wire unions here
+ * prevents the client graph from depending on Web's removed database runtime.
+ */
+export type CopilotAsyncToolStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'delivered'
+
+export type CopilotToolPermissionDecision = 'allow' | 'allow_chat' | 'always_allow' | 'skip'
 
 export const ASYNC_TOOL_STATUS = MothershipStreamV1AsyncToolRecordStatus
 
