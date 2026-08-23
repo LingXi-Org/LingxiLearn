@@ -1,1 +1,0 @@
-ALTER TABLE "knowledge_connector_sync_log" ADD COLUMN "docs_failed" integer DEFAULT 0 NOT NULL;

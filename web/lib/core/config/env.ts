@@ -43,19 +43,7 @@ export const env = createEnv({
   skipValidation: true,
 
   server: {
-    // Core Database & Authentication
-    DATABASE_URL:                          z.string().url(),                       // Primary database connection string
-    DATABASE_REPLICA_URL:                  z.string().url().optional(),            // Read-replica connection string; opt-in reads fall back to the primary when unset
-    DB_APP_NAME:                           z.string().optional(),                  // Postgres application_name for query attribution (sim-app/sim-trigger/sim-realtime)
-    SIM_DB_ROLE:                           z.enum(['web', 'trigger', 'realtime']).optional(), // Per-process pool profile selector (read directly by @/lib/db)
-    DATABASE_URL_WEB:                      z.string().url().optional(),            // Per-role primary URL override; @/lib/db falls back to DATABASE_URL
-    DATABASE_URL_TRIGGER:                  z.string().url().optional(),            // Per-role primary URL override (trigger)
-    DATABASE_URL_REALTIME:                 z.string().url().optional(),            // Per-role primary URL override (realtime)
-    DATABASE_URL_CLEANUP:                  z.string().url().optional(),            // Sub-process pool URL override (cleanup jobs, via dbFor)
-    DATABASE_URL_EXEC:                     z.string().url().optional(),            // Sub-process pool URL override (inline execution writes, via dbFor)
-    DATABASE_REPLICA_URL_WEB:              z.string().url().optional(),            // Per-role replica URL override; falls back to DATABASE_REPLICA_URL
-    DATABASE_REPLICA_URL_TRIGGER:          z.string().url().optional(),            // Per-role replica URL override (trigger)
-    DATABASE_REPLICA_URL_REALTIME:         z.string().url().optional(),            // Per-role replica URL override (realtime)
+    // Core Authentication
     BETTER_AUTH_URL:                       z.string().url(),                       // Base URL for Better Auth service
     BETTER_AUTH_SECRET:                    z.string().min(32),                     // Secret key for Better Auth JWT signing
     DISABLE_REGISTRATION:                  z.boolean().optional(),                 // Flag to disable new user registration

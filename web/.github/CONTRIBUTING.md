@@ -267,30 +267,21 @@ If you prefer not to use Docker or Dev Containers. **All commands run from the r
    # Realtime server — small, only the values shared with the main app
    cp apps/realtime/.env.example apps/realtime/.env
 
-   # DB tooling (drizzle-kit, db:migrate)
-   cp lib/db/.env.example lib/db/.env
    ```
 
-   At minimum, each `.env` needs `DATABASE_URL`. `apps/sim/.env` and `apps/realtime/.env` additionally need matching values for `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and `NEXT_PUBLIC_APP_URL`. `apps/sim/.env` also needs `ENCRYPTION_KEY` and `API_ENCRYPTION_KEY`. Generate any 32-char secrets with `openssl rand -hex 32`.
+   The Web application does not own a database connection or migration files.
+   Configure the FastAPI service in `server/` and set its
+   `LINGXILEARN_DATABASE_URL` before running the backend.
 
-   The same `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and `DATABASE_URL` must appear in both `apps/sim/.env` and `apps/realtime/.env` so the two services share auth and DB. After editing `apps/sim/.env`, you can mirror the shared subset into the realtime env in one shot:
+   The server owns the schema and is the only migration entrypoint. From the
+   repository root, run:
 
    ```bash
-   grep -E '^(DATABASE_URL|BETTER_AUTH_URL|BETTER_AUTH_SECRET|INTERNAL_API_SECRET|NEXT_PUBLIC_APP_URL|REDIS_URL)=' apps/sim/.env > apps/realtime/.env
-   grep -E '^DATABASE_URL=' apps/sim/.env > lib/db/.env
+   cd server
+   uv run alembic upgrade head
    ```
 
-3. **Run Database Migrations:**
-
-   Migrations live in `lib/db/migrations/`. Run them via the dedicated workspace script:
-
-   ```bash
-   bun run db:migrate
-   ```
-
-   For ad-hoc schema iteration during development you can also use `bun run db:push` from the web root, but `db:migrate` is the canonical command for both local and CI/CD setups.
-
-4. **Run the Development Servers:**
+3. **Run the Development Servers:**
 
    ```bash
    bun run dev:full
@@ -308,7 +299,7 @@ If you prefer not to use Docker or Dev Containers. **All commands run from the r
    bun run dev:sockets  # realtime server only
    ```
 
-5. **Make Your Changes and Test Locally.**
+4. **Make Your Changes and Test Locally.**
 
    Before opening a PR, run the same checks CI runs:
 

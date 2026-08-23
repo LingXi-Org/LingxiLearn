@@ -1,1 +1,0 @@
-DROP INDEX "idx_webhook_on_workflow_id_block_id";

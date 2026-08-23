@@ -87,7 +87,6 @@ function reachableFrom(entries: string[]): Set<string> {
 const nextEntryPattern =
   /(?:^|[\\/])(?:page|layout|route|default|error|global-error|loading|not-found|unauthorized|forbidden|template|opengraph-image|twitter-image|sitemap|robots|manifest|icon)\.(?:ts|tsx|js|jsx)$/
 const rootEntries = [
-  'drizzle.config.ts',
   'instrumentation.ts',
   'instrumentation-client.ts',
   'instrumentation-edge.ts',
@@ -109,8 +108,6 @@ const productionEntries = [
 ].filter((file) => !isTest(file))
 const operationalEntries = [
   ...filesUnder(path.join(root, 'scripts')),
-  ...filesUnder(path.join(root, 'lib', 'db', 'scripts')),
-  path.join(root, 'lib', 'db', 'drizzle.config.ts'),
 ].filter((file) => existsSync(file) && isSource(file) && !isTest(file))
 const testEntries = filesUnder(root).filter(
   (file) => isSource(file) && isTest(file) && !file.includes(`${path.sep}node_modules${path.sep}`)

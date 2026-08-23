@@ -123,8 +123,6 @@ services:
       - lingxilearn-dev-web-next:/app/.next
     environment:
       NODE_ENV: development
-      DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
       NEXT_STATIC_EXPORT: "0"
       # Browser calls stay same-origin; Next rewrites them to the API service.
       # An absolute localhost URL would point back to the web container during

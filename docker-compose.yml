@@ -66,10 +66,6 @@ services:
     pull_policy: always
     env_file: [.env]
     environment:
-      # The web image only needs this URL for the shared frontend runtime; all
-      # LingxiLearn domain data is owned by the API database schema.
-      DATABASE_URL: >-
-        postgresql://${POSTGRES_USER:?set POSTGRES_USER}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?set POSTGRES_DB}
       LINGXILEARN_API_ORIGIN: http://api:8000
       # Production must use the canonical LingxiIdentity session path.
       DISABLE_AUTH: "false"

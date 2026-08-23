@@ -68,7 +68,6 @@
     "capability": "workspace-credentials",
     "status": "owned"
   },
-  "db": { "owner": "platform", "capability": "persistence", "status": "owned" },
   "desktop": {
     "owner": "desktop",
     "capability": "desktop-bridge",
