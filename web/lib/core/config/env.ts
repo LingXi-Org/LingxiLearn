@@ -277,15 +277,7 @@ export const env = createEnv({
     TRIGGER_DEV_ENABLED:                   z.boolean().optional(),                 // Toggle to enable/disable Trigger.dev for async jobs
     CRON_SECRET:                           z.string().optional(),                  // Secret for authenticating cron job requests
     JOB_RETENTION_DAYS:                    z.string().optional().default('1'),     // Days to retain job logs/data
-    SCHEDULE_EXECUTION_CONCURRENCY_LIMIT:  z.string().optional().default('30'),
-    WORKFLOW_EXECUTION_CONCURRENCY_LIMIT:  z.string().optional().default('75'),
     WEBHOOK_EXECUTION_CONCURRENCY_LIMIT:   z.string().optional().default('75'),
-    RESUME_EXECUTION_CONCURRENCY_LIMIT:    z.string().optional().default('50'),
-    SCHEDULE_ENQUEUE_BUDGET_MULTIPLIER:    z.string().optional().default('2'),
-    SCHEDULE_JITTER_MAX_MS:                z.string().optional().default('30000'),
-    SCHEDULE_INFRA_RETRY_BASE_MS:          z.string().optional().default('60000'),
-    SCHEDULE_INFRA_RETRY_MAX_MS:           z.string().optional().default('300000'),
-    SCHEDULE_INFRA_RETRY_MAX_ATTEMPTS:     z.string().optional().default('10'),
 
     // Cloud Storage - AWS S3
     AWS_REGION:                            z.string().optional(),                  // AWS region for S3 buckets

@@ -35,7 +35,7 @@ vi.mock('@/lib/execution/cancellation', () => ({
   isRedisCancellationEnabled: () => false,
   isExecutionCancelled: vi.fn().mockResolvedValue(false),
 }))
-vi.mock('@/lib/data-drains/destinations/utils', () => ({
+vi.mock('@/lib/core/utils/abortable-sleep', () => ({
   sleepUntilAborted: mockSleepUntilAborted,
 }))
 vi.mock('@/lib/execution/remote-sandbox/pi-lifetime', async (importOriginal) => {
