@@ -60,4 +60,7 @@ ignore = ["B008", "E501", "B905"]
 [tool.mypy]
 python_version = "3.13"
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "croniter"
 ignore_missing_imports = true

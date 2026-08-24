@@ -7,7 +7,7 @@ import { AuthEntry } from '@/app/(auth)/components/auth-entry'
  * completed by LingxiIdentity's Logto Experience, so this page must not ask
  * for a name, password, captcha, or maintain a second validation policy.
  */
-export default function SignupPage({}: {
+export default function SignupPage(_props: {
   githubAvailable: boolean
   googleAvailable: boolean
   microsoftAvailable: boolean

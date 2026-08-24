@@ -86,6 +86,8 @@ make check   # 前端检查
 make prod    # 生产部署
 ```
 
+合并门禁及其本地复现命令见 [CI 质量门禁](docs/ci-quality-gates.md)。
+
 ## 仓库结构
 
 ```text

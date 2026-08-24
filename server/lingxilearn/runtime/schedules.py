@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .sim_semantics import SimRuntimeError
 
 try:  # Optional at import time so SQLite/unit-test installs stay lightweight.
-    from croniter import croniter  # type: ignore[import-not-found]
+    from croniter import croniter
 except ImportError:  # pragma: no cover - exercised only in minimal installs
     croniter = None
 

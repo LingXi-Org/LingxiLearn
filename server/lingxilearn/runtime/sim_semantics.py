@@ -8,7 +8,7 @@ used by the chat and Logs surfaces.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -823,7 +823,7 @@ class SimRunProjector:
         }
 
 
-def _safe_trace_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+def _safe_trace_records(records: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
     """Apply the V2 public event envelope before trace replay.
 
     Reasoning deltas and raw tool call/result payloads are deliberately never
@@ -831,7 +831,7 @@ def _safe_trace_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any
     """
     private = {"reasoning.delta", "tool.call.delta", "tool.result", "assistant.delta"}
     blocked = {"arguments", "input", "output", "result", "content", "thinking", "reasoning"}
-    safe: list[dict[str, Any]] = []
+    safe: list[Mapping[str, Any]] = []
     for record in records:
         if str(record.get("kind") or "") in private:
             continue
@@ -843,7 +843,7 @@ def _safe_trace_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any
 
 
 def replay_sim_trace(
-    records: Iterable[dict[str, Any]],
+    records: Iterable[Mapping[str, Any]],
     *,
     execution_id: str,
     task_id: str,
@@ -864,5 +864,5 @@ def replay_sim_trace(
     )
 
 
-def sim_trace_total_tokens(trace: list[dict[str, Any]]) -> dict[str, int]:
+def sim_trace_total_tokens(trace: list[dict[str, Any]]) -> int:
     return total_tokens(trace)
