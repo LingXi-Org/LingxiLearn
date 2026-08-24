@@ -1,10 +1,13 @@
 """Workspace API routes split by resource family."""
 
+from typing import Never
+
 from fastapi import APIRouter
 
-from ..application.uploads import multipart_part_urls
+from ..application.uploads import multipart_part_urls, upload_sessions
 from ..application.workspace_errors import WorkspaceDomainError
-from .workspace_file_routes import _upload_sessions
+from ..application.workspace_files import WorkspaceFileStorage
+from ..application.workspace_knowledge_service import WorkspaceKnowledgeService
 from .workspace_route_shared import (
     MAX_FILE_SIZE,
     UTC,
@@ -12,23 +15,18 @@ from .workspace_route_shared import (
     Depends,
     DocumentTagSaveResponse,
     HTTPException,
-    KnowledgeBase,
     KnowledgeBaseResponse,
     KnowledgeBasesResponse,
     KnowledgeBulkChunksResponse,
     KnowledgeBulkDocumentsResponse,
-    KnowledgeChunk,
     KnowledgeChunkResponse,
     KnowledgeChunksResponse,
-    KnowledgeDocument,
     KnowledgeDocumentResponse,
     KnowledgeDocumentsResponse,
-    KnowledgeDocumentTag,
     KnowledgeDocumentUpsertResponse,
     KnowledgeMessageResponse,
     KnowledgeNextSlotResponse,
     KnowledgeSearchResponse,
-    KnowledgeTag,
     KnowledgeTagListResponse,
     KnowledgeTagResponse,
     KnowledgeTagsResponse,
@@ -38,7 +36,6 @@ from .workspace_route_shared import (
     Request,
     SuccessResponse,
     UploadStateResponse,
-    WorkspaceUploadSession,
     _chunk_public,
     _document_public,
     _knowledge_base_public,
@@ -53,13 +50,9 @@ from .workspace_route_shared import (
     base64,
     current_learner_context,
     datetime,
-    delete,
-    false,
-    func,
     hashlib,
     not_found,
     secrets,
-    select,
     services_of,
     timedelta,
     utcnow,
@@ -67,6 +60,14 @@ from .workspace_route_shared import (
 )
 
 router = APIRouter(prefix="/api")
+
+
+def _knowledge_service(request: Request) -> WorkspaceKnowledgeService:
+    return services_of(request).workspace_knowledge
+
+
+def _raise_domain(error: WorkspaceDomainError) -> Never:
+    raise HTTPException(status_code=error.status_code, detail=error.code) from error
 
 
 @router.get("/knowledge", response_model=KnowledgeBasesResponse)
@@ -78,28 +79,10 @@ async def list_knowledge(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await services_of(request).artifacts.project_agent_artifacts(context.learner_id)
-    async with services_of(request).db.session() as session:
-        query = select(KnowledgeBase).where(KnowledgeBase.learner_id == context.learner_id)
-        if scope in {"active", "archived"}:
-            query = query.where(KnowledgeBase.archived.is_(scope == "archived"))
-        elif not includeArchived:
-            query = query.where(KnowledgeBase.archived.is_(False))
-        rows = (
-            (await session.execute(query.order_by(KnowledgeBase.updated_at.desc()))).scalars().all()
-        )
-        result = []
-        for row in rows:
-            count = (
-                await session.scalar(
-                    select(func.count())
-                    .select_from(KnowledgeDocument)
-                    .where(
-                        KnowledgeDocument.base_id == row.id, KnowledgeDocument.archived.is_(False)
-                    )
-                )
-                or 0
-            )
-            result.append(_knowledge_base_public(row, int(count)))
+    rows = await _knowledge_service(request).repository.list_bases(
+        context.learner_id, scope, includeArchived
+    )
+    result = [_knowledge_base_public(row, count) for row, count in rows]
     return {"success": True, "data": result, "knowledgeBases": result}
 
 
@@ -109,30 +92,20 @@ async def create_knowledge(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    row = KnowledgeBase(
-        id=f"kb_{uuid.uuid4().hex}",
-        learner_id=context.learner_id,
-        name=str(body.get("name") or "知识库"),
-        description=str(body.get("description") or ""),
-        metadata_payload={},
+    row = await _knowledge_service(request).repository.create_base(
+        context.learner_id,
+        str(body.get("name") or "知识库"),
+        str(body.get("description") or ""),
     )
-    async with services_of(request).db.session() as session:
-        session.add(row)
-        await session.commit()
     public = _knowledge_base_public(row)
     return {"success": True, "data": public, "knowledgeBase": public}
 
 
-async def _base_for_id(request: Request, base_id: str, context: LearnerContext) -> KnowledgeBase:
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeBase).where(
-                KnowledgeBase.id == base_id, KnowledgeBase.learner_id == context.learner_id
-            )
-        )
-    if row is None:
-        raise not_found()
-    return row
+async def _base_for_id(request: Request, base_id: str, context: LearnerContext) -> Any:
+    try:
+        return await _knowledge_service(request).require_base(context.learner_id, base_id)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
 
 
 @router.get("/knowledge/search", response_model=KnowledgeSearchResponse)
@@ -145,29 +118,7 @@ async def search_knowledge(
     """Search before the ``/{base_id}`` route so ``search`` is not a base id."""
 
     needle = q.strip().casefold()
-    async with services_of(request).db.session() as session:
-        bases = (
-            (
-                await session.execute(
-                    select(KnowledgeBase).where(
-                        KnowledgeBase.learner_id == context.learner_id,
-                        KnowledgeBase.archived.is_(False),
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        base_ids = [row.id for row in bases]
-        query = (
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.base_id.in_(base_ids),
-                KnowledgeDocument.archived.is_(False),
-            )
-            if base_ids
-            else select(KnowledgeDocument).where(false())
-        )
-        docs = (await session.execute(query)).scalars().all()
+    docs = await _knowledge_service(request).repository.search_documents(context.learner_id)
     matches = []
     for doc in docs:
         haystack = f"{doc.name}\n{doc.content}".casefold()
@@ -195,12 +146,7 @@ async def next_available_tag_slot(
     prefix = {"text": "tag", "number": "number", "date": "date", "boolean": "boolean"}.get(
         fieldType, "tag"
     )
-    async with services_of(request).db.session() as session:
-        rows = (
-            (await session.execute(select(KnowledgeTag).where(KnowledgeTag.base_id == base_id)))
-            .scalars()
-            .all()
-        )
+    rows = await _knowledge_service(request).repository.list_tags(base_id)
     used = [row.tag_slot for row in rows if row.tag_slot]
     for index in range(1, 8 if prefix == "tag" else 6):
         candidate = f"{prefix}{index}"
@@ -232,45 +178,22 @@ async def tag_usage(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        tags = (
-            (
-                await session.execute(
-                    select(KnowledgeTag)
-                    .where(KnowledgeTag.base_id == base_id)
-                    .order_by(KnowledgeTag.name)
-                )
-            )
-            .scalars()
-            .all()
+    rows = await _knowledge_service(request).repository.tag_usage(base_id)
+    usages = []
+    for tag, linked_documents in rows:
+        documents = [
+            {"id": document.id, "name": document.name, "tagValue": value}
+            for document, value in linked_documents
+        ]
+        public = _tag_public(tag)
+        usages.append(
+            {
+                "tagName": public["displayName"],
+                "tagSlot": public["tagSlot"],
+                "documentCount": len(documents),
+                "documents": documents,
+            }
         )
-        usages: list[dict[str, Any]] = []
-        for tag in tags:
-            links = (
-                (
-                    await session.execute(
-                        select(KnowledgeDocumentTag).where(KnowledgeDocumentTag.tag_id == tag.id)
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            documents: list[dict[str, Any]] = []
-            for link in links:
-                document = await session.get(KnowledgeDocument, link.document_id)
-                if document is not None and not document.archived:
-                    documents.append(
-                        {"id": document.id, "name": document.name, "tagValue": link.value}
-                    )
-            public = _tag_public(tag)
-            usages.append(
-                {
-                    "tagName": public["displayName"],
-                    "tagSlot": public["tagSlot"],
-                    "documentCount": len(documents),
-                    "documents": documents,
-                }
-            )
     return {"success": True, "data": usages}
 
 
@@ -292,17 +215,10 @@ async def update_knowledge(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     row = await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        current = await session.get(KnowledgeBase, row.id)
-        if current is None:
-            raise not_found()
-        if body.get("name") is not None:
-            current.name = str(body["name"]).strip()[:255]
-        if body.get("description") is not None:
-            current.description = str(body["description"])
-        await session.commit()
-        row = current
-    public = _knowledge_base_public(row)
+    current = await _knowledge_service(request).repository.update_base(row.id, body)
+    if current is None:
+        raise not_found()
+    public = _knowledge_base_public(current)
     return {"success": True, "data": public, "knowledgeBase": public}
 
 
@@ -311,11 +227,7 @@ async def archive_knowledge(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
     row = await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        current = await session.get(KnowledgeBase, row.id)
-        if current is not None:
-            current.archived = True
-            await session.commit()
+    await _knowledge_service(request).repository.set_base_archived(row.id, True)
     return {"success": True, "data": {"message": "archived"}}
 
 
@@ -324,11 +236,7 @@ async def restore_knowledge(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
     row = await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        current = await session.get(KnowledgeBase, row.id)
-        if current is not None:
-            current.archived = False
-            await session.commit()
+    row = await _knowledge_service(request).repository.set_base_archived(row.id, False) or row
     public = _knowledge_base_public(row)
     return {"success": True, "data": public, "knowledgeBase": public}
 
@@ -347,19 +255,9 @@ async def list_documents(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        query = select(KnowledgeDocument).where(KnowledgeDocument.base_id == base_id)
-        if not includeArchived:
-            query = query.where(KnowledgeDocument.archived.is_(False))
-        if enabledFilter == "enabled":
-            query = query.where(KnowledgeDocument.archived.is_(False))
-        elif enabledFilter == "disabled":
-            query = query.where(KnowledgeDocument.archived.is_(True))
-        rows = (
-            (await session.execute(query.order_by(KnowledgeDocument.updated_at.desc())))
-            .scalars()
-            .all()
-        )
+    rows = await _knowledge_service(request).repository.list_documents(
+        base_id, includeArchived, enabledFilter
+    )
     if search:
         needle = search.casefold()
         rows = [row for row in rows if needle in f"{row.name}\n{row.content}".casefold()]
@@ -373,7 +271,7 @@ async def list_documents(
         "enabled",
     }:
 
-        def sort_key(row: KnowledgeDocument) -> Any:
+        def sort_key(row: Any) -> Any:
             values = {
                 "filename": row.name,
                 "fileSize": len(row.content.encode("utf-8")),
@@ -409,18 +307,7 @@ async def list_tag_definitions(
     base_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(KnowledgeTag)
-                    .where(KnowledgeTag.base_id == base_id)
-                    .order_by(KnowledgeTag.name)
-                )
-            )
-            .scalars()
-            .all()
-        )
+    rows = await _knowledge_service(request).repository.list_tags(base_id)
     tags = [_tag_public(row) for row in rows]
     return {"success": True, "data": tags, "tags": tags}
 
@@ -439,16 +326,9 @@ async def create_tag_definition(
     if not name:
         raise HTTPException(status_code=422, detail="tag_name_required")
     field_type = str(body.get("fieldType") or body.get("field_type") or "text")
-    row = KnowledgeTag(
-        id=f"tag_{uuid.uuid4().hex}",
-        base_id=base_id,
-        name=name[:128],
-        tag_slot=str(body.get("tagSlot") or ""),
-        field_type=field_type,
+    row = await _knowledge_service(request).repository.create_tag(
+        base_id, name, str(body.get("tagSlot") or ""), field_type
     )
-    async with services_of(request).db.session() as session:
-        session.add(row)
-        await session.commit()
     return {"success": True, "data": _tag_public(row)}
 
 
@@ -461,17 +341,9 @@ async def update_tag_definition(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeTag).where(KnowledgeTag.id == tag_id, KnowledgeTag.base_id == base_id)
-        )
-        if row is None:
-            raise not_found()
-        if body.get("name") is not None:
-            row.name = str(body["name"]).strip()[:128]
-        if body.get("fieldType") is not None:
-            row.field_type = str(body["fieldType"])
-        await session.commit()
+    row = await _knowledge_service(request).repository.update_tag(base_id, tag_id, body)
+    if row is None:
+        raise not_found()
     return {"success": True, "data": _tag_public(row)}
 
 
@@ -483,14 +355,8 @@ async def delete_tag_definition(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeTag).where(KnowledgeTag.id == tag_id, KnowledgeTag.base_id == base_id)
-        )
-        if row is None:
-            raise not_found()
-        await session.delete(row)
-        await session.commit()
+    if not await _knowledge_service(request).repository.delete_tag(base_id, tag_id):
+        raise not_found()
     return {"success": True}
 
 
@@ -505,26 +371,9 @@ async def list_document_tag_definitions(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id,
-                KnowledgeDocument.base_id == base_id,
-            )
-        )
-        if document is None:
-            raise not_found()
-        rows = (
-            (
-                await session.execute(
-                    select(KnowledgeTag)
-                    .where(KnowledgeTag.base_id == base_id)
-                    .order_by(KnowledgeTag.name)
-                )
-            )
-            .scalars()
-            .all()
-        )
+    if not await _knowledge_service(request).repository.document_exists(base_id, document_id):
+        raise not_found()
+    rows = await _knowledge_service(request).repository.list_tags(base_id)
     return {"success": True, "data": [_tag_public(row) for row in rows]}
 
 
@@ -543,46 +392,14 @@ async def save_document_tag_definitions(
     definitions: list[Any] = (
         body["definitions"] if isinstance(body.get("definitions"), list) else []
     )
-    created: list[dict[str, Any]] = []
-    updated: list[dict[str, Any]] = []
-    async with services_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id,
-                KnowledgeDocument.base_id == base_id,
-            )
-        )
-        if document is None:
-            raise not_found()
-        for definition in definitions:
-            if not isinstance(definition, dict):
-                continue
-            slot = str(definition.get("tagSlot") or "").strip()
-            name = str(definition.get("displayName") or "").strip()
-            field_type = str(definition.get("fieldType") or "text").strip()
-            if not slot or not name:
-                continue
-            row = await session.scalar(
-                select(KnowledgeTag).where(
-                    KnowledgeTag.base_id == base_id,
-                    KnowledgeTag.tag_slot == slot,
-                )
-            )
-            if row is None:
-                row = KnowledgeTag(
-                    id=f"tag_{uuid.uuid4().hex}",
-                    base_id=base_id,
-                    name=name[:128],
-                    tag_slot=slot,
-                    field_type=field_type,
-                )
-                session.add(row)
-                created.append(_tag_public(row))
-            else:
-                row.name = name[:128]
-                row.field_type = field_type
-                updated.append(_tag_public(row))
-        await session.commit()
+    outcome = await _knowledge_service(request).repository.save_tag_definitions(
+        base_id, document_id, definitions
+    )
+    if outcome is None:
+        raise not_found()
+    created_rows, updated_rows = outcome
+    created = [_tag_public(row) for row in created_rows]
+    updated = [_tag_public(row) for row in updated_rows]
     return {"success": True, "data": {"created": created, "updated": updated, "errors": []}}
 
 
@@ -596,19 +413,8 @@ async def delete_document_tag_definitions(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id,
-                KnowledgeDocument.base_id == base_id,
-            )
-        )
-        if document is None:
-            raise not_found()
-        await session.execute(
-            delete(KnowledgeDocumentTag).where(KnowledgeDocumentTag.document_id == document_id)
-        )
-        await session.commit()
+    if not await _knowledge_service(request).repository.delete_document_tags(base_id, document_id):
+        raise not_found()
     return {"success": True}
 
 
@@ -637,22 +443,17 @@ async def create_knowledge_upload(
     temp = _storage_root(request, context.learner_id) / f".{upload_id}.part"
     expires = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     workspace = await _workspace_for_id(request, str(body.get("workspaceId") or "lingxi"), context)
-    async with services_of(request).db.session() as session:
-        session.add(
-            WorkspaceUploadSession(
-                id=upload_id,
-                workspace_id=workspace.id,
-                learner_id=context.learner_id,
-                token_hash=hashlib.sha256(token.encode()).hexdigest(),
-                name=name,
-                mime_type=content_type,
-                size=size,
-                temp_key=str(temp.relative_to(_storage_root(request, context.learner_id))),
-                status="uploading",
-                expires_at=datetime.fromisoformat(expires),
-            )
-        )
-        await session.commit()
+    await services_of(request).workspace_files.create_upload(
+        upload_id=upload_id,
+        workspace_id=workspace.id,
+        learner_id=context.learner_id,
+        token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        name=name,
+        mime_type=content_type,
+        size=size,
+        temp_key=str(temp.relative_to(_storage_root(request, context.learner_id))),
+        expires_at=datetime.fromisoformat(expires),
+    )
     item = {
         "id": upload_id,
         "knowledgeBaseId": base_id,
@@ -670,7 +471,7 @@ async def create_knowledge_upload(
         "parts": {},
         "expiresAt": expires,
     }
-    _upload_sessions[upload_id] = item
+    upload_sessions[upload_id] = item
     session_public = _knowledge_upload_session_public(item, status="uploading", document=None)
     transfer = {
         "method": "put",
@@ -690,7 +491,7 @@ async def create_knowledge_upload_part_urls(
     workspaceId: str,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    item = _upload_sessions.get(upload_id)
+    item = upload_sessions.get(upload_id)
     if item is None or item.get("knowledgeBaseId") != base_id:
         raise not_found()
     await _base_for_id(request, base_id, context)
@@ -718,7 +519,7 @@ async def complete_knowledge_upload(
     workspaceId: str,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    item = _upload_sessions.get(upload_id)
+    item = upload_sessions.get(upload_id)
     if (
         item is None
         or item.get("knowledgeBaseId") != base_id
@@ -733,14 +534,7 @@ async def complete_knowledge_upload(
                 item, status="completed", document=item["document"]
             )
         }
-    if item["temp"].is_file():
-        raw = item["temp"].read_bytes()
-    elif item.get("parts"):
-        raw = b"".join(
-            path.read_bytes() for _number, path in sorted(item["parts"].items()) if path.is_file()
-        )
-    else:
-        raw = b""
+    raw = WorkspaceFileStorage.read_upload(item)
     if len(raw) != int(item["body"]["size"]):
         raise HTTPException(status_code=422, detail="upload_size_mismatch")
     name, mime, content = _parse_knowledge_document(
@@ -756,31 +550,15 @@ async def complete_knowledge_upload(
         for key in ("tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7")
         if item["body"].get(key) is not None
     }
-    async with services_of(request).db.session() as session:
-        row = KnowledgeDocument(
-            id=f"doc_{uuid.uuid4().hex}",
-            base_id=base_id,
-            name=name,
-            mime_type=mime,
-            content=content,
-            metadata_payload=metadata,
-        )
-        session.add(row)
-        for ordinal, start in enumerate(range(0, len(content), 1200)):
-            session.add(
-                KnowledgeChunk(
-                    id=f"chunk_{uuid.uuid4().hex}",
-                    document_id=row.id,
-                    ordinal=ordinal,
-                    text=content[start : start + 1200],
-                    metadata_payload={"enabled": True},
-                )
-            )
-        upload_row = await session.get(WorkspaceUploadSession, upload_id)
-        if upload_row is not None:
-            upload_row.status = "completed"
-            upload_row.file_id = row.id
-        await session.commit()
+    row = await _knowledge_service(request).repository.create_document(
+        base_id,
+        name,
+        mime,
+        content,
+        metadata,
+        enabled_chunks=True,
+        upload_id=upload_id,
+    )
     document = _document_public(row)
     summary = {
         key: document[key]
@@ -800,9 +578,7 @@ async def complete_knowledge_upload(
     }
     item["status"] = "completed"
     item["document"] = summary
-    item["temp"].unlink(missing_ok=True)
-    for part_path in item.get("parts", {}).values():
-        part_path.unlink(missing_ok=True)
+    WorkspaceFileStorage.cleanup_upload(item)
     return {"data": _knowledge_upload_session_public(item, status="completed", document=summary)}
 
 
@@ -814,7 +590,7 @@ async def abort_knowledge_upload(
     workspaceId: str,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    item = _upload_sessions.get(upload_id)
+    item = upload_sessions.get(upload_id)
     if (
         item is None
         or item.get("knowledgeBaseId") != base_id
@@ -823,15 +599,9 @@ async def abort_knowledge_upload(
     ):
         raise not_found()
     await _base_for_id(request, base_id, context)
-    _upload_sessions.pop(upload_id, None)
-    item["temp"].unlink(missing_ok=True)
-    for part_path in item.get("parts", {}).values():
-        part_path.unlink(missing_ok=True)
-    async with services_of(request).db.session() as session:
-        row = await session.get(WorkspaceUploadSession, upload_id)
-        if row is not None:
-            row.status = "aborted"
-            await session.commit()
+    upload_sessions.pop(upload_id, None)
+    WorkspaceFileStorage.cleanup_upload(item)
+    await _knowledge_service(request).repository.set_upload_status(upload_id, "aborted")
     return {"data": _knowledge_upload_session_public(item, status="aborted", document=None)}
 
 
@@ -844,28 +614,9 @@ async def create_document(
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
     name, mime, content = _parse_knowledge_document(body)
-    row = KnowledgeDocument(
-        id=f"doc_{uuid.uuid4().hex}",
-        base_id=base_id,
-        name=name,
-        mime_type=mime,
-        content=content,
-        metadata_payload=dict(body.get("metadata") or {}),
+    row = await _knowledge_service(request).repository.create_document(
+        base_id, name, mime, content, dict(body.get("metadata") or {})
     )
-    async with services_of(request).db.session() as session:
-        session.add(row)
-        # Deterministic chunks keep search and retrieval useful without embeddings.
-        for ordinal, start in enumerate(range(0, len(content), 1200)):
-            session.add(
-                KnowledgeChunk(
-                    id=f"chunk_{uuid.uuid4().hex}",
-                    document_id=row.id,
-                    ordinal=ordinal,
-                    text=content[start : start + 1200],
-                    metadata_payload={},
-                )
-            )
-        await session.commit()
     public = _document_public(row)
     return {"success": True, "data": public, "document": public}
 
@@ -882,43 +633,9 @@ async def upsert_document(
     await _base_for_id(request, base_id, context)
     document_id = str(body.get("documentId") or "").strip()
     name, mime, content = _parse_knowledge_document(body)
-    async with services_of(request).db.session() as session:
-        row = (
-            await session.scalar(
-                select(KnowledgeDocument).where(
-                    KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-                )
-            )
-            if document_id
-            else None
-        )
-        is_update = row is not None
-        if row is None:
-            row = KnowledgeDocument(
-                id=document_id or f"doc_{uuid.uuid4().hex}",
-                base_id=base_id,
-                name=name,
-                mime_type=mime,
-                content=content,
-                metadata_payload={},
-            )
-            session.add(row)
-        else:
-            row.name, row.mime_type, row.content, row.archived = name, mime, content, False
-            await session.execute(
-                delete(KnowledgeChunk).where(KnowledgeChunk.document_id == row.id)
-            )
-        for ordinal, start in enumerate(range(0, len(content), 1200)):
-            session.add(
-                KnowledgeChunk(
-                    id=f"chunk_{uuid.uuid4().hex}",
-                    document_id=row.id,
-                    ordinal=ordinal,
-                    text=content[start : start + 1200],
-                    metadata_payload={"enabled": True},
-                )
-            )
-        await session.commit()
+    row, is_update = await _knowledge_service(request).repository.upsert_document(
+        base_id, document_id, name, mime, content
+    )
     return {
         "success": True,
         "data": {
@@ -943,21 +660,7 @@ async def bulk_update_documents(
     ids = {str(item) for item in body.get("documentIds") or []}
     if operation not in {"enable", "disable", "delete"} or not ids:
         raise HTTPException(status_code=422, detail="invalid_document_operation")
-    async with services_of(request).db.session() as session:
-        rows = list(
-            (
-                await session.execute(
-                    select(KnowledgeDocument).where(
-                        KnowledgeDocument.base_id == base_id, KnowledgeDocument.id.in_(ids)
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        for row in rows:
-            row.archived = operation != "enable"
-        await session.commit()
+    rows = await _knowledge_service(request).repository.bulk_documents(base_id, ids, operation)
     return {
         "success": True,
         "data": {
@@ -979,12 +682,7 @@ async def get_document(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
+    row = await _knowledge_service(request).repository.find_document(base_id, document_id)
     if row is None:
         raise not_found()
     public = _document_public(row)
@@ -1007,26 +705,10 @@ async def list_chunks(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        if document is None:
-            raise not_found()
-        rows = (
-            (
-                await session.execute(
-                    select(KnowledgeChunk)
-                    .where(KnowledgeChunk.document_id == document_id)
-                    .order_by(KnowledgeChunk.ordinal)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        document = await session.get(KnowledgeDocument, document_id)
+    outcome = await _knowledge_service(request).repository.document_chunks(base_id, document_id)
+    if outcome is None:
+        raise not_found()
+    document, rows = outcome
     if search:
         needle = search.casefold()
         rows = [row for row in rows if needle in (row.text or "").casefold()]
@@ -1039,7 +721,7 @@ async def list_chunks(
         ]
     if sortBy in {"chunkIndex", "tokenCount", "enabled"}:
 
-        def chunk_sort_key(row: KnowledgeChunk) -> Any:
+        def chunk_sort_key(row: Any) -> Any:
             values = {
                 "chunkIndex": row.ordinal,
                 "tokenCount": len(row.text or "") // 4,
@@ -1085,28 +767,12 @@ async def create_chunk(
     content = str(body.get("content") or "")
     if not content:
         raise HTTPException(status_code=422, detail="chunk_content_required")
-    async with services_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        if document is None:
-            raise not_found()
-        ordinal = await session.scalar(
-            select(func.max(KnowledgeChunk.ordinal)).where(
-                KnowledgeChunk.document_id == document_id
-            )
-        )
-        row = KnowledgeChunk(
-            id=f"chunk_{uuid.uuid4().hex}",
-            document_id=document_id,
-            ordinal=int(ordinal or -1) + 1,
-            text=content,
-            metadata_payload={"enabled": bool(body.get("enabled", True))},
-        )
-        session.add(row)
-        await session.commit()
+    outcome = await _knowledge_service(request).repository.create_chunk(
+        base_id, document_id, content, bool(body.get("enabled", True))
+    )
+    if outcome is None:
+        raise not_found()
+    document, row = outcome
     return {
         "success": True,
         "data": _chunk_public(
@@ -1127,19 +793,12 @@ async def get_chunk(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        row = await session.scalar(
-            select(KnowledgeChunk).where(
-                KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id
-            )
-        )
-    if document is None or row is None:
+    outcome = await _knowledge_service(request).repository.find_chunk(
+        base_id, document_id, chunk_id
+    )
+    if outcome is None:
         raise not_found()
+    document, row = outcome
     return {
         "success": True,
         "data": _chunk_public(
@@ -1165,26 +824,12 @@ async def update_chunk(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        document = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        row = await session.scalar(
-            select(KnowledgeChunk).where(
-                KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id
-            )
-        )
-        if document is None or row is None:
-            raise not_found()
-        if body.get("content") is not None:
-            row.text = str(body["content"])
-        metadata = {**(row.metadata_payload or {})}
-        if body.get("enabled") is not None:
-            metadata["enabled"] = bool(body["enabled"])
-        row.metadata_payload = metadata
-        await session.commit()
+    outcome = await _knowledge_service(request).repository.update_chunk(
+        base_id, document_id, chunk_id, body
+    )
+    if outcome is None:
+        raise not_found()
+    document, row = outcome
     return {
         "success": True,
         "data": _chunk_public(
@@ -1205,16 +850,10 @@ async def delete_chunk(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeChunk).where(
-                KnowledgeChunk.id == chunk_id, KnowledgeChunk.document_id == document_id
-            )
-        )
-        if row is None:
-            raise not_found()
-        await session.delete(row)
-        await session.commit()
+    if not await _knowledge_service(request).repository.delete_chunk(
+        base_id, document_id, chunk_id
+    ):
+        raise not_found()
     return {"success": True, "data": {"message": "deleted"}}
 
 
@@ -1234,28 +873,9 @@ async def bulk_update_chunks(
     chunk_ids = {str(item) for item in body.get("chunkIds") or []}
     if operation not in {"enable", "disable", "delete"} or not chunk_ids:
         raise HTTPException(status_code=422, detail="invalid_chunk_operation")
-    async with services_of(request).db.session() as session:
-        rows = list(
-            (
-                await session.execute(
-                    select(KnowledgeChunk).where(
-                        KnowledgeChunk.document_id == document_id, KnowledgeChunk.id.in_(chunk_ids)
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if operation == "delete":
-            for row in rows:
-                await session.delete(row)
-        else:
-            for row in rows:
-                row.metadata_payload = {
-                    **(row.metadata_payload or {}),
-                    "enabled": operation == "enable",
-                }
-        await session.commit()
+    rows = await _knowledge_service(request).repository.bulk_chunks(
+        base_id, document_id, chunk_ids, operation
+    )
     return {
         "success": True,
         "data": {
@@ -1282,75 +902,10 @@ async def update_document(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        if row is None:
-            raise not_found()
-        if (row.metadata_payload or {}).get("readOnly") and any(
-            key in body for key in ("name", "filename", "content", "enabled")
-        ):
-            raise HTTPException(status_code=403, detail="read_only_document")
-        if body.get("name") is not None or body.get("filename") is not None:
-            row.name = _safe_name(str(body.get("name") or body.get("filename")))
-        if isinstance(body.get("content"), str):
-            row.content = body["content"]
-            await session.execute(
-                delete(KnowledgeChunk).where(KnowledgeChunk.document_id == row.id)
-            )
-            for ordinal, start in enumerate(range(0, len(row.content), 1200)):
-                session.add(
-                    KnowledgeChunk(
-                        id=f"chunk_{uuid.uuid4().hex}",
-                        document_id=row.id,
-                        ordinal=ordinal,
-                        text=row.content[start : start + 1200],
-                        metadata_payload={},
-                    )
-                )
-        if body.get("enabled") is not None:
-            row.archived = not bool(body["enabled"])
-        tag_keys = (
-            {f"tag{index}" for index in range(1, 8)}
-            | {f"number{index}" for index in range(1, 6)}
-            | {"date1", "date2", "boolean1", "boolean2", "boolean3"}
-        )
-        if any(key in body for key in tag_keys):
-            metadata = {**(row.metadata_payload or {})}
-            for key in tag_keys:
-                if key in body:
-                    metadata[key] = body[key] or None
-            row.metadata_payload = metadata
-            for slot in [key for key in tag_keys if key.startswith("tag")]:
-                if slot not in body:
-                    continue
-                tag = await session.scalar(
-                    select(KnowledgeTag).where(
-                        KnowledgeTag.base_id == base_id, KnowledgeTag.tag_slot == slot
-                    )
-                )
-                if tag is None:
-                    continue
-                link = await session.scalar(
-                    select(KnowledgeDocumentTag).where(
-                        KnowledgeDocumentTag.document_id == row.id,
-                        KnowledgeDocumentTag.tag_id == tag.id,
-                    )
-                )
-                value = str(body.get(slot) or "")
-                if value:
-                    if link is None:
-                        session.add(
-                            KnowledgeDocumentTag(document_id=row.id, tag_id=tag.id, value=value)
-                        )
-                    else:
-                        link.value = value
-                elif link is not None:
-                    await session.delete(link)
-        await session.commit()
+    try:
+        row = await _knowledge_service(request).update_document(base_id, document_id, body)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
     public = _document_public(row)
     return {"success": True, "data": public, "document": public}
 
@@ -1365,16 +920,11 @@ async def archive_document(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        if row is None:
-            raise not_found()
-        row.archived = True
-        await session.commit()
+    row = await _knowledge_service(request).repository.set_document_archived(
+        base_id, document_id, True
+    )
+    if row is None:
+        raise not_found()
     return {"success": True}
 
 
@@ -1388,16 +938,11 @@ async def restore_document(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _base_for_id(request, base_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(KnowledgeDocument).where(
-                KnowledgeDocument.id == document_id, KnowledgeDocument.base_id == base_id
-            )
-        )
-        if row is None:
-            raise not_found()
-        row.archived = False
-        await session.commit()
+    row = await _knowledge_service(request).repository.set_document_archived(
+        base_id, document_id, False
+    )
+    if row is None:
+        raise not_found()
     public = _document_public(row)
     return {"success": True, "data": public, "document": public}
 

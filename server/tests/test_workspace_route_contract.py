@@ -311,3 +311,108 @@ def test_table_router_cannot_own_sql_or_orm_models() -> None:
         "WorkspaceTableView(",
     )
     assert not [token for token in forbidden if token in source]
+
+
+@pytest.mark.asyncio
+async def test_knowledge_crud_chunks_tags_and_search_contract(workspace_api) -> None:
+    client, _ = workspace_api
+    created = await client.post(
+        "/api/knowledge", json={"name": "数学", "description": "个人知识库"}
+    )
+    assert created.status_code == 200
+    base_id = created.json()["data"]["id"]
+
+    tag = await client.post(
+        f"/api/knowledge/{base_id}/tag-definitions",
+        json={"displayName": "主题", "fieldType": "text", "tagSlot": "tag1"},
+    )
+    assert tag.status_code == 201
+
+    document = await client.post(
+        f"/api/knowledge/{base_id}/documents",
+        json={"name": "代数.txt", "content": "线性代数与矩阵"},
+    )
+    assert document.status_code == 200
+    document_id = document.json()["data"]["id"]
+
+    updated = await client.patch(
+        f"/api/knowledge/{base_id}/documents/{document_id}",
+        json={"tag1": "代数", "content": "线性代数、矩阵与向量"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"]["tag1"] == "代数"
+
+    chunks = await client.get(
+        f"/api/knowledge/{base_id}/documents/{document_id}/chunks"
+    )
+    assert chunks.status_code == 200
+    assert chunks.json()["pagination"]["total"] == 1
+    assert chunks.json()["chunks"][0]["content"] == "线性代数、矩阵与向量"
+    chunk_id = chunks.json()["chunks"][0]["id"]
+
+    foreign_base = await client.post("/api/knowledge", json={"name": "物理"})
+    isolated = await client.delete(
+        f"/api/knowledge/{foreign_base.json()['data']['id']}/documents/{document_id}/chunks/{chunk_id}"
+    )
+    assert isolated.status_code == 404
+    still_present = await client.get(
+        f"/api/knowledge/{base_id}/documents/{document_id}/chunks/{chunk_id}"
+    )
+    assert still_present.status_code == 200
+
+    search = await client.get("/api/knowledge/search", params={"q": "矩阵"})
+    assert search.status_code == 200
+    assert search.json()["results"][0]["document"]["id"] == document_id
+
+    archived = await client.delete(f"/api/knowledge/{base_id}/documents/{document_id}")
+    restored = await client.post(
+        f"/api/knowledge/{base_id}/documents/{document_id}/restore"
+    )
+    assert archived.status_code == restored.status_code == 200
+    assert restored.json()["data"]["enabled"] is True
+
+    raw = "拓扑学".encode()
+    upload = await client.post(
+        f"/api/knowledge/{base_id}/documents/uploads",
+        json={
+            "workspaceId": PUBLIC_WORKSPACE_ID,
+            "name": "拓扑.txt",
+            "contentType": "text/plain",
+            "size": len(raw),
+        },
+    )
+    assert upload.status_code == 201
+    upload_id = upload.json()["data"]["session"]["id"]
+    token = upload.json()["data"]["uploadToken"]
+    transferred = await client.put(
+        f"/api/v2/uploads/{upload_id}", content=raw, headers={"upload-token": token}
+    )
+    assert transferred.status_code == 204
+    completed = await client.post(
+        f"/api/knowledge/{base_id}/documents/uploads/{upload_id}/complete",
+        params={"workspaceId": PUBLIC_WORKSPACE_ID},
+        headers={"upload-token": token},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["data"]["status"] == "completed"
+    documents = await client.get(f"/api/knowledge/{base_id}/documents")
+    assert "拓扑.txt" in {item["filename"] for item in documents.json()["documents"]}
+
+
+def test_knowledge_router_cannot_own_sql_or_orm_models() -> None:
+    source = (
+        Path(__file__).parents[1] / "lingxilearn" / "api" / "workspace_knowledge_routes.py"
+    ).read_text(encoding="utf-8")
+    forbidden = (
+        "sqlalchemy",
+        "store.models",
+        "session.execute",
+        "session.scalar",
+        "KnowledgeBase(",
+        "KnowledgeDocument(",
+        "KnowledgeChunk(",
+        "KnowledgeTag(",
+        "KnowledgeDocumentTag(",
+        "WorkspaceUploadSession(",
+    )
+    assert not [token for token in forbidden if token in source]

@@ -48,7 +48,7 @@ router = APIRouter(prefix="/api")
 
 
 def _table_service(request: Request) -> WorkspaceTableService:
-    return WorkspaceTableService(services_of(request).db)
+    return services_of(request).workspace_tables
 
 
 async def _owned_table(request: Request, table_id: str, context: LearnerContext) -> tuple[Any, Any]:

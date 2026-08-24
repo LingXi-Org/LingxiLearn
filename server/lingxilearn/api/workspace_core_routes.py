@@ -3,7 +3,6 @@
 from fastapi import APIRouter
 
 from ..application.workspace_errors import WorkspaceDomainError
-from ..application.workspaces import WorkspaceService
 from .workspace_route_shared import (
     UTC,
     Any,
@@ -120,7 +119,7 @@ async def update_workspace(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    row = await WorkspaceService(services_of(request).db).update(
+    row = await services_of(request).workspaces.update(
         context.learner_id, workspace_id, body
     )
     return {"workspace": _public_workspace(row), "data": _public_workspace(row)}
@@ -137,7 +136,7 @@ async def list_pinned_items(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        rows = await WorkspaceService(services_of(request).db).list_pins(
+        rows = await services_of(request).workspaces.list_pins(
             context.learner_id, workspaceId, resourceType
         )
     except WorkspaceDomainError as error:
@@ -152,7 +151,7 @@ async def create_pinned_item(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        row = await WorkspaceService(services_of(request).db).create_pin(context.learner_id, body)
+        row = await services_of(request).workspaces.create_pin(context.learner_id, body)
     except WorkspaceDomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.code) from error
     return {"pinnedItem": _pinned_item_public(row, context.learner_id)}
@@ -166,7 +165,7 @@ async def delete_pinned_item(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        await WorkspaceService(services_of(request).db).delete_pin(
+        await services_of(request).workspaces.delete_pin(
             context.learner_id, resource_type, resource_id
         )
     except WorkspaceDomainError as error:

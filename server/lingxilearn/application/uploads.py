@@ -5,6 +5,10 @@ from typing import Any
 
 from .workspace_errors import WorkspaceDomainError, WorkspaceResourceNotFound
 
+# Local upload compatibility state is shared by Files and Knowledge. Keeping
+# one application-owned registry prevents domain routers importing each other.
+upload_sessions: dict[str, dict[str, Any]] = {}
+
 
 def multipart_part_urls(
     upload_id: str,

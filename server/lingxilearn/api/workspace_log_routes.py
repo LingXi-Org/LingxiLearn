@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter
 
-from ..store.repositories.logs import LogRepository
 from .workspace_route_shared import (
     UTC,
     AgentExecution,
@@ -35,7 +34,7 @@ async def list_logs(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _workspace_for_id(request, workspaceId, context)
-    repository = LogRepository(services_of(request).db)
+    repository = services_of(request).logs
     tasks = await repository.list_tasks(context.learner_id, limit)
     execution_ids = [str(task.latest_execution_id) for task in tasks if task.latest_execution_id]
     executions: dict[str, AgentExecution] = {}
@@ -100,9 +99,7 @@ async def log_stats(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     await _workspace_for_id(request, workspaceId, context)
-    total, failed, executions = await LogRepository(services_of(request).db).stats(
-        context.learner_id
-    )
+    total, failed, executions = await services_of(request).logs.stats(context.learner_id)
     now_dt = datetime.now(UTC)
     normalized_rows = [
         (_utc_datetime(row.started_at), _utc_datetime(row.ended_at)) for row in executions
@@ -135,7 +132,7 @@ async def export_logs(
     format: str = "json",
     context: LearnerContext = Depends(current_learner_context),
 ) -> StreamingResponse:
-    tasks = await LogRepository(services_of(request).db).list_tasks(context.learner_id)
+    tasks = await services_of(request).logs.list_tasks(context.learner_id)
     records = [
         {
             "id": task.id,
@@ -179,7 +176,7 @@ async def log_by_execution(
     except KeyError as exc:
         raise not_found() from exc
     task_id = snapshot["taskId"]
-    events = await LogRepository(services.db).events(task_id, execution_id)
+    events = await services.logs.events(task_id, execution_id)
     metadata = snapshot["executionMetadata"]
     started_at = metadata.get("startedAt") or datetime.now(UTC).isoformat()
     detail = {
@@ -268,7 +265,7 @@ async def log_detail(
 ) -> dict[str, Any]:
     await _workspace_for_id(request, workspaceId, context)
     services = services_of(request)
-    repository = LogRepository(services.db)
+    repository = services.logs
     task = await repository.task(context.learner_id, log_id)
     if task is None:
         raise not_found()

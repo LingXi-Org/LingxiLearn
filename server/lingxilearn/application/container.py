@@ -33,6 +33,7 @@ from ..state.skill_catalog import discover as discover_skill_manifests
 from ..store.database import Database
 from ..store.learner import LearnerRepository
 from ..store.repositories.agent_tasks import AgentTaskRepository
+from ..store.repositories.logs import LogRepository
 from ..store.repositories.runtime import RuntimeRepository
 from ..store.repositories.sessions import SessionRepository
 from ..store.repositories.work_ledger import WorkLedgerRepository
@@ -47,6 +48,11 @@ from .graph_factory import RuntimeGraphFactory
 from .learner_state import LearnerStateService
 from .runtime_adapter import LingxiGraphRuntimeAdapter
 from .shared import BackgroundTasks
+from .skills import SkillService
+from .workspace_file_service import WorkspaceFileService
+from .workspace_knowledge_service import WorkspaceKnowledgeService
+from .workspace_table_service import WorkspaceTableService
+from .workspaces import WorkspaceService
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +177,12 @@ class ApplicationServices:
             tasks=self.tasks,
         )
         self.learner_state = LearnerStateService(runtime_state=self.runtime_state)
+        self.workspace_files = WorkspaceFileService(self.db)
+        self.workspace_tables = WorkspaceTableService(self.db)
+        self.workspace_knowledge = WorkspaceKnowledgeService(self.db)
+        self.workspaces = WorkspaceService(self.db)
+        self.skills = SkillService(self.db)
+        self.logs = LogRepository(self.db)
 
     @property
     def agent_model(self) -> dict[str, Any] | None:
