@@ -2,9 +2,6 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  // Temporary until #51/#61 remove clean-install-unreachable Sim modules whose
-  // undeclared optional dependencies prevent Next from checking the real closure.
-  typescript: { ignoreBuildErrors: true },
   trailingSlash: false,
   poweredByHeader: false,
   images: { unoptimized: true },

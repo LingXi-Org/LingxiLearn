@@ -13,7 +13,7 @@ import {
   buildFileSelectionLabel,
   truncateSelectionText,
 } from '@/lib/copilot/chat/selection-context'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { extractEmbeddedFileRef } from '@/lib/uploads/utils/embedded-image-ref'
 import { isUntitledName } from '@/app/workspace/[workspaceId]/files/untitled-title'
 import { useUploadWorkspaceFile } from '@/hooks/queries/workspace-files'

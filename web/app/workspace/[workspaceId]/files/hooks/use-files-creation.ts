@@ -5,7 +5,7 @@ import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
 import { toError } from '@/lib/utils/errors'
 import { useRouter } from 'next/navigation'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { getMimeTypeFromExtension } from '@/lib/uploads/utils/file-utils'
 import {
   folderRowId,

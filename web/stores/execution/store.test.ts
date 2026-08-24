@@ -58,7 +58,6 @@ describe('useExecutionStore', () => {
       expect(state.isDebugging).toBe(false)
       expect(state.activeBlockIds.size).toBe(0)
       expect(state.pendingBlocks).toEqual([])
-      expect(state.executor).toBeNull()
       expect(state.debugContext).toBeNull()
       expect(state.lastRunPath.size).toBe(0)
       expect(state.lastRunEdges.size).toBe(0)
@@ -308,19 +307,6 @@ describe('useExecutionStore', () => {
         'block-1',
         'block-2',
       ])
-    })
-  })
-
-  describe('setExecutor', () => {
-    it.concurrent('should store and clear executor', () => {
-      const wf = 'wf-executor'
-      const mockExecutor = { run: () => {} } as any
-
-      useExecutionStore.getState().setExecutor(wf, mockExecutor)
-      expect(useExecutionStore.getState().getWorkflowExecution(wf).executor).toBe(mockExecutor)
-
-      useExecutionStore.getState().setExecutor(wf, null)
-      expect(useExecutionStore.getState().getWorkflowExecution(wf).executor).toBeNull()
     })
   })
 

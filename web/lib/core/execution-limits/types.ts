@@ -78,9 +78,9 @@ const EXECUTION_TIMEOUTS: Record<SubscriptionPlan, ExecutionTimeoutConfig> = {
  * `EXECUTION_TIMEOUT_ASYNC_FREE`), which opts back into that bound.
  */
 export function getExecutionTimeout(
-  plan: SubscriptionPlan | string | undefined,
+  plan: SubscriptionPlan | string | null | undefined,
   type: 'sync' | 'async' = 'sync',
-  enterpriseWorkflowExecutionTimeoutSeconds?: number
+  enterpriseWorkflowExecutionTimeoutSeconds?: number | null
 ): number {
   if (!isBillingEnabled) {
     const override = Number.parseInt(

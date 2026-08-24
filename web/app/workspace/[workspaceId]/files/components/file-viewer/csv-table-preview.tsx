@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { useHorizontalWheelScroll } from '@/app/workspace/[workspaceId]/files/components/file-viewer/use-horizontal-wheel-scroll'
 import { useWorkspaceCsvPreview } from '@/hooks/queries/workspace-file-table'
 import { useCsvTruncationImport } from './csv-import'

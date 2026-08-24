@@ -212,10 +212,6 @@ const LANE_EXEMPT: Record<string, string> = {
     'Marketing chrome. Verified: every consumer lives under app/(landing)/, and the desktop shell boots to /login or a workspace with no path to those routes.',
   'app/playground/page.tsx':
     'Verified dev-only: the page calls notFound() unless NEXT_PUBLIC_ENABLE_PLAYGROUND is set.',
-  'app/workspace/[workspaceId]/components/session-expired/session-expired.tsx':
-    'Centres its content (`items-center justify-center`) with no chrome in the lane, and is a transient sign-out notice.',
-  'app/workspace/[workspaceId]/w/components/sidebar/components/search-modal/search-modal.tsx':
-    'The `fixed inset-0` here is the scrim, which carries no content. The panel itself is separately positioned at `top-[15%]`, well clear of the lane.',
   'app/_shell/desktop-update-gate.tsx':
     'Blocking overlay that centres its content, with no chrome in the lane. The lights stay usable regardless: under `titleBarStyle: hiddenInset` macOS draws them above the web contents, so web UI cannot cover them — this bug class is app chrome sitting *under* the lights, not the reverse.',
   'app/workspace/[workspaceId]/w/[workflowId]/components/error/index.tsx':
@@ -274,8 +270,6 @@ const isExempt = (file: string) =>
  * later, so at runtime the denied page has no chrome and must reserve for itself. Without
  * this, a regression there would read as inherited and pass.
  *
- * `SessionExpired` is deliberately absent: it renders as a sibling *within* the chrome
- * tree, so its inherited coverage is real.
  */
 const SELF_RESERVE_REQUIRED = new Set([
   // Both of its render paths bypass the chrome, so its own reservation is the only one:

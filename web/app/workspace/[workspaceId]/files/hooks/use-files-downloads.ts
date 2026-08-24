@@ -7,7 +7,7 @@ import { getErrorMessage } from '@/lib/utils/errors'
 import { usePostHog } from 'posthog-js/react'
 import { captureEvent } from '@/lib/posthog/client'
 import { triggerArchiveDownload, triggerFileDownload } from '@/lib/uploads/client/download'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 
 const logger = createLogger('Files')
 

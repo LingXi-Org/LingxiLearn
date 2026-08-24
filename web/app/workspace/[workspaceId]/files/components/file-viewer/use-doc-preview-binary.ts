@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { useWorkspaceFileBinary } from '@/hooks/queries/workspace-files'
 
 export type DocPreviewState = 'empty' | 'loading' | 'ready' | 'stale'

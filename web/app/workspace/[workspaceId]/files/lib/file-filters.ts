@@ -1,4 +1,4 @@
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import {
   getFileExtension,
   isAudioFileType,

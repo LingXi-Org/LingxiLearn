@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { ButtonGroup, ButtonGroupItem, cn } from '@/components/ui-kit'
-import type { PermissionType } from '@/lib/workspaces/permissions/utils'
+import type { PermissionType } from '@/lib/permissions/native/predicates'
 
 export type { PermissionType }
 

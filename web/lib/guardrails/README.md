@@ -109,6 +109,4 @@ See [Presidio documentation](https://microsoft.github.io/presidio/supported_enti
 - `validate_hallucination.ts` - Hallucination detection with RAG + LLM scoring (TypeScript)
 - `validate_pii.ts` - PII detection client: calls the Presidio service's /analyze + /anonymize (TypeScript)
 - `pii-entities.ts` - Client-safe PII entity + language catalog (shared by the block and Data Retention)
-- `mask-client.ts` - Internal HTTP client for batch PII masking from the log-redaction persist path
 - `validate.test.ts` - Test suite for JSON and regex validators
-

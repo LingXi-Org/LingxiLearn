@@ -135,6 +135,15 @@ export const workspaceFileRecordSchema = z.object({
   share: shareRecordSchema.nullable().optional(),
 })
 
+/**
+ * Normalized workspace-file view returned by the REST client.
+ *
+ * Keep this type beside the route schema: the browser consumes the parsed
+ * contract (dates are coerced at the boundary), not the deleted server-side
+ * persistence mapper that used to define `WorkspaceFileRecord`.
+ */
+export type WorkspaceFileRecord = z.output<typeof workspaceFileRecordSchema>
+
 const workspaceFileSuccessSchema = z.object({
   success: z.boolean(),
 })

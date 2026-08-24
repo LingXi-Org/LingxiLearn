@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { ChipConfirmModal, Columns2, Eye, Pencil, Trash } from '@/components/ui-kit'
 import { Download, Send } from '@/components/ui-kit/icons'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import type { BreadcrumbItem, ResourceAction } from '@/app/workspace/[workspaceId]/components'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
 import {

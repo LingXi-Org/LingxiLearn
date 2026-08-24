@@ -30,7 +30,7 @@ vi.mock('@/lib/uploads/utils/validation', () => ({
 }))
 
 import type { WorkspaceFileFolderApi } from '@/hooks/queries/workspace-file-folders'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import {
   fileMatchesFilters,
   listFolderFiles,

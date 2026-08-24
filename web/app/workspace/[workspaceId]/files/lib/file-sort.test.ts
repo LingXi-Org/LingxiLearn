@@ -14,7 +14,7 @@ vi.mock('@/lib/uploads/utils/file-utils', () => ({
 
 import type { WorkspaceFileFolderApi } from '@/hooks/queries/workspace-file-folders'
 import type { WorkspaceMember } from '@/hooks/queries/workspace'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import {
   buildSortableFileEntries,
   FOLDER_TYPE_LABEL,

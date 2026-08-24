@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import type { SortDirection } from '@/lib/url-state'
 import type { ResourceRow } from '@/app/workspace/[workspaceId]/components'
 import { sortResources } from '@/app/workspace/[workspaceId]/components/folders'

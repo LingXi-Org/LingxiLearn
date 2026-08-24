@@ -170,6 +170,8 @@ const STATIC_FRAME_SRC = [
 ] as const
 
 // Build-time CSP directives (for next.config.ts)
+const configuredApiUrl = getEnv('NEXT_PUBLIC_API_BASE')
+
 export const buildTimeCSPDirectives: CSPDirectives = {
   'default-src': ["'self'"],
   'script-src': [...STATIC_SCRIPT_SRC],
@@ -183,11 +185,7 @@ export const buildTimeCSPDirectives: CSPDirectives = {
 
   'connect-src': [
     ...STATIC_CONNECT_SRC,
-    ...(env.NEXT_PUBLIC_API_BASE
-      ? [env.NEXT_PUBLIC_API_BASE]
-      : isDev
-        ? [DEFAULT_LINGXILEARN_API_URL]
-        : []),
+    ...(configuredApiUrl ? [configuredApiUrl] : isDev ? [DEFAULT_LINGXILEARN_API_URL] : []),
     env.NEXT_PUBLIC_APP_URL || '',
     ...(env.OLLAMA_URL ? [env.OLLAMA_URL] : isDev ? [DEFAULT_OLLAMA_URL] : []),
     ...(env.NEXT_PUBLIC_SOCKET_URL

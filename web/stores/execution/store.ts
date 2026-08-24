@@ -115,12 +115,6 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>()((se
     get().setStatus(workflowId, nextStatus)
   },
 
-  setExecutor: (workflowId, executor) => {
-    set({
-      workflowExecutions: updatedMap(get().workflowExecutions, workflowId, { executor }),
-    })
-  },
-
   setDebugContext: (workflowId, debugContext) => {
     set({
       workflowExecutions: updatedMap(get().workflowExecutions, workflowId, { debugContext }),

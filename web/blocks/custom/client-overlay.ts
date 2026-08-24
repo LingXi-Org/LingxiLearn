@@ -5,10 +5,9 @@ import { registerBlockOverlayResolver } from '@/blocks/custom/overlay'
 import type { BlockConfig } from '@/blocks/types'
 
 /**
- * Client-side custom-block overlay: a mutable Map, hydrated from
- * `useCustomBlocks` by `CustomBlocksProvider`, that the `@/blocks/registry`
- * accessors fall back to. Scoped to the active workspace's org; re-hydrated on
- * workspace switch.
+ * Client-side custom-block overlay: a mutable Map that an active native client
+ * owner may hydrate; the `@/blocks/registry` accessors fall back to it. When no
+ * owner is mounted the map remains empty, so the static registry is unchanged.
  *
  * Because many consumers snapshot `getAllBlocks()` (the cmd+K search, the Access
  * Control block list), the overlay is also an external store: `version` bumps on

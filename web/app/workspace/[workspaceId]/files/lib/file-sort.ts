@@ -1,4 +1,4 @@
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import type { SortableResource } from '@/app/workspace/[workspaceId]/components/folders'
 import { formatFileType } from '@/app/workspace/[workspaceId]/files/lib/file-type-label'
 import type { FILE_SORT_COLUMNS } from '@/app/workspace/[workspaceId]/files/search-params'

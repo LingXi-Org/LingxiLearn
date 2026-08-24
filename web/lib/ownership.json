@@ -83,11 +83,6 @@
     "capability": "runtime-environment",
     "status": "owned"
   },
-  "events": {
-    "owner": "runtime",
-    "capability": "application-events",
-    "status": "owned"
-  },
   "execution": {
     "owner": "runtime",
     "capability": "workflow-execution",

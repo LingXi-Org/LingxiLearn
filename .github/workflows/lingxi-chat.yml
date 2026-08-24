@@ -47,6 +47,9 @@ jobs:
       - name: Type-check frontend contracts
         run: bun run type-check
 
+      - name: Build production frontend
+        run: bun run build
+
       # Enforce the auth boundary established by issue #52: LingxiLearn must
       # not import Better Auth. All credential, OIDC token and session
       # ownership belongs to the LingxiIdentity BFF.

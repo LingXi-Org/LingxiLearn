@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState } from 'react'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { useFileContentSource } from '@/hooks/use-file-content-source'
 import { PREVIEW_LOADING_OVERLAY, UnsupportedPreview } from './preview-shared'
 import { ZoomablePreview } from './zoomable-preview'

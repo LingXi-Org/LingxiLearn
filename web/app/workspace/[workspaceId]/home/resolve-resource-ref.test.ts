@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceResourceRef } from '@/lib/copilot/resources/types'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { resolveWorkspaceResourceRef } from './resolve-resource-ref'
 
 function file(overrides: Partial<WorkspaceFileRecord> & { id: string; name: string }) {
