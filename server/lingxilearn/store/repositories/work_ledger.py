@@ -41,8 +41,9 @@ class WorkLedgerRepository:
         kind: str,
         payload: dict[str, Any],
         idempotency_key: str,
+        turn_id: str | None = None,
     ) -> dict[str, Any]:
-        """Append one command and create its immutable turn atomically.
+        """Append one command, creating a turn only for new-turn input.
 
         A retried idempotency key returns the original command; it never
         creates a second turn or advances the command sequence.
@@ -67,23 +68,30 @@ class WorkLedgerRepository:
                 result = _command_dict(existing)
                 result["created"] = False
                 return result
-            turn_index = (
-                int(
-                    await s.scalar(
-                        select(func.coalesce(func.max(AgentTurn.turn_index), -1)).where(
-                            AgentTurn.task_id == task_id
+            if turn_id is not None:
+                turn = await s.scalar(
+                    select(AgentTurn).where(AgentTurn.id == turn_id, AgentTurn.task_id == task_id)
+                )
+                if turn is None:
+                    raise KeyError(f"unknown turn for task: {turn_id}")
+            else:
+                turn_index = (
+                    int(
+                        await s.scalar(
+                            select(func.coalesce(func.max(AgentTurn.turn_index), -1)).where(
+                                AgentTurn.task_id == task_id
+                            )
                         )
                     )
+                    + 1
                 )
-                + 1
-            )
-            turn = AgentTurn(
-                id=f"turn_{uuid4().hex}",
-                task_id=task_id,
-                turn_index=turn_index,
-                status="active",
-                input_payload=dict(payload),
-            )
+                turn = AgentTurn(
+                    id=f"turn_{uuid4().hex}",
+                    task_id=task_id,
+                    turn_index=turn_index,
+                    status="active",
+                    input_payload=dict(payload),
+                )
             sequence = (
                 int(
                     await s.scalar(
@@ -104,7 +112,9 @@ class WorkLedgerRepository:
                 idempotency_key=idempotency_key,
                 payload=dict(payload),
             )
-            s.add_all([turn, command])
+            if turn_id is None:
+                s.add(turn)
+            s.add(command)
             try:
                 await s.commit()
             except IntegrityError:
@@ -120,23 +130,32 @@ class WorkLedgerRepository:
                     # counters between the initial read and flush.  Re-read
                     # the high-water marks once after rollback and retry the
                     # insert with fresh immutable IDs.
-                    retry_turn_index = (
-                        int(
-                            await s.scalar(
-                                select(func.coalesce(func.max(AgentTurn.turn_index), -1)).where(
-                                    AgentTurn.task_id == task_id
-                                )
+                    if turn_id is not None:
+                        retry_turn = await s.scalar(
+                            select(AgentTurn).where(
+                                AgentTurn.id == turn_id, AgentTurn.task_id == task_id
                             )
                         )
-                        + 1
-                    )
-                    retry_turn = AgentTurn(
-                        id=f"turn_{uuid4().hex}",
-                        task_id=task_id,
-                        turn_index=retry_turn_index,
-                        status="active",
-                        input_payload=dict(payload),
-                    )
+                        if retry_turn is None:
+                            raise KeyError(f"unknown turn for task: {turn_id}") from None
+                    else:
+                        retry_turn_index = (
+                            int(
+                                await s.scalar(
+                                    select(func.coalesce(func.max(AgentTurn.turn_index), -1)).where(
+                                        AgentTurn.task_id == task_id
+                                    )
+                                )
+                            )
+                            + 1
+                        )
+                        retry_turn = AgentTurn(
+                            id=f"turn_{uuid4().hex}",
+                            task_id=task_id,
+                            turn_index=retry_turn_index,
+                            status="active",
+                            input_payload=dict(payload),
+                        )
                     retry_sequence = (
                         int(
                             await s.scalar(
@@ -157,7 +176,9 @@ class WorkLedgerRepository:
                         idempotency_key=idempotency_key,
                         payload=dict(payload),
                     )
-                    s.add_all([retry_turn, retry_command])
+                    if turn_id is None:
+                        s.add(retry_turn)
+                    s.add(retry_command)
                     await s.commit()
                     result = _command_dict(retry_command)
                     result["created"] = True
@@ -496,10 +517,7 @@ class WorkLedgerRepository:
                         WorkItem.id == row.id,
                         (
                             (WorkItem.status == "queued")
-                            | (
-                                (WorkItem.status == "leased")
-                                & (WorkItem.lease_until < moment)
-                            )
+                            | ((WorkItem.status == "leased") & (WorkItem.lease_until < moment))
                         ),
                     )
                     .values(
@@ -900,7 +918,9 @@ class WorkLedgerRepository:
                     .where(WorkItem.task_id == task_id)
                 )
             ).all()
-            return [{"work_id": work_id, "depends_on_id": depends_on} for work_id, depends_on in rows]
+            return [
+                {"work_id": work_id, "depends_on_id": depends_on} for work_id, depends_on in rows
+            ]
 
 
 def _work_dict(row: WorkItem) -> dict[str, Any]:
@@ -929,4 +949,3 @@ def _work_dict(row: WorkItem) -> dict[str, Any]:
         "confirmation_digest": row.confirmation_digest,
         "result_id": row.result_id,
     }
-

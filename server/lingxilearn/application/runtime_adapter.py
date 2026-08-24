@@ -312,6 +312,8 @@ class LingxiGraphRuntimeAdapter:
         self._hold_sweep_pending: set[str] = set()
         self._agent_slots = asyncio.Semaphore(max(1, settings.agent_concurrency))
         self._agent_runners: defaultdict[str, set[asyncio.Task[Any]]] = defaultdict(set)
+        self._active_steering: dict[str, tuple[Any, str, str, str]] = {}
+        self._pending_steering: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
         self._conversation_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._conversation_queue: defaultdict[str, asyncio.Queue[dict[str, Any]]] = defaultdict(
             asyncio.Queue
@@ -362,15 +364,45 @@ class LingxiGraphRuntimeAdapter:
     async def submit_running_input(
         self, task_id: str, learner_id: str, item: dict[str, Any]
     ) -> None:
-        """Persist a mid-turn input for the live graph's interjection drain.
+        """Steer the live LingxiGraph run without starting a second turn."""
 
-        Running input must not also enter ``_conversation_queue``: once the
-        graph drains the interjection, queueing the same item would replay it
-        as a fresh turn after the current run releases the thread.
-        """
-
-        del learner_id  # Reserved for a future native steering implementation.
-        await self._runtime_state.push_interjection(task_id, item)
+        active = self._active_steering.get(task_id)
+        if active is None:
+            self._pending_steering[task_id].append(dict(item))
+            return
+        graph, run_id, execution_id, turn_id = active
+        event = graph.steer(
+            run_id,
+            kind="user_message",
+            payload=dict(item),
+            metadata={
+                "task_id": task_id,
+                "thread_id": task_id,
+                "turn_id": str(item.get("turn_id") or turn_id),
+                "learner_id": learner_id,
+                "execution_id": execution_id,
+            },
+            idempotency_key=str(item.get("idempotency_key") or item.get("command_id") or "")
+            or None,
+        )
+        await self._events.append(
+            task_id,
+            [
+                {
+                    "kind": "steer.accepted",
+                    "agent": "coordinator",
+                    "execution_id": execution_id,
+                    "turn_id": str(item.get("turn_id") or turn_id) or None,
+                    "payload": {
+                        "steering_event_id": event.id,
+                        "sequence": event.sequence,
+                        "kind": event.kind,
+                        "status": "accepted",
+                    },
+                }
+            ],
+        )
+        self._events.notify(task_id)
 
     def schedule_interaction_drain(self, task_id: str, learner_id: str) -> None:
         self._tasks.spawn(self._drain_interaction_continuations(task_id, learner_id))
@@ -485,7 +517,9 @@ class LingxiGraphRuntimeAdapter:
 
         self._hold_sweep_pending.discard(task_id)
         if not self.model_configured:
-            await self._agent_tasks.set_agent_task_status(task_id, "failed", "DS_API_KEY is not configured")
+            await self._agent_tasks.set_agent_task_status(
+                task_id, "failed", "DS_API_KEY is not configured"
+            )
             self._events.notify(task_id)
             return False
         record = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
@@ -517,9 +551,30 @@ class LingxiGraphRuntimeAdapter:
         # Freeze the command set belonging to this turn.  Inputs arriving
         # while the graph is running belong to a later turn and must remain
         # pending for the next coordinator pass.
-        turn_command_ids = {
-            str(command["id"]) for command in await self._work_ledger.pending_commands(task_id)
-        }
+        pending_commands = await self._work_ledger.pending_commands(task_id)
+        turn_command_ids = {str(command["id"]) for command in pending_commands}
+        # Messages accepted while a task was still queued survive a process
+        # restart in the command ledger. Rehydrate them into the native
+        # Steering channel when this execution starts. The first message that
+        # exactly matches the new-turn prompt is the turn input, not steering.
+        deferred_steering: list[dict[str, Any]] = []
+        primary_prompt_seen = False
+        for command in pending_commands:
+            if command.get("kind") != "message":
+                continue
+            payload = dict(command.get("payload") or {})
+            if not primary_prompt_seen and str(payload.get("message") or "") == str(prompt or ""):
+                primary_prompt_seen = True
+                continue
+            deferred_steering.append(
+                {
+                    **payload,
+                    "command_id": str(command.get("id") or ""),
+                    "turn_id": str(command.get("turn_id") or ""),
+                    "idempotency_key": str(command.get("idempotency_key") or ""),
+                }
+            )
+        steering_command_ids = {str(item.get("command_id") or "") for item in deferred_steering}
         execution_id = f"exec-{uuid.uuid4().hex}"
         try:
             # Bind this invocation to the canonical turn it executes.  A
@@ -786,6 +841,15 @@ class LingxiGraphRuntimeAdapter:
                 prior_results=prior_results,
                 prior_artifacts=prior_artifacts,
             )
+            self._active_steering[task_id] = (graph, execution_id, execution_id, turn_id)
+            steering_by_identity: dict[str, dict[str, Any]] = {}
+            for pending in [*deferred_steering, *self._pending_steering.pop(task_id, [])]:
+                identity = str(
+                    pending.get("idempotency_key") or pending.get("command_id") or uuid.uuid4().hex
+                )
+                steering_by_identity.setdefault(identity, pending)
+            for pending in steering_by_identity.values():
+                await self.submit_running_input(task_id, learner_id, pending)
             graph_input: Any = (
                 Command(resume=resume)
                 if resume is not None
@@ -800,13 +864,16 @@ class LingxiGraphRuntimeAdapter:
                 graph_input,
                 config,
                 stream_mode=("events", "messages"),
+                run_id=execution_id,
                 context={
                     "learner_id": learner_id,
                     "locale": "zh-CN",
                     "resource_refs": list(record.resources or []),
                 },
             ):
-                current_record = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
+                current_record = await self._agent_tasks.get_agent_task_for_learner(
+                    task_id, learner_id
+                )
                 if current_record is None:
                     return True
                 if current_record.status == "cancelled":
@@ -867,7 +934,13 @@ class LingxiGraphRuntimeAdapter:
                     buffer.append(projected)
                 if force_flush or len(buffer) >= AGENT_FLUSH_EVERY:
                     await flush_buffer()
+            active = self._active_steering.get(task_id)
+            if active is not None and active[1] == execution_id:
+                self._active_steering.pop(task_id, None)
         except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
+            active = self._active_steering.get(task_id)
+            if active is not None and active[1] == execution_id:
+                self._active_steering.pop(task_id, None)
             logger.exception("agent task failed: %s", task_id)
             detail = _safe_agent_error(exc, self._settings)
             recovered_intro = await self._artifacts.recover_lesson_intro_draft(task_id)
@@ -929,7 +1002,9 @@ class LingxiGraphRuntimeAdapter:
             await self._agent_tasks.set_agent_task_status(
                 task_id, failure_status, f"运行失败：{type(exc).__name__}: {detail}"
             )
-            await self._agent_tasks.set_agent_thread_status(task_id, "cancelled" if failure_status == "cancelled" else "open")
+            await self._agent_tasks.set_agent_thread_status(
+                task_id, "cancelled" if failure_status == "cancelled" else "open"
+            )
             await emit_turn_terminal("cancelled" if failure_status == "cancelled" else "failed")
             snapshot = projector.snapshot()
             workflow_state = dict(snapshot["workflowState"])
@@ -993,8 +1068,38 @@ class LingxiGraphRuntimeAdapter:
         # consumed only after the graph has produced a durable outcome, so a
         # crash cannot silently drop an input.
         if status not in {"failed", "partial"}:
-            for command in await self._work_ledger.pending_commands(task_id):
+            remaining_commands = await self._work_ledger.pending_commands(task_id)
+            transferred = [
+                command
+                for command in remaining_commands
+                if command.get("kind") == "message"
+                and (
+                    str(command["id"]) in steering_command_ids
+                    or str(command["id"]) not in turn_command_ids
+                )
+            ]
+            if transferred:
+                await self._events.append(
+                    task_id,
+                    [
+                        {
+                            "kind": "steer.superseded",
+                            "agent": "coordinator",
+                            "execution_id": execution_id,
+                            "turn_id": str(command.get("turn_id") or "") or None,
+                            "payload": {
+                                "command_id": str(command["id"]),
+                                "status": "superseded",
+                                "disposition": "transfer_pending",
+                            },
+                        }
+                        for command in transferred
+                    ],
+                )
+            for command in remaining_commands:
                 if str(command["id"]) not in turn_command_ids:
+                    continue
+                if str(command["id"]) in steering_command_ids:
                     continue
                 await self._work_ledger.consume_command(str(command["id"]))
         await self._runtime.update_agent_execution(
@@ -1030,7 +1135,9 @@ class LingxiGraphRuntimeAdapter:
             if not (board.get("holds") or {}):
                 return
             self._hold_sweep_pending.add(task_id)
-        self._tasks.spawn(self._drive_agent_task(task_id, learner_id, "", resume={"kind": "holds_ready"}))
+        self._tasks.spawn(
+            self._drive_agent_task(task_id, learner_id, "", resume={"kind": "holds_ready"})
+        )
 
     async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
         """Drain queued learner inputs through the normal turn coordinator.

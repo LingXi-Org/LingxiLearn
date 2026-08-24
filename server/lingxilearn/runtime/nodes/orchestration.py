@@ -147,10 +147,30 @@ def build_orchestrate_node(deps: LoopDeps, *, dispatcher: Dispatcher):
         await deps.transition_status(state, RuntimeStatus.PLANNING)
         goal = Goal.from_dict(state.get("goal") or {})
         budget = Budget.from_dict(state.get("budget"))
-        interjections = await deps.runtime_state.drain_interjections(deps.task_id)
+        steering = runtime.drain_steering()
         latest_message = (
-            dict(interjections[-1]) if interjections else dict(state.get("user_message") or {})
+            dict(steering[-1].payload) if steering else dict(state.get("user_message") or {})
         )
+        for event in steering:
+            command_id = str(event.payload.get("command_id") or "")
+            if command_id and deps.work_ledger is not None:
+                await deps.work_ledger.consume_command(command_id)
+            if deps.emit is not None:
+                consumed_at = datetime.now(UTC)
+                deps.emit(
+                    "steer.consumed",
+                    {
+                        "execution_id": deps.execution_id,
+                        "turn_id": str(event.metadata.get("turn_id") or deps.turn_id) or None,
+                        "steering_event_id": event.id,
+                        "sequence": event.sequence,
+                        "kind": event.kind,
+                        "safe_point": "orchestrate",
+                        "queue_latency_seconds": max(
+                            0.0, (consumed_at - event.created_at).total_seconds()
+                        ),
+                    },
+                )
         if not latest_message and str(state.get("utterance") or "").strip():
             latest_message = {"message": str(state["utterance"])}
         if latest_message:

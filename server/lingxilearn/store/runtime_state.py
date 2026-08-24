@@ -112,7 +112,6 @@ def session_state_dict(row: SessionState) -> dict[str, Any]:
         "goal_stack": list(row.goal_stack or []),
         "plan": dict(row.plan or {}),
         "budget": dict(row.budget or {}),
-        "interjections": list(row.interjections or []),
         "board": dict(row.board or {}),
         "revision": int(row.revision or 0),
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -167,7 +166,6 @@ class RuntimeStateRepository:
 
     def __init__(self, db: Database) -> None:
         self.db = db
-        self._interjection_lock = asyncio.Lock()
         self._projection_locks: dict[tuple[str, str], asyncio.Lock] = {}
 
     def projection_lock(
@@ -219,33 +217,6 @@ class RuntimeStateRepository:
             elif int(row.last_event_id or 0) < seq:
                 row.last_event_id = str(seq)
             await s.commit()
-
-    async def push_interjection(self, task_id: str, message: dict[str, Any]) -> None:
-        async with self._interjection_lock:
-            async with self.db.session() as session:
-                row = await session.scalar(
-                    select(SessionState).where(SessionState.task_id == task_id)
-                )
-                if row is None:
-                    raise KeyError(f"unknown session state for task: {task_id}")
-                row.interjections = [*(row.interjections or []), dict(message)]
-                row.revision = int(row.revision or 0) + 1
-                await session.commit()
-
-    async def drain_interjections(self, task_id: str) -> list[dict[str, Any]]:
-        async with self._interjection_lock:
-            async with self.db.session() as session:
-                row = await session.scalar(
-                    select(SessionState).where(SessionState.task_id == task_id)
-                )
-                if row is None:
-                    return []
-                messages = [dict(item) for item in (row.interjections or [])]
-                row.interjections = []
-                if messages:
-                    row.revision = int(row.revision or 0) + 1
-                await session.commit()
-                return messages
 
     # -- learning_evidence (append-only) ------------------------------------
 

@@ -590,7 +590,9 @@ class AgentTaskService:
     async def propose_schedule_revocation(
         self, *, learner_id: str, schedule_id: str
     ) -> dict[str, Any]:
-        schedule = await self._agent_tasks.get_schedule(schedule_id=schedule_id, learner_id=learner_id)
+        schedule = await self._agent_tasks.get_schedule(
+            schedule_id=schedule_id, learner_id=learner_id
+        )
         if schedule is None:
             raise KeyError(schedule_id)
         proposal_id = f"schedule-revoke-proposal-{uuid.uuid4().hex}"
@@ -710,7 +712,9 @@ class AgentTaskService:
             )
             workspace_id = workspace.id if workspace is not None else None
             for ref in normalized:
-                kind = str(ref.get("type") or ref.get("resourceType") or ref.get("kind") or "").lower()
+                kind = str(
+                    ref.get("type") or ref.get("resourceType") or ref.get("kind") or ""
+                ).lower()
                 resource_id = str(
                     ref.get("id")
                     or ref.get("resourceId")
@@ -839,14 +843,19 @@ class AgentTaskService:
         if str(getattr(record, "thread_status", "") or "open") == "cancelled":
             raise ValueError("thread is cancelled")
         attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
-        command = None
+        current_turn = (
+            await self._work_ledger.latest_turn(task_id)
+            if record.status in {"queued", "running", "awaiting_user"}
+            else None
+        )
+        command = await self._work_ledger.append_command(
+            task_id=task_id,
+            kind="message",
+            payload={"message": message.strip(), "attachments": attachment_refs},
+            idempotency_key=idempotency_key or f"message-{uuid.uuid4().hex}",
+            turn_id=str(current_turn["id"]) if current_turn is not None else None,
+        )
         if idempotency_key:
-            command = await self._work_ledger.append_command(
-                task_id=task_id,
-                kind="message",
-                payload={"message": message.strip(), "attachments": attachment_refs},
-                idempotency_key=idempotency_key,
-            )
             # A retry of an already-enqueued command must not schedule another
             # conversation worker or append another interjection.
             if not command.get("created", True):
@@ -879,6 +888,9 @@ class AgentTaskService:
                 "message": message.strip(),
                 "attachments": attachment_refs,
                 "received_at": datetime.now(UTC).isoformat(),
+                "command_id": str(command.get("id") or ""),
+                "turn_id": str(command.get("turn_id") or ""),
+                "idempotency_key": str(command.get("idempotency_key") or ""),
             }
             await self._runtime.submit_running_input(task_id, record.learner_id, item)
             return {
@@ -1037,7 +1049,10 @@ class AgentTaskService:
             record.learner_id,
             {"message": "已提交答题", "kind": "quiz_submit", "answers": answers},
         )
-        return {"status": "accepted", "submission": await _submission_snapshot(self._agent_tasks, task_id)}
+        return {
+            "status": "accepted",
+            "submission": await _submission_snapshot(self._agent_tasks, task_id),
+        }
 
     async def confirm_agent_work(
         self,
@@ -1166,13 +1181,14 @@ class AgentTaskService:
         for work in await self._work_ledger.list_work(task_id):
             if work.get("status") not in {"succeeded", "failed", "cancelled", "blocked"}:
                 await self._work_ledger.cancel_work(task_id=task_id, work_id=str(work["id"]))
-        await self._agent_tasks.set_agent_task_status(task_id, "cancelled", thread_status="cancelled")
+        await self._agent_tasks.set_agent_task_status(
+            task_id, "cancelled", thread_status="cancelled"
+        )
         await self._runtime.cancel_run(task_id)
         if record.current_execution_id:
             latest = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
             execution_id = str(
-                (latest.current_execution_id if latest else None)
-                or record.current_execution_id
+                (latest.current_execution_id if latest else None) or record.current_execution_id
             )
             execution = await self._runtime_repo.get_agent_execution(execution_id, learner_id)
             if execution is not None:

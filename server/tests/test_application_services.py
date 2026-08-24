@@ -100,6 +100,61 @@ def test_runtime_adapter_satisfies_the_input_port() -> None:
     assert isinstance(adapter, RuntimeInputPort)
 
 
+@pytest.mark.asyncio
+async def test_runtime_adapter_steers_the_canonical_execution() -> None:
+    class Graph:
+        calls: list[tuple[str, dict[str, Any]]] = []
+
+        def steer(self, run_id: str, **kwargs: Any) -> Any:
+            self.calls.append((run_id, kwargs))
+            return type("Steering", (), {"id": "steer-1", "sequence": 1, "kind": "user_message"})()
+
+    class Events:
+        def __init__(self) -> None:
+            self.rows: list[dict[str, Any]] = []
+
+        async def append(self, _task_id: str, rows: list[dict[str, Any]]) -> None:
+            self.rows.extend(rows)
+
+        def notify(self, _task_id: str) -> None:
+            pass
+
+    graph = Graph()
+    events = Events()
+    adapter = LingxiGraphRuntimeAdapter.__new__(LingxiGraphRuntimeAdapter)
+    adapter._active_steering = {"task-1": (graph, "exec-1", "exec-1", "turn-1")}
+    adapter._pending_steering = defaultdict(list)
+    adapter._events = events
+
+    await adapter.submit_running_input(
+        "task-1",
+        "learner-1",
+        {
+            "message": "先讲直觉",
+            "command_id": "cmd-1",
+            "turn_id": "turn-1",
+            "idempotency_key": "message-1",
+        },
+    )
+
+    assert graph.calls[0][0] == "exec-1"
+    assert graph.calls[0][1]["kind"] == "user_message"
+    assert graph.calls[0][1]["idempotency_key"] == "message-1"
+    assert events.rows[0]["kind"] == "steer.accepted"
+
+
+def test_legacy_interjection_queue_is_removed() -> None:
+    package = PACKAGE.parent
+    production = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in package.rglob("*.py")
+        if "migrations" not in path.parts
+    )
+    assert "push_interjection" not in production
+    assert "drain_interjections" not in production
+    assert "SessionState.interjections" not in production
+
+
 class _StubRuntimePort:
     """Captures turn submissions without running a graph."""
 
@@ -211,9 +266,14 @@ async def test_running_message_is_submitted_once_without_queue_replay(container)
     )
 
     await focused.agent_message(task_id, "请补充一个例子", learner_id=learner_id)
+    first_turn = await services.work_ledger.latest_turn(task_id)
+    await focused.agent_message(task_id, "再简短一点", learner_id=learner_id)
+    second_turn = await services.work_ledger.latest_turn(task_id)
 
-    assert len(port.running_inputs) == 1
+    assert len(port.running_inputs) == 2
     assert port.running_inputs[0][2]["message"] == "请补充一个例子"
+    assert first_turn is not None and second_turn is not None
+    assert first_turn["id"] == second_turn["id"]
     assert port.enqueued == []
 
 
