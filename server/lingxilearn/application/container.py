@@ -52,6 +52,7 @@ from .skills import SkillService
 from .workspace_file_service import WorkspaceFileService
 from .workspace_knowledge_service import WorkspaceKnowledgeService
 from .workspace_table_service import WorkspaceTableService
+from .workspaces import WorkspaceService
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +180,7 @@ class ApplicationServices:
         self.workspace_files = WorkspaceFileService(self.db)
         self.workspace_tables = WorkspaceTableService(self.db)
         self.workspace_knowledge = WorkspaceKnowledgeService(self.db)
+        self.workspaces = WorkspaceService(self.db)
         self.skills = SkillService(self.db)
         self.logs = LogRepository(self.db)
 

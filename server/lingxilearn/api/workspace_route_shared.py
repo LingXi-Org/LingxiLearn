@@ -33,7 +33,6 @@ from sqlalchemy import delete, desc, false, func, or_, select, update
 from ..application.document_parser import KnowledgeDocumentParser
 from ..application.workspace_errors import WorkspaceDomainError
 from ..application.workspace_files import WorkspaceFileStorage, safe_leaf_name, validated_mime_type
-from ..application.workspaces import WorkspaceService
 from ..contracts.rest_models import (
     CreateUploadResponse,
     DocumentTagSaveResponse,
@@ -205,14 +204,14 @@ def _utc_datetime(value: datetime | None) -> datetime | None:
 
 
 async def _workspace(request: Request, context: LearnerContext) -> Workspace:
-    return await WorkspaceService(services_of(request).db).resolve(context.learner_id)
+    return await services_of(request).workspaces.resolve(context.learner_id)
 
 
 async def _workspace_for_id(
     request: Request, workspace_id: str, context: LearnerContext
 ) -> Workspace:
     try:
-        return await WorkspaceService(services_of(request).db).resolve(
+        return await services_of(request).workspaces.resolve(
             context.learner_id, workspace_id
         )
     except WorkspaceDomainError as error:
