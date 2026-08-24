@@ -12,7 +12,7 @@ import {
 import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
 import { useAddToChat } from '@/hooks/use-add-to-chat'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { EditorContextMenu } from './editor-context-menu'
 import type { PreviewMode } from './file-viewer'
 import { PreviewPanel, resolvePreviewType } from './preview-panel'

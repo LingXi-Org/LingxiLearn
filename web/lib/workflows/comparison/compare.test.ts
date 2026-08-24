@@ -6,7 +6,7 @@ import {
   createWorkflowState as createTestWorkflowState,
 } from '@/tests/support'
 import { describe, expect, it } from 'vitest'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 import {
   formatDiffSummaryForDescription,
   generateWorkflowDiffSummary,

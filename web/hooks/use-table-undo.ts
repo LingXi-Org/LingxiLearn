@@ -21,7 +21,7 @@ import {
   useUpdateTableRow,
 } from '@/hooks/queries/tables'
 import { runWithoutRecording, useTableUndoStore } from '@/stores/table/store'
-import type { TableUndoAction } from '@/stores/table/types'
+import type { TableUndoAction } from '@/lib/table/undo-types'
 
 const logger = createLogger('useTableUndo')
 

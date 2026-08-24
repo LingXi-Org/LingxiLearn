@@ -1,4 +1,4 @@
-import type { BlockState, Position } from '@/stores/workflows/workflow/types'
+import type { BlockState, Position } from '@/lib/workflows/domain/workflow'
 
 export type { Edge } from 'reactflow'
 

@@ -26,7 +26,7 @@ import { getEndDateFromTimeRange, getStartDateFromTimeRange } from '@/lib/logs/f
 import { parseQuery, queryToApiParams } from '@/lib/logs/query-parser'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { sleep } from '@/lib/utils/helpers'
-import type { TimeRange } from '@/stores/logs/filters/types'
+import type { TimeRange } from '@/lib/logs/filter-types'
 
 export type { DashboardStatsResponse, WorkflowStats }
 

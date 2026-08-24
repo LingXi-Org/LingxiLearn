@@ -1,6 +1,6 @@
 import { requestJson } from '@/lib/api/client/request'
 import { getDeploymentVersionStateContract } from '@/lib/api/contracts/deployments'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 /**
  * Fetches the deployed state for a specific deployment version.

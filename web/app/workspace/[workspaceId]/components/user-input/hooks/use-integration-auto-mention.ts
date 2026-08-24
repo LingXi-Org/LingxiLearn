@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { getIntegrationMatcher } from '@/blocks/integration-matcher'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Characters that signal the user has completed a word. Used by the

@@ -3,7 +3,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useTableUndoStore } from '@/stores/table/store'
-import type { TableUndoAction } from '@/stores/table/types'
+import type { TableUndoAction } from '@/lib/table/undo-types'
 
 const TABLE = 'tbl-1'
 

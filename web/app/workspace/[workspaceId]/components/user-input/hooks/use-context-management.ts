@@ -4,7 +4,7 @@ import {
   filterOutContext,
   isContextAlreadySelected,
 } from '@/app/workspace/[workspaceId]/components/user-input/utils'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 interface UseContextManagementProps {
   /** Current message text */

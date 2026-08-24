@@ -1,6 +1,6 @@
 import { createAgentBlock, createLoopBlock } from '@/tests/support'
 import { describe, expect, it } from 'vitest'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 import {
   convertLoopBlockToLoop,
   isAncestorProtected,

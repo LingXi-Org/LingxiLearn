@@ -6,7 +6,7 @@ import ReactFlow, { type Node, type NodeProps, ReactFlowProvider } from 'reactfl
 import 'reactflow/dist/style.css'
 import { Sparkles } from '@/components/ui-kit/icons'
 import { WorkflowBlockView } from '@/components/workflow'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 /** Read-only compatibility surface for log/table consumers. The editable
  * workflow preview was intentionally removed; logs expose an audit summary. */

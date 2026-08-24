@@ -28,8 +28,8 @@ export interface CopilotTerminalSessionData {
  * each xterm instance owns its own byte stream and scrollback, and pushing
  * hundreds of chunks a second through React state would stall the UI.
  *
- * Named `copilot-terminal` because `stores/terminal` is the workflow editor's
- * execution-log panel, which is unrelated.
+ * Named `copilot-terminal` to distinguish this renderer-owned session state
+ * from server-backed execution events.
  */
 interface CopilotTerminalState {
   activeScopeId: string | null

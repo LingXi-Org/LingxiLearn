@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import {
   isResourceReferencedByContexts,
   resourceFromContext,

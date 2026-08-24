@@ -1,3 +1,6 @@
 export { createLingxiTaskTransport } from '@/lib/lingxi/lingxi-task-transport'
-export { getLingxiGraphUseChatOptions, useChat } from './use-chat'
+export {
+  getLingxiGraphUseChatOptions,
+  useWorkspaceChatController,
+} from './use-lingxi-graph-chat'
 export { useMothershipResize } from './use-mothership-resize'

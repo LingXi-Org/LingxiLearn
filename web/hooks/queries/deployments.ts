@@ -25,7 +25,7 @@ import {
 import { wandGenerateStreamContract } from '@/lib/api/contracts/hotspots'
 import { fetchDeploymentVersionState } from '@/hooks/queries/utils/fetch-deployment-version-state'
 import { workflowKeys } from '@/hooks/queries/utils/workflow-keys'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 const logger = createLogger('DeploymentQueries')
 

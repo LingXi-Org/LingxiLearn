@@ -52,7 +52,6 @@ import {
   supportsToolUsageControl,
   supportsVerbosity,
   transformBlockTool,
-  updateOllamaProviderModels,
 } from '@/providers/utils'
 
 const mockGetRotatingApiKey = vi.fn().mockReturnValue('rotating-server-key')
@@ -1042,16 +1041,6 @@ describe('Provider Management', () => {
     })
   })
 
-  describe('updateOllamaProviderModels', () => {
-    it('should update ollama models', () => {
-      const mockModels = ['llama2', 'codellama', 'mistral']
-
-      expect(() => updateOllamaProviderModels(mockModels)).not.toThrow()
-
-      const ollamaModels = getProviderModels('ollama')
-      expect(ollamaModels).toEqual(mockModels)
-    })
-  })
 })
 
 describe('JSON and Structured Output', () => {

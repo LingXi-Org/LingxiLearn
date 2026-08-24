@@ -3,7 +3,7 @@ import { getWorkflows } from '@/hooks/queries/utils/workflow-cache'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import { mergeSubblockState } from '@/stores/workflows/utils'
 import { useWorkflowStore } from '@/stores/workflows/workflow/store'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 const logger = createLogger('Workflows')
 
@@ -52,4 +52,4 @@ export function getWorkflowWithValues(workflowId: string, workspaceId: string) {
   }
 }
 
-export type { WorkflowState } from '@/stores/workflows/workflow/types'
+export type { WorkflowState } from '@/lib/workflows/domain/workflow'

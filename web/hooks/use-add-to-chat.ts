@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import { addMothershipContexts } from '@/lib/mothership/events'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Returns a callback that attaches a context chip to the Sim Agent (Chat) input

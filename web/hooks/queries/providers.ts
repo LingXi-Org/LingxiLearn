@@ -1,5 +1,3 @@
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import {
@@ -14,10 +12,13 @@ import {
   getTogetherProviderModelsContract,
   getVllmProviderModelsContract,
   type ProviderModelsResponse,
+  type ProviderName,
 } from '@/lib/api/contracts/providers'
-import type { ProviderName } from '@/stores/providers'
+import { createLogger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/utils/errors'
+import { getQueryClient } from '@/app/_shell/providers/get-query-client'
 
-type ProviderModelSource = ProviderName | 'openrouter-embeddings'
+export type ProviderModelSource = ProviderName | 'openrouter-embeddings'
 
 const logger = createLogger('ProviderModelsQuery')
 
@@ -103,4 +104,36 @@ export function providerModelsQueryOptions(provider: ProviderModelSource, worksp
 
 export function useProviderModels(provider: ProviderModelSource, workspaceId?: string) {
   return useQuery(providerModelsQueryOptions(provider, workspaceId))
+}
+
+/** Synchronous cache read for code paths which cannot use React hooks. */
+export function getCachedProviderModels(
+  provider: ProviderModelSource,
+  workspaceId?: string
+): string[] {
+  return (
+    getQueryClient().getQueryData<ProviderModelsResponse>(providerKeys.list(provider, workspaceId))
+      ?.models ?? []
+  )
+}
+
+let activeProviderWorkspaceId: string | undefined
+
+/** Selects the workspace whose scoped provider cache may be read by non-React consumers. */
+export function setActiveProviderWorkspaceId(workspaceId: string | undefined): void {
+  activeProviderWorkspaceId = workspaceId
+}
+
+export function getActiveWorkspaceProviderModels(provider: ProviderModelSource): string[] {
+  if (!activeProviderWorkspaceId) return []
+  return getCachedProviderModels(provider, activeProviderWorkspaceId)
+}
+
+export function getCachedProviderModelInfo(
+  provider: ProviderModelSource,
+  workspaceId?: string
+): ProviderModelsResponse['modelInfo'] {
+  return getQueryClient().getQueryData<ProviderModelsResponse>(
+    providerKeys.list(provider, workspaceId)
+  )?.modelInfo
 }

@@ -42,10 +42,10 @@ import {
 } from '@/hooks/queries/utils/workflow-list-query'
 import { useFolderStore } from '@/stores/folders/store'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
-import type { WorkflowMetadata } from '@/stores/workflows/registry/types'
+import type { WorkflowMetadata } from '@/lib/workflows/domain/metadata'
 import { generateCreativeWorkflowName } from '@/stores/workflows/registry/utils'
 import { useSubBlockStore } from '@/stores/workflows/subblock/store'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 const logger = createLogger('WorkflowQueries')
 

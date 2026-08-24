@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import type { ServedFolderResourceType } from '@/lib/api/contracts/folders'
 import { breadcrumbFolderChain } from '@/app/workspace/[workspaceId]/components/folders/folder-breadcrumbs'
 import { useFolders } from '@/hooks/queries/folders'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 export interface UseFolderAncestorsOptions {
   resourceType: ServedFolderResourceType

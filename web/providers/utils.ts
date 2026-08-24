@@ -22,6 +22,7 @@ import {
 } from '@/lib/workflows/subblocks/visibility'
 import { assembleCustomBlockInputMapping, isCustomBlockType } from '@/blocks/custom/build-config'
 import { isCustomTool } from '@/executor/constants'
+import { getCachedProviderModels } from '@/hooks/queries/providers'
 import {
   getComputerUseModels,
   getEmbeddingModelPricing,
@@ -47,7 +48,6 @@ import {
   PROVIDER_DEFINITIONS,
   supportsTemperature as supportsTemperatureFromDefinitions,
   supportsToolUsageControl as supportsToolUsageControlFromDefinitions,
-  updateOllamaModels as updateOllamaModelsInDefinitions,
 } from '@/providers/models'
 import {
   getProviderToolInputProvenance,
@@ -55,7 +55,6 @@ import {
   registerPreparedProviderToolInputProvenance,
 } from '@/providers/tool-input-provenance'
 import type { ProviderId, ProviderToolConfig } from '@/providers/types'
-import { useProvidersStore } from '@/stores/providers/store'
 import { mergeToolParameters } from '@/tools/merge-params'
 import type { WorkflowToolExecutionContext } from '@/tools/types'
 
@@ -189,53 +188,6 @@ export const providers: Record<ProviderId, ProviderMetadata> = {
   fireworks: buildProviderMetadata('fireworks'),
   together: buildProviderMetadata('together'),
   baseten: buildProviderMetadata('baseten'),
-}
-
-export function updateOllamaProviderModels(models: string[]): void {
-  updateOllamaModelsInDefinitions(models)
-  providers.ollama.models = getProviderModelsFromDefinitions('ollama')
-}
-
-export function updateVLLMProviderModels(models: string[]): void {
-  const { updateVLLMModels } = require('@/providers/models')
-  updateVLLMModels(models)
-  providers.vllm.models = getProviderModelsFromDefinitions('vllm')
-}
-
-export function updateLiteLLMProviderModels(models: string[]): void {
-  const { updateLiteLLMModels } = require('@/providers/models')
-  updateLiteLLMModels(models)
-  providers.litellm.models = getProviderModelsFromDefinitions('litellm')
-}
-
-export async function updateOpenRouterProviderModels(models: string[]): Promise<void> {
-  const { updateOpenRouterModels } = await import('@/providers/models')
-  updateOpenRouterModels(models)
-  providers.openrouter.models = getProviderModelsFromDefinitions('openrouter')
-}
-
-export async function updateFireworksProviderModels(models: string[]): Promise<void> {
-  const { updateFireworksModels } = await import('@/providers/models')
-  updateFireworksModels(models)
-  providers.fireworks.models = getProviderModelsFromDefinitions('fireworks')
-}
-
-export async function updateOllamaCloudProviderModels(models: string[]): Promise<void> {
-  const { updateOllamaCloudModels } = await import('@/providers/models')
-  updateOllamaCloudModels(models)
-  providers['ollama-cloud'].models = getProviderModelsFromDefinitions('ollama-cloud')
-}
-
-export async function updateTogetherProviderModels(models: string[]): Promise<void> {
-  const { updateTogetherModels } = await import('@/providers/models')
-  updateTogetherModels(models)
-  providers.together.models = getProviderModelsFromDefinitions('together')
-}
-
-export async function updateBasetenProviderModels(models: string[]): Promise<void> {
-  const { updateBasetenModels } = await import('@/providers/models')
-  updateBasetenModels(models)
-  providers.baseten.models = getProviderModelsFromDefinitions('baseten')
 }
 
 export function getBaseModelProviders(): Record<string, ProviderId> {
@@ -1076,20 +1028,18 @@ export const PROVIDER_PLACEHOLDER_KEY = 'provider-uses-own-credentials'
 export function getApiKey(provider: string, model: string, userProvidedKey?: string): string {
   const hasUserKey = !!userProvidedKey
 
-  const isOllamaModel =
-    provider === 'ollama' || useProvidersStore.getState().providers.ollama.models.includes(model)
+  const isOllamaModel = provider === 'ollama' || getCachedProviderModels('ollama').includes(model)
   if (isOllamaModel) {
     return 'empty'
   }
 
-  const isVllmModel =
-    provider === 'vllm' || useProvidersStore.getState().providers.vllm.models.includes(model)
+  const isVllmModel = provider === 'vllm' || getCachedProviderModels('vllm').includes(model)
   if (isVllmModel) {
     return userProvidedKey || 'empty'
   }
 
   const isLitellmModel =
-    provider === 'litellm' || useProvidersStore.getState().providers.litellm.models.includes(model)
+    provider === 'litellm' || getCachedProviderModels('litellm').includes(model)
   if (isLitellmModel) {
     return userProvidedKey || 'empty'
   }

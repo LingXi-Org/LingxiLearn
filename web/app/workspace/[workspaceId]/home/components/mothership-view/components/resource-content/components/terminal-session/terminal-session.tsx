@@ -76,7 +76,7 @@ import { ContextMenu } from '@/app/workspace/[workspaceId]/components/context-me
 import { useContextMenu } from '@/app/workspace/[workspaceId]/components/hooks'
 import { useDesktopPreferenceMutation } from '@/hooks/use-desktop-preference-mutation'
 import { useCopilotTerminalStore } from '@/stores/copilot-terminal/store'
-import type { ChatContext, TerminalTextSelection } from '@/stores/panel'
+import type { ChatContext, TerminalTextSelection } from '@/lib/lingxi/chat-context'
 
 const logger = createLogger('TerminalSession')
 const EMPTY_TERMINAL_TABS: TerminalTabsState = { tabs: [], activeTerminalId: null }

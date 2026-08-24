@@ -1,7 +1,7 @@
-import type { ChatContext } from '@/stores/panel'
-import type { BrowserTextSelection, TerminalTextSelection } from '@/stores/panel/types'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
+import type { BrowserTextSelection, TerminalTextSelection } from '@/lib/lingxi/chat-context'
 
-export type { ChatContext } from '@/stores/panel'
+export type { ChatContext } from '@/lib/lingxi/chat-context'
 
 const EDIT_CONTENT_TOOL_ID = 'edit_content'
 const RUN_SUBAGENT_ID = 'run'

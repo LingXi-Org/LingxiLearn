@@ -20,7 +20,7 @@ import {
   snapPositionToGrid,
   sortContainersDeepestFirst,
 } from '@/lib/workflows/autolayout/utils'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 type TargetedBlockInfo = {
   id: string

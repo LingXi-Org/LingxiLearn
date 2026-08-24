@@ -38,10 +38,6 @@ export default defineConfig({
         replacement: path.resolve(__dirname, 'stores/console/store.ts'),
       },
       {
-        find: '@/stores/execution/store',
-        replacement: path.resolve(__dirname, 'stores/execution/store.ts'),
-      },
-      {
         find: '@/blocks/types',
         replacement: path.resolve(__dirname, 'blocks/types.ts'),
       },

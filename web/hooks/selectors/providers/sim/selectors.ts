@@ -13,7 +13,7 @@ import type {
   SelectorOption,
   SelectorQueryArgs,
 } from '@/hooks/selectors/types'
-import type { WorkflowMetadata } from '@/stores/workflows/registry/types'
+import type { WorkflowMetadata } from '@/lib/workflows/domain/metadata'
 
 /** Matches the workflow list's own fallback for an unnamed workflow. */
 function workflowBaseLabel(workflow: WorkflowMetadata): string {

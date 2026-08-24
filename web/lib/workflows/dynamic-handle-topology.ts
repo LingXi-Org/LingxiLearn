@@ -1,4 +1,4 @@
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 export interface ConditionRow {
   id: string

@@ -3,9 +3,12 @@
 import { createLogger } from '@/lib/logger'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
 import { environmentKeys } from '@/hooks/queries/environment'
-import { useExecutionStore } from '@/stores/execution'
 import { useMothershipDraftsStore } from '@/stores/mothership-drafts/store'
-import { consolePersistence, useTerminalConsoleStore } from '@/stores/terminal'
+import {
+  clearMothershipQueueForLogout,
+  useMothershipQueueStore,
+} from '@/stores/mothership-queue/store'
+import { resetWorkspaceClientState } from '@/stores/reset-workspace-client-state'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import { useSubBlockStore } from '@/stores/workflows/subblock/store'
 import { useWorkflowStore } from '@/stores/workflows/workflow/store'
@@ -33,15 +36,9 @@ export const resetAllStores = () => {
   useWorkflowStore.getState().clear()
   useSubBlockStore.getState().clear()
   getQueryClient().removeQueries({ queryKey: environmentKeys.all })
-  useExecutionStore.getState().reset()
-  useTerminalConsoleStore.setState({
-    workflowEntries: {},
-    entryIdsByBlockExecution: {},
-    entryLocationById: {},
-    isOpen: false,
-  })
-  consolePersistence.persist()
   useMothershipDraftsStore.setState({ drafts: {} })
+  useMothershipQueueStore.getState().reset()
+  resetWorkspaceClientState()
 }
 
 /**
@@ -52,6 +49,7 @@ export async function clearUserData(): Promise<void> {
 
   try {
     resetAllStores()
+    await clearMothershipQueueForLogout()
 
     const keysToKeep = ['next-favicon', 'theme', RECENT_IMPERSONATIONS_STORAGE_KEY]
     const keysToRemove = Object.keys(localStorage).filter((key) => !keysToKeep.includes(key))

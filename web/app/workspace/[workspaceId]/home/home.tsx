@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { usePostHog } from 'posthog-js/react'
 import { cn, toast } from '@/components/ui-kit'
 import { LandingPromptStorage, MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { LINGXI_EXCLUDED_RESOURCE_TYPES } from '@/lib/lingxi/supported-contexts'
 import { createLogger } from '@/lib/logger'
 import {
@@ -22,7 +23,6 @@ import {
 } from '@/hooks/queries/mothership-chats'
 import { getWorkspaceFilesQueryOptions, useWorkspaceFiles } from '@/hooks/queries/workspace-files'
 import { useOAuthReturnRouter } from '@/hooks/use-oauth-return'
-import type { ChatContext } from '@/stores/panel'
 import { ChatFeature } from './chat-feature'
 import { WorkspaceResourcePanel } from './components/workspace-resource-panel'
 import {
@@ -33,8 +33,8 @@ import {
 import {
   createLingxiTaskTransport,
   getLingxiGraphUseChatOptions,
-  useChat,
   useMothershipResize,
+  useWorkspaceChatController,
 } from './hooks'
 import { toResourceActivityNotice } from './hooks/lingxi-resource-activity-adapter'
 import {
@@ -161,7 +161,7 @@ export function WorkspaceHomeShell({ chatId, userId, tableViewsEnabled }: Worksp
     genericResourceData,
     lingxiRuntime,
     getCurrentRequestId,
-  } = useChat(workspaceId, chatId, chatOptions)
+  } = useWorkspaceChatController(workspaceId, chatId, chatOptions)
 
   const { mothershipRef, handleResizePointerDown, clearWidth } = useMothershipResize(desktopScopeId)
   const resourceAttentionChatIdRef = useRef(resolvedChatId)
@@ -282,7 +282,7 @@ export function WorkspaceHomeShell({ chatId, userId, tableViewsEnabled }: Worksp
    *
    * Chip-only handoffs open each resource directly rather than relying on the
    * input's listener being mounted, then dispatch so the input inserts the chip.
-   * This effect is declared after `useChat`, so its chat-init `setResources([])`
+   * This effect is declared after `useWorkspaceChatController`, so its chat-init `setResources([])`
    * has already flushed and cannot wipe the just-opened resource.
    */
   useEffect(() => {

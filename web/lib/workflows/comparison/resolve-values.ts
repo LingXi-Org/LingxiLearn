@@ -8,7 +8,7 @@ import { fetchOAuthCredentialDetail } from '@/hooks/queries/oauth/oauth-credenti
 import { getSelectorDefinition, loadAllSelectorOptions } from '@/hooks/selectors/registry'
 import { resolveSelectorForSubBlock } from '@/hooks/selectors/resolution'
 import type { SelectorContext, SelectorKey } from '@/hooks/selectors/types'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 import { formatParameterLabel } from '@/tools/params'
 
 const logger = createLogger('ResolveValues')

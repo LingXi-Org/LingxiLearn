@@ -3,7 +3,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MothershipHandoffStorage, STORAGE_KEYS } from '@/lib/core/utils/browser-storage'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 const WS = 'ws-1'
 

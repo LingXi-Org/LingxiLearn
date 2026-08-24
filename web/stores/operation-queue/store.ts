@@ -1,5 +1,5 @@
-import { createLogger } from '@/lib/logger'
 import { create } from 'zustand'
+import { createLogger } from '@/lib/logger'
 import type {
   OperationQueueState,
   QueuedOperation,
@@ -656,6 +656,25 @@ export const useOperationQueueStore = create<OperationQueueState>((set, get) => 
     set({ hasOperationError: false })
   },
 }))
+
+/** Cancels every pending callback and detaches emitters at a workspace/user boundary. */
+export function resetOperationQueue(): void {
+  retryTimeouts.forEach((timeout) => clearTimeout(timeout))
+  retryTimeouts.clear()
+  operationTimeouts.forEach((timeout) => clearTimeout(timeout))
+  operationTimeouts.clear()
+  emitWorkflowOperation = null
+  emitSubblockUpdate = null
+  emitVariableUpdate = null
+  currentRegisteredWorkflowId = null
+  useOperationQueueStore.setState({
+    operations: [],
+    workflowOperationVersions: {},
+    remoteApplyVersions: {},
+    isProcessing: false,
+    hasOperationError: false,
+  })
+}
 
 /**
  * Hook to access operation queue state and actions.

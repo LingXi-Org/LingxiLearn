@@ -130,12 +130,6 @@ export {
 } from './stripe.mock'
 // Telemetry mocks
 export { telemetryMock } from './telemetry.mock'
-// Terminal console mocks (for @/stores/terminal and @/stores/terminal/console/store)
-export {
-  resetTerminalConsoleMock,
-  terminalConsoleMock,
-  terminalConsoleMockFns,
-} from './terminal-console.mock'
 // URL mocks
 export {
   LOCALHOST_HOSTNAMES_MOCK,

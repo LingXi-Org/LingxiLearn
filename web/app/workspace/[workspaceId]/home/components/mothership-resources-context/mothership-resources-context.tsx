@@ -8,7 +8,7 @@ import type {
 
 /**
  * Resource-management operations for the Mothership resource panel. Provided
- * by the home surface (which owns the resource state via `useChat`) and
+ * by the home surface (which owns the resource state via `useWorkspaceChatController`) and
  * consumed at the leaves (`ResourceTabs`, `MothershipView`) so the operations
  * do not have to be relayed through intermediate components.
  */

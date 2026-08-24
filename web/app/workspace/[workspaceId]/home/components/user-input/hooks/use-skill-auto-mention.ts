@@ -6,7 +6,7 @@ function escapeRegex(value: string): string {
 }
 import type { McpServer } from '@/hooks/queries/mcp'
 import type { SkillDefinition } from '@/hooks/queries/skills'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Characters that signal the user has completed a word. Used by the

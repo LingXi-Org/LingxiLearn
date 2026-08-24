@@ -3,7 +3,7 @@ import { isPlainRecord } from '@/lib/utils/object'
 import { DEFAULT_SUBBLOCK_TYPE } from '@/lib/workflows/persistence/native/subblocks'
 import { getBlock } from '@/blocks'
 import { isCustomBlockType } from '@/blocks/custom/build-config'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 const logger = createLogger('WorkflowSubblockSanitization')
 

@@ -2,7 +2,7 @@
 
 import { type RefObject, useEffect } from 'react'
 import { attachSelectionContextToClipboard } from '@/lib/copilot/chat/selection-clipboard'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Rides a selection {@link ChatContext} onto the editor's native copy so a

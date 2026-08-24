@@ -2,8 +2,11 @@
  * @vitest-environment node
  */
 
-import { beforeEach, describe, expect, it } from 'vitest'
-import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  clearMothershipQueueForLogout,
+  useMothershipQueueStore,
+} from '@/stores/mothership-queue/store'
 import type { QueuedMothershipMessage } from '@/stores/mothership-queue/types'
 
 const message = (id: string, content = `content-${id}`): QueuedMothershipMessage => ({
@@ -193,5 +196,18 @@ describe('useMothershipQueueStore', () => {
       useMothershipQueueStore.getState().setEditing('chat-A', null)
       expect(useMothershipQueueStore.getState().editing['chat-A']).toBeUndefined()
     })
+  })
+
+  it('clears both live and persisted queue state on logout', async () => {
+    const clearStorage = vi
+      .spyOn(useMothershipQueueStore.persist, 'clearStorage')
+      .mockResolvedValue(undefined)
+    useMothershipQueueStore.getState().enqueue('chat-A', message('m1'))
+
+    await clearMothershipQueueForLogout()
+
+    expect(useMothershipQueueStore.getState().queues).toEqual({})
+    expect(useMothershipQueueStore.getState().editing).toEqual({})
+    expect(clearStorage).toHaveBeenCalledOnce()
   })
 })

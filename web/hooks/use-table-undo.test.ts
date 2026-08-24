@@ -63,7 +63,7 @@ vi.mock('@/stores/table/store', () => ({
 }))
 
 import { useTableUndo } from '@/hooks/use-table-undo'
-import type { TableUndoAction } from '@/stores/table/types'
+import type { TableUndoAction } from '@/lib/table/undo-types'
 
 const WORKSPACE_ID = 'ws-1'
 const TABLE_ID = 'tbl-1'

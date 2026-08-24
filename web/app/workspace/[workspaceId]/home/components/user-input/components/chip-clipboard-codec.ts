@@ -4,7 +4,7 @@ import {
   restoreSkillTriggerText,
   stripMentionTrigger,
 } from '@/app/workspace/[workspaceId]/components/user-input/utils'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /** URI scheme for portable chip links (`[label](sim:kind/id)`). Custom so only
  *  our own links — never generic markdown — are parsed back into chips. */

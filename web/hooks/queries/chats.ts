@@ -1,10 +1,10 @@
-import { createLogger } from '@/lib/logger'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiClientError } from '@/lib/api/client/errors'
 import { requestJson } from '@/lib/api/client/request'
 import {
   authenticateDeployedChatContract,
   type ChatAuthType,
+  type ChatOutputConfig,
   type CreateChatBody,
   type CreateChatResponse,
   createChatContract,
@@ -19,7 +19,7 @@ import {
   updateChatContract,
   verifyChatEmailOtpContract,
 } from '@/lib/api/contracts/chats'
-import type { OutputConfig } from '@/stores/chat/types'
+import { createLogger } from '@/lib/logger'
 import { deploymentKeys, invalidateDeploymentQueries } from './deployments'
 
 const logger = createLogger('ChatMutations')
@@ -225,7 +225,7 @@ function throwUserFriendlyIdentifierError(error: unknown): never {
 /**
  * Parses output block selections into structured output configs
  */
-function parseOutputConfigs(selectedOutputBlocks: string[]): OutputConfig[] {
+function parseOutputConfigs(selectedOutputBlocks: string[]): ChatOutputConfig[] {
   return selectedOutputBlocks
     .map((outputId) => {
       const firstUnderscoreIndex = outputId.indexOf('_')
@@ -238,7 +238,7 @@ function parseOutputConfigs(selectedOutputBlocks: string[]): OutputConfig[] {
       }
       return null
     })
-    .filter((config): config is OutputConfig => config !== null)
+    .filter((config): config is ChatOutputConfig => config !== null)
 }
 
 /**

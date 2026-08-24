@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SCROLL_TOLERANCE } from '@/app/workspace/[workspaceId]/components/user-input/constants'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 interface UseMentionMenuProps {
   /** Current message text */
