@@ -1,132 +1,148 @@
 # LingxiLearn architecture
 
-LingxiLearn is a learning workspace with one frontend source tree and one
-LingxiLearn backend. The frontend reuses the existing product-page, resource,
-and chat UI source, while every Lingxi workspace request terminates at the
-canonical FastAPI service.
+This document describes the current runtime and deployment boundary. It is not
+a migration plan. The architecture programme and constraints are tracked in
+[issue #36](https://github.com/LingXi-Org/LingxiLearn/issues/36).
 
-## Repository boundary
-
-```text
-web/                 Next.js application; source lives directly at this level
-server/lingxilearn/  FastAPI, LingxiIdentity, learning service and REST/SSE API
-packs/               Declarative course content
-skills/              Current LingxiSkills catalogue
-docker-compose.dev.yml   Local development: bind-mounted web + reloadable API
-docker-compose.yml       Production: static web build + one API process
-```
-
-There is no separate Sim backend, Redis service, realtime service, or
-Kubernetes deployment in this repository. The copied frontend packages are
-shared UI/source dependencies; they are not a second Lingxi runtime.
-
-## Runtime topology
-
-### Host development server
+## Production topology
 
 ```text
-Browser :3000 ── Next dev server ── FastAPI :8000 ── var/lingxilearn.sqlite3
+Browser
+  │ HTTPS, one public origin
+  ▼
+Next.js standalone Web (Node server.js, :3000)
+  │ rewrites /api/* and /auth/*
+  ▼
+FastAPI (:8000) ───────────────► external LingxiIdentity BFF / Logto
+  │                                  auth, session and token owner
+  ├──────────────► PostgreSQL
+  │                 domain records, events, schedules and resource metadata
+  ├──────────────► api-var volume
+  │                 workspace file bytes, attachments and artifacts
+  └──────────────► LingxiGraph
+                    Agent execution/runtime engine
+
+Python scheduler ──► PostgreSQL claims ──► Agent task application services
 ```
 
-The host development path reads the root `.env`. Its development identity
-switch is explicit, and the SQLite file is the single local database. There is
-no `server/var` database.
+The browser has one origin. Web renders the application and proxies API and
+authentication traffic; it is not the LingxiLearn business backend. FastAPI
+does **not** serve a static Next export in production. `web/Dockerfile` builds
+`.next/standalone/server.js`, and its runtime image starts it with Node.
 
-### Compose development
+## Ownership
 
-```text
-Browser :3000 ── Next dev server (./web bind-mounted at /app)
-                    │
-                    └── REST/SSE ── FastAPI :8080 ── PostgreSQL
-```
-
-`docker-compose.dev.yml` is the containerized development deployment. The web
-container uses dedicated `node_modules` and `.next` volumes, while the API
-source and the database schema are bind-mounted. Alembic runs before the API.
-
-### Production
-
-```text
-Browser :8080 ── FastAPI ── PostgreSQL
-                  │
-                  └── /app/web (static Next export)
-```
-
-`docker-compose.yml` builds the frontend once into the `web-dist` volume and
-serves it from the same lightweight Python process as the API. The runtime image
-does not contain Node, Bun, a frontend server, Redis, or a second web process.
-
-## Frontend data boundary
-
-The Lingxi workspace has two explicit browser transport modules, both pointing
-to the same FastAPI origin; neither is a Next domain API:
-
-- `web/lib/lingxi/api.ts` owns native Lingxi resources: workspace files/folders,
-  agent tasks, settings, skills, and the task SSE stream.
-- `web/lib/api/client/request.ts` owns the shared table, knowledge, and log
-  contracts used by the reused resource pages.
-- `web/lib/lingxi/lingxi-graph-adapter.ts` converts task events into the shared
-  chat message, reasoning-step, tool-call, and subagent shapes.
-- `web/app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts` owns
-  task creation, snapshots, event replay, cancellation, and message sending.
-- Shared Sim-derived components remain presentation and contract consumers;
-  `useChat` has one LingxiGraph transport for the `lingxi` workspace.
-
-For the `lingxi` workspace, credentials, OAuth connections, workflow, and
-other unavailable integration surfaces are disabled at the hook boundary, so
-they do not probe removed `/api` routes. The browser sends the HttpOnly session
-cookie with requests and does not store a bearer token in localStorage.
-
-## Backend data boundary
-
-The FastAPI service owns the LingxiLearn learning domain and exposes:
-
-- OIDC-protected Agent Task REST endpoints;
-- replayable Agent Task SSE events;
-- the capability registry and artifact/quiz resource endpoints;
-- the learning profile, the decision trace and this run's execution graph;
-- course packs, learner context, evidence and persistence;
-- static frontend fallback in production.
-
-LingxiGraph is used inside the backend task service. The browser receives safe
-stage summaries, tool metadata and artifact references rather than raw private
-reasoning or credentials.
-
-## The runtime
-
-There is one graph, and nothing in it names an agent or a subject:
-
-```text
-START → interpret_goal → orchestrate → dispatch → observe
-      → update_state → evaluate_goal
-evaluate_goal ──(runtime_status only)──> orchestrate | await_user | END
-```
-
-What runs inside `dispatch` is recomputed every round from the learner's state,
-resolved `capability tag → skill → provider` through `skill_registry`. Adding a
-capability, a skill or a subject changes data; it does not change the graph.
-
-Four tables are the only channel between agents. No agent hands another agent
-prose.
-
-| Table | Who writes it | What it holds |
+| Component | Owns | Does not own |
 | --- | --- | --- |
-| `learning_profile` | `state/profile_writer.py`, and nothing else | one row per learner × knowledge point |
-| `learning_evidence` | any provider, append-only | structured observations, never prose |
-| `session_state` | the loop | goal stack, run phase, guardrail budget |
-| `skill_registry` | startup, from `skills/*/SKILL.md` | capability tags, contracts, preconditions, cost |
+| Next.js Web | routes, rendering, browser state, presentation/compatibility adapters, typed HTTP clients, same-origin proxy | LingxiLearn domain persistence, migrations, authorization truth, Agent execution, durable jobs |
+| FastAPI | REST/SSE contracts, learner/workspace authorization, application services, repositories, transactions, files/resources, Agent task lifecycle | frontend rendering or issuing identity sessions |
+| Python scheduler | durable schedule polling/claiming and scheduled Agent task launch through the shared application services | HTTP presentation or a separate job database |
+| LingxiIdentity BFF / Logto | login, identity session, token lifecycle and principal validation | learning/workspace domain data |
+| LingxiGraph | Agent graph execution, runtime transitions, interaction pause/resume and provider/tool execution | browser UI or identity sessions |
+| PostgreSQL | production domain records, events, schedules, claims, resource metadata and migration state | binary file/artifact payloads |
+| `api-var` storage | workspace file bytes, multipart data, task attachments and generated artifact files | authorization or resource metadata |
+| `packs/`, `skills/` | read-only course packs and Skill definitions mounted into API/scheduler | mutable learner state |
 
-`decision_trace` records each round's candidate set, choice, reason, evidence
-and profile before/after, and links a replan to what it is redoing.
+Rule of thumb: code that decides how data looks or behaves in the browser
+belongs in Web. Code that authorizes, validates, persists, schedules or executes
+a LingxiLearn domain operation belongs behind a FastAPI application service.
+Web may validate a form for feedback, but FastAPI remains authoritative.
 
-Guardrails live in `runtime/guardrails.py` and run in code, not in a prompt:
-step and replan ceilings, token and time budgets, a capability allow-list, a
-heavy-artifact cap, confirmation for irreversible actions, a mandatory
-rationale, and a required negotiation sentence before deviating from what the
-learner literally asked for.
+## Request and identity path
 
-`server/tests/test_no_fixed_routing.py` fails the build if intent-to-workflow
-branching reappears.
+`web/next.config.ts` rewrites browser requests to `LINGXILEARN_API_ORIGIN`:
+
+- `/api/:path*` → FastAPI `/api/:path*` (REST and SSE);
+- `/auth/:path*` → FastAPI `/auth/:path*`.
+
+FastAPI proxies identity `/auth/*` and `/api/v1/*` traffic to the external BFF.
+The browser keeps the HttpOnly identity cookie on one origin and never owns the
+OIDC exchange or LingxiIdentity bearer/refresh tokens. Production requires
+`LINGXILEARN_IDENTITY_BFF_URL` and forces `LINGXILEARN_INSECURE_DEV_AUTH=false`.
+The Identity deployment must be reachable for authenticated product traffic.
+
+Development Compose intentionally uses a fixed local learner and does not call
+the production Identity BFF. This convenience must never be inherited by a
+production deployment.
+
+## Persistence
+
+Production Compose uses PostgreSQL 16. `postgres-data` owns database durability
+and Alembic is the schema migration path. File metadata and learner ownership
+live in PostgreSQL; bytes live below `LINGXILEARN_VAR_DIR` in `api-var`.
+Agent audit files, uploads and generated artifacts live below
+`LINGXILEARN_AGENT_TASK_DIR`, also on `api-var`. API and scheduler share the
+volume and the read-only `packs/` and `skills/` inputs.
+
+The Python configuration defaults to host-only SQLite at
+`var/lingxilearn.sqlite3`. SQLite is not production and does not model
+multi-process PostgreSQL locking/concurrency. Both development and production
+Compose use PostgreSQL; claims, concurrent workers and migrations must be
+verified there.
+
+## Startup, ports and health
+
+Production startup order is encoded in `docker-compose.yml`:
+
+1. PostgreSQL passes `pg_isready`; `api-var-init` prepares filesystem ownership.
+2. `migrate` waits for both and runs `alembic upgrade head` to completion.
+3. FastAPI and scheduler start after migrations.
+4. Web starts after the API image healthcheck succeeds.
+
+Web listens on container port 3000 and is published as
+`${LINGXILEARN_WEB_PORT:-8080}`. FastAPI is internal on port 8000. Its image
+probes `GET /api/health`; that route reports a degraded body on database failure
+but still returns HTTP 200, so it is a process/startup probe rather than a full
+dependency readiness guarantee. Web probes its own `/api/health` rewrite,
+covering Node plus the proxy-to-API path. Scheduler has no HTTP server and its
+inherited image healthcheck is disabled. LingxiIdentity is external and is not
+covered by Compose healthchecks.
+
+Development Compose publishes Web at `localhost:3000` and FastAPI at
+`${LINGXILEARN_PORT:-8080}`. It bind-mounts source, but the browser still uses
+the same-origin Web rewrite to API port 8000 inside the Compose network.
+
+## Agent and background execution
+
+FastAPI creates and mutates Agent tasks through application services.
+LingxiGraph is the execution engine behind the runtime port; the browser only
+consumes durable public task events, interactions and artifact/resource
+references. Private reasoning and credentials are not public payloads.
+
+The standalone Python scheduler owns scheduled domain work. It claims due
+schedules in PostgreSQL and launches Agent tasks through the same composition
+root as FastAPI. New durable background capabilities belong in Python
+application/repository boundaries, not in a Next route, browser timer or
+Web-owned database. See [issue #49](https://github.com/LingXi-Org/LingxiLearn/issues/49).
+
+## Frontend compatibility boundary
+
+Allowed compatibility code is an explicit, narrow adapter for retained data or
+an external integration, with an owner and executable deletion condition. It
+may translate transport/contracts for presentation, but it must not become a
+second domain service, persistence owner, credential/token owner or
+authorization source.
+
+Do not add new Next domain APIs, direct Web database access, independent
+identity-session fetches, local token storage, Web-owned background jobs,
+`@sim/*` packages, fake compatibility routes or restored removed paths.
+Historical adapters remain isolated from the native Lingxi path and are not a
+template for new work. Related constraints are tracked by
+[issue #51](https://github.com/LingXi-Org/LingxiLearn/issues/51) and
+[issue #52](https://github.com/LingXi-Org/LingxiLearn/issues/52); enforcement is
+documented in [`docs/ci-quality-gates.md`](docs/ci-quality-gates.md).
+
+## Repository map
+
+```text
+web/                 Next.js application and Node standalone image
+server/lingxilearn/  FastAPI, application services, scheduler and runtime port
+server/migrations/   Alembic migrations
+packs/               read-only course content
+skills/              read-only Skill catalogue
+docker-compose.dev.yml   bind-mounted development stack
+docker-compose.yml       production Web/API/scheduler/PostgreSQL stack
+```
 
 ## Verification
 
@@ -140,6 +156,5 @@ docker compose --env-file .env -f docker-compose.dev.yml config
 docker compose --env-file .env -f docker-compose.yml config
 ```
 
-For a real local run, copy `.env.example` to `.env`, set the database password
-and identity client id, then start the development Compose file. Production uses
-the same source tree but serves the static export from the API container.
+Container CI builds the images and checks that the Web image configuration
+contains the Node standalone entrypoint and the declared API/Web healthchecks.

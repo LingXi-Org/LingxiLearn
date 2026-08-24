@@ -1,7 +1,7 @@
 # LingxiLearn — one-command deployment.
 #
 #   cp .env.example .env    # edit the password, optionally add an LLM key
-#   docker compose up --build
+#   docker compose pull && docker compose up -d
 #   open http://localhost:8080
 #
 # The Compose path is exercised by the Agent-task end-to-end verification.

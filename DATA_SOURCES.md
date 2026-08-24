@@ -26,7 +26,7 @@ RFC 文档版权归 IETF Trust 所有，此处为教学用途的**摘录与转�
 - 本地只有显式 `LINGXILEARN_INSECURE_DEV_AUTH=true` 时才使用固定开发 subject；不接受
   客户端自报 subject、header 或 learner ID。
 - 存储内容：学习者画像、会话状态、作答证据、掌握度、误区聚合、偏好、追加式学习事件、报告和 SSE 投影日志。
-- 本地开发默认写入 `var/lingxilearn.sqlite3`；容器部署写入 PostgreSQL 卷。
+- 直接在宿主机零配置启动时默认写入 `var/lingxilearn.sqlite3`；开发与生产 Compose 均写入 PostgreSQL 卷。
 - 旧的匿名 guest 记录不会自动映射到新 Identity 用户，仍保留但不通过受保护 API 暴露。
 - 评测使用的学习者档案全部是**合成的**（`lingxilearn.eval`），
   评测报告中的"学习增益"一栏已明确标注为流程验证，**不代表真实学生的学习效果**。

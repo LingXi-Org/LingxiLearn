@@ -1,9 +1,10 @@
 /**
  * Shared API base configuration.
  *
- * When the app is served by FastAPI (single-process deployment) the API is
- * same-origin and this is empty. Point NEXT_PUBLIC_API_BASE at the backend
- * when running ``next dev`` against a separately hosted server.
+ * The browser normally uses an empty base so `/api/*` stays same-origin and
+ * the Next standalone/dev server rewrites it to FastAPI. A non-empty public
+ * base is exceptional cross-origin development compatibility; LingxiIdentity
+ * browser requests must remain same-origin.
  *
  * This module is the single owner of the API_BASE constant. Both the
  * transport layer and domain clients import from here (issue #40).

@@ -13,7 +13,7 @@ setup: ## Install the current backend and root frontend dependencies
 dev: ## Start the only local development deployment with bind mounts
 	docker compose -f docker-compose.dev.yml up --build
 
-prod: ## Start the only production deployment with a static web export
+prod: ## Start the production Next standalone Web, API, scheduler, and database
 	$(MAKE) prod-pull
 	docker compose -f docker-compose.yml up -d
 

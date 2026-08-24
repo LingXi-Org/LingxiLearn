@@ -31,22 +31,17 @@ Goal → Plan → Act → Observe → Update State → Re-plan
 
 ## Architecture
 
+Production runs separate Next standalone / Node Web, FastAPI API, Python
+Scheduler, and PostgreSQL processes. Browser `/api/*` and `/auth/*` requests
+stay same-origin through Web rewrites; external LingxiIdentity BFF / Logto owns
+identity sessions. See [ARCHITECTURE.md](ARCHITECTURE.md) for topology, startup
+order, and ownership.
+
 ```text
-Next.js / React
-      │
-      ▼
-FastAPI
-      │
-      ▼
-LingxiHarness
-Goal Interpreter · Orchestrator · Dispatcher
-      │
-      ▼
-LingxiGraph
-      │
-      ├── Skills / Agents / Tools
-      ├── Course Packs
-      └── PostgreSQL / Artifacts
+Browser → Next standalone Web → FastAPI → LingxiGraph
+                                  ├→ PostgreSQL / file and artifact storage
+                                  └→ LingxiIdentity BFF / Logto
+Python Scheduler → PostgreSQL job claims → shared application services
 ```
 
 Core principle:
