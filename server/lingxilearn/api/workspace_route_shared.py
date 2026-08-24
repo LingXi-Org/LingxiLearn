@@ -106,12 +106,6 @@ from ..store.models.knowledge import (
     KnowledgeTag,
 )
 from ..store.models.runtime import AgentExecution
-from ..store.models.table import (
-    WorkspaceTable,
-    WorkspaceTableColumn,
-    WorkspaceTableRow,
-    WorkspaceTableView,
-)
 from ..store.models.workspace import (
     PersonalSkill,
     Workspace,
@@ -165,7 +159,6 @@ from .mappers.workspaces import pinned_item_response as _pinned_item_public
 from .mappers.workspaces import workspace_response as _public_workspace
 
 MAX_FILE_SIZE = 20 * 1024 * 1024
-ALLOWED_COLUMN_TYPES = {"string", "number", "currency", "boolean", "date", "json", "select"}
 PINNED_RESOURCE_TYPES = {"workflow", "file", "knowledge_base", "table", "folder", "workspace"}
 # Stable public alias for a learner's single personal workspace. Database IDs
 # remain internal; accepting either form at the API boundary is intentional.
@@ -242,23 +235,3 @@ def _public_origin(request: Request) -> str:
     if host:
         return f"{proto}://{host}".rstrip("/")
     return str(request.base_url).rstrip("/")
-
-
-async def _table_for_id(
-    request: Request, table_id: str, context: LearnerContext
-) -> tuple[Workspace, WorkspaceTable]:
-    workspace = await _workspace(request, context)
-    async with services_of(request).db.session() as session:
-        table = await session.scalar(
-            select(WorkspaceTable).where(
-                WorkspaceTable.id == table_id, WorkspaceTable.workspace_id == workspace.id
-            )
-        )
-        if table is None:
-            raise not_found()
-        return workspace, table
-
-
-def _assert_table_writable(table: WorkspaceTable) -> None:
-    if (table.metadata_payload or {}).get("source") == "lingxi-runtime":
-        raise HTTPException(status_code=403, detail="learning_records_are_read_only")

@@ -248,3 +248,66 @@ async def test_workspace_contract_preserves_auth_and_domain_errors(workspace_api
         response = await unauthenticated.get("/api/workspaces")
     assert response.status_code == 401
     assert response.json() == {"detail": "authentication_required"}
+
+
+@pytest.mark.asyncio
+async def test_table_crud_preserves_typed_rows_and_view_contract(workspace_api) -> None:
+    client, _ = workspace_api
+    created = await client.post(
+        "/api/table",
+        json={
+            "workspaceId": PUBLIC_WORKSPACE_ID,
+            "name": "成绩",
+            "schema": {
+                "columns": [
+                    {"name": "student", "type": "string", "required": True},
+                    {"name": "score", "type": "number"},
+                    {"name": "passed", "type": "boolean"},
+                ]
+            },
+        },
+    )
+    assert created.status_code == 200
+    table_id = created.json()["data"]["table"]["id"]
+
+    inserted = await client.post(
+        f"/api/table/{table_id}/rows",
+        json={"rows": [{"student": "Ada", "score": "98.5", "passed": "yes"}]},
+    )
+    assert inserted.status_code == 200
+    values = inserted.json()["data"]["rows"][0]["values"]
+    assert values == {"student": "Ada", "score": 98.5, "passed": True}
+
+    missing_required = await client.post(
+        f"/api/table/{table_id}/rows", json={"rows": [{"score": 10}]}
+    )
+    assert missing_required.status_code == 422
+    assert missing_required.json() == {"detail": "required_columns:student"}
+
+    view = await client.post(
+        f"/api/table/{table_id}/views", json={"name": "高分", "config": {"sort": "score"}}
+    )
+    assert view.status_code == 200
+    view_id = view.json()["data"]["view"]["id"]
+    promoted = await client.patch(
+        f"/api/table/{table_id}/views/{view_id}", json={"isDefault": True}
+    )
+    assert promoted.status_code == 200
+    assert promoted.json()["data"]["view"]["isDefault"] is True
+
+
+def test_table_router_cannot_own_sql_or_orm_models() -> None:
+    source = (
+        Path(__file__).parents[1] / "lingxilearn" / "api" / "workspace_table_routes.py"
+    ).read_text(encoding="utf-8")
+    forbidden = (
+        "sqlalchemy",
+        "store.models",
+        "session.execute",
+        "session.scalar",
+        "WorkspaceTable(",
+        "WorkspaceTableColumn(",
+        "WorkspaceTableRow(",
+        "WorkspaceTableView(",
+    )
+    assert not [token for token in forbidden if token in source]

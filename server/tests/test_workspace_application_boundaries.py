@@ -4,11 +4,13 @@ import base64
 import io
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from lingxilearn.application.document_parser import KnowledgeDocumentParser
 from lingxilearn.application.table_csv import parse_csv_rows
+from lingxilearn.application.table_values import coerce_table_values
 from lingxilearn.application.workspace_errors import (
     WorkspaceDomainError,
     WorkspacePayloadTooLarge,
@@ -86,3 +88,35 @@ def test_document_parser_enforces_size_and_csv_parser_preserves_rows() -> None:
         ["name", "score"],
         [{"name": "Ada", "score": "10"}],
     )
+
+
+def test_table_value_policy_covers_all_native_column_types() -> None:
+    columns = [
+        SimpleNamespace(key="text", type="string", options={"required": True}),
+        SimpleNamespace(key="amount", type="currency", options={}),
+        SimpleNamespace(key="when", type="date", options={}),
+        SimpleNamespace(key="payload", type="json", options={}),
+        SimpleNamespace(
+            key="tags",
+            type="select",
+            options={"multiple": True, "options": [{"value": "a"}, {"value": "b"}]},
+        ),
+    ]
+    assert coerce_table_values(
+        columns,
+        {
+            "text": 42,
+            "amount": "12.5",
+            "when": "2026-08-24",
+            "payload": '{"ok":true}',
+            "tags": ["a", "b"],
+        },
+    ) == {
+        "text": "42",
+        "amount": 12.5,
+        "when": "2026-08-24",
+        "payload": {"ok": True},
+        "tags": ["a", "b"],
+    }
+    with pytest.raises(WorkspaceDomainError, match="invalid_select_value:tags"):
+        coerce_table_values(columns, {"text": "Ada", "tags": ["unknown"]})
