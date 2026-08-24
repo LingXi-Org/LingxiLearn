@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from 'react'
-import { isLoopbackHostname } from '@/lib/security/hostnames'
 import {
   keepPreviousData,
   useMutation,
@@ -35,6 +34,7 @@ import type {
   McpTransport,
   StoredMcpTool,
 } from '@/lib/mcp/types'
+import { isLoopbackHostname } from '@/lib/security/hostnames'
 import { getErrorMessage } from '@/lib/utils/errors'
 import { workflowMcpServerKeys } from '@/hooks/queries/workflow-mcp-servers'
 
@@ -123,7 +123,13 @@ async function fetchMcpTools(
       },
       signal,
     })
-    return data.data.tools
+    return data.data.tools.map((tool) => ({
+      ...tool,
+      // The API permits an omitted description, while the shared MCP tool
+      // type follows the SDK and requires one. Keep the wire contract
+      // optional without leaking that ambiguity into consumers.
+      description: tool.description ?? '',
+    }))
   } catch (error) {
     if (error instanceof ApiClientError && error.status === 404) {
       return []

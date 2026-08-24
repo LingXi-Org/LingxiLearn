@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Music } from '@/components/ui-kit/icons'
 import dynamic from 'next/dynamic'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { resolveMediaMimeType } from '@/lib/uploads/utils/file-utils'
 import {
   useWorkspaceFileBinary,

@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useState } from 'react'
 import { createLogger } from '@/lib/logger'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { PptxSandboxHost } from '@/app/workspace/[workspaceId]/files/components/file-viewer/pptx-sandbox-host'
 import {
   PREVIEW_LOADING_OVERLAY,

@@ -181,7 +181,10 @@ export function subscribeAgentEvents(
 }
 
 /** Mothership Stream V1 history: durable envelopes only (issue #18). */
-export function agentTaskV1Events(taskId: string, from = 0): Promise<{ events: AgentTaskEvent[] }> {
+export function agentTaskV1Events(
+  taskId: string,
+  from = 0
+): Promise<{ events: AgentTaskEvent[]; protocol: 'v1' | 'legacy-v0' }> {
   return agentTasksClient.getAgentTaskV1Events(taskId, from)
 }
 

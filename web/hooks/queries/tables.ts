@@ -98,9 +98,8 @@ import {
   isExecInFlight,
   optimisticallyScheduleNewlyEligibleGroups,
 } from '@/lib/table/deps'
-import { sanitizeName } from '@/lib/table/import'
+import { type CsvHeaderMapping, sanitizeName } from '@/lib/table/import'
 import type {
-  CsvHeaderMapping,
   EnrichmentRunDetail,
   RowData,
   RowExecutionMetadata,

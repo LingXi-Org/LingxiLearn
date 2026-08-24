@@ -9,7 +9,7 @@ import {
   buildFileSelectionLabel,
   truncateSelectionText,
 } from '@/lib/copilot/chat/selection-context'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
 import { useAddToChat } from '@/hooks/use-add-to-chat'
 import type { ChatContext } from '@/stores/panel'

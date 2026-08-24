@@ -7,7 +7,8 @@ import type { BlockConfig } from '@/blocks/types'
  * rewriting the many synchronous `getBlock` call sites.
  *
  * Two environment-specific resolvers register here:
- *  - client: a Map hydrated from `useCustomBlocks` (see `client-overlay.ts`)
+ *  - client: a Map hydrated by an optional native client owner (see
+ *    `client-overlay.ts`)
  *  - server: an AsyncLocalStorage map scoped per request/org (see `server-overlay.ts`)
  *
  * This module is isomorphic (no `'use client'`, no `node:` imports) so

@@ -18,7 +18,6 @@ import { getErrorMessage } from '@/lib/utils/errors'
 import { useSession } from '@/lib/auth/auth-client'
 import type { OAuthReturnContext } from '@/lib/credentials/client-state'
 import { ADD_CONNECTOR_SEARCH_PARAM, writeOAuthReturnContext } from '@/lib/credentials/client-state'
-import { defaultCredentialDisplayName } from '@/lib/credentials/display-name'
 import {
   getProviderIdFromServiceId,
   OAUTH_PROVIDERS,
@@ -32,6 +31,25 @@ import { useConnectOAuthService } from '@/hooks/queries/oauth/oauth-connections'
 const logger = createLogger('ConnectOAuthModal')
 
 const EMPTY_SCOPES: readonly string[] = []
+const DISPLAY_NAME_MAX_LENGTH = 255
+
+function defaultCredentialDisplayName(
+  userName: string | null | undefined,
+  serviceName: string,
+  takenNames: ReadonlySet<string>
+): string {
+  const trimmed = userName?.trim()
+  const suffix = `'s ${serviceName}`
+  const budget = DISPLAY_NAME_MAX_LENGTH - suffix.length - 5
+  const base = trimmed ? `${trimmed.slice(0, Math.max(0, budget))}${suffix}` : `My ${serviceName}`
+  if (!takenNames.has(base.toLowerCase())) return base
+
+  for (let index = 2; index < 10000; index += 1) {
+    const candidate = `${base} ${index}`
+    if (!takenNames.has(candidate.toLowerCase())) return candidate
+  }
+  return base
+}
 
 type ServiceIcon = ComponentType<{ className?: string }>
 

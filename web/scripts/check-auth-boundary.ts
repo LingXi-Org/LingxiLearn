@@ -10,8 +10,7 @@
  *   - `better-auth` and `better-auth/*` (server or client runtime)
  *   - `@better-auth/*` (plugins, adapters, helpers)
  *   - `@sim/auth` and `@sim/auth/*` (the deleted Sim auth compatibility
- *     package; its pure Principal type contract now lives at
- *     `@/lib/auth/principal`, which is a plain app module and is allowed)
+ *     package; identity contracts now live in the LingxiIdentity API module)
  *
  * No exception is kept for any `@sim/auth` entry point so the compatibility
  * package cannot be reintroduced to host a second auth runtime.
@@ -63,7 +62,7 @@ function forbiddenBoundary(specifier: string): string | null {
   }
   const isSimAuth = specifier === '@sim/auth' || specifier.startsWith('@sim/auth/')
   if (isSimAuth) {
-    return '@sim/auth (package deleted; principal contract lives at @/lib/auth/principal)'
+    return '@sim/auth (package deleted; identity contracts live in the BFF API)'
   }
   return null
 }

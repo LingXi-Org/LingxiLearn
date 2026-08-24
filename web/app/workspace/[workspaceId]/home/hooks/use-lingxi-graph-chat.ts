@@ -441,7 +441,7 @@ export function useLingxiGraphChat(
   // open, and an optimistic active flag alone cannot represent a terminal
   // task after reconnect.
   const assistantStreaming = turnState === 'active' && !locallyStopped
-  const messages = useMemo(() => {
+  const messages = useMemo<ChatMessage[]>(() => {
     if (!task) return localUsers.length > 0 ? localUsers : []
     // V1 transcript: every turn independently owns its user text, content
     // blocks, interactions and AgentRuns (issue #18 §18.3).  Local user

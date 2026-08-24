@@ -1,5 +1,5 @@
 import { canonicalWorkspaceFilePath } from '@/lib/copilot/vfs/path-utils'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { extractEmbeddedFileRef } from '@/lib/uploads/utils/embedded-image-ref'
 
 /**

@@ -1,6 +1,6 @@
 import type { Logger } from '@/lib/logger'
 import { omit } from '@/lib/utils/object'
-import type { StorageContext } from '@/lib/uploads'
+import type { StorageContext } from '@/lib/uploads/shared/types'
 import {
   ACCEPTED_FILE_TYPES,
   SUPPORTED_ARCHIVE_EXTENSIONS,

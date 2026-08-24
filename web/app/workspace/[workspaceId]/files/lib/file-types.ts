@@ -1,4 +1,4 @@
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import type { WorkspaceFileFolderApi } from '@/hooks/queries/workspace-file-folders'
 
 /** A right-clicked row resolved to its record — what the row context menu acts on. */

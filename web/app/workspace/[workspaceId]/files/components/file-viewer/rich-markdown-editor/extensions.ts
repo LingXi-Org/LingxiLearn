@@ -130,6 +130,10 @@ export function createMarkdownContentExtensions(
     HTMLAttributes: { class: 'code-editor-theme' },
   })
   return [
+    // StarterKit's semver-compatible subextensions may be hoisted at a newer
+    // patch release than the root Tiptap packages. Their runtime contract is
+    // identical, but TypeScript assigns the duplicate Extension classes
+    // different nominal identities, so normalize that single boundary here.
     StarterKit.configure({
       link: { openOnClick: false, protocols: [SIM_LINK_PROTOCOL] },
       underline: false,
@@ -139,7 +143,7 @@ export function createMarkdownContentExtensions(
       // Collaboration provides its own (Yjs-backed) undo/redo — disabling the
       // built-in history avoids the two fighting over the shared document.
       ...(options.disableHistory ? { undoRedo: false as const } : {}),
-    }),
+    }) as Extensions[number],
     BlockSafeParagraph,
     InlineCode,
     Highlight,

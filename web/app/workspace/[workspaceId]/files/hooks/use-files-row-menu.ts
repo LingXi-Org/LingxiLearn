@@ -2,7 +2,7 @@
 
 import { type MouseEvent, useCallback, useMemo, useRef } from 'react'
 import { createLogger } from '@/lib/logger'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import {
   buildMoveOptions,
   folderRowId,

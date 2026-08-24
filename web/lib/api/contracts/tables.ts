@@ -16,14 +16,17 @@ import {
   SORT_DIRECTIONS,
   TABLE_LIMITS,
 } from '@/lib/table/constants'
-import { CSV_SYNC_MAX_FILE_SIZE_BYTES, CSV_SYNC_MAX_FILE_SIZE_MESSAGE } from '@/lib/table/import'
+import {
+  CSV_SYNC_MAX_FILE_SIZE_BYTES,
+  CSV_SYNC_MAX_FILE_SIZE_MESSAGE,
+  type CsvHeaderMapping,
+} from '@/lib/table/import'
 import {
   getTablePredicateTreeSizeError,
   MAX_PREDICATE_GROUP_SIZE,
   normalizeTablePredicate,
 } from '@/lib/table/query-builder/predicate'
 import type {
-  CsvHeaderMapping,
   EnrichmentRunDetail,
   Filter,
   Predicate,

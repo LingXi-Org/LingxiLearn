@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceFileFolderApi } from '@/hooks/queries/workspace-file-folders'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { buildFolderSizeMap } from '@/app/workspace/[workspaceId]/files/lib/folder-size-map'
 
 function makeFile(folderId: string | null, size: number, id = `f-${size}`): WorkspaceFileRecord {

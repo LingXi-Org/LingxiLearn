@@ -129,6 +129,10 @@ export async function readFilePreviewSessions(streamId: string): Promise<FilePre
   const sessions: FilePreviewSession[] = []
   const values = Object.values(raw ?? {})
   for (const entry of values) {
+    if (typeof entry !== 'string') {
+      logger.warn('Skipping non-string file preview session entry', { streamId })
+      continue
+    }
     try {
       const parsed = JSON.parse(entry) as unknown
       if (!isFilePreviewSession(parsed)) {

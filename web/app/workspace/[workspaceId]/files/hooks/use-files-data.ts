@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { createLogger } from '@/lib/logger'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { buildDescendantIndex } from '@/app/workspace/[workspaceId]/components/folders'
 import { buildFolderSizeMap } from '@/app/workspace/[workspaceId]/files/lib/folder-size-map'
 import { usePinItem, usePinnedIds, useUnpinItem } from '@/hooks/queries/pinned-items'

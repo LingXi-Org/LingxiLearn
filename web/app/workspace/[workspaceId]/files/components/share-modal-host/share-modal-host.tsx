@@ -1,6 +1,6 @@
 'use client'
 
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { ShareModal } from '@/app/workspace/[workspaceId]/files/components/share-modal'
 
 export interface ShareModalHostProps {

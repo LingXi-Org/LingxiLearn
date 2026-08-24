@@ -156,6 +156,7 @@ export const ResourceContent = memo(function ResourceContent({
       name: streamFileName,
       key: '',
       path: '',
+      folderId: null,
       size: 0,
       type,
       uploadedBy: '',

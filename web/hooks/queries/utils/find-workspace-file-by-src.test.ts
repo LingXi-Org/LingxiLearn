@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { findWorkspaceFileBySrc } from '@/hooks/queries/utils/find-workspace-file-by-src'
 
 function record(over: Partial<WorkspaceFileRecord>): WorkspaceFileRecord {

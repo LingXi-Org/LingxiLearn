@@ -1,4 +1,3 @@
-import type { Executor } from '@/executor'
 import type { SerializableExecutionState } from '@/executor/execution/types'
 import type { ExecutionContext } from '@/executor/types'
 
@@ -45,8 +44,6 @@ export interface WorkflowExecutionState {
   activeBlockIds: Set<string>
   /** Block IDs queued to execute next (used during debug stepping) */
   pendingBlocks: string[]
-  /** The executor instance when running client-side */
-  executor: Executor | null
   /** Debug execution context preserved across steps */
   debugContext: ExecutionContext | null
   /** Maps block IDs to their run result from the last execution */
@@ -88,7 +85,6 @@ export const defaultWorkflowExecutionState: WorkflowExecutionState = {
   ...deriveExecutionFlags('idle'),
   activeBlockIds: new Set(),
   pendingBlocks: [],
-  executor: null,
   debugContext: null,
   lastRunPath: new Map(),
   lastRunEdges: new Map(),
@@ -154,8 +150,6 @@ export interface ExecutionActions {
   setIsDebugging: (workflowId: string, isDebugging: boolean) => void
   /** Sets the list of blocks pending execution during debug stepping */
   setPendingBlocks: (workflowId: string, blockIds: string[]) => void
-  /** Stores the executor instance for a workflow */
-  setExecutor: (workflowId: string, executor: Executor | null) => void
   /** Stores the debug execution context for a workflow */
   setDebugContext: (workflowId: string, context: ExecutionContext | null) => void
   /** Records a block's run result (success/error) in the run path */
