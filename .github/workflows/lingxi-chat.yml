@@ -1,4 +1,4 @@
-name: Lingxi chat checks
+name: Product quality gates
 
 on:
   pull_request:
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   frontend:
-    name: Lingxi frontend contract
+    name: Frontend production quality
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -44,8 +44,14 @@ jobs:
       - name: Run Lingxi chat tests
         run: bun run test:chat
 
+      - name: Run shared core unit tests
+        run: bun run test:unit:core
+
       - name: Type-check frontend contracts
         run: bun run type-check
+
+      - name: Lint production frontend source
+        run: bun run lint:production
 
       - name: Build production frontend
         run: bun run build
@@ -59,41 +65,13 @@ jobs:
       - name: Check workspace module boundaries
         run: bash ../scripts/check-workspace-boundaries.sh web
 
-      - name: Check Lingxi frontend changes
-        run: >-
-          bunx biome check
-          app/workspace/[workspaceId]/components/message-actions/message-actions.tsx
-          app/workspace/[workspaceId]/home/components/message-content/components/agent-group/agent-group.tsx
-          app/workspace/[workspaceId]/home/components/message-content/components/agent-group/tool-call-item.test.tsx
-          app/workspace/[workspaceId]/home/components/message-content/components/agent-group/tool-call-item.tsx
-          app/workspace/[workspaceId]/home/components/message-content/message-content.tsx
-          app/workspace/[workspaceId]/home/components/message-content/components/question/question.tsx
-          app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers.ts
-          app/workspace/[workspaceId]/home/components/mothership-chat/mothership-chat.tsx
-          app/workspace/[workspaceId]/home/hooks/use-chat.ts
-          app/workspace/[workspaceId]/home/hooks/use-lingxi-graph-chat.ts
-          app/workspace/[workspaceId]/home/home.tsx
-          app/workspace/[workspaceId]/home/types.ts
-          lib/lingxi/chat-types.ts
-          lib/lingxi/generated/mothership-stream-v1.test.ts
-          lib/lingxi/generated/mothership-stream-v1.ts
-          lib/lingxi/legacy/v0/lingxi-graph-v0.test.ts
-          lib/lingxi/legacy/v0/lingxi-graph-v0.ts
-          lib/lingxi/lingxi-task-transport.ts
-          lib/lingxi/stream/decode-v1.test.ts
-          lib/lingxi/stream/decode-v1.ts
-          lib/lingxi/stream/turn-model.test.ts
-          lib/lingxi/stream/turn-model.ts
-          lib/lingxi/supported-contexts.ts
-          lib/lingxi/turn-state.test.ts
-          lib/lingxi/turn-state.ts
-          stores/mothership-queue/store.test.ts
-          stores/mothership-queue/store.ts
-          stores/mothership-queue/types.ts
-          vitest.config.ts
+      - name: Check production quality boundaries
+        run: |
+          bun run check:quality-boundaries
+          bunx vitest run --config vitest.config.ts scripts/check-quality-boundaries.test.ts
 
-  backend:
-    name: Lingxi backend protocol & lifecycle
+  backend-static:
+    name: Backend static quality
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -106,22 +84,35 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+          python-version: '3.13'
 
       - name: Install backend dependencies
         run: uv sync --locked --extra dev
 
-      - name: Run create-task idempotency regression
-        run: uv run --extra dev pytest -q tests/test_agent_tasks.py -k create_agent_task_idempotency
+      - name: Ruff production and tests
+        run: uv run --extra dev ruff check lingxilearn tests
 
-      - name: Run Mothership V1 protocol & lifecycle tests
-        run: >-
-          uv run --extra dev pytest -q
-          tests/test_mothership_stream_v1.py
-          tests/test_public_projection.py
-          tests/test_interactions.py
-          tests/test_interaction_continuation.py
-          tests/test_agent_runs_lifecycle.py
-          tests/test_parallel_dispatch.py
-          tests/test_artifact_resource_versioning.py
-          tests/test_sqlite_schema_upgrade.py
-          tests/test_thread_and_graph.py
+      - name: Mypy production package
+        run: uv run --extra dev mypy lingxilearn
+
+  backend-core:
+    name: Backend core tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: '3.13'
+
+      - name: Install backend dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Run backend core suite
+        run: uv run --extra dev pytest -q

@@ -15,6 +15,8 @@
       "!**/.env*",
       "!**/*.test.*",
       "!**/*.spec.*",
+      "!**/tools/generated/**",
+      "!**/lib/execution/sandbox/bundles/**",
       "!**/public/sw.js",
       "!**/public/workbox-*.js",
       "!**/public/worker-*.js"
@@ -71,7 +73,8 @@
         "noControlCharactersInRegex": "off",
         "noExplicitAny": "off",
         "noArrayIndexKey": "off",
-        "noImplicitAnyLet": "off"
+        "noImplicitAnyLet": "off",
+        "noAssignInExpressions": "off"
       },
       "correctness": {
         "useExhaustiveDependencies": "off",
@@ -92,6 +95,7 @@
     }
   },
   "javascript": {
+    "jsxRuntime": "reactClassic",
     "formatter": {
       "jsxQuoteStyle": "single",
       "quoteProperties": "asNeeded",

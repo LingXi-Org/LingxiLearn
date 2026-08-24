@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -42,10 +42,17 @@ _NODE_EVENTS = {
 
 
 class PrimitiveLike(Protocol):
-    sim_type: str
-    category: str
-    idempotent: bool
-    label: str
+    @property
+    def sim_type(self) -> str: ...
+
+    @property
+    def category(self) -> str: ...
+
+    @property
+    def idempotent(self) -> bool: ...
+
+    @property
+    def label(self) -> str: ...
 
 
 PrimitiveResolver = Callable[[str], PrimitiveLike]
@@ -567,6 +574,8 @@ class SimTraceProjector:
         block_id: str = "",
     ) -> None:
         kind = getattr(event, "kind", None)
+        if not isinstance(kind, EventKind):
+            return
         runtime = {
             "execution_id": self.execution_id,
             "run_id": getattr(event, "run_id", None),
@@ -635,6 +644,7 @@ class SimTraceProjector:
         timestamp: Any,
         block_id: str = "",
     ) -> None:
+        span: dict[str, Any] | None
         timestamp = self._touch(timestamp)
         if kind == "run.started":
             self._saw_run_lifecycle = True
@@ -808,6 +818,7 @@ class SimTraceProjector:
         timestamp: Any = None,
         block_id: str = "",
     ) -> None:
+        span: dict[str, Any] | None
         safe_payload = _transport_free(payload)
         safe_runtime = dict(runtime or {})
         timestamp = self._touch(timestamp)
@@ -1071,9 +1082,9 @@ class SimTraceProjector:
                 or model_span.get("model")
                 or ""
             )
-            provider = safe_payload.get("provider") or response.get("provider")
-            if provider:
-                model_span["provider"] = str(provider)
+            provider_value = safe_payload.get("provider") or response.get("provider")
+            if provider_value:
+                model_span["provider"] = str(provider_value)
             finish_reason = response.get("finish_reason") or response.get("stop_reason")
             if finish_reason:
                 model_span["finishReason"] = str(finish_reason)
@@ -1234,9 +1245,9 @@ class SimTraceProjector:
             span = self._find_agent(agent) or self._parent(safe_runtime)
             if span is not None:
                 output = dict(span.get("output") or {})
-                message = safe_payload.get("message")
-                if message:
-                    output["message"] = str(message)
+                message_value = safe_payload.get("message")
+                if message_value:
+                    output["message"] = str(message_value)
                 span["output"] = output or safe_payload
             self._event(
                 span,
@@ -1478,7 +1489,7 @@ def replay_trace(
     return projector.snapshot(status=status, ended_at=ended_at)
 
 
-def total_tokens(trace_spans: list[Mapping[str, Any]]) -> int:
+def total_tokens(trace_spans: Sequence[Mapping[str, Any]]) -> int:
     """Return the root token total without double-counting child spans."""
 
     if not trace_spans:

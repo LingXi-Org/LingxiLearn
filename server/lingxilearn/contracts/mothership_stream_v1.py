@@ -25,12 +25,12 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION: Final[Literal[1]] = 1
 
 EventType = Literal[
     "turn",
@@ -309,16 +309,16 @@ class LingxiMothershipStreamV1Encoder:
     payload schema for its type.
     """
 
-    PAYLOAD_MODELS: dict[str, type[V1Model]] = {
-        "turn": TurnPayload,
-        "text": TextPayload,
-        "span": SpanStartPayload | SpanEndPayload,  # type: ignore[assignment]
-        "tool": ToolPayload,
-        "interaction": InteractionRequestedPayload | InteractionResolvedPayload,  # type: ignore[assignment]
-        "resource": ResourceUpsertPayload,
-        "run": RunPayload,
-        "error": ErrorPayload,
-        "complete": CompletePayload,
+    PAYLOAD_MODELS: dict[str, tuple[type[V1Model], ...]] = {
+        "turn": (TurnPayload,),
+        "text": (TextPayload,),
+        "span": (SpanStartPayload, SpanEndPayload),
+        "tool": (ToolPayload,),
+        "interaction": (InteractionRequestedPayload, InteractionResolvedPayload),
+        "resource": (ResourceUpsertPayload,),
+        "run": (RunPayload,),
+        "error": (ErrorPayload,),
+        "complete": (CompletePayload,),
     }
 
     def encode(
@@ -347,10 +347,9 @@ class LingxiMothershipStreamV1Encoder:
 
     @staticmethod
     def _validate_payload_shape(event_type: str, payload: dict[str, Any]) -> None:
-        model_or_union = LingxiMothershipStreamV1Encoder.PAYLOAD_MODELS.get(event_type)
-        if model_or_union is None:
+        candidates = LingxiMothershipStreamV1Encoder.PAYLOAD_MODELS.get(event_type)
+        if candidates is None:
             raise ValueError(f"unknown V1 event type: {event_type}")
-        candidates = getattr(model_or_union, "__args__", (model_or_union,))
         for candidate in candidates:
             try:
                 candidate.model_validate(payload)

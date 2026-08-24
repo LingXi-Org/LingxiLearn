@@ -15,7 +15,6 @@ import pytest
 
 from lingxilearn.agents.providers import (
     ProviderContext,
-    ProviderError,
     ProviderResult,
     descriptor,
     register,
