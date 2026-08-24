@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
-import { Home } from '../../home/home'
+import { WorkspaceHomeShell } from '../../home/home'
 import { HomeFallback } from '../../home/home-fallback'
 
 export const metadata: Metadata = {
@@ -15,7 +15,10 @@ export default async function ChatPage({
   const { workspaceId, chatId } = await params
   return (
     <Suspense fallback={<HomeFallback />}>
-      <Home chatId={chatId === 'lingxi' ? undefined : chatId} tableViewsEnabled={false} />
+      <WorkspaceHomeShell
+        chatId={chatId === 'lingxi' ? undefined : chatId}
+        tableViewsEnabled={false}
+      />
     </Suspense>
   )
 }
