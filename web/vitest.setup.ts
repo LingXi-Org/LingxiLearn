@@ -9,7 +9,6 @@ import {
   requestUtilsMock,
   setupGlobalFetchMock,
   setupGlobalStorageMocks,
-  terminalConsoleMock,
   urlsMock,
   workflowAuthzMock,
 } from '@/tests/support'
@@ -42,51 +41,6 @@ vi.mock('@/stores/console/store', () => ({
       addConsole: vi.fn(),
     }),
   },
-}))
-
-vi.mock('@/stores/terminal', () => terminalConsoleMock)
-vi.mock('@/stores/terminal/console/store', () => terminalConsoleMock)
-
-vi.mock('@/stores/execution/store', () => ({
-  useExecutionStore: {
-    getState: vi.fn().mockReturnValue({
-      getWorkflowExecution: vi.fn().mockReturnValue({
-        status: 'idle',
-        isExecuting: false,
-        isDebugging: false,
-        activeBlockIds: new Set(),
-        pendingBlocks: [],
-        executor: null,
-        debugContext: null,
-        lastRunPath: new Map(),
-        lastRunEdges: new Map(),
-      }),
-      setStatus: vi.fn(),
-      setIsExecuting: vi.fn(),
-      setIsDebugging: vi.fn(),
-      setPendingBlocks: vi.fn(),
-      reset: vi.fn(),
-      setActiveBlocks: vi.fn(),
-      setBlockRunStatus: vi.fn(),
-      setEdgeRunStatus: vi.fn(),
-      clearRunPath: vi.fn(),
-    }),
-  },
-  useCurrentWorkflowExecution: vi.fn().mockReturnValue({
-    status: 'idle',
-    isExecuting: false,
-    isDebugging: false,
-    activeBlockIds: new Set(),
-    pendingBlocks: [],
-    executor: null,
-    debugContext: null,
-    lastRunPath: new Map(),
-    lastRunEdges: new Map(),
-  }),
-  useIsBlockActive: vi.fn().mockReturnValue(false),
-  useIsCurrentWorkflowExecuting: vi.fn().mockReturnValue(false),
-  useLastRunPath: vi.fn().mockReturnValue(new Map()),
-  useLastRunEdges: vi.fn().mockReturnValue(new Map()),
 }))
 
 /**

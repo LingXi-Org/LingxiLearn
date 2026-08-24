@@ -1,5 +1,7 @@
 import type { Edge } from 'reactflow'
-import type { BlockState, Loop, Parallel } from '@/stores/workflows/workflow/types'
+import type { BlockState, Loop, Parallel } from '@/lib/workflows/domain/workflow'
+
+export type { WorkflowMetadata } from '@/lib/workflows/domain/metadata'
 
 interface ClipboardData {
   blocks: Record<string, BlockState>
@@ -8,21 +10,6 @@ interface ClipboardData {
   loops: Record<string, Loop>
   parallels: Record<string, Parallel>
   timestamp: number
-}
-
-export interface WorkflowMetadata {
-  id: string
-  name: string
-  lastModified: Date
-  createdAt: Date
-  description?: string
-  workspaceId?: string
-  folderId?: string | null
-  sortOrder: number
-  archivedAt?: Date | null
-  locked?: boolean
-  forkSyncExcluded?: boolean
-  isDeployed?: boolean
 }
 
 export type HydrationPhase = 'idle' | 'creating' | 'state-loading' | 'ready' | 'error'

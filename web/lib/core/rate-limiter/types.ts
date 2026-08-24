@@ -1,7 +1,7 @@
 import { getPlanTypeForLimits } from '@/lib/billing/plan-helpers'
 import { env } from '@/lib/core/config/env'
 import { isBillingEnabled } from '@/lib/core/config/env-flags'
-import type { CoreTriggerType } from '@/stores/logs/filters/types'
+import type { CoreTriggerType } from '@/lib/logs/filter-types'
 import type { TokenBucketConfig } from './storage'
 
 export type TriggerType = CoreTriggerType | 'api-endpoint'

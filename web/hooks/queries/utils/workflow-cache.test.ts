@@ -27,7 +27,7 @@ afterAll(() => {
 })
 
 import { workflowKeys } from '@/hooks/queries/utils/workflow-keys'
-import type { WorkflowMetadata } from '@/stores/workflows/registry/types'
+import type { WorkflowMetadata } from '@/lib/workflows/domain/metadata'
 
 function workflow(id: string): WorkflowMetadata {
   return {

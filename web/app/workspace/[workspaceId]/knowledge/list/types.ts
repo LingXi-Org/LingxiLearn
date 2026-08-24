@@ -1,5 +1,5 @@
 import type { KnowledgeBaseData } from '@/lib/knowledge/types'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 /**
  * The folder tree the knowledge list navigates. One constant so the domain never spells

@@ -3,7 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 const { mockGetBlock } = vi.hoisted(() => ({
   mockGetBlock: vi.fn(),

@@ -9,7 +9,7 @@ import type {
   ProviderTimingSegment,
 } from '@/executor/types'
 import type { ResolvedSecretTraceProvenanceV1 } from '@/executor/utils/resolved-secret-trace-registry'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 export type { WorkflowState }
 export type WorkflowEdge = Edge
@@ -58,7 +58,7 @@ export interface ExecutionEnvironment {
   workspaceId: string
 }
 
-import type { CoreTriggerType } from '@/stores/logs/filters/types'
+import type { CoreTriggerType } from '@/lib/logs/filter-types'
 
 export interface ExecutionTrigger {
   type: CoreTriggerType | string

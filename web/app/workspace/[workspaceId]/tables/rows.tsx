@@ -7,7 +7,7 @@ import { folderRow } from '@/app/workspace/[workspaceId]/components/folders'
 import { ownerCell } from '@/app/workspace/[workspaceId]/components/resource/components/owner-cell'
 import { timeCell } from '@/app/workspace/[workspaceId]/components/resource/components/time-cell'
 import type { WorkspaceMember } from '@/hooks/queries/workspace'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 /** A list row (and the right-clicked row), resolved to the entity it refers to. */
 export type TableResourceItem =

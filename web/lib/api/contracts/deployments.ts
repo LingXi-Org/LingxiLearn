@@ -6,7 +6,7 @@ import {
   DEPLOYMENT_OPERATION_ACTIONS,
   DEPLOYMENT_OPERATION_STATUSES,
 } from '@/lib/workflows/deployment-lifecycle'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 export const deployedWorkflowStateSchema = z
   .custom<WorkflowState>(

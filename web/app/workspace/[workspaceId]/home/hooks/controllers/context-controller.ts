@@ -1,5 +1,5 @@
 import type { LingxiAttachmentRef } from '@/lib/lingxi/api'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import type { FileAttachmentForApi } from '../../types'
 
 function contextSuffix(contexts?: ChatContext[]): string {

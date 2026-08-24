@@ -1,4 +1,4 @@
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Mention folder types

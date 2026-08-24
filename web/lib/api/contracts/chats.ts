@@ -37,6 +37,7 @@ export const chatOutputConfigSchema = z.object({
   blockId: z.string().min(1),
   path: z.string().min(1),
 })
+export type ChatOutputConfig = z.output<typeof chatOutputConfigSchema>
 
 export const deployedChatOutputConfigSchema = z.object({
   blockId: z.string(),

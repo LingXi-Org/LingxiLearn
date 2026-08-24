@@ -2,7 +2,7 @@ import {
   isWorkflowBlockAncestorLocked,
   isWorkflowBlockProtected,
 } from '@/lib/workflows/domain/workflow'
-import type { BlockState, Loop, Parallel } from '@/stores/workflows/workflow/types'
+import type { BlockState, Loop, Parallel } from '@/lib/workflows/domain/workflow'
 
 const DEFAULT_LOOP_ITERATIONS = 5
 const DEFAULT_PARALLEL_BATCH_SIZE = 20

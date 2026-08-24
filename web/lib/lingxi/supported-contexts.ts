@@ -8,7 +8,7 @@
  */
 
 import type { MothershipResourceType } from '@/lib/copilot/resources/types'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 export const LINGXI_CONTEXT_KINDS: ReadonlySet<ChatContext['kind']> = new Set([
   'file',

@@ -3,7 +3,7 @@
  */
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { getAllBlocks } from '@/blocks/registry'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 vi.unmock('@/blocks/registry')
 

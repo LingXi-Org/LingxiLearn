@@ -15,7 +15,7 @@ import {
   toResourceRows,
 } from '@/app/workspace/[workspaceId]/tables/rows'
 import type { WorkspaceMember } from '@/hooks/queries/workspace'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 function makeTable(overrides: Partial<TableDefinition> & { id: string }): TableDefinition {
   return {

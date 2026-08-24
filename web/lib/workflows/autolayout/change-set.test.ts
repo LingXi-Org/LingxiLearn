@@ -6,7 +6,7 @@ import {
   getTargetedLayoutChangeSet,
   getTargetedLayoutImpact,
 } from '@/lib/workflows/autolayout/change-set'
-import type { BlockState, WorkflowState } from '@/stores/workflows/workflow/types'
+import type { BlockState, WorkflowState } from '@/lib/workflows/domain/workflow'
 
 const { mockGetBlock } = vi.hoisted(() => ({
   mockGetBlock: vi.fn(),

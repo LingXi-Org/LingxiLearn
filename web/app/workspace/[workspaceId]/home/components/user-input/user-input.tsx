@@ -41,7 +41,7 @@ import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 import { type SpeechToTextError, useSpeechToText } from '@/hooks/use-speech-to-text'
 import { useMothershipDraftsStore } from '@/stores/mothership-drafts/store'
 import type { MothershipResourceType } from '@/lib/copilot/resources/types'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 export type { FileAttachmentForApi } from '@/app/workspace/[workspaceId]/home/types'
 

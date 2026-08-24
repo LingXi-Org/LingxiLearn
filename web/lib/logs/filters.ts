@@ -1,4 +1,4 @@
-import type { TimeRange } from '@/stores/logs/filters/types'
+import type { TimeRange } from '@/lib/logs/filter-types'
 
 interface FilterValues {
   timeRange: string

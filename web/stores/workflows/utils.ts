@@ -21,7 +21,7 @@ import type {
   Position,
   SubBlockState,
   WorkflowState,
-} from '@/stores/workflows/workflow/types'
+} from '@/lib/workflows/domain/workflow'
 import { TRIGGER_RUNTIME_SUBBLOCK_IDS } from '@/triggers/constants'
 
 /** Threshold to detect viewport-based offsets vs small duplicate offsets */

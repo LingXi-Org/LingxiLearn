@@ -62,6 +62,9 @@ export function findQualityBoundaryViolations(webRoot: string): QualityBoundaryV
     if (/['"]@sim(?:\/|['"])/.test(content)) {
       violations.push({ file: display, rule: 'deleted @sim/* package alias' })
     }
+    if (!display.startsWith('stores/') && /['"]@\/stores\/[^'"]+\/types['"]/.test(content)) {
+      violations.push({ file: display, rule: 'domain types must not be owned by a store' })
+    }
     if (/^\s*\/\/\s*@ts-nocheck\b/m.test(content)) {
       violations.push({ file: display, rule: '@ts-nocheck disables production checking' })
     }

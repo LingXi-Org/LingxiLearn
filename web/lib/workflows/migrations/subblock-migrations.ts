@@ -9,7 +9,7 @@ import {
   resolveCanonicalMode,
 } from '@/lib/workflows/subblocks/visibility'
 import { getBlock } from '@/blocks'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 const logger = createLogger('SubblockMigrations')
 

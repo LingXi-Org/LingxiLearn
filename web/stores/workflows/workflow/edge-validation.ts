@@ -4,7 +4,7 @@ import {
 } from '@/lib/workflows/domain/workflow'
 import type { Edge } from 'reactflow'
 import { TriggerUtils } from '@/lib/workflows/triggers/triggers'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 interface DroppedEdge {
   edge: Edge

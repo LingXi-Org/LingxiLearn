@@ -40,7 +40,7 @@ import {
 } from '@/lib/workflows/subblocks/visibility'
 import { getBlock } from '@/blocks'
 import type { SubBlockConfig } from '@/blocks/types'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 import { TRIGGER_REGISTRY } from '@/triggers/registry'
 
 /**

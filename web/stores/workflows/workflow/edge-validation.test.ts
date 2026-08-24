@@ -1,7 +1,7 @@
 import type { Edge } from 'reactflow'
 import { describe, expect, it } from 'vitest'
 import { validateEdges } from '@/stores/workflows/workflow/edge-validation'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 function makeBlock(id: string, type: string, overrides?: Partial<BlockState>): BlockState {
   return {

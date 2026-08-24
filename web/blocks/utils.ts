@@ -1,5 +1,5 @@
-import { toError } from '@/lib/utils/errors'
 import { SimAutoIcon } from '@/components/icons'
+import type { ProviderName } from '@/lib/api/contracts/providers'
 import {
   isAzureConfigured,
   isCohereConfigured,
@@ -7,9 +7,14 @@ import {
   isOllamaConfigured,
 } from '@/lib/core/config/env-flags'
 import { getScopesForService } from '@/lib/oauth/utils'
+import { toError } from '@/lib/utils/errors'
 import { containsReference } from '@/lib/workflows/sanitization/references'
 import { buildCanonicalIndex } from '@/lib/workflows/subblocks/visibility'
 import type { BlockOutput, OutputFieldDefinition, SubBlockConfig } from '@/blocks/types'
+import {
+  getActiveWorkspaceProviderModels,
+  getCachedProviderModels,
+} from '@/hooks/queries/providers'
 import {
   getBaseModelProviders,
   getHostedModels,
@@ -22,7 +27,6 @@ import {
 } from '@/providers/models'
 import { isPiSupportedModel } from '@/providers/pi-providers'
 import { getProviderFromModel } from '@/providers/utils'
-import { useProvidersStore } from '@/stores/providers/store'
 
 export const VERTEX_MODELS = getProviderModels('vertex')
 export const BEDROCK_MODELS = getProviderModels('bedrock')
@@ -55,16 +59,15 @@ export const SERVICE_ACCOUNT_SUBBLOCKS: SubBlockConfig[] = [
  * Returns model options for combobox subblocks, combining all provider sources.
  */
 export function getModelOptions() {
-  const providersState = useProvidersStore.getState()
-  const baseModels = orderModelIdsByReleaseDate(providersState.providers.base.models)
-  const ollamaModels = providersState.providers.ollama.models
-  const ollamaCloudModels = providersState.providers['ollama-cloud'].models
-  const vllmModels = providersState.providers.vllm.models
-  const litellmModels = providersState.providers.litellm.models
-  const openrouterModels = providersState.providers.openrouter.models
-  const fireworksModels = providersState.providers.fireworks.models
-  const togetherModels = providersState.providers.together.models
-  const basetenModels = providersState.providers.baseten.models
+  const baseModels = orderModelIdsByReleaseDate(getCachedProviderModels('base'))
+  const ollamaModels = getCachedProviderModels('ollama')
+  const vllmModels = getCachedProviderModels('vllm')
+  const litellmModels = getCachedProviderModels('litellm')
+  const openrouterModels = getCachedProviderModels('openrouter')
+  const ollamaCloudModels = getActiveWorkspaceProviderModels('ollama-cloud')
+  const fireworksModels = getActiveWorkspaceProviderModels('fireworks')
+  const togetherModels = getActiveWorkspaceProviderModels('together')
+  const basetenModels = getActiveWorkspaceProviderModels('baseten')
   const allModels = Array.from(
     new Set([
       ...baseModels,
@@ -162,12 +165,30 @@ export function resolveOutputType(
   return resolvedOutputs
 }
 
-function getProviderFromStore(model: string): string | null {
-  const { providers } = useProvidersStore.getState()
+const MODEL_LOOKUP_PROVIDERS: ProviderName[] = [
+  'base',
+  'ollama',
+  'ollama-cloud',
+  'vllm',
+  'litellm',
+  'openrouter',
+  'fireworks',
+  'together',
+  'baseten',
+]
+
+function getProviderFromCache(model: string): string | null {
   const normalized = model.toLowerCase()
-  for (const [key, state] of Object.entries(providers)) {
-    if (state.models.some((m: string) => m.toLowerCase() === normalized)) {
-      return key
+  for (const provider of MODEL_LOOKUP_PROVIDERS) {
+    const models =
+      provider === 'ollama-cloud' ||
+      provider === 'fireworks' ||
+      provider === 'together' ||
+      provider === 'baseten'
+        ? getActiveWorkspaceProviderModels(provider)
+        : getCachedProviderModels(provider)
+    if (models.some((cachedModel) => cachedModel.toLowerCase() === normalized)) {
+      return provider
     }
   }
   return null
@@ -176,12 +197,12 @@ function getProviderFromStore(model: string): string | null {
 /**
  * Whether an Ollama instance is available. `isOllamaConfigured` reads the
  * server-only `OLLAMA_URL` env var, which is always undefined in the browser —
- * there the providers store (populated from the server's model list, which is
+ * there the query cache (populated from the server's model list, which is
  * non-empty only when Ollama is configured) is the signal.
  */
 function isOllamaAvailable(): boolean {
   if (isOllamaConfigured) return true
-  return useProvidersStore.getState().providers.ollama.models.length > 0
+  return getCachedProviderModels('ollama').length > 0
 }
 
 function buildModelVisibilityCondition(model: string, shouldShow: boolean) {
@@ -222,10 +243,10 @@ function shouldRequireApiKeyForModel(model: string): boolean {
     return false
   }
 
-  const storeProvider = getProviderFromStore(normalizedModel)
-  if (storeProvider === 'ollama' || storeProvider === 'vllm' || storeProvider === 'litellm')
+  const cachedProvider = getProviderFromCache(normalizedModel)
+  if (cachedProvider === 'ollama' || cachedProvider === 'vllm' || cachedProvider === 'litellm')
     return false
-  if (storeProvider) return true
+  if (cachedProvider) return true
 
   if (isOllamaAvailable()) {
     if (normalizedModel.includes('/')) return true

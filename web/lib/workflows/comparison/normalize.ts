@@ -16,7 +16,7 @@ import type {
   Parallel,
   Variable,
   WorkflowState,
-} from '@/stores/workflows/workflow/types'
+} from '@/lib/workflows/domain/workflow'
 import { SYSTEM_SUBBLOCK_IDS, TRIGGER_RUNTIME_SUBBLOCK_IDS } from '@/triggers/constants'
 
 /**

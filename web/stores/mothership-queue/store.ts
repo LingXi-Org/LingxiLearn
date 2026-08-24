@@ -185,3 +185,9 @@ export const useMothershipQueueStore = create<MothershipQueueState>()(
     { name: 'mothership-queue-store' }
   )
 )
+
+/** Clears both the live queue and its per-tab persisted snapshot during logout. */
+export async function clearMothershipQueueForLogout(): Promise<void> {
+  useMothershipQueueStore.getState().reset()
+  await useMothershipQueueStore.persist.clearStorage()
+}

@@ -51,7 +51,7 @@ import { usePermissionConfig } from '@/hooks/use-permission-config'
 import { formatCost } from '@/providers/utils'
 import { useLogDetailsUIStore } from '@/stores/logs/store'
 import { MAX_LOG_DETAILS_WIDTH_RATIO, MIN_LOG_DETAILS_WIDTH } from '@/stores/logs/utils'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Renders an already-apportioned integer credit value. `dollars` is only used

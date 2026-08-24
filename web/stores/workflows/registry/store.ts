@@ -3,6 +3,7 @@ import { devtools } from 'zustand/middleware'
 import { createLogger } from '@/lib/logger'
 import { generateRandomHex } from '@/lib/utils/random'
 import { DEFAULT_DUPLICATE_OFFSET } from '@/lib/workflows/autolayout/constants'
+import type { BlockState, Loop, Parallel, WorkflowState } from '@/lib/workflows/domain/workflow'
 import { getQueryClient } from '@/app/_shell/providers/get-query-client'
 import type { WorkflowDeploymentInfo } from '@/hooks/queries/deployments'
 import { deploymentKeys } from '@/hooks/queries/deployments'
@@ -10,13 +11,13 @@ import { fetchWorkflowEnvelope } from '@/hooks/queries/utils/fetch-workflow-enve
 import { invalidateWorkflowLists } from '@/hooks/queries/utils/invalidate-workflow-lists'
 import { workflowKeys } from '@/hooks/queries/utils/workflow-keys'
 import { useOperationQueueStore } from '@/stores/operation-queue/store'
+import { resetWorkspaceClientState } from '@/stores/reset-workspace-client-state'
 import { useVariablesStore } from '@/stores/variables/store'
 import type { Variable } from '@/stores/variables/types'
 import type { HydrationState, WorkflowRegistry } from '@/stores/workflows/registry/types'
 import { useSubBlockStore } from '@/stores/workflows/subblock/store'
 import { getUniqueBlockName, regenerateBlockIds } from '@/stores/workflows/utils'
 import { useWorkflowStore } from '@/stores/workflows/workflow/store'
-import type { BlockState, Loop, Parallel, WorkflowState } from '@/stores/workflows/workflow/types'
 
 const logger = createLogger('WorkflowRegistry')
 const initialHydration: HydrationState = {
@@ -57,6 +58,7 @@ export const useWorkflowRegistry = create<WorkflowRegistry>()(
         logger.info(`Switching to workspace: ${workspaceId}`)
 
         resetWorkflowStores()
+        resetWorkspaceClientState()
         // Workflow stores are fully reset and reloaded from the server in the new
         // workspace, so a previously tripped offline mode must not carry over.
         useOperationQueueStore.getState().clearError()

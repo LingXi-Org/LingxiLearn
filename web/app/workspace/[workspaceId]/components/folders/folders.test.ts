@@ -18,7 +18,7 @@ import {
   parseMoveOptionValue,
   ROOT_MOVE_OPTION_VALUE,
 } from '@/app/workspace/[workspaceId]/components/folders/move-options'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 function makeFolder(
   id: string,

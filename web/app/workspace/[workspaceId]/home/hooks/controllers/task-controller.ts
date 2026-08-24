@@ -6,7 +6,7 @@ import {
   type LingxiV1SubmittedAnswer,
   type LingxiV1ThreadModel,
 } from '@/lib/lingxi/stream/turn-model'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import type { FileAttachmentForApi } from '../../types'
 import { attachmentRefs, contextOptions, requestMessage } from './context-controller'
 

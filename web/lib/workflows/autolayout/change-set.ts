@@ -1,6 +1,6 @@
 import type { Edge } from 'reactflow'
 import { getBlockMetrics } from '@/lib/workflows/autolayout/utils'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 interface TargetedLayoutChangeSetOptions {
   before: Pick<WorkflowState, 'blocks' | 'edges'>

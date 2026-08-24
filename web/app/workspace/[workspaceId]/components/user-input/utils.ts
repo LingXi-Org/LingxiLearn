@@ -4,7 +4,7 @@ import {
   type MentionFolderId,
 } from '@/app/workspace/[workspaceId]/components/user-input/constants'
 import type { MentionDataReturn } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-mention-data'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Wide fixed-advance glyph used as the stored trigger for skill chips so the

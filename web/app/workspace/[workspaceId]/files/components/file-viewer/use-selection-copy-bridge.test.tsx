@@ -5,7 +5,7 @@ import { act, createRef, type RefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SIM_SELECTION_MIME } from '@/lib/copilot/chat/selection-clipboard'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { useSelectionCopyBridge } from './use-selection-copy-bridge'
 
 const selection: ChatContext = {

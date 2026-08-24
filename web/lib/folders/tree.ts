@@ -1,4 +1,4 @@
-import type { FolderTreeNode, WorkspaceFolder } from '@/stores/folders/types'
+import type { FolderTreeNode, WorkspaceFolder } from '@/lib/folders/types'
 
 export function buildFolderTree(
   folders: Record<string, WorkspaceFolder>,

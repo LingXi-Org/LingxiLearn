@@ -16,7 +16,7 @@ import type {
 import type { RunFromBlockContext } from '@/executor/utils/run-from-block'
 import type { AgentStreamSink, UnsubscribeAgentStreamSink } from '@/providers/stream-events'
 import type { SerializedBlock, SerializedWorkflow } from '@/serializer/types'
-import type { SubflowType } from '@/stores/workflows/workflow/types'
+import type { SubflowType } from '@/lib/workflows/domain/workflow'
 
 export interface UserFile {
   id: string

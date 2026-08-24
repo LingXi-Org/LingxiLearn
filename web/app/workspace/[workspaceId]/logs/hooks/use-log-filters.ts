@@ -7,7 +7,7 @@ import {
   logFilterUrlKeys,
 } from '@/app/workspace/[workspaceId]/logs/search-params'
 import { useDebouncedSearchSetter } from '@/hooks/use-debounced-search-setter'
-import type { LogLevel, TimeRange, TriggerType } from '@/stores/logs/filters/types'
+import type { LogLevel, TimeRange, TriggerType } from '@/lib/logs/filter-types'
 
 const DEFAULT_TIME_RANGE: TimeRange = 'All time'
 

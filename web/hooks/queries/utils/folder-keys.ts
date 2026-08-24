@@ -1,5 +1,5 @@
 import type { FolderApi, FolderResourceType } from '@/lib/api/contracts/folders'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 export type FolderQueryScope = 'active' | 'archived'
 

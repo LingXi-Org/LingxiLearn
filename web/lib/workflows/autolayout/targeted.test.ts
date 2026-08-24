@@ -6,7 +6,7 @@ import { DEFAULT_VERTICAL_SPACING } from '@/lib/workflows/autolayout/constants'
 import { applyTargetedLayout } from '@/lib/workflows/autolayout/targeted'
 import type { Edge } from '@/lib/workflows/autolayout/types'
 import { getBlockMetrics } from '@/lib/workflows/autolayout/utils'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 const { mockGetBlock } = vi.hoisted(() => ({
   mockGetBlock: vi.fn(),

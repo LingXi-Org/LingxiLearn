@@ -1,6 +1,6 @@
 import type { BlockRetryConfig } from '@/lib/workflows/domain/workflow'
 import type { OutputFieldDefinition, ParamType } from '@/blocks/types'
-import type { Position } from '@/stores/workflows/workflow/types'
+import type { Position } from '@/lib/workflows/domain/workflow'
 
 export interface SerializedWorkflow {
   version: string

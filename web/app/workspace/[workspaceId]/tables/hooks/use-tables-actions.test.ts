@@ -11,7 +11,7 @@ import {
   folderRowId,
   ROOT_MOVE_OPTION_VALUE,
 } from '@/app/workspace/[workspaceId]/components/folders'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 const { routerPush, toastError, startRenameSpy, renameSessions, mutations } = vi.hoisted(() => ({
   routerPush: vi.fn(),

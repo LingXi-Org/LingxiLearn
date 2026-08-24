@@ -53,14 +53,11 @@ vi.mock('@/providers/utils', () => ({
   getProviderFromModel: vi.fn(() => 'openai'),
 }))
 
-vi.mock('@/stores/providers/store', () => ({
-  useProvidersStore: {
-    getState: () => ({
-      get providers() {
-        return mockProviders.value
-      },
-    }),
-  },
+vi.mock('@/hooks/queries/providers', () => ({
+  getCachedProviderModels: (provider: string) =>
+    mockProviders.value[provider as keyof typeof mockProviders.value]?.models ?? [],
+  getActiveWorkspaceProviderModels: (provider: string) =>
+    mockProviders.value[provider as keyof typeof mockProviders.value]?.models ?? [],
 }))
 
 vi.mock('@/lib/oauth/utils', () => ({
@@ -167,35 +164,35 @@ describe('getApiKeyCondition / shouldRequireApiKeyForModel', () => {
     })
   })
 
-  describe('provider store lookup (client-side)', () => {
-    it('does not require API key when model is in the Ollama store bucket', () => {
+  describe('provider query-cache lookup (client-side)', () => {
+    it('does not require API key when model is in the Ollama cache entry', () => {
       mockProviders.value.ollama.models = ['llama3:latest', 'mistral:latest']
       expect(evaluateCondition('llama3:latest')).toBe(false)
       expect(evaluateCondition('mistral:latest')).toBe(false)
     })
 
-    it('requires API key when model is in the base store bucket', () => {
+    it('requires API key when model is in the base cache entry', () => {
       mockProviders.value.base.models = ['gpt-4o', 'claude-sonnet-4-5']
       expect(evaluateCondition('gpt-4o')).toBe(true)
       expect(evaluateCondition('claude-sonnet-4-5')).toBe(true)
     })
 
-    it('does not require API key when model is in the vLLM store bucket', () => {
+    it('does not require API key when model is in the vLLM cache entry', () => {
       mockProviders.value.vllm.models = ['my-custom-model']
       expect(evaluateCondition('my-custom-model')).toBe(false)
     })
 
-    it('does not require API key when model is in the LiteLLM store bucket', () => {
+    it('does not require API key when model is in the LiteLLM cache entry', () => {
       mockProviders.value.litellm.models = ['litellm/anthropic/claude-sonnet-4-6']
       expect(evaluateCondition('litellm/anthropic/claude-sonnet-4-6')).toBe(false)
     })
 
-    it('requires API key when model is in the fireworks store bucket', () => {
+    it('requires API key when model is in the fireworks cache entry', () => {
       mockProviders.value.fireworks.models = ['fireworks/llama-3']
       expect(evaluateCondition('fireworks/llama-3')).toBe(true)
     })
 
-    it('requires API key when model is in the openrouter store bucket', () => {
+    it('requires API key when model is in the openrouter cache entry', () => {
       mockProviders.value.openrouter.models = ['openrouter/anthropic/claude']
       expect(evaluateCondition('openrouter/anthropic/claude')).toBe(true)
     })

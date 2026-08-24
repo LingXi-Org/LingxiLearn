@@ -16,7 +16,7 @@ import type {
   ResolvedSecretTraceRegistry,
 } from '@/executor/utils/resolved-secret-trace-registry'
 import type { RunFromBlockContext } from '@/executor/utils/run-from-block'
-import type { SubflowType } from '@/stores/workflows/workflow/types'
+import type { SubflowType } from '@/lib/workflows/domain/workflow'
 
 export interface ExecutionMetadata {
   requestId: string

@@ -1,6 +1,6 @@
 import { buildFolderPath } from '@/lib/folders/paths'
 import { folderAncestorChain } from '@/lib/folders/tree'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 /**
  * Returns true when the folder or one of its ancestors is locked. Used to

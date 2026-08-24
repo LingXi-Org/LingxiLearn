@@ -21,7 +21,7 @@ import type {
   LocalToolCallStatus,
   OrchestratorResult,
 } from '@/lib/copilot/request/types'
-import type { BrowserTextSelection, TerminalTextSelection } from '@/stores/panel/types'
+import type { BrowserTextSelection, TerminalTextSelection } from '@/lib/lingxi/chat-context'
 
 export type PersistedToolState = LocalToolCallStatus | MothershipStreamV1ToolOutcome | 'interrupted'
 

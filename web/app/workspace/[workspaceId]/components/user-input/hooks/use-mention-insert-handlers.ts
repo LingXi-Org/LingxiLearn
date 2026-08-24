@@ -7,7 +7,7 @@ import {
 import type { useMentionMenu } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-mention-menu'
 import type { MentionFolderNav } from '@/app/workspace/[workspaceId]/components/user-input/types'
 import { isContextAlreadySelected } from '@/app/workspace/[workspaceId]/components/user-input/utils'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 interface UseMentionInsertHandlersProps {
   /** Mention menu hook instance */

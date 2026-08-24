@@ -2,7 +2,7 @@
  * Tests for workflow normalization utilities
  */
 import { describe, expect, it } from 'vitest'
-import type { BlockState, Loop, Parallel } from '@/stores/workflows/workflow/types'
+import type { BlockState, Loop, Parallel } from '@/lib/workflows/domain/workflow'
 import {
   extractBlockFieldsForComparison,
   filterSubBlockIds,

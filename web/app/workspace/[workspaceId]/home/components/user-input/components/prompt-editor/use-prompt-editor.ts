@@ -33,7 +33,7 @@ import {
 } from '@/app/workspace/[workspaceId]/components/user-input/utils'
 import { type McpServer, useMcpServers } from '@/hooks/queries/mcp'
 import { type SkillDefinition, useSkills } from '@/hooks/queries/skills'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Computes the viewport position of a caret offset inside a textarea by

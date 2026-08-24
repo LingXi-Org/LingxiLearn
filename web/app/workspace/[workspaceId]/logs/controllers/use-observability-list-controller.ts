@@ -53,7 +53,7 @@ import {
 import { useDebounce } from '@/hooks/use-debounce'
 import { useUrlSort } from '@/hooks/use-url-sort'
 import { useFilterStore } from '@/stores/logs/filters/store'
-import type { LogViewMode } from '@/stores/logs/filters/types'
+import type { LogViewMode } from '@/lib/logs/filter-types'
 
 const LOGS_PER_PAGE = 50 as const
 const REFRESH_SPINNER_DURATION_MS = 1000 as const

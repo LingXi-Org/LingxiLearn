@@ -20,6 +20,10 @@ describe('production quality boundaries', () => {
 
   it.each([
     [`import x from '${['@', 'sim/db'].join('')}'`, 'deleted @sim/* package alias'],
+    [
+      "import type { WorkspaceFolder } from '@/stores/folders/types'",
+      'domain types must not be owned by a store',
+    ],
     ['// @ts-nocheck\nexport const x = 1', '@ts-nocheck disables production checking'],
     ['export default { compilerOptions: { noCheck: true } }', 'TypeScript noCheck bypass'],
     ['export default { typescript: { ignoreBuildErrors: true } }', 'Next.js ignoreBuildErrors bypass'],

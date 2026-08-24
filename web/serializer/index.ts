@@ -19,7 +19,7 @@ import { getBlock } from '@/blocks'
 import { isCustomBlockType, RESERVED_PARAMS } from '@/blocks/custom/build-config'
 import type { SubBlockConfig } from '@/blocks/types'
 import type { SerializedBlock, SerializedWorkflow } from '@/serializer/types'
-import type { BlockState, Loop, Parallel } from '@/stores/workflows/workflow/types'
+import type { BlockState, Loop, Parallel } from '@/lib/workflows/domain/workflow'
 import { generateLoopBlocks, generateParallelBlocks } from '@/stores/workflows/workflow/utils'
 import { getToolParams } from '@/tools/metadata'
 

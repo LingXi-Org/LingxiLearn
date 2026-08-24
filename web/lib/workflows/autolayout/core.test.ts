@@ -5,7 +5,7 @@ import { HANDLE_POSITIONS } from '@/components/workflow'
 import { describe, expect, it, vi } from 'vitest'
 import { layoutBlocksCore } from '@/lib/workflows/autolayout/core'
 import type { Edge } from '@/lib/workflows/autolayout/types'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 vi.mock('@/blocks', () => ({
   getBlock: () => null,

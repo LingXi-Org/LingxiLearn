@@ -28,7 +28,7 @@ import {
   useRenameTable,
 } from '@/hooks/queries/tables'
 import { useInlineRename } from '@/hooks/use-inline-rename'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 const logger = createLogger('TablesActions')
 

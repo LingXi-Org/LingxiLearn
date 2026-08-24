@@ -1,6 +1,6 @@
 import { getBlock } from '@/blocks'
 import type { SelectorContext } from '@/hooks/selectors/types'
-import type { SubBlockState } from '@/stores/workflows/workflow/types'
+import type { SubBlockState } from '@/lib/workflows/domain/workflow'
 import {
   buildCanonicalIndex,
   buildSubBlockValues,

@@ -1,6 +1,6 @@
 import { createLogger } from '@/lib/logger'
 import { blockRetryEquals } from '@/lib/workflows/domain/workflow'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 import {
   extractBlockFieldsForComparison,
   extractSubBlockRest,

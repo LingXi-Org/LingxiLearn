@@ -4,7 +4,7 @@ import type {
   ResourceCell,
   ResourceRow,
 } from '@/app/workspace/[workspaceId]/components/resource/resource'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 const FOLDER_ICON = <Folder className='size-[14px]' />
 

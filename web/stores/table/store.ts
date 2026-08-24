@@ -3,11 +3,16 @@
  * Ephemeral — no persistence. Stacks are keyed by tableId.
  */
 
-import { generateShortId } from '@/lib/utils/id'
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
-import type { TableUndoAction, TableUndoStacks, TableUndoState, UndoEntry } from './types'
-import { VIEW_SCOPED_UNDO_ACTIONS } from './types'
+import type {
+  TableUndoAction,
+  TableUndoStacks,
+  TableUndoState,
+  UndoEntry,
+} from '@/lib/table/undo-types'
+import { VIEW_SCOPED_UNDO_ACTIONS } from '@/lib/table/undo-types'
+import { generateShortId } from '@/lib/utils/id'
 
 const STACK_CAPACITY = 100
 const EMPTY_STACKS: TableUndoStacks = { undo: [], redo: [] }

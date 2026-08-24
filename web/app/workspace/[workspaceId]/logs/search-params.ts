@@ -6,7 +6,7 @@ import {
   type LogLevel,
   type TimeRange,
   type TriggerType,
-} from '@/stores/logs/filters/types'
+} from '@/lib/logs/filter-types'
 
 /**
  * Co-located, typed URL query-param definitions for the logs feature. The

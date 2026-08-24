@@ -1,4 +1,4 @@
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Custom clipboard MIME type carrying a selection {@link ChatContext} so a

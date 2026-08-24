@@ -18,7 +18,7 @@ import { toolsUtilsMock } from '@/tests/support/mocks'
 import { describe, expect, it, vi } from 'vitest'
 import { Serializer, WorkflowValidationError } from '@/serializer/index'
 import type { SerializedWorkflow } from '@/serializer/types'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 /**
  * Type helper to convert testing package workflow to app workflow types.

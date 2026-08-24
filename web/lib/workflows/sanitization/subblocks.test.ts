@@ -7,7 +7,7 @@ vi.unmock('@/blocks/registry')
 
 import { migrateSubblockIds } from '@/lib/workflows/migrations/subblock-migrations'
 import { sanitizeMalformedSubBlocks } from '@/lib/workflows/sanitization/subblocks'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 const FIELD_ID = 'cd7e4a16-c608-4087-8f2d-61f9672baeda'
 

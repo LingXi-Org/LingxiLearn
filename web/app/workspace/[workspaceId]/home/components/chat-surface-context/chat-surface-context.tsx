@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { noop } from '@/lib/utils/helpers'
 import type { WorkspaceResourceRef } from '@/app/workspace/[workspaceId]/home/types'
-import type { ChatContext } from '@/stores/panel'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Identity and interaction callbacks shared across a Mothership chat surface

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_VERTICAL_SPACING } from '@/lib/workflows/autolayout/constants'
 import { getBlockMetrics, resolveNoteOverlaps } from '@/lib/workflows/autolayout/utils'
 import type { getBlock } from '@/blocks'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 const { mockGetBlock } = vi.hoisted(() => ({
   mockGetBlock: vi.fn(),

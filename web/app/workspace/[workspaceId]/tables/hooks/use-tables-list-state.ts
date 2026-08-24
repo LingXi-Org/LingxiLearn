@@ -23,7 +23,7 @@ import { useDebounce } from '@/hooks/use-debounce'
 import { useDebouncedSearchSetter } from '@/hooks/use-debounced-search-setter'
 import type { ActiveSort } from '@/hooks/use-url-sort'
 import { useUrlSort } from '@/hooks/use-url-sort'
-import type { WorkspaceFolder } from '@/stores/folders/types'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 
 export interface UseTablesListStateOptions {
   tables: TableDefinition[]

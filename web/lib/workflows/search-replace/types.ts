@@ -6,7 +6,7 @@ import type {
 import type { StoredCustomToolRecord } from '@/lib/workflows/subblocks/display'
 import type { SubBlockConfig } from '@/blocks/types'
 import type { SelectorContext } from '@/hooks/selectors/types'
-import type { BlockState, SubBlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState, SubBlockState } from '@/lib/workflows/domain/workflow'
 
 export type WorkflowSearchMode = 'text' | 'resource' | 'all'
 

@@ -2,7 +2,7 @@ import type { QueryFunctionContext } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import { listWorkflowsContract, type WorkflowListItem } from '@/lib/api/contracts'
 import { type WorkflowQueryScope, workflowKeys } from '@/hooks/queries/utils/workflow-keys'
-import type { WorkflowMetadata } from '@/stores/workflows/registry/types'
+import type { WorkflowMetadata } from '@/lib/workflows/domain/metadata'
 
 type WorkflowApiRow = WorkflowListItem
 

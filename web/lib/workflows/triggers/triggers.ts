@@ -1,5 +1,5 @@
 import { getBlock } from '@/blocks'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 /**
  * Unified trigger type definitions

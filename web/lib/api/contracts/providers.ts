@@ -3,6 +3,20 @@ import { resolvedSecretTraceProvenanceSchema } from '@/lib/api/contracts/primiti
 import { defineRouteContract } from '@/lib/api/contracts/types'
 import { RESOLVED_SECRET_PROVENANCE_FIELD } from '@/lib/execution/private-tool-metadata'
 
+export const providerNames = [
+  'ollama',
+  'ollama-cloud',
+  'vllm',
+  'litellm',
+  'openrouter',
+  'fireworks',
+  'together',
+  'baseten',
+  'base',
+] as const
+
+export type ProviderName = (typeof providerNames)[number]
+
 export const openRouterModelInfoSchema = z.object({
   id: z.string(),
   contextLength: z.number().optional(),

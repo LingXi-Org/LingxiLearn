@@ -1,5 +1,6 @@
 import { useContext } from 'react'
 import { isMockAuthEnabled } from '@/lib/core/config/env-flags'
+import { clearUserData } from '@/stores'
 import { identityApi } from './identity-api'
 import { MOCK_IDENTITY_ME } from './mock-session'
 import { SessionContext, type SessionContextValue } from './session-provider'
@@ -147,5 +148,6 @@ export const client = {
 
 export async function signOut(): Promise<void> {
   if (!isMockAuthEnabled) await identityApi.logout()
+  await clearUserData()
   window.location.assign('/')
 }

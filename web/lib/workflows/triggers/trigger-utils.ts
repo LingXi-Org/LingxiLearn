@@ -5,7 +5,7 @@ import { generateMockPayloadFromOutputsDefinition } from '@/lib/workflows/trigge
 import { type StartBlockCandidate, StartBlockPath } from '@/lib/workflows/triggers/triggers'
 import { getAllBlocks, getBlock } from '@/blocks'
 import type { BlockConfig } from '@/blocks/types'
-import type { BlockState, WorkflowState } from '@/stores/workflows/workflow/types'
+import type { BlockState, WorkflowState } from '@/lib/workflows/domain/workflow'
 import { getTrigger } from '@/triggers'
 
 const logger = createLogger('TriggerUtils')

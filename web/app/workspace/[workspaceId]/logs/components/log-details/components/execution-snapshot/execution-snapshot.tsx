@@ -20,7 +20,7 @@ import { CircleAlert } from '@/components/ui-kit/icons'
 import { createPortal } from 'react-dom'
 import { Preview } from '@/app/workspace/[workspaceId]/components/preview'
 import { useExecutionSnapshot } from '@/hooks/queries/logs'
-import type { WorkflowState } from '@/stores/workflows/workflow/types'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 interface TraceSpan {
   blockId?: string

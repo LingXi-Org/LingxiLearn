@@ -11,6 +11,7 @@ import {
   api,
   subscribeAgentV1Events,
 } from '@/lib/lingxi/api'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import type { LingxiTaskTransport } from '@/lib/lingxi/lingxi-task-transport'
 import { decodeLingxiV1Event } from '@/lib/lingxi/stream/decode-v1'
 import {
@@ -29,14 +30,14 @@ import {
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers'
 import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
-import type { QueuedMothershipMessage } from '@/stores/mothership-queue/types'
-import type { ChatContext } from '@/stores/panel'
+import type { QueuedMothershipMessage } from '../chat-queue-types'
 import type {
   ChatMessage,
   ChatMessageAttachment,
   FileAttachmentForApi,
   GenericResourceData,
 } from '../types'
+import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './chat-controller-types'
 import {
   mergeAgentTaskEvent,
   RUNTIME_GRAPH_REFRESH_EVENTS,
@@ -56,7 +57,6 @@ import {
   executeInteractionAnswerCommand,
   runTaskCommand,
 } from './controllers/task-controller'
-import type { SendMessageOptions, UseChatOptions, UseChatReturn } from './use-chat'
 
 function userMessage(
   id: string,
@@ -86,7 +86,20 @@ function generateLingxiId(prefix: string): string {
   return `${prefix}:${uuid ?? `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`}`
 }
 
-export function useLingxiGraphChat(
+export function getLingxiGraphUseChatOptions(
+  options: Pick<
+    UseChatOptions,
+    | 'onResourceEvent'
+    | 'onStreamEnd'
+    | 'initialActiveResourceId'
+    | 'activeResourceState'
+    | 'onRequestStarted'
+  > & { adapter: LingxiTaskTransport }
+): UseChatOptions {
+  return { ...options }
+}
+
+export function useWorkspaceChatController(
   workspaceId: string,
   initialChatId: string | undefined,
   options?: UseChatOptions

@@ -1,29 +1,30 @@
 /**
- * @vitest-environment node
+ * @vitest-environment jsdom
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getPiModelOptions } from '@/blocks/utils'
 import { resolvePiModelId } from '@/providers/pi-providers'
 import { getProviderFromModel } from '@/providers/utils'
-import { useProvidersStore } from '@/stores/providers/store'
+import { getQueryClient } from '@/app/_shell/providers/get-query-client'
+import { providerKeys, type ProviderModelSource } from '@/hooks/queries/providers'
 
-const originalBaseModels = useProvidersStore.getState().providers.base.models
-const originalOpenRouterModels = useProvidersStore.getState().providers.openrouter.models
+const queryClient = getQueryClient()
+
+function setModels(provider: ProviderModelSource, models: string[]) {
+  queryClient.setQueryData(providerKeys.list(provider), { models })
+}
 
 describe('Pi model options', () => {
   beforeAll(() => {
-    const store = useProvidersStore.getState()
-    store.setProviderModels('base', ['claude-sonnet-4-6', 'claude-sonnet-4-0', 'gpt-5.4'])
-    store.setProviderModels('openrouter', [
+    setModels('base', ['claude-sonnet-4-6', 'claude-sonnet-4-0', 'gpt-5.4'])
+    setModels('openrouter', [
       'openrouter/openai/gpt-5',
       'openrouter/openrouter/fusion',
     ])
   })
 
   afterAll(() => {
-    const store = useProvidersStore.getState()
-    store.setProviderModels('base', originalBaseModels)
-    store.setProviderModels('openrouter', originalOpenRouterModels)
+    queryClient.removeQueries({ queryKey: providerKeys.all })
   })
 
   it("only exposes models present in Pi's pinned catalog", () => {

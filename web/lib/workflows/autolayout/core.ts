@@ -12,7 +12,7 @@ import {
   snapNodesToGrid,
 } from '@/lib/workflows/autolayout/utils'
 import { EDGE } from '@/executor/constants'
-import type { BlockState } from '@/stores/workflows/workflow/types'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 
 const logger = createLogger('AutoLayout:Core')
 
