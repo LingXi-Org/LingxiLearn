@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -32,6 +33,22 @@ def test_workspace_file_policy_is_transport_neutral(tmp_path) -> None:
         safe_leaf_name("../secret")
     with pytest.raises(WorkspaceDomainError, match="invalid_mime_type"):
         validated_mime_type("file.txt", "text/plain\nX-Injected: yes")
+
+
+def test_workspace_file_router_cannot_own_persistence_or_orm_models() -> None:
+    source = (
+        Path(__file__).parents[1] / "lingxilearn" / "api" / "workspace_file_routes.py"
+    ).read_text(encoding="utf-8")
+    forbidden = (
+        "sqlalchemy",
+        "store.models",
+        "session.execute",
+        "session.scalar",
+        "WorkspaceFile(",
+        "WorkspaceFolder(",
+        "WorkspaceUploadSession(",
+    )
+    assert not [token for token in forbidden if token in source]
 
 
 def test_document_parser_handles_structured_formats_without_http_exceptions() -> None:
