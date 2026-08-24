@@ -1,16 +1,16 @@
 from types import SimpleNamespace
 
-from lingxilearn.api.workspace_routes import (
-    PUBLIC_WORKSPACE_ID,
-    _file_public,
-    _knowledge_base_public,
-    _table_public,
-    _table_row_public,
+from lingxilearn.api.mappers import (
+    file_response,
+    knowledge_base_response,
+    table_response,
+    table_row_response,
 )
+from lingxilearn.api.mappers.constants import PUBLIC_WORKSPACE_ID
 
 
 def test_workspace_resource_mappers_do_not_fabricate_legacy_fields() -> None:
-    file_payload = _file_public(
+    file_payload = file_response(
         SimpleNamespace(
             id="file-1",
             storage_key="learner/file-1",
@@ -33,7 +33,7 @@ def test_workspace_resource_mappers_do_not_fabricate_legacy_fields() -> None:
     assert "uploadedByEmail" not in file_payload
     assert "folderPath" not in file_payload
 
-    table_payload = _table_public(
+    table_payload = table_response(
         SimpleNamespace(
             id="table-1",
             name="Practice",
@@ -48,7 +48,7 @@ def test_workspace_resource_mappers_do_not_fabricate_legacy_fields() -> None:
     assert table_payload["createdBy"] is None
     assert "maxRows" not in table_payload
 
-    row_payload = _table_row_public(
+    row_payload = table_row_response(
         SimpleNamespace(
             id="row-1",
             values={"answer": 42},
@@ -59,7 +59,7 @@ def test_workspace_resource_mappers_do_not_fabricate_legacy_fields() -> None:
     )
     assert "executions" not in row_payload
 
-    knowledge_payload = _knowledge_base_public(
+    knowledge_payload = knowledge_base_response(
         SimpleNamespace(
             id="kb-1",
             learner_id="learner-1",
