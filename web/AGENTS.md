@@ -19,6 +19,6 @@ bun run type-check
 bun run build
 ```
 
-The development Compose file bind-mounts this directory. The production
-Compose file builds the static `out/` directory and serves it from the small
-FastAPI runtime image.
+The development Compose file bind-mounts this directory. The production image
+builds `.next/standalone/server.js` and runs it in a separate Node process;
+FastAPI owns domain APIs and does not serve frontend files.

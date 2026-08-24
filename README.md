@@ -31,22 +31,13 @@ Goal → Plan → Act → Observe → Update State → Re-plan
 
 ## 架构
 
+生产环境由独立的 Next standalone / Node Web、FastAPI API、Python Scheduler 与 PostgreSQL 组成。浏览器经 Web 的同源 `/api/*`、`/auth/*` rewrite 访问 FastAPI；身份会话由外部 LingxiIdentity BFF / Logto 管理。完整的拓扑、启动顺序与 ownership 见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
 ```text
-Next.js / React
-      │
-      ▼
-FastAPI
-      │
-      ▼
-LingxiHarness
-Goal Interpreter · Orchestrator · Dispatcher
-      │
-      ▼
-LingxiGraph
-      │
-      ├── Skills / Agents / Tools
-      ├── Course Packs
-      └── PostgreSQL / Artifacts
+Browser → Next standalone Web → FastAPI → LingxiGraph
+                                  ├→ PostgreSQL / 文件与 Artifact 存储
+                                  └→ LingxiIdentity BFF / Logto
+Python Scheduler → PostgreSQL 任务声明 → 共享应用服务
 ```
 
 核心原则：
