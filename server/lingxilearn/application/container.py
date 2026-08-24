@@ -47,6 +47,9 @@ from .graph_factory import RuntimeGraphFactory
 from .learner_state import LearnerStateService
 from .runtime_adapter import LingxiGraphRuntimeAdapter
 from .shared import BackgroundTasks
+from .workspace_file_service import WorkspaceFileService
+from .workspace_knowledge_service import WorkspaceKnowledgeService
+from .workspace_table_service import WorkspaceTableService
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +174,9 @@ class ApplicationServices:
             tasks=self.tasks,
         )
         self.learner_state = LearnerStateService(runtime_state=self.runtime_state)
+        self.workspace_files = WorkspaceFileService(self.db)
+        self.workspace_tables = WorkspaceTableService(self.db)
+        self.workspace_knowledge = WorkspaceKnowledgeService(self.db)
 
     @property
     def agent_model(self) -> dict[str, Any] | None:

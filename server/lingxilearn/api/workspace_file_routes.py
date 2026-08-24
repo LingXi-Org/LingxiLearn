@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from ..application.uploads import multipart_part_urls
+from ..application.uploads import multipart_part_urls, upload_sessions
 from ..application.workspace_errors import WorkspaceDomainError
 from ..application.workspace_file_service import WorkspaceFileService
 from ..application.workspace_files import WorkspaceFileStorage
@@ -67,7 +67,7 @@ async def list_folders(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
-    rows = await WorkspaceFileService(services_of(request).db).repository.list_folders(
+    rows = await services_of(request).workspace_files.repository.list_folders(
         workspace.id, scope
     )
     folders = [_folder_public(row, workspace.id) for row in rows]
@@ -90,7 +90,7 @@ async def create_folder(
 ) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     try:
-        folder = await WorkspaceFileService(services_of(request).db).create_folder(
+        folder = await services_of(request).workspace_files.create_folder(
             workspace.id, body
         )
     except WorkspaceDomainError as error:
@@ -113,7 +113,7 @@ async def update_folder(
 ) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     try:
-        folder = await WorkspaceFileService(services_of(request).db).update_folder(
+        folder = await services_of(request).workspace_files.update_folder(
             workspace.id, folder_id, body
         )
     except WorkspaceDomainError as error:
@@ -156,7 +156,7 @@ async def move_file_items(
 ) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     try:
-        file_count, folder_count = await WorkspaceFileService(services_of(request).db).move_items(
+        file_count, folder_count = await services_of(request).workspace_files.move_items(
             workspace.id, body
         )
     except WorkspaceDomainError as error:
@@ -219,7 +219,7 @@ async def download_file_items(
     workspace = await _workspace_for_id(request, workspace_id, context)
     requested_files = {str(item) for item in (fileIds or [])}
     requested_folders = {str(item) for item in (folderIds or [])}
-    repository = WorkspaceFileService(services_of(request).db).repository
+    repository = services_of(request).workspace_files.repository
     folders = await repository.list_folders(workspace.id)
     files = [row for row in await repository.list_files(workspace.id) if not row.archived]
     folder_ids = descendant_folder_ids(folders, requested_folders)
@@ -250,7 +250,7 @@ async def list_files(
         raise HTTPException(status_code=400, detail="invalid_scope")
     await services_of(request).artifacts.project_agent_artifacts(context.learner_id)
     workspace = await _workspace_for_id(request, workspace_id, context)
-    rows = await WorkspaceFileService(services_of(request).db).repository.list_files(
+    rows = await services_of(request).workspace_files.repository.list_files(
         workspace.id, scope, folderId
     )
     return {"success": True, "files": [_file_public(row, workspace.id) for row in rows]}
@@ -282,7 +282,7 @@ async def create_file(
         context.learner_id, storage_key, raw
     )
     try:
-        row = await WorkspaceFileService(services_of(request).db).create_file(
+        row = await services_of(request).workspace_files.create_file(
             workspace_id=workspace.id,
             folder_id=str(folder_id) if folder_id else None,
             name=name,
@@ -305,7 +305,7 @@ async def _file_for_id(
 ) -> tuple[Any, Any]:
     workspace = await _workspace_for_id(request, workspace_id, context)
     try:
-        row = await WorkspaceFileService(services_of(request).db).require_file(
+        row = await services_of(request).workspace_files.require_file(
             workspace.id, file_id
         )
     except WorkspaceDomainError as error:
@@ -346,13 +346,13 @@ async def update_file(
     if "folderId" in body:
         folder_id = body["folderId"] or None
         if folder_id:
-            folder = await WorkspaceFileService(services_of(request).db).repository.get_folder(
+            folder = await services_of(request).workspace_files.repository.get_folder(
                 workspace.id, str(folder_id)
             )
             if folder is None or folder.archived:
                 raise not_found()
         row.folder_id = folder_id
-    row = await WorkspaceFileService(services_of(request).db).repository.save_file(row) or row
+    row = await services_of(request).workspace_files.repository.save_file(row) or row
     return {"success": True, "file": _file_public(row, workspace.id)}
 
 
@@ -376,7 +376,7 @@ async def update_file_dimensions(
     if width <= 0 or height <= 0 or width > 100_000 or height > 100_000:
         raise HTTPException(status_code=422, detail="invalid_dimensions")
     row.width, row.height = width, height
-    await WorkspaceFileService(services_of(request).db).repository.save_file(row)
+    await services_of(request).workspace_files.repository.save_file(row)
     return {"success": True}
 
 
@@ -389,7 +389,7 @@ async def delete_file(
 ) -> dict[str, Any]:
     _workspace_row, row = await _file_for_id(request, workspace_id, file_id, context)
     row.archived = True
-    await WorkspaceFileService(services_of(request).db).repository.save_file(row)
+    await services_of(request).workspace_files.repository.save_file(row)
     return {"success": True}
 
 
@@ -402,7 +402,7 @@ async def restore_file(
 ) -> dict[str, Any]:
     _workspace_row, row = await _file_for_id(request, workspace_id, file_id, context)
     row.archived = False
-    await WorkspaceFileService(services_of(request).db).repository.save_file(row)
+    await services_of(request).workspace_files.repository.save_file(row)
     return {"success": True}
 
 
@@ -434,7 +434,7 @@ async def update_file_content(
     )
     row.size = len(raw)
     row.storage_key = storage_key
-    saved = await WorkspaceFileService(services_of(request).db).repository.save_file(row)
+    saved = await services_of(request).workspace_files.repository.save_file(row)
     if saved is None:
         raise not_found()
     row = saved
@@ -480,7 +480,7 @@ async def serve_file(
     if ".." in Path(storage_key).parts or not storage_key.startswith(f"{context.learner_id}/"):
         raise not_found()
     workspace = await _workspace(request, context)
-    row = await WorkspaceFileService(services_of(request).db).repository.get_file_by_storage_key(
+    row = await services_of(request).workspace_files.repository.get_file_by_storage_key(
         workspace.id, storage_key
     )
     if row is None or row.archived:
@@ -505,7 +505,7 @@ async def inline_file(
     workspace = await _workspace_for_id(request, workspace_id, context)
     if bool(key) == bool(fileId):
         raise HTTPException(status_code=422, detail="provide_exactly_one_file_reference")
-    repository = WorkspaceFileService(services_of(request).db).repository
+    repository = services_of(request).workspace_files.repository
     row = (
         await repository.get_file(workspace.id, fileId)
         if fileId
@@ -556,7 +556,7 @@ async def usage_limits(
     request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
     workspace = await _workspace(request, context)
-    used = await WorkspaceFileService(services_of(request).db).repository.usage(workspace.id)
+    used = await services_of(request).workspace_files.repository.usage(workspace.id)
     limit = MAX_FILE_SIZE * 100
     empty_rate = {
         "isLimited": False,
@@ -578,9 +578,6 @@ async def usage_limits(
 
 
 # Upload session compatibility (local single-process transfer) ----------------
-
-_upload_sessions: dict[str, dict[str, Any]] = {}
-
 
 @router.post("/files/uploads", response_model=CreateUploadResponse)
 async def create_upload(
@@ -611,7 +608,7 @@ async def create_upload(
     temp = _storage_root(request, context.learner_id) / f".{upload_id}.part"
     workspace = await _workspace_for_id(request, str(body.get("workspaceId", "lingxi")), context)
     expires = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
-    await WorkspaceFileService(services_of(request).db).create_upload(
+    await services_of(request).workspace_files.create_upload(
         upload_id=upload_id,
         workspace_id=workspace.id,
         learner_id=context.learner_id,
@@ -622,7 +619,7 @@ async def create_upload(
         temp_key=str(temp.relative_to(_storage_root(request, context.learner_id))),
         expires_at=datetime.fromisoformat(expires),
     )
-    _upload_sessions[upload_id] = {
+    upload_sessions[upload_id] = {
         "token": token,
         "body": body,
         "learner_id": context.learner_id,
@@ -655,7 +652,7 @@ async def create_upload(
 async def put_upload(
     upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> StreamingResponse:
-    item = _upload_sessions.get(upload_id)
+    item = upload_sessions.get(upload_id)
     if (
         item is None
         or item["learner_id"] != context.learner_id
@@ -669,7 +666,7 @@ async def put_upload(
     if len(raw) != expected_size:
         raise HTTPException(status_code=422, detail="upload_size_mismatch")
     WorkspaceFileStorage.write_temporary(item["temp"], raw)
-    await WorkspaceFileService(services_of(request).db).repository.set_upload_status(
+    await services_of(request).workspace_files.repository.set_upload_status(
         upload_id, "uploaded"
     )
     return StreamingResponse(iter(()), status_code=204)
@@ -692,7 +689,7 @@ async def create_upload_part_urls(
     try:
         return multipart_part_urls(
             upload_id,
-            _upload_sessions.get(upload_id),
+            upload_sessions.get(upload_id),
             context.learner_id,
             request.headers.get("upload-token"),
             body,
@@ -710,7 +707,7 @@ async def put_upload_part(
     token: str | None = None,
     context: LearnerContext = Depends(current_learner_context),
 ) -> Response:
-    item = _upload_sessions.get(upload_id)
+    item = upload_sessions.get(upload_id)
     if (
         item is None
         or item["learner_id"] != context.learner_id
@@ -731,7 +728,7 @@ async def put_upload_part(
 async def complete_upload(
     upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
-    item = _upload_sessions.get(upload_id)
+    item = upload_sessions.get(upload_id)
     if (
         item is None
         or item["learner_id"] != context.learner_id
@@ -770,7 +767,7 @@ async def complete_upload(
         context.learner_id, storage_key, raw
     )
     try:
-        row = await WorkspaceFileService(services_of(request).db).complete_upload(
+        row = await services_of(request).workspace_files.complete_upload(
             upload_id,
             workspace_id=workspace.id,
             folder_id=str(folder_id) if folder_id else None,
@@ -821,16 +818,16 @@ async def complete_upload(
 async def abort_upload(
     upload_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
-    item = _upload_sessions.get(upload_id)
+    item = upload_sessions.get(upload_id)
     if (
         item is None
         or item["learner_id"] != context.learner_id
         or request.headers.get("upload-token") != item["token"]
     ):
         raise not_found()
-    _upload_sessions.pop(upload_id, None)
+    upload_sessions.pop(upload_id, None)
     WorkspaceFileStorage.cleanup_upload(item)
-    await WorkspaceFileService(services_of(request).db).repository.set_upload_status(
+    await services_of(request).workspace_files.repository.set_upload_status(
         upload_id, "aborted"
     )
     body = item["body"]

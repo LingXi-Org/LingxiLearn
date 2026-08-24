@@ -98,13 +98,6 @@ from ..contracts.rest_models import (
 from ..learner import LearnerContext
 from ..store.models.agent import AgentTask, AgentTaskEvent
 from ..store.models.base import utcnow
-from ..store.models.knowledge import (
-    KnowledgeBase,
-    KnowledgeChunk,
-    KnowledgeDocument,
-    KnowledgeDocumentTag,
-    KnowledgeTag,
-)
 from ..store.models.runtime import AgentExecution
 from ..store.models.workspace import (
     PersonalSkill,
@@ -112,7 +105,6 @@ from ..store.models.workspace import (
     WorkspaceFile,
     WorkspaceFolder,
     WorkspacePinnedItem,
-    WorkspaceUploadSession,
 )
 from ..store.runtime_tables import (
     RUNTIME_COLUMN_LABELS,
