@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import io
 import mimetypes
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -44,3 +48,61 @@ class WorkspaceFileStorage:
         if target.parent != root:
             raise WorkspaceResourceNotFound("resource_not_found")
         return target
+
+    @staticmethod
+    def decode_content(content: Any, encoding: str | None = None) -> bytes:
+        if encoding == "base64" or not isinstance(content, str):
+            try:
+                return base64.b64decode(str(content), validate=True)
+            except (ValueError, binascii.Error) as exc:
+                raise WorkspaceDomainError("invalid_base64_content") from exc
+        return content.encode("utf-8")
+
+    def write(self, learner_id: str, storage_key: str, raw: bytes) -> Path:
+        target = self.target(learner_id, storage_key)
+        target.write_bytes(raw)
+        return target
+
+    def read(self, learner_id: str, storage_key: str) -> bytes:
+        target = self.existing_target(learner_id, storage_key)
+        return target.read_bytes()
+
+    def existing_target(self, learner_id: str, storage_key: str) -> Path:
+        target = self.target(learner_id, storage_key)
+        if not target.is_file():
+            raise WorkspaceResourceNotFound("resource_not_found")
+        return target
+
+    def archive(self, learner_id: str, files: list[Any]) -> bytes:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for row in files:
+                target = self.target(learner_id, row.storage_key)
+                if target.is_file():
+                    archive.writestr(row.path or row.name, target.read_bytes())
+        return buffer.getvalue()
+
+    @staticmethod
+    def write_temporary(path: Path, raw: bytes) -> None:
+        path.write_bytes(raw)
+
+    @staticmethod
+    def read_upload(item: dict[str, Any]) -> bytes:
+        temp: Path = item["temp"]
+        if temp.is_file():
+            return temp.read_bytes()
+        return b"".join(
+            path.read_bytes()
+            for _number, path in sorted(item.get("parts", {}).items())
+            if path.is_file()
+        )
+
+    @staticmethod
+    def cleanup_upload(item: dict[str, Any]) -> None:
+        item["temp"].unlink(missing_ok=True)
+        for part_path in item.get("parts", {}).values():
+            part_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def remove(path: Path) -> None:
+        path.unlink(missing_ok=True)
