@@ -7,6 +7,7 @@ import {
   useMemo,
   useState,
 } from 'react'
+import { useParams } from 'next/navigation'
 import {
   Badge,
   Button,
@@ -26,9 +27,9 @@ import {
   Workflow,
   Wrench,
 } from '@/components/ui-kit/icons'
-import { useParams } from 'next/navigation'
 import type { LogTraceSpan } from '@/lib/api/contracts/logs'
 import type { TraceSpan } from '@/lib/logs/types'
+import { userFacingError } from '@/lib/product-copy'
 import { formatDuration } from '@/lib/utils/formatting'
 import {
   adjustBgForContrast,
@@ -110,17 +111,17 @@ function getRunLabel(log: ExecutionLogSummaryView): string {
 function getRunBadge(status: RunStatus | null) {
   switch (status) {
     case 'error':
-      return { label: 'Error', variant: 'red' as const }
+      return { label: '错误', variant: 'red' as const }
     case 'running':
-      return { label: 'Running', variant: 'amber' as const }
+      return { label: '运行中', variant: 'amber' as const }
     case 'pending':
     case 'redacting':
-      return { label: 'Pending', variant: 'amber' as const }
+      return { label: '等待中', variant: 'amber' as const }
     case 'cancelled':
     case 'cancelling':
-      return { label: 'Cancelled', variant: 'orange' as const }
+      return { label: '已取消', variant: 'orange' as const }
     default:
-      return { label: 'Success', variant: 'green' as const }
+      return { label: '成功', variant: 'green' as const }
   }
 }
 
@@ -139,28 +140,28 @@ function TrajectorySummaryCards({ model }: { model: TrajectoryModel }) {
   const summary = useMemo(() => summarizeTrajectory(model), [model])
   const cards = [
     {
-      label: 'Rounds',
+      label: '轮次',
       value: String(
         summary.roundCount ?? model.lanes.find((lane) => lane.id === 'control')?.entries.length ?? 0
       ),
     },
     {
-      label: 'Tasks',
+      label: '任务',
       value: String(
         summary.taskCount ?? model.lanes.find((lane) => lane.id === 'task')?.entries.length ?? 0
       ),
     },
     {
-      label: 'Actions',
+      label: '操作',
       value: String(
         summary.actionCount ??
           model.lanes.find((lane) => lane.id === 'action')?.entries.length ??
           summary.spanCount
       ),
     },
-    { label: 'Failures', value: String(summary.failureCount) },
+    { label: '失败', value: String(summary.failureCount) },
     { label: 'Tokens', value: summary.tokenCount.toLocaleString() },
-    { label: 'Duration', value: formatMs(model.totalDurationMs) },
+    { label: '耗时', value: formatMs(model.totalDurationMs) },
   ]
 
   return (
@@ -237,7 +238,7 @@ function TrajectoryTimeline({
       <div className='flex items-center justify-between border-[var(--border)] border-b px-3.5 py-2.5'>
         <div className='flex min-w-0 items-center gap-2'>
           <Clock className='size-[14px] flex-shrink-0 text-[var(--text-icon)]' />
-          <span className='truncate text-[var(--text-primary)] text-sm'>Timing overview</span>
+          <span className='truncate text-[var(--text-primary)] text-sm'>时间概览</span>
           <span className='hidden text-[var(--text-tertiary)] text-caption sm:inline'>
             All lanes share one execution clock
           </span>
@@ -356,11 +357,11 @@ function TrajectoryLedger({
       <table className='w-full min-w-[680px] table-fixed border-collapse'>
         <thead className='sticky top-0 z-[1] bg-[var(--surface-2)]'>
           <tr className='border-[var(--border)] border-b text-left text-[var(--text-muted)] text-xs'>
-            <th className='w-[124px] px-3 py-2'>Lane</th>
-            <th className='px-2 py-2'>Stage</th>
-            <th className='w-[112px] px-2 py-2'>Type</th>
-            <th className='w-[92px] px-2 py-2 text-right'>Start</th>
-            <th className='w-[92px] px-3 py-2 text-right'>Duration</th>
+            <th className='w-[124px] px-3 py-2'>泳道</th>
+            <th className='px-2 py-2'>阶段</th>
+            <th className='w-[112px] px-2 py-2'>类型</th>
+            <th className='w-[92px] px-2 py-2 text-right'>开始</th>
+            <th className='w-[92px] px-3 py-2 text-right'>耗时</th>
           </tr>
         </thead>
         <tbody>
@@ -548,10 +549,10 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
     Object.entries(metadata).filter(([, value]) => value !== undefined && value !== null)
   )
   const tabs = [
-    { id: 'overview' as const, label: 'Overview' },
-    { id: 'input' as const, label: 'Input' },
-    { id: 'output' as const, label: 'Output' },
-    { id: 'timing' as const, label: 'Timing' },
+    { id: 'overview' as const, label: '概览' },
+    { id: 'input' as const, label: '输入' },
+    { id: 'output' as const, label: '输出' },
+    { id: 'timing' as const, label: '时间' },
   ]
 
   return (
@@ -615,39 +616,29 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
           <>
             <DetailCard
               key={`${entry.id}-error`}
-              title='Error'
+              title='错误'
               value={span.errorMessage || span.errorType}
               defaultOpen
               error
             />
-            <DetailCard key={`${entry.id}-thinking`} title='Thinking' value={richSpan.thinking} />
+            <DetailCard key={`${entry.id}-thinking`} title='思考过程' value={richSpan.thinking} />
             <DetailCard
               key={`${entry.id}-metadata`}
-              title='Metadata'
+              title='元数据'
               value={Object.keys(compactMetadata).length > 0 ? compactMetadata : undefined}
             />
           </>
         )}
         {activeTab === 'input' && (
-          <DetailCard
-            key={`${entry.id}-input`}
-            title='Input payload'
-            value={span.input}
-            defaultOpen
-          />
+          <DetailCard key={`${entry.id}-input`} title='输入载荷' value={span.input} defaultOpen />
         )}
         {activeTab === 'output' && (
-          <DetailCard
-            key={`${entry.id}-output`}
-            title='Output payload'
-            value={span.output}
-            defaultOpen
-          />
+          <DetailCard key={`${entry.id}-output`} title='输出载荷' value={span.output} defaultOpen />
         )}
         {activeTab === 'timing' && (
           <DetailCard
             key={`${entry.id}-timing`}
-            title='Timing details'
+            title='时间详情'
             defaultOpen
             value={{
               startedAt: new Date(entry.startMs).toISOString(),
@@ -704,7 +695,7 @@ function TrajectoryContent({
 
   const typeOptions = useMemo(
     () => [
-      { value: 'all', label: 'All types' },
+      { value: 'all', label: '全部类型' },
       ...getTrajectoryTypes(model.entries).map((item) => ({ value: item, label: item })),
     ],
     [model.entries]
@@ -736,7 +727,7 @@ function TrajectoryContent({
         role='toolbar'
         aria-label='Trajectory controls'
       >
-        <span className='mr-1 text-[var(--text-tertiary)] text-xs'>Timeline</span>
+        <span className='mr-1 text-[var(--text-tertiary)] text-xs'>时间线</span>
         <Button
           type='button'
           variant='ghost'
@@ -779,7 +770,7 @@ function TrajectoryContent({
             icon={Search}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder='Search stages, input, or output...'
+            placeholder='搜索阶段、输入或输出…'
             className='min-w-[220px] flex-1'
           />
           <ChipCombobox
@@ -802,7 +793,7 @@ function TrajectoryContent({
                 <ChevronsUpDown className='size-[14px]' />
               </Button>
             </Tooltip.Trigger>
-            <Tooltip.Content side='top'>Expand all</Tooltip.Content>
+            <Tooltip.Content side='top'>全部展开</Tooltip.Content>
           </Tooltip.Root>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
@@ -816,7 +807,7 @@ function TrajectoryContent({
                 <ChevronsDownUp className='size-[14px]' />
               </Button>
             </Tooltip.Trigger>
-            <Tooltip.Content side='top'>Collapse all</Tooltip.Content>
+            <Tooltip.Content side='top'>全部折叠</Tooltip.Content>
           </Tooltip.Root>
         </div>
 
@@ -886,9 +877,9 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
       <div className='mt-6 flex min-h-[320px] flex-1 items-center justify-center'>
         <div className='text-center text-[var(--text-secondary)]'>
           <Workflow className='mx-auto size-[18px] text-[var(--text-icon)]' />
-          <p className='mt-2 text-sm'>No executions found</p>
+          <p className='mt-2 text-sm'>未找到运行记录</p>
           <p className='mt-1 text-[var(--text-tertiary)] text-caption'>
-            Run a workflow to record its multi-level trajectory here.
+            运行工作流后，可在此查看多层级执行轨迹。
           </p>
         </div>
       </div>
@@ -904,13 +895,13 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
           </div>
           <div className='min-w-0'>
             <div className='flex items-center gap-2'>
-              <h2 className='truncate text-[var(--text-primary)] text-sm'>Execution trajectory</h2>
+              <h2 className='truncate text-[var(--text-primary)] text-sm'>运行轨迹</h2>
               <Badge variant={selectedRunBadge.variant} size='sm' dot className='flex-shrink-0'>
                 {selectedRunBadge.label}
               </Badge>
             </div>
             <p className='truncate text-[var(--text-tertiary)] text-caption'>
-              Time-aligned, multi-level workflow pipeline
+              按时间对齐的多层级工作流执行过程
             </p>
           </div>
         </div>
@@ -918,10 +909,10 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
           options={runOptions}
           value={effectiveLogId ?? undefined}
           onChange={setSelectedLogId}
-          placeholder='Select an execution'
+          placeholder='选择一条运行记录'
           className='w-full sm:w-[360px]'
           searchable
-          searchPlaceholder='Search executions...'
+          searchPlaceholder='搜索运行记录…'
           dropdownWidth={420}
         />
       </div>
@@ -933,9 +924,9 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
       ) : detailQuery.error ? (
         <div className='flex min-h-[320px] flex-1 items-center justify-center rounded-md border border-[var(--border)] px-4 text-center'>
           <div>
-            <p className='text-[var(--text-error)] text-sm'>Unable to load this trajectory</p>
+            <p className='text-[var(--text-error)] text-sm'>无法加载此轨迹</p>
             <p className='mt-1 text-[var(--text-tertiary)] text-caption'>
-              {detailQuery.error.message}
+              {userFacingError(detailQuery.error, 'loadFailed')}
             </p>
           </div>
         </div>
@@ -943,9 +934,9 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
         <div className='flex min-h-[320px] flex-1 items-center justify-center rounded-md border border-[var(--border)] px-4 text-center'>
           <div className='text-[var(--text-secondary)]'>
             <Wrench className='mx-auto size-[18px] text-[var(--text-icon)]' />
-            <p className='mt-2 text-sm'>No trajectory data recorded</p>
+            <p className='mt-2 text-sm'>暂无轨迹数据</p>
             <p className='mt-1 text-[var(--text-tertiary)] text-caption'>
-              This execution predates trace capture or did not emit any spans.
+              此次运行早于轨迹采集功能，或没有产生任何 Span。
             </p>
           </div>
         </div>

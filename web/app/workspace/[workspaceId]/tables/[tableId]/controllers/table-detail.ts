@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type WorkspaceTableItem } from '@/lib/lingxi/api'
 import type { WorkspaceTableViewItem } from '@/lib/lingxi/types'
+import { userFacingError } from '@/lib/product-copy'
 import { createTableGridProjection, filterAndSortTableRows } from './table-grid'
 
 interface TableDetailState {
@@ -53,7 +54,7 @@ export function useTableDetailController(tableId: string) {
       setState((current) => ({
         ...current,
         loading: false,
-        error: error instanceof Error ? error.message : '无法加载学习记录',
+        error: userFacingError(error, 'loadFailed'),
       }))
     }
   }, [tableId])

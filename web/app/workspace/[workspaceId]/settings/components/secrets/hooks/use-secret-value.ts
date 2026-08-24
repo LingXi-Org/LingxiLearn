@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { toast } from '@/components/ui-kit'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { useSession } from '@/lib/auth/auth-client'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import type { WorkspaceCredential } from '@/hooks/queries/credentials'
 import {
   usePersonalEnvironment,
@@ -75,8 +75,8 @@ export function useSecretValue({ workspaceId, credential }: UseSecretValueParams
       if (isPersonal) {
         const { data: latest } = await refetchPersonal()
         if (!latest) {
-          toast.error("Couldn't save value", {
-            description: 'Could not load your latest secrets. Please try again in a moment.',
+          toast.error('密钥值保存失败', {
+            description: '无法加载最新密钥，请稍后重试。',
           })
           logger.warn('Aborted personal secret save: latest environment unavailable')
           return
@@ -90,8 +90,8 @@ export function useSecretValue({ workspaceId, credential }: UseSecretValueParams
         await upsertWorkspace.mutateAsync({ workspaceId, variables: { [envKey]: draft } })
       }
     } catch (error) {
-      toast.error("Couldn't save value", {
-        description: getErrorMessage(error, 'Please try again in a moment.'),
+      toast.error('密钥值保存失败', {
+        description: userFacingError(error, 'saveFailed'),
       })
       logger.error('Failed to save secret value', error)
     }

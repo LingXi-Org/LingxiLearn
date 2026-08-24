@@ -107,26 +107,26 @@ describe('LogRowContextMenu cancellation action', () => {
   it('hides Cancel Run without edit permission', () => {
     renderMenu({ canCancelExecution: false })
 
-    expect(findButton('Cancel Run')).toBeUndefined()
+    expect(findButton('取消运行')).toBeUndefined()
   })
 
   it('shows an enabled Cancel Run action for an active execution', () => {
     renderMenu()
 
-    expect(findButton('Cancel Run')?.disabled).toBe(false)
+    expect(findButton('取消运行')?.disabled).toBe(false)
   })
 
   it('shows a disabled Stopping action for a cancelling execution', () => {
     renderMenu({ log: { ...LOG, status: 'cancelling' } })
 
-    expect(findButton('Stopping…')?.disabled).toBe(true)
+    expect(findButton('正在停止…')?.disabled).toBe(true)
   })
 
   it('only disables the execution matching the pending mutation', () => {
     renderMenu({ isCancelPending: true, cancelPendingExecutionId: 'execution-2' })
-    expect(findButton('Cancel Run')?.disabled).toBe(false)
+    expect(findButton('取消运行')?.disabled).toBe(false)
 
     renderMenu({ isCancelPending: true, cancelPendingExecutionId: 'execution-1' })
-    expect(findButton('Stopping…')?.disabled).toBe(true)
+    expect(findButton('正在停止…')?.disabled).toBe(true)
   })
 })

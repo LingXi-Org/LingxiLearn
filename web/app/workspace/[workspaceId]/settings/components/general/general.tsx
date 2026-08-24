@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import {
   Button,
   ChipCombobox,
@@ -16,9 +18,6 @@ import {
   Tooltip,
 } from '@/components/ui-kit'
 import { Camera, Check, CircleInfo, Pencil } from '@/components/ui-kit/icons'
-import { createLogger } from '@/lib/logger'
-import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import { requestJson } from '@/lib/api/client/request'
 import { telemetryContract } from '@/lib/api/contracts/telemetry'
 import { signOut, useSession } from '@/lib/auth/auth-client'
@@ -26,6 +25,8 @@ import { ANONYMOUS_USER_ID } from '@/lib/auth/constants'
 import { isHosted } from '@/lib/core/config/env-flags'
 import { getBrowserTimezone, getTimezoneOptions } from '@/lib/core/utils/timezone'
 import { getBaseUrl } from '@/lib/core/utils/urls'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import type { SettingsAction } from '@/app/workspace/[workspaceId]/settings/components/settings-header/settings-header'
 import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
 import { SettingsSection } from '@/app/workspace/[workspaceId]/settings/components/settings-section/settings-section'
@@ -204,7 +205,10 @@ export function General() {
   }
 
   const handleThemeChange = async (value: string) => {
-    await updateSetting.mutateAsync({ key: 'theme', value: value as 'system' | 'light' | 'dark' })
+    await updateSetting.mutateAsync({
+      key: 'theme',
+      value: value as 'system' | 'light' | 'dark',
+    })
   }
 
   const handleTimezoneChange = async (value: string) => {
@@ -220,7 +224,10 @@ export function General() {
   const handleSnapToGridChange = async (value: string) => {
     const newValue = Number.parseInt(value, 10)
     if (newValue !== settings?.snapToGridSize && !updateSetting.isPending) {
-      await updateSetting.mutateAsync({ key: 'snapToGridSize', value: newValue })
+      await updateSetting.mutateAsync({
+        key: 'snapToGridSize',
+        value: newValue,
+      })
     }
   }
 
@@ -232,13 +239,19 @@ export function General() {
 
   const handleErrorNotificationsChange = async (checked: boolean) => {
     if (checked !== settings?.errorNotificationsEnabled && !updateSetting.isPending) {
-      await updateSetting.mutateAsync({ key: 'errorNotificationsEnabled', value: checked })
+      await updateSetting.mutateAsync({
+        key: 'errorNotificationsEnabled',
+        value: checked,
+      })
     }
   }
 
   const handleTelemetryToggle = async (checked: boolean) => {
     if (checked !== settings?.telemetryEnabled && !updateSetting.isPending) {
-      await updateSetting.mutateAsync({ key: 'telemetryEnabled', value: checked })
+      await updateSetting.mutateAsync({
+        key: 'telemetryEnabled',
+        value: checked,
+      })
 
       if (checked) {
         if (typeof window !== 'undefined') {
@@ -272,7 +285,10 @@ export function General() {
     ...(!isAuthDisabled
       ? [
           { text: 'Sign out', onSelect: handleSignOut },
-          { text: 'Reset password', onSelect: () => setShowResetPasswordModal(true) },
+          {
+            text: 'Reset password',
+            onSelect: () => setShowResetPasswordModal(true),
+          },
         ]
       : []),
   ]
@@ -541,18 +557,16 @@ export function General() {
       <ChipModal
         open={showResetPasswordModal}
         onOpenChange={setShowResetPasswordModal}
-        srTitle='Reset Password'
+        srTitle='重置密码'
       >
-        <ChipModalHeader onClose={() => setShowResetPasswordModal(false)}>
-          Reset Password
-        </ChipModalHeader>
+        <ChipModalHeader onClose={() => setShowResetPasswordModal(false)}>重置密码</ChipModalHeader>
         <ChipModalBody>
           <p className='px-2 text-[var(--text-secondary)] text-sm'>
-            A password reset link will be sent to{' '}
+            密码重置链接将发送到{' '}
             <span className='text-[var(--text-primary)]'>{profile?.email}</span>. Click the link in
-            the email to create a new password.
+            。请点击邮件中的链接设置新密码。
           </p>
-          <ChipModalError>{resetPassword.error?.message}</ChipModalError>
+          <ChipModalError>{userFacingError(resetPassword.error, 'saveFailed')}</ChipModalError>
         </ChipModalBody>
         <ChipModalFooter
           onCancel={() => setShowResetPasswordModal(false)}

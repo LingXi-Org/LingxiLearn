@@ -1,6 +1,8 @@
 'use client'
 
 import { createElement, lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { ThinkingLoader } from '@/components/ui'
 import {
   ArrowRight,
   Check,
@@ -14,8 +16,6 @@ import {
   toast,
 } from '@/components/ui-kit'
 import { TerminalWindow } from '@/components/ui-kit/icons'
-import { useParams } from 'next/navigation'
-import { ThinkingLoader } from '@/components/ui'
 import { useSession } from '@/lib/auth/auth-client'
 import { buildHostedUpgradeUrl, HOSTED_BILLING_SETTINGS_URL } from '@/lib/billing/upgrade-reasons'
 import { canManageWorkspaceBilling } from '@/lib/billing/workspace-permissions'
@@ -1801,9 +1801,9 @@ function SecretInputDisplay({ data, divided = false, onSaved }: CredentialContro
       setValue('')
       setSaved(true)
       onSaved?.()
-      toast.success(`Saved ${secretName}`)
+      toast.success(`已保存 ${secretName}`)
     } catch {
-      toast.error(`Couldn't save ${secretName}. Please try again.`)
+      toast.error(`无法保存 ${secretName}，请稍后重试。`)
     }
   }
 
@@ -1941,10 +1941,10 @@ function FolderAccessDisplay({ data }: { data: CredentialItemData }) {
       const response = await bridge.localFilesystem({ operation: 'mount_directory' })
       if (response.ok && 'mount' in response.data && response.data.mount) {
         setGrantedName(response.data.mount.name)
-        toast.success(`Granted access to ${response.data.mount.name}`)
+        toast.success(`已授权访问 ${response.data.mount.name}`)
       }
     } catch {
-      toast.error("Couldn't open the folder picker. Please try again.")
+      toast.error('无法打开文件夹选择器，请稍后重试。')
     } finally {
       setPicking(false)
     }
@@ -2522,7 +2522,7 @@ function CredentialInputCard({
       }
       await Promise.all(saves)
     } catch {
-      toast.error(`Couldn't save secrets. Please try again.`)
+      toast.error('无法保存密钥，请稍后重试。')
       return false
     }
 

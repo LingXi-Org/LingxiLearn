@@ -17,6 +17,7 @@ import {
 } from '@/components/ui-kit'
 import { RefreshCw, SquareArrowUpRight } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { ConnectorConfigFields } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/connector-config-fields'
 import { hasWorkspaceMaxConnectorAccess } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/connector-entitlements'
 import { SYNC_INTERVALS } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/consts'
@@ -257,7 +258,7 @@ export function EditConnectorModal({
         },
         onError: (err) => {
           logger.error('Failed to update connector', { error: err.message })
-          setError(err.message)
+          setError(userFacingError(err, 'saveFailed'))
         },
       }
     )
@@ -371,7 +372,7 @@ function SettingsTab({
         />
       )}
 
-      <ChipModalField type='custom' title='Sync Frequency'>
+      <ChipModalField type='custom' title='同步频率'>
         <ButtonGroup
           value={String(syncInterval)}
           onValueChange={(val) => setSyncInterval(Number(val))}
@@ -438,8 +439,8 @@ function DocumentsTab({ knowledgeBaseId, connectorId }: DocumentsTabProps) {
   return (
     <div className='flex flex-col gap-3 px-2'>
       <ButtonGroup value={filter} onValueChange={(val) => setFilter(val as 'active' | 'excluded')}>
-        <ButtonGroupItem value='active'>Active ({counts.active})</ButtonGroupItem>
-        <ButtonGroupItem value='excluded'>Excluded ({counts.excluded})</ButtonGroupItem>
+        <ButtonGroupItem value='active'>已启用 ({counts.active})</ButtonGroupItem>
+        <ButtonGroupItem value='excluded'>已排除 ({counts.excluded})</ButtonGroupItem>
       </ButtonGroup>
 
       <div className='max-h-[320px] min-h-0 overflow-y-auto [scrollbar-gutter:stable]'>
@@ -504,7 +505,7 @@ function DocumentsTab({ knowledgeBaseId, connectorId }: DocumentsTabProps) {
                 disabled={isFetchingNextPage}
                 onClick={() => fetchNextPage()}
               >
-                {isFetchingNextPage ? 'Loading…' : 'Load more documents'}
+                {isFetchingNextPage ? '正在加载…' : '加载更多文档'}
               </Button>
             )}
           </div>

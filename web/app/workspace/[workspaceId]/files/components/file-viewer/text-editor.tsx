@@ -2,17 +2,18 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { OnMount } from '@monaco-editor/react'
-import { cn } from '@/components/ui-kit'
 import type { editor as MonacoEditorTypes } from 'monaco-editor'
 import dynamic from 'next/dynamic'
+import { cn } from '@/components/ui-kit'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import {
   buildFileSelectionLabel,
   truncateSelectionText,
 } from '@/lib/copilot/chat/selection-context'
-import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
+import { workspaceCopy } from '@/lib/product-copy'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
 import { useAddToChat } from '@/hooks/use-add-to-chat'
-import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { EditorContextMenu } from './editor-context-menu'
 import type { PreviewMode } from './file-viewer'
 import { PreviewPanel, resolvePreviewType } from './preview-panel'
@@ -593,7 +594,9 @@ export const TextEditor = memo(function TextEditor({
   if (hasContentError) {
     return (
       <div className='flex flex-1 items-center justify-center'>
-        <p className='text-[13px] text-[var(--text-muted)]'>Failed to load file content</p>
+        <p className='text-[13px] text-[var(--text-muted)]'>
+          {workspaceCopy.common.errors.loadFailed}
+        </p>
       </div>
     )
   }
@@ -669,7 +672,7 @@ export const TextEditor = memo(function TextEditor({
                 onMouseDown={() => setIsResizing(true)}
                 role='separator'
                 aria-orientation='vertical'
-                aria-label='Resize split'
+                aria-label='调整分隔区域大小'
               />
               {isResizing && (
                 <div className='-translate-x-[0.5px] pointer-events-none absolute top-0 z-20 h-full w-[2px] bg-[var(--selection)]' />

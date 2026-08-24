@@ -13,7 +13,7 @@ import {
   Search,
   Skeleton,
 } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import { getUserColor } from '@/lib/workspaces/colors'
 import type { RosterMember } from '@/hooks/queries/organization'
 
@@ -146,13 +146,13 @@ export function TransferOwnershipDialog({
               icon={Search}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder='Search members...'
+              placeholder='搜索成员…'
             />
 
             <div className='max-h-[280px] overflow-y-auto rounded-md border border-[var(--border-1)]'>
               {candidates.length === 0 ? (
                 <div className='px-3 py-4 text-center text-[var(--text-muted)] text-small'>
-                  No members match "{search}"
+                  没有与“{search}”匹配的成员
                 </div>
               ) : (
                 <ul className='divide-y divide-[var(--border-1)]'>
@@ -206,7 +206,7 @@ export function TransferOwnershipDialog({
 
         {error && (
           <p className='px-2 text-[var(--text-error)] text-sm'>
-            {getErrorMessage(error) || 'Failed to transfer ownership'}
+            {userFacingError(error, 'saveFailed')}
           </p>
         )}
       </div>

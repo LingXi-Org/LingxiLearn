@@ -1,7 +1,7 @@
 'use client'
 
 import { toast } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import { parseFolderedRowId } from '@/app/workspace/[workspaceId]/components/folders'
 import { useUpdateFolder } from '@/hooks/queries/folders'
 import { useUpdateKnowledgeBase } from '@/hooks/queries/kb/knowledge'
@@ -39,7 +39,7 @@ export function useKnowledgeRename(workspaceId: string) {
         try {
           return await saveFolderName(parsed.id, name)
         } catch (renameError) {
-          toast.error(getErrorMessage(renameError, 'Failed to rename folder'))
+          toast.error(userFacingError(renameError, 'saveFailed'))
           throw renameError
         }
       }
@@ -52,7 +52,7 @@ export function useKnowledgeRename(workspaceId: string) {
       try {
         return await saveFolderName(folderId, name)
       } catch (renameError) {
-        toast.error(getErrorMessage(renameError, 'Failed to rename folder'))
+        toast.error(userFacingError(renameError, 'saveFailed'))
         throw renameError
       }
     },

@@ -20,6 +20,15 @@ const IGNORED_DIRECTORIES = new Set([
   'coverage',
   '.turbo',
 ])
+const WORKSPACE_COPY_FEATURES = new Set([
+  'files',
+  'home',
+  'knowledge',
+  'logs',
+  'settings',
+  'skills',
+  'tables',
+])
 
 export const REMOVED_COMPATIBILITY_ROUTES = [
   'app/ingest/[[...path]]/route.ts',
@@ -30,6 +39,18 @@ export const REMOVED_COMPATIBILITY_ROUTES = [
   'app/workspace/[workspaceId]/integrations/page.tsx',
   'app/workspace/[workspaceId]/integrations/[block]/page.tsx',
   'app/workspace/[workspaceId]/integrations/connected/[credentialId]/page.tsx',
+] as const
+
+export const WORKSPACE_COPY_OWNERS = [
+  'app/workspace/[workspaceId]/components/lingxi-resource-page.tsx',
+  'app/workspace/[workspaceId]/components/folders/foldered-resources.ts',
+  'app/workspace/[workspaceId]/components/resource/resource.tsx',
+  'app/workspace/[workspaceId]/files/files-list.tsx',
+  'app/workspace/[workspaceId]/files/loading.tsx',
+  'app/workspace/[workspaceId]/knowledge/knowledge.tsx',
+  'app/workspace/[workspaceId]/knowledge/loading.tsx',
+  'app/workspace/[workspaceId]/tables/tables.tsx',
+  'app/workspace/[workspaceId]/tables/loading.tsx',
 ] as const
 
 export interface QualityBoundaryViolation {
@@ -74,11 +95,27 @@ export function findQualityBoundaryViolations(webRoot: string): QualityBoundaryV
     if (/\bignoreBuildErrors\s*[":=]/.test(content)) {
       violations.push({ file: display, rule: 'Next.js ignoreBuildErrors bypass' })
     }
+    const workspaceMatch = display.match(/^app\/workspace\/\[workspaceId\]\/([^/]+)\//)
+    if (
+      workspaceMatch &&
+      WORKSPACE_COPY_FEATURES.has(workspaceMatch[1]) &&
+      /(?:set(?:Error|[A-Z]\w*Error)\([^\n]*(?:getErrorMessage|toError\([^)]*\)\.message|(?:error|err|cause)\??\.message)|toast\.error\([^\n]*(?:getErrorMessage|toError\([^)]*\)\.message|(?:error|err|cause)\??\.message)|description:\s*(?:getErrorMessage|toError\([^)]*\)\.message|(?:error|err|cause)\??\.message)|\{getErrorMessage\([^}]+\)\}|mutation\.error\?*\.message)/.test(
+        content
+      )
+    ) {
+      violations.push({ file: display, rule: 'raw technical error exposed in Workspace UI' })
+    }
   }
 
   for (const route of REMOVED_COMPATIBILITY_ROUTES) {
     if (existsSync(join(webRoot, ...route.split('/')))) {
       violations.push({ file: route, rule: 'removed fake compatibility route was restored' })
+    }
+  }
+  for (const owner of WORKSPACE_COPY_OWNERS) {
+    const path = join(webRoot, ...owner.split('/'))
+    if (existsSync(path) && !readFileSync(path, 'utf8').includes('@/lib/product-copy')) {
+      violations.push({ file: owner, rule: 'shared Workspace copy must use the product catalog' })
     }
   }
   return violations

@@ -3,6 +3,7 @@
 import { useCallback } from 'react'
 import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { exportTable } from '@/hooks/queries/tables'
 
 const logger = createLogger('TablesCsvExport')
@@ -16,10 +17,10 @@ export function useExportTable(workspaceId: string): (tableId: string) => Promis
     async (tableId: string) => {
       try {
         const status = await exportTable(workspaceId, tableId)
-        if (status === 'processing') toast.success('Export started')
+        if (status === 'processing') toast.success('已开始导出')
       } catch (err) {
         logger.error('Failed to export table:', err)
-        toast.error('Failed to export table')
+        toast.error(userFacingError(err, 'loadFailed'))
       }
     },
     [workspaceId]

@@ -137,7 +137,7 @@ export function ConnectorSelectorField({
     return (
       <div className='flex h-[30px] items-center gap-2 rounded-lg border border-[var(--border-1)] bg-[var(--surface-5)] px-2 text-[var(--text-muted)] text-small dark:bg-[var(--surface-4)]'>
         <Loader className='size-3.5' animate />
-        Loading…
+        正在加载…
       </div>
     )
   }
@@ -204,7 +204,7 @@ function getEmptyMessage(
     truncated: boolean
   }
 ): string {
-  if (state.error) return 'No match — the list failed to load. Try reopening'
+  if (state.error) return '列表加载失败，请重新打开后再试'
   if (state.hasMore || state.isFetchingMore) return 'No match yet — still loading…'
   if (state.truncated) return 'No match — too many to list. Try a more exact term'
   // `noun` is singular on some connectors ("Base") and plural on others ("Spaces"),

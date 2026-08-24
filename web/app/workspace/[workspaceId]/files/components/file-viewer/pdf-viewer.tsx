@@ -6,8 +6,9 @@
  */
 import '@/lib/core/utils/browser-polyfills'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createLogger } from '@/lib/logger'
 import { pdfjs, Document as ReactPdfDocument, Page as ReactPdfPage } from 'react-pdf'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import 'react-pdf/dist/Page/TextLayer.css'
 import { PREVIEW_LOADING_OVERLAY } from '@/app/workspace/[workspaceId]/files/components/file-viewer/preview-shared'
 import { PreviewToolbar } from '@/app/workspace/[workspaceId]/files/components/file-viewer/preview-toolbar'
@@ -43,7 +44,7 @@ interface PdfViewerCoreProps {
 function PdfError({ error }: { error: string }) {
   return (
     <div className='flex flex-1 flex-col items-center justify-center gap-[8px]'>
-      <p className='text-[14px] text-[var(--text-body)]'>Failed to preview PDF</p>
+      <p className='text-[14px] text-[var(--text-body)]'>PDF 预览失败</p>
       <p className='text-[13px] text-[var(--text-muted)]'>{error}</p>
     </div>
   )
@@ -242,10 +243,10 @@ export const PdfViewerCore = memo(function PdfViewerCore({ source, filename }: P
           }}
           onLoadError={(err) => {
             logger.error('PDF load failed', { error: err.message })
-            setLoadError(err.message)
+            setLoadError(userFacingError(err, 'loadFailed'))
             setIsDocumentReady(true)
           }}
-          error={<PdfError error={loadError ?? 'Failed to load PDF'} />}
+          error={<PdfError error={loadError ?? userFacingError(null, 'loadFailed')} />}
           className='mx-auto'
         >
           <div

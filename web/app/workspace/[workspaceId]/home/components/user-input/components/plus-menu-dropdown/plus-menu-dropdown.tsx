@@ -135,8 +135,7 @@ export const PlusMenuDropdown = React.memo(
         return withDesktopTabMentions(availableResources, mentionBrowserTabs, mentionTerminalTabs)
       }
       const attachable = availableResources.filter(
-        ({ type }) =>
-          !NON_ATTACHABLE_RESOURCE_TYPES.has(type) && !excludedResourceTypes?.has(type)
+        ({ type }) => !NON_ATTACHABLE_RESOURCE_TYPES.has(type) && !excludedResourceTypes?.has(type)
       )
       return attachable.filter(({ type }) => !MENTION_ONLY_RESOURCE_TYPES.has(type))
     }, [availableResources, browserTabs, excludedResourceTypes, isMention, terminalTabs])
@@ -329,7 +328,7 @@ export const PlusMenuDropdown = React.memo(
           {!isMention && (
             <DropdownMenuSearchInput
               ref={searchRef}
-              placeholder='Search resources...'
+              placeholder='搜索资源…'
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)
@@ -378,7 +377,7 @@ export const PlusMenuDropdown = React.memo(
                 })
               ) : (
                 <div className='px-2 py-1.5 text-center text-[var(--text-tertiary)] text-caption'>
-                  No results
+                  没有找到结果
                 </div>
               ))}
           </div>

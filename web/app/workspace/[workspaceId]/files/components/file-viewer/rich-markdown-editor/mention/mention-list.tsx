@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { Editor } from '@tiptap/core'
+import { workspaceCopy } from '@/lib/product-copy'
 import { SuggestionList } from '../menus/suggestion-list'
 import {
   type SuggestionKeyDownHandler,
@@ -99,9 +100,13 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
       activeIndex={activeIndex}
       setActiveIndex={setActiveIndex}
       command={command}
-      ariaLabel='Mentions'
+      ariaLabel='提及内容'
       idPrefix='mention'
-      emptyLabel={rawItems.length === 0 ? 'Loading…' : 'No results'}
+      emptyLabel={
+        rawItems.length === 0
+          ? workspaceCopy.common.states.loading
+          : workspaceCopy.common.states.noResults
+      }
       itemKey={(item) => `${item.kind}:${item.id}`}
       renderItem={(item) => {
         const Icon = item.icon

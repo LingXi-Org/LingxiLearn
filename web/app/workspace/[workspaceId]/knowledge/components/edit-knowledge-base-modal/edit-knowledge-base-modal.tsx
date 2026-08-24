@@ -10,10 +10,10 @@ import {
   ChipModalHeader,
   toast,
 } from '@/components/ui-kit'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { KNOWLEDGE_BASE_DESCRIPTION_MAX_LENGTH } from '@/lib/knowledge/constants'
 import type { ChunkingConfig } from '@/lib/knowledge/types'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 
 const logger = createLogger('EditKnowledgeBaseModal')
 
@@ -101,7 +101,7 @@ export const EditKnowledgeBaseModal = memo(function EditKnowledgeBaseModal({
       onOpenChange(false)
     } catch (err) {
       logger.error('Error updating knowledge base:', err)
-      setError(getErrorMessage(err, 'Failed to update knowledge base'))
+      setError(userFacingError(err, 'saveFailed'))
     } finally {
       setIsSubmitting(false)
     }

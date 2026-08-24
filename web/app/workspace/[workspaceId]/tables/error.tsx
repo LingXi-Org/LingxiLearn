@@ -1,5 +1,6 @@
 'use client'
 
+import { userFacingError, workspaceCopy } from '@/lib/product-copy'
 import { type ErrorBoundaryProps, ErrorState } from '@/app/workspace/[workspaceId]/components'
 
 export default function TablesError({ error, reset }: ErrorBoundaryProps) {
@@ -7,8 +8,8 @@ export default function TablesError({ error, reset }: ErrorBoundaryProps) {
     <ErrorState
       error={error}
       reset={reset}
-      title='Failed to load tables'
-      description='Something went wrong while loading the tables. Please try again.'
+      title={workspaceCopy.resources.tables.loadFailedTitle}
+      description={userFacingError(error, 'loadFailed')}
       loggerName='TablesError'
     />
   )

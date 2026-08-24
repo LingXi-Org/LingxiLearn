@@ -2,13 +2,13 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
 import type { ExecutionLogDetail, ExecutionLogRow } from '@/lib/api/contracts/logs'
+import { api } from '@/lib/lingxi/api'
+import { userFacingError } from '@/lib/product-copy'
 import type { ExecutionLogDetailView } from '@/app/workspace/[workspaceId]/logs/model/execution-log'
 import { mapExecutionLogDetail } from '@/app/workspace/[workspaceId]/logs/model/execution-log-mapper'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { useCancelExecution, useLogDetail, useRetryExecution } from '@/hooks/queries/logs'
-import { api } from '@/lib/lingxi/api'
 
 const ACTIVE_RUN_DETAIL_REFRESH_MS = 3_000 as const
 
@@ -88,9 +88,11 @@ export function useTrajectoryDetailController({
         } else {
           return
         }
-        toast.success('Run stopped')
+        toast.success('运行已停止')
       } catch (error) {
-        toast.error(getErrorMessage(error, 'Failed to stop run'))
+        toast.error('无法停止运行', {
+          description: userFacingError(error),
+        })
       } finally {
         setNativeCancelPending(false)
       }
@@ -114,9 +116,11 @@ export function useTrajectoryDetailController({
         } else {
           return
         }
-        toast.success('Retry started')
-      } catch {
-        toast.error('Failed to retry execution')
+        toast.success('已开始重试')
+      } catch (error) {
+        toast.error('无法重试运行', {
+          description: userFacingError(error),
+        })
       } finally {
         setNativeRetryPending(false)
       }

@@ -7,9 +7,9 @@ export {
   isTrajectoryError,
   summarizeTrajectory,
   TRAJECTORY_LANES,
+  type TrajectoryEntry,
   type TrajectoryLane,
   type TrajectoryLaneId,
-  type TrajectoryEntry,
   type TrajectoryModel,
   type TrajectorySummary,
 } from './trajectory-utils'

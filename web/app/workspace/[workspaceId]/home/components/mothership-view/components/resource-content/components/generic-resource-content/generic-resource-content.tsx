@@ -24,7 +24,7 @@ export function GenericResourceContent({ data }: GenericResourceContentProps) {
   if (data.entries.length === 0) {
     return (
       <div className='flex h-full items-center justify-center'>
-        <p className='text-[13px] text-[var(--text-muted)]'>No results yet</p>
+        <p className='text-[13px] text-[var(--text-muted)]'>暂无结果</p>
       </div>
     )
   }
@@ -44,13 +44,13 @@ export function GenericResourceContent({ data }: GenericResourceContentProps) {
               {getToolStatusDisplayTitle(entry.displayTitle, entry.status, entry.toolName)}
             </span>
             {entry.status === 'error' && (
-              <span className='ml-auto text-[12px] text-[var(--text-error)]'>Error</span>
+              <span className='ml-auto text-[12px] text-[var(--text-error)]'>错误</span>
             )}
             {entry.status === 'skipped' && (
-              <span className='ml-auto text-[12px] text-[var(--text-muted)]'>Skipped</span>
+              <span className='ml-auto text-[12px] text-[var(--text-muted)]'>已跳过</span>
             )}
             {entry.status === 'rejected' && (
-              <span className='ml-auto text-[12px] text-[var(--text-muted)]'>Rejected</span>
+              <span className='ml-auto text-[12px] text-[var(--text-muted)]'>已拒绝</span>
             )}
           </div>
           {entry.streamingArgs && (

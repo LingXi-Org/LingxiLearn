@@ -15,10 +15,10 @@ export type NavigationItem = UnifiedSettingsNavigationItem
 export const isBillingEnabled = SETTINGS_NAVIGATION_BILLING_ENABLED
 
 export const sectionConfig: { key: NavigationSection; title: string }[] = [
-  { key: 'account', title: 'Account' },
-  { key: 'workspace', title: 'Workspace' },
-  { key: 'organization', title: 'Organization' },
-  { key: 'platform', title: 'Platform' },
+  { key: 'account', title: '账户' },
+  { key: 'workspace', title: '工作区' },
+  { key: 'organization', title: '组织' },
+  { key: 'platform', title: '平台' },
 ]
 
 export const allNavigationItems: NavigationItem[] = buildUnifiedSettingsNavigation()
@@ -32,5 +32,11 @@ export function getSettingsSectionMeta(
   section: SettingsSection
 ): { label: string; description: string; docsLink?: string } | null {
   const item = allNavigationItems.find((navItem) => navItem.id === section)
-  return item ? { label: item.label, description: item.description, docsLink: item.docsLink } : null
+  return item
+    ? {
+        label: item.label,
+        description: item.description,
+        docsLink: item.docsLink,
+      }
+    : null
 }

@@ -10,6 +10,9 @@ import {
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
+import { HEADER_ACTION_CLUSTER, TITLE_BAR_LANE_PT } from '@/components/page-header-bar'
+import { orderHeaderActions } from '@/components/settings/settings-header'
 import {
   Chip,
   ChipChevronDown,
@@ -32,9 +35,7 @@ import {
   useIsOverflowing,
 } from '@/components/ui-kit'
 import { ArrowUpLeft } from '@/components/ui-kit/icons'
-import { createPortal } from 'react-dom'
-import { HEADER_ACTION_CLUSTER, TITLE_BAR_LANE_PT } from '@/components/page-header-bar'
-import { orderHeaderActions } from '@/components/settings/settings-header'
+import { workspaceCopy } from '@/lib/product-copy'
 import { InlineRenameInput } from '@/app/workspace/[workspaceId]/components/inline-rename-input'
 
 export interface DropdownOption {
@@ -450,7 +451,7 @@ function BreadcrumbLocationPopover({
         <PopoverAnchor asChild>
           <button
             type='button'
-            aria-label={rootBreadcrumb?.label ?? 'Path'}
+            aria-label={rootBreadcrumb?.label ?? workspaceCopy.common.accessibility.path}
             onClick={() => navigateAndClose(rootBreadcrumb?.onClick)}
             onFocus={openPopover}
             onBlur={scheduleClose}

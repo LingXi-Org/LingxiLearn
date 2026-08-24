@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ChipInput, Info, toast } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { ON_DEMAND_UNLIMITED } from '@/lib/billing/constants'
 import { creditsToDollars, dollarsToCredits } from '@/lib/billing/credits/conversion'
+import { userFacingError } from '@/lib/product-copy'
 import { SettingsSection } from '@/app/workspace/[workspaceId]/settings/components/settings-section/settings-section'
 import { useUpdateOrganizationUsageLimit } from '@/hooks/queries/organization'
 import { useUpdateUsageLimit } from '@/hooks/queries/subscription'
@@ -87,27 +87,27 @@ export function UsageLimitField({
     if (currentLimit == null || debouncedDraft.trim() === '') return
     const parsedCredits = Number.parseFloat(debouncedDraft)
     if (Number.isNaN(parsedCredits)) {
-      toast.error('Usage limit must be a number')
+      toast.error('用量上限必须是数字')
       return
     }
     if (parsedCredits === dollarsToCredits(currentLimit)) return
     const minimumCredits = dollarsToCredits(minimumLimit)
     if (parsedCredits < minimumCredits) {
-      toast.error(`Usage limit must be at least ${minimumCredits.toLocaleString()} credits`)
+      toast.error(`用量上限不能低于 ${minimumCredits.toLocaleString()} 点额度`)
       return
     }
 
     // Store dollars; the input is credits. Convert once at the boundary.
     const limitDollars = creditsToDollars(parsedCredits)
     const onError = (error: unknown) => {
-      toast.error("Couldn't update usage limit", {
-        description: getErrorMessage(error, 'Please try again in a moment.'),
+      toast.error('用量上限更新失败', {
+        description: userFacingError(error, 'saveFailed'),
       })
     }
 
     if (context === 'organization') {
       if (!organizationId) {
-        toast.error("Couldn't update usage limit", {
+        toast.error('用量上限更新失败', {
           description: 'Organization billing context is unavailable. Please refresh and try again.',
         })
         return

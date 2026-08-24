@@ -14,11 +14,16 @@ import {
   type ComboboxOption,
 } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { useCreateWorkflowMcpServer } from '@/hooks/queries/workflow-mcp-servers'
 
 const logger = createLogger('CreateWorkflowMcpServerModal')
 
-const INITIAL_FORM_DATA: { name: string; description: string; isPublic: boolean } = {
+const INITIAL_FORM_DATA: {
+  name: string
+  description: string
+  isPublic: boolean
+} = {
   name: '',
   description: '',
   isPublic: false,
@@ -119,22 +124,20 @@ export function CreateWorkflowMcpServerModal({
               value={formData.isPublic ? 'public' : 'private'}
               onValueChange={(value) => setFormData({ ...formData, isPublic: value === 'public' })}
             >
-              <ButtonGroupItem value='private'>API Key</ButtonGroupItem>
+              <ButtonGroupItem value='private'>API 密钥</ButtonGroupItem>
               <ButtonGroupItem value='public'>公开</ButtonGroupItem>
             </ButtonGroup>
             {formData.isPublic && (
-              <span className='text-[var(--text-muted)] text-caption'>
-                No authentication required
-              </span>
+              <span className='text-[var(--text-muted)] text-caption'>无需身份验证</span>
             )}
           </div>
         </ChipModalField>
-        <ChipModalError>{createServerMutation.error?.message}</ChipModalError>
+        <ChipModalError>{userFacingError(createServerMutation.error, 'saveFailed')}</ChipModalError>
       </ChipModalBody>
       <ChipModalFooter
         onCancel={() => onOpenChange(false)}
         primaryAction={{
-          label: createServerMutation.isPending ? 'Adding...' : 'Add Server',
+          label: createServerMutation.isPending ? '正在添加…' : '添加服务器',
           onClick: handleCreateServer,
           disabled: !isFormValid || createServerMutation.isPending,
         }}

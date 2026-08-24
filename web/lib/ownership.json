@@ -178,6 +178,11 @@
     "capability": "product-analytics",
     "status": "owned"
   },
+  "product-copy": {
+    "owner": "product",
+    "capability": "workspace-product-copy",
+    "status": "owned"
+  },
   "permissions": {
     "owner": "identity",
     "capability": "authorization-primitives",

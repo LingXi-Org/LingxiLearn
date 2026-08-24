@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react'
 import type { Editor } from '@tiptap/core'
+import { workspaceCopy } from '@/lib/product-copy'
 import { SuggestionList } from '../menus/suggestion-list'
 import {
   type SuggestionKeyDownHandler,
@@ -49,9 +50,9 @@ export const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandL
         activeIndex={activeIndex}
         setActiveIndex={setActiveIndex}
         command={command}
-        ariaLabel='Commands'
+        ariaLabel='命令'
         idPrefix='slash-command'
-        emptyLabel='No results'
+        emptyLabel={workspaceCopy.common.states.noResults}
         itemKey={(item) => item.title}
         renderItem={(item) => {
           const Icon = item.icon

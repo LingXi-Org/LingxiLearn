@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useParams } from 'next/navigation'
 import {
   Button,
   Calendar,
@@ -14,7 +15,6 @@ import {
   RefreshCw,
 } from '@/components/ui-kit'
 import { Download } from '@/components/ui-kit/icons'
-import { useParams } from 'next/navigation'
 import { formatDateShort } from '@/lib/core/utils/date-display'
 import { hasActiveFilters } from '@/lib/logs/filters'
 import { getTriggerOptions } from '@/lib/logs/get-trigger-options'
@@ -45,26 +45,26 @@ import {
 import { formatDate, STATUS_CONFIG, StatusBadge, TriggerBadge } from './utils'
 
 const LOG_COLUMNS: ResourceColumn[] = [
-  { id: 'run', header: 'Run' },
-  { id: 'date', header: 'Date' },
-  { id: 'status', header: 'Status' },
-  { id: 'cost', header: 'Cost' },
-  { id: 'trigger', header: 'Trigger' },
-  { id: 'duration', header: 'Duration' },
+  { id: 'run', header: '运行' },
+  { id: 'date', header: '时间' },
+  { id: 'status', header: '状态' },
+  { id: 'cost', header: '成本' },
+  { id: 'trigger', header: '触发方式' },
+  { id: 'duration', header: '耗时' },
 ]
 
 const TIME_RANGE_OPTIONS: ComboboxOption[] = [
-  { value: 'All time', label: 'All time' },
-  { value: 'Past 30 minutes', label: 'Past 30 minutes' },
-  { value: 'Past hour', label: 'Past hour' },
-  { value: 'Past 6 hours', label: 'Past 6 hours' },
-  { value: 'Past 12 hours', label: 'Past 12 hours' },
-  { value: 'Past 24 hours', label: 'Past 24 hours' },
-  { value: 'Past 3 days', label: 'Past 3 days' },
-  { value: 'Past 7 days', label: 'Past 7 days' },
-  { value: 'Past 14 days', label: 'Past 14 days' },
-  { value: 'Past 30 days', label: 'Past 30 days' },
-  { value: 'Custom range', label: 'Custom range' },
+  { value: 'All time', label: '全部时间' },
+  { value: 'Past 30 minutes', label: '过去 30 分钟' },
+  { value: 'Past hour', label: '过去 1 小时' },
+  { value: 'Past 6 hours', label: '过去 6 小时' },
+  { value: 'Past 12 hours', label: '过去 12 小时' },
+  { value: 'Past 24 hours', label: '过去 24 小时' },
+  { value: 'Past 3 days', label: '过去 3 天' },
+  { value: 'Past 7 days', label: '过去 7 天' },
+  { value: 'Past 14 days', label: '过去 14 天' },
+  { value: 'Past 30 days', label: '过去 30 天' },
+  { value: 'Custom range', label: '自定义范围' },
 ] as const
 
 const colorIconCache = new Map<string, React.ComponentType<{ className?: string }>>()
@@ -164,29 +164,29 @@ export default function Logs() {
   const headerActions = useMemo<ResourceAction[]>(
     () => [
       {
-        text: 'Export',
+        text: '导出',
         icon: Download,
         onSelect: handleExport,
         disabled: !detail.commands.canEdit || list.exportAction.isExporting || rows.length === 0,
       },
       {
-        text: 'Refresh',
+        text: '刷新',
         icon: refreshIcon,
         onSelect: handleRefresh,
         disabled: list.refresh.isVisuallyRefreshing,
       },
       {
-        text: 'Logs',
+        text: '日志',
         onSelect: () => list.viewMode.set('logs'),
         active: list.viewMode.isLogsView,
       },
       {
-        text: 'Dashboard',
+        text: '概览',
         onSelect: () => list.viewMode.set('dashboard'),
         active: list.viewMode.isDashboardView,
       },
       {
-        text: 'Trajectory',
+        text: '轨迹',
         onSelect: () => list.viewMode.set('trajectory'),
         active: list.viewMode.isTrajectoryView,
       },
@@ -290,7 +290,7 @@ export default function Logs() {
   return (
     <>
       <Resource>
-        <Resource.Header icon={Library} title='Logs' actions={headerActions} />
+        <Resource.Header icon={Library} title='日志' actions={headerActions} />
         <Resource.Options
           search={{ ...list.searchConfig, dropdown: suggestionsDropdown }}
           sort={list.sortConfig}
@@ -427,10 +427,10 @@ function LogsFilterPanel({ searchQuery, onSearchQueryChange }: LogsFilterPanelPr
 
   const statusDisplayLabel =
     selectedStatuses.length === 0
-      ? 'Status'
+      ? '状态'
       : selectedStatuses.length === 1
-        ? statusOptions.find((s) => s.value === selectedStatuses[0])?.label || '1 selected'
-        : `${selectedStatuses.length} selected`
+        ? statusOptions.find((s) => s.value === selectedStatuses[0])?.label || '已选择 1 项'
+        : `已选择 ${selectedStatuses.length} 项`
 
   const selectedStatusColor =
     selectedStatuses.length === 1
@@ -441,10 +441,10 @@ function LogsFilterPanel({ searchQuery, onSearchQueryChange }: LogsFilterPanelPr
 
   const folderDisplayLabel =
     folderIds.length === 0
-      ? 'Folder'
+      ? '文件夹'
       : folderIds.length === 1
-        ? folderList.find((f) => f.id === folderIds[0])?.name || '1 selected'
-        : `${folderIds.length} folders`
+        ? folderList.find((f) => f.id === folderIds[0])?.name || '已选择 1 项'
+        : `已选择 ${folderIds.length} 个文件夹`
 
   const triggerOptions: ComboboxOption[] = useMemo(
     () =>
@@ -457,19 +457,19 @@ function LogsFilterPanel({ searchQuery, onSearchQueryChange }: LogsFilterPanelPr
 
   const triggerDisplayLabel =
     triggers.length === 0
-      ? 'Trigger'
+      ? '触发方式'
       : triggers.length === 1
-        ? triggerOptions.find((t) => t.value === triggers[0])?.label || '1 selected'
-        : `${triggers.length} triggers`
+        ? triggerOptions.find((t) => t.value === triggers[0])?.label || '已选择 1 项'
+        : `已选择 ${triggers.length} 种触发方式`
 
   const timeDisplayLabel =
     timeRange === 'All time'
-      ? 'Time'
+      ? '时间'
       : timeRange === 'Custom range' && startDate && endDate
         ? `${formatDateShort(startDate)} - ${formatDateShort(endDate)}`
         : timeRange === 'Custom range'
-          ? 'Custom range'
-          : timeRange
+          ? '自定义范围'
+          : TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label || timeRange
 
   const handleTimeRangeChange = (val: string) => {
     if (val === 'Custom range') {
@@ -511,13 +511,13 @@ function LogsFilterPanel({ searchQuery, onSearchQueryChange }: LogsFilterPanelPr
   return (
     <div className='flex w-[240px] flex-col gap-4 p-3'>
       <div className='flex flex-col gap-[9px]'>
-        <span className='text-[var(--text-muted)] text-small'>Status</span>
+        <span className='text-[var(--text-muted)] text-small'>状态</span>
         <ChipCombobox
           options={statusOptions}
           multiSelect
           multiSelectValues={selectedStatuses}
           onMultiSelectChange={handleStatusChange}
-          placeholder='All statuses'
+          placeholder='全部状态'
           overlayContent={
             <span className='flex items-center gap-1.5 truncate text-[var(--text-primary)]'>
               {selectedStatusColor && (
@@ -530,57 +530,57 @@ function LogsFilterPanel({ searchQuery, onSearchQueryChange }: LogsFilterPanelPr
             </span>
           }
           showAllOption
-          allOptionLabel='All statuses'
+          allOptionLabel='全部状态'
           className='w-full'
         />
       </div>
 
       <div className='flex flex-col gap-[9px]'>
-        <span className='text-[var(--text-muted)] text-small'>Folder</span>
+        <span className='text-[var(--text-muted)] text-small'>文件夹</span>
         <ChipCombobox
           options={folderOptions}
           multiSelect
           multiSelectValues={folderIds}
           onMultiSelectChange={setFolderIds}
-          placeholder='All folders'
+          placeholder='全部文件夹'
           overlayContent={
             <span className='truncate text-[var(--text-primary)]'>{folderDisplayLabel}</span>
           }
           searchable
-          searchPlaceholder='Search folders...'
+          searchPlaceholder='搜索文件夹…'
           showAllOption
-          allOptionLabel='All folders'
+          allOptionLabel='全部文件夹'
           className='w-full'
         />
       </div>
 
       <div className='flex flex-col gap-[9px]'>
-        <span className='text-[var(--text-muted)] text-small'>Trigger</span>
+        <span className='text-[var(--text-muted)] text-small'>触发方式</span>
         <ChipCombobox
           options={triggerOptions}
           multiSelect
           multiSelectValues={triggers}
           onMultiSelectChange={setTriggers}
-          placeholder='All triggers'
+          placeholder='全部触发方式'
           overlayContent={
             <span className='truncate text-[var(--text-primary)]'>{triggerDisplayLabel}</span>
           }
           searchable
-          searchPlaceholder='Search triggers...'
+          searchPlaceholder='搜索触发方式…'
           showAllOption
-          allOptionLabel='All triggers'
+          allOptionLabel='全部触发方式'
           className='w-full'
         />
       </div>
 
       <div className='flex flex-col gap-[9px]'>
-        <span className='text-[var(--text-muted)] text-small'>Time Range</span>
+        <span className='text-[var(--text-muted)] text-small'>时间范围</span>
         <div className='relative'>
           <ChipCombobox
             options={TIME_RANGE_OPTIONS}
             value={timeRange}
             onChange={handleTimeRangeChange}
-            placeholder='All time'
+            placeholder='全部时间'
             overlayContent={
               <span className='truncate text-[var(--text-primary)]'>{timeDisplayLabel}</span>
             }
@@ -620,7 +620,7 @@ function LogsFilterPanel({ searchQuery, onSearchQueryChange }: LogsFilterPanelPr
           onClick={handleClearFilters}
           className='h-[32px] w-full rounded-md'
         >
-          Clear All Filters
+          清除全部筛选
         </Button>
       )}
     </div>

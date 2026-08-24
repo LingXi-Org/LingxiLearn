@@ -1,11 +1,11 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { toast } from '@/components/ui-kit'
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
 import { useRouter } from 'next/navigation'
+import { toast } from '@/components/ui-kit'
 import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { getMimeTypeFromExtension } from '@/lib/uploads/utils/file-utils'
 import {
   folderRowId,
@@ -95,7 +95,7 @@ export function useFilesCreation({
       onFolderCreated?.(folderRowId(folder.id), folder.name)
     } catch (error) {
       logger.error('Failed to create folder:', error)
-      toast.error(toError(error).message)
+      toast.error(userFacingError(error, 'saveFailed'))
     }
   }, [workspaceId, folders, currentFolderId, createFolder, onFolderCreated])
 

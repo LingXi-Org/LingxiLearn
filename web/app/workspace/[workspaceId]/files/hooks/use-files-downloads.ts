@@ -1,13 +1,13 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { toast } from '@/components/ui-kit'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { usePostHog } from 'posthog-js/react'
-import { captureEvent } from '@/lib/posthog/client'
-import { triggerArchiveDownload, triggerFileDownload } from '@/lib/uploads/client/download'
+import { toast } from '@/components/ui-kit'
 import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
+import { createLogger } from '@/lib/logger'
+import { captureEvent } from '@/lib/posthog/client'
+import { userFacingError } from '@/lib/product-copy'
+import { triggerArchiveDownload, triggerFileDownload } from '@/lib/uploads/client/download'
 
 const logger = createLogger('Files')
 
@@ -35,7 +35,7 @@ export function useFilesDownloads(workspaceId: string) {
         })
       } catch (err) {
         logger.error('Failed to download file:', err)
-        toast.error(getErrorMessage(err, `Failed to download "${file.name}"`))
+        toast.error(userFacingError(err, 'loadFailed'))
       }
     },
     [workspaceId]
@@ -50,7 +50,7 @@ export function useFilesDownloads(workspaceId: string) {
         await triggerArchiveDownload({ workspaceId, ...selection })
       } catch (err) {
         logger.error('Failed to download selection:', err)
-        toast.error(getErrorMessage(err, 'Failed to download the selected files'))
+        toast.error(userFacingError(err, 'loadFailed'))
       } finally {
         archiveDownloadInFlightRef.current = false
         setIsDownloadingArchive(false)

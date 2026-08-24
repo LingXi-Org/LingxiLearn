@@ -3,6 +3,7 @@
 import { type ChangeEvent, type RefObject, useCallback, useRef, useState } from 'react'
 import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { pickCsvFiles } from '@/app/workspace/[workspaceId]/tables/csv'
 import { useImportCsv } from '@/hooks/queries/tables'
 import { useImportTrayStore } from '@/stores/table/import-tray/store'
@@ -88,7 +89,7 @@ export function useCsvImport({
         }
       } catch (err) {
         logger.error('Error uploading CSV:', err)
-        toast.error('Failed to import CSV')
+        toast.error(userFacingError(err, 'uploadFailed'))
       } finally {
         setUploadProgress({ completed: 0, total: 0 })
         if (csvInputRef.current) {
@@ -108,7 +109,7 @@ export function useCsvImport({
       if (!list || list.length === 0) return
       const csvFiles = pickCsvFiles(list)
       if (csvFiles.length === 0) {
-        toast.error('No CSV or TSV files selected')
+        toast.error('请选择 CSV 或 TSV 文件')
         if (csvInputRef.current) csvInputRef.current.value = ''
         return
       }

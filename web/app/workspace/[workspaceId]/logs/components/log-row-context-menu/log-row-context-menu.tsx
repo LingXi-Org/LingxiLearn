@@ -88,7 +88,7 @@ export const LogRowContextMenu = memo(function LogRowContextMenu({
           <>
             <DropdownMenuItem onSelect={onRetryExecution} disabled={isRetryPending}>
               <Redo />
-              {isRetryPending ? 'Retrying...' : 'Retry'}
+              {isRetryPending ? '正在重试…' : '重试'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
@@ -97,18 +97,18 @@ export const LogRowContextMenu = memo(function LogRowContextMenu({
           <>
             <DropdownMenuItem onSelect={onCancelExecution} disabled={isStopping}>
               <X />
-              {isStopping ? 'Stopping…' : 'Cancel Run'}
+              {isStopping ? '正在停止…' : '取消运行'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
         )}
         <DropdownMenuItem disabled={!hasExecutionId} onSelect={onCopyExecutionId}>
           <Duplicate />
-          Copy Run ID
+          复制运行 ID
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!hasExecutionId} onSelect={onCopyLink}>
           <Link />
-          Copy Link
+          复制链接
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />

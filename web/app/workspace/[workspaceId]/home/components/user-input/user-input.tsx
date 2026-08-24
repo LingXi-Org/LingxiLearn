@@ -10,12 +10,14 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Button, cn, Paperclip, Plus, Slash, Tooltip, toast } from '@/components/ui-kit'
-import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
+import { Button, cn, Paperclip, Plus, Slash, Tooltip, toast } from '@/components/ui-kit'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
 import { SIM_RESOURCE_DRAG_TYPE, SIM_RESOURCES_DRAG_TYPE } from '@/lib/copilot/resource-types'
+import type { MothershipResourceType } from '@/lib/copilot/resources/types'
 import { isDesktopApp } from '@/lib/desktop'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
+import { createLogger } from '@/lib/logger'
 import { MOTHERSHIP_ADD_CONTEXT_EVENT } from '@/lib/mothership/events'
 import { MOTHERSHIP_ACCEPT_ATTRIBUTE } from '@/lib/uploads/utils/validation'
 import { useChatSurface } from '@/app/workspace/[workspaceId]/home/components/chat-surface-context'
@@ -34,14 +36,12 @@ import type {
   MothershipResource,
   QueuedMessage,
 } from '@/app/workspace/[workspaceId]/home/types'
-import { useFileAttachments } from './hooks/use-file-attachments'
-import type { AttachedFile } from './hooks/use-file-attachments'
 import { mentionifyIntegrations } from '@/blocks/integration-matcher'
 import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 import { type SpeechToTextError, useSpeechToText } from '@/hooks/use-speech-to-text'
 import { useMothershipDraftsStore } from '@/stores/mothership-drafts/store'
-import type { MothershipResourceType } from '@/lib/copilot/resources/types'
-import type { ChatContext } from '@/lib/lingxi/chat-context'
+import type { AttachedFile } from './hooks/use-file-attachments'
+import { useFileAttachments } from './hooks/use-file-attachments'
 
 export type { FileAttachmentForApi } from '@/app/workspace/[workspaceId]/home/types'
 
@@ -278,16 +278,16 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
     editorRef.current.setValue(newVal)
   }
 
-  function handleUsageLimitExceeded(message?: string, isMemberLimit?: boolean) {
+  function handleUsageLimitExceeded(_message?: string, isMemberLimit?: boolean) {
     // A per-member cap can only be raised by an org admin, so don't offer Upgrade
     // (the member can't act on it) — the message already tells them to ask an admin.
     toast.error(
-      message || 'You are out of credits.',
+      isMemberLimit ? '已达到成员使用额度，请联系组织管理员。' : '额度已用尽。',
       isMemberLimit
         ? undefined
         : {
             action: {
-              label: 'Upgrade',
+              label: '升级',
               onClick: () => navigateToSettings({ section: 'billing' }),
             },
           }
@@ -298,16 +298,16 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
     if (error === 'microphone-blocked') {
       toast.error(
         isDesktopApp()
-          ? 'Microphone access is blocked. Allow Sim to use the microphone in your system privacy settings.'
-          : 'Microphone access is blocked. Allow it for this site and try again.'
+          ? '麦克风权限已被阻止，请在系统隐私设置中允许应用访问麦克风。'
+          : '麦克风权限已被阻止，请允许此网站访问麦克风后重试。'
       )
       return
     }
     if (error === 'microphone-unavailable') {
-      toast.error('No microphone found. Connect one and try again.')
+      toast.error('未检测到麦克风，请连接后重试。')
       return
     }
-    toast.error('Could not start voice input. Try again.')
+    toast.error('无法启动语音输入，请稍后重试。')
   }
 
   const {

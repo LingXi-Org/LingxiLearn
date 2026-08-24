@@ -1,11 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { saveDiscardActions } from '@/components/settings/save-discard-actions'
 import { ChipConfirmModal, toast } from '@/components/ui-kit'
 import { ArrowLeft } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { saveDiscardActions } from '@/components/settings/save-discard-actions'
+import { userFacingError } from '@/lib/product-copy'
 import { UnsavedChangesModal } from '@/app/workspace/[workspaceId]/components/credential-detail'
 import {
   CUSTOM_TOOL_DELETE_CONFIRM_TEXT,
@@ -174,7 +174,7 @@ export function CustomToolDetail({
       }
     } catch (error) {
       logger.error('Failed to save custom tool', error)
-      const message = getErrorMessage(error, 'Failed to save custom tool')
+      const message = userFacingError(error, 'saveFailed')
       setSchemaError(
         message.includes('Cannot change function name') ? FUNCTION_NAME_LOCKED : message
       )
@@ -189,8 +189,8 @@ export function CustomToolDetail({
       onBack()
     } catch (error) {
       logger.error('Failed to delete custom tool', error)
-      toast.error("Couldn't delete tool", {
-        description: getErrorMessage(error, 'Please try again in a moment.'),
+      toast.error('删除工具失败', {
+        description: userFacingError(error, 'deleteFailed'),
       })
     }
   }

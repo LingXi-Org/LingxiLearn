@@ -1,8 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { ChipInput, ChipTextarea, chipFieldSurfaceClass, cn, Tooltip } from '@/components/ui-kit'
 import dynamic from 'next/dynamic'
+import { ChipInput, ChipTextarea, chipFieldSurfaceClass, cn, Tooltip } from '@/components/ui-kit'
 import { DetailSection } from '@/app/workspace/[workspaceId]/components/credential-detail'
 import {
   SKILL_CONTENT_PLACEHOLDER,
@@ -111,7 +111,7 @@ export function SkillFields({
 }: SkillFieldsProps) {
   return (
     <>
-      <DetailSection title='Name'>
+      <DetailSection title='名称'>
         <FieldLockTooltip reason={lockReason}>
           <ChipInput
             id='skill-name'
@@ -127,7 +127,7 @@ export function SkillFields({
         <FieldMessage error={errors.name} hint={disabled ? undefined : SKILL_NAME_HINT} />
       </DetailSection>
 
-      <DetailSection title='Description'>
+      <DetailSection title='描述'>
         <FieldLockTooltip reason={lockReason}>
           <ChipTextarea
             id='skill-description'
@@ -145,7 +145,7 @@ export function SkillFields({
         <FieldMessage error={errors.description} />
       </DetailSection>
 
-      <DetailSection title='Content'>
+      <DetailSection title='内容'>
         <FieldLockTooltip reason={lockReason}>
           <RichMarkdownField
             key={contentKey}

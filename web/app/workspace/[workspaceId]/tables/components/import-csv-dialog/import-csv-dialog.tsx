@@ -22,8 +22,7 @@ import {
   toast,
 } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { truncate } from '@/lib/utils/string'
+import { userFacingError } from '@/lib/product-copy'
 import {
   buildAutoMapping,
   CSV_DELIMITER_SNIFF_BYTES,
@@ -32,6 +31,7 @@ import {
   parseCsvBuffer,
 } from '@/lib/table/import'
 import type { TableDefinition } from '@/lib/table/types'
+import { truncate } from '@/lib/utils/string'
 import { type CsvImportMode, useImportCsvIntoTable } from '@/hooks/queries/tables'
 import { useImportTrayStore } from '@/stores/table/import-tray/store'
 
@@ -206,7 +206,7 @@ export function ImportCsvDialog({
       })
       setMapping(autoMapping)
     } catch (err) {
-      const message = getErrorMessage(err, 'Failed to parse CSV')
+      const message = userFacingError(err, 'loadFailed')
       logger.error('CSV parse failed', err)
       setParseError(message)
     } finally {
@@ -346,7 +346,7 @@ export function ImportCsvDialog({
         },
         onError: (error) => {
           if (importId) useImportTrayStore.getState().endUpload(importId)
-          setSubmitError(summarizeImportError(error.message))
+          setSubmitError(userFacingError(error, 'uploadFailed'))
         },
       }
     )
@@ -419,8 +419,8 @@ export function ImportCsvDialog({
                   <Table>
                     <TableHeader>
                       <TableRow>
-            <TableHead>CSV 列</TableHead>
-            <TableHead>目标列</TableHead>
+                        <TableHead>CSV 列</TableHead>
+                        <TableHead>目标列</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

@@ -1,6 +1,9 @@
 'use client'
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { useQueryState } from 'nuqs'
+import { createPortal } from 'react-dom'
 import {
   Badge,
   Button,
@@ -22,13 +25,20 @@ import {
   Tooltip,
   useCopyToClipboard,
 } from '@/components/ui-kit'
-import { ArrowDown, ArrowUp, Check, ChevronUp, Clipboard, Search, Wrench, X } from '@/components/ui-kit/icons'
-import { useParams, useRouter } from 'next/navigation'
-import { useQueryState } from 'nuqs'
-import { createPortal } from 'react-dom'
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronUp,
+  Clipboard,
+  Search,
+  Wrench,
+  X,
+} from '@/components/ui-kit/icons'
 import { BASE_EXECUTION_CHARGE } from '@/lib/billing/constants'
 import { isChatEnabled } from '@/lib/core/config/env-flags'
 import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { filterHiddenOutputKeys } from '@/lib/logs/execution/trace-spans/trace-spans'
 import type { TraceSpan } from '@/lib/logs/types'
 import { sendMothershipMessage } from '@/lib/mothership/events'
@@ -51,7 +61,6 @@ import { usePermissionConfig } from '@/hooks/use-permission-config'
 import { formatCost } from '@/providers/utils'
 import { useLogDetailsUIStore } from '@/stores/logs/store'
 import { MAX_LOG_DETAILS_WIDTH_RATIO, MIN_LOG_DETAILS_WIDTH } from '@/stores/logs/utils'
-import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Renders an already-apportioned integer credit value. `dollars` is only used
@@ -137,7 +146,7 @@ export const RunOutputSection = memo(
                     )}
                   </Button>
                 </Tooltip.Trigger>
-                <Tooltip.Content side='top'>{copied ? 'Copied' : 'Copy'}</Tooltip.Content>
+                <Tooltip.Content side='top'>{copied ? '已复制' : '复制'}</Tooltip.Content>
               </Tooltip.Root>
               <Tooltip.Root>
                 <Tooltip.Trigger asChild>
@@ -153,7 +162,7 @@ export const RunOutputSection = memo(
                     <Search className='size-[10px]' />
                   </Button>
                 </Tooltip.Trigger>
-                <Tooltip.Content side='top'>Search</Tooltip.Content>
+                <Tooltip.Content side='top'>搜索</Tooltip.Content>
               </Tooltip.Root>
             </div>
           )}
@@ -171,7 +180,7 @@ export const RunOutputSection = memo(
               type='text'
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder='Search...'
+              placeholder='搜索…'
               className='mr-0.5 w-[94px]'
             />
             <span
@@ -388,9 +397,9 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
       <div className='mt-4 flex min-h-0 flex-1 flex-col'>
         <ChipModalTabs
           tabs={[
-            { value: 'overview', label: 'Overview' },
-            ...(showTraceTab ? [{ value: 'trace', label: 'Trace' }] : []),
-            ...(showEventsTab ? [{ value: 'events', label: 'Events' }] : []),
+            { value: 'overview', label: '概览' },
+            ...(showTraceTab ? [{ value: 'trace', label: '追踪' }] : []),
+            ...(showEventsTab ? [{ value: 'events', label: '事件' }] : []),
           ]}
           value={resolvedTab}
           onChange={(v) => setActiveTab(v as LogDetailsTab)}
@@ -403,7 +412,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
               {/* Timestamp + Source header */}
               <div className='grid grid-cols-2 gap-x-3 pb-0.5'>
                 <div className='flex min-w-0 flex-col gap-0.5'>
-                  <span className='text-[var(--text-tertiary)] text-caption'>Timestamp</span>
+                  <span className='text-[var(--text-tertiary)] text-caption'>时间戳</span>
                   <span className='text-[var(--text-secondary)] text-sm tabular-nums'>
                     {formattedTimestamp
                       ? `${formattedTimestamp.compactDate} ${formattedTimestamp.compactTime}`
@@ -460,23 +469,23 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
 
                 {/* Level */}
                 <div className='flex h-10 items-center justify-between px-3'>
-                  <span className='text-[var(--text-tertiary)] text-caption'>Level</span>
+                  <span className='text-[var(--text-tertiary)] text-caption'>级别</span>
                   <StatusBadge status={log.status} />
                 </div>
 
                 {/* Trigger */}
                 <div className='flex h-10 items-center justify-between px-3'>
-                  <span className='text-[var(--text-tertiary)] text-caption'>Trigger</span>
+                  <span className='text-[var(--text-tertiary)] text-caption'>触发方式</span>
                   {log.trigger ? (
                     <TriggerBadge trigger={log.trigger} />
                   ) : (
-                    <span className='text-[var(--text-secondary)] text-caption'>None</span>
+                    <span className='text-[var(--text-secondary)] text-caption'>无</span>
                   )}
                 </div>
 
                 {/* Duration */}
                 <div className='flex h-10 items-center justify-between px-3'>
-                  <span className='text-[var(--text-tertiary)] text-caption'>Duration</span>
+                  <span className='text-[var(--text-tertiary)] text-caption'>耗时</span>
                   <span className='text-[var(--text-secondary)] text-caption tabular-nums'>
                     {log.durationMs != null
                       ? formatDuration(log.durationMs, { precision: 2 }) || '—'
@@ -501,7 +510,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
                 {/* Snapshot */}
                 {showRunSnapshot && (
                   <div className='flex h-10 items-center justify-between px-3'>
-                    <span className='text-[var(--text-tertiary)] text-caption'>Snapshot</span>
+                    <span className='text-[var(--text-tertiary)] text-caption'>快照</span>
                     <Chip leftIcon={Eye} onClick={() => setIsExecutionSnapshotOpen(true)}>
                       View Snapshot
                     </Chip>
@@ -511,7 +520,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
                 {/* Troubleshoot */}
                 {canTroubleshoot && (
                   <div className='flex h-10 items-center justify-between px-3'>
-                    <span className='text-[var(--text-tertiary)] text-caption'>Troubleshoot</span>
+                    <span className='text-[var(--text-tertiary)] text-caption'>问题排查</span>
                     <Chip leftIcon={Wrench} onClick={handleTroubleshoot}>
                       Troubleshoot in Chat
                     </Chip>
@@ -522,7 +531,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
               {/* Run Input */}
               {hasExecutionDetail && runInput && !permissionConfig.hideTraceSpans && (
                 <div className='flex flex-col gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2 dark:bg-transparent'>
-                  <span className='text-[var(--text-tertiary)] text-caption'>Run Input</span>
+                  <span className='text-[var(--text-tertiary)] text-caption'>运行输入</span>
                   <RunOutputSection output={runInput} />
                 </div>
               )}
@@ -559,7 +568,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
                     </div>
                   ))}
                   <div className='flex h-10 items-center justify-between px-3'>
-                    <span className='text-[var(--text-secondary)] text-caption'>Total</span>
+                    <span className='text-[var(--text-secondary)] text-caption'>总计</span>
                     <span className='text-[var(--text-primary)] text-caption tabular-nums'>
                       {creditLabel(costBreakdown.totalCredits, costBreakdown.totalDollars)}
                     </span>
@@ -600,7 +609,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
               </div>
             ) : (
               <div className='flex h-full items-center justify-center px-4 text-center'>
-                <span className='text-[var(--text-tertiary)] text-sm'>Loading trace…</span>
+                <span className='text-[var(--text-tertiary)] text-sm'>正在加载追踪数据…</span>
               </div>
             )}
           </div>
@@ -750,7 +759,7 @@ export const LogDetails = memo(function LogDetails({
           <div className='flex h-full flex-col px-3.5 pt-3'>
             {/* Header */}
             <div className='flex items-center justify-between'>
-              <h2 className='text-[var(--text-primary)] text-sm'>Log Details</h2>
+              <h2 className='text-[var(--text-primary)] text-sm'>日志详情</h2>
               <div className='flex items-center gap-[1px]'>
                 {log.status === 'error' && log.source.kind !== 'unknown' && (
                   <Tooltip.Root>
@@ -765,7 +774,7 @@ export const LogDetails = memo(function LogDetails({
                         <Redo className='size-[14px]' />
                       </Button>
                     </Tooltip.Trigger>
-                    <Tooltip.Content side='bottom'>Retry</Tooltip.Content>
+                    <Tooltip.Content side='bottom'>重试</Tooltip.Content>
                   </Tooltip.Root>
                 )}
                 <Button

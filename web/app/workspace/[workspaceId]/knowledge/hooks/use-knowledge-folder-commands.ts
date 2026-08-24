@@ -3,7 +3,7 @@
 import { type MutableRefObject, useCallback } from 'react'
 import { toast } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import {
   folderRowId,
   nextUntitledFolderName,
@@ -77,7 +77,7 @@ export function useKnowledgeFolderCommands({
       startRowRename(folderRowId(folder.id), folder.name)
     } catch (createError) {
       logger.error('Failed to create folder', createError)
-      toast.error(getErrorMessage(createError, 'Failed to create folder'))
+      toast.error(userFacingError(createError, 'saveFailed'))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ref-backed options and mutation flags are read at call time
   }, [workspaceId])
@@ -106,7 +106,7 @@ export function useKnowledgeFolderCommands({
         })
       } catch (moveError) {
         logger.error('Failed to move folder', moveError)
-        toast.error(getErrorMessage(moveError, 'Failed to move folder'))
+        toast.error(userFacingError(moveError, 'saveFailed'))
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mutation objects are unstable; mutateAsync is stable in v5
@@ -141,7 +141,7 @@ export function useKnowledgeFolderCommands({
         }
       } catch (deleteError) {
         logger.error('Failed to delete folder', deleteError)
-        toast.error(getErrorMessage(deleteError, 'Failed to delete folder'))
+        toast.error(userFacingError(deleteError, 'deleteFailed'))
         throw deleteError
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- ref-backed options and mutation flags are read at call time

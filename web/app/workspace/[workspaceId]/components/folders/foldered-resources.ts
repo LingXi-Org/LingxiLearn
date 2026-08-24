@@ -1,6 +1,7 @@
 import type { ElementType } from 'react'
 import { Database, File as FileIcon, Table as TableIcon } from '@/components/ui-kit/icons'
 import type { FolderResourceType } from '@/lib/api/contracts/folders'
+import { workspaceCopy } from '@/lib/product-copy'
 import { folderListHref } from '@/app/workspace/[workspaceId]/components/folders/search-params'
 
 /**
@@ -33,9 +34,21 @@ export const FOLDERED_RESOURCE_HEADERS: Record<
   FolderedHeaderResourceType,
   FolderedResourceHeaderMeta
 > = {
-  file: { rootLabel: 'Files', rootIcon: FileIcon, listSegment: 'files' },
-  knowledge_base: { rootLabel: 'Knowledge bases', rootIcon: Database, listSegment: 'knowledge' },
-  table: { rootLabel: 'Tables', rootIcon: TableIcon, listSegment: 'tables' },
+  file: {
+    rootLabel: workspaceCopy.resources.files.title,
+    rootIcon: FileIcon,
+    listSegment: 'files',
+  },
+  knowledge_base: {
+    rootLabel: workspaceCopy.resources.knowledge.title,
+    rootIcon: Database,
+    listSegment: 'knowledge',
+  },
+  table: {
+    rootLabel: workspaceCopy.resources.tables.title,
+    rootIcon: TableIcon,
+    listSegment: 'tables',
+  },
 }
 
 /**

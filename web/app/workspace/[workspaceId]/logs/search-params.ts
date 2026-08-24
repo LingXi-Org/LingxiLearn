@@ -1,12 +1,12 @@
 import { createParser, parseAsArrayOf, parseAsString, parseAsStringLiteral } from 'nuqs/server'
-import { createSortParams } from '@/lib/url-state'
-import type { LogSortBy } from '@/hooks/queries/logs'
 import {
   CORE_TRIGGER_TYPES,
   type LogLevel,
   type TimeRange,
   type TriggerType,
 } from '@/lib/logs/filter-types'
+import { createSortParams } from '@/lib/url-state'
+import type { LogSortBy } from '@/hooks/queries/logs'
 
 /**
  * Co-located, typed URL query-param definitions for the logs feature. The

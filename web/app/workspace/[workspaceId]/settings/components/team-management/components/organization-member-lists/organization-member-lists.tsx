@@ -1,14 +1,13 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChipDropdown, toast } from '@/components/ui-kit'
-import { isOrgAdminRole } from '@/lib/permissions/native/predicates'
 import {
   type OrgRole,
   type PermissionType,
   RoleLockTooltip,
   workspaceRoleLockReason,
 } from '@/components/permissions'
+import { ChipDropdown, toast } from '@/components/ui-kit'
 import type {
   OrganizationRoster,
   RosterMember,
@@ -16,7 +15,8 @@ import type {
   RosterWorkspaceAccess,
 } from '@/lib/api/contracts/organization'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { isOrgAdminRole } from '@/lib/permissions/native/predicates'
+import { userFacingError } from '@/lib/product-copy'
 import { formatDate } from '@/lib/utils/formatting'
 import type { Member } from '@/lib/workspaces/organization'
 import {
@@ -345,8 +345,8 @@ export function OrganizationMemberLists({
                       .mutateAsync({ userId: member.userId, workspaceId, organizationId })
                       .catch((error) => {
                         logger.error('Failed to remove workspace member', { error })
-                        toast.error("Couldn't remove member", {
-                          description: getErrorMessage(error, 'Please try again in a moment.'),
+                        toast.error('移除成员失败', {
+                          description: userFacingError(error, 'deleteFailed'),
                         })
                       }),
                 },

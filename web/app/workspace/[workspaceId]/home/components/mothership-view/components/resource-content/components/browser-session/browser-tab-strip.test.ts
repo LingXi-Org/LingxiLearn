@@ -36,7 +36,7 @@ describe('browserTabTitle', () => {
   })
 
   it('uses the loading label only while the tab is actually loading', () => {
-    expect(browserTabTitle({ ...tab, loading: true })).toBe('Loading…')
+    expect(browserTabTitle({ ...tab, loading: true })).toBe('正在加载…')
   })
 
   it('keeps a resolved title when one is available', () => {

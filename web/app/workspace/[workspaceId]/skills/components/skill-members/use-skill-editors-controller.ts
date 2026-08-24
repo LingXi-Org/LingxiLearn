@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { createLogger } from '@/lib/logger'
 import type { AddPeopleTarget } from '@/components/permissions'
 import type { SkillEditor } from '@/lib/api/contracts'
+import { createLogger } from '@/lib/logger'
 import { useRemoveSkillMember, useSkillMembers, useUpsertSkillMember } from '@/hooks/queries/skills'
 
 const logger = createLogger('SkillEditorsController')

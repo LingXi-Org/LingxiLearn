@@ -1,5 +1,6 @@
 'use client'
 
+import { userFacingError, workspaceCopy } from '@/lib/product-copy'
 import { type ErrorBoundaryProps, ErrorState } from '@/app/workspace/[workspaceId]/components'
 
 export default function FilesError({ error, reset }: ErrorBoundaryProps) {
@@ -7,8 +8,8 @@ export default function FilesError({ error, reset }: ErrorBoundaryProps) {
     <ErrorState
       error={error}
       reset={reset}
-      title='Failed to load files'
-      description='Something went wrong while loading your files. Please try again.'
+      title={workspaceCopy.resources.files.loadFailedTitle}
+      description={userFacingError(error, 'loadFailed')}
       loggerName='FilesError'
     />
   )

@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChipInput, cn, toast } from '@/components/ui-kit'
-import { createLogger } from '@/lib/logger'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'
 import { saveDiscardActions } from '@/components/settings/save-discard-actions'
+import { ChipInput, cn, toast } from '@/components/ui-kit'
 import {
   clearPendingCredentialCreateRequest,
   PENDING_CREDENTIAL_CREATE_REQUEST_EVENT,
@@ -14,6 +13,7 @@ import {
   readPendingCredentialCreateRequest,
 } from '@/lib/credentials/client-state'
 import type { WorkspaceEnvironmentData } from '@/lib/environment/api'
+import { createLogger } from '@/lib/logger'
 import { UnsavedChangesModal } from '@/app/workspace/[workspaceId]/components/credential-detail'
 import { RowActionsMenu } from '@/app/workspace/[workspaceId]/settings/components/row-actions-menu'
 import { SecretValueField } from '@/app/workspace/[workspaceId]/settings/components/secrets/components/secret-value-field'
@@ -42,7 +42,7 @@ const COL_SPAN_ALL = 'col-span-4'
 /** Copies a secret's name and confirms with a toast. */
 function copyName(key: string) {
   void navigator.clipboard.writeText(key)
-  toast.success('Copied name to clipboard')
+  toast.success('名称已复制到剪贴板')
 }
 
 interface SecretRowMenuProps {
@@ -66,7 +66,7 @@ function SecretRowMenu({ onCopyName, onViewDetails, onDelete }: SecretRowMenuPro
       actions={[
         ...(onViewDetails ? [{ label: 'View details', onSelect: onViewDetails }] : []),
         { label: 'Copy name', onSelect: onCopyName },
-        ...(onDelete ? [{ label: 'Delete', destructive: true, onSelect: onDelete }] : []),
+        ...(onDelete ? [{ label: '删除', destructive: true, onSelect: onDelete }] : []),
       ]}
     />
   )
@@ -851,13 +851,13 @@ export function SecretsManager() {
       setWorkspaceVars(mergedWorkspaceVars)
       setNewWorkspaceRows([createEmptyEnvVar()])
       if (mutations.length > 0) {
-        toast.success('Secrets saved')
+        toast.success('密钥已保存')
       }
     } catch (error) {
       hasSavedPersonalRef.current = false
       hasSavedWorkspaceRef.current = false
       logger.error('Failed to save environment variables:', error)
-      toast.error('Failed to save secrets')
+      toast.error('密钥保存失败，请稍后重试。')
     } finally {
       if (mutations.length > 0) {
         queryClient.invalidateQueries({ queryKey: workspaceCredentialKeys.lists() })
@@ -980,7 +980,7 @@ export function SecretsManager() {
         search={{
           value: searchTerm,
           onChange: setSearchTerm,
-          placeholder: 'Search secrets...',
+          placeholder: '搜索密钥…',
         }}
         actions={saveDiscardActions({
           dirty: hasChanges,
@@ -1065,7 +1065,7 @@ export function SecretsManager() {
                 Object.keys(workspaceVars).length > 0 ||
                 newWorkspaceRows.length > 0) && (
                 <SettingsEmptyState variant='inline'>
-                  No secrets found matching &ldquo;{searchTerm}&rdquo;
+                  没有找到与“{searchTerm}”匹配的密钥
                 </SettingsEmptyState>
               )}
           </div>

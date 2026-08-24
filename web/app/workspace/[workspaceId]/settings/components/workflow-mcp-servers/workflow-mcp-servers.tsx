@@ -1,6 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { useQueryState } from 'nuqs'
+import { McpIcon } from '@/components/icons'
+import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'
 import {
   Badge,
   Button,
@@ -22,13 +26,9 @@ import {
   useCopyToClipboard,
 } from '@/components/ui-kit'
 import { ArrowLeft, Check, Clipboard, Plus, Server } from '@/components/ui-kit/icons'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { useParams } from 'next/navigation'
-import { useQueryState } from 'nuqs'
-import { McpIcon } from '@/components/icons'
-import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'
 import { getBaseUrl } from '@/lib/core/utils/urls'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import {
   mcpServerIdParam,
@@ -396,7 +396,7 @@ function ServerDetailView({
             ? [
                 { text: 'Edit server', onSelect: handleOpenEditServer },
                 {
-                  text: 'Add workflows',
+                  text: '添加工作流',
                   icon: Plus,
                   variant: 'primary',
                   onSelect: () => setShowAddWorkflow(true),
@@ -409,7 +409,7 @@ function ServerDetailView({
                   ? [
                       {
                         id: 'delete',
-                        text: isDeleting ? 'Deleting...' : 'Delete',
+                        text: isDeleting ? '正在删除…' : '删除',
                         onSelect: onDelete,
                         disabled: isDeleting,
                       },
@@ -434,8 +434,7 @@ function ServerDetailView({
               <div className='flex flex-col gap-4.5'>
                 {tools.length === 0 ? (
                   <p className='text-[var(--text-muted)] text-sm'>
-                    No workflows added yet. Click &quot;Add Workflow&quot; to add a deployed
-                    workflow.
+                    尚未添加工作流。点击“添加工作流”选择已部署的工作流。
                   </p>
                 ) : (
                   <div className={RESOURCE_LIST_STACK}>
@@ -443,7 +442,7 @@ function ServerDetailView({
                       <SettingsResourceRow
                         key={tool.id}
                         title={tool.toolName}
-                        description={tool.toolDescription || 'No description'}
+                        description={tool.toolDescription || '暂无描述'}
                         trailing={
                           canManage ? (
                             <RowActionsMenu
@@ -556,13 +555,13 @@ function ServerDetailView({
                         ) : (
                           <>
                             <Server className='mr-1.5 size-[14px]' />
-                            Add to Workspace
+                            添加到工作区
                           </>
                         )}
                       </Button>
                       {addToWorkspaceMutation.isError && (
                         <p className='text-[var(--text-error)] text-caption'>
-                          {addToWorkspaceMutation.error?.message || 'Failed to add server'}
+                          {userFacingError(addToWorkspaceMutation.error, 'saveFailed')}
                         </p>
                       )}
                     </div>
@@ -638,7 +637,7 @@ function ServerDetailView({
           title='Remove Workflow'
           text={[
             'Are you sure you want to remove ',
-            { text: toolToDelete?.toolName ?? 'this workflow', bold: true },
+            { text: toolToDelete?.toolName ?? '此工作流', bold: true },
             ' from this server? The workflow will remain deployed and can be added back later.',
           ]}
           confirm={{
@@ -717,9 +716,7 @@ function ServerDetailView({
                     ))}
                   </div>
                 ) : (
-                  <p className='text-[var(--text-muted)] text-sm'>
-                    No inputs configured for this workflow.
-                  </p>
+                  <p className='text-[var(--text-muted)] text-sm'>此工作流未配置输入项。</p>
                 )
               })()}
             </ChipModalField>
@@ -727,7 +724,7 @@ function ServerDetailView({
           <ChipModalFooter
             onCancel={() => setToolToView(null)}
             primaryAction={{
-              label: updateToolMutation.isPending ? 'Saving...' : 'Save',
+              label: updateToolMutation.isPending ? '正在保存…' : '保存',
               onClick: handleSaveToolEdit,
               disabled: isSaveToolDisabled,
             }}
@@ -743,7 +740,7 @@ function ServerDetailView({
               setSelectedWorkflowId(null)
             }
           }}
-          srTitle='Add Workflow'
+          srTitle='添加工作流'
         >
           <ChipModalHeader
             onClose={() => {
@@ -751,7 +748,7 @@ function ServerDetailView({
               setSelectedWorkflowId(null)
             }}
           >
-            Add Workflow
+            添加工作流
           </ChipModalHeader>
           <ChipModalBody>
             <p className='px-2 text-[var(--text-secondary)] text-sm'>
@@ -765,7 +762,7 @@ function ServerDetailView({
                 onChange={(value: string) => setSelectedWorkflowId(value)}
                 placeholder='Select a workflow...'
                 searchable
-                searchPlaceholder='Search workflows...'
+                searchPlaceholder='搜索工作流…'
                 disabled={addToolMutation.isPending}
                 fullWidth
                 dropdownWidth='trigger'
@@ -775,7 +772,7 @@ function ServerDetailView({
             </ChipModalField>
             <ChipModalError>
               {addToolMutation.isError
-                ? addToolMutation.error?.message || 'Failed to add workflow'
+                ? userFacingError(addToolMutation.error, 'saveFailed')
                 : null}
             </ChipModalError>
           </ChipModalBody>
@@ -785,7 +782,7 @@ function ServerDetailView({
               setSelectedWorkflowId(null)
             }}
             primaryAction={{
-              label: addToolMutation.isPending ? 'Adding...' : 'Add Workflow',
+              label: addToolMutation.isPending ? '正在添加…' : '添加工作流',
               onClick: handleAddWorkflow,
               disabled: !selectedWorkflowId || addToolMutation.isPending,
             }}
@@ -840,7 +837,7 @@ function ServerDetailView({
           <ChipModalFooter
             onCancel={() => setShowEditServer(false)}
             primaryAction={{
-              label: updateServerMutation.isPending ? 'Saving...' : 'Save',
+              label: updateServerMutation.isPending ? '正在保存…' : '保存',
               onClick: handleSaveServerEdit,
               disabled:
                 !editServerName.trim() ||
@@ -956,14 +953,14 @@ export function WorkflowMcpServers() {
     <ChipConfirmModal
       open={!!serverToDelete}
       onOpenChange={(open) => !open && setServerToDelete(null)}
-      srTitle='Delete MCP Server'
-      title='Delete MCP Server'
+      srTitle='删除 MCP 服务器'
+      title='删除 MCP 服务器'
       text={[
         'Are you sure you want to delete ',
-        { text: serverToDelete?.name ?? 'this server', bold: true },
+        { text: serverToDelete?.name ?? '此服务器', bold: true },
         '? This action cannot be undone.',
       ]}
-      confirm={{ label: 'Delete', onClick: handleDeleteServer }}
+      confirm={{ label: '删除', onClick: handleDeleteServer }}
     />
   ) : null
 
@@ -990,7 +987,7 @@ export function WorkflowMcpServers() {
   const actions: SettingsAction[] = canAdmin
     ? [
         {
-          text: 'Add server',
+          text: '添加服务器',
           icon: Plus,
           variant: 'primary',
           onSelect: () => setShowAddModal(true),
@@ -1005,18 +1002,18 @@ export function WorkflowMcpServers() {
         search={{
           value: searchTerm,
           onChange: setSearchTerm,
-          placeholder: 'Search servers...',
+          placeholder: '搜索服务器…',
         }}
         actions={actions}
       >
         <div className='min-h-0 flex-1'>
           {error ? (
             <SettingsEmptyState tone='error'>
-              {getErrorMessage(error, 'Failed to load MCP servers')}
+              {userFacingError(error, 'loadFailed')}
             </SettingsEmptyState>
           ) : isLoading ? null : !hasServers ? (
             <SettingsEmptyState>
-              {canAdmin ? 'Click "Add server" above to get started' : 'No MCP servers configured'}
+              {canAdmin ? '点击上方“添加服务器”开始配置' : '尚未配置 MCP 服务器'}
             </SettingsEmptyState>
           ) : (
             <div className={RESOURCE_LIST_STACK}>
@@ -1051,7 +1048,7 @@ export function WorkflowMcpServers() {
               })}
               {showNoResults && (
                 <SettingsEmptyState variant='inline'>
-                  No servers found matching "{searchTerm}"
+                  没有找到与“{searchTerm}”匹配的服务器
                 </SettingsEmptyState>
               )}
             </div>

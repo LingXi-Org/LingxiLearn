@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Wrench } from '@/components/ui-kit/icons'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'
+import { Plus, Wrench } from '@/components/ui-kit/icons'
+import { userFacingError } from '@/lib/product-copy'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import {
   customToolIdParam,
@@ -108,9 +108,7 @@ export function CustomTools() {
       actions={actions}
     >
       {error ? (
-        <SettingsEmptyState tone='error'>
-          {getErrorMessage(error, 'Failed to load tools')}
-        </SettingsEmptyState>
+        <SettingsEmptyState tone='error'>{userFacingError(error, 'loadFailed')}</SettingsEmptyState>
       ) : isLoading ? null : showEmptyState ? (
         <SettingsEmptyState>
           {canEdit ? 'Click "Add tool" above to get started' : 'No custom tools configured'}

@@ -310,7 +310,10 @@ export function WorkspaceHomeShell({ chatId, userId, tableViewsEnabled }: Worksp
   function handleContextAdd(context: ChatContext) {
     const resolved = resourceFromContext(context)
     if (resolved) {
-      addResourceFromUser({ ...resolved, title: resourceTitleFromContext(context) })
+      addResourceFromUser({
+        ...resolved,
+        title: resourceTitleFromContext(context),
+      })
     }
   }
 
@@ -350,7 +353,10 @@ export function WorkspaceHomeShell({ chatId, userId, tableViewsEnabled }: Worksp
     // than an unhandled rejection — and stays distinct from an empty list, so
     // "we could not look" is never reported as "it is not there".
     const files = await queryClient
-      .fetchQuery({ ...getWorkspaceFilesQueryOptions(workspaceId), staleTime: 0 })
+      .fetchQuery({
+        ...getWorkspaceFilesQueryOptions(workspaceId),
+        staleTime: 0,
+      })
       .catch(() => null)
     const resolved = files && resolveWorkspaceResourceRef(ref, files)
     if (resolved) {
@@ -359,9 +365,7 @@ export function WorkspaceHomeShell({ chatId, userId, tableViewsEnabled }: Worksp
     }
     // The chip looks clickable, so refusing silently reads as a broken button.
     toast.error(
-      files
-        ? `Couldn't find "${ref.title}" in this workspace`
-        : `Couldn't open "${ref.title}" — check your connection and try again`
+      files ? `在此工作区中找不到“${ref.title}”` : `无法打开“${ref.title}”，请检查网络后重试`
     )
     logger.warn('Ignored a resource chip that did not resolve', {
       type: ref.type,
