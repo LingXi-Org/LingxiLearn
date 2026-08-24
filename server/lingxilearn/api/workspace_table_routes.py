@@ -3,8 +3,9 @@
 from fastapi import APIRouter
 
 from ..application.table_csv import parse_csv_rows
+from ..application.workspace_errors import WorkspaceDomainError
+from ..application.workspace_table_service import WorkspaceTableService
 from .workspace_route_shared import (
-    ALLOWED_COLUMN_TYPES,
     MAX_FILE_SIZE,
     RUNTIME_STUDENT_CATEGORIES,
     Any,
@@ -30,36 +31,37 @@ from .workspace_route_shared import (
     TableViewDeletedResponse,
     TableViewResponse,
     TableViewsResponse,
-    WorkspaceTable,
-    WorkspaceTableColumn,
-    WorkspaceTableRow,
-    WorkspaceTableView,
-    _assert_table_writable,
     _column_public,
-    _table_for_id,
     _table_public,
     _table_row_public,
     _view_public,
     _workspace_for_id,
     csv,
     current_learner_context,
-    datetime,
-    delete,
-    ensure_runtime_tables,
-    func,
     io,
     json,
-    math,
     not_found,
-    or_,
-    re,
-    select,
     services_of,
-    update,
-    uuid,
 )
 
 router = APIRouter(prefix="/api")
+
+
+def _table_service(request: Request) -> WorkspaceTableService:
+    return WorkspaceTableService(services_of(request).db)
+
+
+async def _owned_table(request: Request, table_id: str, context: LearnerContext) -> tuple[Any, Any]:
+    workspace = await _workspace_for_id(request, "lingxi", context)
+    try:
+        table = await _table_service(request).require(workspace.id, table_id)
+    except WorkspaceDomainError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.code) from error
+    return workspace, table
+
+
+def _raise_domain(error: WorkspaceDomainError) -> None:
+    raise HTTPException(status_code=error.status_code, detail=error.code) from error
 
 
 def _csv_payload(raw: str, delimiter: str = ",") -> tuple[list[str], list[dict[str, Any]]]:
@@ -79,37 +81,9 @@ async def import_table_csv(
     headers, rows = _csv_payload(raw, str(body.get("delimiter") or ","))
     if not headers:
         raise HTTPException(status_code=422, detail="csv_header_required")
-    table = WorkspaceTable(
-        id=f"table_{uuid.uuid4().hex}",
-        workspace_id=workspace.id,
-        name=str(body.get("name") or "CSV 表格"),
-        description="",
-        metadata_payload={},
+    table = await _table_service(request).repository.import_csv(
+        workspace.id, str(body.get("name") or "CSV 表格"), headers, rows
     )
-    async with services_of(request).db.session() as session:
-        session.add(table)
-        for position, name in enumerate(headers):
-            session.add(
-                WorkspaceTableColumn(
-                    id=f"col_{uuid.uuid4().hex}",
-                    table_id=table.id,
-                    key=name,
-                    name=name,
-                    type="string",
-                    position=position,
-                    options={},
-                )
-            )
-        for position, values in enumerate(rows):
-            session.add(
-                WorkspaceTableRow(
-                    id=f"row_{uuid.uuid4().hex}",
-                    table_id=table.id,
-                    values=values,
-                    position=position,
-                )
-            )
-        await session.commit()
     return {
         "success": True,
         "data": {"table": {"id": table.id, "name": table.name}, "importedRows": len(rows)},
@@ -123,7 +97,7 @@ async def import_table_rows(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
+    _workspace_row, table = await _owned_table(request, table_id, context)
     raw = str(body.get("csv") or body.get("content") or "")
     _headers, rows = (
         _csv_payload(raw, str(body.get("delimiter") or ","))
@@ -131,24 +105,12 @@ async def import_table_rows(
         else ([], body.get("rows") or [])
     )
     if body.get("mode") == "replace":
-        async with services_of(request).db.session() as session:
-            await session.execute(
-                delete(WorkspaceTableRow).where(WorkspaceTableRow.table_id == table.id)
+        try:
+            await _table_service(request).replace_rows(
+                table, [dict(row) for row in rows if isinstance(row, dict)]
             )
-            for position, values in enumerate(rows):
-                if isinstance(values, dict):
-                    normalized = await _coerce_row_values(
-                        session, table.id, dict(values), enforce_required=True
-                    )
-                    session.add(
-                        WorkspaceTableRow(
-                            id=f"row_{uuid.uuid4().hex}",
-                            table_id=table.id,
-                            values=normalized,
-                            position=position,
-                        )
-                    )
-            await session.commit()
+        except WorkspaceDomainError as error:
+            _raise_domain(error)
     else:
         await _create_rows(table_id, {"rows": rows}, request, context)
     return {"success": True, "data": {"importedRows": len(rows)}}
@@ -163,50 +125,20 @@ async def list_tables(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, workspaceId, context)
-    async with services_of(request).db.session() as session:
-        if workspaceId == "lingxi":
-            await ensure_runtime_tables(session, workspace.id)
-            await session.commit()
-        query = select(WorkspaceTable).where(WorkspaceTable.workspace_id == workspace.id)
-        if scope not in {"active", "archived", "all"}:
-            raise HTTPException(status_code=400, detail="invalid_scope")
-        if scope in {"active", "archived"}:
-            query = query.where(WorkspaceTable.archived.is_(scope == "archived"))
-        elif includeArchived is False:
-            query = query.where(WorkspaceTable.archived.is_(False))
-        tables = (
-            (await session.execute(query.order_by(WorkspaceTable.updated_at.desc())))
-            .scalars()
-            .all()
+    if scope not in {"active", "archived", "all"}:
+        raise HTTPException(status_code=400, detail="invalid_scope")
+    repository = _table_service(request).repository
+    if workspaceId == "lingxi":
+        await repository.ensure_runtime_tables(workspace.id)
+    details = await repository.list_with_details(workspace.id, scope, includeArchived)
+    result = [
+        _table_public(table, columns, count)
+        for table, columns, count in details
+        if not (
+            (table.metadata_payload or {}).get("source") == "lingxi-runtime"
+            and (table.metadata_payload or {}).get("category") not in RUNTIME_STUDENT_CATEGORIES
         )
-        result = []
-        for table in tables:
-            metadata = table.metadata_payload or {}
-            if (
-                metadata.get("source") == "lingxi-runtime"
-                and metadata.get("category") not in RUNTIME_STUDENT_CATEGORIES
-            ):
-                continue
-            cols = (
-                (
-                    await session.execute(
-                        select(WorkspaceTableColumn).where(
-                            WorkspaceTableColumn.table_id == table.id
-                        )
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            count = (
-                await session.scalar(
-                    select(func.count())
-                    .select_from(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                )
-                or 0
-            )
-            result.append(_table_public(table, list(cols), int(count)))
+    ]
     return {
         "success": True,
         "data": {"tables": result, "totalCount": len(result)},
@@ -258,64 +190,12 @@ async def create_table(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, str(body.get("workspaceId", "lingxi")), context)
-    schema = body.get("schema") or {}
-    columns = schema.get("columns") or []
-    if not columns:
-        raise HTTPException(status_code=422, detail="at_least_one_column_required")
-    table = WorkspaceTable(
-        id=f"table_{uuid.uuid4().hex}",
-        workspace_id=workspace.id,
-        name=str(body.get("name") or "新表格"),
-        description=str(body.get("description") or ""),
-        metadata_payload={"folderId": body.get("folderId") or None},
-    )
-    async with services_of(request).db.session() as session:
-        session.add(table)
-        for index, column in enumerate(columns):
-            ctype = str(column.get("type", "string"))
-            if ctype not in ALLOWED_COLUMN_TYPES:
-                raise HTTPException(status_code=422, detail="unsupported_column_type")
-            name = str(column.get("name") or f"column_{index + 1}")
-            session.add(
-                WorkspaceTableColumn(
-                    id=str(column.get("id") or f"col_{uuid.uuid4().hex}"),
-                    table_id=table.id,
-                    key=name,
-                    name=name,
-                    type=ctype,
-                    position=int(column.get("position", index)),
-                    options={
-                        k: column[k]
-                        for k in ("required", "unique", "options", "multiple", "currencyCode")
-                        if k in column
-                    },
-                )
-            )
-        for index in range(int(body.get("initialRowCount", 0) or 0)):
-            session.add(
-                WorkspaceTableRow(
-                    id=f"row_{uuid.uuid4().hex}", table_id=table.id, values={}, position=index
-                )
-            )
-        await session.commit()
-    async with services_of(request).db.session() as session:
-        persisted_columns = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
-                )
-            )
-            .scalars()
-            .all()
+    try:
+        table, persisted_columns, row_count = await _table_service(request).create(
+            workspace.id, body
         )
-        row_count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == table.id)
-            )
-            or 0
-        )
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
     return {
         "success": True,
         "data": {
@@ -332,25 +212,8 @@ async def get_table(
     workspaceId: str = "lingxi",
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    workspace, table = await _table_for_id(request, table_id, context)
-    async with services_of(request).db.session() as session:
-        cols = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == table.id)
-            )
-            or 0
-        )
+    workspace, table = await _owned_table(request, table_id, context)
+    _current, cols, count = await _table_service(request).repository.details(table.id)
     return {"success": True, "data": {"table": _table_public(table, list(cols), int(count))}}
 
 
@@ -361,57 +224,16 @@ async def update_table(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    workspace, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    async with services_of(request).db.session() as session:
-        current = await session.get(WorkspaceTable, table.id)
-        if current is None:
-            raise not_found()
-        if body.get("name") is not None:
-            current.name = str(body["name"]).strip()[:255]
-        if isinstance(body.get("metadata"), dict):
-            current.metadata_payload = dict(body["metadata"])
-        if "folderId" in body:
-            current.metadata_payload = {
-                **(current.metadata_payload or {}),
-                "folderId": body.get("folderId") or None,
-            }
-        if isinstance(body.get("locks"), dict):
-            existing_locks: dict[str, Any] = (
-                dict((current.metadata_payload or {}).get("locks") or {})
-                if isinstance((current.metadata_payload or {}).get("locks"), dict)
-                else {}
-            )
-            current.metadata_payload = {
-                **(current.metadata_payload or {}),
-                "locks": {
-                    **existing_locks,
-                    **{
-                        key: bool(value)
-                        for key, value in body["locks"].items()
-                        if key in {"schemaLocked", "insertLocked", "updateLocked", "deleteLocked"}
-                    },
-                },
-            }
-        await session.commit()
-        cols = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == current.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == current.id)
-            )
-            or 0
-        )
-        table = current
+    workspace, table = await _owned_table(request, table_id, context)
+    try:
+        _table_service(request).assert_writable(table)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
+    current = await _table_service(request).repository.update_table(table.id, body)
+    if current is None:
+        raise not_found()
+    _persisted, cols, count = await _table_service(request).repository.details(current.id)
+    table = current
     return {"success": True, "data": {"table": _table_public(table, list(cols), int(count))}}
 
 
@@ -419,13 +241,12 @@ async def update_table(
 async def archive_table(
     table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    async with services_of(request).db.session() as session:
-        current = await session.get(WorkspaceTable, table.id)
-        if current is not None:
-            current.archived = True
-            await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        _table_service(request).assert_writable(table)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
+    await _table_service(request).repository.set_archived(table.id, True)
     return {"success": True, "data": {"message": "archived"}}
 
 
@@ -433,32 +254,13 @@ async def archive_table(
 async def restore_table(
     table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    async with services_of(request).db.session() as session:
-        current = await session.get(WorkspaceTable, table.id)
-        if current is not None:
-            current.archived = False
-            await session.commit()
-    async with services_of(request).db.session() as session:
-        current = await session.get(WorkspaceTable, table.id)
-        cols = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == table.id)
-            )
-            or 0
-        )
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        _table_service(request).assert_writable(table)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
+    await _table_service(request).repository.set_archived(table.id, False)
+    current, cols, count = await _table_service(request).repository.details(table.id)
     return {
         "success": True,
         "data": {"table": _table_public(current or table, list(cols), int(count))},
@@ -473,29 +275,8 @@ async def list_rows(
     limit: int = 100,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    async with services_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                    .order_by(WorkspaceTableRow.position)
-                    .offset(max(0, offset))
-                    .limit(min(1000, max(1, limit)))
-                )
-            )
-            .scalars()
-            .all()
-        )
-        count = (
-            await session.scalar(
-                select(func.count())
-                .select_from(WorkspaceTableRow)
-                .where(WorkspaceTableRow.table_id == table.id)
-            )
-            or 0
-        )
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    rows, count = await _table_service(request).repository.rows(table.id, offset, limit)
     public = [_table_row_public(row) for row in rows]
     return {
         "success": True,
@@ -519,20 +300,9 @@ async def query_rows(
     limit: int = 100,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
+    _workspace_row, table = await _owned_table(request, table_id, context)
     needle = q.casefold().strip()
-    async with services_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                    .order_by(WorkspaceTableRow.position)
-                )
-            )
-            .scalars()
-            .all()
-        )
+    rows, _count = await _table_service(request).repository.rows(table.id)
     if needle:
         rows = [
             row
@@ -565,20 +335,9 @@ async def find_rows(
     route returns only the cell matches expected by the grid and deliberately
     has no workflow-run semantics.
     """
-    _workspace_row, table = await _table_for_id(request, table_id, context)
+    _workspace_row, table = await _owned_table(request, table_id, context)
     needle = q.casefold().strip()
-    async with services_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                    .order_by(WorkspaceTableRow.position)
-                )
-            )
-            .scalars()
-            .all()
-        )
+    rows, _count = await _table_service(request).repository.rows(table.id)
     matches: list[dict[str, Any]] = []
     if needle:
         for ordinal, row in enumerate(rows):
@@ -594,30 +353,9 @@ async def _export_table(
     format: str = "csv",
     context: LearnerContext = Depends(current_learner_context),
 ) -> StreamingResponse:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    async with services_of(request).db.session() as session:
-        columns = (
-            (
-                await session.execute(
-                    select(WorkspaceTableColumn)
-                    .where(WorkspaceTableColumn.table_id == table.id)
-                    .order_by(WorkspaceTableColumn.position)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableRow)
-                    .where(WorkspaceTableRow.table_id == table.id)
-                    .order_by(WorkspaceTableRow.position)
-                )
-            )
-            .scalars()
-            .all()
-        )
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    columns = await _table_service(request).repository.columns(table.id)
+    rows, _count = await _table_service(request).repository.rows(table.id)
     headers = [column.key for column in columns]
     if format.lower() == "json":
         return StreamingResponse(
@@ -660,145 +398,18 @@ def _row_input(body: dict[str, Any]) -> list[dict[str, Any]]:
     return [dict(value)] if isinstance(value, dict) else []
 
 
-async def _coerce_row_values(
-    session: Any,
-    table_id: str,
-    values: dict[str, Any],
-    *,
-    enforce_required: bool = True,
-) -> dict[str, Any]:
-    """Coerce the seven native column types at the API boundary.
-
-    Rows remain JSON documents in PostgreSQL/SQLite, but native Tables still
-    promise predictable scalar types. Keeping this conversion in one helper
-    means CSV import, row CRUD, and upsert all share the same validation.
-    """
-
-    columns = (
-        (
-            await session.execute(
-                select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table_id)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    by_key = {column.key: column for column in columns}
-    normalized: dict[str, Any] = {}
-    for key, raw in values.items():
-        column = by_key.get(str(key))
-        if column is None:
-            # Keep forward-compatible JSON keys visible instead of silently
-            # dropping user data; typed columns are still normalized below.
-            normalized[str(key)] = raw
-            continue
-        if raw is None or raw == "":
-            normalized[column.key] = None
-            continue
-        try:
-            if column.type == "string":
-                normalized[column.key] = str(raw)
-            elif column.type in {"number", "currency"}:
-                if isinstance(raw, bool):
-                    raise ValueError
-                number = float(raw)
-                if not math.isfinite(number):
-                    raise ValueError
-                normalized[column.key] = (
-                    int(number) if isinstance(raw, int) and not isinstance(raw, bool) else number
-                )
-            elif column.type == "boolean":
-                if isinstance(raw, bool):
-                    normalized[column.key] = raw
-                elif isinstance(raw, (int, float)) and raw in {0, 1}:
-                    normalized[column.key] = bool(raw)
-                elif str(raw).strip().casefold() in {"true", "1", "yes", "y", "on"}:
-                    normalized[column.key] = True
-                elif str(raw).strip().casefold() in {"false", "0", "no", "n", "off"}:
-                    normalized[column.key] = False
-                else:
-                    raise ValueError
-            elif column.type == "date":
-                value = str(raw).strip().replace("Z", "+00:00")
-                try:
-                    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-                        normalized[column.key] = (
-                            datetime.strptime(value, "%Y-%m-%d").date().isoformat()
-                        )
-                    else:
-                        normalized[column.key] = datetime.fromisoformat(value).isoformat()
-                except ValueError:
-                    normalized[column.key] = datetime.strptime(value, "%Y-%m-%d").date().isoformat()
-            elif column.type == "json":
-                normalized[column.key] = json.loads(raw) if isinstance(raw, str) else raw
-            elif column.type == "select":
-                options = (column.options or {}).get("options", [])
-                allowed = {
-                    str(option.get("value") if isinstance(option, dict) else option)
-                    for option in options
-                }
-                multiple = bool((column.options or {}).get("multiple", False))
-                candidate = (
-                    raw if multiple and isinstance(raw, list) else ([raw] if multiple else raw)
-                )
-                candidates = candidate if isinstance(candidate, list) else [candidate]
-                if allowed and any(str(item) not in allowed for item in candidates):
-                    raise ValueError
-                normalized[column.key] = candidate
-            else:
-                raise ValueError
-        except (TypeError, ValueError, json.JSONDecodeError, OverflowError) as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"invalid_{column.type}_value:{column.key}",
-            ) from exc
-
-    if enforce_required:
-        missing = [
-            column.key
-            for column in columns
-            if bool((column.options or {}).get("required"))
-            and (
-                column.key not in normalized
-                or normalized[column.key] is None
-                or normalized[column.key] == ""
-            )
-        ]
-        if missing:
-            raise HTTPException(status_code=422, detail=f"required_columns:{','.join(missing)}")
-    return normalized
-
-
 async def _create_rows(
     table_id: str,
     body: dict[str, Any],
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    values = _row_input(body)
-    async with services_of(request).db.session() as session:
-        highest = (
-            await session.scalar(
-                select(func.max(WorkspaceTableRow.position)).where(
-                    WorkspaceTableRow.table_id == table.id
-                )
-            )
-            or -1
-        )
-        created = []
-        for index, item in enumerate(values):
-            normalized = await _coerce_row_values(session, table.id, item, enforce_required=True)
-            row = WorkspaceTableRow(
-                id=f"row_{uuid.uuid4().hex}",
-                table_id=table.id,
-                values=normalized,
-                position=int(highest) + index + 1,
-            )
-            session.add(row)
-            created.append(_table_row_public(row))
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        rows = await _table_service(request).create_rows(table, _row_input(body))
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
+    created = [_table_row_public(row) for row in rows]
     return {
         "success": True,
         "data": {"rows": created, "row": created[0] if len(created) == 1 else None},
@@ -823,23 +434,17 @@ async def update_row(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableRow).where(
-                WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id
-            )
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        values = body.get("data") if isinstance(body.get("data"), dict) else body.get("values")
+        row = await _table_service(request).update_row(
+            table, row_id, dict(values) if isinstance(values, dict) else None
         )
-        if row is None:
-            raise not_found()
-        update = body.get("data") if isinstance(body.get("data"), dict) else body.get("values")
-        if isinstance(update, dict):
-            row.values = await _coerce_row_values(
-                session, table.id, {**(row.values or {}), **update}, enforce_required=True
-            )
-        await session.commit()
-        public = _table_row_public(row)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
+    if row is None:
+        raise not_found()
+    public = _table_row_public(row)
     return {"success": True, "data": {"row": public}}
 
 
@@ -850,37 +455,12 @@ async def upsert_rows(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    rows = _row_input(body)
-    async with services_of(request).db.session() as session:
-        created: list[dict[str, Any]] = []
-        for item in rows:
-            item = dict(item)
-            row_id = str(item.pop("id", "") or f"row_{uuid.uuid4().hex}")
-            normalized = await _coerce_row_values(session, table.id, item, enforce_required=True)
-            row = await session.scalar(
-                select(WorkspaceTableRow).where(
-                    WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id
-                )
-            )
-            if row is None:
-                highest = (
-                    await session.scalar(
-                        select(func.max(WorkspaceTableRow.position)).where(
-                            WorkspaceTableRow.table_id == table.id
-                        )
-                    )
-                    or -1
-                )
-                row = WorkspaceTableRow(
-                    id=row_id, table_id=table.id, values=normalized, position=int(highest) + 1
-                )
-                session.add(row)
-            else:
-                row.values = normalized
-            created.append(_table_row_public(row))
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        persisted = await _table_service(request).upsert_rows(table, _row_input(body))
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
+    created = [_table_row_public(row) for row in persisted]
     return {"success": True, "data": {"rows": created}}
 
 
@@ -891,18 +471,13 @@ async def delete_row(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableRow).where(
-                WorkspaceTableRow.id == row_id, WorkspaceTableRow.table_id == table.id
-            )
-        )
-        if row is None:
-            raise not_found()
-        await session.delete(row)
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        _table_service(request).assert_writable(table)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
+    if not await _table_service(request).repository.delete_row(table.id, row_id):
+        raise not_found()
     return {"success": True, "data": {}}
 
 
@@ -913,37 +488,11 @@ async def add_column(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    column: dict[str, Any] = body["column"] if isinstance(body.get("column"), dict) else body
-    ctype = str(column.get("type", "string"))
-    if ctype not in ALLOWED_COLUMN_TYPES:
-        raise HTTPException(status_code=422, detail="unsupported_column_type")
-    async with services_of(request).db.session() as session:
-        max_pos = (
-            await session.scalar(
-                select(func.max(WorkspaceTableColumn.position)).where(
-                    WorkspaceTableColumn.table_id == table.id
-                )
-            )
-            or -1
-        )
-        name = str(column.get("name") or f"column_{int(max_pos) + 2}")
-        row = WorkspaceTableColumn(
-            id=str(column.get("id") or f"col_{uuid.uuid4().hex}"),
-            table_id=table.id,
-            key=name,
-            name=name,
-            type=ctype,
-            position=int(column.get("position", max_pos + 1)),
-            options={
-                k: column[k]
-                for k in ("required", "unique", "options", "multiple", "currencyCode")
-                if k in column
-            },
-        )
-        session.add(row)
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        row = await _table_service(request).add_column(table, body)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
     return {"success": True, "data": {"columns": [_column_public(row)]}}
 
 
@@ -954,35 +503,11 @@ async def update_column(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    async with services_of(request).db.session() as session:
-        query = select(WorkspaceTableColumn).where(WorkspaceTableColumn.table_id == table.id)
-        if body.get("columnId"):
-            query = query.where(WorkspaceTableColumn.id == body["columnId"])
-        else:
-            query = query.where(WorkspaceTableColumn.key == body.get("columnName"))
-        row = await session.scalar(query)
-        if row is None:
-            raise not_found()
-        updates: dict[str, Any] = (
-            dict(body["updates"])
-            if isinstance(body.get("updates"), dict)
-            else dict(body.get("column", body))
-        )
-        if updates.get("name"):
-            row.name = row.key = str(updates["name"])
-        if updates.get("type") in ALLOWED_COLUMN_TYPES:
-            row.type = str(updates["type"])
-        row.options = {
-            **(row.options or {}),
-            **{
-                k: updates[k]
-                for k in ("required", "unique", "options", "multiple", "currencyCode")
-                if k in updates
-            },
-        }
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        row = await _table_service(request).update_column(table, body)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
     return {"success": True, "data": {"columns": [_column_public(row)]}}
 
 
@@ -993,22 +518,15 @@ async def delete_column(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    _assert_table_writable(table)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableColumn).where(
-                WorkspaceTableColumn.table_id == table.id,
-                or_(
-                    WorkspaceTableColumn.id == body.get("columnId"),
-                    WorkspaceTableColumn.key == body.get("columnName"),
-                ),
-            )
-        )
-        if row is None:
-            raise not_found()
-        await session.delete(row)
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    try:
+        _table_service(request).assert_writable(table)
+    except WorkspaceDomainError as error:
+        _raise_domain(error)
+    if not await _table_service(request).repository.delete_column(
+        table.id, body.get("columnId"), body.get("columnName")
+    ):
+        raise not_found()
     return {"success": True, "data": {"columns": []}}
 
 
@@ -1016,17 +534,8 @@ async def delete_column(
 async def list_views(
     table_id: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    async with services_of(request).db.session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(WorkspaceTableView).where(WorkspaceTableView.table_id == table.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    rows = await _table_service(request).repository.list_views(table.id)
     return {"success": True, "data": {"views": [_view_public(row) for row in rows]}}
 
 
@@ -1037,17 +546,8 @@ async def create_view(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    row = WorkspaceTableView(
-        id=f"view_{uuid.uuid4().hex}",
-        table_id=table.id,
-        name=str(body.get("name") or "视图"),
-        config=dict(body.get("config") or body.get("view") or {}),
-        created_by=context.learner_id,
-    )
-    async with services_of(request).db.session() as session:
-        session.add(row)
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    row = await _table_service(request).repository.create_view(table.id, context.learner_id, body)
     return {"success": True, "data": {"view": _view_public(row)}}
 
 
@@ -1059,33 +559,10 @@ async def update_view(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableView).where(
-                WorkspaceTableView.id == view_id, WorkspaceTableView.table_id == table.id
-            )
-        )
-        if row is None:
-            raise not_found()
-        if body.get("name"):
-            row.name = str(body["name"])
-        if isinstance(body.get("config"), dict):
-            row.config = dict(body["config"])
-        if isinstance(body.get("configPatch"), dict):
-            row.config = {**(row.config or {}), **body["configPatch"]}
-        if "isDefault" in body:
-            row.is_default = bool(body["isDefault"])
-            if row.is_default:
-                await session.execute(
-                    update(WorkspaceTableView)
-                    .where(
-                        WorkspaceTableView.table_id == table.id,
-                        WorkspaceTableView.id != row.id,
-                    )
-                    .values(is_default=False)
-                )
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    row = await _table_service(request).repository.update_view(table.id, view_id, body)
+    if row is None:
+        raise not_found()
     return {"success": True, "data": {"view": _view_public(row)}}
 
 
@@ -1096,17 +573,9 @@ async def delete_view(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    _workspace_row, table = await _table_for_id(request, table_id, context)
-    async with services_of(request).db.session() as session:
-        row = await session.scalar(
-            select(WorkspaceTableView).where(
-                WorkspaceTableView.id == view_id, WorkspaceTableView.table_id == table.id
-            )
-        )
-        if row is None:
-            raise not_found()
-        await session.delete(row)
-        await session.commit()
+    _workspace_row, table = await _owned_table(request, table_id, context)
+    if not await _table_service(request).repository.delete_view(table.id, view_id):
+        raise not_found()
     return {"success": True, "data": {"deleted": True}}
 
 
