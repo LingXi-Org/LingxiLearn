@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { Loader } from '@/components/ui-kit'
+import { userFacingError } from '@/lib/product-copy'
 import {
   DashboardSegmentsContext,
   type SegmentSelectionMode,
@@ -372,8 +373,8 @@ function DashboardInner({ stats, isLoading, error, searchQuery }: DashboardProps
     return (
       <div className='mt-6 flex flex-1 items-center justify-center'>
         <div className='text-[var(--text-error)]'>
-          <p className='text-small'>Error loading data</p>
-          <p className='text-caption'>{error.message}</p>
+          <p className='text-small'>数据加载失败</p>
+          <p className='text-caption'>{userFacingError(error, 'loadFailed')}</p>
         </div>
       </div>
     )
@@ -383,8 +384,8 @@ function DashboardInner({ stats, isLoading, error, searchQuery }: DashboardProps
     return (
       <div className='mt-6 flex flex-1 items-center justify-center'>
         <div className='text-center text-[var(--text-secondary)]'>
-          <p className='text-small'>No workflows</p>
-          <p className='mt-1 text-caption'>Create a workflow to see its execution history here</p>
+          <p className='text-small'>暂无工作流</p>
+          <p className='mt-1 text-caption'>创建工作流后，可在此查看运行历史</p>
         </div>
       </div>
     )
@@ -396,7 +397,7 @@ function DashboardInner({ stats, isLoading, error, searchQuery }: DashboardProps
         <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
           <div className='flex flex-col overflow-hidden rounded-md bg-[var(--surface-2)] dark:bg-[var(--surface-2)]'>
             <div className='flex min-w-0 items-center justify-between gap-2 bg-[var(--surface-3)] px-4 py-[9px] dark:bg-[var(--surface-3)]'>
-              <span className='min-w-0 truncate text-[var(--text-primary)] text-sm'>Runs</span>
+              <span className='min-w-0 truncate text-[var(--text-primary)] text-sm'>运行次数</span>
               {globalDetails && (
                 <span className='flex-shrink-0 text-[var(--text-secondary)] text-sm'>
                   {globalDetails.totalRuns}
@@ -421,7 +422,7 @@ function DashboardInner({ stats, isLoading, error, searchQuery }: DashboardProps
 
           <div className='flex flex-col overflow-hidden rounded-md bg-[var(--surface-2)] dark:bg-[var(--surface-2)]'>
             <div className='flex min-w-0 items-center justify-between gap-2 bg-[var(--surface-3)] px-4 py-[9px] dark:bg-[var(--surface-3)]'>
-              <span className='min-w-0 truncate text-[var(--text-primary)] text-sm'>Errors</span>
+              <span className='min-w-0 truncate text-[var(--text-primary)] text-sm'>错误</span>
               {globalDetails && (
                 <span className='flex-shrink-0 text-[var(--text-secondary)] text-sm'>
                   {globalDetails.totalErrors}
@@ -446,7 +447,7 @@ function DashboardInner({ stats, isLoading, error, searchQuery }: DashboardProps
 
           <div className='flex flex-col overflow-hidden rounded-md bg-[var(--surface-2)] dark:bg-[var(--surface-2)]'>
             <div className='flex min-w-0 items-center justify-between gap-2 bg-[var(--surface-3)] px-4 py-[9px] dark:bg-[var(--surface-3)]'>
-              <span className='min-w-0 truncate text-[var(--text-primary)] text-sm'>Latency</span>
+              <span className='min-w-0 truncate text-[var(--text-primary)] text-sm'>延迟</span>
               {globalDetails && (
                 <span className='flex-shrink-0 text-[var(--text-secondary)] text-sm'>
                   {formatLatency(globalDetails.avgLatency)}

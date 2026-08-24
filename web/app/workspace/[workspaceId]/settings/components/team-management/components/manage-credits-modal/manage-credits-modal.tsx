@@ -10,7 +10,7 @@ import {
   ChipModalHeader,
   Info,
 } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import {
   useOrganizationMemberUsageLimit,
   useUpdateOrganizationMemberUsageLimit,
@@ -73,13 +73,13 @@ export function ManageCreditsModal({
 
   const creditsUsed = data ? data.creditsUsed.toLocaleString() : '—'
   const creditsUsedTitle = data
-    ? `Credits used this ${data.billingInterval === 'year' ? 'year' : 'month'}`
-    : 'Credits used'
+    ? `本${data.billingInterval === 'year' ? '年' : '月'}已使用额度`
+    : '已使用额度'
 
   const handleSave = () => {
     if (!userId) return
     if (!isValid) {
-      setError('Enter a whole number of credits, or leave blank for no limit.')
+      setError('请输入整数额度，留空表示不设上限。')
       return
     }
     setError(null)
@@ -87,33 +87,31 @@ export function ManageCreditsModal({
       { orgId: organizationId, userId, creditLimit: parsedLimit },
       {
         onSuccess: () => onOpenChange(false),
-        onError: (err) => setError(getErrorMessage(err, 'Failed to update credit limit')),
+        onError: (err) => setError(userFacingError(err, 'saveFailed')),
       }
     )
   }
 
   return (
-    <ChipModal open={open} onOpenChange={onOpenChange} srTitle='Manage credits'>
+    <ChipModal open={open} onOpenChange={onOpenChange} srTitle='管理额度'>
       <ChipModalHeader onClose={() => onOpenChange(false)}>
-        {member ? `Manage credits — ${member.name || member.email}` : 'Manage credits'}
+        {member ? `管理额度 — ${member.name || member.email}` : '管理额度'}
       </ChipModalHeader>
       <ChipModalBody>
         <ChipModalField
           type='copy'
           title={creditsUsedTitle}
-          value={isLoading ? 'Loading…' : creditsUsed}
-          copyLabel='Copy credits used'
+          value={isLoading ? '正在加载…' : creditsUsed}
+          copyLabel='复制已使用额度'
         />
         <ChipModalField
           type='input'
           inputType='number'
           title={
             <span className='inline-flex items-center gap-1.5'>
-              Credit limit
+              额度上限
               <Info side='top'>
-                {
-                  "Set in credits — Sim's usage unit (1,000 credits = $5). Caps this member's usage across this organization's workspaces each billing period."
-                }
+                以额度为单位设置。该上限会限制此成员在每个计费周期内使用组织工作区的总额度。
               </Info>
             </span>
           }
@@ -122,8 +120,8 @@ export function ManageCreditsModal({
             hasEditedRef.current = true
             setDraft(value)
           }}
-          placeholder='No limit'
-          hint='Leave blank for no limit.'
+          placeholder='不设上限'
+          hint='留空表示不设上限。'
           disabled={isLoading || isSaving}
         />
         <ChipModalError>{error}</ChipModalError>
@@ -132,7 +130,7 @@ export function ManageCreditsModal({
         onCancel={() => onOpenChange(false)}
         cancelDisabled={isSaving}
         primaryAction={{
-          label: isSaving ? 'Saving…' : 'Save',
+          label: isSaving ? '正在保存…' : '保存',
           onClick: handleSave,
           disabled: !isValid || !isDirty || isSaving || isLoading,
         }}

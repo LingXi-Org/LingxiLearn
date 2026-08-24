@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   ChevronDown,
   Chip,
@@ -12,7 +13,6 @@ import {
   Tooltip,
   toast,
 } from '@/components/ui-kit'
-import { useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import { schedulePermissionContract } from '@/lib/api/contracts/agent-interactions'
 import { createLogger } from '@/lib/logger'
@@ -105,10 +105,16 @@ export function ToolPermissionCard({
           body: { decisions: ids.map((id) => ({ proposalId: id, decision })) },
         })
         if (decision === 'always_allow') {
-          void queryClient.invalidateQueries({ queryKey: generalSettingsKeys.settings() })
+          void queryClient.invalidateQueries({
+            queryKey: generalSettingsKeys.settings(),
+          })
         }
       } catch (error) {
-        logger.error('Failed to submit tool permission decision', { toolCallId, decision, error })
+        logger.error('Failed to submit tool permission decision', {
+          toolCallId,
+          decision,
+          error,
+        })
         // A 404 means there is nothing left to answer — the turn ended, the
         // server restarted, or permissions were switched off under us. Retrying
         // cannot help, so retire the prompt instead of leaving buttons that do
@@ -119,7 +125,7 @@ export function ToolPermissionCard({
         }
         // Anything else may be transient. Put the cards back so the user can
         // try again, since the turn is still blocked on this answer.
-        toast.error('Could not record your choice. Please try again.')
+        toast.error('无法保存你的选择，请稍后重试。')
         clearSubmitted(ids)
         setSubmitting(null)
       }

@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import dynamic from 'next/dynamic'
+import { useParams } from 'next/navigation'
 import {
   ChipModal,
   ChipModalBody,
@@ -12,15 +14,14 @@ import {
   chipFieldSurfaceClass,
   cn,
 } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
-import dynamic from 'next/dynamic'
-import { useParams } from 'next/navigation'
+import { userFacingError } from '@/lib/product-copy'
 import {
   SKILL_CONTENT_PLACEHOLDER,
   SKILL_DESCRIPTION_MAX_LENGTH,
   SKILL_DESCRIPTION_PLACEHOLDER,
   SKILL_NAME_HINT,
   SKILL_NAME_PLACEHOLDER,
+  skillCopy,
 } from '@/app/workspace/[workspaceId]/skills/components/skill-copy'
 import { SkillImport } from '@/app/workspace/[workspaceId]/skills/components/skill-import'
 import {
@@ -59,8 +60,8 @@ interface FieldErrors {
 type TabValue = 'create' | 'import'
 
 const CREATE_TABS = [
-  { value: 'create', label: 'Create' },
-  { value: 'import', label: 'Import' },
+  { value: 'create', label: '创建' },
+  { value: 'import', label: '导入' },
 ] as const
 
 export function SkillModal({ open, onOpenChange, onSave, initialValues }: SkillModalProps) {
@@ -111,11 +112,11 @@ export function SkillModal({ open, onOpenChange, onSave, initialValues }: SkillM
     if (nameError) newErrors.name = nameError
 
     if (!description.trim()) {
-      newErrors.description = 'Description is required'
+      newErrors.description = skillCopy.descriptionRequired
     }
 
     if (!content.trim()) {
-      newErrors.content = 'Content is required'
+      newErrors.content = skillCopy.contentRequired
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -139,9 +140,9 @@ export function SkillModal({ open, onOpenChange, onSave, initialValues }: SkillM
       onSave()
     } catch (error) {
       if (isSkillNameConflictError(error)) {
-        setErrors({ name: getErrorMessage(error, 'This skill name is already taken.') })
+        setErrors({ name: skillCopy.nameConflict })
       } else {
-        setErrors({ general: 'Failed to save skill. Please try again.' })
+        setErrors({ general: userFacingError(error, 'saveFailed') })
       }
     }
   }
@@ -182,11 +183,11 @@ export function SkillModal({ open, onOpenChange, onSave, initialValues }: SkillM
     <ChipModal
       open={open}
       onOpenChange={onOpenChange}
-      srTitle={isEditing ? 'Edit Skill' : 'Add Skill'}
+      srTitle={isEditing ? '编辑技能' : '添加技能'}
       size='lg'
     >
       <ChipModalHeader onClose={() => onOpenChange(false)}>
-        {isEditing ? 'Edit Skill' : 'Add Skill'}
+        {isEditing ? '编辑技能' : '添加技能'}
       </ChipModalHeader>
 
       <ChipModalBody>
@@ -202,7 +203,7 @@ export function SkillModal({ open, onOpenChange, onSave, initialValues }: SkillM
           <>
             <ChipModalField
               type='input'
-              title='Name'
+              title='名称'
               value={name}
               onChange={(value) => {
                 setName(value)
@@ -218,7 +219,7 @@ export function SkillModal({ open, onOpenChange, onSave, initialValues }: SkillM
 
             <ChipModalField
               type='input'
-              title='Description'
+              title='描述'
               value={description}
               onChange={(value) => {
                 setDescription(value)
@@ -232,7 +233,7 @@ export function SkillModal({ open, onOpenChange, onSave, initialValues }: SkillM
               disabled={readOnly || saving}
             />
 
-            <ChipModalField type='custom' title='Content' required error={errors.content}>
+            <ChipModalField type='custom' title='内容' required error={errors.content}>
               <RichMarkdownField
                 key={`${initialValues?.id ?? 'new'}:${contentSeed}`}
                 value={content}
@@ -263,7 +264,7 @@ export function SkillModal({ open, onOpenChange, onSave, initialValues }: SkillM
           onCancel={() => onOpenChange(false)}
           cancelDisabled={isBuiltin}
           primaryAction={{
-            label: saving ? 'Saving...' : isEditing ? 'Update' : 'Create',
+            label: saving ? '正在保存…' : isEditing ? '更新' : '创建',
             onClick: handleSave,
             disabled: readOnly || saving || !hasChanges,
           }}

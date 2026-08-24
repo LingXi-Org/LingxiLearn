@@ -10,7 +10,7 @@ import {
   ChipModalHeader,
 } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 
 const logger = createLogger('RenameDocumentModal')
 
@@ -68,7 +68,7 @@ export function RenameDocumentModal({
       onOpenChange(false)
     } catch (err) {
       logger.error('Error renaming document:', err)
-      setError(getErrorMessage(err, 'Failed to rename document'))
+      setError(userFacingError(err, 'saveFailed'))
     } finally {
       setIsSubmitting(false)
     }

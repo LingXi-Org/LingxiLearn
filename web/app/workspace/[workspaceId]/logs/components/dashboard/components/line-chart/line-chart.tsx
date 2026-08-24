@@ -242,7 +242,7 @@ function LineChartComponent({
         )}
         style={{ width, height }}
       >
-        <p className='text-[var(--text-muted)] text-sm'>No data</p>
+        <p className='text-[var(--text-muted)] text-sm'>暂无数据</p>
       </div>
     )
   }

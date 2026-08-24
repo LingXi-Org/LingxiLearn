@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Chip, ChipConfirmModal, ChipLink, Send, toast } from '@/components/ui-kit'
-import { ArrowLeft } from '@/components/ui-kit/icons'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { useRouter } from 'next/navigation'
 import { AddPeopleModal } from '@/components/permissions'
 import { SaveDiscardChips } from '@/components/settings/save-discard-actions'
+import { Chip, ChipConfirmModal, ChipLink, Send, toast } from '@/components/ui-kit'
+import { ArrowLeft } from '@/components/ui-kit/icons'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { SkillTile } from '@/app/workspace/[workspaceId]/components'
 import {
   CredentialDetailHeading,
@@ -28,6 +28,7 @@ import {
   validateSkillName,
 } from '@/app/workspace/[workspaceId]/skills/components/utils'
 import { useDeleteSkill, useSkills, useUpdateSkill } from '@/hooks/queries/skills'
+import { skillCopy } from '../components/skill-copy'
 
 const logger = createLogger('SkillDetail')
 
@@ -104,8 +105,8 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
     const newErrors: SkillFieldErrors = {}
     const nameError = validateSkillName(nameDraft)
     if (nameError) newErrors.name = nameError
-    if (!descriptionDraft.trim()) newErrors.description = 'Description is required'
-    if (!contentDraft.trim()) newErrors.content = 'Content is required'
+    if (!descriptionDraft.trim()) newErrors.description = skillCopy.descriptionRequired
+    if (!contentDraft.trim()) newErrors.content = skillCopy.contentRequired
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
@@ -123,13 +124,13 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
         },
       })
       setErrors({})
-      toast.success(`Saved "${nameDraft}"`)
+      toast.success(`已保存“${nameDraft}”`)
     } catch (error) {
       if (isSkillNameConflictError(error)) {
-        setErrors({ name: getErrorMessage(error, 'This skill name is already taken.') })
+        setErrors({ name: skillCopy.nameConflict })
       } else {
-        toast.error("Couldn't save skill", {
-          description: getErrorMessage(error, 'Please try again in a moment.'),
+        toast.error('无法保存技能', {
+          description: userFacingError(error, 'saveFailed'),
         })
       }
       logger.error('Failed to save skill', error)
@@ -147,8 +148,8 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
       router.replace(skillsHref)
     } catch (error) {
       guard.rearm()
-      toast.error("Couldn't delete skill", {
-        description: getErrorMessage(error, 'Please try again in a moment.'),
+      toast.error('无法删除技能', {
+        description: userFacingError(error, 'deleteFailed'),
       })
       logger.error('Failed to delete skill', error)
     }
@@ -168,7 +169,7 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
 
   const back = (
     <ChipLink href={skillsHref} onClick={guard.handleBackClick} leftIcon={ArrowLeft}>
-      Skills
+      技能
     </ChipLink>
   )
 
@@ -180,10 +181,10 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
     skill && canEdit ? (
       <>
         <Chip leftIcon={Send} onClick={() => setShareOpen(true)}>
-          Share
+          分享
         </Chip>
         <Chip onClick={() => setShowDeleteConfirm(true)} disabled={deleteSkill.isPending}>
-          Delete
+          删除
         </Chip>
         <SaveDiscardChips
           dirty={isDirty}
@@ -217,8 +218,8 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
   const lockReason = !readOnly
     ? null
     : isBuiltin
-      ? 'Built-in skills are read-only'
-      : 'You need to be a skill editor to edit this skill'
+      ? '内置技能为只读'
+      : '你需要成为技能编辑者才能编辑此技能'
 
   return (
     <>
@@ -226,7 +227,7 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
         <CredentialDetailHeading
           leading={<SkillTile />}
           title={skill.name}
-          subtitle={isBuiltin ? 'Built-in skill' : skill.description}
+          subtitle={isBuiltin ? '内置技能' : skill.description}
         />
 
         <SkillFields
@@ -259,18 +260,14 @@ export function SkillDetail({ workspaceId, skillId }: SkillDetailProps) {
       <ChipConfirmModal
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
-        srTitle='Delete Skill'
-        title='Delete Skill'
-        text={[
-          'Are you sure you want to delete ',
-          { text: skill.name, bold: true },
-          '? This action cannot be undone.',
-        ]}
+        srTitle='删除技能'
+        title='删除技能'
+        text={['确定要删除“', { text: skill.name, bold: true }, '”吗？此操作无法撤销。']}
         confirm={{
-          label: 'Delete',
+          label: '删除',
           onClick: handleConfirmDelete,
           pending: deleteSkill.isPending,
-          pendingLabel: 'Deleting...',
+          pendingLabel: '正在删除…',
         }}
       />
 

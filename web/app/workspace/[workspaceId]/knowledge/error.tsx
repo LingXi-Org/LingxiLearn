@@ -1,5 +1,6 @@
 'use client'
 
+import { userFacingError, workspaceCopy } from '@/lib/product-copy'
 import { type ErrorBoundaryProps, ErrorState } from '@/app/workspace/[workspaceId]/components'
 
 export default function KnowledgeError({ error, reset }: ErrorBoundaryProps) {
@@ -7,8 +8,8 @@ export default function KnowledgeError({ error, reset }: ErrorBoundaryProps) {
     <ErrorState
       error={error}
       reset={reset}
-      title='Failed to load knowledge'
-      description='Something went wrong while loading your knowledge bases. Please try again.'
+      title={workspaceCopy.resources.knowledge.loadFailedTitle}
+      description={userFacingError(error, 'loadFailed')}
       loggerName='KnowledgeError'
     />
   )

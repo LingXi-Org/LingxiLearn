@@ -2,6 +2,7 @@
 
 import { Plus } from '@/components/ui-kit'
 import { Database, FolderPlus } from '@/components/ui-kit/icons'
+import { workspaceCopy } from '@/lib/product-copy'
 import {
   type ChromeActionSpec,
   ResourceChromeFallback,
@@ -9,20 +10,21 @@ import {
 import { FOLDERED_RESOURCE_HEADERS } from '@/app/workspace/[workspaceId]/components/folders/foldered-resources'
 
 const KNOWLEDGE_HEADER = FOLDERED_RESOURCE_HEADERS.knowledge_base
+const copy = workspaceCopy.resources.knowledge
 
 const COLUMNS = [
-  { id: 'name', header: 'Name' },
-  { id: 'documents', header: 'Documents', widthMultiplier: 0.6 },
-  { id: 'tokens', header: 'Tokens', widthMultiplier: 0.6 },
-  { id: 'connectors', header: 'Connectors', widthMultiplier: 0.7 },
-  { id: 'created', header: 'Created' },
-  { id: 'owner', header: 'Owner' },
-  { id: 'updated', header: 'Last Updated' },
+  { id: 'name', header: copy.columns.name },
+  { id: 'documents', header: copy.columns.documents, widthMultiplier: 0.6 },
+  { id: 'tokens', header: copy.columns.tokens, widthMultiplier: 0.6 },
+  { id: 'connectors', header: '连接器', widthMultiplier: 0.7 },
+  { id: 'created', header: copy.columns.created },
+  { id: 'owner', header: workspaceCopy.common.columns.owner },
+  { id: 'updated', header: workspaceCopy.common.columns.updated },
 ]
 
 const ACTIONS: ChromeActionSpec[] = [
-  { text: 'New folder', icon: FolderPlus },
-  { text: 'New base', icon: Plus, variant: 'primary' },
+  { text: workspaceCopy.resources.actions.newFolder, icon: FolderPlus },
+  { text: workspaceCopy.resources.actions.newBase, icon: Plus, variant: 'primary' },
 ]
 
 export default function KnowledgeLoading() {
@@ -32,7 +34,7 @@ export default function KnowledgeLoading() {
       title={KNOWLEDGE_HEADER.rootLabel}
       columns={COLUMNS}
       actions={ACTIONS}
-      searchPlaceholder='Search knowledge bases...'
+      searchPlaceholder={copy.searchPlaceholder}
       hasSort
       hasFilter
     />

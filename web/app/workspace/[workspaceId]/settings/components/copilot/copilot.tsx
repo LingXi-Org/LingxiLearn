@@ -89,7 +89,7 @@ export function Copilot() {
       }
     } catch (error) {
       logger.error('Failed to generate copilot API key', { error })
-      setCreateError('Failed to create API key. Please check your connection and try again.')
+      setCreateError('API 密钥创建失败，请检查网络后重试。')
     }
   }
 
@@ -129,7 +129,7 @@ export function Copilot() {
         search={{
           value: searchTerm,
           onChange: setSearchTerm,
-          placeholder: 'Search API keys...',
+          placeholder: '搜索 API 密钥…',
         }}
         actions={actions}
       >
@@ -152,7 +152,7 @@ export function Copilot() {
                     label={`Actions for ${key.name || 'Unnamed Key'}`}
                     actions={[
                       {
-                        label: 'Delete',
+                        label: '删除',
                         destructive: true,
                         onSelect: () => {
                           setDeleteKey(key)
@@ -166,7 +166,7 @@ export function Copilot() {
             ))}
             {showNoResults && (
               <SettingsEmptyState variant='inline'>
-                No API keys found matching "{searchTerm}"
+                没有找到与“{searchTerm}”匹配的 API 密钥
               </SettingsEmptyState>
             )}
           </div>
@@ -259,8 +259,8 @@ export function Copilot() {
             setDeleteKey(null)
           }
         }}
-        srTitle='Delete API key'
-        title='Delete API key'
+        srTitle='删除 API 密钥'
+        title='删除 API 密钥'
         text={[
           'Deleting ',
           { text: deleteKey?.name || 'Unnamed Key', bold: true },
@@ -269,7 +269,7 @@ export function Copilot() {
           ' This action cannot be undone.',
         ]}
         confirm={{
-          label: 'Delete',
+          label: '删除',
           onClick: handleDeleteKey,
           pending: deleteKeyMutation.isPending,
           pendingLabel: 'Deleting...',

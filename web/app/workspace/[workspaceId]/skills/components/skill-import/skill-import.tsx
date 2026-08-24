@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ChipModalField } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import {
   type ParsedSkill,
   readSkillFile,
@@ -30,8 +30,8 @@ export function SkillImport({ onImport }: SkillImportProps) {
     setError('')
     try {
       onImport(await readSkillFile(file))
-    } catch (err) {
-      setError(getErrorMessage(err, 'Failed to process file'))
+    } catch (error) {
+      setError(userFacingError(error, 'uploadFailed'))
     } finally {
       setImporting(false)
     }
@@ -40,12 +40,12 @@ export function SkillImport({ onImport }: SkillImportProps) {
   return (
     <ChipModalField
       type='file'
-      title='Upload File'
+      title='上传文件'
       accept={SKILL_IMPORT_ACCEPT}
       onChange={(files) => void handleFiles(files)}
       loading={importing}
-      label={importing ? 'Importing…' : undefined}
-      description='.md file with YAML frontmatter, or .zip containing a SKILL.md'
+      label={importing ? '正在导入…' : undefined}
+      description='带 YAML 前置元数据的 .md 文件，或包含 SKILL.md 的 .zip 文件'
       error={error || undefined}
     />
   )

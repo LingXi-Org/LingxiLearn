@@ -1,14 +1,15 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Chip, ChipInput, ChipModalTabs } from '@/components/ui-kit'
-import { Search } from '@/components/ui-kit/icons'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryStates } from 'nuqs'
 import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'
+import { Chip, ChipInput, ChipModalTabs } from '@/components/ui-kit'
+import { Search } from '@/components/ui-kit/icons'
 import type { ServedFolderResourceType } from '@/lib/api/contracts/folders'
 import { isChatEnabled } from '@/lib/core/config/env-flags'
-import { toError } from '@/lib/utils/errors'
+import type { WorkspaceFolder } from '@/lib/folders/types'
+import { userFacingError } from '@/lib/product-copy'
 import { formatDate } from '@/lib/utils/formatting'
 import type { ColumnOption } from '@/app/workspace/[workspaceId]/components'
 import { folderedResourceListHref } from '@/app/workspace/[workspaceId]/components/folders'
@@ -41,7 +42,6 @@ import {
 import { useRestoreWorkspaceFile, useWorkspaceFiles } from '@/hooks/queries/workspace-files'
 import { useUrlSort } from '@/hooks/use-url-sort'
 import { useFolderStore } from '@/stores/folders/store'
-import type { WorkspaceFolder } from '@/lib/folders/types'
 
 type ResourceType =
   | 'all'
@@ -84,7 +84,7 @@ function getResourceHref(
 }
 
 const SORT_OPTIONS: ColumnOption[] = [
-  { id: 'deleted', label: 'Deleted' },
+  { id: 'deleted', label: '删除时间' },
   { id: 'name', label: 'Name' },
   { id: 'type', label: 'Type' },
 ]
@@ -513,7 +513,7 @@ export function RecentlyDeleted() {
       <div className='flex items-center gap-2'>
         <ChipInput
           icon={Search}
-          placeholder='Search deleted items...'
+          placeholder='搜索已删除项目…'
           value={urlSearchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           disabled={isLoading}
@@ -536,16 +536,14 @@ export function RecentlyDeleted() {
       />
 
       {error ? (
-        <SettingsEmptyState tone='error'>
-          {toError(error).message || 'Failed to load deleted items'}
-        </SettingsEmptyState>
+        <SettingsEmptyState tone='error'>{userFacingError(error, 'loadFailed')}</SettingsEmptyState>
       ) : isLoading ? null : filtered.length === 0 ? (
         showNoResults ? (
           <SettingsEmptyState variant='inline'>
-            {`No items found matching \u201c${urlSearchTerm}\u201d`}
+            {`没有找到与“${urlSearchTerm}”匹配的项目`}
           </SettingsEmptyState>
         ) : (
-          <SettingsEmptyState>No deleted items</SettingsEmptyState>
+          <SettingsEmptyState>暂无已删除项目</SettingsEmptyState>
         )
       ) : (
         <div className={RESOURCE_LIST_STACK}>
@@ -566,7 +564,7 @@ export function RecentlyDeleted() {
                   <>
                     {TYPE_LABEL[resource.type]}
                     {' \u00b7 '}
-                    Deleted {formatDate(resource.deletedAt)}
+                    删除于 {formatDate(resource.deletedAt)}
                   </>
                 }
                 badge={

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import {
   Button,
   ChipModal,
@@ -14,7 +15,7 @@ import {
 } from '@/components/ui-kit'
 import { RefreshCw, X } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
-import { useParams } from 'next/navigation'
+import { userFacingError } from '@/lib/product-copy'
 import {
   assertMultiFileUploadAdmission,
   MultiFileUploadAdmissionError,
@@ -105,11 +106,11 @@ export function AddDocumentsModal({
       }
     } catch (error) {
       if (error instanceof MultiFileUploadAdmissionError) {
-        setFileError(error.message)
+        setFileError(userFacingError(error, 'uploadFailed'))
         return
       }
       logger.error('Error processing files:', error)
-      setFileError('An error occurred while processing files. Please try again.')
+      setFileError(userFacingError(error, 'uploadFailed'))
     }
   }
 
@@ -232,7 +233,9 @@ export function AddDocumentsModal({
           </ChipModalField>
         )}
 
-        {uploadError && <ChipModalError>{uploadError.message}</ChipModalError>}
+        {uploadError && (
+          <ChipModalError>{userFacingError(uploadError, 'uploadFailed')}</ChipModalError>
+        )}
       </ChipModalBody>
 
       <ChipModalFooter

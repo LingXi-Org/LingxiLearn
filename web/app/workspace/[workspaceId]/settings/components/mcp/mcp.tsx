@@ -1,16 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Badge, Button, Chip, ChipConfirmModal, cn, Tooltip, toast } from '@/components/ui-kit'
-import { ArrowLeft, ChevronDown, Plus } from '@/components/ui-kit/icons'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { McpIcon } from '@/components/icons'
 import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'
+import { Badge, Button, Chip, ChipConfirmModal, cn, Tooltip, toast } from '@/components/ui-kit'
+import { ArrowLeft, ChevronDown, Plus } from '@/components/ui-kit/icons'
 import { requestJson } from '@/lib/api/client/request'
 import { getWorkflowStateContract } from '@/lib/api/contracts/workflows'
+import { createLogger } from '@/lib/logger'
 import {
   getIssueBadgeLabel,
   getIssueBadgeVariant,
@@ -18,6 +17,8 @@ import {
   type McpToolIssue,
 } from '@/lib/mcp/tool-validation'
 import type { McpTransport } from '@/lib/mcp/types'
+import { userFacingError, workspaceCopy } from '@/lib/product-copy'
+import type { BlockState } from '@/lib/workflows/domain/workflow'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import {
   mcpServerIdParam,
@@ -51,7 +52,6 @@ import {
 import { useAvailableEnvVarKeys } from '@/hooks/use-available-env-vars'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 import { useSubBlockStore } from '@/stores/workflows/subblock/store'
-import type { BlockState } from '@/lib/workflows/domain/workflow'
 import { McpServerFormModal } from './components'
 
 const logger = createLogger('McpSettings')
@@ -118,7 +118,7 @@ function ServerListItem({
     : isRefreshing
       ? 'Refreshing...'
       : isLoadingTools && tools.length === 0
-        ? 'Loading...'
+        ? workspaceCopy.common.states.loading
         : showDiscoveryError
           ? discoveryError
           : toolsLabel
@@ -243,7 +243,9 @@ export function MCP() {
       logger.info(`Removed MCP server: ${serverId}`)
     } catch (error) {
       logger.error('Failed to remove MCP server:', error)
-      toast.error('Failed to remove MCP server', { description: getErrorMessage(error) })
+      toast.error('删除 MCP 服务器失败', {
+        description: userFacingError(error, 'deleteFailed'),
+      })
     } finally {
       setDeletingServers((prev) => {
         const newSet = new Set(prev)
@@ -321,7 +323,9 @@ export function MCP() {
       }
     } catch (error) {
       logger.error('Failed to refresh MCP server:', error)
-      toast.error('Failed to refresh MCP server', { description: getErrorMessage(error) })
+      toast.error('刷新 MCP 服务器失败', {
+        description: userFacingError(error, 'loadFailed'),
+      })
     }
   }
 
@@ -403,17 +407,17 @@ export function MCP() {
       onOpenChange={(open) => {
         if (!open) setServerToDeleteId(null)
       }}
-      srTitle='Delete MCP server'
-      title='Delete MCP server'
+      srTitle='删除 MCP 服务器'
+      title='删除 MCP 服务器'
       text={[
         'Are you sure you want to delete ',
         {
-          text: servers.find((s) => s.id === serverToDeleteId)?.name || 'this server',
+          text: servers.find((s) => s.id === serverToDeleteId)?.name || '此服务器',
           bold: true,
         },
         '? This action cannot be undone.',
       ]}
-      confirm={{ label: 'Delete', onClick: confirmDeleteServer }}
+      confirm={{ label: '删除', onClick: confirmDeleteServer }}
     />
   ) : null
 
@@ -446,7 +450,7 @@ export function MCP() {
                 },
                 {
                   id: 'delete',
-                  text: deletingServers.has(server.id) ? 'Deleting...' : 'Delete',
+                  text: deletingServers.has(server.id) ? '正在删除…' : '删除',
                   onSelect: () => handleRemoveServer(server.id),
                   disabled: deletingServers.has(server.id),
                 },
@@ -498,7 +502,7 @@ export function MCP() {
 
         <SettingsSection label={`Tools (${tools.length})`}>
           {tools.length === 0 ? (
-            <p className='text-[var(--text-muted)] text-sm'>No tools available</p>
+            <p className='text-[var(--text-muted)] text-sm'>暂无可用工具</p>
           ) : (
             <div className='flex flex-col gap-2'>
               {tools.map((tool) => {
@@ -651,13 +655,13 @@ export function MCP() {
         search={{
           value: searchTerm,
           onChange: setSearchTerm,
-          placeholder: 'Search servers...',
+          placeholder: '搜索服务器…',
         }}
         actions={
           canEdit
             ? [
                 {
-                  text: 'Add server',
+                  text: '添加服务器',
                   icon: Plus,
                   variant: 'primary',
                   onSelect: () => setShowAddModal(true),
@@ -669,13 +673,13 @@ export function MCP() {
       >
         {listError ? (
           <SettingsEmptyState tone='error'>
-            {getErrorMessage(listError, 'Failed to load MCP servers')}
+            {userFacingError(listError, 'loadFailed')}
           </SettingsEmptyState>
         ) : serversLoading ? (
-          <SettingsEmptyState>Loading...</SettingsEmptyState>
+          <SettingsEmptyState>{workspaceCopy.common.states.loading}</SettingsEmptyState>
         ) : !hasServers ? (
           <SettingsEmptyState>
-            {canEdit ? 'Click "Add server" above to get started' : 'No MCP servers configured'}
+            {canEdit ? '点击上方“添加服务器”开始配置' : '尚未配置 MCP 服务器'}
           </SettingsEmptyState>
         ) : (
           <div className={RESOURCE_LIST_STACK}>
@@ -700,7 +704,9 @@ export function MCP() {
                     refreshServerMutation.variables?.serverId === server.id
                   }
                   discoveryError={
-                    serverToolsState?.error ? getErrorMessage(serverToolsState.error) : null
+                    serverToolsState?.error
+                      ? userFacingError(serverToolsState.error, 'loadFailed')
+                      : null
                   }
                   onViewDetails={() => handleViewDetails(server.id)}
                   onAuthorize={() => startOauthForServer(server.id)}
@@ -709,7 +715,7 @@ export function MCP() {
             })}
             {showNoResults && (
               <SettingsEmptyState variant='inline'>
-                No servers found matching &quot;{searchTerm}&quot;
+                没有找到与“{searchTerm}”匹配的服务器
               </SettingsEmptyState>
             )}
           </div>

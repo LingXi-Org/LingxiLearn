@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { useParams } from 'next/navigation'
 import {
   Badge,
   Chip,
@@ -17,8 +18,7 @@ import {
   useCopyToClipboard,
 } from '@/components/ui-kit'
 import { Check, Clipboard, Pencil, Plus, Trash } from '@/components/ui-kit/icons'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { useParams } from 'next/navigation'
+import { userFacingError } from '@/lib/product-copy'
 import { SettingsSection } from '@/app/workspace/[workspaceId]/settings/components/settings-section/settings-section'
 import {
   useAddInboxSender,
@@ -77,7 +77,7 @@ export function InboxSettingsTab() {
       setIsEditAddressOpen(false)
       setNewUsername('')
     } catch (error) {
-      setEditAddressError(getErrorMessage(error, 'Failed to update address'))
+      setEditAddressError(userFacingError(error, 'saveFailed'))
     }
   }, [workspaceId, newUsername, updateAddress.mutateAsync])
 
@@ -94,7 +94,7 @@ export function InboxSettingsTab() {
       setNewSenderEmail('')
       setNewSenderLabel('')
     } catch (error) {
-      setAddSenderError(getErrorMessage(error, 'Failed to add sender'))
+      setAddSenderError(userFacingError(error, 'saveFailed'))
     }
   }, [workspaceId, newSenderEmail, newSenderLabel, addSender.mutateAsync])
 
@@ -104,7 +104,7 @@ export function InboxSettingsTab() {
       try {
         await removeSender.mutateAsync({ workspaceId, senderId })
       } catch (error) {
-        setRemoveSenderError(getErrorMessage(error, 'Failed to remove sender'))
+        setRemoveSenderError(userFacingError(error, 'deleteFailed'))
       }
     },
     [workspaceId, removeSender.mutateAsync]

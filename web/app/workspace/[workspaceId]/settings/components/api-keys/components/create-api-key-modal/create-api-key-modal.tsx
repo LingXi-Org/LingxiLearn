@@ -13,7 +13,7 @@ import {
   SecretReveal,
 } from '@/components/ui-kit'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import { type CreatedApiKey, useCreateApiKey } from '@/hooks/queries/api-keys'
 
 const logger = createLogger('CreateApiKeyModal')
@@ -64,8 +64,8 @@ export function CreateApiKeyModal({
     if (isDuplicate) {
       setCreateError(
         keyType === 'workspace'
-          ? `A workspace API key named "${trimmedName}" already exists. Please choose a different name.`
-          : `A personal API key named "${trimmedName}" already exists. Please choose a different name.`
+          ? `工作区 API 密钥“${trimmedName}”已存在，请使用其他名称。`
+          : `个人 API 密钥“${trimmedName}”已存在，请使用其他名称。`
       )
       return
     }
@@ -88,12 +88,7 @@ export function CreateApiKeyModal({
       onKeyCreated?.(data.key)
     } catch (error: unknown) {
       logger.error('API key creation failed:', { error })
-      const errorMessage = getErrorMessage(error, 'Failed to create API key. Please try again.')
-      if (errorMessage.toLowerCase().includes('already exists')) {
-        setCreateError(errorMessage)
-      } else {
-        setCreateError('Failed to create API key. Please check your connection and try again.')
-      }
+      setCreateError(userFacingError(error, 'saveFailed'))
     }
   }
 
@@ -189,7 +184,10 @@ export function CreateApiKeyModal({
         </ChipModalBody>
         <ChipModalFooter
           onCancel={() => setShowNewKeyDialog(false)}
-          primaryAction={{ label: 'Done', onClick: () => setShowNewKeyDialog(false) }}
+          primaryAction={{
+            label: 'Done',
+            onClick: () => setShowNewKeyDialog(false),
+          }}
         />
       </ChipModal>
     </>

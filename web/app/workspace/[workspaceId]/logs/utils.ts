@@ -1,6 +1,6 @@
 import React from 'react'
-import { Badge } from '@/components/ui-kit'
 import { format } from 'date-fns'
+import { Badge } from '@/components/ui-kit'
 import { formatDuration, formatRelativeTime } from '@/lib/utils/formatting'
 import type { RunStatus, TriggerPresentation } from './model/execution-log'
 

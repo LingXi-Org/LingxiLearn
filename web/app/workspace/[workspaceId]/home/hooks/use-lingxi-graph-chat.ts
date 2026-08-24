@@ -28,6 +28,7 @@ import {
   turnStateFromTask,
 } from '@/lib/lingxi/turn-state'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
+import { userFacingError } from '@/lib/product-copy'
 import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers'
 import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
 import type { QueuedMothershipMessage } from '../chat-queue-types'
@@ -314,7 +315,7 @@ export function useWorkspaceChatController(
         stream?.stop()
         cancelled = true
         setIsReconnecting(false)
-        setError(`V1 protocol error at ${decoded.error.path}: ${decoded.error.message}`)
+        setError('对话数据暂时无法解析，请刷新后重试。')
         return
       }
       const envelope = decoded.event
@@ -327,7 +328,11 @@ export function useWorkspaceChatController(
       const model = v1ModelRef.current ?? emptyV1ThreadModel(taskId)
       reduceV1Event(model, envelope)
       v1ModelRef.current = model
-      setV1Model({ chatId: model.chatId, turns: model.turns, lastSeq: model.lastSeq })
+      setV1Model({
+        chatId: model.chatId,
+        turns: model.turns,
+        lastSeq: model.lastSeq,
+      })
       if (envelope.type === 'run' || envelope.type === 'span') {
         scheduleRuntimeGraphRefresh()
       }
@@ -437,7 +442,7 @@ export function useWorkspaceChatController(
       } catch (cause) {
         if (cancelled) return
         setIsReconnecting(false)
-        setError(cause instanceof Error ? cause.message : String(cause))
+        setError(userFacingError(cause, 'connectionFailed'))
       }
     }
     void start()
@@ -586,12 +591,15 @@ export function useWorkspaceChatController(
             ],
             explicitIdempotencyKey ?? lingxiIdempotencyKey(userMessageId)
           )
-          onRequestStartedRef.current?.({ requestId: existingTaskId, userMessageId })
+          onRequestStartedRef.current?.({
+            requestId: existingTaskId,
+            userMessageId,
+          })
           return true
         } catch (cause) {
           optimisticActiveRef.current = false
           applyTurnState(previousTurnState)
-          setError(cause instanceof Error ? cause.message : String(cause))
+          setError(userFacingError(cause, 'loadFailed'))
           return false
         } finally {
           setIsSending(false)
@@ -642,7 +650,7 @@ export function useWorkspaceChatController(
       } catch (cause) {
         optimisticActiveRef.current = false
         applyTurnState(previousTurnState)
-        setError(cause instanceof Error ? cause.message : String(cause))
+        setError(userFacingError(cause))
         return false
       } finally {
         setIsSending(false)
@@ -691,14 +699,17 @@ export function useWorkspaceChatController(
           await executeInteractionAnswerCommand(command, {
             answerInteraction: answerAgentInteraction,
           })
-          onRequestStartedRef.current?.({ requestId: taskId, userMessageId: answerId })
+          onRequestStartedRef.current?.({
+            requestId: taskId,
+            userMessageId: answerId,
+          })
           return true
         } catch (cause) {
           // The interaction is still pending server-side; hand the card back
           // its active state so the learner can retry.
           optimisticActiveRef.current = false
           applyTurnState(previousTurnState)
-          setError(cause instanceof Error ? cause.message : String(cause))
+          setError(userFacingError(cause))
           return false
         } finally {
           setIsSending(false)
@@ -827,7 +838,7 @@ export function useWorkspaceChatController(
       setTask(refreshed)
       applyTurnState(turnStateFromTask(refreshed))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(userFacingError(cause))
     }
   }, [applyTurnState])
 

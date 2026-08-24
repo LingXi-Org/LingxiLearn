@@ -1,26 +1,27 @@
 'use client'
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { cn, toast } from '@/components/ui-kit'
-import { FILE_DOC_SEED, type JoinFileDocError } from '@/lib/realtime/protocol/file-doc'
 import type { Extensions, JSONContent } from '@tiptap/core'
 import { isChangeOrigin } from '@tiptap/extension-collaboration'
 import type { Editor } from '@tiptap/react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { useRouter } from 'next/navigation'
+import { cn, toast } from '@/components/ui-kit'
+import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
 import { useSession } from '@/lib/auth/auth-client'
 import {
   buildFileSelectionLabel,
   truncateSelectionText,
 } from '@/lib/copilot/chat/selection-context'
-import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
+import { workspaceCopy } from '@/lib/product-copy'
+import { FILE_DOC_SEED, type JoinFileDocError } from '@/lib/realtime/protocol/file-doc'
 import { extractEmbeddedFileRef } from '@/lib/uploads/utils/embedded-image-ref'
 import { isUntitledName } from '@/app/workspace/[workspaceId]/files/untitled-title'
 import { useUploadWorkspaceFile } from '@/hooks/queries/workspace-files'
 import { useAddToChat } from '@/hooks/use-add-to-chat'
 import type { SaveStatus } from '@/hooks/use-autosave'
 import { useFileContentSource } from '@/hooks/use-file-content-source'
-import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { PreviewLoadingFrame } from '../preview-shared'
 import { useEditableFileContent } from '../use-editable-file-content'
 import { useSelectionCopyBridge } from '../use-selection-copy-bridge'
@@ -226,7 +227,9 @@ export const RichMarkdownEditor = memo(function RichMarkdownEditor({
   if (hasContentError) {
     return (
       <div className='flex flex-1 items-center justify-center'>
-        <p className='text-[var(--text-muted)] text-small'>Failed to load file content</p>
+        <p className='text-[var(--text-muted)] text-small'>
+          {workspaceCopy.common.errors.loadFailed}
+        </p>
       </div>
     )
   }

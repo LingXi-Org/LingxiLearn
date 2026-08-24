@@ -279,17 +279,7 @@ export function useAvailableResources(
       })
     }
     return groups.filter((g) => !excluded.has(g.type)).sort(byResourceMenuOrder)
-  }, [
-    enabled,
-    folders,
-    fileFolders,
-    tables,
-    files,
-    knowledgeBases,
-    tasks,
-    logs,
-    excludeTypes,
-  ])
+  }, [enabled, folders, fileFolders, tables, files, knowledgeBases, tasks, logs, excludeTypes])
 
   /**
    * Left in source order: `buildResourceFolderTree` orders each level by name,
@@ -678,7 +668,7 @@ export function AddResourceDropdown({
               })
             ) : (
               <div className='px-2 py-1.5 text-center text-[var(--text-tertiary)] text-caption'>
-                No results
+                没有找到结果
               </div>
             )
           ) : (

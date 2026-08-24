@@ -3,10 +3,11 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from '@/components/ui-kit'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { generateUniqueTableName } from '@/lib/table/constants'
 import type { TableDefinition } from '@/lib/table/types'
-import { getErrorMessage } from '@/lib/utils/errors'
 import type { RowDragDropConfig } from '@/app/workspace/[workspaceId]/components'
 import type { MoveOptionNode } from '@/app/workspace/[workspaceId]/components/folders'
 import {
@@ -28,7 +29,6 @@ import {
   useRenameTable,
 } from '@/hooks/queries/tables'
 import { useInlineRename } from '@/hooks/use-inline-rename'
-import type { WorkspaceFolder } from '@/lib/folders/types'
 
 const logger = createLogger('TablesActions')
 
@@ -125,7 +125,7 @@ export function useTablesActions({
             updates: { name },
           })
           .catch((err: unknown) => {
-            toast.error(getErrorMessage(err, 'Failed to rename folder'), { duration: 5000 })
+            toast.error(userFacingError(err, 'saveFailed'), { duration: 5000 })
             throw err
           })
       }
@@ -138,7 +138,7 @@ export function useTablesActions({
       updateFolder
         .mutateAsync({ workspaceId, resourceType: 'table', id: folderId, updates: { name } })
         .catch((err: unknown) => {
-          toast.error(getErrorMessage(err, 'Failed to rename folder'), { duration: 5000 })
+          toast.error(userFacingError(err, 'saveFailed'), { duration: 5000 })
           throw err
         }),
   })
@@ -191,7 +191,7 @@ export function useTablesActions({
       startFolderRename(folder)
     } catch (err) {
       logger.error('Failed to create folder:', err)
-      toast.error(getErrorMessage(err, 'Failed to create folder'), { duration: 5000 })
+      toast.error(userFacingError(err, 'saveFailed'), { duration: 5000 })
     }
   }, [workspaceId, folders, currentFolderId, createFolderAsync, clearSearch, startFolderRename])
 
@@ -224,7 +224,7 @@ export function useTablesActions({
         }
       } catch (err) {
         logger.error('Failed to delete folder:', err)
-        toast.error(getErrorMessage(err, 'Failed to delete folder'), { duration: 5000 })
+        toast.error(userFacingError(err, 'deleteFailed'), { duration: 5000 })
         throw err
       }
     },
@@ -255,8 +255,7 @@ export function useTablesActions({
       updateFolder.mutate(
         { workspaceId, resourceType: 'table', id: folderId, updates: { parentId } },
         {
-          onError: (err) =>
-            toast.error(getErrorMessage(err, 'Failed to move folder'), { duration: 5000 }),
+          onError: (err) => toast.error(userFacingError(err, 'saveFailed'), { duration: 5000 }),
         }
       )
     },

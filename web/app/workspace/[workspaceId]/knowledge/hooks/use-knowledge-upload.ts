@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { useQueryClient } from '@tanstack/react-query'
 import type { V2KnowledgeDocumentSummary } from '@/lib/api/contracts/v2/knowledge'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import {
   assertMultiFileUploadAdmission,
   MultiFileUploadAdmissionError,
@@ -153,7 +153,10 @@ export function useKnowledgeUpload(options: UseKnowledgeUploadOptions = {}) {
           updateFileStatus(index, { status: 'completed', progress: 100 })
           return uploaded
         } catch (error) {
-          updateFileStatus(index, { status: 'failed', error: getErrorMessage(error) })
+          updateFileStatus(index, {
+            status: 'failed',
+            error: userFacingError(error, 'uploadFailed'),
+          })
           throw error
         }
       }
@@ -217,12 +220,21 @@ export function useKnowledgeUpload(options: UseKnowledgeUploadOptions = {}) {
 
       const error: UploadError =
         err instanceof KnowledgeUploadError
-          ? { message: err.message, code: err.code, details: err.details, timestamp: Date.now() }
+          ? {
+              message: userFacingError(err, 'uploadFailed'),
+              code: err.code,
+              details: err.details,
+              timestamp: Date.now(),
+            }
           : err instanceof MultiFileUploadAdmissionError
-            ? { message: err.message, code: err.code, timestamp: Date.now() }
+            ? {
+                message: userFacingError(err, 'uploadFailed'),
+                code: err.code,
+                timestamp: Date.now(),
+              }
             : err instanceof Error
-              ? { message: err.message, timestamp: Date.now() }
-              : { message: 'Unknown error occurred during upload', timestamp: Date.now() }
+              ? { message: userFacingError(err, 'uploadFailed'), timestamp: Date.now() }
+              : { message: userFacingError(err, 'uploadFailed'), timestamp: Date.now() }
 
       setUploadError(error)
       options.onError?.(error)

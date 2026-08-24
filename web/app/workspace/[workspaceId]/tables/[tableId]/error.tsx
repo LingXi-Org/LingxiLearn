@@ -1,8 +1,9 @@
 'use client'
 
+import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui-kit'
 import { ArrowLeft } from '@/components/ui-kit/icons'
-import { useParams, useRouter } from 'next/navigation'
+import { userFacingError, workspaceCopy } from '@/lib/product-copy'
 import { type ErrorBoundaryProps, ErrorState } from '@/app/workspace/[workspaceId]/components'
 
 export default function TableError({ error, reset }: ErrorBoundaryProps) {
@@ -13,8 +14,8 @@ export default function TableError({ error, reset }: ErrorBoundaryProps) {
     <ErrorState
       error={error}
       reset={reset}
-      title='Failed to load table'
-      description='Something went wrong while loading this table. The table may have been deleted or you may not have permission to view it.'
+      title={workspaceCopy.resources.tables.loadFailedTitle}
+      description={userFacingError(error, 'loadFailed')}
       loggerName='TableError'
     >
       <Button

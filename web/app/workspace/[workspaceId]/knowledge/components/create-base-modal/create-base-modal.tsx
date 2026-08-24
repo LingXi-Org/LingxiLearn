@@ -2,6 +2,9 @@
 
 import { memo, useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useParams } from 'next/navigation'
+import { type FieldErrors, useForm } from 'react-hook-form'
+import { z } from 'zod'
 import {
   Button,
   Checkbox,
@@ -20,13 +23,10 @@ import {
   toast,
 } from '@/components/ui-kit'
 import { X } from '@/components/ui-kit/icons'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { useParams } from 'next/navigation'
-import { type FieldErrors, useForm } from 'react-hook-form'
-import { z } from 'zod'
 import type { StrategyOptions } from '@/lib/chunkers/types'
 import { KNOWLEDGE_BASE_DESCRIPTION_MAX_LENGTH } from '@/lib/knowledge/constants'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import {
   assertMultiFileUploadAdmission,
   MultiFileUploadAdmissionError,
@@ -230,11 +230,11 @@ export const CreateBaseModal = memo(function CreateBaseModal({
       }
     } catch (error) {
       if (error instanceof MultiFileUploadAdmissionError) {
-        setFileError(error.message)
+        setFileError(userFacingError(error, 'uploadFailed'))
         return
       }
       logger.error('Error processing files:', error)
-      setFileError('An error occurred while processing files. Please try again.')
+      setFileError(userFacingError(error, 'uploadFailed'))
     }
   }
 
@@ -315,7 +315,7 @@ export const CreateBaseModal = memo(function CreateBaseModal({
       logger.error('Error creating knowledge base:', error)
       setSubmitStatus({
         type: 'error',
-        message: getErrorMessage(error, 'An unknown error occurred'),
+        message: userFacingError(error, 'saveFailed'),
       })
     }
   }
@@ -536,7 +536,9 @@ export const CreateBaseModal = memo(function CreateBaseModal({
             </ChipModalField>
           )}
 
-          <ChipModalError>{uploadError?.message || submitStatus?.message}</ChipModalError>
+          <ChipModalError>
+            {userFacingError(uploadError ?? submitStatus, 'saveFailed')}
+          </ChipModalError>
         </ChipModalBody>
 
         <ChipModalFooter

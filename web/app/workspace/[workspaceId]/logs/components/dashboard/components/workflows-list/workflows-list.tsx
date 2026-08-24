@@ -33,7 +33,7 @@ function WorkflowsListInner({
           <span className='w-[160px] flex-shrink-0 text-[var(--text-tertiary)] text-caption'>
             Workflow
           </span>
-          <span className='flex-1 text-[var(--text-tertiary)] text-caption'>Logs</span>
+          <span className='flex-1 text-[var(--text-tertiary)] text-caption'>日志</span>
           <span className='w-[100px] flex-shrink-0 pl-4 text-[var(--text-tertiary)] text-caption'>
             Success Rate
           </span>
@@ -45,7 +45,7 @@ function WorkflowsListInner({
         {filteredExecutions.length === 0 ? (
           <div className='flex items-center justify-center py-8'>
             <span className='text-[var(--text-secondary)] text-small'>
-              {searchQuery ? `No workflows found matching "${searchQuery}"` : 'No workflows found'}
+              {searchQuery ? `没有找到匹配“${searchQuery}”的工作流` : '未找到工作流'}
             </span>
           </div>
         ) : (

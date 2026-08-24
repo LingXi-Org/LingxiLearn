@@ -16,8 +16,8 @@ import {
 } from '@/components/ui-kit'
 import { ChevronDown, ChevronRight } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import type { McpAuthType, McpTransport } from '@/lib/mcp/types'
+import { userFacingError } from '@/lib/product-copy'
 import {
   checkEnvVarTrigger,
   EnvVarDropdown,
@@ -548,7 +548,7 @@ export function McpServerFormModal({
 
       onOpenChange(false)
     } catch (error) {
-      setSubmitError(getErrorMessage(error, 'Failed to save server'))
+      setSubmitError(userFacingError(error, 'saveFailed'))
       logger.error('Failed to save MCP server:', error)
     } finally {
       setIsSubmitting(false)
@@ -599,7 +599,7 @@ export function McpServerFormModal({
 
       onOpenChange(false)
     } catch (error) {
-      setSubmitError(getErrorMessage(error, 'Failed to save server'))
+      setSubmitError(userFacingError(error, 'saveFailed'))
       logger.error('Failed to save MCP server from JSON:', error)
     } finally {
       setIsSubmitting(false)
@@ -609,8 +609,8 @@ export function McpServerFormModal({
   const isSubmitDisabled =
     isSubmitting || !isFormValid || isDomainBlocked || (mode === 'edit' && !hasChanges)
 
-  const title = mode === 'add' ? 'Add MCP server' : 'Edit MCP server'
-  const submitLabel = mode === 'add' ? 'Add server' : 'Save'
+  const title = mode === 'add' ? '添加 MCP 服务器' : '编辑 MCP 服务器'
+  const submitLabel = mode === 'add' ? '添加服务器' : '保存'
 
   const handleToggleJsonMode = () => {
     if (testResult) clearTestResult()

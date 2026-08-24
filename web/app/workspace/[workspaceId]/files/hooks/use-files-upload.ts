@@ -2,9 +2,9 @@
 
 import { type ChangeEvent, type DragEvent, useCallback, useRef, useState } from 'react'
 import { toast } from '@/components/ui-kit'
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { useLimitUpgradeToast } from '@/lib/billing/client'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import {
   FILES_ACCEPT_ATTR,
   partitionUploadCandidates,
@@ -12,6 +12,19 @@ import {
 import { useUploadWorkspaceFile } from '@/hooks/queries/workspace-files'
 
 const logger = createLogger('Files')
+
+const STORAGE_LIMIT_CODES = new Set([
+  'storage_limit_exceeded',
+  'storage_quota_exceeded',
+  'quota_exceeded',
+])
+
+function isStorageLimitError(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false
+  const structured = error as { code?: unknown; status?: unknown }
+  const code = typeof structured.code === 'string' ? structured.code.toLowerCase() : ''
+  return structured.status === 402 || STORAGE_LIMIT_CODES.has(code)
+}
 
 const hasExternalFiles = (dataTransfer: DataTransfer): boolean =>
   dataTransfer.types.includes('Files')
@@ -80,11 +93,10 @@ export function useFilesUpload({ workspaceId, canUpload, currentFolderId }: UseF
             })
           } catch (err) {
             logger.error('Error uploading file:', err)
-            const message = getErrorMessage(err)
-            if (/storage limit/i.test(message)) {
-              notifyLimit('storage', message)
+            if (isStorageLimitError(err)) {
+              notifyLimit('storage', userFacingError(err, 'uploadFailed'))
             } else {
-              toast.error(`Failed to upload "${allowed[i].name}"`)
+              toast.error(userFacingError(err, 'uploadFailed'))
             }
           }
         }

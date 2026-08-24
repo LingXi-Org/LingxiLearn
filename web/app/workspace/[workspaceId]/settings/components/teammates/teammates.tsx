@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
-import { ChipDropdown, Plus, toast } from '@/components/ui-kit'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import {
@@ -10,10 +9,11 @@ import {
   workspaceRoleLockReason,
 } from '@/components/permissions'
 import { canMutateWorkspaceSettingsSection } from '@/components/settings/navigation'
+import { ChipDropdown, Plus, toast } from '@/components/ui-kit'
 import type { WorkspacePermission } from '@/lib/api/contracts/workspaces'
 import { buildUpgradeHref } from '@/lib/billing/upgrade-reasons'
 import { isBillingEnabled } from '@/lib/core/config/env-flags'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import { formatDate } from '@/lib/utils/formatting'
 import { InviteModal } from '@/app/workspace/[workspaceId]/components/invite-modal'
 import {
@@ -292,11 +292,8 @@ export function Teammates() {
                                   { userId: teammate.userId, workspaceId },
                                   {
                                     onError: (error) => {
-                                      toast.error("Couldn't remove teammate", {
-                                        description: getErrorMessage(
-                                          error,
-                                          'Please try again in a moment.'
-                                        ),
+                                      toast.error('移除协作者失败', {
+                                        description: userFacingError(error, 'deleteFailed'),
                                       })
                                     },
                                   }

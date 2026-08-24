@@ -10,14 +10,12 @@ import {
   useRef,
   useState,
 } from 'react'
-import {
-  type DesktopZoomAction,
-  type DesktopZoomPercent,
-  resolveDesktopZoom,
-  type TerminalAppearanceTheme,
-  type TerminalShortcutCommand,
-  type TerminalThemeProfile,
-} from '@/lib/desktop/bridge'
+import { FitAddon } from '@xterm/addon-fit'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
+import { WebLinksAddon } from '@xterm/addon-web-links'
+import { WebglAddon } from '@xterm/addon-webgl'
+import { type IBufferRange, Terminal } from '@xterm/xterm'
+import { useTheme } from 'next-themes'
 import {
   cn,
   NATIVE_SURFACE_OCCLUSION_PREPARE_EVENT,
@@ -27,19 +25,17 @@ import {
   toast,
 } from '@/components/ui-kit'
 import { TerminalWindow } from '@/components/ui-kit/icons'
-import { createLogger } from '@/lib/logger'
-import { FitAddon } from '@xterm/addon-fit'
-import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { WebglAddon } from '@xterm/addon-webgl'
-import { type IBufferRange, Terminal } from '@xterm/xterm'
-import { useTheme } from 'next-themes'
-import '@xterm/xterm/css/xterm.css'
 import {
-  describeRunningCommand,
-  type TerminalTabState,
-  type TerminalTabsState,
-} from '@/lib/terminal/protocol'
+  type DesktopZoomAction,
+  type DesktopZoomPercent,
+  resolveDesktopZoom,
+  type TerminalAppearanceTheme,
+  type TerminalShortcutCommand,
+  type TerminalThemeProfile,
+} from '@/lib/desktop/bridge'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
+import '@xterm/xterm/css/xterm.css'
 import { SIM_RESOURCE_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import { TERMINAL_SESSION_RESOURCE_ID } from '@/lib/copilot/resources/types'
 import { getDesktopBridge } from '@/lib/desktop'
@@ -51,7 +47,13 @@ import {
   withSelectedProfile,
 } from '@/lib/desktop/appearance'
 import { trackPanelFocus } from '@/lib/desktop/panel-focus'
+import type { ChatContext, TerminalTextSelection } from '@/lib/lingxi/chat-context'
 import { addMothershipContext } from '@/lib/mothership/events'
+import {
+  describeRunningCommand,
+  type TerminalTabState,
+  type TerminalTabsState,
+} from '@/lib/terminal/protocol'
 import {
   clearTerminalScrollback,
   closeTerminal,
@@ -69,14 +71,13 @@ import {
   switchTerminal,
   writeToTerminal,
 } from '@/lib/terminal/transport'
+import { ContextMenu } from '@/app/workspace/[workspaceId]/components/context-menu/context-menu'
+import { useContextMenu } from '@/app/workspace/[workspaceId]/components/hooks'
 import { useMothershipResources } from '@/app/workspace/[workspaceId]/home/components/mothership-resources-context'
 import { TerminalContextMenu } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/terminal-session/terminal-context-menu'
 import { TerminalTabIcon } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/terminal-session/terminal-tab-icon'
-import { ContextMenu } from '@/app/workspace/[workspaceId]/components/context-menu/context-menu'
-import { useContextMenu } from '@/app/workspace/[workspaceId]/components/hooks'
 import { useDesktopPreferenceMutation } from '@/hooks/use-desktop-preference-mutation'
 import { useCopilotTerminalStore } from '@/stores/copilot-terminal/store'
-import type { ChatContext, TerminalTextSelection } from '@/lib/lingxi/chat-context'
 
 const logger = createLogger('TerminalSession')
 const EMPTY_TERMINAL_TABS: TerminalTabsState = { tabs: [], activeTerminalId: null }
@@ -858,7 +859,7 @@ export function TerminalSession({ visible, scopeId }: TerminalSessionProps) {
         if (active) setStartError(null)
       })
       .catch((error: Error) => {
-        if (active) setStartError(error.message)
+        if (active) setStartError(userFacingError(error, 'connectionFailed'))
       })
     return () => {
       active = false

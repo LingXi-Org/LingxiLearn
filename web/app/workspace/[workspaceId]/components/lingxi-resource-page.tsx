@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Checkbox, Chip, ChipInput, ChipSelect } from '@/components/ui-kit'
-import { Settings as SettingsIcon, Table as TableIcon } from '@/components/ui-kit/icons'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Checkbox, Chip, ChipInput, ChipSelect } from '@/components/ui-kit'
+import { Settings as SettingsIcon, Table as TableIcon } from '@/components/ui-kit/icons'
 import {
   API_BASE,
   api,
@@ -14,6 +14,7 @@ import {
   type WorkspaceFolderItem,
   type WorkspaceTableItem,
 } from '@/lib/lingxi/api'
+import { userFacingError, workspaceCopy } from '@/lib/product-copy'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
 import { SettingsField } from '@/app/workspace/[workspaceId]/settings/components/settings-field'
 import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
@@ -86,7 +87,7 @@ function FilesPage() {
         setFiles(fileResult.files)
         setFolders(folderResult.folders)
       })
-      .catch((e) => setError(String(e)))
+      .catch((e) => setError(userFacingError(e, 'loadFailed')))
       .finally(() => setLoading(false))
   }, [archived, folderId])
   useEffect(() => {
@@ -114,7 +115,7 @@ function FilesPage() {
       )
       reload()
     } catch (e) {
-      setError(String(e))
+      setError(userFacingError(e, 'uploadFailed'))
     }
   }
   const createText = async () => {
@@ -122,7 +123,7 @@ function FilesPage() {
       await api.createWorkspaceFile('新建文档.md', '# 新文档\n', 'text/markdown', 'utf-8', folderId)
       reload()
     } catch (e) {
-      setError(String(e))
+      setError(userFacingError(e, 'saveFailed'))
     }
   }
   const createFolder = async () => {
@@ -132,12 +133,12 @@ function FilesPage() {
       setFolderName('')
       reload()
     } catch (e) {
-      setError(String(e))
+      setError(userFacingError(e, 'saveFailed'))
     }
   }
   return (
     <Shell
-      title='Files'
+      title={workspaceCopy.resources.files.title}
       description='私有工作区文件；文本、Markdown、JSON、CSV 可编辑，二进制文件只读预览。'
     >
       <div className='mx-auto max-w-[960px]'>
@@ -193,7 +194,7 @@ function FilesPage() {
         {loading ? (
           <p className='py-8 text-center text-[13px] text-[var(--text-muted)]'>正在加载…</p>
         ) : files.length === 0 ? (
-          <Empty>{archived ? '没有归档文件' : '还没有文件'}</Empty>
+          <Empty>{archived ? '没有归档文件' : workspaceCopy.resources.files.empty}</Empty>
         ) : (
           <div className='divide-y divide-[var(--border)] rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)]'>
             {files.map((file) => (
@@ -295,7 +296,7 @@ function KnowledgePage() {
   }
   return (
     <Shell
-      title='Knowledge'
+      title={workspaceCopy.resources.knowledge.title}
       description='个人知识库、文档、分块、标签和中英文搜索；不启用外部连接器。'
     >
       <div className='mx-auto max-w-[960px]'>
@@ -309,7 +310,7 @@ function KnowledgePage() {
           <ActionButton type='submit'>新建知识库</ActionButton>
         </form>
         {bases.length === 0 ? (
-          <Empty>还没有知识库</Empty>
+          <Empty>{workspaceCopy.resources.knowledge.empty}</Empty>
         ) : (
           <div className='grid gap-3 sm:grid-cols-2'>
             {bases.map((base) => (

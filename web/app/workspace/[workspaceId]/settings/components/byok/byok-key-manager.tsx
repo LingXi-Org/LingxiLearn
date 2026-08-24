@@ -15,7 +15,7 @@ import {
 } from '@/components/ui-kit'
 import { Eye, EyeOff, Search } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import {
   CHIP_FIELD_INPUT,
   CHIP_FIELD_SHELL,
@@ -233,7 +233,7 @@ export function BYOKKeyManager(props: BYOKKeyManagerProps) {
       }
       closeEditModal()
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to save API key'))
+      setError(userFacingError(err, 'saveFailed'))
       logger.error('Failed to save BYOK key', { error: err })
     }
   }
@@ -466,7 +466,10 @@ export function BYOKKeyManager(props: BYOKKeyManagerProps) {
           { text: deleteMeta?.name ?? 'selected', bold: true },
           ' API key? ',
           isDeletingLastKey
-            ? { text: 'This workspace will revert to using platform hosted keys.', error: true }
+            ? {
+                text: 'This workspace will revert to using platform hosted keys.',
+                error: true,
+              }
             : `Requests will continue using the remaining ${deleteMeta?.name ?? 'provider'} keys.`,
           ' This action cannot be undone.',
         ]}

@@ -4,6 +4,7 @@ import { Component, type ErrorInfo, memo, type ReactNode } from 'react'
 import { cn } from '@/components/ui-kit'
 import { Loader } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
 
 const logger = createLogger('FilePreview')
@@ -83,7 +84,7 @@ export class PreviewErrorBoundary extends Component<
       return (
         <PreviewError
           label={this.props.label}
-          error={this.state.error?.message ?? 'An unexpected error occurred'}
+          error={userFacingError(this.state.error, 'loadFailed')}
         />
       )
     }
@@ -101,9 +102,9 @@ export function resolvePreviewError(
   // legacy file with no artifact. Give a clear, actionable message instead of a
   // generic fetch error.
   if (fetchError?.name === 'DocNotReadyError') {
-    return "Couldn't generate this document preview. Re-run the file generation to rebuild it."
+    return '无法生成文档预览，请重新生成文件后再试。'
   }
-  if (fetchError) return fetchError.message
+  if (fetchError) return userFacingError(fetchError, 'loadFailed')
   return renderError
 }
 

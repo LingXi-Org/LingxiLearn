@@ -1,5 +1,5 @@
 import { ChipConfirmModal } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import { formatQuotedNameList } from '@/lib/utils/string'
 
 const MAX_LISTED_CREDENTIALS = 3
@@ -47,10 +47,10 @@ export function RemoveMemberDialog({
       ? 'Remove External Member'
       : 'Remove Team Member'
 
-  const errorMessage = error ? getErrorMessage(error) || 'Failed to remove member' : null
+  const errorMessage = error ? userFacingError(error, 'deleteFailed') : null
 
   const credentialWarning = credentialImpactFailed
-    ? `Couldn't check which credentials ${isSelfRemoval ? 'you own' : 'they own'} will be affected — connected accounts backed by ${isSelfRemoval ? 'your' : 'their'} identity may stop working after removal.`
+    ? `无法确认${isSelfRemoval ? '你' : '该成员'}拥有的哪些凭据会受影响；移除后，关联账户可能停止工作。`
     : breakingCredentials.length > 0
       ? `${breakingCredentials.length === 1 ? 'A credential' : `${breakingCredentials.length} credentials`} ${
           isSelfRemoval ? 'you own' : 'they own'

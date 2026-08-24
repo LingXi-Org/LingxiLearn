@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import { uploadInternalFileSession } from '@/lib/uploads/client/session-upload'
 
 const logger = createLogger('ProfilePictureUpload')
@@ -111,7 +111,7 @@ export function useProfilePictureUpload({
         setPreviewUrl(serverUrl)
         onUploadRef.current?.(serverUrl)
       } catch (error) {
-        const errorMessage = getErrorMessage(error, 'Failed to upload profile picture')
+        const errorMessage = userFacingError(error, 'uploadFailed')
         onErrorRef.current?.(errorMessage)
         URL.revokeObjectURL(newPreviewUrl)
         previewRef.current = null

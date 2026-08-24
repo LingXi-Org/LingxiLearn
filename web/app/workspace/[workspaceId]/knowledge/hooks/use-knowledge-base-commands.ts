@@ -1,11 +1,11 @@
 'use client'
 
 import { useCallback } from 'react'
-import { toast } from '@/components/ui-kit'
 import { useRouter } from 'next/navigation'
+import { toast } from '@/components/ui-kit'
 import type { KnowledgeBaseData } from '@/lib/knowledge/types'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import { parseMoveOptionValue } from '@/app/workspace/[workspaceId]/components/folders'
 import { useDeleteKnowledgeBase, useUpdateKnowledgeBase } from '@/hooks/queries/kb/knowledge'
 import type { usePinItem, useUnpinItem } from '@/hooks/queries/pinned-items'
@@ -74,7 +74,7 @@ export function useKnowledgeBaseCommands({
         await updateKnowledgeBaseMutation({ knowledgeBaseId, updates: { folderId } })
       } catch (moveError) {
         logger.error('Failed to move knowledge base', moveError)
-        toast.error(getErrorMessage(moveError, 'Failed to move knowledge base'))
+        toast.error(userFacingError(moveError, 'saveFailed'))
       }
     },
     [updateKnowledgeBaseMutation]

@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
+import { useParams, useRouter } from 'next/navigation'
 import { Plus } from '@/components/ui-kit'
 import { FolderPlus, Pencil, Trash } from '@/components/ui-kit/icons'
-import { useParams, useRouter } from 'next/navigation'
+import { workspaceCopy } from '@/lib/product-copy'
 import type {
   BreadcrumbItem,
   FilterTag,
@@ -274,13 +275,13 @@ export function Knowledge() {
   const headerActions: ResourceAction[] = useMemo(
     () => [
       {
-        text: 'New folder',
+        text: workspaceCopy.resources.actions.newFolder,
         icon: FolderPlus,
         onSelect: folderCommands.createFolderInCurrentFolder,
         disabled: folderCommands.isCreatingFolder || !canEdit,
       },
       {
-        text: 'New base',
+        text: workspaceCopy.resources.actions.newBase,
         icon: Plus,
         onSelect: dialogs.openCreate,
         disabled: !canEdit,
@@ -317,7 +318,7 @@ export function Knowledge() {
           canEdit && breadcrumbs.length > 0
             ? [
                 {
-                  label: 'Rename',
+                  label: workspaceCopy.resources.actions.rename,
                   icon: Pencil,
                   onClick: () => {
                     const folder = breadcrumbs[breadcrumbs.length - 1]
@@ -325,7 +326,7 @@ export function Knowledge() {
                   },
                 },
                 {
-                  label: 'Delete',
+                  label: workspaceCopy.resources.actions.delete,
                   icon: Trash,
                   onClick: () => dialogs.requestFolderDelete(breadcrumbs[breadcrumbs.length - 1]),
                 },
@@ -349,7 +350,7 @@ export function Knowledge() {
       value: urlSearchQuery,
       onChange: urlState.setSearchQuery,
       onClearAll: () => urlState.setSearchQuery(''),
-      placeholder: 'Search knowledge bases...',
+      placeholder: workspaceCopy.resources.knowledge.searchPlaceholder,
     }),
     [urlSearchQuery, urlState.setSearchQuery]
   )
@@ -357,13 +358,13 @@ export function Knowledge() {
   const sortConfig: SortConfig = useMemo(
     () => ({
       options: [
-        { id: 'name', label: 'Name' },
-        { id: 'documents', label: 'Documents' },
-        { id: 'tokens', label: 'Tokens' },
-        { id: 'connectors', label: 'Connectors' },
-        { id: 'created', label: 'Created' },
-        { id: 'owner', label: 'Owner' },
-        { id: 'updated', label: 'Last Updated' },
+        { id: 'name', label: workspaceCopy.resources.knowledge.columns.name },
+        { id: 'documents', label: workspaceCopy.resources.knowledge.columns.documents },
+        { id: 'tokens', label: workspaceCopy.resources.knowledge.columns.tokens },
+        { id: 'connectors', label: '连接器' },
+        { id: 'created', label: workspaceCopy.resources.knowledge.columns.created },
+        { id: 'owner', label: workspaceCopy.common.columns.owner },
+        { id: 'updated', label: workspaceCopy.common.columns.updated },
       ],
       active: urlState.activeSort,
       onSort: urlState.onSortColumn,

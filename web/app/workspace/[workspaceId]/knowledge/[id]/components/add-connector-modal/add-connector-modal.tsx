@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useParams } from 'next/navigation'
 import {
   ArrowRight,
   Button,
@@ -21,13 +22,13 @@ import {
   Search,
 } from '@/components/ui-kit'
 import { ArrowLeft, Plus } from '@/components/ui-kit/icons'
-import { useParams } from 'next/navigation'
 import { consumeOAuthReturnContext } from '@/lib/credentials/client-state'
 import {
   getCanonicalScopesForProvider,
   getProviderIdFromServiceId,
   type OAuthProvider,
 } from '@/lib/oauth'
+import { userFacingError } from '@/lib/product-copy'
 import { ConnectOAuthModal } from '@/app/workspace/[workspaceId]/components/connect-oauth-modal'
 import { ConnectorConfigFields } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/connector-config-fields'
 import { hasWorkspaceMaxConnectorAccess } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/connector-entitlements'
@@ -216,7 +217,7 @@ export function AddConnectorModal({
           onOpenChange(false)
         },
         onError: (err) => {
-          setError(err.message)
+          setError(userFacingError(err, 'saveFailed'))
         },
       }
     )

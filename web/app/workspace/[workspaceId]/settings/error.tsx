@@ -1,5 +1,6 @@
 'use client'
 
+import { workspaceCopy } from '@/lib/product-copy'
 import { type ErrorBoundaryProps, ErrorState } from '@/app/workspace/[workspaceId]/components'
 
 export default function SettingsError({ error, reset }: ErrorBoundaryProps) {
@@ -7,8 +8,8 @@ export default function SettingsError({ error, reset }: ErrorBoundaryProps) {
     <ErrorState
       error={error}
       reset={reset}
-      title='Failed to load settings'
-      description='Something went wrong while loading your settings. Please try again.'
+      title='设置加载失败'
+      description={workspaceCopy.common.errors.loadFailed}
       loggerName='SettingsError'
     />
   )

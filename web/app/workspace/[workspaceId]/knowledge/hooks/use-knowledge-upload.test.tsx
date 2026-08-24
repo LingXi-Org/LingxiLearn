@@ -4,6 +4,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { workspaceCopy } from '@/lib/product-copy'
 
 const { mockInvalidateQueries, mockUploadKnowledgeDocumentSession } = vi.hoisted(() => ({
   mockInvalidateQueries: vi.fn(),
@@ -77,7 +78,7 @@ describe('useKnowledgeUpload admission', () => {
     })
     expect(result().uploadError).toMatchObject({
       code: 'UPLOAD_TOTAL_SIZE_EXCEEDED',
-      message: 'Select files totaling 500 MiB or less.',
+      message: workspaceCopy.common.errors.uploadFailed,
     })
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'UPLOAD_TOTAL_SIZE_EXCEEDED' })

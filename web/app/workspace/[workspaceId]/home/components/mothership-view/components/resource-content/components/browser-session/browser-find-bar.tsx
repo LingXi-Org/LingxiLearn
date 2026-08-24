@@ -1,9 +1,9 @@
 'use client'
 
 import { type RefObject, useCallback, useEffect, useState } from 'react'
-import type { BrowserFindResult } from '@/lib/browser-agent/protocol'
 import { Button, ChipInput } from '@/components/ui-kit'
 import { ArrowDown, ArrowUp, Search, X } from '@/components/ui-kit/icons'
+import type { BrowserFindResult } from '@/lib/browser-agent/protocol'
 import {
   findInBrowserPage,
   onBrowserFindResult,
@@ -166,7 +166,7 @@ function FindCount({ query, result }: { query: string; result: BrowserFindResult
     if (!result.final) return null
     return (
       <span aria-live='polite' className='flex-shrink-0 px-1 text-[var(--text-muted)] text-caption'>
-        No results
+        没有找到结果
       </span>
     )
   }

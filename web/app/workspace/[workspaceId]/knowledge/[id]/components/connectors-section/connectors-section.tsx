@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { format, formatDistanceToNow, isPast } from 'date-fns'
 import {
   Badge,
   Button,
@@ -26,11 +27,11 @@ import {
   Trash,
   TriangleAlert,
 } from '@/components/ui-kit/icons'
-import { createLogger } from '@/lib/logger'
-import { format, formatDistanceToNow, isPast } from 'date-fns'
 import { consumeOAuthReturnContext, writeOAuthReturnContext } from '@/lib/credentials/client-state'
+import { createLogger } from '@/lib/logger'
 import { getCanonicalScopesForProvider, getProviderIdFromServiceId } from '@/lib/oauth'
 import { getMissingRequiredScopes } from '@/lib/oauth/utils'
+import { userFacingError } from '@/lib/product-copy'
 import { ConnectOAuthModal } from '@/app/workspace/[workspaceId]/components/connect-oauth-modal'
 import { EditConnectorModal } from '@/app/workspace/[workspaceId]/knowledge/[id]/components/edit-connector-modal/edit-connector-modal'
 import { getBlock } from '@/blocks'
@@ -146,7 +147,7 @@ export function ConnectorsSection({
           },
           onError: (err) => {
             logger.error('Sync trigger failed', { error: err.message })
-            setError(err.message)
+            setError(userFacingError(err, 'saveFailed'))
             delete syncTriggeredAt.current[connectorId]
             forceUpdate((n) => n + 1)
           },
@@ -176,7 +177,7 @@ export function ConnectorsSection({
           onSuccess: () => setError(null),
           onError: (err) => {
             logger.error('Toggle pause failed', { error: err.message })
-            setError(err.message)
+            setError(userFacingError(err, 'deleteFailed'))
           },
         }
       )
@@ -195,7 +196,7 @@ export function ConnectorsSection({
         },
         onError: (err) => {
           logger.error('Delete connector failed', { error: err.message })
-          setError(err.message)
+          setError(userFacingError(err, 'saveFailed'))
           closeDeleteModal()
         },
       }

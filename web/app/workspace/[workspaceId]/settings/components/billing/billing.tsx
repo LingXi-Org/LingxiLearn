@@ -1,4 +1,5 @@
 'use client'
+import { useRouter } from 'next/navigation'
 import {
   ArrowRight,
   Badge,
@@ -12,8 +13,6 @@ import {
   Tooltip,
   toast,
 } from '@/components/ui-kit'
-import { isOrgAdminRole } from '@/lib/permissions/native/predicates'
-import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/auth/auth-client'
 import { ON_DEMAND_UNLIMITED } from '@/lib/billing/constants'
 import { CREDIT_MULTIPLIER } from '@/lib/billing/credits/conversion'
@@ -40,7 +39,8 @@ import {
 } from '@/lib/billing/subscriptions/utils'
 import { buildUpgradeHref } from '@/lib/billing/upgrade-reasons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { isOrgAdminRole } from '@/lib/permissions/native/predicates'
+import { userFacingError } from '@/lib/product-copy'
 import { formatDate } from '@/lib/utils/formatting'
 import { CreditUsageSection } from '@/app/workspace/[workspaceId]/settings/components/billing/components/credit-usage-section/credit-usage-section'
 import { UsageLimitField } from '@/app/workspace/[workspaceId]/settings/components/billing/components/usage-limit-field/usage-limit-field'
@@ -269,7 +269,7 @@ export function Billing({
 
   const handleToggleOnDemand = async () => {
     if (!permissions.canEditUsageLimit) {
-      toast.error("Can't change on-demand usage", {
+      toast.error('无法更改按需用量设置', {
         description: 'Only organization admins can change on-demand usage.',
       })
       return
@@ -296,15 +296,15 @@ export function Billing({
       }
     } catch (error) {
       logger.error('Failed to toggle on-demand billing', { error })
-      toast.error("Couldn't update on-demand usage", {
-        description: getErrorMessage(error, 'Please try again in a moment.'),
+      toast.error('按需用量设置更新失败', {
+        description: userFacingError(error, 'saveFailed'),
       })
     }
   }
 
   const handleOpenBillingPortal = () => {
     if (!permissions.canEditUsageLimit) {
-      toast.error("Can't manage payment method", {
+      toast.error('无法管理付款方式', {
         description: 'Only organization admins can manage billing.',
       })
       return
@@ -313,7 +313,7 @@ export function Billing({
     const context = subscription.isOrgScoped ? 'organization' : 'user'
     if (context === 'organization' && !billingOrganizationId) {
       portalWindow?.close()
-      toast.error('Billing unavailable', {
+      toast.error('计费功能暂不可用', {
         description: 'Organization billing context is unavailable. Please refresh and try again.',
       })
       return
@@ -332,8 +332,8 @@ export function Billing({
         onError: (error) => {
           portalWindow?.close()
           logger.error('Failed to open billing portal', { error })
-          toast.error("Couldn't open billing portal", {
-            description: getErrorMessage(error, 'Please try again in a moment.'),
+          toast.error('无法打开计费门户', {
+            description: userFacingError(error, 'loadFailed'),
           })
         },
       }
@@ -342,7 +342,7 @@ export function Billing({
 
   const handleCancelSubscription = () => {
     if (!permissions.canEditUsageLimit) {
-      toast.error("Can't cancel subscription", {
+      toast.error('无法取消订阅', {
         description: 'Only organization admins can cancel the subscription.',
       })
       return
@@ -354,7 +354,7 @@ export function Billing({
 
   const handleRestoreSubscription = () => {
     if (!permissions.canEditUsageLimit) {
-      toast.error("Can't restore subscription", {
+      toast.error('无法恢复订阅', {
         description: 'Only organization admins can restore the subscription.',
       })
       return
@@ -378,7 +378,7 @@ export function Billing({
     : `Personal ${planName} plan`
   const priceText =
     organizationSubscriptionState === 'free'
-      ? 'No active organization subscription'
+      ? '组织暂无有效订阅'
       : organizationSubscriptionState === 'lapsed'
         ? 'Choose a new plan for this organization'
         : subscription.isEnterprise
@@ -532,7 +532,7 @@ export function Billing({
             {periodEnd && (
               <div className='flex items-center justify-between'>
                 <span className='text-[var(--text-body)] text-small'>
-                  {isCancelledAtPeriodEnd ? 'Access until' : 'Next billing date'}
+                  {isCancelledAtPeriodEnd ? '可使用至' : '下次计费日期'}
                 </span>
                 <span className='text-[var(--text-muted)] text-small'>
                   {new Date(periodEnd).toLocaleDateString()}
@@ -553,7 +553,7 @@ export function Billing({
             {!subscription.isEnterprise && (
               <div className='flex items-center justify-between'>
                 <span className='text-[var(--text-body)] text-small'>
-                  {isCancelledAtPeriodEnd ? 'Subscription canceled' : 'Cancel subscription'}
+                  {isCancelledAtPeriodEnd ? '订阅已取消' : '取消订阅'}
                 </span>
                 {isCancelledAtPeriodEnd ? (
                   <Chip
@@ -569,7 +569,7 @@ export function Billing({
                     disabled={!canManageBilling}
                     onClick={handleCancelSubscription}
                   >
-                    Cancel
+                    取消
                   </Chip>
                 )}
               </div>

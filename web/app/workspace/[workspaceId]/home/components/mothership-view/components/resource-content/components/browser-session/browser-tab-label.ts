@@ -22,6 +22,6 @@ export function shouldShowBrowserTabSpinner(
 export function browserTabTitle(tab: BrowserTabState): string {
   const title = tab.title.trim()
   if (title) return title
-  if (tab.loading) return 'Loading…'
-  return browserTabHostname(tab.url) ?? 'New tab'
+  if (tab.loading) return '正在加载…'
+  return browserTabHostname(tab.url) ?? '新标签页'
 }

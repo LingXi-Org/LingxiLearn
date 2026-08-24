@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Button,
   Checkbox,
@@ -22,7 +23,7 @@ import {
   Loader,
 } from '@/components/ui-kit'
 import { ChevronLeft, ChevronRight, Pin } from '@/components/ui-kit/icons'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { workspaceCopy } from '@/lib/product-copy'
 import { InlineRenameInput } from '@/app/workspace/[workspaceId]/components/inline-rename-input'
 import { FloatingOverflowText } from '@/app/workspace/[workspaceId]/components/resource/components/floating-overflow-text'
 import { ResourceHeader } from '@/app/workspace/[workspaceId]/components/resource/components/resource-header'
@@ -351,7 +352,7 @@ const ResourceTable = memo(function ResourceTable({
                     checked={selectable.isAllSelected}
                     onCheckedChange={handleSelectAll}
                     disabled={selectable.disabled}
-                    aria-label='Select all'
+                    aria-label={workspaceCopy.common.accessibility.selectAll}
                   />
                 </div>
               )}
@@ -531,7 +532,7 @@ const CellContent = memo(function CellContent({
         <Pin
           className='size-[12px] shrink-0 text-[var(--text-icon)]'
           role='img'
-          aria-label='Pinned'
+          aria-label={workspaceCopy.common.accessibility.pinned}
         />
       )}
     </span>
@@ -691,7 +692,7 @@ const DataRow = memo(function DataRow({
             checked={isSelected}
             onCheckedChange={handleSelectRow}
             disabled={selectable.disabled}
-            aria-label='Select row'
+            aria-label={workspaceCopy.common.accessibility.selectRow}
             onClick={handleSelectRowClick}
           />
         </div>

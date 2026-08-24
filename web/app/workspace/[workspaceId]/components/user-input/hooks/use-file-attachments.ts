@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from '@/components/ui-kit'
-import { createLogger } from '@/lib/logger'
-import { toError } from '@/lib/utils/errors'
-import { generateId } from '@/lib/utils/id'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
+import { createLogger } from '@/lib/logger'
+import { userFacingError } from '@/lib/product-copy'
 import { assertMultiFileUploadAdmission } from '@/lib/uploads/client/admission'
 import { runWithConcurrency, WHOLE_FILE_PARALLEL_UPLOADS } from '@/lib/uploads/client/concurrency'
 import { uploadInternalFileSession } from '@/lib/uploads/client/session-upload'
 import { MAX_WORKSPACE_FILE_SIZE } from '@/lib/uploads/shared/types'
 import { resolveFileType } from '@/lib/uploads/utils/file-utils'
+import { generateId } from '@/lib/utils/id'
 
 const logger = createLogger('useFileAttachments')
 
@@ -164,7 +164,7 @@ export function useFileAttachments(props: UseFileAttachmentsProps) {
           maxFileBytes: MAX_WORKSPACE_FILE_SIZE,
         })
       } catch (error) {
-        toast.error("Couldn't add files", { description: toError(error).message })
+        toast.error('无法添加文件', { description: userFacingError(error, 'uploadFailed') })
         return
       }
 
@@ -225,8 +225,8 @@ export function useFileAttachments(props: UseFileAttachmentsProps) {
         } catch (error) {
           if (!controller.signal.aborted) {
             logger.error(`File upload failed: ${error}`)
-            toast.error(`Couldn't upload "${file.name}"`, {
-              description: toError(error).message,
+            toast.error(`无法上传“${file.name}”`, {
+              description: userFacingError(error, 'uploadFailed'),
             })
           }
           revokePreviewUrl(placeholder.previewUrl)

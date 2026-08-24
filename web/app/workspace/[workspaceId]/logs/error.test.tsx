@@ -52,10 +52,8 @@ describe('LogsError boundary', () => {
       root.render(<LogsError error={error} reset={vi.fn()} />)
     })
 
-    expect(container.textContent).toContain('Failed to load logs')
-    expect(container.textContent).toContain(
-      'Something went wrong while loading the logs. Please try again.'
-    )
+    expect(container.textContent).toContain('日志加载失败')
+    expect(container.textContent).toContain('加载日志时出现问题，请稍后重试。')
   })
 
   it('calls reset when the refresh action is clicked', () => {

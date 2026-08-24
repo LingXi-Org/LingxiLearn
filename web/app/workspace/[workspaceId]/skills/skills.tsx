@@ -1,12 +1,12 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Chip, ChipInput, Search } from '@/components/ui-kit'
-import { Plus } from '@/components/ui-kit/icons'
-import { getErrorMessage } from '@/lib/utils/errors'
 import { useParams, useRouter } from 'next/navigation'
 import { useQueryState } from 'nuqs'
 import { HEADER_ACTION_CLUSTER, PAGE_HEADER_BAR } from '@/components/page-header-bar'
+import { Chip, ChipInput, Search } from '@/components/ui-kit'
+import { Plus } from '@/components/ui-kit/icons'
+import { userFacingError } from '@/lib/product-copy'
 import { SkillTile } from '@/app/workspace/[workspaceId]/components'
 import { ShowcaseWithExplore } from '@/app/workspace/[workspaceId]/integrations/components/showcase-with-explore'
 import { SettingsEmptyState } from '@/app/workspace/[workspaceId]/settings/components/settings-empty-state'
@@ -23,8 +23,9 @@ import {
 } from '@/app/workspace/[workspaceId]/skills/search-params'
 import { useSkills } from '@/hooks/queries/skills'
 import { useDebouncedSearchSetter } from '@/hooks/use-debounced-search-setter'
+import { skillCopy } from './components/skill-copy'
 
-const SKILLS_LABEL = 'Skills'
+const SKILLS_LABEL = skillCopy.title
 
 export function Skills() {
   const params = useParams()
@@ -87,11 +88,11 @@ export function Skills() {
       </div>
       <div className='min-h-0 w-full min-w-0 flex-1 overflow-y-auto px-4 sm:px-6 [scrollbar-gutter:stable_both-edges]'>
         <div className='mx-auto flex w-full max-w-[48rem] min-w-0 flex-col gap-7 pb-3'>
-          <ShowcaseWithExplore prompt='Explain the skills in Sim and which ones I should add to my agents.' />
+          <ShowcaseWithExplore prompt='介绍当前可用的技能，并说明哪些技能适合添加到我的智能体。' />
           <div className='flex items-center gap-2'>
             <ChipInput
               icon={Search}
-              placeholder='搜索 Skills…'
+              placeholder={skillCopy.searchPlaceholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               disabled={isLoading}
@@ -102,7 +103,7 @@ export function Skills() {
           <div className='flex flex-col gap-7'>
             {error ? (
               <SettingsEmptyState variant='inline' tone='error'>
-                {getErrorMessage(error, 'Failed to load skills')}
+                {userFacingError(error, 'loadFailed')}
               </SettingsEmptyState>
             ) : filteredSkills.length > 0 ? (
               <SettingsSection label={SKILLS_LABEL}>
@@ -115,7 +116,7 @@ export function Skills() {
                       title={s.name}
                       description={s.description || undefined}
                       onClick={() => router.push(`${skillsHref}/${s.id}`)}
-                      clickLabel={`Open ${s.name}`}
+                      clickLabel={`打开 ${s.name}`}
                       navigable
                     />
                   ))}

@@ -3,6 +3,7 @@
 import { type MouseEvent, useCallback, useMemo, useRef } from 'react'
 import { type ComboboxOption, FolderPlus, Pencil, Plus, Upload } from '@/components/ui-kit'
 import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
+import { workspaceCopy } from '@/lib/product-copy'
 import type {
   BreadcrumbItem,
   FilterTag,
@@ -45,12 +46,12 @@ import { useInlineRename } from '@/hooks/use-inline-rename'
 const FILES_HEADER = FOLDERED_RESOURCE_HEADERS.file
 
 const COLUMNS: ResourceColumn[] = [
-  { id: 'name', header: 'Name', widthMultiplier: 1.15 },
-  { id: 'size', header: 'Size', widthMultiplier: 0.85 },
-  { id: 'type', header: 'Type', widthMultiplier: 1.0 },
-  { id: 'created', header: 'Created' },
-  { id: 'owner', header: 'Owner' },
-  { id: 'updated', header: 'Last Updated' },
+  { id: 'name', header: workspaceCopy.resources.files.columns.name, widthMultiplier: 1.15 },
+  { id: 'size', header: workspaceCopy.resources.files.columns.size, widthMultiplier: 0.85 },
+  { id: 'type', header: workspaceCopy.resources.files.columns.type, widthMultiplier: 1.0 },
+  { id: 'created', header: workspaceCopy.resources.files.columns.created },
+  { id: 'owner', header: workspaceCopy.common.columns.owner },
+  { id: 'updated', header: workspaceCopy.common.columns.updated },
 ]
 
 export interface FilesListProps {
@@ -305,18 +306,18 @@ export function FilesList({
     value: filtersController.searchTerm,
     onChange: filtersController.setSearchTerm,
     onClearAll: () => filtersController.setSearchTerm(''),
-    placeholder: 'Search files...',
+    placeholder: workspaceCopy.resources.files.searchPlaceholder,
   }
 
   const sortConfig: SortConfig = useMemo(
     () => ({
       options: [
-        { id: 'name', label: 'Name' },
-        { id: 'size', label: 'Size' },
-        { id: 'type', label: 'Type' },
-        { id: 'created', label: 'Created' },
-        { id: 'updated', label: 'Last Updated' },
-        { id: 'owner', label: 'Owner' },
+        { id: 'name', label: workspaceCopy.resources.files.columns.name },
+        { id: 'size', label: workspaceCopy.resources.files.columns.size },
+        { id: 'type', label: workspaceCopy.resources.files.columns.type },
+        { id: 'created', label: workspaceCopy.resources.files.columns.created },
+        { id: 'updated', label: workspaceCopy.common.columns.updated },
+        { id: 'owner', label: workspaceCopy.common.columns.owner },
       ],
       active: filtersController.activeSort,
       onSort: filtersController.onSort,
@@ -334,13 +335,13 @@ export function FilesList({
         disabled: upload.uploading || !commands.upload,
       },
       {
-        text: 'New folder',
+        text: workspaceCopy.resources.actions.newFolder,
         icon: FolderPlus,
         onSelect: creation.handleCreateFolder,
         disabled: creation.createFolderIsPending || !commands.createFolder,
       },
       {
-        text: 'New file',
+        text: workspaceCopy.resources.actions.newFile,
         icon: Plus,
         onSelect: creation.handleCreateFile,
         disabled: upload.uploading || creation.creatingFile || !commands.createFile,
@@ -389,7 +390,7 @@ export function FilesList({
           openListFolder && (canEdit || permissionsLoading)
             ? [
                 {
-                  label: 'Rename',
+                  label: workspaceCopy.resources.actions.rename,
                   icon: Pencil,
                   disabled: !canEdit,
                   onClick: () =>
@@ -464,7 +465,7 @@ export function FilesList({
     if (filtersController.uploadedByFilter.length > 0) {
       const label =
         filtersController.uploadedByFilter.length === 1
-          ? `Uploaded by: ${membersById.get(filtersController.uploadedByFilter[0])?.name ?? '1 member'}`
+          ? `上传者：${membersById.get(filtersController.uploadedByFilter[0])?.name ?? '1 名成员'}`
           : `Uploaded by: ${filtersController.uploadedByFilter.length} members`
       tags.push({ label, onRemove: () => filtersController.setUploadedByFilter([]) })
     }
@@ -537,9 +538,11 @@ export function FilesList({
                 <div className='pointer-events-none absolute inset-0 z-[var(--z-dropdown)] flex flex-col items-center justify-center gap-2 border border-[var(--brand-secondary)] border-dashed bg-[var(--surface-4)] transition-colors'>
                   <Upload className='size-5 text-[var(--brand-secondary)]' />
                   <div className='flex flex-col gap-0.5 text-center'>
-                    <p className='text-[14px] text-[var(--brand-secondary)]'>Drop to upload</p>
+                    <p className='text-[14px] text-[var(--brand-secondary)]'>
+                      {workspaceCopy.resources.files.dropToUpload}
+                    </p>
                     <p className='text-[11px] text-[var(--text-tertiary)]'>
-                      Release files here to add them to this workspace
+                      {workspaceCopy.resources.files.dropToUploadHint}
                     </p>
                   </div>
                 </div>

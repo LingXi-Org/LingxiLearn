@@ -2,6 +2,7 @@
 
 import type React from 'react'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   cn,
   DropdownMenu,
@@ -17,10 +18,10 @@ import {
   ModalHeader,
 } from '@/components/ui-kit'
 import { CircleAlert } from '@/components/ui-kit/icons'
-import { createPortal } from 'react-dom'
+import { userFacingError } from '@/lib/product-copy'
+import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 import { Preview } from '@/app/workspace/[workspaceId]/components/preview'
 import { useExecutionSnapshot } from '@/hooks/queries/logs'
-import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 
 interface TraceSpan {
   blockId?: string
@@ -100,7 +101,7 @@ export function ExecutionSnapshot({
         >
           <div className='flex items-center gap-2 text-[var(--text-secondary)]'>
             <Loader className='size-[16px]' animate />
-            <span className='text-small'>Loading run snapshot…</span>
+            <span className='text-small'>正在加载运行快照…</span>
           </div>
         </div>
       )
@@ -114,7 +115,9 @@ export function ExecutionSnapshot({
         >
           <div className='flex items-center gap-2 text-[var(--text-error)]'>
             <CircleAlert className='size-[16px]' />
-            <span className='text-small'>Failed to load run snapshot: {error.message}</span>
+            <span className='text-small'>
+              运行快照加载失败：{userFacingError(error, 'loadFailed')}
+            </span>
           </div>
         </div>
       )
@@ -128,7 +131,7 @@ export function ExecutionSnapshot({
         >
           <div className='flex items-center gap-2 text-[var(--text-secondary)]'>
             <Loader className='size-[16px]' animate />
-            <span className='text-small'>Loading run snapshot…</span>
+            <span className='text-small'>正在加载运行快照…</span>
           </div>
         </div>
       )
@@ -142,11 +145,10 @@ export function ExecutionSnapshot({
         >
           <div className='flex items-center gap-3 text-[var(--text-warning)]'>
             <CircleAlert className='size-[20px]' />
-            <span className='text-base'>Logged State Not Found</span>
+            <span className='text-base'>未找到已记录的状态</span>
           </div>
           <div className='max-w-md text-center text-[var(--text-secondary)] text-small'>
-            This log was migrated from the old logging system. The workflow state at the time of
-            this run is not available.
+            此日志从旧版日志系统迁移而来，无法获取此次运行时的工作流状态。
           </div>
           <div className='text-[var(--text-tertiary)] text-caption'>
             Note: {workflowState._note}
@@ -218,7 +220,7 @@ export function ExecutionSnapshot({
           }}
         >
           <ModalContent size='full' className='flex h-[90vh] flex-col'>
-            <ModalHeader>Workflow State</ModalHeader>
+            <ModalHeader>工作流状态</ModalHeader>
 
             <ModalBody className='!p-0 min-h-0 flex-1 overflow-hidden'>
               <ModalDescription className='sr-only'>

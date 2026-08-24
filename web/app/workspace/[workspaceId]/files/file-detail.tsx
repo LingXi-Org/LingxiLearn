@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { ChipConfirmModal, Columns2, Eye, Pencil, Trash } from '@/components/ui-kit'
 import { Download, Send } from '@/components/ui-kit/icons'
 import type { WorkspaceFileRecord } from '@/lib/api/contracts/workspace-files'
+import { workspaceCopy } from '@/lib/product-copy'
 import type { BreadcrumbItem, ResourceAction } from '@/app/workspace/[workspaceId]/components'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
 import {
@@ -88,12 +89,28 @@ export function FileDetail({
               }
             : undefined,
           dropdownItems: [
-            { label: 'Download', icon: Download, onClick: detail.handleDownloadSelected },
+            {
+              label: workspaceCopy.common.actions.download,
+              icon: Download,
+              onClick: detail.handleDownloadSelected,
+            },
             ...(canEdit
               ? [
-                  { label: 'Rename', icon: Pencil, onClick: detail.handleStartHeaderRename },
-                  { label: 'Share', icon: Send, onClick: detail.handleShareSelected },
-                  { label: 'Delete', icon: Trash, onClick: detail.handleDeleteSelected },
+                  {
+                    label: workspaceCopy.resources.actions.rename,
+                    icon: Pencil,
+                    onClick: detail.handleStartHeaderRename,
+                  },
+                  {
+                    label: workspaceCopy.resources.actions.share,
+                    icon: Send,
+                    onClick: detail.handleShareSelected,
+                  },
+                  {
+                    label: workspaceCopy.common.actions.delete,
+                    icon: Trash,
+                    onClick: detail.handleDeleteSelected,
+                  },
                 ]
               : []),
           ],
@@ -146,27 +163,30 @@ export function FileDetail({
         : showPreviewToggle
           ? [
               {
-                text: detail.previewMode === 'preview' ? 'Edit' : 'Preview',
+                text:
+                  detail.previewMode === 'preview'
+                    ? workspaceCopy.resources.actions.edit
+                    : workspaceCopy.resources.actions.preview,
                 icon: detail.previewMode === 'preview' ? Pencil : Eye,
                 onSelect: detail.handleTogglePreview,
               },
             ]
           : []),
       {
-        text: 'Download',
+        text: workspaceCopy.common.actions.download,
         icon: Download,
         onSelect: detail.handleDownloadSelected,
       },
       ...(canEdit
         ? [
             {
-              text: 'Share',
+              text: workspaceCopy.resources.actions.share,
               icon: Send,
               onSelect: detail.handleShareSelected,
             },
             {
               id: 'delete',
-              text: 'Delete',
+              text: workspaceCopy.common.actions.delete,
               icon: Trash,
               onSelect: detail.handleDeleteSelected,
             },
@@ -222,11 +242,14 @@ export function FileDetail({
           <ChipConfirmModal
             open={detail.showUnsavedChangesAlert}
             onOpenChange={detail.setShowUnsavedChangesAlert}
-            srTitle='Unsaved Changes'
-            title='Unsaved Changes'
-            text='You have unsaved changes. Are you sure you want to discard them?'
+            srTitle='有未保存的更改'
+            title='有未保存的更改'
+            text='当前更改尚未保存，确定要放弃吗？'
             dismissLabel='Keep editing'
-            confirm={{ label: 'Discard Changes', onClick: detail.handleDiscardChanges }}
+            confirm={{
+              label: workspaceCopy.resources.actions.discardChanges,
+              onClick: detail.handleDiscardChanges,
+            }}
           />
         </Resource>
       </FileDocRoomProvider>

@@ -7,8 +7,8 @@ export default function LogsError({ error, reset }: ErrorBoundaryProps) {
     <ErrorState
       error={error}
       reset={reset}
-      title='Failed to load logs'
-      description='Something went wrong while loading the logs. Please try again.'
+      title='日志加载失败'
+      description='加载日志时出现问题，请稍后重试。'
       loggerName='LogsError'
     />
   )

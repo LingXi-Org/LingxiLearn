@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { SaveDiscardChips } from '@/components/settings/save-discard-actions'
 import { ChipLink, toast } from '@/components/ui-kit'
 import { ArrowLeft } from '@/components/ui-kit/icons'
 import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import { useRouter } from 'next/navigation'
-import { SaveDiscardChips } from '@/components/settings/save-discard-actions'
+import { userFacingError } from '@/lib/product-copy'
 import { SkillTile } from '@/app/workspace/[workspaceId]/components'
 import {
   CredentialDetailHeading,
@@ -26,6 +26,7 @@ import {
   validateSkillName,
 } from '@/app/workspace/[workspaceId]/skills/components/utils'
 import { useCreateSkill } from '@/hooks/queries/skills'
+import { skillCopy } from '../components/skill-copy'
 
 const logger = createLogger('SkillCreate')
 
@@ -61,8 +62,8 @@ export function SkillCreate({ workspaceId }: SkillCreateProps) {
     const newErrors: SkillFieldErrors = {}
     const nameError = validateSkillName(nameDraft)
     if (nameError) newErrors.name = nameError
-    if (!descriptionDraft.trim()) newErrors.description = 'Description is required'
-    if (!contentDraft.trim()) newErrors.content = 'Content is required'
+    if (!descriptionDraft.trim()) newErrors.description = skillCopy.descriptionRequired
+    if (!contentDraft.trim()) newErrors.content = skillCopy.contentRequired
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return
@@ -74,17 +75,17 @@ export function SkillCreate({ workspaceId }: SkillCreateProps) {
         skill: { name: nameDraft, description: descriptionDraft, content: contentDraft },
       })
       setErrors({})
-      toast.success(`Created "${nameDraft}"`)
+      toast.success(`已创建“${nameDraft}”`)
       // Detach the guard so its Back trap can't fire mid-navigation; `replace` then
       // consumes the seeded entry rather than stacking another.
       guard.release()
       router.replace(created ? `${skillsHref}/${created.id}` : skillsHref)
     } catch (error) {
       if (isSkillNameConflictError(error)) {
-        setErrors({ name: getErrorMessage(error, 'This skill name is already taken.') })
+        setErrors({ name: skillCopy.nameConflict })
       } else {
-        toast.error("Couldn't create skill", {
-          description: getErrorMessage(error, 'Please try again in a moment.'),
+        toast.error('无法创建技能', {
+          description: userFacingError(error, 'saveFailed'),
         })
       }
       logger.error('Failed to create skill', error)
@@ -114,7 +115,7 @@ export function SkillCreate({ workspaceId }: SkillCreateProps) {
 
   const back = (
     <ChipLink href={skillsHref} onClick={guard.handleBackClick} leftIcon={ArrowLeft}>
-      Skills
+      技能
     </ChipLink>
   )
 
@@ -138,8 +139,8 @@ export function SkillCreate({ workspaceId }: SkillCreateProps) {
       <CredentialDetailLayout back={back} actions={actions}>
         <CredentialDetailHeading
           leading={<SkillTile />}
-          title='New skill'
-          subtitle='Write a skill, or import an existing SKILL.md'
+          title='新建技能'
+          subtitle='编写技能，或导入已有的 SKILL.md'
         />
 
         <SkillFields

@@ -1,5 +1,6 @@
 'use client'
 
+import { workspaceCopy } from '@/lib/product-copy'
 import { type ErrorBoundaryProps, ErrorState } from '@/app/workspace/[workspaceId]/components'
 
 export default function HomeError({ error, reset }: ErrorBoundaryProps) {
@@ -7,8 +8,8 @@ export default function HomeError({ error, reset }: ErrorBoundaryProps) {
     <ErrorState
       error={error}
       reset={reset}
-      title='Failed to load home'
-      description='Something went wrong while loading your workspace home. Please try again.'
+      title='工作区首页加载失败'
+      description={workspaceCopy.common.errors.loadFailed}
       loggerName='HomeError'
     />
   )

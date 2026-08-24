@@ -5,7 +5,9 @@ import { useParams, useRouter } from 'next/navigation'
 import type { ComboboxOption } from '@/components/ui-kit'
 import { ChipConfirmModal, Plus, Upload } from '@/components/ui-kit'
 import { FolderPlus, Pencil, Trash } from '@/components/ui-kit/icons'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 import { createLogger } from '@/lib/logger'
+import { workspaceCopy } from '@/lib/product-copy'
 import type { TableDefinition } from '@/lib/table/types'
 import type {
   DropdownOption,
@@ -49,17 +51,16 @@ import { useTablesList } from '@/hooks/queries/tables'
 import { getCanonicalFolderPath } from '@/hooks/queries/utils/folder-tree'
 import { useWorkspaceMembersQuery, type WorkspaceMember } from '@/hooks/queries/workspace'
 import { usePermissionConfig } from '@/hooks/use-permission-config'
-import type { WorkspaceFolder } from '@/lib/folders/types'
 
 const logger = createLogger('Tables')
 
 const COLUMNS: ResourceColumn[] = [
-  { id: 'name', header: 'Name' },
-  { id: 'columns', header: 'Columns' },
-  { id: 'rows', header: 'Rows' },
-  { id: 'created', header: 'Created' },
-  { id: 'owner', header: '所有者' },
-  { id: 'updated', header: 'Last Updated' },
+  { id: 'name', header: workspaceCopy.resources.tables.columns.name },
+  { id: 'columns', header: workspaceCopy.resources.tables.columns.columns },
+  { id: 'rows', header: workspaceCopy.resources.tables.columns.rows },
+  { id: 'created', header: workspaceCopy.resources.tables.columns.created },
+  { id: 'owner', header: workspaceCopy.common.columns.owner },
+  { id: 'updated', header: workspaceCopy.resources.tables.columns.updated },
 ]
 
 /** Root label for breadcrumbs and the "move to workspace root" destination. */
@@ -206,13 +207,13 @@ export function Tables() {
     if (!folder) return undefined
     return [
       {
-        label: 'Rename',
+        label: workspaceCopy.resources.actions.rename,
         icon: Pencil,
         disabled: !canEdit,
         onClick: () => breadcrumbRename.startRename(folder.id, folder.name),
       },
       {
-        label: 'Delete',
+        label: workspaceCopy.resources.actions.delete,
         icon: Trash,
         disabled: !canEdit,
         /**
@@ -265,7 +266,7 @@ export function Tables() {
       value: listState.searchValue,
       onChange: listState.setSearchTerm,
       onClearAll: () => listState.setSearchTerm(''),
-      placeholder: 'Search tables...',
+      placeholder: workspaceCopy.resources.tables.searchPlaceholder,
     }),
     [listState.searchValue, listState.setSearchTerm]
   )
@@ -273,12 +274,12 @@ export function Tables() {
   const sortConfig: SortConfig = useMemo(
     () => ({
       options: [
-        { id: 'name', label: 'Name' },
-        { id: 'columns', label: 'Columns' },
-        { id: 'rows', label: 'Rows' },
-        { id: 'created', label: 'Created' },
-        { id: 'owner', label: '所有者' },
-        { id: 'updated', label: 'Last Updated' },
+        { id: 'name', label: workspaceCopy.resources.tables.columns.name },
+        { id: 'columns', label: workspaceCopy.resources.tables.columns.columns },
+        { id: 'rows', label: workspaceCopy.resources.tables.columns.rows },
+        { id: 'created', label: workspaceCopy.resources.tables.columns.created },
+        { id: 'owner', label: workspaceCopy.common.columns.owner },
+        { id: 'updated', label: workspaceCopy.resources.tables.columns.updated },
       ],
       active: listState.activeSort,
       onSort: listState.onSort,
@@ -311,7 +312,11 @@ export function Tables() {
   const filterTags: FilterTag[] = useMemo(() => {
     const tags: FilterTag[] = []
     if (listState.rowCountFilter.length > 0) {
-      const rowLabels: Record<string, string> = { empty: 'Empty', small: 'Small', large: 'Large' }
+      const rowLabels: Record<string, string> = {
+        empty: workspaceCopy.resources.states.empty,
+        small: workspaceCopy.resources.states.fewRows,
+        large: workspaceCopy.resources.states.manyRows,
+      }
       const label =
         listState.rowCountFilter.length === 1
           ? `Rows: ${rowLabels[listState.rowCountFilter[0]]}`
@@ -486,13 +491,13 @@ export function Tables() {
         disabled: csvImport.uploading || !canEdit,
       },
       {
-        text: 'New folder',
+        text: workspaceCopy.resources.actions.newFolder,
         icon: FolderPlus,
         onSelect: actions.createFolder,
         disabled: !canEdit || actions.isCreatingFolder,
       },
       {
-        text: 'New table',
+        text: workspaceCopy.resources.actions.newTable,
         icon: Plus,
         onSelect: actions.createTable,
         disabled: csvImport.uploading || !canEdit || actions.isCreatingTable,
@@ -641,10 +646,10 @@ export function Tables() {
           ' You can restore it from Recently Deleted in Settings.',
         ]}
         confirm={{
-          label: 'Delete',
+          label: workspaceCopy.resources.actions.delete,
           onClick: handleDelete,
           pending: actions.isDeletingTable,
-          pendingLabel: 'Deleting...',
+          pendingLabel: workspaceCopy.resources.actions.deleting,
         }}
       />
 
@@ -664,10 +669,10 @@ export function Tables() {
           ' You can restore those tables from Recently Deleted in Settings.',
         ]}
         confirm={{
-          label: 'Delete',
+          label: workspaceCopy.resources.actions.delete,
           onClick: handleDeleteFolder,
           pending: actions.isDeletingFolder,
-          pendingLabel: 'Deleting...',
+          pendingLabel: workspaceCopy.resources.actions.deleting,
         }}
       />
     </>

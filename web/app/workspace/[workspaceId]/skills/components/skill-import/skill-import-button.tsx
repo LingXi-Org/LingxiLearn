@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { Chip, Loader, toast } from '@/components/ui-kit'
-import { getErrorMessage } from '@/lib/utils/errors'
+import { userFacingError } from '@/lib/product-copy'
 import {
   type ParsedSkill,
   readSkillFile,
@@ -28,8 +28,8 @@ export function SkillImportButton({ onImport, disabled = false }: SkillImportBut
     try {
       onImport(await readSkillFile(file))
     } catch (error) {
-      toast.error("Couldn't import skill", {
-        description: getErrorMessage(error, 'Please try a .md or .zip file.'),
+      toast.error('无法导入技能', {
+        description: userFacingError(error, 'uploadFailed'),
       })
     } finally {
       setImporting(false)
@@ -39,7 +39,7 @@ export function SkillImportButton({ onImport, disabled = false }: SkillImportBut
   return (
     <>
       <Chip onClick={() => inputRef.current?.click()} disabled={disabled || importing}>
-        {importing ? <Loader className='size-[14px]' animate /> : 'Import'}
+        {importing ? <Loader className='size-[14px]' animate /> : '导入'}
       </Chip>
       <input
         ref={inputRef}

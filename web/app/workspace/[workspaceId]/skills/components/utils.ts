@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import { isApiClientError } from '@/lib/api/client/errors'
+import { skillCopy } from './skill-copy'
 
 export interface ParsedSkill {
   name: string
@@ -121,9 +122,9 @@ const KEBAB_CASE_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/
  * the rule and its copy live in one place across every skill editing surface.
  */
 export function validateSkillName(name: string): string | null {
-  if (!name.trim()) return 'Name is required'
-  if (name.length > 64) return 'Name must be 64 characters or less'
-  if (!KEBAB_CASE_REGEX.test(name)) return 'Name must be kebab-case (e.g. my-skill)'
+  if (!name.trim()) return skillCopy.nameRequired
+  if (name.length > 64) return skillCopy.nameTooLong
+  if (!KEBAB_CASE_REGEX.test(name)) return skillCopy.nameFormat
   return null
 }
 
@@ -145,12 +146,12 @@ export async function readSkillFile(file: File): Promise<ParsedSkill> {
   const name = file.name.toLowerCase()
 
   if (!SKILL_IMPORT_EXTENSIONS.some((ext) => name.endsWith(ext))) {
-    throw new Error('Unsupported file type. Use .md or .zip files.')
+    throw new Error('不支持此文件类型，请使用 .md 或 .zip 文件。')
   }
 
   if (name.endsWith('.zip')) {
     if (file.size > MAX_SKILL_ZIP_BYTES) {
-      throw new Error('ZIP file is too large (max 5 MB)')
+      throw new Error('ZIP 文件过大（最大 5 MB）。')
     }
     return parseSkillMarkdown(await extractSkillFromZip(file))
   }

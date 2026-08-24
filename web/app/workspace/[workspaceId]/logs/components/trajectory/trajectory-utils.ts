@@ -1,4 +1,8 @@
-import type { LogTraceSpan, Trajectory as ApiTrajectory, TrajectoryItem } from '@/lib/api/contracts/logs'
+import type {
+  Trajectory as ApiTrajectory,
+  LogTraceSpan,
+  TrajectoryItem,
+} from '@/lib/api/contracts/logs'
 
 export const TRAJECTORY_LANES = [
   { id: 'run', label: 'RUN' },
@@ -132,9 +136,11 @@ function resolveDuration(span: LogTraceSpan, startMs: number): number {
 }
 
 function laneForSpan(span: LogTraceSpan): TrajectoryLaneId {
-  const value = `${span.type ?? ''} ${(span as unknown as Record<string, unknown>).category ?? ''}`.toLowerCase()
+  const value =
+    `${span.type ?? ''} ${(span as unknown as Record<string, unknown>).category ?? ''}`.toLowerCase()
   if (value.includes('workflow') || value.includes('run')) return 'run'
-  if (value.includes('decision') || value.includes('control') || value.includes('agent')) return 'control'
+  if (value.includes('decision') || value.includes('control') || value.includes('agent'))
+    return 'control'
   if (value.includes('runtime')) return 'runtime'
   if (value.includes('state')) return 'state'
   if (value.includes('resource')) return 'resource'
@@ -143,9 +149,7 @@ function laneForSpan(span: LogTraceSpan): TrajectoryLaneId {
 }
 
 function laneForItem(item: TrajectoryItem): TrajectoryLaneId {
-  return TRAJECTORY_LANES.some((lane) => lane.id === item.lane)
-    ? item.lane
-    : 'action'
+  return TRAJECTORY_LANES.some((lane) => lane.id === item.lane) ? item.lane : 'action'
 }
 
 function itemToSpan(item: TrajectoryItem): LogTraceSpan {
@@ -174,7 +178,10 @@ function itemToSpan(item: TrajectoryItem): LogTraceSpan {
   } as LogTraceSpan
 }
 
-function buildSemanticModel(trajectory: ApiTrajectory, fallbackDurationMs: number): TrajectoryModel {
+function buildSemanticModel(
+  trajectory: ApiTrajectory,
+  fallbackDurationMs: number
+): TrajectoryModel {
   const clockStart = parseTimestamp(trajectory.clock.startedAt) ?? 0
   const duration = Math.max(0, trajectory.clock.durationMs, fallbackDurationMs)
   const sourceEntries: Array<{
@@ -433,7 +440,9 @@ export function summarizeTrajectory(model: TrajectoryModel): TrajectorySummary {
   }
   if (model.source === 'trajectory') {
     summary.roundCount =
-      model.lanes.find((lane) => lane.id === 'control')?.entries.filter((entry) => entry.item?.kind === 'round').length ?? 0
+      model.lanes
+        .find((lane) => lane.id === 'control')
+        ?.entries.filter((entry) => entry.item?.kind === 'round').length ?? 0
     summary.taskCount = model.lanes.find((lane) => lane.id === 'task')?.entries.length ?? 0
     summary.actionCount = model.lanes.find((lane) => lane.id === 'action')?.entries.length ?? 0
   }
