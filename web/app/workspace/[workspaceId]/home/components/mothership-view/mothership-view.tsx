@@ -4,6 +4,7 @@ import { forwardRef, memo, useCallback, useMemo, useRef, useState } from 'react'
 import { cn } from '@/components/ui-kit'
 import type { FilePreviewSession } from '@/lib/copilot/request/session'
 import { getFileExtension } from '@/lib/uploads/utils/file-utils'
+import type { WorkflowsEditorRuntime } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 import type { PreviewMode } from '@/app/workspace/[workspaceId]/files/components/file-viewer'
 import {
   isCsvStreamOnly,
@@ -17,7 +18,6 @@ import type {
   GenericResourceData,
   MothershipResource,
 } from '@/app/workspace/[workspaceId]/home/types'
-import type { WorkflowsEditorRuntime } from '@/app/(landing)/workflows/components/workflows-editor-loop'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { useWorkspaceFiles } from '@/hooks/queries/workspace-files'
 import { ResourceActions, ResourceContent, ResourceTabs } from './components'
@@ -59,7 +59,7 @@ function shouldShowStreamingFilePanel(
   return false
 }
 
-interface MothershipViewProps {
+export interface MothershipViewProps {
   workspaceId: string
   chatId?: string
   desktopScopeId: string
