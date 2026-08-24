@@ -1,20 +1,15 @@
 """Workspace API routes split by resource family."""
 
-from fastapi import APIRouter
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from ..application.table_csv import parse_csv_rows
 from ..application.workspace_errors import WorkspaceDomainError
 from ..application.workspace_table_service import WorkspaceTableService
-from .workspace_route_shared import (
-    MAX_FILE_SIZE,
-    RUNTIME_STUDENT_CATEGORIES,
-    Any,
-    Depends,
-    HTTPException,
-    LearnerContext,
+from ..contracts.rest_models import (
     LearningRecordResponse,
-    Request,
-    StreamingResponse,
     TableColumnsResponse,
     TableEmptyDataResponse,
     TableImportCsvResponse,
@@ -31,18 +26,17 @@ from .workspace_route_shared import (
     TableViewDeletedResponse,
     TableViewResponse,
     TableViewsResponse,
-    _column_public,
-    _table_public,
-    _table_row_public,
-    _view_public,
-    _workspace_for_id,
-    csv,
-    current_learner_context,
-    io,
-    json,
-    not_found,
-    services_of,
 )
+from ..learner import LearnerContext
+from ..store.runtime_tables import RUNTIME_STUDENT_CATEGORIES
+from .dependencies import current_learner_context, not_found, services_of
+from .mappers.tables import column_response as _column_public
+from .mappers.tables import table_response as _table_public
+from .mappers.tables import table_row_response as _table_row_public
+from .mappers.tables import table_view_response as _view_public
+from .workspace_route_shared import _workspace_for_id
+
+TABLE_IMPORT_MAX_SIZE = 20 * 1024 * 1024
 
 router = APIRouter(prefix="/api")
 
@@ -76,7 +70,7 @@ async def import_table_csv(
 ) -> dict[str, Any]:
     workspace = await _workspace_for_id(request, str(body.get("workspaceId", "lingxi")), context)
     raw = str(body.get("csv") or body.get("content") or "")
-    if len(raw.encode("utf-8")) > MAX_FILE_SIZE:
+    if len(raw.encode("utf-8")) > TABLE_IMPORT_MAX_SIZE:
         raise HTTPException(status_code=413, detail="import_too_large")
     headers, rows = _csv_payload(raw, str(body.get("delimiter") or ","))
     if not headers:
@@ -301,22 +295,14 @@ async def query_rows(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     _workspace_row, table = await _owned_table(request, table_id, context)
-    needle = q.casefold().strip()
-    rows, _count = await _table_service(request).repository.rows(table.id)
-    if needle:
-        rows = [
-            row
-            for row in rows
-            if needle in json.dumps(row.values or {}, ensure_ascii=False).casefold()
-        ]
-    selected = rows[max(0, offset) : max(0, offset) + min(max(1, limit), 1000)]
-    public = [_table_row_public(row) for row in selected]
+    projection = await _table_service(request).query_rows(table, q, offset, limit)
+    public = [_table_row_public(row) for row in projection.rows]
     return {
         "success": True,
         "data": {
             "rows": public,
             "rowCount": len(public),
-            "totalCount": len(rows),
+            "totalCount": projection.total_count,
             "nextCursor": None,
         },
     }
@@ -336,14 +322,7 @@ async def find_rows(
     has no workflow-run semantics.
     """
     _workspace_row, table = await _owned_table(request, table_id, context)
-    needle = q.casefold().strip()
-    rows, _count = await _table_service(request).repository.rows(table.id)
-    matches: list[dict[str, Any]] = []
-    if needle:
-        for ordinal, row in enumerate(rows):
-            for column, value in (row.values or {}).items():
-                if needle in json.dumps(value, ensure_ascii=False).casefold():
-                    matches.append({"ordinal": ordinal, "rowId": row.id, "column": str(column)})
+    matches = await _table_service(request).find_cells(table, q)
     return {"success": True, "data": {"matches": matches, "truncated": False}}
 
 
@@ -354,23 +333,11 @@ async def _export_table(
     context: LearnerContext = Depends(current_learner_context),
 ) -> StreamingResponse:
     _workspace_row, table = await _owned_table(request, table_id, context)
-    columns = await _table_service(request).repository.columns(table.id)
-    rows, _count = await _table_service(request).repository.rows(table.id)
-    headers = [column.key for column in columns]
-    if format.lower() == "json":
-        return StreamingResponse(
-            iter([json.dumps([row.values or {} for row in rows], ensure_ascii=False)]),
-            media_type="application/json",
-        )
-    buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=headers)
-    writer.writeheader()
-    for row in rows:
-        writer.writerow({header: (row.values or {}).get(header) for header in headers})
+    export = await _table_service(request).export(table, format)
     return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={table.name}.csv"},
+        iter([export.content]),
+        media_type=export.media_type,
+        headers=export.headers,
     )
 
 

@@ -278,6 +278,34 @@ async def test_table_crud_preserves_typed_rows_and_view_contract(workspace_api) 
     values = inserted.json()["data"]["rows"][0]["values"]
     assert values == {"student": "Ada", "score": 98.5, "passed": True}
 
+    queried = await client.get(f"/api/table/{table_id}/query", params={"q": "98.5"})
+    assert queried.status_code == 200
+    assert queried.json()["data"]["totalCount"] == 1
+    assert queried.json()["data"]["rows"][0]["values"] == values
+
+    found = await client.get(f"/api/table/{table_id}/rows/find", params={"q": "ada"})
+    assert found.status_code == 200
+    assert found.json()["data"] == {
+        "matches": [
+            {"ordinal": 0, "rowId": inserted.json()["data"]["rows"][0]["id"], "column": "student"}
+        ],
+        "truncated": False,
+    }
+
+    csv_export = await client.get(f"/api/table/{table_id}/export")
+    assert csv_export.status_code == 200
+    assert csv_export.headers["content-type"].startswith("text/csv")
+    assert (
+        csv_export.headers["content-disposition"]
+        == "attachment; filename*=UTF-8''%E6%88%90%E7%BB%A9.csv"
+    )
+    assert csv_export.text == "student,score,passed\r\nAda,98.5,True\r\n"
+
+    json_export = await client.get(f"/api/table/{table_id}/export", params={"format": "json"})
+    assert json_export.status_code == 200
+    assert json_export.headers["content-type"] == "application/json"
+    assert json_export.json() == [values]
+
     missing_required = await client.post(
         f"/api/table/{table_id}/rows", json={"rows": [{"score": 10}]}
     )
@@ -342,13 +370,18 @@ async def test_knowledge_crud_chunks_tags_and_search_contract(workspace_api) -> 
     assert updated.status_code == 200
     assert updated.json()["data"]["tag1"] == "代数"
 
-    chunks = await client.get(
-        f"/api/knowledge/{base_id}/documents/{document_id}/chunks"
-    )
+    chunks = await client.get(f"/api/knowledge/{base_id}/documents/{document_id}/chunks")
     assert chunks.status_code == 200
     assert chunks.json()["pagination"]["total"] == 1
     assert chunks.json()["chunks"][0]["content"] == "线性代数、矩阵与向量"
     chunk_id = chunks.json()["chunks"][0]["id"]
+
+    appended = await client.post(
+        f"/api/knowledge/{base_id}/documents/{document_id}/chunks",
+        json={"content": "第二个知识片段"},
+    )
+    assert appended.status_code == 200
+    assert appended.json()["data"]["chunkIndex"] == 1
 
     foreign_base = await client.post("/api/knowledge", json={"name": "物理"})
     isolated = await client.delete(
@@ -365,9 +398,7 @@ async def test_knowledge_crud_chunks_tags_and_search_contract(workspace_api) -> 
     assert search.json()["results"][0]["document"]["id"] == document_id
 
     archived = await client.delete(f"/api/knowledge/{base_id}/documents/{document_id}")
-    restored = await client.post(
-        f"/api/knowledge/{base_id}/documents/{document_id}/restore"
-    )
+    restored = await client.post(f"/api/knowledge/{base_id}/documents/{document_id}/restore")
     assert archived.status_code == restored.status_code == 200
     assert restored.json()["data"]["enabled"] is True
 
@@ -414,5 +445,43 @@ def test_knowledge_router_cannot_own_sql_or_orm_models() -> None:
         "KnowledgeTag(",
         "KnowledgeDocumentTag(",
         "WorkspaceUploadSession(",
+    )
+    assert not [token for token in forbidden if token in source]
+
+
+def test_workspace_http_modules_do_not_regain_persistence_or_parser_implementations() -> None:
+    api_dir = Path(__file__).parents[1] / "lingxilearn" / "api"
+    modules = [*api_dir.glob("workspace*_routes.py"), api_dir / "workspace_route_shared.py"]
+    forbidden = (
+        "from sqlalchemy",
+        "import sqlalchemy",
+        "store.models",
+        "session.execute",
+        "session.scalar",
+        "import csv",
+        "import zipfile",
+        "xml.etree",
+    )
+    violations = {
+        module.name: [token for token in forbidden if token in module.read_text(encoding="utf-8")]
+        for module in modules
+    }
+    assert not {name: tokens for name, tokens in violations.items() if tokens}
+
+
+def test_log_router_is_only_an_http_adapter() -> None:
+    source = (
+        Path(__file__).parents[1] / "lingxilearn" / "api" / "workspace_log_routes.py"
+    ).read_text(encoding="utf-8")
+    forbidden = (
+        "sqlalchemy",
+        "store.models",
+        "list_tasks(",
+        "executions_by_ids(",
+        "agent_execution_snapshot(",
+        "csv.DictWriter",
+        "json.dumps",
+        '"workflowName"',
+        '"traceSpans"',
     )
     assert not [token for token in forbidden if token in source]

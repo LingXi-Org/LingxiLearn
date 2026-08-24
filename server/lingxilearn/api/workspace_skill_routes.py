@@ -1,21 +1,18 @@
 """Workspace API routes split by resource family."""
 
-from fastapi import APIRouter
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..application.workspace_errors import WorkspaceDomainError
-from .workspace_route_shared import (
-    Any,
-    Depends,
-    HTTPException,
-    LearnerContext,
-    Request,
+from ..contracts.rest_models import (
     SkillCreateResponse,
     SkillUpdateResponse,
     SuccessResponse,
-    _skill_public,
-    current_learner_context,
-    services_of,
 )
+from ..learner import LearnerContext
+from .dependencies import current_learner_context, services_of
+from .mappers.skills import skill_response as _skill_public
 
 router = APIRouter(prefix="/api")
 

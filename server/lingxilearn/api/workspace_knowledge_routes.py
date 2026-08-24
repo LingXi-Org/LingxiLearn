@@ -1,20 +1,20 @@
 """Workspace API routes split by resource family."""
 
-from typing import Never
+import base64
+import hashlib
+import secrets
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any, Never
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..application.uploads import multipart_part_urls, upload_sessions
 from ..application.workspace_errors import WorkspaceDomainError
 from ..application.workspace_files import WorkspaceFileStorage
 from ..application.workspace_knowledge_service import WorkspaceKnowledgeService
-from .workspace_route_shared import (
-    MAX_FILE_SIZE,
-    UTC,
-    Any,
-    Depends,
+from ..contracts.rest_models import (
     DocumentTagSaveResponse,
-    HTTPException,
     KnowledgeBaseResponse,
     KnowledgeBasesResponse,
     KnowledgeBulkChunksResponse,
@@ -32,31 +32,26 @@ from .workspace_route_shared import (
     KnowledgeTagsResponse,
     KnowledgeTagUsageResponse,
     KnowledgeUploadCreateResponse,
-    LearnerContext,
-    Request,
     SuccessResponse,
     UploadStateResponse,
-    _chunk_public,
-    _document_public,
-    _knowledge_base_public,
-    _knowledge_upload_session_public,
+)
+from ..learner import LearnerContext
+from .dependencies import current_learner_context, not_found, services_of
+from .mappers.knowledge import chunk_response as _chunk_public
+from .mappers.knowledge import document_response as _document_public
+from .mappers.knowledge import knowledge_base_response as _knowledge_base_public
+from .mappers.knowledge import (
+    knowledge_upload_session_response as _knowledge_upload_session_public,
+)
+from .mappers.knowledge import tag_response as _tag_public
+from .workspace_route_shared import (
+    MAX_FILE_SIZE,
     _mime_type,
     _parse_knowledge_document,
     _public_origin,
     _safe_name,
     _storage_root,
-    _tag_public,
     _workspace_for_id,
-    base64,
-    current_learner_context,
-    datetime,
-    hashlib,
-    not_found,
-    secrets,
-    services_of,
-    timedelta,
-    utcnow,
-    uuid,
 )
 
 router = APIRouter(prefix="/api")
@@ -277,7 +272,7 @@ async def list_documents(
                 "fileSize": len(row.content.encode("utf-8")),
                 "tokenCount": len(row.content) // 4,
                 "chunkCount": max(1, (len(row.content) + 1199) // 1200) if row.content else 0,
-                "uploadedAt": row.created_at or utcnow(),
+                "uploadedAt": row.created_at or datetime.now(UTC),
                 "processingStatus": "completed",
                 "enabled": not row.archived,
             }

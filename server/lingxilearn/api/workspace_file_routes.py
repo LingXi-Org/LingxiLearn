@@ -1,31 +1,31 @@
 """Workspace API routes split by resource family."""
 
-from fastapi import APIRouter
+import base64
+import hashlib
+import secrets
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from ..application.uploads import multipart_part_urls, upload_sessions
 from ..application.workspace_errors import WorkspaceDomainError
 from ..application.workspace_file_service import WorkspaceFileService
-from ..application.workspace_files import WorkspaceFileStorage
-from ..store.repositories.workspace_files import descendant_folder_ids
-from .workspace_route_shared import (
+from ..application.workspace_files import (
     MAX_FILE_SIZE,
-    UTC,
-    Any,
+    WorkspaceFileStorage,
+    safe_leaf_name,
+    validated_mime_type,
+)
+from ..contracts.rest_models import (
     CreateUploadResponse,
-    Depends,
     FileDownloadUrlResponse,
-    FileResponse,
     FolderArchiveResponse,
     FolderRestoreResponse,
-    HTTPException,
-    LearnerContext,
     MoveItemsResponse,
-    Path,
-    Query,
-    Request,
-    Response,
     StorageStatusResponse,
-    StreamingResponse,
     SuccessResponse,
     UploadPartsResponse,
     UploadStateResponse,
@@ -35,27 +35,32 @@ from .workspace_route_shared import (
     WorkspaceFilesResponse,
     WorkspaceFolderResponse,
     WorkspaceFoldersResponse,
-    _file_public,
-    _folder_public,
-    _mime_type,
+)
+from ..learner import LearnerContext
+from .dependencies import current_learner_context, not_found, services_of
+from .mappers.files import file_response as _file_public
+from .mappers.workspaces import folder_response as _folder_public
+from .workspace_route_shared import (
     _public_origin,
-    _safe_name,
-    _storage_root,
-    _storage_target,
     _workspace,
     _workspace_for_id,
-    base64,
-    current_learner_context,
-    datetime,
-    hashlib,
-    not_found,
-    secrets,
-    services_of,
-    timedelta,
-    uuid,
 )
 
 router = APIRouter(prefix="/api")
+
+
+def _safe_name(value: str, fallback: str = "untitled") -> str:
+    try:
+        return safe_leaf_name(value, fallback)
+    except WorkspaceDomainError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.code) from error
+
+
+def _mime_type(name: str, supplied: Any) -> str:
+    try:
+        return validated_mime_type(name, supplied)
+    except WorkspaceDomainError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.code) from error
 
 
 @router.get("/workspaces/{workspace_id}/files/folders", response_model=WorkspaceFoldersResponse)
@@ -219,18 +224,16 @@ async def download_file_items(
     workspace = await _workspace_for_id(request, workspace_id, context)
     requested_files = {str(item) for item in (fileIds or [])}
     requested_folders = {str(item) for item in (folderIds or [])}
-    repository = services_of(request).workspace_files.repository
-    folders = await repository.list_folders(workspace.id)
-    files = [row for row in await repository.list_files(workspace.id) if not row.archived]
-    folder_ids = descendant_folder_ids(folders, requested_folders)
-    if requested_files - {row.id for row in files} or requested_folders - {
-        row.id for row in folders
-    }:
-        raise not_found()
-    selected = [row for row in files if row.id in requested_files or row.folder_id in folder_ids]
-    archive_bytes = WorkspaceFileStorage(services_of(request).settings.var_dir).archive(
-        context.learner_id, selected
-    )
+    try:
+        archive_bytes = await services_of(request).workspace_files.build_archive(
+            workspace_id=workspace.id,
+            learner_id=context.learner_id,
+            file_ids=requested_files,
+            folder_ids=requested_folders,
+            var_dir=services_of(request).settings.var_dir,
+        )
+    except WorkspaceDomainError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.code) from error
     return StreamingResponse(
         iter([archive_bytes]),
         media_type="application/zip",
@@ -416,29 +419,19 @@ async def update_file_content(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    workspace, row = await _file_for_id(request, workspace_id, file_id, context)
-    if (row.metadata_payload or {}).get("readOnly"):
-        raise HTTPException(status_code=403, detail="read_only_file")
     try:
-        raw = WorkspaceFileStorage(services_of(request).settings.var_dir).decode_content(
-            body.get("content", ""), body.get("encoding")
+        workspace = await _workspace_for_id(request, workspace_id, context)
+        row = await services_of(request).workspace_files.replace_content(
+            workspace_id=workspace.id,
+            file_id=file_id,
+            learner_id=context.learner_id,
+            var_dir=services_of(request).settings.var_dir,
+            content=body.get("content", ""),
+            encoding=body.get("encoding"),
+            max_size=MAX_FILE_SIZE,
         )
     except WorkspaceDomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.code) from error
-    if len(raw) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="file_too_large")
-    old_target = _storage_target(request, context.learner_id, row.storage_key)
-    storage_key = f"{context.learner_id}/{secrets.token_urlsafe(24)}"
-    WorkspaceFileStorage(services_of(request).settings.var_dir).write(
-        context.learner_id, storage_key, raw
-    )
-    row.size = len(raw)
-    row.storage_key = storage_key
-    saved = await services_of(request).workspace_files.repository.save_file(row)
-    if saved is None:
-        raise not_found()
-    row = saved
-    WorkspaceFileStorage.remove(old_target)
     return {"success": True, "file": _file_public(row, workspace.id)}
 
 
@@ -452,10 +445,13 @@ async def get_file_content(
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
-    workspace, row = await _file_for_id(request, workspace_id, file_id, context)
     try:
-        raw = WorkspaceFileStorage(services_of(request).settings.var_dir).read(
-            context.learner_id, row.storage_key
+        workspace = await _workspace_for_id(request, workspace_id, context)
+        row, raw = await services_of(request).workspace_files.read_content(
+            workspace_id=workspace.id,
+            file_id=file_id,
+            learner_id=context.learner_id,
+            var_dir=services_of(request).settings.var_dir,
         )
     except WorkspaceDomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.code) from error
@@ -477,17 +473,13 @@ async def get_file_content(
 async def serve_file(
     storage_key: str, request: Request, context: LearnerContext = Depends(current_learner_context)
 ) -> FileResponse:
-    if ".." in Path(storage_key).parts or not storage_key.startswith(f"{context.learner_id}/"):
-        raise not_found()
     workspace = await _workspace(request, context)
-    row = await services_of(request).workspace_files.repository.get_file_by_storage_key(
-        workspace.id, storage_key
-    )
-    if row is None or row.archived:
-        raise not_found()
     try:
-        target = WorkspaceFileStorage(services_of(request).settings.var_dir).existing_target(
-            context.learner_id, storage_key
+        row, target = await services_of(request).workspace_files.resolve_storage_target(
+            workspace_id=workspace.id,
+            learner_id=context.learner_id,
+            storage_key=storage_key,
+            var_dir=services_of(request).settings.var_dir,
         )
     except WorkspaceDomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.code) from error
@@ -503,19 +495,13 @@ async def inline_file(
     context: LearnerContext = Depends(current_learner_context),
 ) -> FileResponse:
     workspace = await _workspace_for_id(request, workspace_id, context)
-    if bool(key) == bool(fileId):
-        raise HTTPException(status_code=422, detail="provide_exactly_one_file_reference")
-    repository = services_of(request).workspace_files.repository
-    row = (
-        await repository.get_file(workspace.id, fileId)
-        if fileId
-        else await repository.get_file_by_storage_key(workspace.id, str(key))
-    )
-    if row is None or row.archived:
-        raise not_found()
     try:
-        target = WorkspaceFileStorage(services_of(request).settings.var_dir).existing_target(
-            context.learner_id, row.storage_key
+        row, target = await services_of(request).workspace_files.resolve_inline_target(
+            workspace_id=workspace.id,
+            learner_id=context.learner_id,
+            var_dir=services_of(request).settings.var_dir,
+            storage_key=key,
+            file_id=fileId,
         )
     except WorkspaceDomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.code) from error
@@ -605,7 +591,10 @@ async def create_upload(
         raise HTTPException(status_code=413, detail="file_too_large")
     upload_id = f"upload_{uuid.uuid4().hex}"
     token = secrets.token_urlsafe(32)
-    temp = _storage_root(request, context.learner_id) / f".{upload_id}.part"
+    storage_root = WorkspaceFileStorage(services_of(request).settings.var_dir).root(
+        context.learner_id
+    )
+    temp = storage_root / f".{upload_id}.part"
     workspace = await _workspace_for_id(request, str(body.get("workspaceId", "lingxi")), context)
     expires = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     await services_of(request).workspace_files.create_upload(
@@ -616,7 +605,7 @@ async def create_upload(
         name=_safe_name(str(body.get("name") or "untitled")),
         mime_type=_mime_type(str(body.get("name") or "untitled"), body.get("contentType")),
         size=size,
-        temp_key=str(temp.relative_to(_storage_root(request, context.learner_id))),
+        temp_key=str(temp.relative_to(storage_root)),
         expires_at=datetime.fromisoformat(expires),
     )
     upload_sessions[upload_id] = {
