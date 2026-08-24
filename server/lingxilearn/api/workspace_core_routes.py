@@ -1,30 +1,28 @@
 """Workspace API routes split by resource family."""
 
-from fastapi import APIRouter
+from datetime import UTC, datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..application.workspace_errors import WorkspaceDomainError
-from .workspace_route_shared import (
-    UTC,
-    Any,
-    Depends,
-    HTTPException,
-    LearnerContext,
+from ..contracts.rest_models import (
     MessageResponse,
     PinnedItemResponse,
     PinnedItemsResponse,
-    Request,
     SuccessResponse,
     WorkspaceListResponse,
     WorkspaceMembersResponse,
     WorkspacePermissionsResponse,
     WorkspaceResponse,
-    _pinned_item_public,
-    _public_workspace,
+)
+from ..learner import LearnerContext
+from .dependencies import current_learner_context, services_of
+from .mappers.workspaces import pinned_item_response as _pinned_item_public
+from .mappers.workspaces import workspace_response as _public_workspace
+from .workspace_route_shared import (
     _workspace,
     _workspace_for_id,
-    current_learner_context,
-    datetime,
-    services_of,
 )
 
 router = APIRouter(prefix="/api")

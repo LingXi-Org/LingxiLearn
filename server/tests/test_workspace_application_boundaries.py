@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import base64
 import io
 import zipfile
@@ -9,7 +10,11 @@ from types import SimpleNamespace
 import pytest
 
 from lingxilearn.application.document_parser import KnowledgeDocumentParser
-from lingxilearn.application.table_csv import parse_csv_rows
+from lingxilearn.application.table_csv import (
+    csv_download_headers,
+    parse_csv_rows,
+    render_table_export,
+)
 from lingxilearn.application.table_values import coerce_table_values
 from lingxilearn.application.workspace_errors import (
     WorkspaceDomainError,
@@ -53,6 +58,19 @@ def test_workspace_file_router_cannot_own_persistence_or_orm_models() -> None:
     assert not [token for token in forbidden if token in source]
 
 
+def test_workspace_file_router_delegates_storage_target_resolution() -> None:
+    source = (
+        Path(__file__).parents[1] / "lingxilearn" / "api" / "workspace_file_routes.py"
+    ).read_text(encoding="utf-8")
+    forbidden = (
+        "descendant_folder_ids",
+        "Path(storage_key)",
+        ".existing_target(",
+        "._storage_target(",
+    )
+    assert not [token for token in forbidden if token in source]
+
+
 def test_document_parser_handles_structured_formats_without_http_exceptions() -> None:
     parser = KnowledgeDocumentParser(1024 * 1024)
     assert parser.parse({"name": "data.json", "content": '{"answer":42}'})[2] == (
@@ -88,6 +106,39 @@ def test_document_parser_enforces_size_and_csv_parser_preserves_rows() -> None:
         ["name", "score"],
         [{"name": "Ada", "score": "10"}],
     )
+
+
+def test_table_export_rendering_is_transport_neutral() -> None:
+    rows = [{"name": "林溪", "score": 10, "ignored": "value"}]
+    csv_content, csv_media_type = render_table_export(["name", "score"], rows, "csv")
+    assert csv_content == "name,score\r\n林溪,10\r\n"
+    assert csv_media_type == "text/csv"
+
+    json_content, json_media_type = render_table_export(["name", "score"], rows, "JSON")
+    assert json_content == '[{"name": "林溪", "score": 10, "ignored": "value"}]'
+    assert json_media_type == "application/json"
+    assert csv_download_headers("成绩.csv") == {
+        "Content-Disposition": "attachment; filename*=UTF-8''%E6%88%90%E7%BB%A9.csv"
+    }
+    assert csv_download_headers("scores.csv") == {
+        "Content-Disposition": "attachment; filename=scores.csv"
+    }
+
+
+def test_table_router_does_not_own_search_or_export_algorithms() -> None:
+    source = (
+        Path(__file__).parents[1] / "lingxilearn" / "api" / "workspace_table_routes.py"
+    ).read_text(encoding="utf-8")
+    forbidden = ("import csv", "import io", "json.dumps", "csv.DictWriter", "io.StringIO")
+    assert not [token for token in forbidden if token in source]
+    tree = ast.parse(source)
+    shared_imports = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "workspace_route_shared"
+        for alias in node.names
+    }
+    assert shared_imports == {"_workspace_for_id"}
 
 
 def test_table_value_policy_covers_all_native_column_types() -> None:

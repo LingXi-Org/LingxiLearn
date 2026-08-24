@@ -478,7 +478,7 @@ class WorkspaceKnowledgeRepository:
             row = KnowledgeChunk(
                 id=f"chunk_{uuid.uuid4().hex}",
                 document_id=document_id,
-                ordinal=int(ordinal or -1) + 1,
+                ordinal=int(ordinal if ordinal is not None else -1) + 1,
                 text=content,
                 metadata_payload={"enabled": enabled},
             )

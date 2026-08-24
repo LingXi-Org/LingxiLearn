@@ -46,6 +46,7 @@ from .artifacts import ArtifactResourceService
 from .conversation import ConversationService
 from .graph_factory import RuntimeGraphFactory
 from .learner_state import LearnerStateService
+from .logs import LogService
 from .runtime_adapter import LingxiGraphRuntimeAdapter
 from .shared import BackgroundTasks
 from .skills import SkillService
@@ -182,7 +183,7 @@ class ApplicationServices:
         self.workspace_knowledge = WorkspaceKnowledgeService(self.db)
         self.workspaces = WorkspaceService(self.db)
         self.skills = SkillService(self.db)
-        self.logs = LogRepository(self.db)
+        self.logs = LogService(LogRepository(self.db), self.agent_events)
 
     @property
     def agent_model(self) -> dict[str, Any] | None:

@@ -10,6 +10,8 @@ from typing import Any
 
 from .workspace_errors import WorkspaceDomainError, WorkspaceResourceNotFound
 
+MAX_FILE_SIZE = 20 * 1024 * 1024
+
 
 def safe_leaf_name(value: str, fallback: str = "untitled") -> str:
     candidate = str(value).strip().replace("\x00", "")
