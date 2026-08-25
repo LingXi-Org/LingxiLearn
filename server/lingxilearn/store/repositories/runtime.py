@@ -552,6 +552,7 @@ class RuntimeRepository:
                 turn_id=turn_id,
                 sequence=sequence,
                 kind="interaction_answer",
+                delivery_mode="resume",
                 idempotency_key=_interaction_command_key(interaction_id, idempotency_key),
                 payload={
                     "interaction_id": interaction_id,

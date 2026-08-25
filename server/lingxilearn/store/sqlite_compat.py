@@ -19,7 +19,7 @@ from .models.base import Base
 
 logger = logging.getLogger(__name__)
 
-SQLITE_SCHEMA_HEAD = "0019_task_event_protocol"
+SQLITE_SCHEMA_HEAD = "0021_command_delivery_identity"
 SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "agent_tasks": {
         "create_idempotency_key": "VARCHAR(192)",
@@ -80,6 +80,12 @@ SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
         "reserved_tokens": "INTEGER NOT NULL DEFAULT 0",
         "reserved_heavy": "INTEGER NOT NULL DEFAULT 0",
         "reserved_wall_ms": "INTEGER NOT NULL DEFAULT 0",
+    },
+    "command_inbox": {
+        "delivery_mode": "VARCHAR(24) NOT NULL DEFAULT 'command'",
+        "disposition": "VARCHAR(24) NOT NULL DEFAULT 'pending'",
+        "delivery_execution_id": "VARCHAR(128)",
+        "delivered_at": "DATETIME",
     },
 }
 

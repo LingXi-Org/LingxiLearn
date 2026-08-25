@@ -305,7 +305,14 @@ class AgentTaskRepository:
             row.updated_at = utcnow()
             await s.commit()
 
-    async def claim_agent_task(self, task_id: str, learner_id: str) -> AgentTask | None:
+    async def claim_agent_task(
+        self,
+        task_id: str,
+        learner_id: str,
+        *,
+        execution_id: str | None = None,
+        reclaim_running: bool = False,
+    ) -> AgentTask | None:
         """Atomically claim a runnable task for one process.
 
         Task execution is launched from an asyncio background task, so the
@@ -320,15 +327,21 @@ class AgentTaskRepository:
         """
 
         async with self.db.session() as s:
+            claimable_status = AgentTask.status != "cancelled"
+            if not reclaim_running:
+                claimable_status = AgentTask.status.notin_(("running", "cancelled"))
+            values: dict[str, Any] = {"status": "running", "updated_at": utcnow()}
+            if execution_id is not None:
+                values["current_execution_id"] = execution_id
             result = await s.execute(
                 update(AgentTask)
                 .where(
                     AgentTask.id == task_id,
                     AgentTask.learner_id == learner_id,
                     AgentTask.thread_status.in_(("open", "awaiting_user", "running")),
-                    AgentTask.status.notin_(("running", "cancelled")),
+                    claimable_status,
                 )
-                .values(status="running", updated_at=utcnow())
+                .values(**values)
             )
             if int(getattr(result, "rowcount", 0) or 0) != 1:
                 return None

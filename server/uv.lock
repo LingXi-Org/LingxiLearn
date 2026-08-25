@@ -537,11 +537,11 @@ wheels = [
 
 [[package]]
 name = "lingxigraph"
-version = "2.2.0"
+version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1b/a2/d5107a37c9d1cd44815d4bb52f3c93374019afe9be9af1c7c02d6d7ee8a5/lingxigraph-2.2.0.tar.gz", hash = "sha256:f234bd749ba5f76c33dab11b465faac77e6f14e56e35b5f02735416232d84605", size = 206864, upload-time = "2026-08-12T02:52:13.864Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f0/9f/952f69a5392a2fbcbf1a07720462ede97d60db083826f4269782019c668e/lingxigraph-2.3.0.tar.gz", hash = "sha256:c9fe64d097148370b99bbccf862c7d389956eae908737f18232acc0301f7bc1a", size = 288893, upload-time = "2026-08-18T13:53:17.417Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/d9/49cd29daba93724d9e341075664714b64284dd62b498de9a1c2735e57aa7/lingxigraph-2.2.0-py3-none-any.whl", hash = "sha256:023541dd61539c680bdd5b810bc5252b792426d26876f13fb65bc2bf94d6e9d9", size = 184667, upload-time = "2026-08-12T02:52:12.438Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/cc/0b7ad1d6f91b1372e8427e442912252a00857d35a2ee5d961a671e5ea0a0/lingxigraph-2.3.0-py3-none-any.whl", hash = "sha256:00cfee0484e766961b30feeba542ab04dde1ee63d86e78cea2448a3fe3e56940", size = 228342, upload-time = "2026-08-18T13:53:15.593Z" },
 ]
 
 [package.optional-dependencies]
@@ -614,7 +614,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
-    { name = "lingxigraph", extras = ["openai", "coze", "postgres"], specifier = "==2.2.0" },
+    { name = "lingxigraph", extras = ["openai", "coze", "postgres"], specifier = "==2.3.0" },
     { name = "lingxiidentity", specifier = ">=0.1,<0.2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11,<2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },

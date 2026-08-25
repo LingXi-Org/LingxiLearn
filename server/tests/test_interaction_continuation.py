@@ -184,6 +184,7 @@ async def test_answer_during_a_running_turn_resumes_without_a_restart(paused_thr
         if record is not None and record.status == "running":
             return False
         resumes.append(dict(kwargs.get("resume") or {}))
+        await services.work_ledger.consume_command(str(kwargs["primary_command_id"]))
         return True
 
     services.tasks.spawn = spawn  # type: ignore[method-assign]
@@ -227,7 +228,7 @@ async def test_answer_during_a_running_turn_resumes_without_a_restart(paused_thr
         for command in await services.work_ledger.pending_commands(task_id)
         if command["kind"] == "interaction_answer"
     ]
-    assert remaining == [], "a drained continuation is consumed exactly once"
+    assert remaining == [], "the simulated durable outcome acknowledges the continuation"
 
     # A second drain is a no-op rather than a replay.
     assert await services.runtime._drain_interaction_continuations(task_id, learner_id) == 0
@@ -288,6 +289,8 @@ async def test_a_losing_worker_never_consumes_the_continuation(paused_thread) ->
         # False is exactly what _run_agent_task returns when another worker
         # won claim_agent_task: nothing was executed here.
         attempts.append(dict(kwargs.get("resume") or {}))
+        if owned:
+            await services.work_ledger.consume_command(str(kwargs["primary_command_id"]))
         return owned
 
     services.tasks.spawn = spawn  # type: ignore[method-assign]
@@ -415,6 +418,7 @@ async def test_ui_retry_with_a_new_key_repairs_and_resumes(paused_thread) -> Non
 
     async def drive(task: str, learner: str, prompt: str, **kwargs: Any) -> bool:
         resumed.append(dict(kwargs.get("resume") or {}))
+        await services.work_ledger.consume_command(str(kwargs["primary_command_id"]))
         return True
 
     services.tasks.spawn = spawn  # type: ignore[method-assign]

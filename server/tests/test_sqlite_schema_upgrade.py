@@ -160,6 +160,18 @@ async def test_existing_0017_sqlite_file_upgrades_without_data_loss(legacy_sqlit
             ).fetchall()
         }
         assert {"turn_id", "parent_execution_id", "resumes_execution_id"} <= execution_columns
+        command_columns = {
+            row[1]
+            for row in (
+                await conn.exec_driver_sql("PRAGMA table_info('command_inbox')")
+            ).fetchall()
+        }
+        assert {
+            "delivery_mode",
+            "disposition",
+            "delivery_execution_id",
+            "delivered_at",
+        } <= command_columns
 
         # New 0018 tables exist too, and the learner's data survived.
         tables = {
@@ -181,7 +193,7 @@ async def test_existing_0017_sqlite_file_upgrades_without_data_loss(legacy_sqlit
         assert protocol == 0
 
         marker = (await conn.exec_driver_sql("SELECT version_num FROM alembic_version")).scalar()
-        assert marker == SQLITE_SCHEMA_HEAD == "0019_task_event_protocol"
+        assert marker == SQLITE_SCHEMA_HEAD == "0021_command_delivery_identity"
 
 
 async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) -> None:

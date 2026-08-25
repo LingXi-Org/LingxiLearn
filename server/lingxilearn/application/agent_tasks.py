@@ -298,11 +298,12 @@ class AgentTaskService:
             if existing.create_payload_digest != payload_digest:
                 raise ValueError("idempotency_key_reused") from None
             return _agent_task_create_result(existing)
-        await self._work_ledger.append_command(
+        initial_command = await self._work_ledger.append_command(
             task_id=task_id,
             kind="initial_prompt",
             payload={"message": normalized, "attachments": attachment_refs},
             idempotency_key=f"task:{task_id}:initial",
+            delivery_mode="new_turn",
         )
         await self._events.append(
             task_id,
@@ -322,6 +323,8 @@ class AgentTaskService:
             _prompt_with_attachments(normalized, attachment_refs),
             schedule_id=schedule_id,
             scheduled_for=scheduled_for,
+            command_id=str(initial_command["id"]),
+            turn_id=str(initial_command["turn_id"]),
         )
         return {"id": task_id, "status": "queued"}
 
@@ -590,7 +593,9 @@ class AgentTaskService:
     async def propose_schedule_revocation(
         self, *, learner_id: str, schedule_id: str
     ) -> dict[str, Any]:
-        schedule = await self._agent_tasks.get_schedule(schedule_id=schedule_id, learner_id=learner_id)
+        schedule = await self._agent_tasks.get_schedule(
+            schedule_id=schedule_id, learner_id=learner_id
+        )
         if schedule is None:
             raise KeyError(schedule_id)
         proposal_id = f"schedule-revoke-proposal-{uuid.uuid4().hex}"
@@ -710,7 +715,9 @@ class AgentTaskService:
             )
             workspace_id = workspace.id if workspace is not None else None
             for ref in normalized:
-                kind = str(ref.get("type") or ref.get("resourceType") or ref.get("kind") or "").lower()
+                kind = str(
+                    ref.get("type") or ref.get("resourceType") or ref.get("kind") or ""
+                ).lower()
                 resource_id = str(
                     ref.get("id")
                     or ref.get("resourceId")
@@ -839,24 +846,40 @@ class AgentTaskService:
         if str(getattr(record, "thread_status", "") or "open") == "cancelled":
             raise ValueError("thread is cancelled")
         attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
-        command = None
+        current_turn = (
+            await self._work_ledger.latest_turn(task_id)
+            if record.status in {"queued", "running", "awaiting_user"}
+            else None
+        )
+        delivery_mode = {
+            "awaiting_user": "resume",
+            "queued": "steering",
+            "running": "steering",
+        }.get(record.status, "new_turn")
+        command = await self._work_ledger.append_command(
+            task_id=task_id,
+            kind="message",
+            payload={"message": message.strip(), "attachments": attachment_refs},
+            idempotency_key=idempotency_key or f"message-{uuid.uuid4().hex}",
+            turn_id=str(current_turn["id"]) if current_turn is not None else None,
+            delivery_mode=delivery_mode,
+        )
+        created = bool(command.get("created", True))
         if idempotency_key:
-            command = await self._work_ledger.append_command(
-                task_id=task_id,
-                kind="message",
-                payload={"message": message.strip(), "attachments": attachment_refs},
-                idempotency_key=idempotency_key,
-            )
-            # A retry of an already-enqueued command must not schedule another
-            # conversation worker or append another interjection.
-            if not command.get("created", True):
+            if not created:
                 if command.get("payload") != {
                     "message": message.strip(),
                     "attachments": attachment_refs,
                 }:
                     raise ValueError("idempotency_key_reused")
-                return {"turnId": str(command.get("turn_id") or ""), "created": False}
-        if record.status == "awaiting_user":
+                # Append success is not delivery success.  A retry repairs the
+                # fast path whenever the durable command is still pending.
+                if command.get("consumed_at"):
+                    return {"turnId": str(command.get("turn_id") or ""), "created": False}
+        command_id = str(command.get("id") or "")
+        command_turn_id = str(command.get("turn_id") or "")
+        delivery_mode = str(command.get("delivery_mode") or delivery_mode)
+        if delivery_mode == "resume":
             # Continuation of the paused turn: resume the original checkpoint.
             self._runtime.resume_turn(
                 task_id,
@@ -866,12 +889,14 @@ class AgentTaskService:
                     "kind": "chat",
                     "attachments": attachment_refs,
                 },
+                command_id=command_id,
+                turn_id=command_turn_id,
             )
             return {
-                "turnId": str((command or {}).get("turn_id") or ""),
-                "created": True,
+                "turnId": command_turn_id,
+                "created": created,
             }
-        if record.status in {"queued", "running"}:
+        if delivery_mode == "steering":
             # Mid-turn input has one owner.  The runtime adapter decides how
             # the live graph consumes it; it must not also become a queued
             # conversation item and replay as a second turn.
@@ -879,22 +904,28 @@ class AgentTaskService:
                 "message": message.strip(),
                 "attachments": attachment_refs,
                 "received_at": datetime.now(UTC).isoformat(),
+                "command_id": command_id,
+                "turn_id": command_turn_id,
+                "idempotency_key": str(command.get("idempotency_key") or ""),
             }
             await self._runtime.submit_running_input(task_id, record.learner_id, item)
             return {
-                "turnId": str((command or {}).get("turn_id") or ""),
-                "created": True,
+                "turnId": command_turn_id,
+                "created": created,
             }
         # Idle thread (previous turn delivered/failed): queue a brand-new turn.
         item = {
             "message": message.strip(),
             "attachments": attachment_refs,
             "received_at": datetime.now(UTC).isoformat(),
+            "command_id": command_id,
+            "turn_id": command_turn_id,
+            "idempotency_key": str(command.get("idempotency_key") or ""),
         }
         self._runtime.enqueue_conversation_input(task_id, record.learner_id, item)
         return {
-            "turnId": str((command or {}).get("turn_id") or ""),
-            "created": True,
+            "turnId": command_turn_id,
+            "created": created,
         }
 
     async def answer_agent_interaction(
@@ -956,6 +987,7 @@ class AgentTaskService:
             # The retry still repairs a publish the original attempt may have
             # died before completing.
             await self._events.publish_interaction_outbox(task_id)
+            self._runtime.schedule_interaction_drain(task_id, learner_id)
             return {"status": "accepted", "interactionId": interaction_id}
 
         await self._events.publish_interaction_outbox(task_id)
@@ -967,7 +999,14 @@ class AgentTaskService:
         }
         # The spawn is only the fast path: the command ledger already holds the
         # continuation, so a process death here is recovered at startup.
-        self._runtime.resume_turn(task_id, learner_id, resume)
+        command = dict(claim.get("command") or {})
+        self._runtime.resume_turn(
+            task_id,
+            learner_id,
+            resume,
+            command_id=str(command.get("id") or "") or None,
+            turn_id=str(command.get("turn_id") or "") or None,
+        )
         return {"status": "accepted", "interactionId": interaction_id}
 
     async def submit_agent_quiz(
@@ -1037,7 +1076,10 @@ class AgentTaskService:
             record.learner_id,
             {"message": "已提交答题", "kind": "quiz_submit", "answers": answers},
         )
-        return {"status": "accepted", "submission": await _submission_snapshot(self._agent_tasks, task_id)}
+        return {
+            "status": "accepted",
+            "submission": await _submission_snapshot(self._agent_tasks, task_id),
+        }
 
     async def confirm_agent_work(
         self,
@@ -1166,13 +1208,14 @@ class AgentTaskService:
         for work in await self._work_ledger.list_work(task_id):
             if work.get("status") not in {"succeeded", "failed", "cancelled", "blocked"}:
                 await self._work_ledger.cancel_work(task_id=task_id, work_id=str(work["id"]))
-        await self._agent_tasks.set_agent_task_status(task_id, "cancelled", thread_status="cancelled")
+        await self._agent_tasks.set_agent_task_status(
+            task_id, "cancelled", thread_status="cancelled"
+        )
         await self._runtime.cancel_run(task_id)
         if record.current_execution_id:
             latest = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
             execution_id = str(
-                (latest.current_execution_id if latest else None)
-                or record.current_execution_id
+                (latest.current_execution_id if latest else None) or record.current_execution_id
             )
             execution = await self._runtime_repo.get_agent_execution(execution_id, learner_id)
             if execution is not None:
