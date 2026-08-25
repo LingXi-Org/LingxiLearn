@@ -313,11 +313,8 @@ class LingxiGraphRuntimeAdapter:
         self._agent_slots = asyncio.Semaphore(max(1, settings.agent_concurrency))
         self._agent_runners: defaultdict[str, set[asyncio.Task[Any]]] = defaultdict(set)
         self._active_steering: dict[str, tuple[Any, str, str, str]] = {}
-        self._pending_steering: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+        self._steering_deliveries: defaultdict[str, set[str]] = defaultdict(set)
         self._conversation_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self._conversation_queue: defaultdict[str, asyncio.Queue[dict[str, Any]]] = defaultdict(
-            asyncio.Queue
-        )
 
     # -- RuntimeInputPort ---------------------------------------------------
 
@@ -341,6 +338,8 @@ class LingxiGraphRuntimeAdapter:
         *,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
+        command_id: str | None = None,
+        turn_id: str | None = None,
     ) -> None:
         self._tasks.spawn(
             self._drive_agent_task(
@@ -349,17 +348,37 @@ class LingxiGraphRuntimeAdapter:
                 prompt,
                 schedule_id=schedule_id,
                 scheduled_for=scheduled_for,
+                primary_command_id=command_id,
+                turn_id=turn_id,
             )
         )
 
-    def resume_turn(self, task_id: str, learner_id: str, resume: dict[str, Any]) -> None:
-        self._tasks.spawn(self._drive_agent_task(task_id, learner_id, "", resume=resume))
+    def resume_turn(
+        self,
+        task_id: str,
+        learner_id: str,
+        resume: dict[str, Any],
+        *,
+        command_id: str | None = None,
+        turn_id: str | None = None,
+    ) -> None:
+        self._tasks.spawn(
+            self._drive_agent_task(
+                task_id,
+                learner_id,
+                "",
+                resume=resume,
+                primary_command_id=command_id,
+                turn_id=turn_id,
+            )
+        )
 
     def enqueue_conversation_input(
         self, task_id: str, learner_id: str, item: dict[str, Any]
     ) -> None:
-        self._conversation_queue[task_id].put_nowait(item)
-        self._tasks.spawn(self._serve_conversation(task_id, learner_id))
+        # The item is already in CommandInbox.  Wake a drainer; never make the
+        # process-local queue the owner of accepted learner input.
+        self._tasks.spawn(self._drain_pending_commands(task_id, learner_id))
 
     async def submit_running_input(
         self, task_id: str, learner_id: str, item: dict[str, Any]
@@ -368,23 +387,44 @@ class LingxiGraphRuntimeAdapter:
 
         active = self._active_steering.get(task_id)
         if active is None:
-            self._pending_steering[task_id].append(dict(item))
+            self._tasks.spawn(self._drain_pending_commands(task_id, learner_id))
             return
+        await self._deliver_steering(task_id, learner_id, item, active)
+
+    async def _deliver_steering(
+        self,
+        task_id: str,
+        learner_id: str,
+        item: dict[str, Any],
+        active: tuple[Any, str, str, str],
+    ) -> None:
         graph, run_id, execution_id, turn_id = active
-        event = graph.steer(
-            run_id,
-            kind="user_message",
-            payload=dict(item),
-            metadata={
-                "task_id": task_id,
-                "thread_id": task_id,
-                "turn_id": str(item.get("turn_id") or turn_id),
-                "learner_id": learner_id,
-                "execution_id": execution_id,
-            },
-            idempotency_key=str(item.get("idempotency_key") or item.get("command_id") or "")
-            or None,
-        )
+        command_id = str(item.get("command_id") or "")
+        delivered = self._steering_deliveries[execution_id]
+        if command_id and command_id in delivered:
+            return
+        if command_id:
+            delivered.add(command_id)
+        try:
+            event = graph.steer(
+                run_id,
+                kind="user_message",
+                payload=dict(item),
+                metadata={
+                    "task_id": task_id,
+                    "thread_id": task_id,
+                    "turn_id": str(item.get("turn_id") or turn_id),
+                    "learner_id": learner_id,
+                    "execution_id": execution_id,
+                },
+                idempotency_key=str(item.get("idempotency_key") or command_id) or None,
+            )
+        except Exception:
+            if command_id:
+                delivered.discard(command_id)
+            raise
+        if command_id:
+            await self._work_ledger.mark_command_delivered(command_id, execution_id)
         await self._events.append(
             task_id,
             [
@@ -398,11 +438,62 @@ class LingxiGraphRuntimeAdapter:
                         "sequence": event.sequence,
                         "kind": event.kind,
                         "status": "accepted",
+                        "command_id": command_id or None,
                     },
                 }
             ],
         )
         self._events.notify(task_id)
+
+    async def _poll_durable_steering(
+        self, task_id: str, learner_id: str, execution_id: str, turn_id: str
+    ) -> None:
+        """Deliver ledger-owned steering to this replica's live graph."""
+
+        while True:
+            if not await self._deliver_pending_steering_once(
+                task_id, learner_id, execution_id, turn_id
+            ):
+                active = self._active_steering.get(task_id)
+                if active is None or active[2] != execution_id:
+                    return
+            await asyncio.sleep(0.1)
+
+    async def _deliver_pending_steering_once(
+        self, task_id: str, learner_id: str, execution_id: str, turn_id: str
+    ) -> int:
+        active = self._active_steering.get(task_id)
+        if active is None or active[2] != execution_id:
+            return 0
+        delivered = 0
+        for command in await self._work_ledger.pending_commands(task_id):
+            if (
+                command.get("kind") != "message"
+                or command.get("delivery_mode") != "steering"
+                or str(command.get("turn_id") or "") != turn_id
+            ):
+                continue
+            before = len(self._steering_deliveries[execution_id])
+            payload = {
+                **dict(command.get("payload") or {}),
+                "command_id": str(command["id"]),
+                "turn_id": str(command["turn_id"]),
+                "idempotency_key": str(command.get("idempotency_key") or ""),
+            }
+            await self._deliver_steering(task_id, learner_id, payload, active)
+            if len(self._steering_deliveries[execution_id]) > before:
+                delivered += 1
+        return delivered
+
+    async def _heartbeat_primary_command(
+        self, command_id: str, execution_id: str
+    ) -> None:
+        while True:
+            await asyncio.sleep(10)
+            if not await self._work_ledger.heartbeat_command_delivery(
+                command_id, execution_id
+            ):
+                return
 
     def schedule_interaction_drain(self, task_id: str, learner_id: str) -> None:
         self._tasks.spawn(self._drain_interaction_continuations(task_id, learner_id))
@@ -425,8 +516,10 @@ class LingxiGraphRuntimeAdapter:
         # left in that durable queue when the API process is restarted; the
         # atomic claim in _run_agent_task makes this safe across replicas.
         for task in await self._agent_tasks.queued_agent_tasks():
+            self._tasks.spawn(self._drain_pending_commands(task["id"], task["learner_id"]))
+        for task in await self._work_ledger.tasks_with_pending_commands():
             self._tasks.spawn(
-                self._drive_agent_task(task["id"], task["learner_id"], task["prompt"])
+                self._recover_pending_commands(task["id"], task["learner_id"])
             )
         await self.recover_interaction_continuations()
 
@@ -455,6 +548,8 @@ class LingxiGraphRuntimeAdapter:
                         "interaction_id": interaction_id,
                         "answers": list(payload.get("answers") or []),
                     },
+                    primary_command_id=str(command.get("id") or "") or None,
+                    turn_id=str(command.get("turn_id") or "") or None,
                 )
             )
             recovered += 1
@@ -471,6 +566,8 @@ class LingxiGraphRuntimeAdapter:
         resume: dict[str, Any] | None = None,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
+        primary_command_id: str | None = None,
+        turn_id: str | None = None,
     ) -> bool:
         """Run one turn; returns whether *this* call owned the run.
 
@@ -494,6 +591,8 @@ class LingxiGraphRuntimeAdapter:
                     resume=resume,
                     schedule_id=schedule_id,
                     scheduled_for=scheduled_for,
+                    primary_command_id=primary_command_id,
+                    turn_id=turn_id,
                 )
         finally:
             if runner is not None:
@@ -512,6 +611,8 @@ class LingxiGraphRuntimeAdapter:
         resume: dict[str, Any] | None = None,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
+        primary_command_id: str | None = None,
+        turn_id: str | None = None,
     ) -> bool:
         """Execute one turn; returns whether this call claimed the thread."""
 
@@ -525,6 +626,49 @@ class LingxiGraphRuntimeAdapter:
         record = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
         if record is None:
             return False
+        primary_command = (
+            await self._work_ledger.command(primary_command_id) if primary_command_id else None
+        )
+        if primary_command_id and (
+            primary_command is None or primary_command.get("consumed_at") is not None
+        ):
+            return False
+        if primary_command is not None:
+            turn_id = str(primary_command.get("turn_id") or turn_id or "")
+        latest = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
+        if latest is None or latest.status == "cancelled":
+            return False
+        execution_id = f"exec-{uuid.uuid4().hex}"
+        command_claimed = False
+        reclaim_running = False
+        if primary_command_id:
+            assert primary_command is not None
+            previous_disposition = str(primary_command.get("disposition") or "pending")
+            previous_owner = str(primary_command.get("delivery_execution_id") or "")
+            command_claimed = await self._work_ledger.claim_command_delivery(
+                primary_command_id, execution_id
+            )
+            if not command_claimed:
+                return False
+            reclaim_running = (
+                previous_disposition == "delivered"
+                and previous_owner != execution_id
+                and str(primary_command.get("delivery_mode") or "") != "steering"
+            )
+        claimed = await self._agent_tasks.claim_agent_task(
+            task_id,
+            learner_id,
+            execution_id=execution_id,
+            reclaim_running=reclaim_running,
+        )
+        if claimed is None:
+            # Another API process (or the request that originally created the
+            # task) already owns this run.  The caller must treat this as "not
+            # mine": the winner owns the command ledger entry too.
+            if command_claimed and primary_command_id:
+                await self._work_ledger.mark_command_transfer_pending(primary_command_id)
+            return False
+        record = claimed
         if resume is not None and resume.get("message"):
             await self._agent_tasks.update_agent_task_output(
                 task_id,
@@ -538,34 +682,19 @@ class LingxiGraphRuntimeAdapter:
                     "attachments": _json_safe(resume.get("attachments") or []),
                 },
             )
-        latest = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
-        if latest is None or latest.status == "cancelled":
-            return False
-        claimed = await self._agent_tasks.claim_agent_task(task_id, learner_id)
-        if claimed is None:
-            # Another API process (or the request that originally created the
-            # task) already owns this run.  The caller must treat this as "not
-            # mine": the winner owns the command ledger entry too.
-            return False
-        record = claimed
-        # Freeze the command set belonging to this turn.  Inputs arriving
-        # while the graph is running belong to a later turn and must remain
-        # pending for the next coordinator pass.
         pending_commands = await self._work_ledger.pending_commands(task_id)
-        turn_command_ids = {str(command["id"]) for command in pending_commands}
-        # Messages accepted while a task was still queued survive a process
-        # restart in the command ledger. Rehydrate them into the native
-        # Steering channel when this execution starts. The first message that
-        # exactly matches the new-turn prompt is the turn input, not steering.
+        # Identity, never text, separates the execution's primary command from
+        # commands that belong in the native Steering channel.
         deferred_steering: list[dict[str, Any]] = []
-        primary_prompt_seen = False
         for command in pending_commands:
-            if command.get("kind") != "message":
+            if (
+                command.get("kind") != "message"
+                or command.get("delivery_mode") != "steering"
+                or str(command.get("id") or "") == str(primary_command_id or "")
+                or str(command.get("turn_id") or "") != str(turn_id or "")
+            ):
                 continue
             payload = dict(command.get("payload") or {})
-            if not primary_prompt_seen and str(payload.get("message") or "") == str(prompt or ""):
-                primary_prompt_seen = True
-                continue
             deferred_steering.append(
                 {
                     **payload,
@@ -574,13 +703,15 @@ class LingxiGraphRuntimeAdapter:
                     "idempotency_key": str(command.get("idempotency_key") or ""),
                 }
             )
-        steering_command_ids = {str(item.get("command_id") or "") for item in deferred_steering}
-        execution_id = f"exec-{uuid.uuid4().hex}"
         try:
             # Bind this invocation to the canonical turn it executes.  A
             # resume keeps the turn that paused; new messages claim the
             # latest pending turn (issue #18 §4.3).
-            current_turn = await self._work_ledger.latest_turn(task_id)
+            current_turn = (
+                await self._work_ledger.turn(task_id, str(turn_id))
+                if turn_id
+                else await self._work_ledger.latest_turn(task_id)
+            )
             turn_id = str(current_turn["id"]) if current_turn else ""
             turn_index = int(current_turn["turn_index"]) if current_turn else 0
             # An interaction answer resumes the paused execution inside the
@@ -794,6 +925,8 @@ class LingxiGraphRuntimeAdapter:
         buffer: list[dict[str, Any]] = []
         current_agent = "coordinator"
         graph: Any | None = None
+        steering_pump: asyncio.Task[None] | None = None
+        primary_heartbeat: asyncio.Task[None] | None = None
         flush_lock = asyncio.Lock()
 
         async def flush_buffer() -> None:
@@ -822,6 +955,10 @@ class LingxiGraphRuntimeAdapter:
             if kind in _AGENT_FORCE_FLUSH:
                 self._tasks.spawn(flush_buffer())
 
+        if primary_command_id:
+            primary_heartbeat = asyncio.create_task(
+                self._heartbeat_primary_command(primary_command_id, execution_id)
+            )
         try:
             session_state = await self._runtime_state.ensure_session_state(
                 learner_id=learner_id,
@@ -842,14 +979,31 @@ class LingxiGraphRuntimeAdapter:
                 prior_artifacts=prior_artifacts,
             )
             self._active_steering[task_id] = (graph, execution_id, execution_id, turn_id)
+            checkpoint_state = await graph.aget_state(config)
+            checkpointed_command_ids = {
+                str(command_id)
+                for command_id in (
+                    dict(getattr(checkpoint_state, "values", None) or {}).get(
+                        "applied_command_ids"
+                    )
+                    or []
+                )
+                if str(command_id)
+            }
+            for command_id in checkpointed_command_ids:
+                await self._work_ledger.consume_command(command_id)
+            self._steering_deliveries[execution_id].update(checkpointed_command_ids)
             steering_by_identity: dict[str, dict[str, Any]] = {}
-            for pending in [*deferred_steering, *self._pending_steering.pop(task_id, [])]:
+            for pending in deferred_steering:
                 identity = str(
                     pending.get("idempotency_key") or pending.get("command_id") or uuid.uuid4().hex
                 )
                 steering_by_identity.setdefault(identity, pending)
             for pending in steering_by_identity.values():
                 await self.submit_running_input(task_id, learner_id, pending)
+            steering_pump = asyncio.create_task(
+                self._poll_durable_steering(task_id, learner_id, execution_id, turn_id)
+            )
             graph_input: Any = (
                 Command(resume=resume)
                 if resume is not None
@@ -877,6 +1031,10 @@ class LingxiGraphRuntimeAdapter:
                 if current_record is None:
                     return True
                 if current_record.status == "cancelled":
+                    if primary_heartbeat is not None:
+                        primary_heartbeat.cancel()
+                        await asyncio.gather(primary_heartbeat, return_exceptions=True)
+                        primary_heartbeat = None
                     await flush_buffer()
                     snapshot = projector.snapshot()
                     await self._runtime.update_agent_execution(
@@ -934,10 +1092,22 @@ class LingxiGraphRuntimeAdapter:
                     buffer.append(projected)
                 if force_flush or len(buffer) >= AGENT_FLUSH_EVERY:
                     await flush_buffer()
+            if steering_pump is not None:
+                steering_pump.cancel()
+                await asyncio.gather(steering_pump, return_exceptions=True)
+                steering_pump = None
             active = self._active_steering.get(task_id)
             if active is not None and active[1] == execution_id:
                 self._active_steering.pop(task_id, None)
         except Exception as exc:  # noqa: BLE001 - task failures are user-visible state
+            if primary_heartbeat is not None:
+                primary_heartbeat.cancel()
+                await asyncio.gather(primary_heartbeat, return_exceptions=True)
+                primary_heartbeat = None
+            if steering_pump is not None:
+                steering_pump.cancel()
+                await asyncio.gather(steering_pump, return_exceptions=True)
+                steering_pump = None
             active = self._active_steering.get(task_id)
             if active is not None and active[1] == execution_id:
                 self._active_steering.pop(task_id, None)
@@ -1023,6 +1193,7 @@ class LingxiGraphRuntimeAdapter:
             # A failed turn still releases the thread; an answer accepted while
             # it was running must not wait for a restart (issue #18 §10.4).
             self._tasks.spawn(self._drain_interaction_continuations(task_id, learner_id))
+            self._steering_deliveries.pop(execution_id, None)
             return True
 
         # Join any in-flight forced flush before terminal state is read.
@@ -1044,7 +1215,7 @@ class LingxiGraphRuntimeAdapter:
             "; ".join(errors),
             thread_status=thread_status,
         )
-        turn = await self._work_ledger.latest_turn(task_id)
+        turn = await self._work_ledger.turn(task_id, turn_id)
         if turn is not None:
             turn_status = {
                 "awaiting_user": "awaiting_user",
@@ -1064,20 +1235,45 @@ class LingxiGraphRuntimeAdapter:
                 status, "failed" if status == "failed" else "delivered"
             )
         )
-        # A command remains pending while the turn is executing. It becomes
-        # consumed only after the graph has produced a durable outcome, so a
-        # crash cannot silently drop an input.
+        # First persist the execution outcome.  Only then may the primary
+        # command be acknowledged; Steering is acknowledged from the exact
+        # identities that the graph wrote into its checkpoint.
+        await self._runtime.update_agent_execution(
+            execution_id,
+            status="awaiting_user"
+            if status == "awaiting_user"
+            else ("completed" if status in {"completed", "handed_off"} else status),
+            workflow_state=projector.snapshot()["workflowState"],
+            trace_spans=projector.snapshot()["traceSpans"],
+            error="; ".join(errors),
+            ended=status not in {"awaiting_user", "partial"},
+        )
         if status not in {"failed", "partial"}:
+            applied_command_ids = {
+                str(command_id)
+                for command_id in values.get("applied_command_ids") or []
+                if str(command_id)
+            }
+            if primary_command_id:
+                applied_command_ids.add(primary_command_id)
+            for command_id in applied_command_ids:
+                await self._work_ledger.consume_command(
+                    command_id, execution_id=execution_id
+                )
+
             remaining_commands = await self._work_ledger.pending_commands(task_id)
             transferred = [
                 command
                 for command in remaining_commands
                 if command.get("kind") == "message"
-                and (
-                    str(command["id"]) in steering_command_ids
-                    or str(command["id"]) not in turn_command_ids
-                )
+                and command.get("delivery_mode") == "steering"
+                and str(command.get("turn_id") or "") == turn_id
             ]
+            for command in transferred:
+                await self._work_ledger.mark_command_transfer_pending(
+                    str(command["id"]),
+                    delivery_mode="resume" if status == "awaiting_user" else "new_turn",
+                )
             if transferred:
                 await self._events.append(
                     task_id,
@@ -1096,22 +1292,6 @@ class LingxiGraphRuntimeAdapter:
                         for command in transferred
                     ],
                 )
-            for command in remaining_commands:
-                if str(command["id"]) not in turn_command_ids:
-                    continue
-                if str(command["id"]) in steering_command_ids:
-                    continue
-                await self._work_ledger.consume_command(str(command["id"]))
-        await self._runtime.update_agent_execution(
-            execution_id,
-            status="awaiting_user"
-            if status == "awaiting_user"
-            else ("completed" if status in {"completed", "handed_off"} else status),
-            workflow_state=projector.snapshot()["workflowState"],
-            trace_spans=projector.snapshot()["traceSpans"],
-            error="; ".join(errors),
-            ended=status not in {"awaiting_user", "partial"},
-        )
         # Publish generated HTML artifacts as native read-only workspace files
         # while retaining the original task-audit files and URLs.
         try:
@@ -1122,6 +1302,11 @@ class LingxiGraphRuntimeAdapter:
         # The thread is claimable again: pick up any interaction answer that
         # was accepted while this execution still held it (issue #18 §10.4).
         self._tasks.spawn(self._drain_interaction_continuations(task_id, learner_id))
+        self._tasks.spawn(self._drain_pending_commands(task_id, learner_id))
+        if primary_heartbeat is not None:
+            primary_heartbeat.cancel()
+            await asyncio.gather(primary_heartbeat, return_exceptions=True)
+        self._steering_deliveries.pop(execution_id, None)
         return True
 
     async def _sweep_holds(self, task_id: str, learner_id: str) -> None:
@@ -1139,50 +1324,77 @@ class LingxiGraphRuntimeAdapter:
             self._drive_agent_task(task_id, learner_id, "", resume={"kind": "holds_ready"})
         )
 
-    async def _serve_conversation(self, task_id: str, learner_id: str) -> None:
-        """Drain queued learner inputs through the normal turn coordinator.
-
-        A queued message waits while a graph turn is executing, then either
-        resumes the paused checkpoint (``awaiting_user``) or starts a new turn
-        on the same long-lived thread.  A finished turn never ends the thread
-        (issue #18 §4.1) — only a cancelled thread stops draining the queue.
-        """
+    async def _drain_pending_commands(self, task_id: str, learner_id: str) -> int:
+        """Run accepted commands in ledger order using their durable identity."""
 
         async with self._conversation_locks[task_id]:
-            queue = self._conversation_queue[task_id]
-            while not queue.empty():
-                item = await queue.get()
-                while True:
-                    record = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
-                    if record is None:
-                        return
-                    if str(getattr(record, "thread_status", "") or "open") == "cancelled":
-                        return
-                    if record.status in {"queued", "running"}:
-                        await asyncio.sleep(0.2)
-                        continue
-                    break
-                if record.status == "awaiting_user":
-                    await self._drive_agent_task(
-                        task_id,
-                        learner_id,
-                        "",
-                        resume={
-                            "message": str(item.get("message") or ""),
-                            "kind": "chat",
-                            "attachments": item.get("attachments") or [],
-                        },
-                    )
-                else:
-                    # New turn on the same thread: fresh graph invocation with
-                    # the message as the utterance, reusing the checkpoint
-                    # history under the same thread_id.
-                    await self._drive_agent_task(
-                        task_id,
-                        learner_id,
-                        str(item.get("message") or ""),
-                        resume=None,
-                    )
+            pending = await self._work_ledger.pending_commands(task_id)
+            if not pending:
+                return 0
+            record = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
+            if record is None or record.status == "cancelled":
+                return 0
+            if str(getattr(record, "thread_status", "") or "open") == "cancelled":
+                return 0
+            command = next(
+                (
+                    row
+                    for row in pending
+                    if row.get("kind") in {"initial_prompt", "message", "interaction_answer"}
+                ),
+                None,
+            )
+            if command is None:
+                return 0
+            kind = str(command.get("kind") or "")
+            mode = str(command.get("delivery_mode") or "command")
+            disposition = str(command.get("disposition") or "pending")
+            payload = dict(command.get("payload") or {})
+            command_id = str(command["id"])
+            command_turn_id = str(command.get("turn_id") or "")
+            if record.status == "running" and not (
+                disposition == "delivered" and mode != "steering"
+            ):
+                return 0
+            if kind == "interaction_answer":
+                resume: dict[str, Any] | None = {
+                    "kind": "interaction_answer",
+                    "interaction_id": str(payload.get("interaction_id") or ""),
+                    "answers": list(payload.get("answers") or []),
+                }
+                prompt = ""
+            elif mode == "resume" or (mode == "steering" and record.status == "awaiting_user"):
+                resume = {
+                    "kind": "chat",
+                    "message": str(payload.get("message") or ""),
+                    "attachments": list(payload.get("attachments") or []),
+                }
+                prompt = ""
+            elif mode in {"new_turn", "steering"} or disposition == "transfer_pending":
+                resume = None
+                prompt = str(payload.get("message") or record.prompt)
+            else:
+                return 0
+            owned = await self._drive_agent_task(
+                task_id,
+                learner_id,
+                prompt,
+                resume=resume,
+                primary_command_id=command_id,
+                turn_id=command_turn_id,
+            )
+            return int(owned)
+
+    async def _recover_pending_commands(self, task_id: str, learner_id: str) -> None:
+        """Keep retrying an orphaned primary command while its lease is live."""
+
+        while await self._work_ledger.pending_commands(task_id):
+            if await self._drain_pending_commands(task_id, learner_id):
+                return
+            record = await self._agent_tasks.get_agent_task_for_learner(task_id, learner_id)
+            if record is None or record.status != "running":
+                return
+            await asyncio.sleep(5)
 
     async def _drain_interaction_continuations(self, task_id: str, learner_id: str) -> int:
         """Resume answered interactions whose fast-path resume could not claim.
@@ -1231,6 +1443,8 @@ class LingxiGraphRuntimeAdapter:
                         "interaction_id": interaction_id,
                         "answers": list(payload.get("answers") or []),
                     },
+                    primary_command_id=str(pending[0].get("id") or "") or None,
+                    turn_id=str(pending[0].get("turn_id") or "") or None,
                 )
                 if not owned:
                     # Another worker (the answer's own fast path, or a drain in
@@ -1240,8 +1454,7 @@ class LingxiGraphRuntimeAdapter:
                     # ownership — not arrival — decides who may consume.
                     return drained
                 drained += 1
-                # This call owned the run, so it may close the ledger entry:
-                # a resume that reached a durable outcome already consumed it,
-                # and consuming here covers the failed turn so one continuation
-                # is never replayed in a loop.
-                await self._work_ledger.consume_command(str(pending[0]["id"]))
+                # The run acknowledges its exact primary command only after a
+                # checkpoint/outcome commits.  A failed run deliberately leaves
+                # the continuation replayable.
+                return drained

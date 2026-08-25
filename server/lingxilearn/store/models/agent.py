@@ -150,8 +150,12 @@ class CommandInbox(Base):
     turn_id: Mapped[str] = mapped_column(String(128), ForeignKey("agent_turns.id"), index=True)
     sequence: Mapped[int] = mapped_column(Integer)
     kind: Mapped[str] = mapped_column(String(32))
+    delivery_mode: Mapped[str] = mapped_column(String(24), default="command", index=True)
+    disposition: Mapped[str] = mapped_column(String(24), default="pending", index=True)
+    delivery_execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     idempotency_key: Mapped[str] = mapped_column(String(192))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

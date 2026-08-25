@@ -42,6 +42,7 @@ class WorkLedgerRepository:
         payload: dict[str, Any],
         idempotency_key: str,
         turn_id: str | None = None,
+        delivery_mode: str = "command",
     ) -> dict[str, Any]:
         """Append one command, creating a turn only for new-turn input.
 
@@ -109,6 +110,7 @@ class WorkLedgerRepository:
                 turn_id=turn.id,
                 sequence=sequence,
                 kind=kind,
+                delivery_mode=delivery_mode,
                 idempotency_key=idempotency_key,
                 payload=dict(payload),
             )
@@ -173,6 +175,7 @@ class WorkLedgerRepository:
                         turn_id=retry_turn.id,
                         sequence=retry_sequence,
                         kind=kind,
+                        delivery_mode=delivery_mode,
                         idempotency_key=idempotency_key,
                         payload=dict(payload),
                     )
@@ -201,12 +204,51 @@ class WorkLedgerRepository:
             ).all()
             return [_command_dict(row) for row in rows]
 
+    async def tasks_with_pending_commands(self) -> list[dict[str, str]]:
+        """Threads with accepted commands that still need durable application."""
+
+        async with self.db.session() as s:
+            rows = (
+                await s.execute(
+                    select(AgentTask.id, AgentTask.learner_id)
+                    .join(CommandInbox, CommandInbox.task_id == AgentTask.id)
+                    .where(
+                        CommandInbox.consumed_at.is_(None),
+                        AgentTask.deleted_at.is_(None),
+                        AgentTask.status != "cancelled",
+                    )
+                    .distinct()
+                    .order_by(AgentTask.created_at)
+                )
+            ).all()
+            return [
+                {"id": str(task_id), "learner_id": str(learner_id)}
+                for task_id, learner_id in rows
+            ]
+
     async def latest_turn(self, task_id: str) -> dict[str, Any] | None:
         async with self.db.session() as s:
             row = await s.scalar(
                 select(AgentTurn)
                 .where(AgentTurn.task_id == task_id)
                 .order_by(AgentTurn.turn_index.desc())
+            )
+            if row is None:
+                return None
+            return {
+                "id": row.id,
+                "turn_index": row.turn_index,
+                "status": row.status,
+                "phase": row.phase,
+                "goal_status": row.goal_status,
+                "execution_mode": row.execution_mode,
+                "revision": int(row.revision or 0),
+            }
+
+    async def turn(self, task_id: str, turn_id: str) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.scalar(
+                select(AgentTurn).where(AgentTurn.id == turn_id, AgentTurn.task_id == task_id)
             )
             if row is None:
                 return None
@@ -241,15 +283,101 @@ class WorkLedgerRepository:
             await s.commit()
             return True
 
-    async def consume_command(self, command_id: str) -> bool:
+    async def consume_command(
+        self, command_id: str, *, execution_id: str | None = None
+    ) -> bool:
+        async with self.db.session() as s:
+            stmt = update(CommandInbox).where(
+                CommandInbox.id == command_id, CommandInbox.consumed_at.is_(None)
+            )
+            if execution_id is not None:
+                stmt = stmt.where(CommandInbox.delivery_execution_id == execution_id)
+            result = await s.execute(stmt.values(disposition="applied", consumed_at=utcnow()))
+            await s.commit()
+            return bool(getattr(result, "rowcount", 0))
+
+    async def mark_command_delivered(self, command_id: str, execution_id: str) -> bool:
+        """Record a runtime delivery without mistaking it for durable application."""
+
         async with self.db.session() as s:
             result = await s.execute(
                 update(CommandInbox)
                 .where(CommandInbox.id == command_id, CommandInbox.consumed_at.is_(None))
-                .values(consumed_at=utcnow())
+                .values(
+                    disposition="delivered",
+                    delivery_execution_id=execution_id,
+                    delivered_at=utcnow(),
+                )
             )
             await s.commit()
             return bool(getattr(result, "rowcount", 0))
+
+    async def claim_command_delivery(
+        self, command_id: str, execution_id: str, *, lease_seconds: int = 30
+    ) -> bool:
+        """Lease a primary command, reclaiming only an expired delivery."""
+
+        cutoff = utcnow() - timedelta(seconds=max(1, lease_seconds))
+        async with self.db.session() as s:
+            result = await s.execute(
+                update(CommandInbox)
+                .where(
+                    CommandInbox.id == command_id,
+                    CommandInbox.consumed_at.is_(None),
+                    (
+                        CommandInbox.disposition.in_(("pending", "transfer_pending"))
+                        | (CommandInbox.delivery_execution_id == execution_id)
+                        | (CommandInbox.delivered_at.is_(None))
+                        | (CommandInbox.delivered_at < cutoff)
+                    ),
+                )
+                .values(
+                    disposition="delivered",
+                    delivery_execution_id=execution_id,
+                    delivered_at=utcnow(),
+                )
+            )
+            await s.commit()
+            return bool(getattr(result, "rowcount", 0))
+
+    async def heartbeat_command_delivery(self, command_id: str, execution_id: str) -> bool:
+        async with self.db.session() as s:
+            result = await s.execute(
+                update(CommandInbox)
+                .where(
+                    CommandInbox.id == command_id,
+                    CommandInbox.delivery_execution_id == execution_id,
+                    CommandInbox.consumed_at.is_(None),
+                )
+                .values(delivered_at=utcnow())
+            )
+            await s.commit()
+            return bool(getattr(result, "rowcount", 0))
+
+    async def mark_command_transfer_pending(
+        self, command_id: str, *, delivery_mode: str | None = None
+    ) -> bool:
+        """Release an unapplied delivery so another execution can own it."""
+
+        async with self.db.session() as s:
+            values: dict[str, Any] = {
+                "disposition": "transfer_pending",
+                "delivery_execution_id": None,
+            }
+            if delivery_mode is not None:
+                values["delivery_mode"] = delivery_mode
+            result = await s.execute(
+                update(CommandInbox)
+                .where(CommandInbox.id == command_id, CommandInbox.consumed_at.is_(None))
+                .values(**values)
+            )
+            await s.commit()
+            return bool(getattr(result, "rowcount", 0))
+
+    async def command(self, command_id: str) -> dict[str, Any] | None:
+        async with self.db.session() as s:
+            row = await s.get(CommandInbox, command_id)
+            return _command_dict(row) if row is not None else None
 
     async def create_work_plan(
         self,

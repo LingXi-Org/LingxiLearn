@@ -72,6 +72,10 @@ def _append(left: list[Any], right: list[Any]) -> list[Any]:
     return [*left, *right]
 
 
+def _append_unique(left: list[str], right: list[str]) -> list[str]:
+    return list(dict.fromkeys([*left, *right]))
+
+
 class LoopState(TypedDict, total=False):
     """The loop's own bookkeeping. Learner state lives in the four tables."""
 
@@ -89,6 +93,8 @@ class LoopState(TypedDict, total=False):
     last_decision_id: str
     replanning: bool
     user_message: dict[str, Any]
+    applied_command_ids: Annotated[list[str], _append_unique]
+    """Steering identities whose effect reached a durable graph checkpoint."""
     pending_interaction: dict[str, Any] | None
     """Durable interaction awaiting an answer; drives the typed interrupt."""
     finished_reason: str

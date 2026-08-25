@@ -32,11 +32,21 @@ class RuntimeInputPort(Protocol):
         *,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
+        command_id: str | None = None,
+        turn_id: str | None = None,
     ) -> None:
         """Queue a brand-new turn on a task thread (fire-and-forget)."""
         ...
 
-    def resume_turn(self, task_id: str, learner_id: str, resume: dict[str, Any]) -> None:
+    def resume_turn(
+        self,
+        task_id: str,
+        learner_id: str,
+        resume: dict[str, Any],
+        *,
+        command_id: str | None = None,
+        turn_id: str | None = None,
+    ) -> None:
         """Resume the paused checkpoint of the current turn (fire-and-forget)."""
         ...
 

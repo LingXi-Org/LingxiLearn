@@ -148,13 +148,16 @@ def build_orchestrate_node(deps: LoopDeps, *, dispatcher: Dispatcher):
         goal = Goal.from_dict(state.get("goal") or {})
         budget = Budget.from_dict(state.get("budget"))
         steering = runtime.drain_steering()
+        applied_command_ids = [
+            command_id
+            for event in steering
+            if (command_id := str(event.payload.get("command_id") or ""))
+        ]
+        checkpoint_patch = {"applied_command_ids": applied_command_ids}
         latest_message = (
             dict(steering[-1].payload) if steering else dict(state.get("user_message") or {})
         )
         for event in steering:
-            command_id = str(event.payload.get("command_id") or "")
-            if command_id and deps.work_ledger is not None:
-                await deps.work_ledger.consume_command(command_id)
             if deps.emit is not None:
                 consumed_at = datetime.now(UTC)
                 deps.emit(
@@ -473,7 +476,12 @@ def build_orchestrate_node(deps: LoopDeps, *, dispatcher: Dispatcher):
                         messages=[message],
                     )
                     deps.close_round(step=step, status=str(RuntimeStatus.FAILED), detail=message)
-                    return {**patch, "budget": budget.to_dict(), "step": step}
+                    return {
+                        **patch,
+                        **checkpoint_patch,
+                        "budget": budget.to_dict(),
+                        "step": step,
+                    }
                 if durable is not None:
                     produced = produced.model_copy(
                         update={
@@ -566,6 +574,7 @@ def build_orchestrate_node(deps: LoopDeps, *, dispatcher: Dispatcher):
             )
             return {
                 **patch,
+                **checkpoint_patch,
                 "budget": budget.to_dict(),
                 "last_decision_id": str(stored["id"]),
                 "step": step,
@@ -622,6 +631,7 @@ def build_orchestrate_node(deps: LoopDeps, *, dispatcher: Dispatcher):
         )
         return {
             **patch,
+            **checkpoint_patch,
             "plan": persisted_plan,
             "budget": budget.to_dict(),
             "last_decision_id": str(stored["id"]),
