@@ -1,10 +1,20 @@
 'use client'
 
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/lingxi/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  createAgentTask,
+  deleteAgentTask,
+  forkAgentTask,
+  getAgentTask,
+  getAgentTasks,
+  restoreAgentTask,
+  updateAgentTask,
+} from '@/lib/api/domains/agent-tasks'
+import { suspendBrowserScope } from '@/lib/browser-agent/transport'
+import { type MothershipResource, sanitizeChatResources } from '@/lib/copilot/resources/types'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type { AgentTaskListItem, AgentTaskSnapshot } from '@/lib/lingxi/types'
-import type { ChatMessage, MothershipResource } from '@/app/workspace/[workspaceId]/home/types'
+import { suspendTerminalScope } from '@/lib/terminal/transport'
 
 /**
  * The shared chat query namespace is kept as a compatibility seam for the
@@ -49,8 +59,8 @@ export const mothershipChatKeys = {
 export const MOTHERSHIP_CHAT_LIST_STALE_TIME = 60 * 1000
 export const MOTHERSHIP_CHAT_HISTORY_STALE_TIME = 30 * 1000
 
-function taskName(task: Pick<AgentTaskListItem, 'prompt' | 'intent'>): string {
-  return task.intent.topic || task.prompt || '新学习任务'
+function taskName(task: Pick<AgentTaskListItem, 'prompt' | 'title' | 'intent'>): string {
+  return task.title || task.intent.topic || task.prompt || '新学习任务'
 }
 
 function mapTask(task: AgentTaskListItem): MothershipChatMetadata {
@@ -60,10 +70,24 @@ function mapTask(task: AgentTaskListItem): MothershipChatMetadata {
     name: taskName(task),
     updatedAt,
     isActive: task.status === 'queued' || task.status === 'running',
-    isUnread: false,
-    isPinned: false,
-    deletedAt: null,
+    isUnread: Boolean(task.is_unread),
+    isPinned: Boolean(task.is_pinned),
+    deletedAt: task.deleted_at ? new Date(task.deleted_at) : null,
   }
+}
+
+function taskResources(task: Pick<AgentTaskSnapshot, 'resources'>): MothershipResource[] {
+  return sanitizeChatResources(task.resources ?? [])
+}
+
+function resourceKey(resource: Pick<MothershipResource, 'type' | 'id'>): string {
+  return `${resource.type}:${resource.id}`
+}
+
+function normalizedResource(resource: MothershipResource): MothershipResource {
+  const [normalized] = sanitizeChatResources([resource])
+  if (!normalized) throw new Error('资源缺少可寻址 ID')
+  return normalized
 }
 
 /** Retained for reused workspace modules; it only maps the Lingxi list shape. */
@@ -76,9 +100,9 @@ export async function fetchMothershipChats(
   scope: MothershipChatScope = 'active',
   signal?: AbortSignal
 ): Promise<MothershipChatMetadata[]> {
-  if (workspaceId !== LINGXI_WORKSPACE_ID || scope === 'archived') return []
+  if (workspaceId !== LINGXI_WORKSPACE_ID) return []
   signal?.throwIfAborted()
-  const { tasks } = await api.agentTasks()
+  const { tasks } = await getAgentTasks(scope)
   return tasks.map(mapTask)
 }
 
@@ -99,7 +123,7 @@ function snapshotToHistory(task: AgentTaskSnapshot): MothershipChatHistory {
   const active = task.status === 'queued' || task.status === 'running'
   return {
     id: task.id,
-    title: task.intent.topic || task.prompt,
+    title: task.title || task.intent.topic || task.prompt,
     messages: [
       {
         id: `lingxi-user-${task.id}`,
@@ -108,7 +132,7 @@ function snapshotToHistory(task: AgentTaskSnapshot): MothershipChatHistory {
       },
     ],
     activeStreamId: active ? task.id : null,
-    resources: [],
+    resources: taskResources(task),
     streamSnapshot: null,
   }
 }
@@ -119,7 +143,7 @@ export async function fetchMothershipChatHistory(
 ): Promise<MothershipChatHistory> {
   signal?.throwIfAborted()
   if (!chatId) throw new Error('缺少 LingxiGraph 任务 ID')
-  return snapshotToHistory(await api.agentTask(chatId))
+  return snapshotToHistory(await getAgentTask(chatId))
 }
 
 export function useMothershipChatHistory(chatId: string | undefined) {
@@ -131,46 +155,68 @@ export function useMothershipChatHistory(chatId: string | undefined) {
   })
 }
 
-function unsupportedMutation<TVariables = unknown, TResult = never>() {
+function useAgentTaskMutation<TVariables, TResult>(
+  mutationFn: (variables: TVariables) => Promise<TResult>
+) {
+  const queryClient = useQueryClient()
   return useMutation<TResult, Error, TVariables>({
-    mutationFn: async () => {
-      throw new Error('该共享功能未接入 LingxiGraph')
+    mutationFn,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: mothershipChatKeys.all })
     },
   })
 }
 
-/** Chat mutations remain visible to reused controls but never issue calls. */
-export function useMarkMothershipChatRead(_workspaceId?: string) {
-  return useMutation<void, Error, string>({ mutationFn: async () => undefined })
+async function suspendNativeTaskResources(taskId: string): Promise<void> {
+  await Promise.allSettled([suspendBrowserScope(taskId), suspendTerminalScope(taskId)])
 }
 
-/** Compatibility mutations used by the copied workspace sidebar. */
 export function useMarkMothershipChatUnread(_workspaceId?: string) {
-  return useMutation<void, Error, string>({ mutationFn: async () => undefined })
+  return useAgentTaskMutation((taskId: string) => updateAgentTask(taskId, { is_unread: true }))
+}
+
+export function useMarkMothershipChatRead(_workspaceId?: string) {
+  return useAgentTaskMutation((taskId: string) => updateAgentTask(taskId, { is_unread: false }))
 }
 
 export function useCreateMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<{ title?: string }>()
+  return useAgentTaskMutation(({ title }: { title?: string }) =>
+    createAgentTask(title?.trim() || '新学习任务')
+  )
 }
 
 export function useForkMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string }>()
+  return useAgentTaskMutation(({ chatId }: { chatId: string }) => forkAgentTask(chatId))
 }
 
 export function useDeleteMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<string>()
+  return useAgentTaskMutation(async (chatId: string) => {
+    const result = await deleteAgentTask(chatId)
+    await suspendNativeTaskResources(chatId)
+    return result
+  })
 }
 
 export function useDeleteMothershipChats(_workspaceId?: string) {
-  return unsupportedMutation<string[]>()
+  return useAgentTaskMutation(async (chatIds: string[]) => {
+    await Promise.all(
+      chatIds.map(async (chatId) => {
+        await deleteAgentTask(chatId)
+        await suspendNativeTaskResources(chatId)
+      })
+    )
+  })
 }
 
 export function useRestoreMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<string>()
+  return useAgentTaskMutation((chatId: string) => restoreAgentTask(chatId))
 }
 
 export function useUpdateMothershipChat(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; title?: string; name?: string }>()
+  return useAgentTaskMutation(
+    ({ chatId, title, name }: { chatId: string; title?: string; name?: string }) =>
+      updateAgentTask(chatId, { title: title ?? name })
+  )
 }
 
 export function useRenameMothershipChat(_workspaceId?: string) {
@@ -178,19 +224,54 @@ export function useRenameMothershipChat(_workspaceId?: string) {
 }
 
 export function useSetMothershipChatPinned(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; pinned: boolean }>()
+  return useAgentTaskMutation(({ chatId, pinned }: { chatId: string; pinned: boolean }) =>
+    updateAgentTask(chatId, { is_pinned: pinned })
+  )
 }
 
 export function useAddMothershipChatResource(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; resource: MothershipResource }>()
+  return useAgentTaskMutation(
+    async ({ chatId, resource }: { chatId: string; resource: MothershipResource }) => {
+      const task = await getAgentTask(chatId)
+      const resources = taskResources(task)
+      const canonical = normalizedResource(resource)
+      const canonicalKey = resourceKey(canonical)
+      const next = sanitizeChatResources([
+        ...resources.filter((candidate) => resourceKey(candidate) !== canonicalKey),
+        canonical,
+      ])
+      return updateAgentTask(chatId, { resources: next })
+    }
+  )
 }
 
 export function useRemoveMothershipChatResource(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; resourceId: string }>()
+  return useAgentTaskMutation(
+    async ({
+      chatId,
+      resourceType,
+      resourceId,
+    }: {
+      chatId: string
+      resourceType: MothershipResource['type']
+      resourceId: string
+    }) => {
+      const task = await getAgentTask(chatId)
+      const resources = taskResources(task)
+      return updateAgentTask(chatId, {
+        resources: resources.filter(
+          (resource) => resource.type !== resourceType || resource.id !== resourceId
+        ),
+      })
+    }
+  )
 }
 
 export function useReorderMothershipChatResources(_workspaceId?: string) {
-  return unsupportedMutation<{ chatId: string; resources: MothershipResource[] }>()
+  return useAgentTaskMutation(
+    ({ chatId, resources }: { chatId: string; resources: MothershipResource[] }) =>
+      updateAgentTask(chatId, { resources: sanitizeChatResources(resources) })
+  )
 }
 
 export function useAddChatResource(_workspaceId?: string) {
@@ -198,11 +279,7 @@ export function useAddChatResource(_workspaceId?: string) {
 }
 
 export function useRemoveChatResource(_workspaceId?: string) {
-  return unsupportedMutation<{
-    chatId: string
-    resourceId?: string
-    resourceType?: MothershipResource['type']
-  }>()
+  return useRemoveMothershipChatResource(_workspaceId)
 }
 
 export function useReorderChatResources(_workspaceId?: string) {

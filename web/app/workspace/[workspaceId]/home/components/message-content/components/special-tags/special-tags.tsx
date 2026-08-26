@@ -1,78 +1,29 @@
 'use client'
 
-import { createElement, lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { ThinkingLoader } from '@/components/ui'
-import {
-  ArrowRight,
-  Check,
-  ChevronDown,
-  cn,
-  Expandable,
-  ExpandableContent,
-  SecretReveal,
-  SquareArrowUpRight,
-  Tooltip,
-  toast,
-} from '@/components/ui-kit'
+import { ArrowRight, ChevronDown, cn, Expandable, ExpandableContent } from '@/components/ui-kit'
 import { TerminalWindow } from '@/components/ui-kit/icons'
-import { useSession } from '@/lib/auth/auth-client'
-import { buildHostedUpgradeUrl, HOSTED_BILLING_SETTINGS_URL } from '@/lib/billing/upgrade-reasons'
-import { canManageWorkspaceBilling } from '@/lib/billing/workspace-permissions'
 import { isBrowserAgentAvailable, sendBrowserPanelAction } from '@/lib/browser-agent/transport'
-import { isHosted } from '@/lib/core/config/env-flags'
-import { isSafeHttpUrl } from '@/lib/core/utils/urls'
-import { readLatestOAuthChatAttempt } from '@/lib/credentials/oauth-chat-attempt'
-import { getDesktopBridge } from '@/lib/desktop'
 import { desktopChatScopeId } from '@/lib/desktop/chat-scope'
-import {
-  resolveOAuthServiceForSlug,
-  resolveServiceAccountIntegration,
-} from '@/lib/integrations/oauth-service'
-import { OAUTH_PROVIDERS } from '@/lib/oauth/oauth'
-import { getServiceConfigByProviderId } from '@/lib/oauth/utils'
 import { finishTerminalHandoff, isTerminalAvailable } from '@/lib/terminal/transport'
 import { useChatSurface } from '@/app/workspace/[workspaceId]/home/components/chat-surface-context'
 import { ContextMentionIcon } from '@/app/workspace/[workspaceId]/home/components/context-mention-icon'
-import {
-  INTERACTION_CARD_ROW_CLASSES,
-  InteractionCard,
-  InteractionCardActionRow,
-  InteractionCardInputRow,
-  InteractionCardRecap,
-} from '@/app/workspace/[workspaceId]/home/components/message-content/components/interaction-card'
 import {
   parseQuestionAnswerMessage,
   QuestionDisplay,
   type TypedQuestionAnswer,
 } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
-import {
-  resolveOAuthChipTarget,
-  useOAuthChipConnection,
-} from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags/use-oauth-chip-connection'
 import type {
   ChatMessageContext,
   MothershipResource,
   WorkspaceResourceRef,
 } from '@/app/workspace/[workspaceId]/home/types'
-// Deep import, not the barrel: the barrel also re-exports
-// ConnectServiceAccountModal, and that edge would pull the modal into this
-// chunk and defeat the lazy() split below.
-import { useServiceAccountConnectTarget } from '@/app/workspace/[workspaceId]/integrations/components/connect-service-account-modal/use-service-account-connect'
-import { useWorkspaceHostContext } from '@/app/workspace/[workspaceId]/providers/workspace-host-provider'
-import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
-import { useWorkspaceCredential } from '@/hooks/queries/credentials'
-import {
-  usePersonalEnvironment,
-  useSavePersonalEnvironment,
-  useUpsertWorkspaceEnvironment,
-} from '@/hooks/queries/environment'
 import { useKnowledgeBasesQuery } from '@/hooks/queries/kb/knowledge'
 import { useTablesList } from '@/hooks/queries/tables'
 import { findWorkspaceFileByPath } from '@/hooks/queries/utils/find-workspace-file-by-src'
-import { useWorkflows } from '@/hooks/queries/workflows'
 import { useWorkspaceFiles } from '@/hooks/queries/workspace-files'
-import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 
 export interface OptionsItemData {
   title: string
@@ -95,168 +46,18 @@ export interface UsageUpgradeTagData {
   message: string
 }
 
-/**
- * Kept out of the chat's initial chunk — it pulls in three provider-specific
- * setup forms and is only mounted once a message actually offers a service
- * account.
- */
-const ConnectServiceAccountModal = lazy(() =>
-  import(
-    '@/app/workspace/[workspaceId]/integrations/components/connect-service-account-modal/connect-service-account-modal'
-  ).then((m) => ({ default: m.ConnectServiceAccountModal }))
-)
-
-export const CREDENTIAL_TAG_TYPES = [
-  'env_key',
-  'oauth_key',
-  'sim_key',
-  'credential_id',
-  'link',
-  'secret_input',
-  'folder_access',
-  'browser_takeover',
-  'terminal_handoff',
-  'service_account',
-] as const
+export const CREDENTIAL_TAG_TYPES = ['browser_takeover', 'terminal_handoff'] as const
 
 export type CredentialTagType = (typeof CREDENTIAL_TAG_TYPES)[number]
-
-export const SECRET_INPUT_SCOPES = ['personal', 'workspace'] as const
-
-export type SecretInputScope = (typeof SECRET_INPUT_SCOPES)[number]
 
 export interface CredentialItemData {
   value?: string
   type: CredentialTagType
-  provider?: string
-  /**
-   * Env-var key name to save the pasted secret under (secret_input), e.g.
-   * "OPENAI_API_KEY"; the folder hint for folder_access; the takeover reason
-   * for browser_takeover; what the user needs to do for terminal_handoff.
-   */
+  /** Takeover reason or terminal handoff instruction. */
   name?: string
-  /** Where a secret_input value is persisted. Defaults to "workspace". */
-  scope?: SecretInputScope
-  /**
-   * Existing credential to reconnect in place (service_account only). Present =
-   * rotate the secret on this credential; absent = create a new one.
-   */
-  credentialId?: string
 }
 
-/**
- * Normalized `<credential>` payload. A singleton object remains valid for old
- * messages, while an array lets one terminal tag render several controls as
- * rows in a single card.
- */
 export type CredentialTagData = CredentialItemData[]
-
-export interface CredentialSubmissionProgress {
-  connectedIntegrationIndexes: ReadonlySet<number>
-  savedSecretIndexes: ReadonlySet<number>
-}
-
-export interface CredentialSubmissionPayload {
-  integrations: Array<{ name: string; status: 'connected' | 'skipped' }>
-  secrets: Array<{ name: string; status: 'saved' | 'skipped' }>
-}
-
-/**
- * Safe user-turn payload emitted by the credential question card. It carries
- * only the requested provider and environment-variable names; secret values
- * remain in Sim's credential stores and never enter the transcript.
- */
-export function formatCredentialSubmissionMessage(
-  data: CredentialTagData,
-  progress?: CredentialSubmissionProgress
-): string {
-  const integrations = data
-    .filter((item) => item.type === 'link' || item.type === 'service_account')
-    .map((item) => item.provider?.trim())
-    .filter((provider): provider is string => Boolean(provider))
-  const secrets = data
-    .filter((item) => item.type === 'secret_input')
-    .map((item) => item.name?.trim())
-    .filter((name): name is string => Boolean(name))
-  const payload: CredentialSubmissionPayload = {
-    integrations: integrations.map((name, index) => ({
-      name,
-      status:
-        !progress || progress.connectedIntegrationIndexes.has(index) ? 'connected' : 'skipped',
-    })),
-    secrets: secrets.map((name, index) => ({
-      name,
-      status: !progress || progress.savedSecretIndexes.has(index) ? 'saved' : 'skipped',
-    })),
-  }
-  return `Credential setup submitted — ${JSON.stringify(payload)}`
-}
-
-export function parseCredentialSubmissionProgress(
-  data: CredentialTagData,
-  content: string
-): CredentialSubmissionPayload | null {
-  const legacyIntegrations = data
-    .filter((item) => item.type === 'link' || item.type === 'service_account')
-    .map((item) => item.provider?.trim())
-    .filter((provider): provider is string => Boolean(provider))
-  const legacySecrets = data
-    .filter((item) => item.type === 'secret_input')
-    .map((item) => item.name?.trim())
-    .filter((name): name is string => Boolean(name))
-  const legacyParts = [
-    legacyIntegrations.length > 0 ? `integrations: ${legacyIntegrations.join(', ')}` : null,
-    legacySecrets.length > 0 ? `secrets: ${legacySecrets.join(', ')}` : null,
-  ].filter((part): part is string => part !== null)
-  const legacyMessage = `Credential setup complete${legacyParts.length > 0 ? ` — ${legacyParts.join('; ')}` : ''}`
-  if (content === legacyMessage) {
-    return {
-      integrations: legacyIntegrations.map((name) => ({ name, status: 'connected' })),
-      secrets: legacySecrets.map((name) => ({ name, status: 'saved' })),
-    }
-  }
-
-  const prefix = 'Credential setup submitted — '
-  if (!content.startsWith(prefix)) return null
-
-  try {
-    const payload = JSON.parse(content.slice(prefix.length)) as CredentialSubmissionPayload
-    const expectedIntegrations = data
-      .filter((item) => item.type === 'link' || item.type === 'service_account')
-      .map((item) => item.provider?.trim())
-      .filter((provider): provider is string => Boolean(provider))
-    const expectedSecrets = data
-      .filter((item) => item.type === 'secret_input')
-      .map((item) => item.name?.trim())
-      .filter((name): name is string => Boolean(name))
-
-    const valid =
-      Array.isArray(payload.integrations) &&
-      payload.integrations.length === expectedIntegrations.length &&
-      payload.integrations.every(
-        (item, index) =>
-          item.name === expectedIntegrations[index] &&
-          (item.status === 'connected' || item.status === 'skipped')
-      ) &&
-      Array.isArray(payload.secrets) &&
-      payload.secrets.length === expectedSecrets.length &&
-      payload.secrets.every(
-        (item, index) =>
-          item.name === expectedSecrets[index] &&
-          (item.status === 'saved' || item.status === 'skipped')
-      )
-    return valid ? payload : null
-  } catch {
-    return null
-  }
-}
-
-export function parseCredentialSubmissionMessage(
-  data: CredentialTagData,
-  content: string
-): boolean {
-  return parseCredentialSubmissionProgress(data, content) !== null
-}
 
 export interface MothershipErrorTagData {
   message: string
@@ -294,7 +95,7 @@ export interface QuestionItem {
 /** Normalized `<question>` payload: single-object bodies become a one-element array. */
 export type QuestionTagData = QuestionItem[]
 
-export const WORKSPACE_RESOURCE_TAG_TYPES = ['workflow', 'table', 'file'] as const
+export const WORKSPACE_RESOURCE_TAG_TYPES = ['table', 'file', 'knowledgebase'] as const
 
 export type WorkspaceResourceTagType = (typeof WORKSPACE_RESOURCE_TAG_TYPES)[number]
 
@@ -380,59 +181,18 @@ function isUsageUpgradeTagData(value: unknown): value is UsageUpgradeTagData {
 
 function isCredentialItemData(value: unknown): value is CredentialItemData {
   if (!isRecord(value)) return false
-  if (
-    typeof value.type !== 'string' ||
-    !(CREDENTIAL_TAG_TYPES as readonly string[]).includes(value.type)
-  ) {
-    return false
-  }
-  if (value.provider !== undefined && typeof value.provider !== 'string') return false
-  // secret_input is an empty input the user fills in — it carries a key name to
-  // save under, not a value.
-  if (value.type === 'secret_input') {
-    if (
-      value.scope !== undefined &&
-      !(SECRET_INPUT_SCOPES as readonly string[]).includes(value.scope as string)
-    ) {
-      return false
-    }
-    return typeof value.name === 'string' && value.name.trim().length > 0
-  }
-  // folder_access, browser_takeover and terminal_handoff are value-less action
-  // chips (optional `name` carries the folder hint / reason).
-  if (
-    value.type === 'folder_access' ||
-    value.type === 'browser_takeover' ||
-    value.type === 'terminal_handoff'
-  ) {
-    return value.name === undefined || typeof value.name === 'string'
-  }
-
-  // A service_account tag is a control, not a value: it names the provider
-  // whose setup form to open, and the user types the secret into that form —
-  // so it never carries a `value`, but it is useless without a provider. An
-  // optional `credentialId` reconnects an existing service account in place;
-  // reject a blank one, since the renderer treats a truthy id as "reconnect"
-  // and would try to rotate a non-existent credential.
-  if (value.type === 'service_account') {
-    if (value.credentialId !== undefined) {
-      if (typeof value.credentialId !== 'string' || value.credentialId.trim().length === 0) {
-        return false
-      }
-    }
-    return typeof value.provider === 'string' && value.provider.trim().length > 0
-  }
-  // A sim_key chip is platform-filled: the model only marks where the workspace
-  // API key belongs (it never holds the value) and Sim injects it from the tool
-  // result, so the tag is valid with or without a `value`. Every other rendered
-  // type (e.g. link) needs a string value to render.
-  if (value.type === 'sim_key') return true
-  return typeof value.value === 'string'
+  return (
+    typeof value.type === 'string' &&
+    (CREDENTIAL_TAG_TYPES as readonly string[]).includes(value.type) &&
+    (value.name === undefined || typeof value.name === 'string') &&
+    (value.value === undefined || typeof value.value === 'string')
+  )
 }
 
 /**
- * Parses a `<credential>` body and normalizes a singleton object to one row.
- * Empty arrays and arrays containing one invalid control reject the whole card.
+ * Parses the two native handoff controls still supported by LingxiLearn.
+ * OAuth, secrets, service accounts, and local-folder grants deliberately fail
+ * this guard because those capabilities have no backend owner.
  */
 export function parseCredentialTagBody(body: string): CredentialTagData | null {
   try {
@@ -444,7 +204,7 @@ export function parseCredentialTagBody(body: string): CredentialTagData | null {
   }
 }
 
-/** Last complete credential batch, used to pair its Submit turn on reload. */
+/** Last complete native handoff batch. */
 export function parseLastCredentialTag(content: string): CredentialTagData | null {
   const matches = content.match(/<credential>([\s\S]*?)<\/credential>/g)
   if (!matches || matches.length === 0) return null
@@ -1448,14 +1208,8 @@ export function parseSpecialTags(content: string, isStreaming: boolean): ParsedS
 
 interface SpecialTagsProps {
   segment: Exclude<ContentSegment, { type: 'text' }>
-  /** Stable identity for interaction state owned by this message/tag. */
-  interactionId?: string
   /** Transcript-derived answers for this message's question card (renders the recap). */
   questionAnswers?: string[]
-  /** Transcript-derived status payload for this message's credential card. */
-  credentialSubmission?: CredentialSubmissionPayload
-  /** The user moved on without submitting this message's credential card. */
-  credentialAbandoned?: boolean
   onOptionSelect?: (id: string) => void
   /**
    * Submits the question card's answers in option-id form. Returning `true`
@@ -1473,10 +1227,7 @@ interface SpecialTagsProps {
  */
 export function SpecialTags({
   segment,
-  interactionId,
   questionAnswers,
-  credentialSubmission,
-  credentialAbandoned,
   onOptionSelect,
   onQuestionSubmit,
   onQuestionDismiss,
@@ -1490,15 +1241,7 @@ export function SpecialTags({
     case 'usage_upgrade':
       return <UsageUpgradeDisplay data={segment.data} />
     case 'credential':
-      return (
-        <CredentialDisplay
-          data={segment.data}
-          interactionId={interactionId}
-          submitted={credentialSubmission}
-          abandoned={credentialAbandoned}
-          onContinue={onOptionSelect}
-        />
-      )
+      return <CredentialDisplay data={segment.data} />
     case 'mothership-error':
       return <MothershipErrorDisplay data={segment.data} />
     case 'workspace_resource':
@@ -1603,12 +1346,12 @@ function OptionsDisplay({ data, onSelect }: OptionsDisplayProps) {
 
 function fallbackWorkspaceResourceTitle(type: WorkspaceResourceTagType): string {
   switch (type) {
-    case 'workflow':
-      return 'Workflow'
     case 'table':
       return 'Table'
     case 'file':
       return 'File'
+    case 'knowledgebase':
+      return 'Knowledge base'
   }
 }
 
@@ -1618,12 +1361,12 @@ function toMothershipResourceType(type: WorkspaceResourceTagType): MothershipRes
 
 function toChatMessageContext(data: WorkspaceResourceTagData, label: string): ChatMessageContext {
   switch (data.type) {
-    case 'workflow':
-      return { kind: 'workflow', label, workflowId: data.id ?? '' }
     case 'table':
       return { kind: 'table', label, tableId: data.id ?? '' }
     case 'file':
       return { kind: 'file', label, fileId: data.id ?? data.path ?? '' }
+    case 'knowledgebase':
+      return { kind: 'knowledge', label, knowledgeId: data.id ?? '' }
   }
 }
 
@@ -1635,7 +1378,6 @@ export function WorkspaceResourceDisplay({
   onSelect?: (resource: WorkspaceResourceRef) => void
 }) {
   const { workspaceId } = useParams<{ workspaceId: string }>()
-  const { data: workflows = [] } = useWorkflows(workspaceId)
   const { data: tables = [] } = useTablesList(workspaceId)
   const { data: files = [] } = useWorkspaceFiles(workspaceId)
   const { data: knowledgeBases = [] } = useKnowledgeBasesQuery(workspaceId)
@@ -1644,19 +1386,16 @@ export function WorkspaceResourceDisplay({
     const fileFromPath =
       data.type === 'file' ? findWorkspaceFileByPath(files, data.path) : undefined
     const title =
-      data.type === 'workflow'
-        ? (workflows.find((workflow) => workflow.id === data.id)?.name ??
+      data.type === 'table'
+        ? (tables.find((table) => table.id === data.id)?.name ??
           fallbackWorkspaceResourceTitle(data.type))
-        : data.type === 'table'
-          ? (tables.find((table) => table.id === data.id)?.name ??
+        : data.type === 'file'
+          ? (files.find((file) => file.id === data.id)?.name ??
+            fileFromPath?.name ??
+            data.title ??
             fallbackWorkspaceResourceTitle(data.type))
-          : data.type === 'file'
-            ? (files.find((file) => file.id === data.id)?.name ??
-              fileFromPath?.name ??
-              data.title ??
-              fallbackWorkspaceResourceTitle(data.type))
-            : (knowledgeBases.find((knowledgeBase) => knowledgeBase.id === data.id)?.name ??
-              fallbackWorkspaceResourceTitle(data.type))
+          : (knowledgeBases.find((knowledgeBase) => knowledgeBase.id === data.id)?.name ??
+            fallbackWorkspaceResourceTitle(data.type))
 
     const id = data.id ?? fileFromPath?.id
     return {
@@ -1665,7 +1404,7 @@ export function WorkspaceResourceDisplay({
       title,
       ...(data.type === 'file' && data.path ? { path: data.path } : {}),
     }
-  }, [data.id, data.path, data.title, data.type, files, knowledgeBases, tables, workflows])
+  }, [data.id, data.path, data.title, data.type, files, knowledgeBases, tables])
 
   const context = toChatMessageContext(data, resource.title)
 
@@ -1697,285 +1436,6 @@ export function WorkspaceResourceDisplay({
   )
 }
 
-function getCredentialIcon(provider: string): React.ComponentType<{ className?: string }> | null {
-  const lower = provider.toLowerCase()
-
-  const directMatch = OAUTH_PROVIDERS[lower]
-  if (directMatch) return directMatch.icon
-
-  for (const config of Object.values(OAUTH_PROVIDERS)) {
-    if (config.name.toLowerCase() === lower) return config.icon
-    for (const service of Object.values(config.services)) {
-      if (service.name.toLowerCase() === lower) return service.icon
-      if (service.providerId.toLowerCase() === lower) return service.icon
-    }
-  }
-
-  return null
-}
-
-function getCredentialProviderDisplayName(provider: string): string {
-  return (
-    getServiceConfigByProviderId(provider)?.name ??
-    OAUTH_PROVIDERS[provider.toLowerCase()]?.name ??
-    provider
-  )
-}
-
-const LockIcon = (props: { className?: string }) => (
-  <svg
-    className={props.className}
-    viewBox='0 0 16 16'
-    fill='none'
-    xmlns='http://www.w3.org/2000/svg'
-  >
-    <rect x='2' y='5' width='12' height='8' rx='1.5' stroke='currentColor' strokeWidth='1.3' />
-    <path
-      d='M5 5V3.5a3 3 0 1 1 6 0V5'
-      stroke='currentColor'
-      strokeWidth='1.3'
-      strokeLinecap='round'
-    />
-    <circle cx='8' cy='9.5' r='1.25' fill='currentColor' />
-  </svg>
-)
-
-/**
- * Inline "paste a secret" widget rendered for
- * `<credential>{"type":"secret_input","name":"OPENAI_API_KEY"}</credential>`.
- * Reuses the shared emcn SecretInput; the pasted value is saved straight to
- * workspace (default) or personal environment variables under `name` and never
- * flows back through the chat transcript.
- */
-interface CredentialControlProps {
-  data: CredentialItemData
-  controlId?: string
-  embedded?: boolean
-  divided?: boolean
-  secretValue?: string
-  onSecretValueChange?: (value: string) => void
-  onSaved?: () => void
-  onConnected?: () => void
-}
-
-function SecretInputDisplay({ data, divided = false, onSaved }: CredentialControlProps) {
-  const { workspaceId } = useParams<{ workspaceId: string }>()
-  const secretName = (data.name ?? '').trim()
-  const scope: SecretInputScope = data.scope === 'personal' ? 'personal' : 'workspace'
-
-  const [value, setValue] = useState('')
-  const [isFocused, setIsFocused] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  const upsertWorkspace = useUpsertWorkspaceEnvironment()
-  const savePersonal = useSavePersonalEnvironment()
-  const personalQuery = usePersonalEnvironment()
-  const personalEnv = personalQuery.data
-  const { canEdit } = useUserPermissionsContext()
-
-  // Setting a workspace var needs write/admin (same gate as the secrets manager);
-  // personal vars are the user's own, so any member may set them.
-  const canManage = scope === 'personal' || canEdit
-
-  const isSaving = upsertWorkspace.isPending || savePersonal.isPending
-  // Personal saves replace the whole map, so block until existing vars are loaded.
-  const personalReady = scope !== 'personal' || personalEnv !== undefined
-  const canSave =
-    canManage && secretName.length > 0 && value.trim().length > 0 && !isSaving && personalReady
-
-  const handleSave = async () => {
-    if (!canSave) return
-    try {
-      if (scope === 'personal') {
-        // The personal POST replaces the whole map, so re-read the latest vars
-        // right before merging — a stale snapshot would drop keys saved elsewhere.
-        const { data: latest } = await personalQuery.refetch()
-        const merged: Record<string, string> = {}
-        for (const [key, entry] of Object.entries(latest ?? personalEnv ?? {}))
-          merged[key] = entry.value
-        merged[secretName] = value
-        await savePersonal.mutateAsync({ variables: merged })
-      } else {
-        await upsertWorkspace.mutateAsync({ workspaceId, variables: { [secretName]: value } })
-      }
-      setValue('')
-      setSaved(true)
-      onSaved?.()
-      toast.success(`已保存 ${secretName}`)
-    } catch {
-      toast.error(`无法保存 ${secretName}，请稍后重试。`)
-    }
-  }
-
-  if (!secretName) return null
-  // Only confirm after the user saves via THIS widget. A fresh prompt always shows
-  // the input so the user can set or override the key, even if it already exists.
-  if (saved) return <SecretReveal redacted />
-  if (!canManage) return null
-
-  return (
-    <InteractionCardInputRow
-      divided={divided}
-      type='text'
-      value={isFocused ? value : '•'.repeat(value.length)}
-      placeholder={`Paste ${secretName}`}
-      autoComplete='off'
-      aria-label={secretName}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      onChange={(event) => {
-        if (isFocused) setValue(event.target.value)
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.currentTarget.blur()
-          return
-        }
-        if (event.key === 'Enter' && canSave) {
-          event.preventDefault()
-          void handleSave()
-        }
-      }}
-      trailing={
-        <Tooltip.Root>
-          <Tooltip.Trigger asChild>
-            <button
-              type='button'
-              onClick={() => void handleSave()}
-              disabled={!canSave}
-              aria-label='Save'
-              className='disabled:cursor-default'
-            >
-              <ArrowRight
-                className={cn(
-                  'size-[16px] shrink-0 transition-colors',
-                  canSave ? 'text-[var(--text-body)]' : 'text-[var(--text-icon)]'
-                )}
-              />
-            </button>
-          </Tooltip.Trigger>
-          <Tooltip.Content>{isSaving ? 'Saving…' : 'Save'}</Tooltip.Content>
-        </Tooltip.Root>
-      }
-    />
-  )
-}
-
-interface CredentialSecretInputRowProps {
-  name: string
-  value: string
-  divided?: boolean
-  onChange: (value: string) => void
-}
-
-/** Secret draft field for the unified card; the card's final Submit owns persistence. */
-function CredentialSecretInputRow({
-  name,
-  value,
-  divided = false,
-  onChange,
-}: CredentialSecretInputRowProps) {
-  const [isFocused, setIsFocused] = useState(false)
-
-  return (
-    <InteractionCardInputRow
-      divided={divided}
-      type='text'
-      value={isFocused ? value : '•'.repeat(value.length)}
-      placeholder={`Paste ${name}`}
-      autoComplete='off'
-      aria-label={name}
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      onChange={(event) => {
-        const maskedValue = '•'.repeat(value.length)
-        if (isFocused || event.target.value !== maskedValue) onChange(event.target.value)
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') event.currentTarget.blur()
-      }}
-    />
-  )
-}
-
-/**
- * Folder icon for the local-folder grant chip (matches the credential chip
- * icon sizing).
- */
-const FolderGrantIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'>
-    <path
-      d='M1.5 4.5A1.5 1.5 0 0 1 3 3h3.2l1.6 1.8H13A1.5 1.5 0 0 1 14.5 6.3v5.2A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5v-7z'
-      stroke='currentColor'
-      strokeWidth='1.2'
-      strokeLinejoin='round'
-    />
-  </svg>
-)
-
-/**
- * Inline grant chip rendered for
- * `<credential>{"type":"folder_access","name":"Desktop"}</credential>`.
- * Clicking opens the desktop app's native folder picker (read-only grant,
- * same flow as the Desktop settings folder picker). Renders nothing outside the
- * desktop app — there is no local filesystem bridge to grant against.
- */
-function FolderAccessDisplay({ data }: { data: CredentialItemData }) {
-  const [picking, setPicking] = useState(false)
-  const [grantedName, setGrantedName] = useState<string | null>(null)
-
-  const bridge = getDesktopBridge()
-  if (!bridge?.localFilesystem) return null
-
-  const hint = (data.name ?? '').trim()
-  const label = grantedName
-    ? `Access granted — ${grantedName}`
-    : hint
-      ? `Grant access to ${hint}`
-      : 'Grant access to a local folder'
-
-  const handleClick = async () => {
-    if (picking || grantedName) return
-    setPicking(true)
-    try {
-      const response = await bridge.localFilesystem({ operation: 'mount_directory' })
-      if (response.ok && 'mount' in response.data && response.data.mount) {
-        setGrantedName(response.data.mount.name)
-        toast.success(`已授权访问 ${response.data.mount.name}`)
-      }
-    } catch {
-      toast.error('无法打开文件夹选择器，请稍后重试。')
-    } finally {
-      setPicking(false)
-    }
-  }
-
-  return (
-    <button
-      type='button'
-      onClick={() => void handleClick()}
-      disabled={picking || grantedName !== null}
-      className={cn(
-        'flex w-full items-center gap-2 rounded-2xl border border-[var(--border-1)] px-3 py-2.5 text-left transition-colors',
-        grantedName === null && !picking && 'hover-hover:bg-[var(--surface-5)]',
-        picking && 'opacity-60'
-      )}
-    >
-      <FolderGrantIcon className='size-[16px] shrink-0' />
-      <span className='flex-1 text-[var(--text-body)] text-sm'>
-        {picking ? 'Choose a folder…' : label}
-      </span>
-      {grantedName === null && (
-        <ArrowRight className='size-[16px] shrink-0 text-[var(--text-icon)]' />
-      )}
-    </button>
-  )
-}
-
-/**
- * Shared browser hand-back question. While active it reports the selected
- * answer; after completion the same component renders its answered recap.
- */
 export function BrowserTakeoverQuestion({
   reason,
   answer,
@@ -2035,185 +1495,7 @@ function BrowserTakeoverDisplay({ data }: { data: CredentialItemData }) {
   )
 }
 
-/**
- * Inline "set up a service account" control rendered for
- * `<credential>{"type":"service_account","provider":"slack"}</credential>`.
- *
- * Opens `ConnectServiceAccountModal` over the chat rather than linking out to
- * the integrations page — the user stays in the conversation that asked for
- * the credential, and comes back to it with the credential in hand.
- */
-function ServiceAccountConnectDisplay({
-  data,
-  embedded = false,
-  divided = false,
-  onConnected,
-}: CredentialControlProps) {
-  const { workspaceId } = useParams<{ workspaceId: string }>()
-  const { canEdit } = useUserPermissionsContext()
-  const [open, setOpen] = useState(false)
-  const [locallyConnected, setLocallyConnected] = useState(false)
-
-  const match = useMemo(
-    () => (data.provider ? resolveServiceAccountIntegration(data.provider) : null),
-    [data.provider]
-  )
-  const service = useMemo(() => (match ? resolveOAuthServiceForSlug(match.slug) : null), [match])
-  const target = useServiceAccountConnectTarget({
-    serviceAccountProviderId: match?.serviceAccountProviderId,
-    serviceName: match?.serviceName,
-    serviceIcon: service?.serviceIcon,
-  })
-
-  // A credentialId reconnects (rotates the secret on) that existing service
-  // account in place rather than creating a new one — the modal keeps its id.
-  const reconnectCredentialId = data.credentialId
-  const { data: reconnectCredential } = useWorkspaceCredential(reconnectCredentialId)
-  const connected = locallyConnected
-
-  // Creating a credential mutates the workspace — hide it from read-only
-  // members, and honour the provider's own preview gate (custom Slack bots
-  // ride the slack_v2 flag) so chat can't surface what the integrations page
-  // deliberately hides.
-  if (!target || target.hidden || !canEdit || !workspaceId) return null
-
-  const label = reconnectCredentialId
-    ? `Reconnect ${reconnectCredential?.displayName ?? target.serviceName}`
-    : `${target.label} for ${target.serviceName}`
-  const displayLabel = connected ? `Connected ${target.serviceName}` : label
-
-  return (
-    <>
-      <button
-        type='button'
-        onClick={() => {
-          if (!connected) setOpen(true)
-        }}
-        disabled={connected}
-        className={cn(
-          embedded
-            ? INTERACTION_CARD_ROW_CLASSES
-            : 'flex w-full items-center gap-2 rounded-2xl border border-[var(--border-1)] px-3 py-2.5 text-left transition-colors',
-          embedded && divided && 'border-t',
-          'hover-hover:bg-[var(--surface-5)]'
-        )}
-      >
-        {createElement(target.serviceIcon, { className: 'size-[16px] shrink-0' })}
-        <span className='flex-1 text-[var(--text-body)] text-sm'>{displayLabel}</span>
-        {connected ? (
-          <Check className='size-[16px] shrink-0 text-[var(--text-icon)]' />
-        ) : (
-          <ArrowRight className='size-[16px] shrink-0 text-[var(--text-icon)]' />
-        )}
-      </button>
-      {open && (
-        <Suspense fallback={null}>
-          <ConnectServiceAccountModal
-            open={open}
-            onOpenChange={setOpen}
-            workspaceId={workspaceId}
-            serviceAccountProviderId={target.serviceAccountProviderId}
-            serviceName={target.serviceName}
-            serviceIcon={target.serviceIcon}
-            credentialId={reconnectCredentialId}
-            credentialDisplayName={reconnectCredential?.displayName ?? undefined}
-            onCreated={() => {
-              setLocallyConnected(true)
-              onConnected?.()
-            }}
-          />
-        </Suspense>
-      )}
-    </>
-  )
-}
-
-function CredentialLinkDisplay({
-  data,
-  controlId = 'credential-link',
-  embedded = false,
-  divided = false,
-  onConnected,
-}: CredentialControlProps) {
-  const { canEdit } = useUserPermissionsContext()
-  const integrationName = getCredentialProviderDisplayName(data.provider ?? '')
-  const {
-    reconnectCredentialId,
-    status,
-    connected,
-    connectedFromAttempt,
-    hasExistingCredential,
-    isReady,
-    onConnectClick,
-  } = useOAuthChipConnection({
-    connectUrl: data.value,
-    provider: data.provider,
-    displayName: integrationName,
-    controlId,
-    onConnected,
-  })
-  const { data: reconnectCredential } = useWorkspaceCredential(reconnectCredentialId)
-
-  // Connecting a credential mutates the workspace — hide it from read-only members.
-  if (!data.provider || !canEdit) return null
-  // The connect link value comes from the streamed model output, so only
-  // render it as a clickable link when it resolves to a real http(s) URL.
-  if (!data.value || !isSafeHttpUrl(data.value)) return null
-  const Icon = getCredentialIcon(data.provider) ?? LockIcon
-  const label = reconnectCredentialId
-    ? `Reconnect ${reconnectCredential?.displayName ?? integrationName}`
-    : hasExistingCredential
-      ? `Connect another ${integrationName}`
-      : `Connect ${integrationName}`
-  const retryLabel = reconnectCredentialId
-    ? `Not connected — reconnect ${reconnectCredential?.displayName ?? integrationName}`
-    : hasExistingCredential
-      ? `Not connected — connect another ${integrationName}`
-      : `Not connected — connect ${integrationName}`
-  const displayLabel = connected
-    ? `Connected ${integrationName}`
-    : !isReady
-      ? `Checking ${integrationName} connections…`
-      : status === 'pending'
-        ? `Waiting for ${integrationName} connection…`
-        : status === 'failed'
-          ? retryLabel
-          : label
-
-  return (
-    <a
-      href={data.value}
-      target='_blank'
-      rel='noopener noreferrer'
-      onClick={onConnectClick}
-      aria-disabled={!isReady || connectedFromAttempt}
-      className={cn(
-        embedded
-          ? INTERACTION_CARD_ROW_CLASSES
-          : 'flex items-center gap-2 rounded-2xl border border-[var(--border-1)] px-3 py-2.5 transition-colors',
-        embedded && divided && 'border-t',
-        'hover-hover:bg-[var(--surface-5)]'
-      )}
-    >
-      {createElement(Icon, { className: 'size-[16px] shrink-0' })}
-      <span className='flex-1 text-[var(--text-body)] text-sm'>{displayLabel}</span>
-      {connected ? (
-        <Check className='size-[16px] shrink-0 text-[var(--text-icon)]' />
-      ) : (
-        <ArrowRight className='size-[16px] shrink-0 text-[var(--text-icon)]' />
-      )}
-    </a>
-  )
-}
-
-/**
- * Inline hand-back chip rendered while a terminal handoff waits on the user —
- * a command sitting on a prompt only they can answer. Without it the tool row
- * just spins: the command is blocked in a panel the user may not even be
- * looking at, with nothing saying it wants them. Clicking tells the waiting
- * handoff they are done; the terminal id rides in `value` so the click reaches
- * the right shell. Renders nothing outside the desktop app.
- */
+/** Completes a terminal handoff owned by the native terminal transport. */
 function TerminalHandoffDisplay({ data }: { data: CredentialItemData }) {
   const { workspaceId } = useParams<{ workspaceId: string }>()
   const { chatId } = useChatSurface()
@@ -2223,7 +1505,7 @@ function TerminalHandoffDisplay({ data }: { data: CredentialItemData }) {
 
   const reason = (data.name ?? '').trim()
   const label = handedBack
-    ? 'Handed control back to Sim'
+    ? '已将控制权交还给灵犀'
     : reason || 'Finish in the terminal, then hand control back'
 
   return (
@@ -2247,397 +1529,16 @@ function TerminalHandoffDisplay({ data }: { data: CredentialItemData }) {
   )
 }
 
-const CREDENTIAL_CARD_TYPES: ReadonlySet<CredentialTagType> = new Set([
-  'secret_input',
-  'link',
-  'service_account',
-  'sim_key',
-])
-
-function isCredentialCardItemVisible(item: CredentialItemData, canEdit: boolean): boolean {
-  if (item.type === 'sim_key') return true
-  if (item.type === 'secret_input') return item.scope === 'personal' || canEdit
-  if (item.type === 'link') {
-    return canEdit && Boolean(item.provider) && Boolean(item.value && isSafeHttpUrl(item.value))
-  }
-  return canEdit
-}
-
-/** Whether a terminal credential tag produces the shared question-style card. */
-export function credentialTagHasVisibleCard(data: CredentialTagData, canEdit: boolean): boolean {
-  return (
-    data.length > 0 &&
-    data.every((item) => CREDENTIAL_CARD_TYPES.has(item.type)) &&
-    data.some((item) => isCredentialCardItemVisible(item, canEdit))
-  )
-}
-
-function CredentialItemDisplay({
-  data,
-  controlId,
-  embedded = false,
-  divided = false,
-  secretValue,
-  onSecretValueChange,
-  onSaved,
-  onConnected,
-}: CredentialControlProps) {
-  if (data.type === 'secret_input') {
-    const secretName = data.name?.trim()
-    if (embedded) {
-      if (!secretName || !onSecretValueChange) return null
-      return (
-        <CredentialSecretInputRow
-          name={secretName}
-          value={secretValue ?? ''}
-          divided={divided}
-          onChange={onSecretValueChange}
-        />
-      )
-    }
-    return (
-      <SecretInputDisplay data={data} embedded={embedded} divided={divided} onSaved={onSaved} />
-    )
-  }
-
-  if (data.type === 'folder_access') {
-    return <FolderAccessDisplay data={data} />
-  }
-
-  if (data.type === 'browser_takeover') {
-    return <BrowserTakeoverDisplay data={data} />
-  }
-
-  if (data.type === 'terminal_handoff') {
-    return <TerminalHandoffDisplay data={data} />
-  }
-
-  if (data.type === 'link') {
-    return (
-      <CredentialLinkDisplay
-        data={data}
-        controlId={controlId}
-        embedded={embedded}
-        divided={divided}
-        onConnected={onConnected}
-      />
-    )
-  }
-
-  if (data.type === 'service_account') {
-    return (
-      <ServiceAccountConnectDisplay
-        data={data}
-        embedded={embedded}
-        divided={divided}
-        onConnected={onConnected}
-      />
-    )
-  }
-
-  if (data.type === 'sim_key') {
-    // SecretReveal masks itself when there's no value, so a value-less tag (the
-    // model's placeholder / persisted form) renders masked and a Sim-filled tag
-    // reveals the key + copy button — no separate "redacted" flag needed.
-    return <SecretReveal value={data.value} />
-  }
-
-  return null
-}
-
-/**
- * Credential input and OAuth controls use the same InteractionCard primitives
- * as QuestionDisplay. Integrations come first and secrets follow in one card
- * with one Submit; legacy/system actions retain their standalone presentation.
- */
-function CredentialInputCard({
-  data,
-  interactionId,
-  submitted,
-  abandoned,
-  onContinue,
-}: {
-  data: CredentialTagData
-  interactionId?: string
-  submitted?: CredentialSubmissionPayload
-  abandoned?: boolean
-  onContinue?: (message: string) => void
-}) {
-  const { workspaceId } = useParams<{ workspaceId: string }>()
-  const { canEdit } = useUserPermissionsContext()
-  const upsertWorkspace = useUpsertWorkspaceEnvironment()
-  const savePersonal = useSavePersonalEnvironment()
-  const personalQuery = usePersonalEnvironment()
-  const [secretDrafts, setSecretDrafts] = useState<Record<number, string>>({})
-  const [savedSecretRows, setSavedSecretRows] = useState<Set<number>>(() => new Set())
-  const [connectedIntegrationRows, setConnectedIntegrationRows] = useState<Set<number>>(
-    () => new Set()
-  )
-  const [locallySubmitted, setLocallySubmitted] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const controlIdPrefix = interactionId ?? 'credential-card'
-
-  /**
-   * An abandoned card recaps from progress its rows made, but it replaces those
-   * rows — so on a fresh mount nothing is left to report a connect the user
-   * already finished, and the recap would read "Skipped" over it. An OAuth
-   * connect records a row-scoped attempt that outlives the mount, so restore
-   * the verdict from there.
-   *
-   * Only OAuth rows need this. A secret is written solely by Submit, which ends
-   * the card as a real submission instead; a service-account connect never
-   * outlives its own row either way.
-   */
-  useEffect(() => {
-    if (!abandoned) return
-    const restored = new Set<number>()
-    let restoreIndex = 0
-    for (const [dataIndex, item] of data.entries()) {
-      if (item.type !== 'link' && item.type !== 'service_account') continue
-      const index = restoreIndex++
-      if (item.type !== 'link') continue
-      const { providerId, reconnectCredentialId } = resolveOAuthChipTarget(
-        item.value,
-        item.provider
-      )
-      if (!providerId) continue
-      const attempt = readLatestOAuthChatAttempt({
-        workspaceId,
-        providerId,
-        controlId: `${controlIdPrefix}:${dataIndex}`,
-        credentialId: reconnectCredentialId,
-      })
-      if (attempt?.status === 'connected') restored.add(index)
-    }
-    if (restored.size === 0) return
-    setConnectedIntegrationRows((current) => {
-      if (Array.from(restored).every((index) => current.has(index))) return current
-      return new Set([...current, ...restored])
-    })
-  }, [abandoned, controlIdPrefix, data, workspaceId])
-
-  let integrationIndex = 0
-  let secretIndex = 0
-  const indexedRows = data.map((item, dataIndex) => ({
-    item,
-    dataIndex,
-    integrationIndex:
-      item.type === 'link' || item.type === 'service_account' ? integrationIndex++ : undefined,
-    secretIndex: item.type === 'secret_input' ? secretIndex++ : undefined,
-  }))
-  const visibleRows = indexedRows.filter(({ item }) => isCredentialCardItemVisible(item, canEdit))
-  if (visibleRows.length === 0) return null
-
-  const integrationRows = visibleRows.filter(
-    ({ item }) => item.type === 'link' || item.type === 'service_account'
-  )
-  const secretRows = visibleRows.filter(
-    ({ item }) => item.type === 'secret_input' || item.type === 'sim_key'
-  )
-  const requiredSecretRows = secretRows.filter(({ item }) => item.type === 'secret_input')
-  const title =
-    integrationRows.length > 0 && secretRows.length > 0
-      ? 'Set up credentials'
-      : integrationRows.length > 0
-        ? 'Connect integrations'
-        : requiredSecretRows.length > 0
-          ? 'Add secrets'
-          : 'API key'
-  const rows = [
-    ...integrationRows.map(({ item, dataIndex, integrationIndex }, index) => (
-      <CredentialItemDisplay
-        key={`${item.type}-${item.provider ?? dataIndex}-${dataIndex}`}
-        data={item}
-        controlId={`${controlIdPrefix}:${dataIndex}`}
-        embedded
-        divided={index > 0}
-        onConnected={() =>
-          setConnectedIntegrationRows((current) => {
-            if (integrationIndex === undefined || current.has(integrationIndex)) return current
-            const next = new Set(current)
-            next.add(integrationIndex)
-            return next
-          })
-        }
-      />
-    )),
-    ...secretRows.map(({ item, dataIndex, secretIndex }, index) => {
-      return (
-        <CredentialItemDisplay
-          key={`${item.type}-${item.name ?? dataIndex}-${dataIndex}`}
-          data={item}
-          embedded
-          divided={integrationRows.length > 0 || index > 0}
-          secretValue={
-            item.type === 'secret_input' ? (secretDrafts[secretIndex ?? -1] ?? '') : undefined
-          }
-          onSecretValueChange={
-            item.type === 'secret_input' && secretIndex !== undefined
-              ? (value) =>
-                  setSecretDrafts((current) => ({
-                    ...current,
-                    [secretIndex]: value,
-                  }))
-              : undefined
-          }
-        />
-      )
-    }),
-  ]
-
-  const submitCredentialSetup = async (): Promise<boolean> => {
-    if (!onContinue) return false
-
-    const workspaceVariables: Record<string, string> = {}
-    const personalVariables: Record<string, string> = {}
-    const enteredSecretIndexes: number[] = []
-
-    for (const { item, secretIndex } of requiredSecretRows) {
-      if (secretIndex === undefined) continue
-      const name = item.name?.trim()
-      const value = secretDrafts[secretIndex] ?? ''
-      if (!name || value.trim().length === 0) continue
-      const target = item.scope === 'personal' ? personalVariables : workspaceVariables
-      target[name] = value
-      enteredSecretIndexes.push(secretIndex)
-    }
-
-    try {
-      const saves: Promise<unknown>[] = []
-      if (Object.keys(workspaceVariables).length > 0) {
-        saves.push(upsertWorkspace.mutateAsync({ workspaceId, variables: workspaceVariables }))
-      }
-      if (Object.keys(personalVariables).length > 0) {
-        saves.push(
-          (async () => {
-            const { data: latest } = await personalQuery.refetch()
-            const merged: Record<string, string> = {}
-            for (const [key, entry] of Object.entries(latest ?? personalQuery.data ?? {})) {
-              merged[key] = entry.value
-            }
-            Object.assign(merged, personalVariables)
-            await savePersonal.mutateAsync({ variables: merged })
-          })()
-        )
-      }
-      await Promise.all(saves)
-    } catch {
-      toast.error('无法保存密钥，请稍后重试。')
-      return false
-    }
-
-    const nextSavedSecretRows = new Set(savedSecretRows)
-    for (const index of enteredSecretIndexes) nextSavedSecretRows.add(index)
-    setSavedSecretRows(nextSavedSecretRows)
-
-    onContinue(
-      formatCredentialSubmissionMessage(data, {
-        connectedIntegrationIndexes: connectedIntegrationRows,
-        savedSecretIndexes: nextSavedSecretRows,
-      })
-    )
-    return true
-  }
-
-  const needsContinuation = integrationRows.length > 0 || requiredSecretRows.length > 0
-  const credentialSummary = [
-    ...integrationRows.map(({ item, integrationIndex }) => ({
-      label: getCredentialProviderDisplayName(item.provider ?? 'Integration'),
-      status: (
-        submitted
-          ? submitted.integrations[integrationIndex ?? -1]?.status === 'connected'
-          : connectedIntegrationRows.has(integrationIndex ?? -1)
-      )
-        ? ('Connected' as const)
-        : ('Skipped' as const),
-    })),
-    ...secretRows.map(({ item, secretIndex }) => {
-      if (item.type === 'sim_key') {
-        return { label: item.name ?? 'Sim API key', status: 'Added' as const }
-      }
-      const saved = submitted
-        ? submitted.secrets[secretIndex ?? -1]?.status === 'saved'
-        : savedSecretRows.has(secretIndex ?? -1)
-      return {
-        label: item.name ?? 'Secret',
-        status: saved ? ('Added' as const) : ('Skipped' as const),
-      }
-    }),
-  ]
-
-  // An abandoned card recaps from local progress only: a row the user connected
-  // or saved before moving on keeps its status, everything else reads "Skipped".
-  // Only a card that asked for something can be abandoned — a standalone
-  // `sim_key` row is a reveal widget, not a prompt, so it stays as it is.
-  if (submitted || locallySubmitted || (abandoned && needsContinuation)) {
-    return (
-      <InteractionCardRecap
-        items={credentialSummary.map((item) => ({ label: item.label, values: [item.status] }))}
-      />
-    )
-  }
-
-  const handleSubmit = async () => {
-    if (isSubmitting) return
-    setIsSubmitting(true)
-    try {
-      if (await submitCredentialSetup()) setLocallySubmitted(true)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <InteractionCard title={title}>
-      <div className='flex flex-col'>
-        {rows}
-        {needsContinuation && onContinue && (
-          <InteractionCardActionRow
-            label='Submit'
-            disabled={isSubmitting}
-            onClick={() => void handleSubmit()}
-          />
-        )}
-      </div>
-    </InteractionCard>
-  )
-}
-
-export function CredentialDisplay({
-  data,
-  interactionId,
-  submitted,
-  abandoned,
-  onContinue,
-}: {
-  data: CredentialTagData
-  interactionId?: string
-  submitted?: CredentialSubmissionPayload
-  abandoned?: boolean
-  onContinue?: (message: string) => void
-}) {
-  const usesCredentialCard = data.every((item) => CREDENTIAL_CARD_TYPES.has(item.type))
-
-  if (usesCredentialCard) {
-    return (
-      <CredentialInputCard
-        data={data}
-        interactionId={interactionId}
-        submitted={submitted}
-        abandoned={abandoned}
-        onContinue={onContinue}
-      />
-    )
-  }
-
+export function CredentialDisplay({ data }: { data: CredentialTagData }) {
   return (
     <div className={cn(data.length > 1 && 'space-y-3')}>
-      {data.map((item, index) => (
-        <CredentialItemDisplay
-          key={`${item.type}-${item.provider ?? item.name ?? index}`}
-          data={item}
-        />
-      ))}
+      {data.map((item, index) =>
+        item.type === 'browser_takeover' ? (
+          <BrowserTakeoverDisplay key={`browser-takeover-${index}`} data={item} />
+        ) : (
+          <TerminalHandoffDisplay key={`terminal-handoff-${index}`} data={item} />
+        )
+      )}
     </div>
   )
 }
@@ -2649,23 +1550,6 @@ function MothershipErrorDisplay({ data }: { data: MothershipErrorTagData }) {
 }
 
 function UsageUpgradeDisplay({ data }: { data: UsageUpgradeTagData }) {
-  const { data: session } = useSession()
-  const hostContext = useWorkspaceHostContext()
-  const { getSettingsHref } = useSettingsNavigation()
-  const buttonLabel = data.action === 'upgrade_plan' ? 'Upgrade Plan' : 'Increase Limit'
-
-  // Self-hosted plan and limit both live on the hosted account, so local
-  // workspace billing roles say nothing about who may change them.
-  const href = isHosted
-    ? getSettingsHref({ section: 'billing' })
-    : data.action === 'upgrade_plan'
-      ? buildHostedUpgradeUrl()
-      : HOSTED_BILLING_SETTINGS_URL
-  const canManageBilling = !isHosted || canManageWorkspaceBilling(hostContext, session?.user?.id)
-  const unavailableMessage = hostContext.hostOrganizationId
-    ? 'Contact an organization admin to manage this workspace’s usage limits.'
-    : 'Only the workspace owner can manage this workspace’s usage limits.'
-
   return (
     <div className='rounded-2xl border border-amber-300/40 bg-amber-50/50 px-4 py-3 dark:border-amber-500/20 dark:bg-amber-950/20'>
       <div className='flex items-center gap-2'>
@@ -2691,20 +1575,9 @@ function UsageUpgradeDisplay({ data }: { data: UsageUpgradeTagData }) {
       <p className='mt-1.5 text-amber-700/90 text-small leading-[20px] dark:text-amber-400/80'>
         {data.message}
       </p>
-      {canManageBilling ? (
-        <a
-          href={href}
-          target={isHosted ? undefined : '_blank'}
-          rel={isHosted ? undefined : 'noopener noreferrer'}
-          aria-label={isHosted ? undefined : `${buttonLabel} (opens in a new tab)`}
-          className='mt-2 inline-flex items-center gap-1 text-amber-700 text-small underline decoration-dashed underline-offset-2 transition-colors hover-hover:text-amber-900 dark:text-amber-300 dark:hover-hover:text-amber-200'
-        >
-          {buttonLabel}
-          {isHosted ? <ArrowRight className='size-3' /> : <SquareArrowUpRight className='size-3' />}
-        </a>
-      ) : (
-        <p className='mt-2 text-amber-700 text-small dark:text-amber-300'>{unavailableMessage}</p>
-      )}
+      <p className='mt-2 text-amber-700 text-small dark:text-amber-300'>
+        当前部署未接入在线计费或套餐升级，请联系管理员处理额度。
+      </p>
     </div>
   )
 }

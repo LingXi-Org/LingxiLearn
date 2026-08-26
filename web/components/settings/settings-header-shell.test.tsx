@@ -12,8 +12,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { saveDiscardActions } from '@/components/settings/save-discard-actions'
 import type { SettingsAction } from '@/components/settings/settings-header'
-import { SettingsHeaderProvider, SettingsHeaderShell } from '@/components/settings/settings-header'
-import { SettingsPanel } from '@/components/settings/settings-panel'
+import {
+  SettingsHeaderProvider,
+  SettingsHeaderShell,
+  useSettingsHeader,
+} from '@/components/settings/settings-header'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -33,13 +36,16 @@ afterEach(() => {
 })
 
 function renderHeader(actions: SettingsAction[]) {
+  function Panel() {
+    useSettingsHeader({ title: 'Thing', actions })
+    return <div />
+  }
+
   act(() => {
     root.render(
       <SettingsHeaderProvider>
         <SettingsHeaderShell>
-          <SettingsPanel title='Thing' actions={actions}>
-            <div />
-          </SettingsPanel>
+          <Panel />
         </SettingsHeaderShell>
       </SettingsHeaderProvider>
     )

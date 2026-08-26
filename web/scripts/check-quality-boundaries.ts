@@ -36,9 +36,51 @@ export const REMOVED_COMPATIBILITY_ROUTES = [
   'app/desktop/connect/page.tsx',
   'app/desktop/done/page.tsx',
   'app/cli/auth/page.tsx',
+  'app/oauth/chat-complete/page.tsx',
   'app/workspace/[workspaceId]/integrations/page.tsx',
   'app/workspace/[workspaceId]/integrations/[block]/page.tsx',
   'app/workspace/[workspaceId]/integrations/connected/[credentialId]/page.tsx',
+] as const
+
+export const REMOVED_COMPATIBILITY_FILES = [
+  // Issue #40 completed only when callers use domain clients directly; a
+  // facade recreates the cross-domain God object and a second API owner.
+  'lib/lingxi/api.ts',
+  // Schedules are explicitly not integrated in the Lingxi capability
+  // manifest, so a query hook would expose an API with no backend owner.
+  'hooks/queries/schedules.ts',
+  // Billing and profile are owned outside the LingxiLearn API. These query
+  // surfaces previously kept no-op billing and duplicate identity routes alive.
+  'hooks/queries/subscription.ts',
+  'hooks/queries/user-profile.ts',
+  // Speech, provider allowlists, permission groups, and the legacy settings
+  // shell all called API surfaces that LingxiLearn does not own.
+  'hooks/use-speech-to-text.ts',
+  'hooks/queries/voice.ts',
+  'hooks/queries/allowed-providers.ts',
+  'lib/api/contracts/media/speech.ts',
+  'lib/api/contracts/permission-groups.ts',
+  'lib/billing/workspace-permissions.ts',
+  'components/settings/navigation.ts',
+  'components/settings/standalone-settings-shell.tsx',
+] as const
+
+export const REMOVED_COMPATIBILITY_SOURCE_TREES = [
+  // Issue #43 moved the reusable primitives out of the private workflow
+  // editor. The Lingxi product has no workflow route or caller for this tree.
+  'app/workspace/[workspaceId]/w',
+  'app/workspace/[workspaceId]/integrations',
+  'app/workspace/[workspaceId]/home/components/credits-chip',
+  'app/workspace/[workspaceId]/components/connect-oauth-modal',
+  'app/workspace/[workspaceId]/knowledge/[id]/components/add-connector-modal',
+  'app/workspace/[workspaceId]/knowledge/[id]/components/connector-config-fields',
+  'app/workspace/[workspaceId]/knowledge/[id]/components/connector-selector-field',
+  'app/workspace/[workspaceId]/knowledge/[id]/components/connectors-section',
+  'app/workspace/[workspaceId]/knowledge/[id]/components/edit-connector-modal',
+  'app/workspace/[workspaceId]/settings/components/billing',
+  'app/workspace/[workspaceId]/settings/components/browser',
+  'app/workspace/[workspaceId]/settings/components/mcp',
+  'app/workspace/[workspaceId]/settings/components/terminal',
 ] as const
 
 export const WORKSPACE_COPY_OWNERS = [
@@ -112,10 +154,65 @@ export function findQualityBoundaryViolations(webRoot: string): QualityBoundaryV
       violations.push({ file: route, rule: 'removed fake compatibility route was restored' })
     }
   }
+  for (const file of REMOVED_COMPATIBILITY_FILES) {
+    if (existsSync(join(webRoot, ...file.split('/')))) {
+      violations.push({ file, rule: 'removed compatibility source was restored' })
+    }
+  }
+  for (const directory of REMOVED_COMPATIBILITY_SOURCE_TREES) {
+    const path = join(webRoot, ...directory.split('/'))
+    if (sourceFiles(path).length > 0) {
+      violations.push({ file: directory, rule: 'removed compatibility source tree was restored' })
+    }
+  }
   for (const owner of WORKSPACE_COPY_OWNERS) {
     const path = join(webRoot, ...owner.split('/'))
     if (existsSync(path) && !readFileSync(path, 'utf8').includes('@/lib/product-copy')) {
       violations.push({ file: owner, rule: 'shared Workspace copy must use the product catalog' })
+    }
+  }
+  const specialTags = join(
+    webRoot,
+    'app',
+    'workspace',
+    '[workspaceId]',
+    'home',
+    'components',
+    'message-content',
+    'components',
+    'special-tags',
+    'special-tags.tsx'
+  )
+  if (existsSync(specialTags)) {
+    const source = readFileSync(specialTags, 'utf8')
+    for (const tagType of [
+      'link',
+      'oauth_key',
+      'secret_input',
+      'sim_key',
+      'service_account',
+      'folder_access',
+    ]) {
+      if (source.includes(`'${tagType}'`) || source.includes(`"${tagType}"`)) {
+        violations.push({
+          file: relative(webRoot, specialTags).replaceAll('\\', '/'),
+          rule: `unsupported credential tag '${tagType}' was restored`,
+        })
+      }
+    }
+  }
+  const chatQueries = join(webRoot, 'hooks', 'queries', 'mothership-chats.ts')
+  if (existsSync(chatQueries)) {
+    const source = readFileSync(chatQueries, 'utf8')
+    if (
+      source.includes('unsupportedMutation') ||
+      source.includes('该共享功能未接入 LingxiGraph') ||
+      /mutationFn:\s*async\s*\([^)]*\)\s*=>\s*undefined/.test(source)
+    ) {
+      violations.push({
+        file: 'hooks/queries/mothership-chats.ts',
+        rule: 'native task mutations must not use fake success or unsupported shims',
+      })
     }
   }
   return violations

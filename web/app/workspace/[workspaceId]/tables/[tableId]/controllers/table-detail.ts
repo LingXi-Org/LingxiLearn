@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type WorkspaceTableItem } from '@/lib/lingxi/api'
-import type { WorkspaceTableViewItem } from '@/lib/lingxi/types'
+import {
+  createWorkspaceRows,
+  createWorkspaceTableView,
+  deleteWorkspaceRow,
+  getWorkspaceTable,
+  getWorkspaceTableRows,
+  getWorkspaceTableViews,
+  updateWorkspaceRow,
+} from '@/lib/api/domains/workspace'
+import type { WorkspaceTableItem, WorkspaceTableViewItem } from '@/lib/lingxi/types'
 import { userFacingError } from '@/lib/product-copy'
 import { createTableGridProjection, filterAndSortTableRows } from './table-grid'
 
@@ -37,9 +45,9 @@ export function useTableDetailController(tableId: string) {
     setState((current) => ({ ...current, loading: true, error: null }))
     try {
       const [tableResult, rowResult, viewResult] = await Promise.all([
-        api.workspaceTable(tableId),
-        api.workspaceTableRows(tableId),
-        api.workspaceTableViews(tableId),
+        getWorkspaceTable(tableId),
+        getWorkspaceTableRows(tableId),
+        getWorkspaceTableViews(tableId),
       ])
       if (requestId !== requestIdRef.current) return
       setState({
@@ -88,7 +96,7 @@ export function useTableDetailController(tableId: string) {
 
   const saveView = useCallback(
     async (name: string) => {
-      const result = await api.createWorkspaceTableView(tableId, name, {
+      const result = await createWorkspaceTableView(tableId, name, {
         query,
         sortKey,
         descending,
@@ -100,7 +108,7 @@ export function useTableDetailController(tableId: string) {
 
   const createRow = useCallback(
     async (values: Record<string, unknown>) => {
-      await api.createWorkspaceRows(tableId, [values])
+      await createWorkspaceRows(tableId, [values])
       await reload()
     },
     [reload, tableId]
@@ -109,7 +117,7 @@ export function useTableDetailController(tableId: string) {
   const updateSelectedRow = useCallback(
     async (values: Record<string, unknown>) => {
       if (!selectedRowId) return
-      await api.updateWorkspaceRow(tableId, selectedRowId, values)
+      await updateWorkspaceRow(tableId, selectedRowId, values)
       await reload()
     },
     [reload, selectedRowId, tableId]
@@ -117,7 +125,7 @@ export function useTableDetailController(tableId: string) {
 
   const deleteSelectedRow = useCallback(async () => {
     if (!selectedRowId) return
-    await api.deleteWorkspaceRow(tableId, selectedRowId)
+    await deleteWorkspaceRow(tableId, selectedRowId)
     setSelectedRowId(null)
     await reload()
   }, [reload, selectedRowId, tableId])

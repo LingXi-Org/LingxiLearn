@@ -21,7 +21,7 @@ contracts/  跨模块数据契约
 贡献代码时请保持这些边界：
 
 - `web/` 负责界面、交互和浏览器侧数据适配，不应新增第二套 Lingxi 后端或重新引入已经移除的旧 `/api` 领域入口。
-- Lingxi 工作区的原生资源通过 `web/lib/lingxi/api.ts` 访问，运行事件通过 LingxiGraph adapter 转换为前端展示结构。
+- Lingxi 工作区的原生资源通过 `web/lib/api/domains/` 下的领域 client 访问，REST/SSE 统一由 `web/lib/api/transport/` 传输；运行事件通过 LingxiGraph adapter 转换为前端展示结构。
 - `server/` 是学习领域和持久化的事实来源。业务状态、学习证据、任务事件和权限判断不得只存在于前端。
 - 浏览器认证依赖 HttpOnly session cookie。不要把 bearer token、访问令牌或其他凭据写入 `localStorage`、日志、前端状态或提交内容。
 - 不要向前端暴露模型私有推理、密钥、内部凭据或不必要的敏感运行时状态。

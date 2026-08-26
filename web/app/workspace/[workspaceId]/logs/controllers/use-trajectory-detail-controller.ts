@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from '@/components/ui-kit'
 import type { ExecutionLogDetail, ExecutionLogRow } from '@/lib/api/contracts/logs'
-import { api } from '@/lib/lingxi/api'
+import { cancelAgentTask, forkAgentTask } from '@/lib/api/domains/agent-tasks'
 import { userFacingError } from '@/lib/product-copy'
 import type { ExecutionLogDetailView } from '@/app/workspace/[workspaceId]/logs/model/execution-log'
 import { mapExecutionLogDetail } from '@/app/workspace/[workspaceId]/logs/model/execution-log-mapper'
@@ -82,7 +82,7 @@ export function useTrajectoryDetailController({
       try {
         if (mapped?.source.kind === 'agent-task' && mapped.taskId) {
           setNativeCancelPending(true)
-          await api.cancelAgentTask(mapped.taskId)
+          await cancelAgentTask(mapped.taskId)
         } else if (mapped?.source.kind === 'workflow' && workflowId) {
           await cancelMutate({ workflowId, executionId })
         } else {
@@ -110,7 +110,7 @@ export function useTrajectoryDetailController({
       try {
         if (mapped?.source.kind === 'agent-task' && mapped.taskId) {
           setNativeRetryPending(true)
-          await api.forkAgentTask(mapped.taskId)
+          await forkAgentTask(mapped.taskId)
         } else if (mapped?.source.kind === 'workflow' && workflowId) {
           await retryMutate({ workflowId, executionId })
         } else {

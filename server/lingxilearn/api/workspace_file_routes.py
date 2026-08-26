@@ -29,7 +29,6 @@ from ..contracts.rest_models import (
     SuccessResponse,
     UploadPartsResponse,
     UploadStateResponse,
-    UsageLimitsResponse,
     WorkspaceFileContentResponse,
     WorkspaceFileResponse,
     WorkspaceFilesResponse,
@@ -535,32 +534,6 @@ async def storage_status() -> dict[str, bool]:
     # LingxiLearn deliberately uses its local persistent volume; no cloud
     # provider is configured or exposed by this workspace surface.
     return {"cloudConfigured": False}
-
-
-@router.get("/users/me/usage-limits", response_model=UsageLimitsResponse)
-async def usage_limits(
-    request: Request, context: LearnerContext = Depends(current_learner_context)
-) -> dict[str, Any]:
-    workspace = await _workspace(request, context)
-    used = await services_of(request).workspace_files.repository.usage(workspace.id)
-    limit = MAX_FILE_SIZE * 100
-    empty_rate = {
-        "isLimited": False,
-        "requestsPerMinute": 0,
-        "maxBurst": 0,
-        "remaining": 0,
-        "resetAt": (datetime.now(UTC) + timedelta(minutes=1)).isoformat(),
-    }
-    return {
-        "success": True,
-        "rateLimit": {"sync": empty_rate, "async": empty_rate, "authType": "manual"},
-        "usage": {"currentPeriodCost": 0, "limit": 0, "plan": "internal"},
-        "storage": {
-            "usedBytes": int(used),
-            "limitBytes": limit,
-            "percentUsed": min(100, int(used) * 100 / limit),
-        },
-    }
 
 
 # Upload session compatibility (local single-process transfer) ----------------

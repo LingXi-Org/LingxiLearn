@@ -1,19 +1,8 @@
 'use client'
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  BrowserOmniboxFocusMode,
-  BrowserPanelAnchor,
-  BrowserPanelBounds,
-  BrowserPanelSnapshot,
-  BrowserTabState,
-} from '@/lib/browser-agent/protocol'
-import { isBrowserTheme } from '@/lib/browser-agent/protocol'
-import type {
-  BrowserAddToChatPayload,
-  BrowserCredentialMetadata,
-  DesktopAppearanceTheme,
-} from '@/lib/desktop/bridge'
+import { useTheme } from 'next-themes'
+import { createPortal } from 'react-dom'
 import {
   Button,
   ChipInput,
@@ -32,9 +21,23 @@ import {
   PopoverItem,
   toast,
 } from '@/components/ui-kit'
-import { ArrowLeft, ArrowRight, Globe, Key, Link, RefreshCw, Search } from '@/components/ui-kit/icons'
-import { useTheme } from 'next-themes'
-import { createPortal } from 'react-dom'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Globe,
+  Key,
+  Link,
+  RefreshCw,
+  Search,
+} from '@/components/ui-kit/icons'
+import type {
+  BrowserOmniboxFocusMode,
+  BrowserPanelAnchor,
+  BrowserPanelBounds,
+  BrowserPanelSnapshot,
+  BrowserTabState,
+} from '@/lib/browser-agent/protocol'
+import { isBrowserTheme } from '@/lib/browser-agent/protocol'
 import { onFocusVisibleBrowserOmnibox } from '@/lib/browser-agent/renderer-shortcuts'
 import {
   fillBrowserCredential,
@@ -46,7 +49,6 @@ import {
   onBrowserFindClose,
   onBrowserFindOpen,
   onBrowserOmniboxFocus,
-  onBrowserToolbarCommand,
   openBrowserTab,
   reorderBrowserTab,
   reportBrowserPanelBounds,
@@ -66,7 +68,13 @@ import {
   loadDesktopBrowserAppearanceTheme,
   resolveDesktopAppearanceTheme,
 } from '@/lib/desktop/appearance'
+import type {
+  BrowserAddToChatPayload,
+  BrowserCredentialMetadata,
+  DesktopAppearanceTheme,
+} from '@/lib/desktop/bridge'
 import { trackPanelFocus } from '@/lib/desktop/panel-focus'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { addMothershipContext } from '@/lib/mothership/events'
 import { useMothershipResources } from '@/app/workspace/[workspaceId]/home/components/mothership-resources-context'
 import { BrowserDownloads } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/browser-session/browser-downloads'
@@ -90,10 +98,8 @@ import {
   type UrlSuggestion,
 } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/browser-session/url-suggestions'
 import { ResourceZoomMenuItems } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/resource-zoom-menu-items'
-import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 import { useBrowserSessionStore } from '@/stores/browser-session/store'
 import { MOTHERSHIP_WIDTH } from '@/stores/constants'
-import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /** Ties the omnibox to its listbox for assistive tech. */
 const SUGGESTIONS_LIST_ID = 'browser-url-suggestions'
@@ -378,7 +384,6 @@ export function BrowserSession({
   const visibleRef = useRef(visible)
   visibleRef.current = visible
   const { removeResource } = useMothershipResources()
-  const { navigateToSettings } = useSettingsNavigation()
 
   // The browser session ending closes the panel, the way the terminal panel
   // goes when its last shell does. What it leaves otherwise is a tab whose
@@ -467,18 +472,6 @@ export function BrowserSession({
   }, [])
 
   useEffect(() => onBrowserAppearanceThemeChanged((next) => setAppearanceTheme(next)), [])
-
-  useEffect(
-    () =>
-      onBrowserToolbarCommand((command) => {
-        if (command === 'import') {
-          navigateToSettings({ section: 'browser', browserView: 'passwords', browserImport: true })
-          return
-        }
-        navigateToSettings({ section: 'browser' })
-      }, scopeId),
-    [navigateToSettings, scopeId]
-  )
 
   useEffect(
     () =>
@@ -1261,24 +1254,6 @@ export function BrowserSession({
                   sendBrowserPanelAction('zoom-reset', {}, scopeId)
                 )}
               />
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={afterToolbarClose(() =>
-                  navigateToSettings({
-                    section: 'browser',
-                    browserView: 'passwords',
-                    browserImport: true,
-                  })
-                )}
-              >
-                Import Passwords
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={afterToolbarClose(() => navigateToSettings({ section: 'browser' }))}
-              >
-                Browser Settings
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

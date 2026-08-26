@@ -150,7 +150,7 @@ export interface AgentTaskListItem {
   is_pinned?: boolean
   is_unread?: boolean
   deleted_at?: string | null
-  resources?: Array<Record<string, unknown>>
+  resources?: unknown[]
 }
 
 export interface SessionListItem {
@@ -231,6 +231,11 @@ export interface QuizSubmissionSnapshot {
 export interface AgentTaskSnapshot {
   id: string
   status: AgentTaskStatus
+  title?: string
+  is_pinned?: boolean
+  is_unread?: boolean
+  deleted_at?: string | null
+  resources?: unknown[]
   turnStatus?: AgentTurnStatus
   goalStatus?: AgentGoalStatus
   phase?: string

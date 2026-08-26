@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui-kit'
-import { api } from '@/lib/lingxi/api'
+import { ackAgentDelivery, agentArtifactUrl, submitAgentQuiz } from '@/lib/api/domains/agent-tasks'
+import { getLogs } from '@/lib/api/domains/logs'
+import { getWorkspaceFiles, getWorkspaceTables } from '@/lib/api/domains/workspace'
+import { fetchArtifactBlob } from '@/lib/api/transport/http'
 import { useAgentTask } from '@/lib/lingxi/hooks/use-agent-task'
 import type { PublicQuizQuestion } from '@/lib/lingxi/types'
 
@@ -66,10 +69,10 @@ function WorkspaceResource({ kind }: { kind: WorkspaceResourceKind }) {
       try {
         const data =
           kind === 'workspace-tables'
-            ? ((await api.workspaceTables()).tables ?? [])
+            ? ((await getWorkspaceTables()).tables ?? [])
             : kind === 'workspace-files'
-              ? ((await api.workspaceFiles('active')).files ?? [])
-              : ((await api.logs()).data ?? [])
+              ? ((await getWorkspaceFiles('active')).files ?? [])
+              : ((await getLogs()).data ?? [])
         if (!disposed) setState({ loading: false, error: null, data })
       } catch (cause) {
         if (!disposed) {
@@ -261,8 +264,7 @@ function LingxiTaskArtifactResource({ parsed }: { parsed: ParsedTaskResource | n
     if (!parsed || parsed.kind === 'quiz') return
     let disposed = false
     let objectUrl: string | null = null
-    void api
-      .fetchArtifact(api.agentArtifactUrl(parsed.taskId, parsed.kind))
+    void fetchArtifactBlob(agentArtifactUrl(parsed.taskId, parsed.kind))
       .then((blob) => {
         if (disposed) return
         objectUrl = URL.createObjectURL(blob)
@@ -290,8 +292,8 @@ function LingxiTaskArtifactResource({ parsed }: { parsed: ParsedTaskResource | n
             normalizeAnswer(question, answers[index] ?? ''),
           ])
         )
-        await api.submitAgentQuiz(parsed.taskId, crypto.randomUUID(), normalizedAnswers)
-        await api.ackAgentDelivery(parsed.taskId, 'quiz')
+        await submitAgentQuiz(parsed.taskId, crypto.randomUUID(), normalizedAnswers)
+        await ackAgentDelivery(parsed.taskId, 'quiz')
         setSubmittedAnswers(answers)
         await refresh()
       } catch (cause) {
@@ -316,11 +318,13 @@ function LingxiTaskArtifactResource({ parsed }: { parsed: ParsedTaskResource | n
           title='LingxiGraph 学习产物'
           sandbox='allow-scripts allow-same-origin allow-forms allow-popups'
         />
-        {task?.delivery.queue.some((item) => item.artifact === parsed.kind && item.state === 'unlocked') && (
+        {task?.delivery.queue.some(
+          (item) => item.artifact === parsed.kind && item.state === 'unlocked'
+        ) && (
           <Button
             className='m-3'
             variant='primary'
-            onClick={() => void api.ackAgentDelivery(parsed.taskId, parsed.kind).then(() => refresh())}
+            onClick={() => void ackAgentDelivery(parsed.taskId, parsed.kind).then(() => refresh())}
           >
             继续下一步
           </Button>

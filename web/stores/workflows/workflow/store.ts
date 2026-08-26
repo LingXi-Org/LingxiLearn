@@ -1,11 +1,11 @@
-import { createLogger } from '@/lib/logger'
-import { generateId } from '@/lib/utils/id'
-import type { BlockRetryConfig } from '@/lib/workflows/domain/workflow'
-import { filterAcyclicEdges, getWorkflowBlockNameConflict } from '@/lib/workflows/domain/workflow'
 import type { Edge } from 'reactflow'
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
+import { createLogger } from '@/lib/logger'
+import { generateId } from '@/lib/utils/id'
 import { DEFAULT_DUPLICATE_OFFSET } from '@/lib/workflows/autolayout/constants'
+import type { BlockRetryConfig } from '@/lib/workflows/domain/workflow'
+import { filterAcyclicEdges, getWorkflowBlockNameConflict } from '@/lib/workflows/domain/workflow'
 import {
   getDynamicHandleSubblockType,
   isDynamicHandleSubblock,
@@ -580,15 +580,14 @@ export const useWorkflowStore = create<WorkflowStore>()(
         const activeWorkflowId = get().currentWorkflowId
         const mergedBlock = mergeSubblockState(get().blocks, activeWorkflowId || undefined, id)[id]
 
-        const newSubBlocks = Object.entries(mergedBlock.subBlocks).reduce(
-          (acc, [subId, subBlock]) => ({
-            ...acc,
-            [subId]: {
+        const newSubBlocks = Object.fromEntries(
+          Object.entries(mergedBlock.subBlocks).map(([subId, subBlock]) => [
+            subId,
+            {
               ...subBlock,
               value: structuredClone(subBlock.value),
             },
-          }),
-          {}
+          ])
         )
 
         // Remap condition/router IDs in the duplicated subBlocks

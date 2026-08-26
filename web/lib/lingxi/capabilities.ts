@@ -1,5 +1,11 @@
 export const LINGXI_WORKSPACE_ID = 'lingxi' as const
 
+export function isLingxiWorkspaceId(
+  workspaceId: string
+): workspaceId is typeof LINGXI_WORKSPACE_ID {
+  return workspaceId === LINGXI_WORKSPACE_ID
+}
+
 export type LingxiCapabilityStatus = 'integrated' | 'not_integrated'
 
 export interface LingxiCapability {
@@ -42,13 +48,14 @@ export interface LingxiCapability {
  * knowledge       | sidebar + pages   | api.workspaceKnowledge | /api/knowledge       | KnowledgeBase     | integrated
  * logs            | sidebar + pages   | api.logs            | /api/logs               | AgentTaskEvent    | integrated
  * usageAudit      | logs (CSV export) | —                   | /api/users/me/usage-logs | AgentTask        | integrated
- * billing         | removed           | removed             | stubs only              | none              | not_integrated
- * organizations   | removed           | removed             | stubs only              | none              | not_integrated
+ * billing         | removed           | removed             | none                    | none              | not_integrated
+ * organizations   | removed           | removed             | none                    | none              | not_integrated
  * invitations     | removed           | removed             | none                    | none              | not_integrated
  * integrations    | removed (#48)     | removed             | none                    | none              | not_integrated
- * oauth           | auth callbacks    | auth plumbing       | none                    | none              | not_integrated
+ * oauth           | removed           | removed             | none                    | none              | not_integrated
  * credentials     | removed (#54)     | removed             | none                    | none              | not_integrated
  * secrets         | removed           | removed             | none                    | none              | not_integrated
+ * speechInput     | removed           | removed             | none                    | none              | not_integrated
  * auditLogs       | removed           | removed             | none                    | none              | not_integrated
  * admin           | removed (#54)     | removed             | none                    | none              | not_integrated
  * schedules       | removed           | removed             | none                    | none              | not_integrated
@@ -156,6 +163,12 @@ export const LingxiCapabilityManifest = {
   oauth: { status: 'not_integrated', label: 'OAuth 连接', backend: null, persistenceOwner: null },
   credentials: { status: 'not_integrated', label: '凭据', backend: null, persistenceOwner: null },
   secrets: { status: 'not_integrated', label: '密钥', backend: null, persistenceOwner: null },
+  speechInput: {
+    status: 'not_integrated',
+    label: '语音输入',
+    backend: null,
+    persistenceOwner: null,
+  },
   auditLogs: { status: 'not_integrated', label: '审计日志', backend: null, persistenceOwner: null },
   admin: { status: 'not_integrated', label: '管理员控制台', backend: null, persistenceOwner: null },
   billing: { status: 'not_integrated', label: '计费', backend: null, persistenceOwner: null },

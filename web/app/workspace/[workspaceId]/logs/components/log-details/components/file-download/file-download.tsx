@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui-kit'
 import { Download } from '@/components/ui-kit/icons'
-import { API_BASE } from '@/lib/lingxi/api'
+import { API_BASE } from '@/lib/api/config'
 import { createLogger } from '@/lib/logger'
 import { extractWorkspaceIdFromExecutionKey, getViewerUrl } from '@/lib/uploads/utils/file-utils'
 

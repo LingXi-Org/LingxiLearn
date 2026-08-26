@@ -1,6 +1,8 @@
 'use client'
 
 import { memo, type ReactNode, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useParams, usePathname } from 'next/navigation'
 import {
   Chip,
   ChipLink,
@@ -23,16 +25,14 @@ import {
   Table,
   Task,
 } from '@/components/ui-kit/icons'
-import Link from 'next/link'
-import { useParams, usePathname } from 'next/navigation'
+import { getAgentTasks } from '@/lib/api/domains/agent-tasks'
 import { LINGXI_BRAND_ASSETS } from '@/lib/branding/lingxi-assets'
-import { api } from '@/lib/lingxi/api'
+import { useLingxiIdentity } from '@/lib/lingxi/lingxi-identity-provider'
 import type { AgentTaskListItem } from '@/lib/lingxi/types'
+import { useSidebarResize } from '@/app/workspace/[workspaceId]/components/hooks'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { createCommands } from '@/app/workspace/[workspaceId]/utils/commands-utils'
-import { useSidebarResize } from '@/app/workspace/[workspaceId]/components/hooks'
 import { useSidebarStore } from '@/stores/sidebar/store'
-import { useLingxiIdentity } from '@/lib/lingxi/lingxi-identity-provider'
 
 export function SidebarTooltip({
   children,
@@ -277,8 +277,7 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
 
   useEffect(() => {
     let active = true
-    void api
-      .agentTasks()
+    void getAgentTasks()
       .then((result) => {
         if (active) {
           setTasks(result.tasks)
@@ -446,7 +445,11 @@ export function SimSidebar({ isCollapsed, isPeeking = false }: SidebarProps) {
             <p className='font-medium text-[var(--text-primary)]'>Sim 源码实现</p>
             <p className='mt-1'>设置页面已关闭，账户操作保留在这里。</p>
             {identity.authenticated && identity.client && (
-              <button type='button' className='mt-3 text-[var(--text-primary)] hover:underline' onClick={() => void identity.client?.logout()}>
+              <button
+                type='button'
+                className='mt-3 text-[var(--text-primary)] hover:underline'
+                onClick={() => void identity.client?.logout()}
+              >
                 退出登录
               </button>
             )}

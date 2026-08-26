@@ -11,14 +11,19 @@ import 'prismjs/components/prism-bash'
 import 'prismjs/components/prism-css'
 import 'prismjs/components/prism-markup'
 import '@/components/ui-kit/components/code/code.css'
-import { Checkbox, CopyCodeButton, cn, languages, highlight as prismHighlight } from '@/components/ui-kit'
+import {
+  Checkbox,
+  CopyCodeButton,
+  cn,
+  languages,
+  highlight as prismHighlight,
+} from '@/components/ui-kit'
 import { decodeVfsSegmentSafe } from '@/lib/copilot/vfs/path-utils'
 import { extractTextContent } from '@/lib/core/utils/react-node-text'
 import { ContextMentionIcon } from '@/app/workspace/[workspaceId]/home/components/context-mention-icon'
 import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
 import {
   type ContentSegment,
-  type CredentialSubmissionPayload,
   parseSpecialTags,
   SpecialTags,
 } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
@@ -396,14 +401,9 @@ const MARKDOWN_COMPONENTS = {
 
 interface ChatContentProps {
   content: string
-  messageId?: string
   isStreaming?: boolean
   /** Transcript-derived answers for this message's question card (renders the recap). */
   questionAnswers?: string[]
-  /** Transcript-derived status payload for this message's credential card. */
-  credentialSubmission?: CredentialSubmissionPayload
-  /** The user moved on without submitting this message's credential card. */
-  credentialAbandoned?: boolean
   onOptionSelect?: (id: string) => void
   /** Submits the question card in option-id form; `true` means a typed
    * interaction consumed it and no chat message is sent (issue #18 §10.5). */
@@ -422,11 +422,8 @@ interface ChatContentProps {
 
 function ChatContentInner({
   content,
-  messageId,
   isStreaming = false,
   questionAnswers,
-  credentialSubmission,
-  credentialAbandoned,
   onOptionSelect,
   onQuestionSubmit,
   onQuestionDismiss,
@@ -650,10 +647,7 @@ function ChatContentInner({
           <SpecialTags
             key={`special-${group.index}`}
             segment={group.segment}
-            interactionId={`${messageId ?? 'message'}:${group.index}`}
             questionAnswers={questionAnswers}
-            credentialSubmission={credentialSubmission}
-            credentialAbandoned={credentialAbandoned}
             onOptionSelect={onOptionSelect}
             onQuestionSubmit={onQuestionSubmit}
             onQuestionDismiss={onQuestionDismiss}

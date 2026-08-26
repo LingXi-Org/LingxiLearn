@@ -264,25 +264,6 @@ export const AgentTaskSnapshotResponseSchema = z.object({
 });
 export type AgentTaskSnapshotResponse = z.output<typeof AgentTaskSnapshotResponseSchema>;
 
-export const IntegrationAvailabilityInfoSchema = z.object({
-  oauthAvailable: z.boolean().default(false),
-  state: z.string(),
-  type: z.string(),
-});
-export type IntegrationAvailabilityInfo = z.output<typeof IntegrationAvailabilityInfoSchema>;
-
-/** ``null`` means no env-derived allowlist (unrestricted). */
-export const AllowedIntegrationsResponseSchema = z.object({
-  allowedIntegrations: z.array(z.string()).nullable(),
-  integrationAvailability: z.array(IntegrationAvailabilityInfoSchema),
-});
-export type AllowedIntegrationsResponse = z.output<typeof AllowedIntegrationsResponseSchema>;
-
-export const AllowedProvidersResponseSchema = z.object({
-  blacklistedProviders: z.array(z.string()),
-});
-export type AllowedProvidersResponse = z.output<typeof AllowedProvidersResponseSchema>;
-
 export const AttachmentUploadResponseSchema = z.object({
   filename: z.string(),
   key: z.string(),
@@ -291,59 +272,6 @@ export const AttachmentUploadResponseSchema = z.object({
   size: z.number().int(),
 });
 export type AttachmentUploadResponse = z.output<typeof AttachmentUploadResponseSchema>;
-
-export const BillingUsageInfoSchema = z.object({
-  billingPeriodEnd: z.string().nullable(),
-  billingPeriodStart: z.string().nullable(),
-  copilotCost: z.number().default(0),
-  current: z.number().int().default(0),
-  daysRemaining: z.number().int().default(0),
-  isExceeded: z.boolean().default(false),
-  isWarning: z.boolean().default(false),
-  lastPeriodCopilotCost: z.number().default(0),
-  lastPeriodCost: z.number().default(0),
-  limit: z.number().int().default(0),
-  percentUsed: z.number().default(0),
-});
-export type BillingUsageInfo = z.output<typeof BillingUsageInfoSchema>;
-
-export const BillingInfoDataSchema = z.object({
-  billingBlocked: z.boolean().default(false),
-  billingBlockedReason: z.string().nullable(),
-  billingInterval: z.string().default("month"),
-  blockedByOrgOwner: z.boolean().default(false),
-  cancelAtPeriodEnd: z.boolean().default(false),
-  creditBalance: z.number().int().default(0),
-  currentUsage: z.number().int().default(0),
-  daysRemaining: z.number().int().default(0),
-  isEnterprise: z.boolean().default(false),
-  isExceeded: z.boolean().default(false),
-  isOrgScoped: z.boolean().default(false),
-  isPaid: z.boolean().default(false),
-  isPro: z.boolean().default(false),
-  isTeam: z.boolean().default(false),
-  isWarning: z.boolean().default(false),
-  metadata: z.record(z.string(), z.unknown()),
-  organizationId: z.string().nullable(),
-  percentUsed: z.number().default(0),
-  periodEnd: z.string().nullable(),
-  plan: z.string().default("internal"),
-  seats: z.number().int().nullable(),
-  status: z.string().default("inactive"),
-  stripeSubscriptionId: z.string().nullable(),
-  type: z.string().default("individual"),
-  upgradeWorkspaceId: z.string().nullable(),
-  usage: BillingUsageInfoSchema,
-  usageLimit: z.number().int().default(0),
-});
-export type BillingInfoData = z.output<typeof BillingInfoDataSchema>;
-
-export const BillingInfoResponseSchema = z.object({
-  context: z.string().default("user"),
-  data: BillingInfoDataSchema,
-  success: z.boolean(),
-});
-export type BillingInfoResponse = z.output<typeof BillingInfoResponseSchema>;
 
 export const Body_download_file_items_api_workspaces__workspace_id__files_download_getSchema = z.object({
   fileIds: z.array(z.string()).nullable(),
@@ -984,12 +912,6 @@ export const NativeSkillInfoSchema = z.object({
 });
 export type NativeSkillInfo = z.output<typeof NativeSkillInfoSchema>;
 
-export const OrganizationsResponseSchema = z.object({
-  isMemberOfAnyOrg: z.boolean().default(false),
-  organizations: z.array(z.record(z.string(), z.unknown())),
-});
-export type OrganizationsResponse = z.output<typeof OrganizationsResponseSchema>;
-
 export const PackConceptInfoSchema = z.object({
   id: z.string(),
   requires: z.array(z.string()),
@@ -1466,12 +1388,6 @@ export const TableViewsResponseSchema = z.object({
 });
 export type TableViewsResponse = z.output<typeof TableViewsResponseSchema>;
 
-export const TelemetryResponseSchema = z.object({
-  forwarded: z.boolean().default(false),
-  success: z.boolean(),
-});
-export type TelemetryResponse = z.output<typeof TelemetryResponseSchema>;
-
 export const UploadCompletedInfoSchema = z.object({
   contentType: z.string(),
   error: z.string().nullable(),
@@ -1508,34 +1424,6 @@ export const UploadStateResponseSchema = z.object({
 });
 export type UploadStateResponse = z.output<typeof UploadStateResponseSchema>;
 
-export const UsageLimitsResponseSchema = z.object({
-  rateLimit: z.record(z.string(), z.unknown()),
-  storage: z.record(z.string(), z.unknown()),
-  success: z.boolean().default(true),
-  usage: z.record(z.string(), z.unknown()),
-});
-export type UsageLimitsResponse = z.output<typeof UsageLimitsResponseSchema>;
-
-export const UserProfileInfoSchema = z.object({
-  email: z.string(),
-  emailVerified: z.boolean().default(false),
-  id: z.string(),
-  image: z.string().nullable(),
-  name: z.string(),
-});
-export type UserProfileInfo = z.output<typeof UserProfileInfoSchema>;
-
-export const UserProfileResponseSchema = z.object({
-  user: UserProfileInfoSchema,
-});
-export type UserProfileResponse = z.output<typeof UserProfileResponseSchema>;
-
-export const UserProfileUpdateResponseSchema = z.object({
-  success: z.boolean(),
-  user: UserProfileInfoSchema,
-});
-export type UserProfileUpdateResponse = z.output<typeof UserProfileUpdateResponseSchema>;
-
 /** Exact ``_settings_public`` wire shape. */
 export const UserSettingsInfoSchema = z.object({
   autoConnect: z.boolean().default(true),
@@ -1564,63 +1452,6 @@ export const UserSettingsUpdateResponseSchema = z.object({
   success: z.boolean(),
 });
 export type UserSettingsUpdateResponse = z.output<typeof UserSettingsUpdateResponseSchema>;
-
-export const V2BillingCreditsInfoSchema = z.object({
-  limit: z.number().int().default(0),
-  remaining: z.number().int().default(0),
-  used: z.number().int().default(0),
-});
-export type V2BillingCreditsInfo = z.output<typeof V2BillingCreditsInfoSchema>;
-
-export const V2BillingLogEntrySchema = z.object({
-  createdAt: z.string().nullable(),
-  creditCost: z.number().default(0),
-  id: z.string(),
-  runId: z.unknown(),
-  source: z.string().default(""),
-  workflow: z.unknown(),
-  workspaceId: z.string().default("lingxi"),
-});
-export type V2BillingLogEntry = z.output<typeof V2BillingLogEntrySchema>;
-
-export const V2BillingLogsResponseSchema = z.object({
-  data: z.array(V2BillingLogEntrySchema),
-  nextCursor: z.string().nullable(),
-});
-export type V2BillingLogsResponse = z.output<typeof V2BillingLogsResponseSchema>;
-
-export const V2BillingPeriodInfoSchema = z.object({
-  end: z.string(),
-  start: z.string(),
-});
-export type V2BillingPeriodInfo = z.output<typeof V2BillingPeriodInfoSchema>;
-
-export const V2BillingStorageInfoSchema = z.object({
-  limitBytes: z.number().int().default(0),
-  percentUsed: z.number().default(0),
-  usedBytes: z.number().int().default(0),
-});
-export type V2BillingStorageInfo = z.output<typeof V2BillingStorageInfoSchema>;
-
-export const V2BillingStatusDataSchema = z.object({
-  credits: V2BillingCreditsInfoSchema,
-  period: V2BillingPeriodInfoSchema,
-  plan: z.string().default("internal"),
-  status: z.string().default("active"),
-  storage: V2BillingStorageInfoSchema,
-  workspaceId: z.string(),
-});
-export type V2BillingStatusData = z.output<typeof V2BillingStatusDataSchema>;
-
-export const V2BillingStatusResponseSchema = z.object({
-  data: V2BillingStatusDataSchema,
-});
-export type V2BillingStatusResponse = z.output<typeof V2BillingStatusResponseSchema>;
-
-export const VoiceSettingsResponseSchema = z.object({
-  sttAvailable: z.boolean().default(false),
-});
-export type VoiceSettingsResponse = z.output<typeof VoiceSettingsResponseSchema>;
 
 /** Exact ``_file_public`` wire shape — the public file DTO, never the ORM row. */
 export const WorkspaceFileInfoSchema = z.object({

@@ -198,7 +198,7 @@ export function WorkspaceHomeShell({ chatId, userId, tableViewsEnabled }: Worksp
     const previousChatId = resourceAttentionChatIdRef.current
     resourceAttentionChatIdRef.current = resolvedChatId
     wasSendingRef.current = false
-    if (resolvedChatId && workspaceId !== 'lingxi') {
+    if (resolvedChatId) {
       markRead(resolvedChatId)
     } else {
       panel.resetForThread(clearWidth)
@@ -209,7 +209,7 @@ export function WorkspaceHomeShell({ chatId, userId, tableViewsEnabled }: Worksp
   }, [resolvedChatId, markRead, clearWidth, workspaceId, panel.resetForThread])
 
   useEffect(() => {
-    if (wasSendingRef.current && !isSending && resolvedChatId && workspaceId !== 'lingxi') {
+    if (wasSendingRef.current && !isSending && resolvedChatId) {
       markRead(resolvedChatId)
     }
     wasSendingRef.current = isSending

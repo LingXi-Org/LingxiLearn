@@ -1,8 +1,8 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { setAuthenticationFailureHandler, setSessionRefreshHandler } from '@/lib/api/transport/http'
 import { isMockAuthEnabled } from '@/lib/core/config/env-flags'
-import { setAuthenticationFailureHandler, setSessionRefreshHandler } from '@/lib/lingxi/api'
 import { clearUserData } from '@/stores'
 import { type IdentityMe, identityApi } from './identity-api'
 import { MOCK_IDENTITY_ME } from './mock-session'

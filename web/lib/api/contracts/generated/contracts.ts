@@ -1,4 +1,4 @@
-// 128 contracts generated from 121 paths.
+// 116 contracts generated from 104 paths.
 // AUTO-GENERATED — do not edit by hand.
 // Regenerate:  python scripts/export_openapi.py && bun run web/scripts/generate-rest-contracts.ts
 // eslint-disable @typescript-eslint/no-explicit-any
@@ -146,29 +146,6 @@ export const agentTaskRuntimeGraphApiAgentTasks_TaskId_RuntimeGraphGetContract =
   response: {
     mode: "json" as const,
     schema: S.RuntimeGraphResponseSchema,
-  },
-});
-
-export const getBillingApiBillingGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/billing",
-  query: z.object({
-    context: z.string().default("user"),
-    id: z.string().nullable(),
-    includeOrg: z.boolean().default(false),
-  }),
-  response: {
-    mode: "json" as const,
-    schema: S.BillingInfoResponseSchema,
-  },
-});
-
-export const purchaseCreditsApiBillingCreditsPostContract = defineRouteContract({
-  method: "POST" as const,
-  path: "/api/billing/credits",
-  response: {
-    mode: "json" as const,
-    schema: S.MessageResponseSchema,
   },
 });
 
@@ -751,15 +728,6 @@ export const patchPreferencesApiMePreferencesPatchContract = defineRouteContract
   },
 });
 
-export const listOrganizationsApiOrganizationsGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/organizations",
-  response: {
-    mode: "json" as const,
-    schema: S.OrganizationsResponseSchema,
-  },
-});
-
 export const listPacksApiPacksGetContract = defineRouteContract({
   method: "GET" as const,
   path: "/api/packs",
@@ -801,33 +769,6 @@ export const deletePinnedItemApiPinnedItems_ResourceType__ResourceId_DeleteContr
   response: {
     mode: "json" as const,
     schema: S.SuccessResponseSchema,
-  },
-});
-
-export const allowedIntegrationsApiSettingsAllowedIntegrationsGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/settings/allowed-integrations",
-  response: {
-    mode: "json" as const,
-    schema: S.AllowedIntegrationsResponseSchema,
-  },
-});
-
-export const allowedProvidersApiSettingsAllowedProvidersGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/settings/allowed-providers",
-  response: {
-    mode: "json" as const,
-    schema: S.AllowedProvidersResponseSchema,
-  },
-});
-
-export const voiceSettingsApiSettingsVoiceGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/settings/voice",
-  response: {
-    mode: "json" as const,
-    schema: S.VoiceSettingsResponseSchema,
   },
 });
 
@@ -1152,33 +1093,6 @@ export const deleteViewApiTable_TableId_Views_ViewId_DeleteContract = defineRout
   },
 });
 
-export const recordTelemetryApiTelemetryPostContract = defineRouteContract({
-  method: "POST" as const,
-  path: "/api/telemetry",
-  response: {
-    mode: "json" as const,
-    schema: S.TelemetryResponseSchema,
-  },
-});
-
-export const getUserProfileApiUsersMeProfileGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/users/me/profile",
-  response: {
-    mode: "json" as const,
-    schema: S.UserProfileResponseSchema,
-  },
-});
-
-export const updateUserProfileApiUsersMeProfilePatchContract = defineRouteContract({
-  method: "PATCH" as const,
-  path: "/api/users/me/profile",
-  response: {
-    mode: "json" as const,
-    schema: S.UserProfileUpdateResponseSchema,
-  },
-});
-
 export const getUserSettingsApiUsersMeSettingsGetContract = defineRouteContract({
   method: "GET" as const,
   path: "/api/users/me/settings",
@@ -1194,45 +1108,6 @@ export const updateUserSettingsApiUsersMeSettingsPatchContract = defineRouteCont
   response: {
     mode: "json" as const,
     schema: S.UserSettingsUpdateResponseSchema,
-  },
-});
-
-export const usageLimitsApiUsersMeUsageLimitsGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/users/me/usage-limits",
-  response: {
-    mode: "json" as const,
-    schema: S.UsageLimitsResponseSchema,
-  },
-});
-
-export const v2BillingLogsApiV2BillingLogsGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/v2/billing/logs",
-  query: z.object({
-    cursor: z.string().nullable(),
-    endDate: z.string().nullable(),
-    limit: z.number().int().min(1).max(100).default(50),
-    period: z.string().default("30d"),
-    source: z.string().nullable(),
-    startDate: z.string().nullable(),
-    workspaceId: z.string().nullable(),
-  }),
-  response: {
-    mode: "json" as const,
-    schema: S.V2BillingLogsResponseSchema,
-  },
-});
-
-export const v2BillingStatusApiV2BillingStatusGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/v2/billing/status",
-  query: z.object({
-    workspaceId: z.string().nullable(),
-  }),
-  response: {
-    mode: "json" as const,
-    schema: S.V2BillingStatusResponseSchema,
   },
 });
 

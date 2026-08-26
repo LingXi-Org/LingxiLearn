@@ -55,6 +55,87 @@ describe('production quality boundaries', () => {
     }
   })
 
+  it('rejects restored API facade and workflow-editor source', () => {
+    const root = fixture()
+    try {
+      const facade = join(root, 'lib', 'lingxi', 'api.ts')
+      const workflowEditor = join(
+        root,
+        'app',
+        'workspace',
+        '[workspaceId]',
+        'w',
+        'components',
+        'sidebar.tsx'
+      )
+      mkdirSync(join(facade, '..'), { recursive: true })
+      mkdirSync(join(workflowEditor, '..'), { recursive: true })
+      writeFileSync(facade, 'export const api = {}')
+      writeFileSync(workflowEditor, 'export function Sidebar() { return null }')
+
+      expect(findQualityBoundaryViolations(root)).toEqual(
+        expect.arrayContaining([
+          {
+            file: 'lib/lingxi/api.ts',
+            rule: 'removed compatibility source was restored',
+          },
+          {
+            file: 'app/workspace/[workspaceId]/w',
+            rule: 'removed compatibility source tree was restored',
+          },
+        ])
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects unsupported credential tags in the chat renderer', () => {
+    const root = fixture()
+    try {
+      const specialTags = join(
+        root,
+        'app',
+        'workspace',
+        '[workspaceId]',
+        'home',
+        'components',
+        'message-content',
+        'components',
+        'special-tags',
+        'special-tags.tsx'
+      )
+      mkdirSync(join(specialTags, '..'), { recursive: true })
+      writeFileSync(specialTags, "export const types = ['browser_takeover', 'service_account']")
+
+      expect(findQualityBoundaryViolations(root)).toContainEqual({
+        file: 'app/workspace/[workspaceId]/home/components/message-content/components/special-tags/special-tags.tsx',
+        rule: "unsupported credential tag 'service_account' was restored",
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects fake native task mutation shims', () => {
+    const root = fixture()
+    try {
+      const chatQueries = join(root, 'hooks', 'queries', 'mothership-chats.ts')
+      mkdirSync(join(chatQueries, '..'), { recursive: true })
+      writeFileSync(
+        chatQueries,
+        "export const mutation = { mutationFn: async () => undefined }"
+      )
+
+      expect(findQualityBoundaryViolations(root)).toContainEqual({
+        file: 'hooks/queries/mothership-chats.ts',
+        rule: 'native task mutations must not use fake success or unsupported shims',
+      })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('requires shared Workspace copy owners to use the product catalog', () => {
     const root = fixture()
     try {

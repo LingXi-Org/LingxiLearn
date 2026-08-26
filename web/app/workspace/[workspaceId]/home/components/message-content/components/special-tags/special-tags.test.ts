@@ -15,17 +15,9 @@ vi.mock('@/lib/auth/auth-client', () => ({
 }))
 
 import { scalingRatioOver4x } from '@/app/workspace/[workspaceId]/home/components/message-content/components/scaling-test-helpers'
-import type {
-  ContentSegment,
-  CredentialItemData,
-  IndexOfCache,
-} from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags/special-tags'
+import type { ContentSegment, IndexOfCache } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags/special-tags'
 import {
-  credentialTagHasVisibleCard,
-  formatCredentialSubmissionMessage,
   memoizedIndexOf,
-  parseCredentialSubmissionMessage,
-  parseCredentialSubmissionProgress,
   parseCredentialTagBody,
   parseLastCredentialTag,
   parseQuestionTagBody,
@@ -43,84 +35,41 @@ function renderedText(segments: ContentSegment[]): string {
 }
 
 describe('parseCredentialTagBody', () => {
-  const secret: CredentialItemData = { type: 'secret_input', name: 'OPENAI_API_KEY' }
-  const oauth: CredentialItemData = {
-    type: 'link',
-    provider: 'google-email',
-    value: 'https://sim.test/api/auth/oauth2/authorize?providerId=google-email',
-  }
+  const browserTakeover = {
+    type: 'browser_takeover',
+    name: 'Complete the verification in the browser.',
+  } as const
+  const terminalHandoff = {
+    type: 'terminal_handoff',
+    name: 'Finish the interactive terminal prompt.',
+  } as const
 
-  it('normalizes a singleton credential object to one row', () => {
-    expect(parseCredentialTagBody(JSON.stringify(secret))).toEqual([secret])
+  it('normalizes a native handoff object and preserves a native batch', () => {
+    expect(parseCredentialTagBody(JSON.stringify(browserTakeover))).toEqual([browserTakeover])
+    expect(parseCredentialTagBody(JSON.stringify([browserTakeover, terminalHandoff]))).toEqual([
+      browserTakeover,
+      terminalHandoff,
+    ])
   })
 
-  it('preserves a mixed credential-input batch in one tag', () => {
-    expect(parseCredentialTagBody(JSON.stringify([secret, oauth]))).toEqual([secret, oauth])
-  })
+  it.each(['link', 'secret_input', 'sim_key', 'service_account', 'folder_access'])(
+    'rejects unsupported %s credential controls',
+    (type) => {
+      expect(parseCredentialTagBody(JSON.stringify({ type, name: 'legacy' }))).toBeNull()
+    }
+  )
 
-  it('rejects empty arrays and batches containing an invalid row', () => {
+  it('rejects empty, malformed, and mixed unsupported batches', () => {
     expect(parseCredentialTagBody('[]')).toBeNull()
-    expect(parseCredentialTagBody(JSON.stringify([secret, { type: 'link' }]))).toBeNull()
-  })
-
-  it('formats and strictly pairs the safe continuation without secret values', () => {
-    const data = [oauth, secret]
-    const message = formatCredentialSubmissionMessage(data)
-
-    expect(message).toBe(
-      'Credential setup submitted — {"integrations":[{"name":"google-email","status":"connected"}],"secrets":[{"name":"OPENAI_API_KEY","status":"saved"}]}'
-    )
-    expect(parseCredentialSubmissionMessage(data, message)).toBe(true)
-    expect(parseCredentialSubmissionProgress(data, message)).toEqual({
-      integrations: [{ name: 'google-email', status: 'connected' }],
-      secrets: [{ name: 'OPENAI_API_KEY', status: 'saved' }],
-    })
-    expect(parseCredentialSubmissionMessage(data, `${message}!`)).toBe(false)
-  })
-
-  it('reports skipped rows without leaking secret values', () => {
-    const data = [oauth, secret]
-    const message = formatCredentialSubmissionMessage(data, {
-      connectedIntegrationIndexes: new Set(),
-      savedSecretIndexes: new Set(),
-    })
-
-    expect(message).toBe(
-      'Credential setup submitted — {"integrations":[{"name":"google-email","status":"skipped"}],"secrets":[{"name":"OPENAI_API_KEY","status":"skipped"}]}'
-    )
-    expect(parseCredentialSubmissionMessage(data, message)).toBe(true)
-  })
-
-  it('still pairs legacy completed setup messages after reload', () => {
+    expect(parseCredentialTagBody('{')).toBeNull()
     expect(
-      parseCredentialSubmissionMessage(
-        [oauth, secret],
-        'Credential setup complete — integrations: google-email; secrets: OPENAI_API_KEY'
-      )
-    ).toBe(true)
+      parseCredentialTagBody(JSON.stringify([browserTakeover, { type: 'service_account' }]))
+    ).toBeNull()
   })
 
-  it('extracts the last complete credential batch for transcript pairing', () => {
-    const content = `First <credential>${JSON.stringify(secret)}</credential> then <credential>${JSON.stringify([oauth, secret])}</credential>`
-    expect(parseLastCredentialTag(content)).toEqual([oauth, secret])
-  })
-
-  it('only reserves message actions when a credential card is visible to this member', () => {
-    const workspaceSecret: CredentialItemData = {
-      type: 'secret_input',
-      name: 'WORKSPACE_KEY',
-      scope: 'workspace',
-    }
-    const personalSecret: CredentialItemData = {
-      type: 'secret_input',
-      name: 'PERSONAL_KEY',
-      scope: 'personal',
-    }
-
-    expect(credentialTagHasVisibleCard([workspaceSecret], false)).toBe(false)
-    expect(credentialTagHasVisibleCard([personalSecret], false)).toBe(true)
-    expect(credentialTagHasVisibleCard([oauth], false)).toBe(false)
-    expect(credentialTagHasVisibleCard([oauth], true)).toBe(true)
+  it('extracts the last complete native handoff batch', () => {
+    const content = `First <credential>${JSON.stringify(browserTakeover)}</credential> then <credential>${JSON.stringify([browserTakeover, terminalHandoff])}</credential>`
+    expect(parseLastCredentialTag(content)).toEqual([browserTakeover, terminalHandoff])
   })
 })
 
@@ -901,90 +850,6 @@ describe('parseSpecialTags with <question>', () => {
   })
 })
 
-describe('service_account credential tag', () => {
-  it('parses a service_account tag into a credential segment', () => {
-    const body = JSON.stringify({ type: 'service_account', provider: 'slack' })
-    const { segments } = parseSpecialTags(`Set this up: <credential>${body}</credential>`, false)
-
-    const credential = segments.find((segment) => segment.type === 'credential')
-    expect(credential).toBeDefined()
-    expect(credential).toMatchObject({
-      type: 'credential',
-      data: [{ type: 'service_account', provider: 'slack' }],
-    })
-  })
-
-  it('carries no value — the secret is typed into Sim’s own form, never the transcript', () => {
-    const body = JSON.stringify({ type: 'service_account', provider: 'google-sheets' })
-    const { segments } = parseSpecialTags(`<credential>${body}</credential>`, false)
-
-    const credential = segments.find((segment) => segment.type === 'credential')
-    expect((credential as { data: Array<{ value?: string }> }).data[0].value).toBeUndefined()
-  })
-
-  it('suppresses the tag while it is still streaming', () => {
-    // A half-streamed tag must not flash raw JSON into the message body.
-    const { segments, hasPendingTag } = parseSpecialTags(
-      'Set this up: <credential>{"type": "service_a',
-      true
-    )
-    expect(hasPendingTag).toBe(true)
-    expect(segments.some((segment) => segment.type === 'credential')).toBe(false)
-    const text = segments
-      .filter((segment): segment is { type: 'text'; content: string } => segment.type === 'text')
-      .map((segment) => segment.content)
-      .join('')
-    expect(text).not.toContain('service_a')
-  })
-})
-
-describe('service_account tag validation', () => {
-  it('rejects a provider-less tag, which would render an unresolvable control', () => {
-    const { segments } = parseSpecialTags(
-      `<credential>${JSON.stringify({ type: 'service_account' })}</credential>`,
-      false
-    )
-    expect(segments.some((segment) => segment.type === 'credential')).toBe(false)
-  })
-
-  it('rejects a blank provider', () => {
-    const { segments } = parseSpecialTags(
-      `<credential>${JSON.stringify({ type: 'service_account', provider: '   ' })}</credential>`,
-      false
-    )
-    expect(segments.some((segment) => segment.type === 'credential')).toBe(false)
-  })
-
-  it('accepts an optional credentialId for reconnect and carries it through', () => {
-    const body = JSON.stringify({
-      type: 'service_account',
-      provider: 'notion',
-      credentialId: 'cred_abc123',
-    })
-    const { segments } = parseSpecialTags(`<credential>${body}</credential>`, false)
-    const credential = segments.find((segment) => segment.type === 'credential')
-    expect(credential).toMatchObject({
-      type: 'credential',
-      data: [{ type: 'service_account', provider: 'notion', credentialId: 'cred_abc123' }],
-    })
-  })
-
-  it('rejects a non-string credentialId', () => {
-    const body = JSON.stringify({ type: 'service_account', provider: 'notion', credentialId: 42 })
-    const { segments } = parseSpecialTags(`<credential>${body}</credential>`, false)
-    expect(segments.some((segment) => segment.type === 'credential')).toBe(false)
-  })
-
-  it.each(['', '   '])(
-    'rejects a blank credentialId (%j) so reconnect cannot target a missing credential',
-    (credentialId) => {
-      const body = JSON.stringify({ type: 'service_account', provider: 'notion', credentialId })
-      const { segments } = parseSpecialTags(`<credential>${body}</credential>`, false)
-      expect(segments.some((segment) => segment.type === 'credential')).toBe(false)
-    }
-  )
-})
-
 describe('memoizedIndexOf', () => {
   const CONTENT =
     'Use <workspace_resource> for files. Use <question> for cards. ' +
@@ -1068,7 +933,7 @@ describe('parser properties', () => {
     options: '<options>[{"title":"Ship it","description":"Open the PR"}]</options>',
     question: `<question>${JSON.stringify(SINGLE_SELECT)}</question>`,
     credential:
-      '<credential>{"type":"link","provider":"slack","value":"https://x.example/p"}</credential>',
+      '<credential>{"type":"terminal_handoff","name":"Finish the prompt"}</credential>',
     usage_upgrade:
       '<usage_upgrade>{"reason":"monthly cap","action":"upgrade_plan","message":"You hit your limit."}</usage_upgrade>',
     'mothership-error':

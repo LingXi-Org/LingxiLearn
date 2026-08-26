@@ -1,4 +1,4 @@
-import type { LingxiAttachmentRef } from '@/lib/lingxi/api'
+import type { LingxiAttachmentRef } from '@/lib/api/domains/agent-tasks'
 import type { ChatContext } from '@/lib/lingxi/chat-context'
 import type { FileAttachmentForApi } from '../../types'
 

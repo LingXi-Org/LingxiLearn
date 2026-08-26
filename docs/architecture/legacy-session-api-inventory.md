@@ -14,6 +14,6 @@ evidence and reports still carry historical session foreign keys.
 | `GET /api/sessions/{id}/artifact/{artifactId}` | None | Yes | `GET /api/agent-tasks/{id}/artifacts/{kind}` | Met: no product caller |
 | `GET /api/sessions/{id}/events` | None | Yes | `GET /api/agent-tasks/{id}/events` | Met: no product caller |
 
-The removed TypeScript client was only re-exported by `lib/lingxi/api.ts`; repository-wide
+The removed TypeScript client was only re-exported by the former Lingxi API facade; repository-wide
 reachability found no calls to those exports. Legacy persistence may remain readable for data
 migration, but V1 AgentTask services must not depend on Session route or conversation services.

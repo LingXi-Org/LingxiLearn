@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { nonEmptyIdSchema, requiredFieldSchema } from '@/lib/api/contracts/primitives'
+import { requiredFieldSchema } from '@/lib/api/contracts/primitives'
 import { type ContractJsonResponse, defineRouteContract } from '@/lib/api/contracts/types'
 
 export const workspaceScopeSchema = z.enum(['active', 'archived', 'all'])
@@ -230,7 +230,8 @@ export const getWorkspaceContract = defineRouteContract({
 
 /**
  * Subscription access fields of the workspace's billed account (its OWNER's
- * rolled-up plan) — the workspace-scoped counterpart to the viewer `/api/billing`
+ * rolled-up plan) — the workspace-scoped counterpart to the legacy viewer
+ * billing payload
  * data. Feed to `getSubscriptionAccessState` to gate workspace features on the
  * owner's plan instead of the signed-in viewer's. No usage/credit data.
  */

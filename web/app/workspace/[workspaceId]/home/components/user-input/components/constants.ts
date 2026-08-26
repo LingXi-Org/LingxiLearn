@@ -1,40 +1,9 @@
 import { cn } from '@/components/ui-kit'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import type {
   MothershipResource,
   MothershipResourceType,
 } from '@/app/workspace/[workspaceId]/home/types'
-import type { ChatContext } from '@/lib/lingxi/chat-context'
-
-export interface SpeechRecognitionEvent extends Event {
-  resultIndex: number
-  results: SpeechRecognitionResultList
-}
-
-export interface SpeechRecognitionErrorEvent extends Event {
-  error: string
-}
-
-export interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start(): void
-  stop(): void
-  abort(): void
-  onstart: ((ev: Event) => void) | null
-  onend: ((ev: Event) => void) | null
-  onresult: ((ev: SpeechRecognitionEvent) => void) | null
-  onerror: ((ev: SpeechRecognitionErrorEvent) => void) | null
-}
-
-interface SpeechRecognitionStatic {
-  new (): SpeechRecognitionInstance
-}
-
-export type WindowWithSpeech = Window & {
-  SpeechRecognition?: SpeechRecognitionStatic
-  webkitSpeechRecognition?: SpeechRecognitionStatic
-}
 
 export interface PlusMenuHandle {
   /** Opens the menu anchored at a viewport position (caret or trigger rect). */
@@ -100,8 +69,6 @@ export const SEND_BUTTON_BASE = 'h-[28px] w-[28px] rounded-full border-0 p-0 tra
 export const SEND_BUTTON_ACTIVE =
   'bg-[#383838] hover:bg-[#575757] dark:bg-[#E0E0E0] dark:hover:bg-[#CFCFCF]'
 export const SEND_BUTTON_DISABLED = 'bg-[#808080] dark:bg-[#808080]'
-
-export const SPEECH_RECOGNITION_LANG = 'en-US'
 
 /**
  * Maps a {@link MothershipResource} (resource-picker domain) to a

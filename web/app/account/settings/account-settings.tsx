@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Button, ChipInput, Label } from '@/components/ui-kit'
 import { type IdentitySession, identityApi } from '@/lib/auth/identity-api'
 import { useSession } from '@/lib/auth/session-provider'
@@ -246,14 +247,14 @@ export function AccountSettings({ initialSection = 'profile' }: { initialSection
               ['sessions', '设备与账户'],
             ] as const
           ).map(([value, label]) => (
-            <button
+            <Link
               key={value}
-              type='button'
+              href={`/account/settings/${value}`}
               onClick={() => setSection(value)}
               className={`rounded-lg px-3 py-2 text-left text-sm ${section === value ? 'bg-[var(--surface-3)] text-[var(--text-primary)]' : 'text-[var(--text-muted)] hover:bg-[var(--surface-2)]'}`}
             >
               {label}
-            </button>
+            </Link>
           ))}
         </nav>
 

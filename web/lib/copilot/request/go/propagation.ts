@@ -43,7 +43,7 @@ export function traceHeaders(
  * tracestate) and returns an OTel Context seeded with the upstream span.
  *
  * Use this at the top of inbound Sim route handlers that Go calls into
- * (e.g. /api/billing/update-cost, /api/copilot/api-keys/validate) so the
+ * (e.g. a nested validation request) so the
  * Sim-side span becomes a proper child of the Go-side client span in the
  * same trace — closing the round trip in Jaeger.
  *

@@ -14,7 +14,6 @@ import { Button, cn, Tooltip, tabStripWheelPosition } from '@/components/ui-kit'
 import { Columns3, Eye, Pencil } from '@/components/ui-kit/icons'
 import { sendBrowserPanelAction } from '@/lib/browser-agent/transport'
 import { SIM_RESOURCE_DRAG_TYPE, SIM_RESOURCES_DRAG_TYPE } from '@/lib/copilot/resource-types'
-import { isEphemeralResource } from '@/lib/copilot/resources/types'
 import { openTerminal } from '@/lib/terminal/transport'
 import type { PreviewMode } from '@/app/workspace/[workspaceId]/files/components/file-viewer'
 import { useMothershipResources } from '@/app/workspace/[workspaceId]/home/components/mothership-resources-context'
@@ -32,11 +31,6 @@ import type {
 } from '@/app/workspace/[workspaceId]/home/types'
 import { useFolders } from '@/hooks/queries/folders'
 import { useKnowledgeBasesQuery } from '@/hooks/queries/kb/knowledge'
-import {
-  useAddChatResource,
-  useRemoveChatResource,
-  useReorderChatResources,
-} from '@/hooks/queries/mothership-chats'
 import { useTablesList } from '@/hooks/queries/tables'
 import { useWorkspaceFiles } from '@/hooks/queries/workspace-files'
 
@@ -357,10 +351,6 @@ export function ResourceTabs({
     }
   }, [activeId])
 
-  const addResource = useAddChatResource(chatId)
-  const removeResource = useRemoveChatResource(chatId)
-  const reorderResources = useReorderChatResources(chatId)
-
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null)
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null)
   const [dropGapIdx, setDropGapIdx] = useState<number | null>(null)
@@ -382,17 +372,9 @@ export function ResourceTabs({
 
   const handleAdd = useCallback(
     (resource: MothershipResource) => {
-      // Opening a resource before the first message is sent is allowed: there
-      // is simply no chat to attach it to yet. `onAddResource` queues it and
-      // persists once the chat exists, so only the server call is conditional.
-      // Synthetic result/preview panels are in-memory only either way.
-      if (chatId && !isEphemeralResource(resource)) {
-        addResource.mutate({ chatId, resource })
-      }
       onAddResource(resource)
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chatId, onAddResource]
+    [onAddResource]
   )
 
   const handleOpenExisting = useCallback(
@@ -471,18 +453,8 @@ export function ResourceTabs({
       if (anchorIdRef.current && removedIds.has(anchorIdRef.current)) {
         anchorIdRef.current = null
       }
-      // Mirrors `handleAdd`: a resource opened while composing the first prompt
-      // has to be closable before there is a chat to attach it to. Only the
-      // server call is conditional — the local removal above also drops the
-      // queued write, so nothing resurrects it once the chat exists.
-      if (!chatId) return
-      for (const r of targets) {
-        if (isEphemeralResource(r)) continue
-        removeResource.mutate({ chatId, resourceType: r.type, resourceId: r.id })
-      }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chatId, onRemoveResource, resources, selectedIds]
+    [onRemoveResource, resources, selectedIds]
   )
 
   const handleDragStart = useCallback(
@@ -589,18 +561,11 @@ export function ResourceTabs({
       const [moved] = reordered.splice(fromIdx, 1)
       reordered.splice(insertAt, 0, moved)
       onReorderResources(reordered)
-      if (chatId) {
-        const persistable = reordered.filter((r) => !isEphemeralResource(r))
-        if (persistable.length > 0) {
-          reorderResources.mutate({ chatId, resources: persistable })
-        }
-      }
       setDraggedIdx(null)
       setDropGapIdx(null)
       dragStartIdx.current = null
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chatId, resources, onReorderResources, dropGapIdx, stopAutoScroll]
+    [resources, onReorderResources, dropGapIdx, stopAutoScroll]
   )
 
   const handleDragEnd = useCallback(() => {

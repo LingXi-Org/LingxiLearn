@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext } from 'react'
-import { API_BASE } from '@/lib/lingxi/api'
+import { API_BASE } from '@/lib/api/config'
 import {
   type EmbeddedFileRef,
   extractEmbeddedFileRef,

@@ -3,6 +3,19 @@ import {
   attachSelectionContextToClipboard,
   readSelectionContextFromClipboard,
 } from '@/lib/copilot/chat/selection-clipboard'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
+import {
+  useContextManagement,
+  useMentionMenu,
+  useMentionTokens,
+} from '@/app/workspace/[workspaceId]/components/user-input/hooks'
+import {
+  escapeRegex,
+  filterContextsPresentInMessage,
+  prepareContextForInsert,
+  restoreSkillTriggerText,
+  SKILL_CHIP_TRIGGER,
+} from '@/app/workspace/[workspaceId]/components/user-input/utils'
 import { snapSelectionToChips } from '@/app/workspace/[workspaceId]/home/components/user-input/chip-selection'
 import {
   chipDisplayToken,
@@ -18,22 +31,8 @@ import {
 import type { SkillsMenuHandle } from '@/app/workspace/[workspaceId]/home/components/user-input/components/skills-menu-dropdown/skills-menu-dropdown'
 import { useSkillAutoMention } from '@/app/workspace/[workspaceId]/home/components/user-input/hooks/use-skill-auto-mention'
 import type { MothershipResource } from '@/app/workspace/[workspaceId]/home/types'
-import {
-  useContextManagement,
-  useIntegrationAutoMention,
-  useMentionMenu,
-  useMentionTokens,
-} from '@/app/workspace/[workspaceId]/components/user-input/hooks'
-import {
-  escapeRegex,
-  filterContextsPresentInMessage,
-  prepareContextForInsert,
-  restoreSkillTriggerText,
-  SKILL_CHIP_TRIGGER,
-} from '@/app/workspace/[workspaceId]/components/user-input/utils'
 import { type McpServer, useMcpServers } from '@/hooks/queries/mcp'
 import { type SkillDefinition, useSkills } from '@/hooks/queries/skills'
-import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
  * Computes the viewport position of a caret offset inside a textarea by
@@ -231,10 +230,6 @@ export function usePromptEditor({
     setMessage: commitValue,
   })
 
-  const integrationAutoMention = useIntegrationAutoMention({
-    setSelectedContexts: contextManagement.setSelectedContexts,
-  })
-
   const skillAutoMention = useSkillAutoMention({
     skills,
     mcpServers,
@@ -242,15 +237,11 @@ export function usePromptEditor({
   })
 
   /**
-   * Bulk-chipifies a block of text on the non-keystroke paths (mount,
-   * template, draft restore, STT, queued message, multi-char paste): explicit
-   * integration `@`-mentions first (casing canonicalized; bare names are never
-   * touched), then skill `/` triggers (swapped to the sentinel). Returns the
-   * fully converted text and registers both context kinds.
+   * Bulk-chipifies skill triggers on non-keystroke input paths.
    */
   const applyAutoMentions = useCallback(
-    (text: string) => skillAutoMention.applyToText(integrationAutoMention.applyToText(text)),
-    [skillAutoMention.applyToText, integrationAutoMention.applyToText]
+    (text: string) => skillAutoMention.applyToText(text),
+    [skillAutoMention.applyToText]
   )
   const applyAutoMentionsRef = useRef(applyAutoMentions)
   applyAutoMentionsRef.current = applyAutoMentions
@@ -721,18 +712,10 @@ export function usePromptEditor({
       let finalValue = nextValue
       if (nextValue.length === previousValue.length + 1) {
         // Single-char keystroke — synchronous, boundary-triggered.
-        finalValue = integrationAutoMention.processChange({
-          textarea: e.target,
-          previousValue,
-          nextValue,
-        })
-        // Run skills on the post-integration value so a completed `/name` token
-        // chips. A confirmed skill rewrites its leading `/` to the wide sentinel
-        // (in the textarea and in the returned value) so the centered icon fits.
         finalValue = skillAutoMention.processChange({
           textarea: e.target,
           previousValue,
-          nextValue: finalValue,
+          nextValue,
         })
       } else if (nextValue.length > previousValue.length + 1) {
         // Multi-char insertion (paste, drag-drop, IME commit) — bulk convert all
@@ -761,13 +744,7 @@ export function usePromptEditor({
       syncMentionState(e.target, finalValue, caret)
       syncSlashState(e.target, finalValue, caret)
     },
-    [
-      applyAutoMentions,
-      integrationAutoMention.processChange,
-      skillAutoMention.processChange,
-      syncMentionState,
-      syncSlashState,
-    ]
+    [applyAutoMentions, skillAutoMention.processChange, syncMentionState, syncSlashState]
   )
 
   const handleKeyDown = useCallback(

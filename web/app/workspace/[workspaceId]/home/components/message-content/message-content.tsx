@@ -22,7 +22,6 @@ import {
 } from '@/lib/copilot/tools/tool-display'
 import { useChatSurface } from '@/app/workspace/[workspaceId]/home/components/chat-surface-context'
 import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
-import type { CredentialSubmissionPayload } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
 import type { ContentBlock, OptionItem, ReasoningStep, ToolCallData } from '../../types'
 import { SUBAGENT_LABELS } from '../../types'
 import type { AgentGroupItem } from './components'
@@ -841,7 +840,6 @@ export function deriveThinkingLabel(blocks: ContentBlock[]): string | null {
 interface MessageContentProps {
   blocks: ContentBlock[]
   fallbackContent: string
-  messageId?: string
   isStreaming: boolean
   /**
    * True for the last message in the transcript. The last turn keeps a
@@ -851,10 +849,6 @@ interface MessageContentProps {
   isLast?: boolean
   /** Transcript-derived answers for this message's question card (renders the recap). */
   questionAnswers?: string[]
-  /** Transcript-derived status payload for this message's credential card. */
-  credentialSubmission?: CredentialSubmissionPayload
-  /** The user moved on without submitting this message's credential card. */
-  credentialAbandoned?: boolean
   onOptionSelect?: (id: string) => void
   /** Submits the question card in option-id form; `true` means a typed
    * interaction consumed it and no chat message is sent (issue #18 §10.5). */
@@ -874,12 +868,9 @@ interface MessageContentProps {
 function MessageContentInner({
   blocks,
   fallbackContent,
-  messageId,
   isStreaming = false,
   isLast = false,
   questionAnswers,
-  credentialSubmission,
-  credentialAbandoned,
   onOptionSelect,
   onQuestionSubmit,
   onQuestionDismiss,
@@ -976,15 +967,12 @@ function MessageContentInner({
                 <ChatContent
                   key={segment.id}
                   content={segment.content}
-                  messageId={messageId}
                   isStreaming={shouldSmoothTextSegment({
                     isStreaming,
                     segmentIndex: i,
                     segmentCount: segments.length,
                   })}
                   questionAnswers={questionAnswers}
-                  credentialSubmission={credentialSubmission}
-                  credentialAbandoned={credentialAbandoned}
                   onOptionSelect={onOptionSelect}
                   onQuestionSubmit={onQuestionSubmit}
                   onQuestionDismiss={onQuestionDismiss}

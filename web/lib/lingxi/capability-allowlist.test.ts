@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   isLingxiCapabilityIntegrated,
+  isLingxiWorkspaceId,
   LingxiCapabilityManifest,
+  LINGXI_WORKSPACE_ID,
   LINGXI_WORKSPACE_ROUTE_ALLOWLIST,
 } from '@/lib/lingxi/capabilities'
 
@@ -28,19 +30,37 @@ const REMOVED_COMPATIBILITY_ROUTES = [
   'app/desktop/connect/page.tsx',
   'app/desktop/done/page.tsx',
   'app/cli/auth/page.tsx',
+  'app/oauth/chat-complete/page.tsx',
   'app/workspace/[workspaceId]/integrations/page.tsx',
   'app/workspace/[workspaceId]/integrations/[block]/page.tsx',
   'app/workspace/[workspaceId]/integrations/connected/[credentialId]/page.tsx',
 ] as const
 
 describe('capability allowlist (issue #48)', () => {
+  it('exposes only the canonical Lingxi workspace route identity', () => {
+    expect(isLingxiWorkspaceId(LINGXI_WORKSPACE_ID)).toBe(true)
+    expect(isLingxiWorkspaceId('another-workspace')).toBe(false)
+
+    const layout = readFileSync(webPath('app', 'workspace', '[workspaceId]', 'layout.tsx'), 'utf8')
+    expect(layout).toContain('if (!isLingxiWorkspaceId(workspaceId)) notFound()')
+    expect(layout).toContain('export const dynamicParams = false')
+  })
+
   it('keeps removed compatibility routes deleted', () => {
     const revived = REMOVED_COMPATIBILITY_ROUTES.filter((route) => existsSync(webPath(route)))
     expect(revived).toEqual([])
   })
 
   it('marks the removed surfaces as not integrated', () => {
-    for (const capability of ['integrations', 'desktop', 'cli', 'ingest'] as const) {
+    for (const capability of [
+      'integrations',
+      'oauth',
+      'credentials',
+      'speechInput',
+      'desktop',
+      'cli',
+      'ingest',
+    ] as const) {
       expect(LingxiCapabilityManifest[capability].status).toBe('not_integrated')
       expect(isLingxiCapabilityIntegrated(capability)).toBe(false)
     }

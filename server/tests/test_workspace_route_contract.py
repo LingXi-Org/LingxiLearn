@@ -57,7 +57,6 @@ GET /api/files/serve/{storage_key:path}
 GET /api/workspaces/{workspace_id}/files/inline
 POST /api/workspaces/{workspace_id}/files/{file_id}/download
 GET /api/files/storage-status
-GET /api/users/me/usage-limits
 POST /api/files/uploads
 PUT /api/v2/uploads/{upload_id}
 POST /api/files/uploads/{upload_id}/parts

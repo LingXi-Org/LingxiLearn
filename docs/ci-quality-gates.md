@@ -16,9 +16,10 @@ bun run build
 bun run check:auth-boundary
 bun run check:quality-boundaries
 bunx vitest run --config vitest.config.ts scripts/check-quality-boundaries.test.ts
+bun run audit:lib-reachability
 ```
 
-生产 lint 覆盖 `app/`、`components/`、`hooks/`、`lib/`、`stores/`、`blocks/`、`tools/` 与 Next 顶层入口；测试文件、生成代码及预构建 bundle 不属于该 lint 的源码事实范围。新增生产文件默认进入检查。
+生产 lint 覆盖 `app/`、`components/`、`hooks/`、`lib/`、`stores/`、`blocks/`、`tools/` 与 Next 顶层入口；测试文件、生成代码及预构建 bundle 不属于该 lint 的源码事实范围。Reachability/ownership 审计阻止无生产、运维、测试或生成器入口的 `web/lib` 实现留在仓库。新增生产文件默认进入检查。
 
 ## Backend static quality
 
@@ -51,4 +52,4 @@ bash scripts/check-tracked-artifacts.sh
 cd web && bun run check:native-primitives-boundary
 ```
 
-这些检查阻止产品层重新依赖 `w/**` 私有模块、恢复已删除的 `@sim/*` alias、重新打开 TypeScript/Next 绕过开关、恢复 fake compatibility routes，以及提交 pytest/build 临时目录。
+这些检查阻止产品层重新依赖 `w/**` 私有模块、恢复已删除的 `@sim/*` alias、重新打开 TypeScript/Next 绕过开关、恢复 fake compatibility routes 或 agent-task mutation no-op，以及提交 pytest/build 临时目录。

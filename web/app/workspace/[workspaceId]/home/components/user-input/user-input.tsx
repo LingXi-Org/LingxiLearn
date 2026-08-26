@@ -11,11 +11,10 @@ import {
   useState,
 } from 'react'
 import { useParams } from 'next/navigation'
-import { Button, cn, Paperclip, Plus, Slash, Tooltip, toast } from '@/components/ui-kit'
+import { Button, cn, Paperclip, Plus, Slash, Tooltip } from '@/components/ui-kit'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
 import { SIM_RESOURCE_DRAG_TYPE, SIM_RESOURCES_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import type { MothershipResourceType } from '@/lib/copilot/resources/types'
-import { isDesktopApp } from '@/lib/desktop'
 import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { createLogger } from '@/lib/logger'
 import { MOTHERSHIP_ADD_CONTEXT_EVENT } from '@/lib/mothership/events'
@@ -25,7 +24,6 @@ import {
   AnimatedPlaceholderEffect,
   AttachedFilesList,
   DropOverlay,
-  MicButton,
   PromptEditor,
   SendButton,
   usePromptEditor,
@@ -37,8 +35,6 @@ import type {
   QueuedMessage,
 } from '@/app/workspace/[workspaceId]/home/types'
 import { mentionifyIntegrations } from '@/blocks/integration-matcher'
-import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
-import { type SpeechToTextError, useSpeechToText } from '@/hooks/use-speech-to-text'
 import { useMothershipDraftsStore } from '@/stores/mothership-drafts/store'
 import type { AttachedFile } from './hooks/use-file-attachments'
 import { useFileAttachments } from './hooks/use-file-attachments'
@@ -77,8 +73,8 @@ export interface UserInputHandle {
 
 /**
  * The chat input: the {@link PromptEditor} editing core wrapped with the
- * chat-specific chrome — file attachments (browse, drag-drop, paste), voice
- * input, draft persistence, queued-message recall, and the send/stop button.
+ * chat-specific chrome — file attachments (browse, drag-drop, paste), draft
+ * persistence, queued-message recall, and the send/stop button.
  */
 const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserInput(
   {
@@ -95,7 +91,6 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
   ref
 ) {
   const { workspaceId } = useParams<{ workspaceId: string }>()
-  const { navigateToSettings } = useSettingsNavigation()
   const { userId, onContextAdd, onContextRemove } = useChatSurface()
 
   const [initialValue] = useState(() => {
@@ -270,65 +265,6 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
     if (defaultValue) editorRef.current.setValue(defaultValue)
   }, [defaultValue])
 
-  const sttPrefixRef = useRef('')
-
-  function handleTranscript(text: string) {
-    const prefix = sttPrefixRef.current
-    const newVal = prefix ? `${prefix} ${text}` : text
-    editorRef.current.setValue(newVal)
-  }
-
-  function handleUsageLimitExceeded(_message?: string, isMemberLimit?: boolean) {
-    // A per-member cap can only be raised by an org admin, so don't offer Upgrade
-    // (the member can't act on it) — the message already tells them to ask an admin.
-    toast.error(
-      isMemberLimit ? '已达到成员使用额度，请联系组织管理员。' : '额度已用尽。',
-      isMemberLimit
-        ? undefined
-        : {
-            action: {
-              label: '升级',
-              onClick: () => navigateToSettings({ section: 'billing' }),
-            },
-          }
-    )
-  }
-
-  function handleSpeechError(error: SpeechToTextError) {
-    if (error === 'microphone-blocked') {
-      toast.error(
-        isDesktopApp()
-          ? '麦克风权限已被阻止，请在系统隐私设置中允许应用访问麦克风。'
-          : '麦克风权限已被阻止，请允许此网站访问麦克风后重试。'
-      )
-      return
-    }
-    if (error === 'microphone-unavailable') {
-      toast.error('未检测到麦克风，请连接后重试。')
-      return
-    }
-    toast.error('无法启动语音输入，请稍后重试。')
-  }
-
-  const {
-    isListening,
-    isSupported: isSttSupported,
-    toggleListening: rawToggle,
-    resetTranscript,
-  } = useSpeechToText({
-    onTranscript: handleTranscript,
-    onUsageLimitExceeded: handleUsageLimitExceeded,
-    onError: handleSpeechError,
-    workspaceId,
-  })
-
-  const toggleListening = useCallback(() => {
-    if (!isListening) {
-      sttPrefixRef.current = editorRef.current.getValue()
-    }
-    rawToggle()
-  }, [isListening, rawToggle])
-
   const onSendQueuedHeadRef = useRef(onSendQueuedHead)
   onSendQueuedHeadRef.current = onSendQueuedHead
   const onEditQueuedTailRef = useRef(onEditQueuedTail)
@@ -501,14 +437,12 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
       activeContexts.length > 0 ? activeContexts : undefined
     )
     currentEditor.clear()
-    sttPrefixRef.current = ''
     if (draftScopeKeyRef.current) {
       useMothershipDraftsStore.getState().clearDraft(draftScopeKeyRef.current)
     }
-    resetTranscript()
     currentFiles.clearAttachedFiles()
     prevSelectedContextsRef.current = []
-  }, [onSubmit, resetTranscript])
+  }, [onSubmit])
 
   /**
    * Enter policy for the editor: mirror canSubmit's uploading guard (Enter
@@ -633,7 +567,6 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
           </Tooltip.Root>
         </div>
         <div className='flex items-center gap-1.5'>
-          {isSttSupported && <MicButton isListening={isListening} onToggle={toggleListening} />}
           <SendButton
             isSending={isSending}
             canSubmit={canSubmit}
