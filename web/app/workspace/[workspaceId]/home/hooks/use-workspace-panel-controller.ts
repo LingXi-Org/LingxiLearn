@@ -164,7 +164,7 @@ export interface WorkspacePanelController {
   select: (resourceId: string, selectResource: (resourceId: string) => void) => void
   add: (
     resource: MothershipResource,
-    addResource: (resource: MothershipResource) => void,
+    addResource: (resource: MothershipResource) => boolean,
     selectResource: (resourceId: string) => void
   ) => void
   resize: (
@@ -267,11 +267,11 @@ export function useWorkspacePanelController(): WorkspacePanelController {
   const add = useCallback(
     (
       resource: MothershipResource,
-      addResource: (resource: MothershipResource) => void,
+      addResource: (resource: MothershipResource) => boolean,
       selectResource: (id: string) => void
     ) => {
+      if (!addResource(resource)) return
       userOwnsViewRef.current = true
-      addResource(resource)
       select(resource.id, selectResource)
       setCollapsed(false)
     },

@@ -1,4 +1,4 @@
-import type { MothershipResource } from '@/lib/copilot/resources/types'
+import { type MothershipResource, sanitizeChatResources } from '@/lib/copilot/resources/types'
 import type { AgentTaskSnapshot } from '@/lib/lingxi/types'
 
 function normalizeArtifactKind(artifact: string): string {
@@ -9,6 +9,16 @@ function normalizeArtifactKind(artifact: string): string {
 
 export function artifactResourceId(taskId: string, artifact: string): string {
   return `lingxi-artifact:${taskId}:${normalizeArtifactKind(artifact)}`
+}
+
+export function persistedTaskResources(
+  task: Pick<AgentTaskSnapshot, 'resources'> | null
+): MothershipResource[] {
+  return sanitizeChatResources(task?.resources ?? [])
+}
+
+function resourceKey(resource: Pick<MothershipResource, 'type' | 'id'>): string {
+  return `${resource.type}:${resource.id}`
 }
 
 export function artifactResources(task: AgentTaskSnapshot | null): MothershipResource[] {
@@ -51,5 +61,10 @@ export function artifactResources(task: AgentTaskSnapshot | null): MothershipRes
       title,
       path,
     }))
-  return [graphResource, ...resources]
+  const projected = [graphResource, ...resources]
+  const projectedKeys = new Set(projected.map(resourceKey))
+  return [
+    ...projected,
+    ...persistedTaskResources(task).filter((resource) => !projectedKeys.has(resourceKey(resource))),
+  ]
 }

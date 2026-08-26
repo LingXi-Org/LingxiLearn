@@ -12,7 +12,12 @@ import {
 } from '@/lib/api/domains/agent-tasks'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
 import type { FilePreviewSession } from '@/lib/copilot/request/session/file-preview-session-contract'
-import type { MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
+import {
+  isEphemeralResource,
+  type MothershipResource,
+  type MothershipResourceType,
+  sanitizeChatResources,
+} from '@/lib/copilot/resources/types'
 import type { ChatContext } from '@/lib/lingxi/chat-context'
 import type { LingxiTaskTransport } from '@/lib/lingxi/lingxi-task-transport'
 import { decodeLingxiV1Event } from '@/lib/lingxi/stream/decode-v1'
@@ -32,6 +37,11 @@ import {
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import { userFacingError } from '@/lib/product-copy'
 import type { TypedQuestionAnswer } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question/typed-answers'
+import {
+  useAddChatResource,
+  useRemoveChatResource,
+  useReorderChatResources,
+} from '@/hooks/queries/mothership-chats'
 import { useMothershipQueueStore } from '@/stores/mothership-queue/store'
 import type { QueuedMothershipMessage } from '../chat-queue-types'
 import type {
@@ -53,7 +63,11 @@ import {
   queueKeysContaining,
   queueMigration,
 } from './controllers/queue-controller'
-import { artifactResourceId, artifactResources } from './controllers/resource-controller'
+import {
+  artifactResourceId,
+  artifactResources,
+  persistedTaskResources,
+} from './controllers/resource-controller'
 import { createStreamController } from './controllers/stream-controller'
 import {
   buildInteractionAnswerCommand,
@@ -87,6 +101,10 @@ const EMPTY_LINGXI_QUEUE: QueuedMothershipMessage[] = []
 function generateLingxiId(prefix: string): string {
   const uuid = globalThis.crypto?.randomUUID?.()
   return `${prefix}:${uuid ?? `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`}`
+}
+
+function resourceKey(resource: Pick<MothershipResource, 'type' | 'id'>): string {
+  return `${resource.type}:${resource.id}`
 }
 
 export function getLingxiGraphUseChatOptions(
@@ -169,6 +187,9 @@ export function useWorkspaceChatController(
   const removeQueuedMessage = useMothershipQueueStore((state) => state.remove)
   const setQueuedEditing = useMothershipQueueStore((state) => state.setEditing)
   const migrateQueuedMessages = useMothershipQueueStore((state) => state.migrate)
+  const { mutateAsync: persistAddResource } = useAddChatResource(workspaceId)
+  const { mutateAsync: persistRemoveResource } = useRemoveChatResource(workspaceId)
+  const { mutateAsync: persistReorderResources } = useReorderChatResources(workspaceId)
 
   const applyTurnState = useCallback((next: LingxiTurnState) => {
     const previous = turnStateRef.current
@@ -842,14 +863,103 @@ export function useWorkspaceChatController(
     }
   }, [applyTurnState])
 
-  const addResource = useCallback((_resource: MothershipResource) => true, [])
-  const removeResource = useCallback(
-    (_type: MothershipResourceType, resourceId: string) => {
-      if (effectiveActiveResourceId === resourceId) setEffectiveActiveResourceId(null)
+  const refreshTaskAfterResourceMutation = useCallback(async (taskId: string) => {
+    const currentAdapter = adapterRef.current
+    if (!currentAdapter) return
+    const refreshed = await currentAdapter.loadTask(taskId)
+    if (resolvedChatIdRef.current === taskId) setTask(refreshed)
+  }, [])
+
+  const settleResourceMutation = useCallback(
+    async (taskId: string, mutation: Promise<unknown>, rollbackResources: MothershipResource[]) => {
+      try {
+        await mutation
+      } catch (cause) {
+        setTask((current) =>
+          current?.id === taskId ? { ...current, resources: rollbackResources } : current
+        )
+        setError(userFacingError(cause))
+        return
+      }
+      try {
+        await refreshTaskAfterResourceMutation(taskId)
+      } catch (cause) {
+        // The write already succeeded, so retain the matching optimistic
+        // snapshot and surface only the failed confirmation refresh.
+        setError(userFacingError(cause))
+      }
     },
-    [effectiveActiveResourceId, setEffectiveActiveResourceId]
+    [refreshTaskAfterResourceMutation]
   )
-  const reorderResources = useCallback((_next: MothershipResource[]) => {}, [])
+
+  const addResource = useCallback(
+    (resource: MothershipResource) => {
+      const taskId = resolvedChatIdRef.current
+      if (!taskId || task?.id !== taskId) return false
+      const [canonical] = sanitizeChatResources([resource])
+      if (!canonical) return false
+
+      const previous = persistedTaskResources(task)
+      const canonicalKey = resourceKey(canonical)
+      const next = sanitizeChatResources([
+        ...previous.filter((candidate) => resourceKey(candidate) !== canonicalKey),
+        canonical,
+      ])
+      setTask((current) => (current?.id === taskId ? { ...current, resources: next } : current))
+
+      if (!isEphemeralResource(canonical)) {
+        void settleResourceMutation(
+          taskId,
+          persistAddResource({ chatId: taskId, resource: canonical }),
+          previous
+        )
+      }
+      return true
+    },
+    [persistAddResource, settleResourceMutation, task]
+  )
+  const removeResource = useCallback(
+    (resourceType: MothershipResourceType, resourceId: string) => {
+      if (effectiveActiveResourceId === resourceId) setEffectiveActiveResourceId(null)
+      const taskId = resolvedChatIdRef.current
+      if (!taskId || task?.id !== taskId) return
+      const previous = persistedTaskResources(task)
+      const next = previous.filter(
+        (resource) => resource.type !== resourceType || resource.id !== resourceId
+      )
+      if (next.length === previous.length) return
+      setTask((current) => (current?.id === taskId ? { ...current, resources: next } : current))
+      void settleResourceMutation(
+        taskId,
+        persistRemoveResource({ chatId: taskId, resourceType, resourceId }),
+        previous
+      )
+    },
+    [
+      effectiveActiveResourceId,
+      persistRemoveResource,
+      setEffectiveActiveResourceId,
+      settleResourceMutation,
+      task,
+    ]
+  )
+  const reorderResources = useCallback(
+    (ordered: MothershipResource[]) => {
+      const taskId = resolvedChatIdRef.current
+      if (!taskId || task?.id !== taskId) return
+      const previous = persistedTaskResources(task)
+      const next = sanitizeChatResources(
+        ordered.filter((resource) => !isEphemeralResource(resource))
+      )
+      setTask((current) => (current?.id === taskId ? { ...current, resources: next } : current))
+      void settleResourceMutation(
+        taskId,
+        persistReorderResources({ chatId: taskId, resources: next }),
+        previous
+      )
+    },
+    [persistReorderResources, settleResourceMutation, task]
+  )
   const removeFromQueue = useCallback(
     (id: string) => {
       const dispatchKey = queueKeyRef.current

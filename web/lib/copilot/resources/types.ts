@@ -22,6 +22,21 @@ export interface MothershipResource {
   path?: string
 }
 
+const mothershipResourceTypes = new Set<string>(Object.values(MothershipResourceType))
+
+/** Runtime guard for resources restored from the untyped AgentTask snapshot. */
+export function isMothershipResource(value: unknown): value is MothershipResource {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<MothershipResource>
+  return (
+    typeof candidate.type === 'string' &&
+    mothershipResourceTypes.has(candidate.type) &&
+    typeof candidate.id === 'string' &&
+    typeof candidate.title === 'string' &&
+    (candidate.path === undefined || typeof candidate.path === 'string')
+  )
+}
+
 /**
  * What a chip in an assistant message knows about the resource it points at,
  * before it has been resolved. The agent writes these tags as text, so a file
@@ -188,10 +203,10 @@ function canonicalizeDesktopSessionResources(
  * hold one. Canonicalization runs first, so the browser and terminal panels —
  * which are given their ids there — are never dropped for arriving without one.
  */
-export function sanitizeChatResources(
-  resources: readonly MothershipResource[]
-): MothershipResource[] {
-  return canonicalizeDesktopSessionResources(resources).filter(isAddressableResource)
+export function sanitizeChatResources(resources: readonly unknown[]): MothershipResource[] {
+  return canonicalizeDesktopSessionResources(resources.filter(isMothershipResource)).filter(
+    isAddressableResource
+  )
 }
 
 /** Placeholder resource titles that a more specific title may overwrite during dedup. */

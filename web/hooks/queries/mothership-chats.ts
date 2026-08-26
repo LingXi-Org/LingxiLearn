@@ -11,7 +11,7 @@ import {
   updateAgentTask,
 } from '@/lib/api/domains/agent-tasks'
 import { suspendBrowserScope } from '@/lib/browser-agent/transport'
-import { type MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
+import { type MothershipResource, sanitizeChatResources } from '@/lib/copilot/resources/types'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type { AgentTaskListItem, AgentTaskSnapshot } from '@/lib/lingxi/types'
 import { suspendTerminalScope } from '@/lib/terminal/transport'
@@ -76,22 +76,18 @@ function mapTask(task: AgentTaskListItem): MothershipChatMetadata {
   }
 }
 
-const mothershipResourceTypes = new Set<string>(Object.values(MothershipResourceType))
-
-function isMothershipResource(value: unknown): value is MothershipResource {
-  if (typeof value !== 'object' || value === null) return false
-  const candidate = value as Partial<MothershipResource>
-  return (
-    typeof candidate.type === 'string' &&
-    mothershipResourceTypes.has(candidate.type) &&
-    typeof candidate.id === 'string' &&
-    typeof candidate.title === 'string' &&
-    (candidate.path === undefined || typeof candidate.path === 'string')
-  )
+function taskResources(task: Pick<AgentTaskSnapshot, 'resources'>): MothershipResource[] {
+  return sanitizeChatResources(task.resources ?? [])
 }
 
-function taskResources(task: Pick<AgentTaskSnapshot, 'resources'>): MothershipResource[] {
-  return (task.resources ?? []).filter(isMothershipResource)
+function resourceKey(resource: Pick<MothershipResource, 'type' | 'id'>): string {
+  return `${resource.type}:${resource.id}`
+}
+
+function normalizedResource(resource: MothershipResource): MothershipResource {
+  const [normalized] = sanitizeChatResources([resource])
+  if (!normalized) throw new Error('资源缺少可寻址 ID')
+  return normalized
 }
 
 /** Retained for reused workspace modules; it only maps the Lingxi list shape. */
@@ -238,10 +234,12 @@ export function useAddMothershipChatResource(_workspaceId?: string) {
     async ({ chatId, resource }: { chatId: string; resource: MothershipResource }) => {
       const task = await getAgentTask(chatId)
       const resources = taskResources(task)
-      const next = resources.filter(
-        (candidate) => candidate.type !== resource.type || candidate.id !== resource.id
-      )
-      next.push(resource)
+      const canonical = normalizedResource(resource)
+      const canonicalKey = resourceKey(canonical)
+      const next = sanitizeChatResources([
+        ...resources.filter((candidate) => resourceKey(candidate) !== canonicalKey),
+        canonical,
+      ])
       return updateAgentTask(chatId, { resources: next })
     }
   )
@@ -249,11 +247,21 @@ export function useAddMothershipChatResource(_workspaceId?: string) {
 
 export function useRemoveMothershipChatResource(_workspaceId?: string) {
   return useAgentTaskMutation(
-    async ({ chatId, resourceId }: { chatId: string; resourceId: string }) => {
+    async ({
+      chatId,
+      resourceType,
+      resourceId,
+    }: {
+      chatId: string
+      resourceType: MothershipResource['type']
+      resourceId: string
+    }) => {
       const task = await getAgentTask(chatId)
       const resources = taskResources(task)
       return updateAgentTask(chatId, {
-        resources: resources.filter((resource) => resource.id !== resourceId),
+        resources: resources.filter(
+          (resource) => resource.type !== resourceType || resource.id !== resourceId
+        ),
       })
     }
   )
@@ -262,7 +270,7 @@ export function useRemoveMothershipChatResource(_workspaceId?: string) {
 export function useReorderMothershipChatResources(_workspaceId?: string) {
   return useAgentTaskMutation(
     ({ chatId, resources }: { chatId: string; resources: MothershipResource[] }) =>
-      updateAgentTask(chatId, { resources })
+      updateAgentTask(chatId, { resources: sanitizeChatResources(resources) })
   )
 }
 
@@ -271,23 +279,7 @@ export function useAddChatResource(_workspaceId?: string) {
 }
 
 export function useRemoveChatResource(_workspaceId?: string) {
-  return useAgentTaskMutation(
-    async ({
-      chatId,
-      resourceId,
-    }: {
-      chatId: string
-      resourceId?: string
-      resourceType?: MothershipResource['type']
-    }) => {
-      if (!resourceId) throw new Error('缺少资源 ID')
-      const task = await getAgentTask(chatId)
-      const resources = taskResources(task)
-      return updateAgentTask(chatId, {
-        resources: resources.filter((resource) => resource.id !== resourceId),
-      })
-    }
-  )
+  return useRemoveMothershipChatResource(_workspaceId)
 }
 
 export function useReorderChatResources(_workspaceId?: string) {

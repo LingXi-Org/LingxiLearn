@@ -180,7 +180,11 @@ describe('native agent-task chat compatibility', () => {
       mutationFn: (input: { chatId: string; resource: Record<string, unknown> }) => Promise<unknown>
     }
     const remove = useRemoveChatResource('task-1') as unknown as {
-      mutationFn: (input: { chatId: string; resourceId: string }) => Promise<unknown>
+      mutationFn: (input: {
+        chatId: string
+        resourceType: 'file'
+        resourceId: string
+      }) => Promise<unknown>
     }
     const reorder = useReorderChatResources('task-1') as unknown as {
       mutationFn: (input: {
@@ -195,10 +199,116 @@ describe('native agent-task chat compatibility', () => {
       resources: [...(snapshot.resources ?? []), table],
     })
 
-    await remove.mutationFn({ chatId: 'task-1', resourceId: 'file-1' })
+    await remove.mutationFn({ chatId: 'task-1', resourceType: 'file', resourceId: 'file-1' })
     expect(updateAgentTask).toHaveBeenLastCalledWith('task-1', { resources: [] })
 
     await reorder.mutationFn({ chatId: 'task-1', resources: [table] })
     expect(updateAgentTask).toHaveBeenLastCalledWith('task-1', { resources: [table] })
+  })
+
+  it('sanitizes restored and written resources at the native AgentTask boundary', async () => {
+    getAgentTask.mockResolvedValue({
+      ...snapshot,
+      resources: [
+        { type: 'file', id: '', title: 'Broken' },
+        { type: 'browser', id: 'browser-tab:a', title: 'A' },
+        { type: 'browser', id: 'browser-tab:b', title: 'B' },
+        { type: 'terminal', id: 'shell:a', title: 'A' },
+        { type: 'terminal', id: 'shell:b', title: 'B' },
+      ],
+    })
+
+    await expect(fetchMothershipChatHistory('task-1')).resolves.toMatchObject({
+      resources: [
+        { type: 'browser', id: 'browser-session', title: 'Browser' },
+        { type: 'terminal', id: 'terminal-session', title: 'Terminal' },
+      ],
+    })
+
+    const add = useAddChatResource('task-1') as unknown as {
+      mutationFn: (input: {
+        chatId: string
+        resource: { type: 'table'; id: string; title: string }
+      }) => Promise<unknown>
+    }
+    await add.mutationFn({
+      chatId: 'task-1',
+      resource: { type: 'table', id: 'table-1', title: 'Scores' },
+    })
+    expect(updateAgentTask).toHaveBeenLastCalledWith('task-1', {
+      resources: [
+        { type: 'browser', id: 'browser-session', title: 'Browser' },
+        { type: 'terminal', id: 'terminal-session', title: 'Terminal' },
+        { type: 'table', id: 'table-1', title: 'Scores' },
+      ],
+    })
+  })
+
+  it('rejects an unaddressable add instead of persisting an undeletable resource', async () => {
+    const add = useAddChatResource('task-1') as unknown as {
+      mutationFn: (input: {
+        chatId: string
+        resource: { type: 'file'; id: string; title: string }
+      }) => Promise<unknown>
+    }
+
+    await expect(
+      add.mutationFn({
+        chatId: 'task-1',
+        resource: { type: 'file', id: '', title: 'Broken' },
+      })
+    ).rejects.toThrow('资源缺少可寻址 ID')
+    expect(updateAgentTask).not.toHaveBeenCalled()
+  })
+
+  it('removes resources by the same type-and-id key used by add', async () => {
+    getAgentTask.mockResolvedValue({
+      ...snapshot,
+      resources: [
+        { type: 'file', id: 'shared-id', title: 'Spec.md' },
+        { type: 'table', id: 'shared-id', title: 'Scores' },
+      ],
+    })
+    const remove = useRemoveChatResource('task-1') as unknown as {
+      mutationFn: (input: {
+        chatId: string
+        resourceType: 'file'
+        resourceId: string
+      }) => Promise<unknown>
+    }
+
+    await remove.mutationFn({
+      chatId: 'task-1',
+      resourceType: 'file',
+      resourceId: 'shared-id',
+    })
+    expect(updateAgentTask).toHaveBeenLastCalledWith('task-1', {
+      resources: [{ type: 'table', id: 'shared-id', title: 'Scores' }],
+    })
+  })
+
+  it('sanitizes reorder payloads before persisting them', async () => {
+    const reorder = useReorderChatResources('task-1') as unknown as {
+      mutationFn: (input: {
+        chatId: string
+        resources: Array<Record<string, unknown>>
+      }) => Promise<unknown>
+    }
+
+    await reorder.mutationFn({
+      chatId: 'task-1',
+      resources: [
+        { type: 'file', id: '', title: 'Broken' },
+        { type: 'browser', id: 'browser-tab:a', title: 'A' },
+        { type: 'browser', id: 'browser-tab:b', title: 'B' },
+        { type: 'table', id: 'table-1', title: 'Scores' },
+      ],
+    })
+    expect(updateAgentTask).toHaveBeenLastCalledWith('task-1', {
+      resources: [
+        { type: 'browser', id: 'browser-session', title: 'Browser' },
+        { type: 'table', id: 'table-1', title: 'Scores' },
+      ],
+    })
   })
 })
