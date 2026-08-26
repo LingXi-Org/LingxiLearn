@@ -14,6 +14,7 @@ import { defaultRangeExtractor, type Range, useVirtualizer } from '@tanstack/rea
 import { cn } from '@/components/ui-kit'
 import type { MothershipResourceType } from '@/lib/copilot/resources/types'
 import { SMOOTH_CHASE_RATE } from '@/lib/core/utils/smooth-bottom-chase'
+import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { MessageActions } from '@/app/workspace/[workspaceId]/components'
 import { ChatMessageAttachments } from '@/app/workspace/[workspaceId]/home/components/chat-message-attachments'
 import { ChatSurfaceProvider } from '@/app/workspace/[workspaceId]/home/components/chat-surface-context'
@@ -26,13 +27,7 @@ import {
   parseQuestionAnswerMessage,
   type TypedQuestionAnswer,
 } from '@/app/workspace/[workspaceId]/home/components/message-content/components/question'
-import {
-  type CredentialSubmissionPayload,
-  credentialTagHasVisibleCard,
-  parseCredentialSubmissionProgress,
-  parseLastCredentialTag,
-  parseLastQuestionTag,
-} from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
+import { parseLastQuestionTag } from '@/app/workspace/[workspaceId]/home/components/message-content/components/special-tags'
 import { nextSizerFloor } from '@/app/workspace/[workspaceId]/home/components/mothership-chat/sizer-floor'
 import { QueuedMessages } from '@/app/workspace/[workspaceId]/home/components/queued-messages'
 import {
@@ -49,9 +44,7 @@ import type {
   QueuedMessage,
   WorkspaceResourceRef,
 } from '@/app/workspace/[workspaceId]/home/types'
-import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { useAutoScroll } from '@/hooks/use-auto-scroll'
-import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { MothershipChatSkeleton } from './components/mothership-chat-skeleton'
 import { shouldShowAssistantMessageActions } from './message-actions-visibility'
 
@@ -197,13 +190,8 @@ interface AssistantMessageRowProps {
   message: ChatMessage
   isStreaming: boolean
   isLast: boolean
-  precedingUserContent?: string
   /** Transcript-derived answers for this message's question card (renders the recap). */
   questionAnswers?: string[]
-  /** Transcript-derived status payload for this message's credential card. */
-  credentialSubmission?: CredentialSubmissionPayload
-  /** The user moved on without submitting this message's credential card. */
-  credentialAbandoned?: boolean
   rowClassName: string
   onOptionSelect?: (id: string) => void
   /** Submits a question card through the typed interaction API; `true` means
@@ -216,16 +204,12 @@ const AssistantMessageRow = memo(function AssistantMessageRow({
   message,
   isStreaming,
   isLast,
-  precedingUserContent,
   questionAnswers,
-  credentialSubmission,
-  credentialAbandoned,
   rowClassName,
   onOptionSelect,
   onQuestionSubmit,
   onAnimatingChange,
 }: AssistantMessageRowProps) {
-  const { canEdit } = useUserPermissionsContext()
   const blocks = message.contentBlocks ?? EMPTY_BLOCKS
   const hasAnyBlocks = blocks.length > 0
   const trimmedContent = message.content?.trim() ?? ''
@@ -244,15 +228,10 @@ const AssistantMessageRow = memo(function AssistantMessageRow({
     return null
   }
 
-  // A trailing question or credential card replaces the copy/thumbs row while
+  // A trailing question replaces the copy/thumbs row while
   // active or answered. A question's raw tag is its dismissal identity so a
   // later question added to the same turn cannot inherit an earlier dismissal.
   const endsWithQuestion = trimmedContent.endsWith('</question>')
-  const endsWithCredential = trimmedContent.endsWith('</credential>')
-  const trailingCredentials = endsWithCredential ? parseLastCredentialTag(trimmedContent) : null
-  const showsCredentialCard = trailingCredentials
-    ? credentialTagHasVisibleCard(trailingCredentials, canEdit)
-    : false
   const questionTag = endsWithQuestion
     ? trimmedContent.slice(trimmedContent.lastIndexOf('<question>'))
     : null
@@ -266,7 +245,7 @@ const AssistantMessageRow = memo(function AssistantMessageRow({
   const actionsEligible = shouldShowAssistantMessageActions({
     phase: 'settled',
     hasContent: Boolean(message.content) || hasAnyBlocks,
-    endsWithInteraction: endsWithQuestion || showsCredentialCard,
+    endsWithInteraction: endsWithQuestion,
     questionDismissed,
   })
 
@@ -275,31 +254,23 @@ const AssistantMessageRow = memo(function AssistantMessageRow({
   // would leave 24px underneath — asymmetric. Shrink the trailing gap to match
   // so the card breathes equally top and bottom. Dismissed cards fall back to
   // the normal message rhythm (they render the standard actions row instead).
-  const showsInteractionCard = (endsWithQuestion && !questionDismissed) || showsCredentialCard
+  const showsInteractionCard = endsWithQuestion && !questionDismissed
 
   return (
     <div className={cn(rowClassName, showsInteractionCard && 'pb-3')}>
       <MessageContent
-        messageId={message.id}
         blocks={blocks}
         fallbackContent={message.content}
         isStreaming={isStreaming}
         isLast={isLast}
         questionAnswers={questionAnswers}
-        credentialSubmission={credentialSubmission}
-        credentialAbandoned={credentialAbandoned}
         onOptionSelect={onOptionSelect}
         onQuestionSubmit={onQuestionSubmit}
         onQuestionDismiss={handleQuestionDismiss}
         onPhaseChange={setPhase}
         actions={
           actionsEligible ? (
-            <MessageActions
-              content={message.content}
-              userQuery={precedingUserContent}
-              requestId={message.requestId}
-              messageId={message.id}
-            />
+            <MessageActions content={message.content} requestId={message.requestId} />
           ) : undefined
         }
       />
@@ -526,30 +497,14 @@ export function MothershipChat({
     return out
   }, [messages])
 
-  const precedingUserContentByIndex = useMemo(() => {
-    const out: Array<string | undefined> = []
-    let lastUserContent: string | undefined
-    for (const [index, message] of messages.entries()) {
-      out[index] = lastUserContent
-      if (message.role === 'user') lastUserContent = message.content
-    }
-    return out
-  }, [messages])
-
   /**
-   * Pairs each assistant question/credential card with the user message that
+   * Pairs each assistant question card with the user message that
    * completed it. The paired user message is hidden — the answered card IS the
    * user turn — and the assistant row renders a recap both live and on reload.
    *
-   * A credential card the user talked past instead of submitting is marked
-   * abandoned: the turn is over, so it collapses to the same recap (every row
-   * it has no progress for reads "Skipped") rather than sitting in the
-   * transcript as a live form nobody can complete anymore.
    */
   const interactionPairing = useMemo(() => {
     const answersByIndex: Array<string[] | undefined> = []
-    const credentialSubmissionByIndex: Array<CredentialSubmissionPayload | undefined> = []
-    const credentialAbandonedByIndex: Array<boolean | undefined> = []
     const hiddenUserByIndex: Array<boolean | undefined> = []
     let lastUserIndex = -1
     for (const [index, message] of messages.entries()) {
@@ -563,33 +518,18 @@ export function MothershipChat({
       // message (always the last row) on every snapshot flush.
       const next = messages[index + 1]
       const answer = next?.role === 'user' && next.content ? next.content : null
-      const superseded = index < lastUserIndex
-      if (!answer && !superseded) continue
+      if (!answer && index >= lastUserIndex) continue
       if (answer && message.content?.includes('</question>')) {
         const questions = parseLastQuestionTag(message.content)
         const answers = questions ? parseQuestionAnswerMessage(questions, answer) : null
         if (answers) {
           answersByIndex[index] = answers
           hiddenUserByIndex[index + 1] = true
-          continue
-        }
-      }
-      if (message.content?.includes('</credential>')) {
-        const credentials = parseLastCredentialTag(message.content)
-        const submission =
-          answer && credentials ? parseCredentialSubmissionProgress(credentials, answer) : null
-        if (submission) {
-          credentialSubmissionByIndex[index] = submission
-          hiddenUserByIndex[index + 1] = true
-        } else if (superseded) {
-          credentialAbandonedByIndex[index] = true
         }
       }
     }
     return {
       answersByIndex,
-      credentialSubmissionByIndex,
-      credentialAbandonedByIndex,
       hiddenUserByIndex,
     }
   }, [messages])
@@ -761,12 +701,9 @@ export function MothershipChat({
                         message={msg}
                         isStreaming={isStreamActive && isLast}
                         isLast={isLast}
-                        precedingUserContent={precedingUserContentByIndex[index]}
                         questionAnswers={
                           interactionPairing.answersByIndex[index] ?? msg.questionAnswers
                         }
-                        credentialSubmission={interactionPairing.credentialSubmissionByIndex[index]}
-                        credentialAbandoned={interactionPairing.credentialAbandonedByIndex[index]}
                         rowClassName={cn(styles.assistantRow, styles.rowGap)}
                         onOptionSelect={isLast ? stableOnOptionSelect : undefined}
                         onQuestionSubmit={isLast ? stableOnQuestionSubmit : undefined}

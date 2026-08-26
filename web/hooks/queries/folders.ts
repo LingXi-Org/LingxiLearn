@@ -1,5 +1,3 @@
-import { createLogger } from '@/lib/logger'
-import { generateId } from '@/lib/utils/id'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import {
@@ -12,8 +10,18 @@ import {
   type ServedFolderResourceType,
   updateFolderContract,
 } from '@/lib/api/contracts'
-import { api, type WorkspaceFolderItem } from '@/lib/lingxi/api'
+import {
+  archiveWorkspaceFolder,
+  createWorkspaceFolder,
+  getWorkspaceFolders,
+  restoreWorkspaceFolder,
+  updateWorkspaceFolder,
+} from '@/lib/api/domains/workspace'
+import type { WorkspaceFolder } from '@/lib/folders/types'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
+import type { WorkspaceFolderItem } from '@/lib/lingxi/types'
+import { createLogger } from '@/lib/logger'
+import { generateId } from '@/lib/utils/id'
 import { getFolderMap } from '@/hooks/queries/utils/folder-cache'
 import {
   FOLDER_LIST_STALE_TIME,
@@ -30,7 +38,6 @@ import {
 import { tableKeys } from '@/hooks/queries/utils/table-keys'
 import { getTopInsertionSortOrder } from '@/hooks/queries/utils/top-insertion-sort-order'
 import { getWorkflows } from '@/hooks/queries/utils/workflow-cache'
-import type { WorkspaceFolder } from '@/lib/folders/types'
 
 const logger = createLogger('FolderQueries')
 
@@ -65,7 +72,7 @@ async function fetchFolders(
   signal?: AbortSignal
 ): Promise<WorkspaceFolder[]> {
   if (workspaceId === LINGXI_WORKSPACE_ID) {
-    const { folders } = await api.workspaceFolders(scope)
+    const { folders } = await getWorkspaceFolders(scope)
     return folders.map((folder, index) => mapLingxiFolder(folder, index, resourceType))
   }
   const { folders } = await requestJson(listFoldersContract, {
@@ -278,7 +285,7 @@ export function useCreateFolder() {
       ...payload
     }: CreateFolderVariables) => {
       if (workspaceId === LINGXI_WORKSPACE_ID) {
-        const { folder } = await api.createWorkspaceFolder(payload.name, payload.parentId ?? null)
+        const { folder } = await createWorkspaceFolder(payload.name, payload.parentId ?? null)
         return mapLingxiFolder(folder, sortOrder ?? 0, resourceType)
       }
       const { folder } = await requestJson(createFolderContract, {
@@ -305,7 +312,7 @@ export function useUpdateFolder() {
           ...(updates.name !== undefined ? { name: updates.name } : {}),
           ...(updates.parentId !== undefined ? { parentId: updates.parentId } : {}),
         }
-        const { folder } = await api.updateWorkspaceFolder(id, body)
+        const { folder } = await updateWorkspaceFolder(id, body)
         return mapLingxiFolder(folder, updates.sortOrder ?? 0, resourceType)
       }
       const { folder } = await requestJson(updateFolderContract, {
@@ -329,7 +336,7 @@ export function useDeleteFolderMutation() {
   return useMutation({
     mutationFn: async ({ workspaceId, resourceType = 'workflow', id }: DeleteFolderVariables) => {
       if (workspaceId === LINGXI_WORKSPACE_ID) {
-        return api.archiveWorkspaceFolder(id)
+        return archiveWorkspaceFolder(id)
       }
       return requestJson(deleteFolderContract, { params: { id }, query: { resourceType } })
     },
@@ -357,7 +364,7 @@ export function useRestoreFolder() {
       folderId,
     }: RestoreFolderVariables) => {
       if (workspaceId === LINGXI_WORKSPACE_ID) {
-        return api.restoreWorkspaceFolder(folderId)
+        return restoreWorkspaceFolder(folderId)
       }
       return requestJson(restoreFolderContract, {
         params: { id: folderId },
@@ -422,7 +429,7 @@ export function useDuplicateFolderMutation() {
       newId,
     }: DuplicateFolderVariables): Promise<WorkspaceFolder> => {
       if (workspaceId === LINGXI_WORKSPACE_ID) {
-        const { folder } = await api.createWorkspaceFolder(name, parentId ?? null)
+        const { folder } = await createWorkspaceFolder(name, parentId ?? null)
         return mapLingxiFolder(folder, 0, 'workflow')
       }
       const { folder } = await requestJson(duplicateFolderContract, {
@@ -465,7 +472,7 @@ export function useReorderFolders() {
       if (variables.workspaceId === LINGXI_WORKSPACE_ID) {
         await Promise.all(
           variables.updates.map((update) =>
-            api.updateWorkspaceFolder(update.id, {
+            updateWorkspaceFolder(update.id, {
               ...(update.parentId !== undefined ? { parentId: update.parentId } : {}),
             })
           )

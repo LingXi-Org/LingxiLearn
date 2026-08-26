@@ -76,7 +76,7 @@ export function updateAgentTask(
     title?: string
     is_pinned?: boolean
     is_unread?: boolean
-    resources?: Array<Record<string, unknown>>
+    resources?: unknown[]
   }
 ) {
   return request<{

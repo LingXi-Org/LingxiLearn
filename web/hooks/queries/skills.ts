@@ -1,4 +1,3 @@
-import { createLogger } from '@/lib/logger'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import {
@@ -11,8 +10,9 @@ import {
   upsertSkillMemberContract,
   upsertSkillsContract,
 } from '@/lib/api/contracts'
-import { api } from '@/lib/lingxi/api'
+import { getSkills } from '@/lib/api/domains/catalogue'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
+import { createLogger } from '@/lib/logger'
 
 const logger = createLogger('SkillsQueries')
 
@@ -37,7 +37,7 @@ export const skillsKeys = {
  */
 async function fetchSkills(workspaceId: string, signal?: AbortSignal): Promise<SkillDefinition[]> {
   if (workspaceId === LINGXI_WORKSPACE_ID) {
-    const { skills } = await api.skills()
+    const { skills } = await getSkills()
     const now = new Date(0).toISOString()
     return skills.map((skill) => ({
       id: skill.id,

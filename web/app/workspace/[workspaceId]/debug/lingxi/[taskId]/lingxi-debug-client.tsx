@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { api } from '@/lib/lingxi/api'
+import {
+  getAgentTask,
+  getAgentTaskDecisions,
+  getAgentTaskEvents,
+  getRuntimeGraph,
+} from '@/lib/api/domains/agent-tasks'
 import type { AgentTaskEvent, AgentTaskSnapshot } from '@/lib/lingxi/types'
 
-type RuntimeGraph = Awaited<ReturnType<typeof api.runtimeGraph>>
+type RuntimeGraph = Awaited<ReturnType<typeof getRuntimeGraph>>
 
 export function LingxiDebugClient() {
   const { taskId } = useParams<{ taskId: string }>()
@@ -18,10 +23,10 @@ export function LingxiDebugClient() {
   const refresh = useCallback(async () => {
     try {
       const [nextTask, nextEvents, nextGraph, nextDecisions] = await Promise.all([
-        api.agentTask(taskId),
-        api.agentTaskEvents(taskId),
-        api.runtimeGraph(taskId),
-        api.agentTaskDecisions(taskId),
+        getAgentTask(taskId),
+        getAgentTaskEvents(taskId),
+        getRuntimeGraph(taskId),
+        getAgentTaskDecisions(taskId),
       ])
       setTask(nextTask)
       setEvents(nextEvents.events.sort((left, right) => left.sequence - right.sequence))

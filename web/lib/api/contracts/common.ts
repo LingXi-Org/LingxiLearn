@@ -46,54 +46,6 @@ export const integrationRequestContract = defineRouteContract({
   },
 })
 
-export const getAllowedProvidersContract = defineRouteContract({
-  method: 'GET',
-  path: '/api/settings/allowed-providers',
-  response: {
-    mode: 'json',
-    schema: z.object({
-      blacklistedProviders: z.array(z.string()),
-    }),
-  },
-})
-
-export const integrationAvailabilitySchema = z.object({
-  type: z.string().min(1),
-  state: z.enum(['ready', 'limited', 'unavailable', 'misconfigured']),
-  oauthAvailable: z.boolean(),
-})
-
-export type IntegrationAvailabilityResponse = z.output<typeof integrationAvailabilitySchema>
-
-export const getAllowedIntegrationsContract = defineRouteContract({
-  method: 'GET',
-  path: '/api/settings/allowed-integrations',
-  response: {
-    mode: 'json',
-    schema: z.object({
-      // `null` means "no env-derived allowlist" (unrestricted); a non-null
-      // array narrows the visible integrations.
-      allowedIntegrations: z.array(z.string()).nullable(),
-      integrationAvailability: z.array(integrationAvailabilitySchema),
-    }),
-  },
-})
-
-export type GetAllowedIntegrationsResponse = z.output<
-  typeof getAllowedIntegrationsContract.response.schema
->
-
-export const getVoiceSettingsContract = defineRouteContract({
-  method: 'GET',
-  path: '/api/settings/voice',
-  response: {
-    mode: 'json',
-    schema: z.object({
-      sttAvailable: z.boolean(),
-    }),
-  },
-})
-
 export const getStarsContract = defineRouteContract({
   method: 'GET',
   path: '/api/stars',

@@ -1,9 +1,7 @@
 'use client'
 
 import type { ComponentProps, RefObject } from 'react'
-import { cn } from '@/components/ui-kit'
-import { ChatSurfaceProvider, CreditsChip, MothershipChat, UserInput } from './components'
-import { RESOURCE_HEADER_CLASSES } from './components/mothership-view/components/resource-tabs/resource-tab-controls'
+import { ChatSurfaceProvider, MothershipChat, UserInput } from './components'
 
 interface ChatFeatureProps {
   showEmptyState: boolean
@@ -25,17 +23,6 @@ export function ChatFeature({
 }: ChatFeatureProps) {
   return (
     <div className='relative flex h-full min-w-0 flex-1 flex-col'>
-      {showEmptyState && (
-        <div
-          className={cn(
-            'absolute z-10',
-            RESOURCE_HEADER_CLASSES.contentTop,
-            RESOURCE_HEADER_CLASSES.adjacentEndPosition
-          )}
-        >
-          <CreditsChip />
-        </div>
-      )}
       {showEmptyState ? (
         <div className='h-full overflow-y-auto [scrollbar-gutter:stable_both-edges]'>
           <div className='flex min-h-full flex-col items-center justify-center px-6 pt-[2vh] pb-[22vh]'>

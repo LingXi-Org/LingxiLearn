@@ -33,7 +33,6 @@ const authShell = read('../(auth)/components/auth-shell.tsx')
 const workspaceChrome = read(
   '../workspace/[workspaceId]/components/workspace-chrome/workspace-chrome.tsx'
 )
-const sidebar = read('../workspace/[workspaceId]/w/components/sidebar/sidebar.tsx')
 const globalStyles = read('../_styles/globals.css')
 const desktopTitleBar = read('../_shell/desktop-title-bar.tsx')
 const logoShell = read('../(landing)/components/logo-shell/logo-shell.tsx')
@@ -75,9 +74,6 @@ describe('desktop title-bar surface audit', () => {
     expect(desktopTitleBar).toContain('desktop-login-window-drag-region')
     expect(workspaceChrome).toContain('desktop-workspace-window-drag-region')
     expect(workspaceChrome).toContain("isCollapsed ? 'h-[var(--desktop-title-bar-height)]' : 'h-2'")
-    // The sidebar's lane strip composes the same two classes instead of
-    // re-declaring the drag region inline, which had dropped `user-select: none`.
-    expect(sidebar).toContain('desktop-window-drag-region desktop-workspace-window-drag-region')
     expect(dragRegion).toContain('-webkit-app-region: drag')
     expect(globalStyles).toContain('.desktop-workspace-window-drag-region')
     expect(globalStyles).toContain('-webkit-app-region: no-drag')
@@ -104,11 +100,9 @@ describe('desktop title-bar surface audit', () => {
       expect(insetBlock).not.toMatch(new RegExp(`${name}:\\s*[\\d.]+px`))
     }
 
-    // Both lane consumers read those vars; a literal in either is the bug.
+    // The workspace lane consumer reads those vars; a literal is the bug.
     expect(workspaceChrome).toContain('left-[var(--desktop-title-bar-inset-x)]')
     expect(workspaceChrome).toContain('size-[var(--desktop-title-bar-control-size)]')
-    expect(sidebar).toContain('[[data-sim-desktop-title-bar=inset]_&]:pt-[var(')
-    expect(sidebar).not.toMatch(/\[\[data-sim-desktop-title-bar=inset\]_&\]:pt-\d/)
   })
 
   it('defines the content-pane lane once, defaulting to zero', () => {
@@ -214,8 +208,6 @@ const LANE_EXEMPT: Record<string, string> = {
     'Verified dev-only: the page calls notFound() unless NEXT_PUBLIC_ENABLE_PLAYGROUND is set.',
   'app/_shell/desktop-update-gate.tsx':
     'Blocking overlay that centres its content, with no chrome in the lane. The lights stay usable regardless: under `titleBarStyle: hiddenInset` macOS draws them above the web contents, so web UI cannot cover them — this bug class is app chrome sitting *under* the lights, not the reverse.',
-  'app/workspace/[workspaceId]/w/[workflowId]/components/error/index.tsx':
-    'Renders <Sidebar>, which owns the workspace lane and its drag region (sidebar.tsx). Padding this root too would double the reservation.',
 }
 
 /**

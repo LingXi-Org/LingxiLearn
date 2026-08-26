@@ -8,7 +8,6 @@ import { Chip, ChipInput, Search } from '@/components/ui-kit'
 import { Plus } from '@/components/ui-kit/icons'
 import { userFacingError } from '@/lib/product-copy'
 import { SkillTile } from '@/app/workspace/[workspaceId]/components'
-import { ShowcaseWithExplore } from '@/app/workspace/[workspaceId]/integrations/components/showcase-with-explore'
 import { SettingsEmptyState } from '@/app/workspace/[workspaceId]/settings/components/settings-empty-state'
 import {
   RESOURCE_LIST_GRID,
@@ -88,7 +87,6 @@ export function Skills() {
       </div>
       <div className='min-h-0 w-full min-w-0 flex-1 overflow-y-auto px-4 sm:px-6 [scrollbar-gutter:stable_both-edges]'>
         <div className='mx-auto flex w-full max-w-[48rem] min-w-0 flex-col gap-7 pb-3'>
-          <ShowcaseWithExplore prompt='介绍当前可用的技能，并说明哪些技能适合添加到我的智能体。' />
           <div className='flex items-center gap-2'>
             <ChipInput
               icon={Search}

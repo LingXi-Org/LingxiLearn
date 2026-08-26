@@ -11,7 +11,6 @@ import {
 import {
   Download,
   Duplicate,
-  Eye,
   FolderPlus,
   ImageUp,
   Lock,
@@ -305,12 +304,14 @@ export function ContextMenu({
           </>
         )}
 
-        {showOpenInNewTab && onOpenInNewTab && (!separateNavigationAction || openInNewTabPosition === 'last') && (
-          <DropdownMenuItem onSelect={onOpenInNewTab}>
-            <SquareArrowUpRight />
-            {openInNewTabLabel}
-          </DropdownMenuItem>
-        )}
+        {showOpenInNewTab &&
+          onOpenInNewTab &&
+          (!separateNavigationAction || openInNewTabPosition === 'last') && (
+            <DropdownMenuItem onSelect={onOpenInNewTab}>
+              <SquareArrowUpRight />
+              {openInNewTabLabel}
+            </DropdownMenuItem>
+          )}
 
         {showLeave && onLeave && (
           <DropdownMenuItem disabled={disableLeave} onSelect={onLeave}>

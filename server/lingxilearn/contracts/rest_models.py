@@ -160,9 +160,7 @@ class SkillRegistryResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-SessionStatus = Literal[
-    "created", "running", "awaiting_learner", "done", "failed", "cancelled"
-]
+SessionStatus = Literal["created", "running", "awaiting_learner", "done", "failed", "cancelled"]
 
 
 class SessionCreateResponse(BaseModel):
@@ -562,9 +560,7 @@ class WorkspaceInfo(BaseModel):
     membershipId: str
     permissions: str = "admin"
     appearance: dict[str, Any] = Field(default_factory=dict)
-    ownerBilling: WorkspaceOwnerBillingInfo = Field(
-        default_factory=WorkspaceOwnerBillingInfo
-    )
+    ownerBilling: WorkspaceOwnerBillingInfo = Field(default_factory=WorkspaceOwnerBillingInfo)
     createdAt: str | None = None
     updatedAt: str | None = None
 
@@ -742,13 +738,6 @@ class FileDownloadUrlResponse(BaseModel):
 
 class StorageStatusResponse(BaseModel):
     cloudConfigured: bool = False
-
-
-class UsageLimitsResponse(BaseModel):
-    success: bool = True
-    rateLimit: dict[str, Any] = Field(default_factory=dict)
-    usage: dict[str, Any] = Field(default_factory=dict)
-    storage: dict[str, Any] = Field(default_factory=dict)
 
 
 # Upload sessions (local single-process transfer)
@@ -1076,9 +1065,7 @@ class KnowledgeBaseInfo(BaseModel):
     docCount: int = 0
     fileCount: int = 0
     tokenCount: int = 0
-    chunkingConfig: KnowledgeChunkingConfigInfo = Field(
-        default_factory=KnowledgeChunkingConfigInfo
-    )
+    chunkingConfig: KnowledgeChunkingConfigInfo = Field(default_factory=KnowledgeChunkingConfigInfo)
     folderId: str | None = None
     deletedAt: str | None = None
     archived: bool = False
@@ -1425,49 +1412,6 @@ class SkillUpdateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class IntegrationAvailabilityInfo(BaseModel):
-    type: str
-    state: str
-    oauthAvailable: bool = False
-
-
-class AllowedIntegrationsResponse(BaseModel):
-    """``null`` means no env-derived allowlist (unrestricted)."""
-
-    allowedIntegrations: list[str] | None = None
-    integrationAvailability: list[IntegrationAvailabilityInfo] = Field(default_factory=list)
-
-
-class AllowedProvidersResponse(BaseModel):
-    blacklistedProviders: list[str] = Field(default_factory=list)
-
-
-class VoiceSettingsResponse(BaseModel):
-    sttAvailable: bool = False
-
-
-class TelemetryResponse(BaseModel):
-    success: bool
-    forwarded: bool = False
-
-
-class UserProfileInfo(BaseModel):
-    id: str
-    name: str
-    email: str
-    image: str | None = None
-    emailVerified: bool = False
-
-
-class UserProfileResponse(BaseModel):
-    user: UserProfileInfo
-
-
-class UserProfileUpdateResponse(BaseModel):
-    success: bool
-    user: UserProfileInfo
-
-
 class UserSettingsInfo(BaseModel):
     """Exact ``_settings_public`` wire shape."""
 
@@ -1493,139 +1437,3 @@ class UserSettingsResponse(BaseModel):
 class UserSettingsUpdateResponse(BaseModel):
     success: bool
     data: UserSettingsInfo
-
-
-class OrganizationsResponse(BaseModel):
-    organizations: list[dict[str, Any]] = Field(default_factory=list)
-    isMemberOfAnyOrg: bool = False
-
-
-class BillingUsageInfo(BaseModel):
-    current: int = 0
-    limit: int = 0
-    percentUsed: float = 0
-    isWarning: bool = False
-    isExceeded: bool = False
-    billingPeriodStart: str | None = None
-    billingPeriodEnd: str | None = None
-    lastPeriodCost: float = 0
-    lastPeriodCopilotCost: float = 0
-    daysRemaining: int = 0
-    copilotCost: float = 0
-
-
-class BillingInfoData(BaseModel):
-    type: str = "individual"
-    plan: str = "internal"
-    currentUsage: int = 0
-    usageLimit: int = 0
-    percentUsed: float = 0
-    isWarning: bool = False
-    isExceeded: bool = False
-    daysRemaining: int = 0
-    creditBalance: int = 0
-    billingInterval: str = "month"
-    isPaid: bool = False
-    isPro: bool = False
-    isTeam: bool = False
-    isEnterprise: bool = False
-    isOrgScoped: bool = False
-    organizationId: str | None = None
-    status: str = "inactive"
-    seats: int | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    stripeSubscriptionId: str | None = None
-    periodEnd: str | None = None
-    cancelAtPeriodEnd: bool = False
-    usage: BillingUsageInfo = Field(default_factory=BillingUsageInfo)
-    billingBlocked: bool = False
-    billingBlockedReason: str | None = None
-    blockedByOrgOwner: bool = False
-    upgradeWorkspaceId: str | None = None
-
-
-class BillingInfoResponse(BaseModel):
-    success: bool
-    context: str = "user"
-    data: BillingInfoData = Field(default_factory=BillingInfoData)
-
-
-class BillingOrgData(BaseModel):
-    organizationId: str
-    organizationName: str = ""
-    subscriptionState: str = "free"
-    hasSubscription: bool = False
-    subscriptionPlan: str = "internal"
-    subscriptionStatus: str | None = None
-    creditBalance: int = 0
-    billingInterval: str = "month"
-    cancelAtPeriodEnd: bool = False
-    totalSeats: int = 1
-    usedSeats: int = 1
-    seatsCount: int = 1
-    totalCurrentUsage: int = 0
-    totalUsageLimit: int = 0
-    minimumBillingAmount: float = 0
-    averageUsagePerMember: float = 0
-    billingPeriodStart: str | None = None
-    billingPeriodEnd: str | None = None
-    members: list[dict[str, Any]] = Field(default_factory=list)
-    billingBlocked: bool = False
-    billingBlockedReason: str | None = None
-    blockedByOrgOwner: bool = False
-    upgradeWorkspaceId: str | None = None
-
-
-class BillingOrgResponse(BaseModel):
-    success: bool
-    context: str = "organization"
-    data: BillingOrgData
-    userRole: str = "owner"
-    billingBlocked: bool = False
-    billingBlockedReason: str | None = None
-    blockedByOrgOwner: bool = False
-
-
-class V2BillingPeriodInfo(BaseModel):
-    start: str
-    end: str
-
-
-class V2BillingCreditsInfo(BaseModel):
-    used: int = 0
-    limit: int = 0
-    remaining: int = 0
-
-
-class V2BillingStorageInfo(BaseModel):
-    usedBytes: int = 0
-    limitBytes: int = 0
-    percentUsed: float = 0
-
-
-class V2BillingStatusData(BaseModel):
-    workspaceId: str
-    period: V2BillingPeriodInfo
-    plan: str = "internal"
-    status: str = "active"
-    credits: V2BillingCreditsInfo = Field(default_factory=V2BillingCreditsInfo)
-    storage: V2BillingStorageInfo = Field(default_factory=V2BillingStorageInfo)
-
-
-class V2BillingStatusResponse(BaseModel):
-    data: V2BillingStatusData
-
-
-class V2BillingLogEntry(BaseModel):
-    id: str
-    createdAt: str | None = None
-    source: str = ""
-    workspaceId: str = "lingxi"
-    workflow: None = None
-    runId: None = None
-    creditCost: float = 0
-
-
-class V2BillingLogsResponse(BaseModel):
-    data: list[V2BillingLogEntry] = Field(default_factory=list)
-    nextCursor: str | None = None

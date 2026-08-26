@@ -1,6 +1,6 @@
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import type { TraceSpan } from '@/lib/logs/types'
-import type { PermissionGroupConfig } from '@/lib/permission-groups/types'
+import type { SubflowType } from '@/lib/workflows/domain/workflow'
 import type { BlockOutput } from '@/blocks/types'
 import type {
   ChildWorkflowContext,
@@ -16,7 +16,6 @@ import type {
 import type { RunFromBlockContext } from '@/executor/utils/run-from-block'
 import type { AgentStreamSink, UnsubscribeAgentStreamSink } from '@/providers/stream-events'
 import type { SerializedBlock, SerializedWorkflow } from '@/serializer/types'
-import type { SubflowType } from '@/lib/workflows/domain/workflow'
 
 export interface UserFile {
   id: string
@@ -367,9 +366,6 @@ export interface ExecutionContext {
   copilotToolExecution?: boolean
   /** In-flight block-output PII redaction policy (resolved `blockOutputs` stage). */
   piiBlockOutputRedaction?: PiiBlockOutputRedaction
-
-  permissionConfig?: PermissionGroupConfig | null
-  permissionConfigLoaded?: boolean
 
   blockStates: ReadonlyMap<string, BlockState>
   executedBlocks: ReadonlySet<string>

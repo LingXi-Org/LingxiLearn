@@ -54,6 +54,7 @@ function getCollapsedSidebarWidth(): number {
  */
 function applyCollapsedCookie(collapsed: boolean) {
   if (typeof document === 'undefined') return
+  // biome-ignore lint/suspicious/noDocumentCookie: SSR reads this value on the next request, and the asynchronous Cookie Store API is not universally available.
   document.cookie = `sidebar_collapsed=${collapsed ? '1' : '0'}; path=/; max-age=31536000; samesite=lax`
 }
 

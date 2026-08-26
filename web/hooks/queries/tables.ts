@@ -86,8 +86,8 @@ import {
   updateWorkflowGroupContract,
 } from '@/lib/api/contracts/tables'
 import type { V2TableImportSource, V2TableImportTarget } from '@/lib/api/contracts/v2/tables'
+import { getWorkspaceTable, getWorkspaceTableRows } from '@/lib/api/domains/workspace'
 import { buildUpgradeHref } from '@/lib/billing/upgrade-reasons'
-import { api as lingxiApi } from '@/lib/lingxi/api'
 import { LINGXI_WORKSPACE_ID } from '@/lib/lingxi/capabilities'
 import type { WorkspaceTableItem } from '@/lib/lingxi/types'
 import { createLogger } from '@/lib/logger'
@@ -197,7 +197,7 @@ async function fetchTable(
   signal?: AbortSignal
 ): Promise<TableDefinition> {
   if (workspaceId === LINGXI_WORKSPACE_ID) {
-    const response = await lingxiApi.workspaceTable(tableId)
+    const response = await getWorkspaceTable(tableId)
     return toTableDefinition(response.data.table)
   }
   const response = await requestJson(getTableContract, {
@@ -220,7 +220,7 @@ async function fetchTableRows({
   signal,
 }: TableRowsParams & { signal?: AbortSignal }): Promise<TableRowsResponse> {
   if (workspaceId === LINGXI_WORKSPACE_ID) {
-    const response = await lingxiApi.workspaceTableRows(tableId)
+    const response = await getWorkspaceTableRows(tableId)
     return {
       // Compatibility stays at the old shared-grid boundary: the native API
       // deliberately does not publish a fake workflow execution map.

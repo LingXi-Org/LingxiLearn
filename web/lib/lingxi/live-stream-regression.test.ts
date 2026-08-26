@@ -47,6 +47,6 @@ describe('Lingxi runtime graph live refresh regression', () => {
     expect(source).toContain('RUNTIME_GRAPH_REFRESH_EVENTS.has(event.kind)')
     expect(source).toContain("envelope.type === 'run' || envelope.type === 'span'")
     expect(source).toContain('scheduleRuntimeGraphRefresh()')
-    expect(source).toContain('api.runtimeGraph(taskId)')
+    expect(source).toContain('getRuntimeGraph(taskId)')
   })
 })

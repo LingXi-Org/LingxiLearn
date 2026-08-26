@@ -89,12 +89,7 @@ export async function authorizedFetch(url: string, init?: RequestInit): Promise<
       const token = await accessTokenProvider()
       if (token) headers.set('Authorization', `Bearer ${token}`)
     }
-    let response: Response
-    try {
-      response = await fetch(url, { ...init, headers, credentials: 'include' })
-    } catch (error) {
-      throw error
-    }
+    const response = await fetch(url, { ...init, headers, credentials: 'include' })
     if (response.status !== 401 || attempt > 0 || !sessionRefreshHandler) return response
     try {
       await sessionRefreshHandler()

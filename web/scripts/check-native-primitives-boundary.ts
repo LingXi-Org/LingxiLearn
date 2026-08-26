@@ -28,10 +28,7 @@ const migrated = new Map([
   [`${legacyScope}/db/triggers`, 'deleted (no current caller)'],
   [`${legacyScope}/db/types`, 'deleted (no current caller)'],
   [`${legacyScope}/desktop-bridge`, '@/lib/desktop/bridge'],
-  [
-    `${legacyScope}/desktop-bridge/local-filesystem-limits`,
-    '@/lib/desktop/local-filesystem-limits',
-  ],
+  [`${legacyScope}/desktop-bridge/local-filesystem-limits`, 'deleted (no current caller)'],
   [`${legacyScope}/emcn`, '@/components/ui-kit'],
   [`${legacyScope}/emcn/code.css`, '@/components/ui-kit/components/code/code.css'],
   [`${legacyScope}/emcn/icons`, '@/components/ui-kit/icons'],
@@ -72,10 +69,7 @@ const migrated = new Map([
   [`${legacyScope}/workflow-persistence/load`, 'deleted (no current caller)'],
   [`${legacyScope}/workflow-persistence/save`, 'deleted (no current caller)'],
   [`${legacyScope}/workflow-persistence/subblocks`, '@/lib/workflows/persistence/native/subblocks'],
-  [
-    `${legacyScope}/workflow-persistence/subflow-helpers`,
-    'deleted (no current caller)',
-  ],
+  [`${legacyScope}/workflow-persistence/subflow-helpers`, 'deleted (no current caller)'],
   [`${legacyScope}/workflow-persistence/types`, 'deleted (no current caller)'],
   [`${legacyScope}/logger`, '@/lib/logger'],
   [`${legacyScope}/utils/errors`, '@/lib/utils/errors'],
@@ -107,7 +101,9 @@ function scanSourceImports(): void {
     const relativePath = trackedPath.replace(/^web\//, '')
     const segments = relativePath.split('/')
     if (!sourceExtension.test(relativePath) || segments.some((part) => skipped.has(part))) continue
-    if ([...skippedRelativeDirectories].some((directory) => relativePath.startsWith(`${directory}/`))) {
+    if (
+      [...skippedRelativeDirectories].some((directory) => relativePath.startsWith(`${directory}/`))
+    ) {
       continue
     }
 

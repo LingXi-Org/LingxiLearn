@@ -1,60 +1,7 @@
 import { z } from 'zod'
 import { booleanQueryFlagSchema } from '@/lib/api/contracts/primitives'
 import { type ContractJsonResponse, defineRouteContract } from '@/lib/api/contracts/types'
-import { BILLING_USAGE_LOG_SOURCES } from '@/lib/billing/usage-sources'
 import { isSameOrigin } from '@/lib/core/utils/validation'
-
-export const userProfileSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.string(),
-  image: z.string().nullable(),
-  emailVerified: z.boolean().optional(),
-})
-
-export type UserProfileApiUser = z.output<typeof userProfileSchema>
-
-export const getUserProfileContract = defineRouteContract({
-  method: 'GET',
-  path: '/api/users/me/profile',
-  response: {
-    mode: 'json',
-    schema: z.object({
-      user: userProfileSchema,
-    }),
-  },
-})
-
-export const updateUserProfileBodySchema = z
-  .object({
-    name: z.string().min(1, 'Name is required').optional(),
-    image: z
-      .string()
-      .refine(
-        (val) => val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/api/'),
-        { message: 'Invalid image URL' }
-      )
-      .nullable()
-      .optional(),
-  })
-  .refine((data) => data.name !== undefined || data.image !== undefined, {
-    message: 'At least one field (name or image) must be provided',
-  })
-
-export type UpdateUserProfileBody = z.input<typeof updateUserProfileBodySchema>
-
-export const updateUserProfileContract = defineRouteContract({
-  method: 'PATCH',
-  path: '/api/users/me/profile',
-  body: updateUserProfileBodySchema,
-  response: {
-    mode: 'json',
-    schema: z.object({
-      success: z.literal(true),
-      user: userProfileSchema,
-    }),
-  },
-})
 
 export const userSettingsEmailPreferencesSchema = z.object({
   unsubscribeAll: z.boolean().optional(),
@@ -267,8 +214,8 @@ export type UnsubscribeActionResponse = ContractJsonResponse<typeof unsubscribeP
 export type UnsubscribeBody = z.input<typeof unsubscribeBodySchema>
 export type UnsubscribeType = NonNullable<UnsubscribeBody['type']>
 
-/** Billing-facing sources collapse both internal chat ledgers into `sim-chat`. */
-export const usageLogSourceSchema = z.enum(BILLING_USAGE_LOG_SOURCES)
+/** Real LingxiLearn audit rows are sourced from persisted agent tasks. */
+export const usageLogSourceSchema = z.enum(['agent-task'])
 
 export const usageLogPeriodSchema = z.enum(['1d', '7d', '30d', 'all', 'custom'])
 
@@ -386,27 +333,3 @@ export type UsageLogPeriod = z.output<typeof usageLogPeriodSchema>
 export type UsageLogEntry = z.output<typeof usageLogEntrySchema>
 export type UsageLogsApiResponse = z.output<typeof usageLogsApiResponseSchema>
 export type ExportUsageLogsQuery = z.output<typeof exportUsageLogsQuerySchema>
-
-export const subscriptionTransferParamsSchema = z.object({
-  id: z.string({ error: 'Subscription ID is required' }).min(1, 'Subscription ID is required'),
-})
-
-export const subscriptionTransferBodySchema = z.object({
-  organizationId: z
-    .string({ error: 'organizationId is required' })
-    .min(1, 'organizationId is required'),
-})
-
-export const subscriptionTransferContract = defineRouteContract({
-  method: 'POST',
-  path: '/api/users/me/subscription/[id]/transfer',
-  params: subscriptionTransferParamsSchema,
-  body: subscriptionTransferBodySchema,
-  response: {
-    mode: 'json',
-    schema: z.object({
-      success: z.literal(true),
-      message: z.string(),
-    }),
-  },
-})

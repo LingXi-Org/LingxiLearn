@@ -70,6 +70,9 @@ jobs:
           bun run check:quality-boundaries
           bunx vitest run --config vitest.config.ts scripts/check-quality-boundaries.test.ts
 
+      - name: Check Web source reachability and ownership
+        run: bun run audit:lib-reachability
+
   backend-static:
     name: Backend static quality
     runs-on: ubuntu-latest

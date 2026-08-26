@@ -168,11 +168,6 @@
     "capability": "oauth-connections",
     "status": "owned"
   },
-  "permission-groups": {
-    "owner": "identity",
-    "capability": "permission-groups",
-    "status": "owned"
-  },
   "posthog": {
     "owner": "analytics",
     "capability": "product-analytics",
@@ -181,11 +176,6 @@
   "product-copy": {
     "owner": "product",
     "capability": "workspace-product-copy",
-    "status": "owned"
-  },
-  "permissions": {
-    "owner": "identity",
-    "capability": "authorization-primitives",
     "status": "owned"
   },
   "pptx-renderer": {
@@ -206,11 +196,6 @@
   "security": {
     "owner": "platform",
     "capability": "security-primitives",
-    "status": "owned"
-  },
-  "speech": {
-    "owner": "lingxi-chat",
-    "capability": "speech-input-output",
     "status": "owned"
   },
   "table": {

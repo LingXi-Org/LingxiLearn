@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, subscribeAgentEvents } from '@/lib/lingxi/api'
+import { getAgentTask, subscribeAgentEvents } from '@/lib/api/domains/agent-tasks'
 import { type AgentTaskEvent, type AgentTaskSnapshot, isAgentTaskActive } from '@/lib/lingxi/types'
 
 export function useAgentTask(taskId: string) {
@@ -15,7 +15,7 @@ export function useAgentTask(taskId: string) {
     if (!taskId) return
     try {
       setLoading(true)
-      setTask(await api.agentTask(taskId))
+      setTask(await getAgentTask(taskId))
       setError(undefined)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))

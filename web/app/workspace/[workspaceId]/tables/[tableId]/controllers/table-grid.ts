@@ -1,4 +1,4 @@
-import type { WorkspaceTableItem } from '@/lib/lingxi/api'
+import type { WorkspaceTableItem } from '@/lib/lingxi/types'
 
 export interface TableDetailColumn {
   id: string

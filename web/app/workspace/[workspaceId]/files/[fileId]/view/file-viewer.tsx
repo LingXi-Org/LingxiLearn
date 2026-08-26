@@ -1,8 +1,8 @@
 'use client'
 
-import { createLogger } from '@/lib/logger'
 import { useParams } from 'next/navigation'
-import { API_BASE } from '@/lib/lingxi/api'
+import { API_BASE } from '@/lib/api/config'
+import { createLogger } from '@/lib/logger'
 import { DesktopTitleBarLane } from '@/app/_shell/desktop-title-bar'
 import { useWorkspaceFileRecord } from '@/hooks/queries/workspace-files'
 

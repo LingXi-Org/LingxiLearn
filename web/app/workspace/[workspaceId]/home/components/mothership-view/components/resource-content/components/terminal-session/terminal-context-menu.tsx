@@ -1,11 +1,6 @@
 'use client'
 
 import {
-  isDesktopAppearanceTheme,
-  type TerminalAppearanceTheme,
-  type TerminalThemeProfile,
-} from '@/lib/desktop/bridge'
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -25,12 +20,15 @@ import {
   Palette,
   Plus,
   Send,
-  Settings,
   Trash,
   X,
 } from '@/components/ui-kit/icons'
+import {
+  isDesktopAppearanceTheme,
+  type TerminalAppearanceTheme,
+  type TerminalThemeProfile,
+} from '@/lib/desktop/bridge'
 import { ResourceZoomMenuItems } from '@/app/workspace/[workspaceId]/home/components/mothership-view/components/resource-content/components/resource-zoom-menu-items'
-import { useSettingsNavigation } from '@/hooks/use-settings-navigation'
 
 interface TerminalContextMenuProps {
   isOpen: boolean
@@ -91,7 +89,6 @@ export function TerminalContextMenu({
   onNewTab,
   onCloseTerminal,
 }: TerminalContextMenuProps) {
-  const { navigateToSettings } = useSettingsNavigation()
   const selectedValue = typeof appearanceTheme === 'string' ? appearanceTheme : appearanceTheme.id
   const run = (action: () => void) => () => {
     action()
@@ -187,13 +184,6 @@ export function TerminalContextMenu({
           <X />
           Close Terminal
           <DropdownMenuShortcut>⌘W</DropdownMenuShortcut>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuItem onSelect={run(() => navigateToSettings({ section: 'terminal' }))}>
-          <Settings />
-          Terminal Settings
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

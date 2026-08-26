@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import { AccountSettings } from '../account-settings'
 
 export function generateStaticParams() {
@@ -8,15 +9,10 @@ export default async function Page({ params }: { params: Promise<{ section: stri
   const { section } = await params
   // Every account identity flow stays on LingxiIdentity. The api-keys/admin/
   // mothership surfaces had no Lingxi backend owner and were removed with their
-  // Sim closures (issue #54) — unsupported sections fall back to the identity
-  // profile instead of a fake closure.
-  if (
-    section === 'profile' ||
-    section === 'general' ||
-    section === 'security' ||
-    section === 'sessions'
-  ) {
-    return <AccountSettings initialSection={section === 'general' ? 'profile' : section} />
+  // Sim closures (issue #54). Unknown and legacy aliases are real 404s so an
+  // unsupported capability cannot masquerade as the profile page.
+  if (section === 'profile' || section === 'security' || section === 'sessions') {
+    return <AccountSettings initialSection={section} />
   }
-  return <AccountSettings initialSection='profile' />
+  notFound()
 }

@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import {
+  answerAgentInteraction,
+  getAgentTaskV1Events,
+  getExecutionSnapshot,
+  getRuntimeGraph,
+  recordLearningEvent,
+  subscribeAgentV1Events,
+} from '@/lib/api/domains/agent-tasks'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
 import type { FilePreviewSession } from '@/lib/copilot/request/session/file-preview-session-contract'
 import type { MothershipResource, MothershipResourceType } from '@/lib/copilot/resources/types'
-import {
-  agentTaskV1Events,
-  answerAgentInteraction,
-  api,
-  subscribeAgentV1Events,
-} from '@/lib/lingxi/api'
 import type { ChatContext } from '@/lib/lingxi/chat-context'
 import type { LingxiTaskTransport } from '@/lib/lingxi/lingxi-task-transport'
 import { decodeLingxiV1Event } from '@/lib/lingxi/stream/decode-v1'
@@ -242,7 +244,7 @@ export function useWorkspaceChatController(
       if (cancelled || runtimeGraphRefreshInFlight) return
       runtimeGraphRefreshInFlight = true
       try {
-        const graph = await api.runtimeGraph(taskId)
+        const graph = await getRuntimeGraph(taskId)
         if (!cancelled) setWorkflowState(graph.workflowState)
       } catch {
         // The graph endpoint can briefly lag identity persistence; the next
@@ -269,7 +271,7 @@ export function useWorkspaceChatController(
         if (legacyTask && projectLegacy) setLegacyProjection(projectLegacy(legacyTask, next))
         return next
       })
-      void api.recordLearningEvent(taskId, event).catch(() => {})
+      void recordLearningEvent(taskId, event).catch(() => {})
       const eventWorkflowState =
         event.workflowState ?? (event.payload.workflowState as Record<string, unknown> | undefined)
       if (eventWorkflowState) setWorkflowState(eventWorkflowState)
@@ -356,14 +358,14 @@ export function useWorkspaceChatController(
         // The server classifies the retained task once. Empty current tasks
         // are V1; only tasks whose durable rows are exclusively pre-V1 enter
         // the explicit historical reader. There is no content-based fallback.
-        const protocolHistory = await agentTaskV1Events(taskId)
+        const protocolHistory = await getAgentTaskV1Events(taskId)
         if (cancelled) return
         setStreamProtocol(protocolHistory.protocol)
         stream = createStreamController({
           subscribeV0: (from, onEvent, onEnd) =>
             currentAdapter.subscribe(taskId, { from, onEvent, onEnd }),
           subscribeV1: (from, onEvent) => subscribeAgentV1Events(taskId, onEvent, { from }),
-          catchUpV1: async (from) => (await agentTaskV1Events(taskId, from)).events,
+          catchUpV1: async (from) => (await getAgentTaskV1Events(taskId, from)).events,
         })
 
         if (protocolHistory.protocol === 'v1') {
@@ -421,15 +423,13 @@ export function useWorkspaceChatController(
             }
           })
         }
-        void api
-          .runtimeGraph(taskId)
+        void getRuntimeGraph(taskId)
           .then((graph) => {
             if (!cancelled) setWorkflowState(graph.workflowState)
           })
           .catch(() => {
             if (loaded.latest_execution_id) {
-              void api
-                .executionSnapshot(loaded.latest_execution_id)
+              void getExecutionSnapshot(loaded.latest_execution_id)
                 .then((snapshot) => setWorkflowState(snapshot.workflowState))
                 .catch(() => {})
             }

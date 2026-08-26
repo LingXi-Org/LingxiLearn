@@ -3,21 +3,24 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useSettingsHeader } from '@/components/settings/settings-header'
 import { Checkbox, Chip, ChipInput, ChipSelect } from '@/components/ui-kit'
 import { Settings as SettingsIcon, Table as TableIcon } from '@/components/ui-kit/icons'
-import {
-  API_BASE,
-  api,
-  type KnowledgeBaseItem,
-  type KnowledgeDocumentItem,
-  type WorkspaceFileItem,
-  type WorkspaceFolderItem,
-  type WorkspaceTableItem,
-} from '@/lib/lingxi/api'
+import { API_BASE } from '@/lib/api/config'
+import * as knowledgeApi from '@/lib/api/domains/knowledge'
+import { getLogs } from '@/lib/api/domains/logs'
+import * as userSettingsApi from '@/lib/api/domains/user-settings'
+import * as workspaceApi from '@/lib/api/domains/workspace'
+import type {
+  KnowledgeBaseItem,
+  KnowledgeDocumentItem,
+  WorkspaceFileItem,
+  WorkspaceFolderItem,
+  WorkspaceTableItem,
+} from '@/lib/lingxi/types'
 import { userFacingError, workspaceCopy } from '@/lib/product-copy'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
 import { SettingsField } from '@/app/workspace/[workspaceId]/settings/components/settings-field'
-import { SettingsPanel } from '@/app/workspace/[workspaceId]/settings/components/settings-panel'
 
 type ResourceKind = 'files' | 'tables' | 'knowledge' | 'logs' | 'settings'
 
@@ -80,8 +83,8 @@ function FilesPage() {
   const reload = useCallback(() => {
     setLoading(true)
     void Promise.all([
-      api.workspaceFiles(archived ? 'archived' : 'active', folderId),
-      api.workspaceFolders(archived ? 'archived' : 'active'),
+      workspaceApi.getWorkspaceFiles(archived ? 'archived' : 'active', folderId),
+      workspaceApi.getWorkspaceFolders(archived ? 'archived' : 'active'),
     ])
       .then(([fileResult, folderResult]) => {
         setFiles(fileResult.files)
@@ -106,7 +109,7 @@ function FilesPage() {
     for (let i = 0; i < bytes.length; i += 0x8000)
       binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
     try {
-      await api.createWorkspaceFile(
+      await workspaceApi.createWorkspaceFile(
         file.name,
         btoa(binary),
         file.type || 'application/octet-stream',
@@ -120,7 +123,13 @@ function FilesPage() {
   }
   const createText = async () => {
     try {
-      await api.createWorkspaceFile('新建文档.md', '# 新文档\n', 'text/markdown', 'utf-8', folderId)
+      await workspaceApi.createWorkspaceFile(
+        '新建文档.md',
+        '# 新文档\n',
+        'text/markdown',
+        'utf-8',
+        folderId
+      )
       reload()
     } catch (e) {
       setError(userFacingError(e, 'saveFailed'))
@@ -129,7 +138,7 @@ function FilesPage() {
   const createFolder = async () => {
     if (!folderName.trim()) return
     try {
-      await api.createWorkspaceFolder(folderName.trim(), folderId)
+      await workspaceApi.createWorkspaceFolder(folderName.trim(), folderId)
       setFolderName('')
       reload()
     } catch (e) {
@@ -223,7 +232,7 @@ function FilesPage() {
                   )}
                   {!archived && (
                     <ActionButton
-                      onClick={() => void api.archiveWorkspaceFile(file.id).then(reload)}
+                      onClick={() => void workspaceApi.archiveWorkspaceFile(file.id).then(reload)}
                     >
                       归档
                     </ActionButton>
@@ -242,8 +251,8 @@ export function TablesPage() {
   const router = useRouter()
   const [tables, setTables] = useState<WorkspaceTableItem[]>([])
   const reload = useCallback(() => {
-    void api
-      .workspaceTables()
+    void workspaceApi
+      .getWorkspaceTables()
       .then((result) => setTables(result.tables))
       .catch(() => setTables([]))
   }, [])
@@ -279,8 +288,8 @@ function KnowledgePage() {
   const [bases, setBases] = useState<KnowledgeBaseItem[]>([])
   const [name, setName] = useState('')
   const reload = useCallback(() => {
-    void api
-      .workspaceKnowledge()
+    void knowledgeApi
+      .getKnowledgeBases()
       .then((result) => setBases(result.knowledgeBases || result.data || []))
       .catch(() => setBases([]))
   }, [])
@@ -290,7 +299,7 @@ function KnowledgePage() {
   const create = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!name.trim()) return
-    await api.createKnowledgeBase(name.trim())
+    await knowledgeApi.createKnowledgeBase(name.trim())
     setName('')
     reload()
   }
@@ -335,8 +344,7 @@ function KnowledgePage() {
 function LogsPage() {
   const [logs, setLogs] = useState<Array<Record<string, any>>>([])
   useEffect(() => {
-    void api
-      .logs()
+    void getLogs()
       .then((result) => setLogs(result.data || []))
       .catch(() => setLogs([]))
   }, [])
@@ -375,154 +383,129 @@ function LogsPage() {
 }
 
 function SettingsPage() {
+  useSettingsHeader({
+    title: '常规设置',
+    description:
+      '账户、学习偏好和个人工作区名称/外观。团队、凭据、API Keys、SSO 与工作流设置不开放。',
+  })
   const [workspaceName, setWorkspaceName] = useState('灵犀智学')
   const [level, setLevel] = useState('undergraduate')
   const [locale, setLocale] = useState('zh-CN')
   const [theme, setTheme] = useState('system')
-  const [telemetryEnabled, setTelemetryEnabled] = useState(true)
-  const [billingNotificationsEnabled, setBillingNotificationsEnabled] = useState(true)
   const [showActionBar, setShowActionBar] = useState(true)
   const [saved, setSaved] = useState(false)
   useEffect(() => {
-    void Promise.all([api.workspace(), api.preferences(), api.userSettings()])
+    void Promise.all([
+      workspaceApi.getWorkspace(),
+      userSettingsApi.getPreferences(),
+      userSettingsApi.getUserSettings(),
+    ])
       .then(([workspace, preference, settings]) => {
         setWorkspaceName(String(workspace.workspace?.name || '灵犀智学'))
         setLevel(String(preference.preferences?.level || 'undergraduate'))
         setLocale(String(preference.preferences?.locale || 'zh-CN'))
         setTheme(String(settings.data?.theme || 'system'))
-        setTelemetryEnabled(settings.data?.telemetryEnabled !== false)
-        setBillingNotificationsEnabled(settings.data?.billingUsageNotificationsEnabled !== false)
         setShowActionBar(settings.data?.showActionBar !== false)
       })
       .catch(() => undefined)
   }, [])
   const save = async (event: React.FormEvent) => {
     event.preventDefault()
-    await api.updateWorkspace({ name: workspaceName })
-    await api.updatePreferences({ level, locale })
-    await api.updateUserSettings({
+    await workspaceApi.updateWorkspace({ name: workspaceName })
+    await userSettingsApi.updatePreferences({ level, locale })
+    await userSettingsApi.updateUserSettings({
       theme,
-      telemetryEnabled,
-      billingUsageNotificationsEnabled: billingNotificationsEnabled,
       showActionBar,
     })
     setSaved(true)
   }
   return (
-    <SettingsPanel
-      title='常规设置'
-      description='账户、学习偏好和个人工作区名称/外观。团队、凭据、API Keys、SSO 与工作流设置不开放。'
-    >
-      <div className='w-full py-2'>
-        <form onSubmit={(event) => void save(event)} className='mx-auto max-w-[680px] space-y-6'>
-          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>个人工作区</h2>
-            <div className='mt-4'>
-              <SettingsField label='名称'>
-                <ChipInput
-                  value={workspaceName}
-                  onChange={(event) => setWorkspaceName(event.target.value)}
-                  maxLength={160}
-                  className='w-full'
-                />
-              </SettingsField>
-            </div>
-          </section>
-          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>学习偏好</h2>
-            <div className='mt-4 grid gap-4 sm:grid-cols-2'>
-              <SettingsField label='学习阶段'>
-                <ChipSelect
-                  fullWidth
-                  value={level}
-                  onChange={setLevel}
-                  options={[
-                    { value: 'undergraduate', label: '本科' },
-                    { value: 'graduate', label: '研究生' },
-                    { value: 'professional', label: '工程实践' },
-                  ]}
-                />
-              </SettingsField>
-              <SettingsField label='语言'>
-                <ChipSelect
-                  fullWidth
-                  value={locale}
-                  onChange={setLocale}
-                  options={[
-                    { value: 'zh-CN', label: '简体中文' },
-                    { value: 'en-US', label: 'English' },
-                  ]}
-                />
-              </SettingsField>
-            </div>
-          </section>
-          <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
-            <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>应用偏好</h2>
-            <div className='mt-4'>
-              <SettingsField label='主题'>
-                <ChipSelect
-                  fullWidth
-                  value={theme}
-                  onChange={setTheme}
-                  options={[
-                    { value: 'system', label: '跟随系统' },
-                    { value: 'light', label: '浅色' },
-                    { value: 'dark', label: '深色' },
-                  ]}
-                />
-              </SettingsField>
-            </div>
-            <div className='mt-4 space-y-3 text-[12px] text-[var(--text-secondary)]'>
-              <div className='flex items-center gap-2'>
-                <Checkbox
-                  checked={telemetryEnabled}
-                  onCheckedChange={(checked) => setTelemetryEnabled(checked === true)}
-                />
-                <span>允许匿名体验诊断</span>
-              </div>
-              <div className='flex items-center gap-2'>
-                <Checkbox
-                  checked={billingNotificationsEnabled}
-                  onCheckedChange={(checked) => setBillingNotificationsEnabled(checked === true)}
-                />
-                <span>接收用量提醒</span>
-              </div>
-              <div className='flex items-center gap-2'>
-                <Checkbox
-                  checked={showActionBar}
-                  onCheckedChange={(checked) => setShowActionBar(checked === true)}
-                />
-                <span>显示操作栏</span>
-              </div>
-            </div>
-          </section>
-          <div className='flex items-center gap-3'>
-            <ActionButton type='submit'>保存设置</ActionButton>
-            {saved && <span className='text-[12px] text-[var(--text-muted)]'>已保存</span>}
+    <div className='w-full py-2'>
+      <form onSubmit={(event) => void save(event)} className='mx-auto max-w-[680px] space-y-6'>
+        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>个人工作区</h2>
+          <div className='mt-4'>
+            <SettingsField label='名称'>
+              <ChipInput
+                value={workspaceName}
+                onChange={(event) => setWorkspaceName(event.target.value)}
+                maxLength={160}
+                className='w-full'
+              />
+            </SettingsField>
           </div>
-        </form>
-        <div className='mx-auto mt-6 grid max-w-[680px] gap-3 sm:grid-cols-2'>
-          <Link
-            href='/account/settings'
-            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-          >
-            <p className='text-[13px] text-[var(--text-primary)]'>账户与安全</p>
-            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-              个人资料、密码、邮箱和设备会话
-            </p>
-          </Link>
-          <Link
-            href='/workspace/lingxi/settings/users'
-            className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
-          >
-            <p className='text-[13px] text-[var(--text-primary)]'>用户管理</p>
-            <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-              个人账户中心；工作区保持个人私有
-            </p>
-          </Link>
+        </section>
+        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>学习偏好</h2>
+          <div className='mt-4 grid gap-4 sm:grid-cols-2'>
+            <SettingsField label='学习阶段'>
+              <ChipSelect
+                fullWidth
+                value={level}
+                onChange={setLevel}
+                options={[
+                  { value: 'undergraduate', label: '本科' },
+                  { value: 'graduate', label: '研究生' },
+                  { value: 'professional', label: '工程实践' },
+                ]}
+              />
+            </SettingsField>
+            <SettingsField label='语言'>
+              <ChipSelect
+                fullWidth
+                value={locale}
+                onChange={setLocale}
+                options={[
+                  { value: 'zh-CN', label: '简体中文' },
+                  { value: 'en-US', label: 'English' },
+                ]}
+              />
+            </SettingsField>
+          </div>
+        </section>
+        <section className='rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-5'>
+          <h2 className='text-[14px] font-medium text-[var(--text-primary)]'>应用偏好</h2>
+          <div className='mt-4'>
+            <SettingsField label='主题'>
+              <ChipSelect
+                fullWidth
+                value={theme}
+                onChange={setTheme}
+                options={[
+                  { value: 'system', label: '跟随系统' },
+                  { value: 'light', label: '浅色' },
+                  { value: 'dark', label: '深色' },
+                ]}
+              />
+            </SettingsField>
+          </div>
+          <div className='mt-4 space-y-3 text-[12px] text-[var(--text-secondary)]'>
+            <div className='flex items-center gap-2'>
+              <Checkbox
+                checked={showActionBar}
+                onCheckedChange={(checked) => setShowActionBar(checked === true)}
+              />
+              <span>显示操作栏</span>
+            </div>
+          </div>
+        </section>
+        <div className='flex items-center gap-3'>
+          <ActionButton type='submit'>保存设置</ActionButton>
+          {saved && <span className='text-[12px] text-[var(--text-muted)]'>已保存</span>}
         </div>
+      </form>
+      <div className='mx-auto mt-6 max-w-[680px]'>
+        <Link
+          href='/account/settings'
+          className='rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-4 hover:bg-[var(--surface-hover)]'
+        >
+          <p className='text-[13px] text-[var(--text-primary)]'>账户与安全</p>
+          <p className='mt-1 text-[11px] text-[var(--text-muted)]'>
+            个人资料、密码、邮箱和设备会话
+          </p>
+        </Link>
       </div>
-    </SettingsPanel>
+    </div>
   )
 }
 
@@ -538,7 +521,10 @@ export function LingxiTableDetail({ tableId }: { tableId: string }) {
   const [table, setTable] = useState<WorkspaceTableItem | null>(null)
   const [rows, setRows] = useState<Array<Record<string, any>>>([])
   const reload = useCallback(() => {
-    void Promise.all([api.workspaceTable(tableId), api.workspaceTableRows(tableId)])
+    void Promise.all([
+      workspaceApi.getWorkspaceTable(tableId),
+      workspaceApi.getWorkspaceTableRows(tableId),
+    ])
       .then(([tableResult, rowResult]) => {
         setTable(tableResult.data.table)
         setRows(rowResult.data.rows || [])
@@ -599,7 +585,7 @@ export function LingxiKnowledgeDetail({ baseId }: { baseId: string }) {
   const [name, setName] = useState('')
   const [content, setContent] = useState('')
   const reload = useCallback(() => {
-    void Promise.all([api.workspaceKnowledge(), api.knowledgeDocuments(baseId)])
+    void Promise.all([knowledgeApi.getKnowledgeBases(), knowledgeApi.getKnowledgeDocuments(baseId)])
       .then(([bases, docs]) => {
         setBaseName((bases.data || []).find((base) => base.id === baseId)?.name || 'Knowledge')
         setDocuments(docs.documents || docs.data || [])
@@ -612,7 +598,7 @@ export function LingxiKnowledgeDetail({ baseId }: { baseId: string }) {
   const create = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!name.trim()) return
-    await api.createKnowledgeDocument(baseId, name.trim(), content, 'text/plain')
+    await knowledgeApi.createKnowledgeDocument(baseId, name.trim(), content, 'text/plain')
     setName('')
     setContent('')
     reload()
@@ -672,8 +658,8 @@ export function LingxiDocumentDetail({
   const [content, setContent] = useState('')
   const [saved, setSaved] = useState(false)
   useEffect(() => {
-    void api
-      .knowledgeDocuments(baseId)
+    void knowledgeApi
+      .getKnowledgeDocuments(baseId)
       .then((result) => {
         const row = (result.documents || result.data || []).find((item) => item.id === documentId)
         setDocument(row || null)
@@ -682,7 +668,7 @@ export function LingxiDocumentDetail({
       .catch(() => undefined)
   }, [baseId, documentId])
   const save = async () => {
-    await api.updateKnowledgeDocument(baseId, documentId, content)
+    await knowledgeApi.updateKnowledgeDocument(baseId, documentId, content)
     setSaved(true)
   }
   const documentEditable = Boolean(
@@ -728,8 +714,8 @@ export function LingxiFileDetail({ fileId }: { fileId: string }) {
   const [saved, setSaved] = useState(false)
   useEffect(() => {
     let active = true
-    void api
-      .workspaceFile(fileId)
+    void workspaceApi
+      .getWorkspaceFile(fileId)
       .then(async (fileResult) => {
         if (!active) return
         setFile(fileResult.file)
@@ -739,7 +725,7 @@ export function LingxiFileDetail({ fileId }: { fileId: string }) {
               /\.(md|markdown|json|csv|txt)$/i.test(fileResult.file.name))
         )
         if (!isEditable) return
-        const contentResult = await api.workspaceFileContent(fileId)
+        const contentResult = await workspaceApi.getWorkspaceFileContent(fileId)
         if (active) {
           setContent(contentResult.content)
           setEncoding(contentResult.encoding)
@@ -784,7 +770,9 @@ export function LingxiFileDetail({ fileId }: { fileId: string }) {
               <div className='mt-3 flex items-center gap-3'>
                 <ActionButton
                   onClick={() =>
-                    void api.updateWorkspaceFileContent(fileId, content).then(() => setSaved(true))
+                    void workspaceApi
+                      .updateWorkspaceFileContent(fileId, content)
+                      .then(() => setSaved(true))
                   }
                 >
                   保存

@@ -1,9 +1,4 @@
 import type { ReactNode } from 'react'
-import {
-  FOLDER_CONFIGS,
-  type MentionFolderId,
-} from '@/app/workspace/[workspaceId]/components/user-input/constants'
-import type { MentionDataReturn } from '@/app/workspace/[workspaceId]/components/user-input/hooks/use-mention-data'
 import type { ChatContext } from '@/lib/lingxi/chat-context'
 
 /**
@@ -157,43 +152,6 @@ export function buildMentionHighlightNodes(
   }
 
   return nodes
-}
-
-/**
- * Gets the data array for a folder ID from mentionData.
- * Uses FOLDER_CONFIGS as the source of truth for key mapping.
- * Returns any[] since item types vary by folder and are used with dynamic config.filterFn
- */
-export function getFolderData(mentionData: MentionDataReturn, folderId: MentionFolderId): any[] {
-  const config = FOLDER_CONFIGS[folderId]
-  return (mentionData[config.dataKey as keyof MentionDataReturn] as any[]) || []
-}
-
-/**
- * Gets the loading state for a folder ID from mentionData.
- * Uses FOLDER_CONFIGS as the source of truth for key mapping.
- */
-export function getFolderLoading(
-  mentionData: MentionDataReturn,
-  folderId: MentionFolderId
-): boolean {
-  const config = FOLDER_CONFIGS[folderId]
-  return mentionData[config.loadingKey as keyof MentionDataReturn] as boolean
-}
-
-/**
- * Gets the ensure loaded function for a folder ID from mentionData.
- * Uses FOLDER_CONFIGS as the source of truth for key mapping.
- */
-export function getFolderEnsureLoaded(
-  mentionData: MentionDataReturn,
-  folderId: MentionFolderId
-): (() => Promise<void>) | undefined {
-  const config = FOLDER_CONFIGS[folderId]
-  if (!config.ensureLoadedKey) return undefined
-  return mentionData[config.ensureLoadedKey as keyof MentionDataReturn] as
-    | (() => Promise<void>)
-    | undefined
 }
 
 /**

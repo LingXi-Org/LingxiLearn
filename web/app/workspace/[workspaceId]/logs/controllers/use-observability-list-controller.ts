@@ -12,9 +12,9 @@ import {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useQueryState } from 'nuqs'
+import { API_BASE } from '@/lib/api/config'
 import type { ExecutionLogSummary } from '@/lib/api/contracts/logs'
 import { formatDateShort } from '@/lib/core/utils/date-display'
-import { API_BASE } from '@/lib/lingxi/api'
 import type { LogViewMode } from '@/lib/logs/filter-types'
 import {
   getEndDateFromTimeRange,

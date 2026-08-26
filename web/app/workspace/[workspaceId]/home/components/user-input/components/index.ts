@@ -7,22 +7,14 @@ export {
   parseChipLinks,
   serializeSelectionForClipboard,
 } from './chip-clipboard-codec'
-export type {
-  PlusMenuHandle,
-  SpeechRecognitionErrorEvent,
-  SpeechRecognitionEvent,
-  SpeechRecognitionInstance,
-  WindowWithSpeech,
-} from './constants'
+export type { PlusMenuHandle } from './constants'
 export {
   mapResourceToContext,
   OVERLAY_CLASSES,
   SCROLLER_CLASSES,
-  SPEECH_RECOGNITION_LANG,
   TEXTAREA_BASE_CLASSES,
 } from './constants'
 export { DropOverlay } from './drop-overlay'
-export { MicButton } from './mic-button'
 export { PlusMenuDropdown } from './plus-menu-dropdown'
 export type {
   PromptEditorInstance,
