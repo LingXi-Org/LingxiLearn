@@ -1,4 +1,4 @@
-// 117 contracts generated from 105 paths.
+// 118 contracts generated from 105 paths.
 // AUTO-GENERATED — do not edit by hand.
 // Regenerate:  python scripts/export_openapi.py && bun run web/scripts/generate-rest-contracts.ts
 // eslint-disable @typescript-eslint/no-explicit-any
