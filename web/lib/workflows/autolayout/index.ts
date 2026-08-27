@@ -1,17 +1,17 @@
-import type { ExecutionCanvasNode } from '@/lib/lingxi/runtime-graph-adapter'
+export type ExecutionCanvasPosition = { x: number; y: number }
 
 /**
- * Deterministically position the first-party Execution Canvas view model.
+ * Deterministically position the first-party Execution Canvas topology.
  *
- * This deliberately consumes native canvas nodes rather than adapting an
- * execution snapshot into the editable WorkflowState contract.
+ * Returning positions only keeps live execution data out of the topology
+ * cache used by the read-only canvas.
  */
-export function layoutExecutionCanvas(
-  nodes: Record<string, ExecutionCanvasNode>,
+export function layoutExecutionCanvasPositions(
+  nodeIds: string[],
   connections: Array<{ source: string; target: string }>
-): Record<string, ExecutionCanvasNode> {
-  const ranks = new Map(Object.keys(nodes).map((id) => [id, 0]))
-  for (let pass = 0; pass < Object.keys(nodes).length; pass += 1) {
+): Record<string, ExecutionCanvasPosition> {
+  const ranks = new Map(nodeIds.map((id) => [id, 0]))
+  for (let pass = 0; pass < nodeIds.length; pass += 1) {
     let changed = false
     for (const connection of connections) {
       const sourceRank = ranks.get(connection.source)
@@ -30,17 +30,14 @@ export function layoutExecutionCanvas(
     byRank.set(rank, [...(byRank.get(rank) ?? []), id])
   }
 
-  const positioned = { ...nodes }
+  const positions: Record<string, ExecutionCanvasPosition> = {}
   for (const [rank, ids] of byRank) {
     ids.sort()
     ids.forEach((id, index) => {
-      positioned[id] = {
-        ...nodes[id],
-        position: { x: rank * 360, y: (index - (ids.length - 1) / 2) * 190 },
-      }
+      positions[id] = { x: rank * 360, y: (index - (ids.length - 1) / 2) * 190 }
     })
   }
-  return positioned
+  return positions
 }
 
 export {

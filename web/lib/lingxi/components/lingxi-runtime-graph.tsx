@@ -17,7 +17,7 @@ import {
   WorkflowBlockView,
   WorkflowEdgeView,
 } from '@/components/workflow'
-import { layoutExecutionCanvas } from '@/lib/workflows/autolayout'
+import { layoutExecutionCanvasPositions } from '@/lib/workflows/autolayout'
 import {
   type ExecutionCanvasNode,
   projectRuntimeGraph,
@@ -223,11 +223,21 @@ export function LingxiRuntimeGraph({ taskId, executionSnapshot, events = [] }: R
       ].join('|'),
     [projection.nodes, projection.connections]
   )
-  const laidOutBlocks = useMemo(
-    () => layoutExecutionCanvas(projection.nodes, projection.connections),
-    // Execution status changes must not recalculate or write positions.  The
-    // native layout is recomputed only when the projected topology changes.
+  const layoutPositions = useMemo(
+    () => layoutExecutionCanvasPositions(Object.keys(projection.nodes), projection.connections),
+    // Execution status changes must not recalculate positions. The native
+    // layout is recomputed only when the projected topology changes.
     [layoutSignature]
+  )
+  const laidOutBlocks = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(projection.nodes).map(([id, block]) => [
+          id,
+          { ...block, position: layoutPositions[id] ?? block.position },
+        ])
+      ),
+    [layoutPositions, projection.nodes]
   )
   const verticalHandles = useMemo(() => {
     const handles: Record<string, RuntimeVerticalHandles> = {}
