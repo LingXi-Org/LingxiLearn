@@ -378,8 +378,33 @@ export const ExecutionMetadataResponseSchema = z.object({
 });
 export type ExecutionMetadataResponse = z.output<typeof ExecutionMetadataResponseSchema>;
 
+export const NativeExecutionDependencyResponseSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  label: z.string(),
+  sourceNodeId: z.string(),
+  status: z.string(),
+  targetNodeId: z.string(),
+});
+export type NativeExecutionDependencyResponse = z.output<typeof NativeExecutionDependencyResponseSchema>;
+
+export const NativeExecutionNodeResponseSchema = z.object({
+  capability: z.string(),
+  details: z.record(z.string(), z.unknown()),
+  id: z.string(),
+  kind: z.string(),
+  label: z.string(),
+  namespace: z.unknown(),
+  output: z.unknown(),
+  provider: z.string().nullable(),
+  status: z.string(),
+  step: z.number().int(),
+  taskId: z.string().nullable(),
+}).catchall(z.unknown());
+export type NativeExecutionNodeResponse = z.output<typeof NativeExecutionNodeResponseSchema>;
+
 export const NativeExecutionSnapshotResponseSchema = z.object({
-  dependencies: z.array(z.record(z.string(), z.unknown())),
+  dependencies: z.array(NativeExecutionDependencyResponseSchema),
   executionId: z.string(),
   graphVersion: z.string(),
   groups: z.record(z.string(), z.unknown()),
@@ -1082,7 +1107,7 @@ export type ReadinessResponse = z.output<typeof ReadinessResponseSchema>;
 
 export const RuntimeGraphResponseSchema = z.object({
   executionGraph: z.record(z.string(), z.unknown()),
-  executionSnapshot: z.record(z.string(), z.unknown()),
+  executionSnapshot: NativeExecutionSnapshotResponseSchema.nullable(),
   id: z.string(),
   latestExecutionId: z.string().nullable(),
   status: z.string(),

@@ -27,8 +27,7 @@ import {
   Workflow,
   Wrench,
 } from '@/components/ui-kit/icons'
-import type { LogTraceSpan } from '@/lib/api/contracts/logs'
-import type { TraceSpan } from '@/lib/logs/types'
+import type { ExecutionTimelineSpan } from '@/lib/api/contracts/logs'
 import { userFacingError } from '@/lib/product-copy'
 import { formatDuration } from '@/lib/utils/formatting'
 import {
@@ -65,21 +64,12 @@ interface TrajectoryProps {
   isLoading: boolean
 }
 
-function asTraceSpan(span: LogTraceSpan): TraceSpan {
-  return span as unknown as TraceSpan
+function getSpanName(span: ExecutionTimelineSpan): string {
+  return getDisplayName(span)
 }
 
-function getSpanName(span: LogTraceSpan): string {
-  return getDisplayName(asTraceSpan(span))
-}
-
-function getSpanVisual(span: LogTraceSpan) {
-  const richSpan = asTraceSpan(span)
-  const presentation = getSpanPresentation(
-    span.type,
-    span.name,
-    typeof richSpan.provider === 'string' ? richSpan.provider : undefined
-  )
+function getSpanVisual(span: ExecutionTimelineSpan) {
+  const presentation = getSpanPresentation(span.kind, span.name, span.provider)
   return {
     ...presentation,
     bgColor: adjustBgForContrast(presentation.bgColor),
@@ -284,7 +274,7 @@ function TrajectoryTimeline({
   )
 }
 
-function SpanIcon({ span }: { span: LogTraceSpan }) {
+function SpanIcon({ span }: { span: ExecutionTimelineSpan }) {
   const { icon: Icon, bgColor } = getSpanVisual(span)
   return (
     <div
@@ -430,11 +420,11 @@ function TrajectoryLedger({
                 </td>
                 <td className='px-2 py-2'>
                   <Badge
-                    variant={typeBadgeVariant(entry.span.type)}
+                    variant={typeBadgeVariant(entry.span.kind)}
                     size='sm'
                     className='max-w-full'
                   >
-                    <span className='truncate'>{entry.span.type}</span>
+                    <span className='truncate'>{entry.span.kind}</span>
                   </Badge>
                 </td>
                 <td className='px-2 py-2 text-right text-[var(--text-secondary)] text-caption tabular-nums'>
@@ -530,7 +520,6 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
   }
 
   const span = entry.span
-  const richSpan = span as unknown as Record<string, unknown>
   const hasError = isTrajectoryError(span)
   const status = hasError ? 'Error' : span.errorHandled ? 'Handled' : span.status || 'Success'
   const statusVariant = hasError ? 'red' : span.errorHandled ? 'amber' : 'green'
@@ -538,12 +527,12 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
   const tokens = getSpanTokenCount(span)
   const metadata = {
     id: entry.sourceId,
-    blockId: span.blockId,
-    model: richSpan.model,
-    provider: richSpan.provider,
-    toolCallId: richSpan.toolCallId,
-    finishReason: richSpan.finishReason,
-    tries: richSpan.tries,
+    nodeId: span.nodeId,
+    model: span.model,
+    provider: span.provider,
+    toolCallId: span.toolCallId,
+    finishReason: span.finishReason,
+    tries: span.tries,
   }
   const compactMetadata = Object.fromEntries(
     Object.entries(metadata).filter(([, value]) => value !== undefined && value !== null)
@@ -607,7 +596,7 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
         <p className='mt-3 text-[var(--text-error)] text-sm'>{span.errorMessage}</p>
       ) : activeTab === 'overview' ? (
         <p className='mt-3 text-[var(--text-secondary)] text-sm'>
-          {span.type} stage in the {entry.lane.toUpperCase()} lane ({entry.precision} timing).
+          {span.kind} stage in the {entry.lane.toUpperCase()} lane ({entry.precision} timing).
         </p>
       ) : null}
 
@@ -621,7 +610,7 @@ function TrajectoryInspector({ entry }: { entry: TrajectoryEntry | null }) {
               defaultOpen
               error
             />
-            <DetailCard key={`${entry.id}-thinking`} title='思考过程' value={richSpan.thinking} />
+            <DetailCard key={`${entry.id}-thinking`} title='思考过程' value={span.thinking} />
             <DetailCard
               key={`${entry.id}-metadata`}
               title='元数据'
@@ -696,7 +685,10 @@ function TrajectoryContent({
   const typeOptions = useMemo(
     () => [
       { value: 'all', label: '全部类型' },
-      ...getTrajectoryTypes(model.entries).map((item) => ({ value: item, label: item })),
+      ...getTrajectoryTypes(model.entries).map((item) => ({
+        value: item,
+        label: item,
+      })),
     ],
     [model.entries]
   )
@@ -851,15 +843,19 @@ export function Trajectory({ logs, isLoading }: TrajectoryProps) {
     refetchInterval: isActiveRun ? ACTIVE_RUN_REFRESH_MS : false,
   })
   const detail = detailQuery.data ? mapExecutionLogDetail(detailQuery.data) : null
-  const traceSpans = detail?.traceSpans
+  const timelineSpans = detail?.timelineSpans
   const trajectory = detail?.trajectory
   const fallbackDuration = detail?.durationMs ?? selectedSummary?.durationMs ?? 0
   const model = useMemo(
-    () => buildTrajectoryModel(traceSpans, fallbackDuration ?? 0, trajectory),
-    [traceSpans, fallbackDuration, trajectory]
+    () => buildTrajectoryModel(timelineSpans, fallbackDuration ?? 0, trajectory),
+    [timelineSpans, fallbackDuration, trajectory]
   )
   const runOptions = useMemo(
-    () => logs.map((log) => ({ value: log.identity.logId, label: getRunLabel(log) })),
+    () =>
+      logs.map((log) => ({
+        value: log.identity.logId,
+        label: getRunLabel(log),
+      })),
     [logs]
   )
   const selectedRunBadge = getRunBadge(detail?.status ?? selectedSummary?.status ?? null)

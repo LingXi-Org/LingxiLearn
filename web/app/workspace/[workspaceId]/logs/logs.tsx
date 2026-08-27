@@ -16,7 +16,6 @@ import {
 } from '@/components/ui-kit'
 import { Download } from '@/components/ui-kit/icons'
 import { formatDateShort } from '@/lib/core/utils/date-display'
-import { timelineSpansToTraceSpans } from '@/lib/lingxi/runtime-graph-adapter'
 import { hasActiveFilters } from '@/lib/logs/filters'
 import { getTriggerOptions } from '@/lib/logs/get-trigger-options'
 import { formatDuration } from '@/lib/utils/formatting'
@@ -107,7 +106,9 @@ function buildRow(view: ExecutionLogSummaryView): ResourceRow {
     id: view.identity.logId,
     cells: {
       run: { label: view.source.title },
-      date: { label: `${formattedDate.compactDate} ${formattedDate.compactTime}` },
+      date: {
+        label: `${formattedDate.compactDate} ${formattedDate.compactTime}`,
+      },
       status: { content: <StatusBadge status={view.status} /> },
       cost: { label: costText },
       trigger: view.trigger ? { content: <TriggerBadge trigger={view.trigger} /> } : { label: '—' },
@@ -365,9 +366,6 @@ export default function Logs() {
       {detail.preview.logId !== null && detail.preview.detail?.executionId && (
         <ExecutionSnapshot
           executionId={detail.preview.detail.executionId}
-          traceSpans={timelineSpansToTraceSpans(
-            detail.preview.detail.executionData?.timeline?.spans
-          )}
           isModal
           isOpen={detail.preview.logId !== null}
           onClose={detail.preview.close}
@@ -440,7 +438,10 @@ function LogsFilterPanel({ searchQuery, onSearchQueryChange }: LogsFilterPanelPr
       ? (STATUS_CONFIG[selectedStatuses[0] as RunStatus]?.color ?? null)
       : null
 
-  const folderOptions: ComboboxOption[] = folderList.map((f) => ({ value: f.id, label: f.name }))
+  const folderOptions: ComboboxOption[] = folderList.map((f) => ({
+    value: f.id,
+    label: f.name,
+  }))
 
   const folderDisplayLabel =
     folderIds.length === 0
@@ -526,7 +527,11 @@ function LogsFilterPanel({ searchQuery, onSearchQueryChange }: LogsFilterPanelPr
               {selectedStatusColor && (
                 <div
                   className='flex-shrink-0 rounded-[3px]'
-                  style={{ backgroundColor: selectedStatusColor, width: 8, height: 8 }}
+                  style={{
+                    backgroundColor: selectedStatusColor,
+                    width: 8,
+                    height: 8,
+                  }}
                 />
               )}
               <span className='truncate'>{statusDisplayLabel}</span>

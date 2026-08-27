@@ -1,6 +1,5 @@
 import type { Edge } from 'reactflow'
 import { BLOCK_DIMENSIONS } from '@/components/workflow/dimensions'
-import type { BlockData, BlockState } from '@/lib/workflows/domain/workflow'
 import type { AgentTaskEvent } from './types'
 
 export type RuntimeExecutionState =
@@ -29,21 +28,27 @@ export interface RuntimeBlockMetadata extends Record<string, unknown> {
   dependsOn?: string[]
 }
 
-/** BlockState with the small amount of presentation metadata the read-only canvas needs. */
-export type RuntimeBlockState = Omit<BlockState, 'data'> & {
-  data: BlockData & RuntimeBlockMetadata
-  executionState: RuntimeExecutionState
+/** One first-party node in the read-only Execution Canvas view model. */
+export interface ExecutionCanvasNode {
+  id: string
+  type: string
+  name: string
+  position: { x: number; y: number }
+  enabled: boolean
+  height: number
+  data: RuntimeBlockMetadata
+  runtimeStatus: RuntimeExecutionState
   runtimeRows: RuntimeRow[]
 }
 
-export interface RuntimeGraphCanvasState {
-  blocks: Record<string, RuntimeBlockState>
-  edges: Edge[]
+export interface ExecutionCanvasState {
+  nodes: Record<string, ExecutionCanvasNode>
+  connections: Edge[]
   running: boolean
   latestStatusText?: string
 }
 
-interface NativeExecutionNode extends Record<string, unknown> {
+export interface NativeExecutionNode extends Record<string, unknown> {
   id?: unknown
   label?: unknown
   kind?: unknown
@@ -56,14 +61,41 @@ interface NativeExecutionNode extends Record<string, unknown> {
   details?: unknown
 }
 
-/** Adapt the first-party execution domain to the existing read-only canvas. */
-export function executionSnapshotToCanvasState(
-  snapshot: Record<string, unknown> | null | undefined
-): Record<string, unknown> {
-  const value = snapshot ?? {}
-  if (!value.nodes) return value
-  const blocks = Object.fromEntries(
-    Object.entries(asRecord(value.nodes)).map(([id, rawNode]) => {
+export interface NativeExecutionSnapshot extends Record<string, unknown> {
+  schemaVersion: 'lingxilearn.execution.v1'
+  executionId: string
+  nodes: Record<string, NativeExecutionNode>
+  dependencies: Array<Record<string, unknown>>
+  terminal: boolean
+  metadata: Record<string, unknown>
+}
+
+function nativeExecutionSnapshot(
+  value: Record<string, unknown> | null | undefined
+): NativeExecutionSnapshot | null {
+  if (
+    value?.schemaVersion !== 'lingxilearn.execution.v1' ||
+    typeof value.executionId !== 'string' ||
+    typeof value.nodes !== 'object' ||
+    value.nodes === null ||
+    Array.isArray(value.nodes) ||
+    !Array.isArray(value.dependencies) ||
+    typeof value.terminal !== 'boolean' ||
+    typeof value.metadata !== 'object' ||
+    value.metadata === null ||
+    Array.isArray(value.metadata)
+  ) {
+    return null
+  }
+  return value as NativeExecutionSnapshot
+}
+
+/** Build the first-party read-only Execution Canvas view model. */
+function executionNodesToCanvasBlocks(
+  nodes: Record<string, NativeExecutionNode>
+): Record<string, RawRuntimeBlock> {
+  return Object.fromEntries(
+    Object.entries(nodes).map(([id, rawNode]) => {
       const node = rawNode as NativeExecutionNode
       const details = asRecord(node.details)
       const kind = stringValue(node.kind) || 'agent'
@@ -76,7 +108,7 @@ export function executionSnapshotToCanvasState(
           type: kind === 'deterministic' ? 'function' : 'agent',
           enabled: true,
           status: stringValue(node.status) || 'queued',
-          executionState: stringValue(node.status) || 'queued',
+          runtimeStatus: stringValue(node.status) || 'queued',
           data: {
             ...details,
             primitive: capability,
@@ -90,51 +122,6 @@ export function executionSnapshotToCanvasState(
       ]
     })
   )
-  const edges = (Array.isArray(value.dependencies) ? value.dependencies : []).map(
-    (rawDependency) => {
-      const dependency = asRecord(rawDependency)
-      const id = stringValue(dependency.id)
-      const source = stringValue(dependency.sourceNodeId)
-      const target = stringValue(dependency.targetNodeId)
-      return {
-        id: id || `${source}->${target}`,
-        source,
-        target,
-        data: {
-          kind: dependency.kind,
-          status: dependency.status,
-          label: dependency.label,
-        },
-      }
-    }
-  )
-  return {
-    id: value.executionId,
-    blocks,
-    edges,
-    variables: value.variables ?? {},
-    loops: asRecord(value.groups).loops ?? {},
-    parallels: asRecord(value.groups).parallels ?? {},
-    metadata: value.metadata ?? {},
-    status: value.status,
-    paused: value.paused,
-    terminal: value.terminal,
-  }
-}
-
-export function timelineSpansToTraceSpans(
-  spans: Array<Record<string, unknown>> | undefined
-): Array<Record<string, unknown>> {
-  return (spans ?? []).map((span) => ({
-    ...span,
-    type: stringValue(span.kind) || 'function',
-    duration: Number(span.durationMs ?? 0),
-    startTime: span.startedAt,
-    endTime: span.endedAt,
-    children: timelineSpansToTraceSpans(
-      Array.isArray(span.children) ? (span.children as Array<Record<string, unknown>>) : []
-    ),
-  }))
 }
 
 interface CapabilityPresentation {
@@ -148,7 +135,7 @@ interface RawRuntimeBlock extends Record<string, unknown> {
   metadata?: Record<string, unknown>
   rows?: unknown[]
   status?: unknown
-  executionState?: unknown
+  runtimeStatus?: unknown
   depends_on?: unknown
   dependsOn?: unknown
   enabled?: unknown
@@ -350,7 +337,10 @@ function runtimeRows(block: RawRuntimeBlock): RuntimeRow[] {
   return Object.entries(metadata)
     .filter(([key]) => !['step', 'planTaskId', 'namespace', 'primitive'].includes(key))
     .slice(0, 3)
-    .map(([title, value]) => ({ title: runtimeLabel(title), value: runtimeLabel(value) }))
+    .map(([title, value]) => ({
+      title: runtimeLabel(title),
+      value: runtimeLabel(value),
+    }))
 }
 
 function registerCapability(
@@ -467,7 +457,11 @@ registerCapability(
 )
 registerCapability(
   CAPABILITY_PRESENTATIONS,
-  { label: 'Deterministic Grader', type: 'function', nodeKind: 'deterministic' },
+  {
+    label: 'Deterministic Grader',
+    type: 'function',
+    nodeKind: 'deterministic',
+  },
   ['Deterministic Grader', 'deterministic_grader', 'assess.grade', 'quiz_submit']
 )
 
@@ -481,8 +475,8 @@ function capabilityPresentation(block: RawRuntimeBlock): CapabilityPresentation 
   return null
 }
 
-function blockStatus(block: RuntimeBlockState): RuntimeExecutionState {
-  return block.executionState
+function blockStatus(block: ExecutionCanvasNode): RuntimeExecutionState {
+  return block.runtimeStatus
 }
 
 function blockHeight(rows: RuntimeRow[], source: RawRuntimeBlock): number {
@@ -502,10 +496,10 @@ function makeBlock(
   source: RawRuntimeBlock,
   presentation: CapabilityPresentation,
   runtimeKind: RuntimeBlockMetadata['runtimeKind'] = presentation.nodeKind
-): RuntimeBlockState {
+): ExecutionCanvasNode {
   const sourceData = asRecord(source.data)
   const rows = runtimeRows(source)
-  const executionState = normalizeExecutionState(source.executionState ?? source.status)
+  const runtimeStatus = normalizeExecutionState(source.runtimeStatus ?? source.status)
   const dependsOn = [
     source.depends_on,
     source.dependsOn,
@@ -515,7 +509,7 @@ function makeBlock(
   const data: RuntimeBlockMetadata = {
     ...sourceData,
     runtimeKind,
-    runtimeStatus: executionState,
+    runtimeStatus: runtimeStatus,
     nodeKind:
       runtimeKind === 'input'
         ? 'input'
@@ -537,13 +531,10 @@ function makeBlock(
     // metadata, matching the previous Runtime Graph semantics.
     name: runtimeLabel(presentation.label),
     position: { x: 0, y: 0 },
-    subBlocks: {},
-    outputs: {},
     enabled: source.enabled !== false,
-    horizontalHandles: true,
     height: blockHeight(rows, source),
     data,
-    executionState,
+    runtimeStatus,
     runtimeRows: rows,
   }
 }
@@ -553,28 +544,25 @@ function makeSpecialBlock(
   type: string,
   name: string,
   runtimeKind: 'input' | 'control',
-  executionState: RuntimeExecutionState,
+  runtimeStatus: RuntimeExecutionState,
   rows: RuntimeRow[],
   sourceData: Record<string, unknown> = {}
-): RuntimeBlockState {
+): ExecutionCanvasNode {
   return {
     id,
     type,
     name,
     position: { x: 0, y: 0 },
-    subBlocks: {},
-    outputs: {},
     enabled: true,
-    horizontalHandles: true,
     height: blockHeight(rows, {}),
     data: {
       ...sourceData,
       runtimeKind,
-      runtimeStatus: executionState,
+      runtimeStatus: runtimeStatus,
       nodeKind: runtimeKind === 'input' ? 'input' : 'intent',
       rows,
     },
-    executionState,
+    runtimeStatus,
     runtimeRows: rows,
   }
 }
@@ -584,14 +572,14 @@ function parseEdges(rawEdges: unknown): ParsedRuntimeEdge[] {
   return rawEdges
     .map((raw) => {
       const edge = asRecord(raw)
-      const data = asRecord(edge.data)
+      const _data = asRecord(edge.data)
       return {
         id: stringValue(edge.id),
-        source: stringValue(edge.source),
-        target: stringValue(edge.target),
-        data,
-        label: stringValue(edge.label) || stringValue(data.label),
-        status: stringValue(edge.status) || stringValue(data.status) || undefined,
+        source: stringValue(edge.sourceNodeId),
+        target: stringValue(edge.targetNodeId),
+        data: edge,
+        label: stringValue(edge.label),
+        status: stringValue(edge.status) || undefined,
       }
     })
     .filter((edge) => edge.source && edge.target && edge.source !== edge.target)
@@ -600,8 +588,8 @@ function parseEdges(rawEdges: unknown): ParsedRuntimeEdge[] {
 function visibleSemanticGraph(
   rawBlocks: Record<string, RawRuntimeBlock>,
   rawEdges: ParsedRuntimeEdge[]
-): { blocks: Record<string, RuntimeBlockState>; edges: ParsedRuntimeEdge[] } {
-  const blocks: Record<string, RuntimeBlockState> = {}
+): { blocks: Record<string, ExecutionCanvasNode>; edges: ParsedRuntimeEdge[] } {
+  const blocks: Record<string, ExecutionCanvasNode> = {}
   for (const [id, rawBlock] of Object.entries(rawBlocks)) {
     const presentation = capabilityPresentation(rawBlock)
     if (!presentation) continue
@@ -617,7 +605,10 @@ function visibleSemanticGraph(
   const edges: ParsedRuntimeEdge[] = []
   const seen = new Set<string>()
   for (const source of visible) {
-    const queue = (outgoing.get(source) ?? []).map((edge) => ({ edge, collapsed: false }))
+    const queue = (outgoing.get(source) ?? []).map((edge) => ({
+      edge,
+      collapsed: false,
+    }))
     const visitedHidden = new Set<string>()
     while (queue.length > 0) {
       const current = queue.shift()!
@@ -672,7 +663,7 @@ function addEdge(edges: ParsedRuntimeEdge[], seen: Set<string>, edge: ParsedRunt
 }
 
 function buildControlAndDependencyEdges(
-  blocks: Record<string, RuntimeBlockState>,
+  blocks: Record<string, ExecutionCanvasNode>,
   explicitEdges: ParsedRuntimeEdge[]
 ): ParsedRuntimeEdge[] {
   const edges = explicitEdges.filter(
@@ -758,18 +749,13 @@ function latestStatusText(events: AgentTaskEvent[]): string | undefined {
 export function projectRuntimeGraph(
   executionSnapshot: Record<string, unknown> | null | undefined,
   events: AgentTaskEvent[] = []
-): RuntimeGraphCanvasState {
-  const graph = executionSnapshotToCanvasState(executionSnapshot)
-  const rawBlocks = Object.fromEntries(
-    Object.entries(asRecord(graph.blocks)).map(([id, block]) => [
-      id,
-      asRecord(block) as RawRuntimeBlock,
-    ])
-  )
-  const parsed = visibleSemanticGraph(rawBlocks, parseEdges(graph.edges))
+): ExecutionCanvasState {
+  const snapshot = nativeExecutionSnapshot(executionSnapshot)
+  const rawBlocks = snapshot ? executionNodesToCanvasBlocks(snapshot.nodes) : {}
+  const parsed = visibleSemanticGraph(rawBlocks, parseEdges(snapshot?.dependencies ?? []))
 
   let inputState: RuntimeExecutionState = 'completed'
-  const controls: Record<string, RuntimeBlockState> = {}
+  const controls: Record<string, ExecutionCanvasNode> = {}
   const controlLabels: Record<string, string> = {
     learning_plan_decision: '学习计划决策',
   }
@@ -807,7 +793,7 @@ export function projectRuntimeGraph(
     )
   }
 
-  const blocks: Record<string, RuntimeBlockState> = {
+  const blocks: Record<string, ExecutionCanvasNode> = {
     'runtime-user-input': makeSpecialBlock(
       'runtime-user-input',
       'workflow_input',
@@ -825,18 +811,17 @@ export function projectRuntimeGraph(
   }
   const explicitEdges = parsed.edges
   const runtimeEdges = buildControlAndDependencyEdges(blocks, explicitEdges)
-  const metadata = asRecord(graph.metadata)
-  const running = !(graph.terminal ?? metadata.terminal)
+  const running = snapshot ? !snapshot.terminal : false
 
   return {
-    blocks,
-    edges: toReactFlowEdges(runtimeEdges),
+    nodes: blocks,
+    connections: toReactFlowEdges(runtimeEdges),
     running,
     latestStatusText: latestStatusText(events),
   }
 }
 
-export function runtimeBlockStatus(block: RuntimeBlockState): RuntimeExecutionState {
+export function runtimeBlockStatus(block: ExecutionCanvasNode): RuntimeExecutionState {
   return blockStatus(block)
 }
 
@@ -849,35 +834,35 @@ export function runtimeStatusToRunPath(
 }
 
 export function runtimeEdgeStatus(
-  source: RuntimeBlockState | undefined,
-  target: RuntimeBlockState | undefined,
+  source: ExecutionCanvasNode | undefined,
+  target: ExecutionCanvasNode | undefined,
   edgeStatus?: unknown
 ): 'success' | 'error' | 'not-executed' {
   // A failed endpoint always wins over a traversed predecessor.  This keeps
   // the native renderer from painting a success edge into (or out of) a
   // failed block when the other endpoint completed earlier.
-  if (source?.executionState === 'failed' || target?.executionState === 'failed') {
+  if (source?.runtimeStatus === 'failed' || target?.runtimeStatus === 'failed') {
     return 'error'
   }
   const normalizedEdgeStatus = String(edgeStatus ?? '').toLowerCase()
   if (['error', 'failed', 'failure'].includes(normalizedEdgeStatus)) return 'error'
   if (['success', 'completed', 'cached'].includes(normalizedEdgeStatus)) return 'success'
-  if (source && ['completed', 'cached'].includes(source.executionState)) return 'success'
+  if (source && ['completed', 'cached'].includes(source.runtimeStatus)) return 'success'
   return 'not-executed'
 }
 
-export function runtimeIconType(block: RuntimeBlockState): string {
+export function runtimeIconType(block: ExecutionCanvasNode): string {
   if (block.data.runtimeKind === 'input') return 'workflow_input'
   if (block.data.runtimeKind === 'control') return 'router_v2'
   return block.type
 }
 
-export function runtimeTypeLabel(block: RuntimeBlockState): string {
+export function runtimeTypeLabel(block: ExecutionCanvasNode): string {
   if (block.data.runtimeKind === 'input') return '用户输入'
   if (block.data.runtimeKind === 'control') return '运行时控制'
   return block.data.nodeKind === 'deterministic' ? '确定性执行' : '智能体 / 服务提供方'
 }
 
-export function runtimeDisplayName(block: RuntimeBlockState): string {
+export function runtimeDisplayName(block: ExecutionCanvasNode): string {
   return block.name || humanize(block.type)
 }

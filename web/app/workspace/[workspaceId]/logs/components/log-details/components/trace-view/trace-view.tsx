@@ -30,7 +30,7 @@ import {
   Search,
   X,
 } from '@/components/ui-kit/icons'
-import type { TraceSpan } from '@/lib/logs/types'
+import type { ExecutionTimelineSpan } from '@/lib/api/contracts/logs'
 import { formatDuration } from '@/lib/utils/formatting'
 import {
   adjustBgForContrast,
@@ -63,7 +63,7 @@ const ROW_BASE_PADDING_LEFT = 14
 const MIN_BAR_PCT = 0.5
 
 interface TraceViewProps {
-  traceSpans: TraceSpan[]
+  timelineSpans: ExecutionTimelineSpan[]
   /**
    * Authoritative, multiplier-inclusive run cost (dollars) from the persisted
    * execution log. When provided it drives the header credit chip so the Trace
@@ -74,7 +74,7 @@ interface TraceViewProps {
 }
 
 interface FlatSpanEntry {
-  span: TraceSpan
+  span: ExecutionTimelineSpan
   depth: number
   parentIds: string[]
   parentDuration?: number
@@ -83,22 +83,22 @@ interface FlatSpanEntry {
 /**
  * Returns the stable id for a span, synthesized when absent.
  */
-function getSpanId(span: TraceSpan): string {
-  return span.id || `span-${span.name}-${span.startTime}`
+function getSpanId(span: ExecutionTimelineSpan): string {
+  return span.id || `span-${span.name}-${span.startedAt}`
 }
 
 /**
  * Normalizes and sorts a tree of spans by start time.
  */
-function normalizeAndSort(spans: TraceSpan[]): TraceSpan[] {
+function normalizeAndSort(spans: ExecutionTimelineSpan[]): ExecutionTimelineSpan[] {
   return spans
     .map((span) => ({
       ...span,
       children: span.children?.length ? normalizeAndSort(span.children) : undefined,
     }))
     .sort((a, b) => {
-      const d = parseTime(a.startTime) - parseTime(b.startTime)
-      return d !== 0 ? d : parseTime(a.endTime) - parseTime(b.endTime)
+      const d = parseTime(a.startedAt) - parseTime(b.startedAt)
+      return d !== 0 ? d : parseTime(a.endedAt) - parseTime(b.endedAt)
     })
 }
 
@@ -106,24 +106,12 @@ function normalizeAndSort(spans: TraceSpan[]): TraceSpan[] {
  * For agents with no tool calls, hides synthetic model-segment children to
  * avoid noise in the tree.
  */
-function getDisplayChildren(span: TraceSpan): TraceSpan[] {
-  const kids: TraceSpan[] = span.children?.length
-    ? [...span.children]
-    : (span.toolCalls ?? []).map((tc, i) => ({
-        id: `${getSpanId(span)}-tool-${i}`,
-        name: tc.name,
-        type: 'tool',
-        duration: tc.duration || 0,
-        startTime: tc.startTime ?? span.startTime,
-        endTime: tc.endTime ?? span.endTime,
-        status: tc.error ? ('error' as const) : ('success' as const),
-        input: tc.input,
-        output: tc.error ? { error: tc.error, ...(tc.output ?? {}) } : tc.output,
-      }))
-  kids.sort((a, b) => parseTime(a.startTime) - parseTime(b.startTime))
-  const isAgent = span.type?.toLowerCase() === 'agent'
-  const hasToolCall = kids.some((c) => c.type?.toLowerCase() === 'tool')
-  if (isAgent && !hasToolCall) return kids.filter((c) => c.type?.toLowerCase() !== 'model')
+function getDisplayChildren(span: ExecutionTimelineSpan): ExecutionTimelineSpan[] {
+  const kids: ExecutionTimelineSpan[] = [...(span.children ?? [])]
+  kids.sort((a, b) => parseTime(a.startedAt) - parseTime(b.startedAt))
+  const isAgent = span.kind?.toLowerCase() === 'agent'
+  const hasToolCall = kids.some((c) => c.kind?.toLowerCase() === 'tool')
+  if (isAgent && !hasToolCall) return kids.filter((c) => c.kind?.toLowerCase() !== 'model')
   return kids
 }
 
@@ -132,10 +120,10 @@ function getDisplayChildren(span: TraceSpan): TraceSpan[] {
  * navigation, carrying depth, the chain of parent ids for indent drawing, and
  * the immediate parent's duration for percentage-of-parent calculations.
  */
-function flattenVisible(spans: TraceSpan[], expanded: Set<string>): FlatSpanEntry[] {
+function flattenVisible(spans: ExecutionTimelineSpan[], expanded: Set<string>): FlatSpanEntry[] {
   const out: FlatSpanEntry[] = []
   const walk = (
-    list: TraceSpan[],
+    list: ExecutionTimelineSpan[],
     depth: number,
     parents: string[],
     parentDuration: number | undefined
@@ -145,7 +133,7 @@ function flattenVisible(spans: TraceSpan[], expanded: Set<string>): FlatSpanEntr
       out.push({ span, depth, parentIds: parents, parentDuration })
       const children = getDisplayChildren(span)
       if (children.length > 0 && expanded.has(id)) {
-        const ownDuration = span.duration || parseTime(span.endTime) - parseTime(span.startTime)
+        const ownDuration = span.durationMs || parseTime(span.endedAt) - parseTime(span.startedAt)
         walk(children, depth + 1, [...parents, id], ownDuration)
       }
     }
@@ -157,9 +145,9 @@ function flattenVisible(spans: TraceSpan[], expanded: Set<string>): FlatSpanEntr
 /**
  * Returns every descendant span id in the tree.
  */
-function collectAllIds(spans: TraceSpan[]): string[] {
+function collectAllIds(spans: ExecutionTimelineSpan[]): string[] {
   const out: string[] = []
-  const walk = (list: TraceSpan[]) => {
+  const walk = (list: ExecutionTimelineSpan[]) => {
     for (const span of list) {
       out.push(getSpanId(span))
       const children = getDisplayChildren(span)
@@ -176,7 +164,7 @@ function collectAllIds(spans: TraceSpan[]): string[] {
  * span has errored children, we recurse into those children first; we only
  * return the current span if none of its descendants are also errored.
  */
-function findLeafErrorSpan(spans: TraceSpan[]): TraceSpan | null {
+function findLeafErrorSpan(spans: ExecutionTimelineSpan[]): ExecutionTimelineSpan | null {
   for (const span of spans) {
     if (span.status === 'error') {
       const children = getDisplayChildren(span)
@@ -195,7 +183,7 @@ function findLeafErrorSpan(spans: TraceSpan[]): TraceSpan | null {
 /**
  * Finds a span by id anywhere in the tree.
  */
-function findSpan(spans: TraceSpan[], id: string | null): TraceSpan | null {
+function findSpan(spans: ExecutionTimelineSpan[], id: string | null): ExecutionTimelineSpan | null {
   if (!id) return null
   for (const span of spans) {
     if (getSpanId(span) === id) return span
@@ -211,7 +199,7 @@ function findSpan(spans: TraceSpan[], id: string | null): TraceSpan | null {
 /**
  * Case-insensitive name match.
  */
-function spanMatchesQuery(span: TraceSpan, query: string): boolean {
+function spanMatchesQuery(span: ExecutionTimelineSpan, query: string): boolean {
   if (!query) return true
   return getDisplayName(span).toLowerCase().includes(query.toLowerCase())
 }
@@ -221,9 +209,9 @@ function spanMatchesQuery(span: TraceSpan, query: string): boolean {
  * a matching descendant. Used to show only relevant branches while preserving
  * their parents.
  */
-function collectMatchingIds(spans: TraceSpan[], query: string): Set<string> {
+function collectMatchingIds(spans: ExecutionTimelineSpan[], query: string): Set<string> {
   const matches = new Set<string>()
-  const walk = (list: TraceSpan[]): boolean => {
+  const walk = (list: ExecutionTimelineSpan[]): boolean => {
     let anyMatch = false
     for (const span of list) {
       const id = getSpanId(span)
@@ -270,13 +258,13 @@ const TraceTreeRow = memo(function TraceTreeRow({
 }) {
   const { span, depth, parentDuration } = entry
   const id = getSpanId(span)
-  const startMs = parseTime(span.startTime)
-  const endMs = parseTime(span.endTime)
-  const duration = span.duration || endMs - startMs
-  const isRootWorkflow = depth === 0 && span.type?.toLowerCase() === 'workflow'
+  const startMs = parseTime(span.startedAt)
+  const endMs = parseTime(span.endedAt)
+  const duration = span.durationMs || endMs - startMs
+  const isRootWorkflow = depth === 0 && span.kind.toLowerCase() === 'execution'
   const hasError = isRootWorkflow ? hasUnhandledErrorInTree(span) : hasErrorInTree(span)
   const { icon: BlockIcon, bgColor: rawBgColor } = getSpanPresentation(
-    span.type,
+    span.kind,
     span.name,
     span.provider
   )
@@ -336,7 +324,7 @@ const TraceTreeRow = memo(function TraceTreeRow({
         ) : (
           <div className='size-[14px] flex-shrink-0' />
         )}
-        {!isIterationType(span.type) && (
+        {!isIterationType(span.kind) && (
           <div
             className='flex size-[14px] flex-shrink-0 items-center justify-center overflow-hidden rounded-sm [&_img]:size-full'
             style={{ background: bgColor }}
@@ -411,7 +399,10 @@ function DetailCodeSection({
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false)
-  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
+  const [contextMenuPosition, setContextMenuPosition] = useState({
+    x: 0,
+    y: 0,
+  })
   const { copied, copy } = useCopyToClipboard({ resetMs: 1500 })
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -649,7 +640,11 @@ function MetaRow({ label, value }: { label: string; value: string }) {
  * Right-side pane. Renders a header and the available content sections for
  * the selected span: metadata, input, output, thinking, tool calls, error.
  */
-const TraceDetailPane = memo(function TraceDetailPane({ span }: { span: TraceSpan | null }) {
+const TraceDetailPane = memo(function TraceDetailPane({
+  span,
+}: {
+  span: ExecutionTimelineSpan | null
+}) {
   if (!span) {
     return (
       <div className='flex h-full items-center justify-center p-6 text-[var(--text-tertiary)] text-caption'>
@@ -658,27 +653,30 @@ const TraceDetailPane = memo(function TraceDetailPane({ span }: { span: TraceSpa
     )
   }
 
-  const duration = span.duration || parseTime(span.endTime) - parseTime(span.startTime)
+  const duration = span.durationMs || parseTime(span.endedAt) - parseTime(span.startedAt)
   const { icon: BlockIcon, bgColor: rawBgColor } = getSpanPresentation(
-    span.type,
+    span.kind,
     span.name,
     span.provider
   )
   const bgColor = adjustBgForContrast(rawBgColor)
-  const isRootWorkflow = span.type?.toLowerCase() === 'workflow'
+  const isRootWorkflow = span.kind.toLowerCase() === 'execution'
   const hasError = isRootWorkflow ? hasUnhandledErrorInTree(span) : hasErrorInTree(span)
   const isDirectError = span.status === 'error'
-  const isModelSpan = span.type?.toLowerCase() === 'model'
+  const isModelSpan = span.kind?.toLowerCase() === 'model'
 
-  const startedAt = parseTime(span.startTime)
-  const endedAt = parseTime(span.endTime)
+  const startedAt = parseTime(span.startedAt)
+  const endedAt = parseTime(span.endedAt)
 
   const metaEntries: { label: string; value: string }[] = []
   metaEntries.push({
     label: '类型',
-    value: isCustomBlockSpanType(span.type) ? 'custom block' : span.type,
+    value: isCustomBlockSpanType(span.kind) ? 'custom block' : span.kind,
   })
-  metaEntries.push({ label: '耗时', value: formatDuration(duration, { precision: 2 }) || '—' })
+  metaEntries.push({
+    label: '耗时',
+    value: formatDuration(duration, { precision: 2 }) || '—',
+  })
   if (span.tries !== undefined) metaEntries.push({ label: '尝试次数', value: String(span.tries) })
   if (span.provider) metaEntries.push({ label: 'Provider', value: span.provider })
   if (span.model) metaEntries.push({ label: 'Model', value: span.model })
@@ -705,14 +703,17 @@ const TraceDetailPane = memo(function TraceDetailPane({ span }: { span: TraceSpa
   // live runs but vanish on reload — show one consistent total instead.
   if (span.errorType) metaEntries.push({ label: '错误类型', value: span.errorType })
   if (span.iterationIndex !== undefined)
-    metaEntries.push({ label: '迭代次数', value: String(span.iterationIndex + 1) })
+    metaEntries.push({
+      label: '迭代次数',
+      value: String(span.iterationIndex + 1),
+    })
 
   const statusLabel = hasError ? '错误' : '成功'
 
   return (
     <div className='flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3.5 pt-3 pb-4'>
       <div className='flex items-start gap-2'>
-        {!isIterationType(span.type) && (
+        {!isIterationType(span.kind) && (
           <div
             className='mt-[2px] flex size-[18px] flex-shrink-0 items-center justify-center overflow-hidden rounded-sm [&_img]:size-full'
             style={{ background: bgColor }}
@@ -803,7 +804,10 @@ const TraceDetailPane = memo(function TraceDetailPane({ span }: { span: TraceSpa
  * in a way that mirrors the executor's internal structure so investigators can
  * follow block-by-block and segment-by-segment what happened and why.
  */
-export const TraceView = memo(function TraceView({ traceSpans, runCostDollars }: TraceViewProps) {
+export const TraceView = memo(function TraceView({
+  timelineSpans,
+  runCostDollars,
+}: TraceViewProps) {
   const treeRef = useRef<HTMLDivElement>(null)
   const { copied: traceCopied, copy: copyTrace } = useCopyToClipboard()
   const [searchQuery, setSearchQuery] = useState('')
@@ -847,13 +851,13 @@ export const TraceView = memo(function TraceView({ traceSpans, runCostDollars }:
     firstErrorId,
     blockCount,
   } = useMemo(() => {
-    const sorted = normalizeAndSort(traceSpans ?? [])
+    const sorted = normalizeAndSort(timelineSpans ?? [])
     let earliest = Number.POSITIVE_INFINITY
     let latest = 0
-    const walkTimeBounds = (spans: TraceSpan[]) => {
+    const walkTimeBounds = (spans: ExecutionTimelineSpan[]) => {
       for (const span of spans) {
-        const s = parseTime(span.startTime)
-        const e = parseTime(span.endTime)
+        const s = parseTime(span.startedAt)
+        const e = parseTime(span.endedAt)
         if (s < earliest) earliest = s
         if (e > latest) latest = e
         if (span.children?.length) walkTimeBounds(span.children)
@@ -873,7 +877,7 @@ export const TraceView = memo(function TraceView({ traceSpans, runCostDollars }:
       firstErrorId: firstError ? getSpanId(firstError) : null,
       blockCount: count,
     }
-  }, [traceSpans])
+  }, [timelineSpans])
 
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => new Set(allIds))
   const [selectedId, setSelectedId] = useState<string | null>(firstErrorId ?? firstRootId)
@@ -904,7 +908,7 @@ export const TraceView = memo(function TraceView({ traceSpans, runCostDollars }:
     normalizedSpans.length === 0
       ? ('empty' as const)
       : normalizedSpans.some((span) =>
-            span.type?.toLowerCase() === 'workflow'
+            span.kind.toLowerCase() === 'execution'
               ? hasUnhandledErrorInTree(span)
               : hasErrorInTree(span)
           )
@@ -977,7 +981,7 @@ export const TraceView = memo(function TraceView({ traceSpans, runCostDollars }:
     row?.scrollIntoView({ block: 'nearest' })
   }, [selectedId])
 
-  if (!traceSpans || traceSpans.length === 0) {
+  if (!timelineSpans || timelineSpans.length === 0) {
     return (
       <div className='flex h-full items-center justify-center text-[var(--text-tertiary)] text-caption'>
         No trace data available
@@ -1035,7 +1039,7 @@ export const TraceView = memo(function TraceView({ traceSpans, runCostDollars }:
                 type='button'
                 variant='ghost'
                 className='!p-1'
-                onClick={() => copyTrace(JSON.stringify(traceSpans, null, 2))}
+                onClick={() => copyTrace(JSON.stringify(timelineSpans, null, 2))}
                 aria-label='Copy raw trace'
               >
                 {traceCopied ? (

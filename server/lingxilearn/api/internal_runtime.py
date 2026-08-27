@@ -17,7 +17,7 @@ from ..application import ApplicationServices
 from ..auth import get_principal
 from ..contracts.rest_models import AgentDecisionsResponse, RuntimeGraphResponse
 from ..learner import LearnerContext
-from ..runtime.execution import stored_execution_snapshot
+from ..runtime.execution import require_execution_snapshot
 from ..runtime.execution_graph import build_execution_graph
 from .dependencies import not_found, services_of
 
@@ -125,15 +125,15 @@ async def agent_task_runtime_graph(
         else None
     )
     state = (
-        stored_execution_snapshot(
-            execution.workflow_state,
+        require_execution_snapshot(
+            execution.execution_snapshot,
             execution_id=execution.id,
             task_id=task_id,
             graph_version=execution.graph_version,
             status=execution.status,
         )
         if execution is not None
-        else {}
+        else None
     )
     runs = await services.agent_events.agent_runs_for_task(task_id)
     dependencies = await services.agent_events.work_dependencies_for_task(task_id)

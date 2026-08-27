@@ -1,6 +1,5 @@
 import type { ExecutionLogDetail } from '@/lib/api/contracts/logs'
 import { dollarsToCredits } from '@/lib/billing/credits/conversion'
-import { timelineSpansToTraceSpans } from '@/lib/lingxi/runtime-graph-adapter'
 import type { LogsGetRunDetailsParams, LogsGetRunDetailsResponse } from '@/tools/logs/types'
 import type { ToolConfig } from '@/tools/types'
 
@@ -9,7 +8,7 @@ export const logsGetRunDetailsTool: ToolConfig<LogsGetRunDetailsParams, LogsGetR
     id: 'logs_get_run_details',
     name: 'Get Run Details',
     description:
-      'Fetch details for a single workflow run by its run ID, including the full trace spans.',
+      'Fetch details for a single workflow run by its run ID, including the native execution timeline.',
     version: '1.0.0',
 
     params: {
@@ -55,7 +54,7 @@ export const logsGetRunDetailsTool: ToolConfig<LogsGetRunDetailsParams, LogsGetR
           durationMs: detail.executionData?.totalDuration ?? null,
           // Costs are stored in dollars; credits are the user-facing unit.
           cost: detail.cost?.total != null ? dollarsToCredits(detail.cost.total) : null,
-          traceSpans: timelineSpansToTraceSpans(detail.executionData?.timeline?.spans),
+          timelineSpans: detail.executionData?.timeline?.spans ?? [],
           finalOutput: detail.executionData?.finalOutput ?? null,
         },
       }
@@ -70,7 +69,7 @@ export const logsGetRunDetailsTool: ToolConfig<LogsGetRunDetailsParams, LogsGetR
       startedAt: { type: 'string', description: 'Run start time (ISO 8601)' },
       durationMs: { type: 'number', description: 'Run duration in milliseconds' },
       cost: { type: 'number', description: 'Run cost in credits' },
-      traceSpans: { type: 'array', description: 'Full trace spans for the run' },
+      timelineSpans: { type: 'array', description: 'Native execution timeline spans for the run' },
       finalOutput: { type: 'json', description: 'Final output of the run' },
     },
   }

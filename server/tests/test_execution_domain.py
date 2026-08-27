@@ -16,7 +16,7 @@ from lingxilearn.runtime.execution import (
     ExecutionError,
     ExecutionProjector,
     replay_execution_timeline,
-    stored_execution_snapshot,
+    require_execution_snapshot,
     visible_execution,
 )
 from lingxilearn.runtime.schedules import SchedulerWorker, next_schedule_time, validate_schedule
@@ -46,33 +46,39 @@ def test_projection_uses_actual_nodes_and_preserves_runtime_metadata():
     )
     snapshot = projector.snapshot()
     assert started["execution_id"] == "exec-1"
-    assert started["payload"]["blockId"] == completed["payload"]["blockId"]
+    assert started["payload"]["nodeId"] == completed["payload"]["nodeId"]
     assert snapshot["snapshot"]["nodes"]
     assert snapshot["timeline"]["spans"][0]["status"] == "completed"
 
 
-def test_persisted_editor_projection_is_translated_at_the_storage_boundary():
-    snapshot = stored_execution_snapshot(
-        {
-            "blocks": {
-                "tutor": {
-                    "name": "Tutor",
-                    "status": "completed",
-                    "data": {"primitive": "tutor", "nodeKind": "agent"},
-                }
-            },
-            "edges": [],
-            "metadata": {"terminal": True},
-        },
-        execution_id="exec-old",
-        task_id="task-old",
-        graph_version="v1",
-        status="completed",
-    )
+def test_persisted_execution_snapshot_fails_closed_on_non_native_schema():
+    with pytest.raises(ExecutionError, match="unsupported execution snapshot schema"):
+        require_execution_snapshot(
+            {"blocks": {}, "edges": []},
+            execution_id="exec-old",
+            task_id="task-old",
+            graph_version="v1",
+            status="completed",
+        )
 
-    assert snapshot["schemaVersion"] == "lingxilearn.execution.v1"
-    assert snapshot["nodes"]["tutor"]["capability"] == "tutor"
-    assert "blocks" not in snapshot
+
+def test_persisted_execution_snapshot_accepts_only_complete_native_state():
+    native = ExecutionProjector("exec-native", "task-native", "v1").snapshot()["snapshot"]
+    assert require_execution_snapshot(
+        native,
+        execution_id="exec-native",
+        task_id="task-native",
+        graph_version="v1",
+    ) == native
+
+    malformed = {**native, "nodes": {"node": {"id": "node"}}}
+    with pytest.raises(ExecutionError, match="malformed node"):
+        require_execution_snapshot(
+            malformed,
+            execution_id="exec-native",
+            task_id="task-native",
+            graph_version="v1",
+        )
 
 
 def test_parallel_semantic_nodes_are_projected_but_runtime_mechanics_are_hidden():
@@ -82,7 +88,7 @@ def test_parallel_semantic_nodes_are_projected_but_runtime_mechanics_are_hidden(
     projector.consume(event(EventKind.NODE_STARTED, node="await_user", step=2), agent="await_user")
     projector.consume(event(EventKind.NODE_STARTED, node="await_user", step=3), agent="await_user")
     state = projector.snapshot()["snapshot"]
-    assert state["groups"]["parallels"]["parallel:1"]["blockIds"]
+    assert state["groups"]["parallels"]["parallel:1"]["nodeIds"]
     assert not state["groups"]["loops"]
     assert {node["label"] for node in state["nodes"].values()} == {
         "Lesson Intro",

@@ -504,17 +504,6 @@ class AgentTaskEventsResponse(BaseModel):
     protocol: Literal["v1", "legacy-v0"]
 
 
-class RuntimeGraphResponse(BaseModel):
-    id: str
-    type: str = "runtime-graph"
-    taskId: str
-    latestExecutionId: str | None = None
-    status: str
-    updatedAt: str | None = None
-    executionSnapshot: dict[str, Any] = Field(default_factory=dict)
-    executionGraph: dict[str, Any] = Field(default_factory=dict)
-
-
 class ExecutionSpanResponse(BaseModel):
     """One recursive span in the LingxiLearn execution timeline."""
 
@@ -538,6 +527,31 @@ class ExecutionTimelineResponse(BaseModel):
     waitingForUserMs: int = 0
 
 
+class NativeExecutionNodeResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    label: str
+    kind: str
+    capability: str
+    provider: str | None = None
+    status: str
+    step: int
+    taskId: str | None = None
+    namespace: Any = None
+    details: dict[str, Any] = Field(default_factory=dict)
+    output: Any = None
+
+
+class NativeExecutionDependencyResponse(BaseModel):
+    id: str
+    sourceNodeId: str
+    targetNodeId: str
+    kind: str
+    status: str
+    label: str
+
+
 class NativeExecutionSnapshotResponse(BaseModel):
     schemaVersion: Literal["lingxilearn.execution.v1"]
     executionId: str
@@ -546,11 +560,22 @@ class NativeExecutionSnapshotResponse(BaseModel):
     status: str
     paused: bool = False
     terminal: bool = False
-    nodes: dict[str, dict[str, Any]] = Field(default_factory=dict)
-    dependencies: list[dict[str, Any]] = Field(default_factory=list)
+    nodes: dict[str, NativeExecutionNodeResponse] = Field(default_factory=dict)
+    dependencies: list[NativeExecutionDependencyResponse] = Field(default_factory=list)
     variables: dict[str, Any] = Field(default_factory=dict)
     groups: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RuntimeGraphResponse(BaseModel):
+    id: str
+    type: str = "runtime-graph"
+    taskId: str
+    latestExecutionId: str | None = None
+    status: str
+    updatedAt: str | None = None
+    executionSnapshot: NativeExecutionSnapshotResponse | None = None
+    executionGraph: dict[str, Any] = Field(default_factory=dict)
 
 
 class ExecutionMetadataResponse(BaseModel):

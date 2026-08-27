@@ -1219,14 +1219,14 @@ class AgentTaskService:
             )
             execution = await self._runtime_repo.get_agent_execution(execution_id, learner_id)
             if execution is not None:
-                state = dict(execution.workflow_state or {})
-                metadata = dict(state.get("metadata") or {})
-                metadata.update({"terminal": True, "status": "cancelled", "paused": False})
-                state["metadata"] = metadata
+                state = dict(execution.execution_snapshot or {})
+                if state.get("schemaVersion") != "lingxilearn.execution.v1":
+                    raise ValueError("cannot cancel an execution with a non-native snapshot")
+                state.update({"terminal": True, "status": "cancelled", "paused": False})
                 await self._runtime_repo.update_agent_execution(
                     execution.id,
                     status="cancelled",
-                    workflow_state=state,
+                    execution_snapshot=state,
                     ended=True,
                 )
         await self._events.append(

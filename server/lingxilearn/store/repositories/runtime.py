@@ -101,8 +101,21 @@ class RuntimeRepository:
                     schedule_id=schedule_id,
                     scheduled_for=scheduled_for,
                     status="running",
-                    workflow_state={},
-                    trace_spans=[],
+                    execution_snapshot={
+                        "schemaVersion": "lingxilearn.execution.v1",
+                        "executionId": execution_id,
+                        "taskId": task_id,
+                        "graphVersion": graph_version,
+                        "status": "running",
+                        "paused": False,
+                        "terminal": False,
+                        "nodes": {},
+                        "dependencies": [],
+                        "variables": {},
+                        "groups": {"loops": {}, "parallels": {}},
+                        "metadata": {},
+                    },
+                    timeline_spans=[],
                 )
             )
             task = await s.get(AgentTask, task_id)
@@ -117,8 +130,8 @@ class RuntimeRepository:
         execution_id: str,
         *,
         status: str | None = None,
-        workflow_state: dict[str, Any] | None = None,
-        trace_spans: list[dict[str, Any]] | None = None,
+        execution_snapshot: dict[str, Any] | None = None,
+        timeline_spans: list[dict[str, Any]] | None = None,
         event_count: int | None = None,
         error: str | None = None,
         ended: bool = False,
@@ -129,10 +142,10 @@ class RuntimeRepository:
                 return
             if status is not None:
                 row.status = status
-            if workflow_state is not None:
-                row.workflow_state = workflow_state
-            if trace_spans is not None:
-                row.trace_spans = trace_spans
+            if execution_snapshot is not None:
+                row.execution_snapshot = execution_snapshot
+            if timeline_spans is not None:
+                row.timeline_spans = timeline_spans
             if event_count is not None:
                 row.event_count = event_count
             if error is not None:
@@ -693,4 +706,3 @@ def _interaction_dict(row: AgentInteraction) -> dict[str, Any]:
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
     }
-

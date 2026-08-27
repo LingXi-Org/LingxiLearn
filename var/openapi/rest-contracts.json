@@ -3443,12 +3443,121 @@
         "title": "MoveItemsResult",
         "type": "object"
       },
+      "NativeExecutionDependencyResponse": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sourceNodeId": {
+            "title": "Sourcenodeid",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "targetNodeId": {
+            "title": "Targetnodeid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sourceNodeId",
+          "targetNodeId",
+          "kind",
+          "status",
+          "label"
+        ],
+        "title": "NativeExecutionDependencyResponse",
+        "type": "object"
+      },
+      "NativeExecutionNodeResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "capability": {
+            "title": "Capability",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "namespace": {
+            "title": "Namespace"
+          },
+          "output": {
+            "title": "Output"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "integer"
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskid"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "capability",
+          "status",
+          "step"
+        ],
+        "title": "NativeExecutionNodeResponse",
+        "type": "object"
+      },
       "NativeExecutionSnapshotResponse": {
         "properties": {
           "dependencies": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/NativeExecutionDependencyResponse"
             },
             "title": "Dependencies",
             "type": "array"
@@ -3473,8 +3582,7 @@
           },
           "nodes": {
             "additionalProperties": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/NativeExecutionNodeResponse"
             },
             "title": "Nodes",
             "type": "object"
@@ -4230,9 +4338,14 @@
             "type": "object"
           },
           "executionSnapshot": {
-            "additionalProperties": true,
-            "title": "Executionsnapshot",
-            "type": "object"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NativeExecutionSnapshotResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "title": "Id",

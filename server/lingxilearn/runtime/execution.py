@@ -15,7 +15,6 @@ from typing import Any
 from lingxigraph import EventKind, RetryPolicy
 
 from .timeline import (
-    ExecutionSpan,
     ExecutionTimeline,
     timeline_total_tokens,
 )
@@ -45,9 +44,65 @@ class ExecutionError(ValueError):
         return {"code": self.code, "message": self.message, "retryable": self.retryable}
 
 
+@dataclass(slots=True)
+class ExecutionNode:
+    """One learner-meaningful node in an execution snapshot."""
+
+    id: str
+    label: str
+    kind: str
+    capability: str
+    provider: str | None
+    status: str
+    step: int
+    task_id: str | None = None
+    namespace: Any = None
+    details: dict[str, Any] = field(default_factory=dict)
+    output: Any = None
+
+    def to_dict(self) -> dict[str, Any]:
+        value = {
+            "id": self.id,
+            "label": self.label,
+            "kind": self.kind,
+            "capability": self.capability,
+            "provider": self.provider,
+            "status": self.status,
+            "step": self.step,
+            "taskId": self.task_id,
+            "namespace": _json_safe(self.namespace),
+            "details": _json_safe(self.details),
+        }
+        if self.output not in (None, {}, []):
+            value["output"] = _json_safe(self.output)
+        return value
+
+
 @dataclass(frozen=True, slots=True)
+class ExecutionDependency:
+    """A directed relationship between native execution nodes."""
+
+    id: str
+    source_node_id: str
+    target_node_id: str
+    kind: str
+    status: str
+    label: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "sourceNodeId": self.source_node_id,
+            "targetNodeId": self.target_node_id,
+            "kind": self.kind,
+            "status": self.status,
+            "label": self.label,
+        }
+
+
+@dataclass(slots=True)
 class ExecutionSnapshot:
-    """Immutable public state of one LingxiLearn execution."""
+    """Native state of one LingxiLearn execution."""
 
     execution_id: str
     task_id: str
@@ -55,11 +110,11 @@ class ExecutionSnapshot:
     status: str
     paused: bool
     terminal: bool
-    nodes: dict[str, dict[str, Any]]
-    dependencies: tuple[dict[str, Any], ...]
-    variables: dict[str, Any]
-    groups: dict[str, Any]
-    metadata: dict[str, Any]
+    nodes: dict[str, ExecutionNode] = field(default_factory=dict)
+    dependencies: list[ExecutionDependency] = field(default_factory=list)
+    variables: dict[str, Any] = field(default_factory=dict)
+    groups: dict[str, Any] = field(default_factory=lambda: {"loops": {}, "parallels": {}})
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -70,8 +125,8 @@ class ExecutionSnapshot:
             "status": self.status,
             "paused": self.paused,
             "terminal": self.terminal,
-            "nodes": _json_safe(self.nodes),
-            "dependencies": _json_safe(self.dependencies),
+            "nodes": {node_id: node.to_dict() for node_id, node in self.nodes.items()},
+            "dependencies": [dependency.to_dict() for dependency in self.dependencies],
             "variables": _json_safe(self.variables),
             "groups": _json_safe(self.groups),
             "metadata": _json_safe(self.metadata),
@@ -373,7 +428,16 @@ def _iso(value: Any) -> str:
     return datetime.now(UTC).isoformat()
 
 
-def stored_execution_snapshot(
+def _elapsed_ms(started_at: str, ended_at: str) -> int:
+    try:
+        start = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, int((end - start).total_seconds() * 1000))
+
+
+def require_execution_snapshot(
     value: Mapping[str, Any] | None,
     *,
     execution_id: str,
@@ -381,70 +445,74 @@ def stored_execution_snapshot(
     graph_version: str,
     status: str | None = None,
 ) -> dict[str, Any]:
-    """Read persisted projection data through the native execution boundary.
-
-    Rows written before this contract may still contain editor-oriented keys.
-    They are translated at the storage boundary and are never exposed by REST,
-    SSE, or the runtime package's public models.
-    """
+    """Validate persisted native state and fail closed on every other schema."""
 
     state = dict(value or {})
-    if state.get("schemaVersion") == EXECUTION_SCHEMA_VERSION:
-        state["status"] = status or state.get("status") or "running"
-        return _json_safe(state)
-    metadata = dict(state.get("metadata") or {})
-    nodes = {
-        block_id: {
-            "id": block_id,
-            "label": block.get("name") or block_id,
-            "kind": (block.get("data") or {}).get("nodeKind") or "agent",
-            "capability": (block.get("data") or {}).get("primitive"),
-            "provider": (block.get("data") or {}).get("provider"),
-            "status": block.get("executionState") or block.get("status") or "queued",
-            "step": (block.get("data") or {}).get("step"),
-            "taskId": (block.get("data") or {}).get("taskId"),
-            "namespace": (block.get("data") or {}).get("namespace"),
-            "details": {
-                key: item
-                for key, item in (block.get("data") or {}).items()
-                if key not in {"nodeKind", "primitive", "provider", "step", "taskId", "namespace"}
-            },
-        }
-        for block_id, block in (state.get("blocks") or {}).items()
-        if isinstance(block, Mapping)
+    required = {
+        "schemaVersion",
+        "executionId",
+        "taskId",
+        "graphVersion",
+        "status",
+        "paused",
+        "terminal",
+        "nodes",
+        "dependencies",
+        "variables",
+        "groups",
+        "metadata",
     }
-    dependencies = tuple(
-        {
-            "id": edge.get("id"),
-            "sourceNodeId": edge.get("source"),
-            "targetNodeId": edge.get("target"),
-            "kind": (edge.get("data") or {}).get("kind") or "sequence",
-            "status": (edge.get("data") or {}).get("status"),
-            "label": (edge.get("data") or {}).get("label"),
-        }
-        for edge in state.get("edges") or []
-        if isinstance(edge, Mapping)
-    )
-    return ExecutionSnapshot(
-        execution_id=execution_id,
-        task_id=task_id,
-        graph_version=graph_version,
-        status=str(status or metadata.get("status") or state.get("status") or "running"),
-        paused=bool(metadata.get("paused", state.get("paused", False))),
-        terminal=bool(metadata.get("terminal", state.get("terminal", False))),
-        nodes=nodes,
-        dependencies=dependencies,
-        variables=dict(state.get("variables") or {}),
-        groups={
-            "loops": dict(state.get("loops") or {}),
-            "parallels": dict(state.get("parallels") or {}),
-        },
-        metadata={
-            key: item
-            for key, item in metadata.items()
-            if key not in {"status", "paused", "terminal", "layoutVersion"}
-        },
-    ).to_dict()
+    if state.get("schemaVersion") != EXECUTION_SCHEMA_VERSION or not required <= state.keys():
+        raise ExecutionError(
+            "unsupported execution snapshot schema; expected lingxilearn.execution.v1",
+            code="invalid_execution_schema",
+        )
+    if (
+        str(state.get("executionId")) != execution_id
+        or str(state.get("taskId")) != task_id
+        or str(state.get("graphVersion")) != graph_version
+    ):
+        raise ExecutionError(
+            "persisted execution identity does not match the requested execution",
+            code="execution_identity_mismatch",
+        )
+    if not isinstance(state.get("nodes"), Mapping) or not isinstance(
+        state.get("dependencies"), list
+    ):
+        raise ExecutionError("persisted execution state is malformed", code="invalid_execution_schema")
+    if not all(
+        isinstance(state.get(key), Mapping) for key in ("variables", "groups", "metadata")
+    ) or not isinstance(state.get("paused"), bool) or not isinstance(state.get("terminal"), bool):
+        raise ExecutionError("persisted execution state is malformed", code="invalid_execution_schema")
+    node_required = {"id", "label", "kind", "capability", "status", "step", "details"}
+    for node_id, node in state["nodes"].items():
+        if (
+            not isinstance(node, Mapping)
+            or not node_required <= node.keys()
+            or str(node.get("id")) != str(node_id)
+        ):
+            raise ExecutionError(
+                "persisted execution contains a malformed node",
+                code="invalid_execution_schema",
+            )
+    dependency_required = {
+        "id",
+        "sourceNodeId",
+        "targetNodeId",
+        "kind",
+        "status",
+        "label",
+    }
+    if any(
+        not isinstance(dependency, Mapping) or not dependency_required <= dependency.keys()
+        for dependency in state["dependencies"]
+    ):
+        raise ExecutionError(
+            "persisted execution contains a malformed dependency",
+            code="invalid_execution_schema",
+        )
+    state["status"] = status or state["status"]
+    return _json_safe(state)
 
 
 @dataclass
@@ -455,83 +523,71 @@ class ExecutionProjector:
     task_id: str
     graph_version: str
     catalog: PrimitiveCatalog = field(default_factory=PrimitiveCatalog)
-    workflow_state: dict[str, Any] = field(default_factory=dict)
-    trace_spans: list[dict[str, Any]] = field(default_factory=list)
-    _last_blocks_by_step: dict[int, list[str]] = field(default_factory=dict, init=False)
+    state: ExecutionSnapshot = field(init=False)
+    timeline_spans: list[dict[str, Any]] = field(default_factory=list)
+    _last_nodes_by_step: dict[int, list[str]] = field(default_factory=dict, init=False)
     _active_spans: dict[str, dict[str, Any]] = field(default_factory=dict, init=False)
     _node_counts: dict[str, int] = field(default_factory=dict, init=False)
-    _block_keys: dict[tuple[str, int, str], str] = field(default_factory=dict, init=False)
-    _planned_blocks: dict[str, str] = field(default_factory=dict, init=False)
+    _node_keys: dict[tuple[str, int, str], str] = field(default_factory=dict, init=False)
+    _planned_nodes: dict[str, str] = field(default_factory=dict, init=False)
     _plan_dependencies: dict[str, list[str]] = field(default_factory=dict, init=False)
     _planned_by_shape: dict[tuple[str, int], list[str]] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
-        self.workflow_state = {
-            "id": self.execution_id,
-            "version": EXECUTION_SCHEMA_VERSION,
-            "graphVersion": self.graph_version,
-            "blocks": {},
-            "edges": [],
-            "loops": {},
-            "parallels": {},
-            "variables": {},
-            "metadata": {"executionId": self.execution_id, "taskId": self.task_id},
-        }
-        self.workflow_state["metadata"]["layoutVersion"] = "semantic-layered.v2"
+        self.state = ExecutionSnapshot(
+            execution_id=self.execution_id,
+            task_id=self.task_id,
+            graph_version=self.graph_version,
+            status="running",
+            paused=False,
+            terminal=False,
+            metadata={"executionId": self.execution_id, "taskId": self.task_id},
+        )
 
     @property
-    def blocks(self) -> dict[str, Any]:
-        return self.workflow_state["blocks"]
+    def nodes(self) -> dict[str, ExecutionNode]:
+        return self.state.nodes
 
-    def _block_id(self, node: str, step: int, task_id: str | None) -> str:
+    def _node_id(self, node: str, step: int, task_id: str | None) -> str:
         count = self._node_counts.get(node, 0) + 1
         self._node_counts[node] = count
         suffix = str(task_id or count).replace("/", "_")
         return f"{node}:{step}:{suffix}"
 
-    def _ensure_block(self, event: Any, agent: str | None = None) -> tuple[str, dict[str, Any]]:
-        node = str(getattr(event, "node", "") or agent or "coordinator")
-        execution = visible_execution(node)
+    def _ensure_node(self, event: Any, agent: str | None = None) -> tuple[str, ExecutionNode]:
+        provider = str(getattr(event, "node", "") or agent or "coordinator")
+        execution = visible_execution(provider)
         if execution is None:
-            raise ExecutionError(f"runtime mechanic cannot be projected as a block: {node!r}")
+            raise ExecutionError(f"runtime mechanic cannot be projected as a node: {provider!r}")
         step = int(getattr(event, "step", 0) or 0)
         task_id = getattr(event, "task_id", None)
-        key = (node, step, str(task_id or ""))
-        existing = self._block_keys.get(key)
+        key = (provider, step, str(task_id or ""))
+        existing = self._node_keys.get(key)
         if existing is not None:
-            return existing, self.blocks[existing]
-        planned = self._promote_planned_block(execution.key, step)
+            return existing, self.nodes[existing]
+        planned = self._promote_planned_node(execution.key, step)
         if planned is not None:
-            block_id, block = planned
-            self._block_keys[key] = block_id
-            return block_id, block
-        block_id = self._block_id(node, step, task_id)
-        self._block_keys[key] = block_id
-        block = {
-            "id": block_id,
-            "type": execution.display_kind,
-            "name": execution.label,
-            "position": {"x": (len(self.blocks) % 4) * 300, "y": (len(self.blocks) // 4) * 160},
-            "subBlocks": {},
-            "outputs": {},
-            "enabled": True,
-            "data": {
-                "primitive": execution.key,
-                "provider": node,
-                "category": execution.node_kind,
-                "nodeKind": execution.node_kind,
-                "executionId": self.execution_id,
-                "step": step,
-                "taskId": task_id,
-                "namespace": _json_safe(getattr(event, "namespace", None)),
-            },
-            "status": "running",
-            "executionState": "running",
-        }
-        self.blocks[block_id] = block
-        return block_id, block
+            node_id, execution_node = planned
+            self._node_keys[key] = node_id
+            return node_id, execution_node
+        node_id = self._node_id(provider, step, task_id)
+        self._node_keys[key] = node_id
+        execution_node = ExecutionNode(
+            id=node_id,
+            label=execution.label,
+            kind=execution.node_kind,
+            capability=execution.key,
+            provider=provider,
+            status="running",
+            step=step,
+            task_id=task_id,
+            namespace=_json_safe(getattr(event, "namespace", None)),
+            details={"executionId": self.execution_id},
+        )
+        self.nodes[node_id] = execution_node
+        return node_id, execution_node
 
-    def _ensure_planned_block(self, payload: dict[str, Any]) -> str | None:
+    def _ensure_planned_node(self, payload: dict[str, Any]) -> str | None:
         plan_task_id = str(
             payload.get("node_id")
             or payload.get("work_item_id")
@@ -548,45 +604,39 @@ class ExecutionProjector:
         if execution is None:
             self._rebuild_planned_edges()
             return None
-        existing = self._planned_blocks.get(plan_task_id)
+        existing = self._planned_nodes.get(plan_task_id)
         if existing is not None:
             return existing
-        block_id = f"plan:{step}:{plan_task_id}".replace("/", "_")
-        self.blocks[block_id] = {
-            "id": block_id,
-            "type": execution.display_kind,
-            "name": execution.label,
-            "position": {"x": 0, "y": 0},
-            "subBlocks": {},
-            "outputs": {},
-            "enabled": bool(payload.get("allowed", True)),
-            "data": {
-                "primitive": execution.key,
-                "capability": primitive_name,
-                "category": execution.node_kind,
-                "nodeKind": execution.node_kind,
-                "executionId": self.execution_id,
-                "step": step,
+        node_id = f"plan:{step}:{plan_task_id}".replace("/", "_")
+        self.nodes[node_id] = ExecutionNode(
+            id=node_id,
+            label=execution.label,
+            kind=execution.node_kind,
+            capability=execution.key,
+            provider=None,
+            status="queued",
+            step=step,
+            task_id=logical_task_id or None,
+            details={
+                "declaredCapability": primitive_name,
                 "planTaskId": plan_task_id,
-                "logicalTaskId": logical_task_id or None,
                 "knowledgePointId": payload.get("knowledge_point_id"),
                 "rationale": payload.get("rationale"),
                 "doneWhen": payload.get("done_when"),
+                "allowed": bool(payload.get("allowed", True)),
             },
-            "status": "queued",
-            "executionState": "queued",
-        }
-        self._planned_blocks[plan_task_id] = block_id
-        self._planned_by_shape.setdefault((execution.key, step), []).append(block_id)
+        )
+        self._planned_nodes[plan_task_id] = node_id
+        self._planned_by_shape.setdefault((execution.key, step), []).append(node_id)
         self._rebuild_planned_edges()
-        return block_id
+        return node_id
 
     def _visible_plan_ancestors(self, task_id: str, visiting: set[str] | None = None) -> set[str]:
         visiting = set(visiting or ())
         if task_id in visiting:
             return set()
         visiting.add(task_id)
-        visible = self._planned_blocks.get(task_id)
+        visible = self._planned_nodes.get(task_id)
         if visible:
             return {visible}
         result: set[str] = set()
@@ -595,12 +645,10 @@ class ExecutionProjector:
         return result
 
     def _rebuild_planned_edges(self) -> None:
-        self.workflow_state["edges"] = [
-            edge
-            for edge in self.workflow_state["edges"]
-            if (edge.get("data") or {}).get("kind") != "dependency"
+        self.state.dependencies = [
+            dependency for dependency in self.state.dependencies if dependency.kind != "dependency"
         ]
-        for task_id, target in self._planned_blocks.items():
+        for task_id, target in self._planned_nodes.items():
             for dependency in self._plan_dependencies.get(task_id, []):
                 for source in self._visible_plan_ancestors(dependency):
                     self._connect(
@@ -610,7 +658,7 @@ class ExecutionProjector:
                         status="queued",
                         label=(
                             "Capability dependency"
-                            if dependency in self._planned_blocks
+                            if dependency in self._planned_nodes
                             else "Lingxi Runtime"
                         ),
                     )
@@ -622,8 +670,8 @@ class ExecutionProjector:
             or payload.get("task_id")
             or ""
         )
-        block_id = self._planned_blocks.get(task_id)
-        if block_id is None:
+        node_id = self._planned_nodes.get(task_id)
+        if node_id is None:
             execution = visible_execution(
                 str(
                     payload.get("provider")
@@ -635,30 +683,27 @@ class ExecutionProjector:
             if execution is not None:
                 candidates = [
                     item
-                    for item in self.blocks.values()
-                    if (item.get("data") or {}).get("primitive") == execution.key
-                    and item.get("executionState") in {"queued", "pending", "running"}
+                    for item in self.nodes.values()
+                    if item.capability == execution.key
+                    and item.status in {"queued", "pending", "running"}
                 ]
                 if candidates:
                     # A repeated logical task id can have several queued
-                    # revisions.  The newest queued block is the safest
+                    # revisions.  The newest queued node is the safest
                     # fallback when an external event has no node id.
-                    block_id = str(candidates[-1]["id"])
-        if block_id is None:
+                    node_id = candidates[-1].id
+        if node_id is None:
             return None
-        block = self.blocks[block_id]
+        node = self.nodes[node_id]
         actual = visible_execution(
             str(payload.get("provider") or payload.get("agent") or payload.get("capability") or "")
         )
         if actual is not None:
-            block["name"] = actual.label
-            block["type"] = actual.display_kind
-            block["data"]["primitive"] = actual.key
-            block["data"]["category"] = actual.node_kind
-            block["data"]["nodeKind"] = actual.node_kind
-        block["status"] = status
-        block["executionState"] = status
-        block["data"]["provider"] = payload.get("provider") or payload.get("agent")
+            node.label = actual.label
+            node.capability = actual.key
+            node.kind = actual.node_kind
+        node.status = status
+        node.provider = str(payload.get("provider") or payload.get("agent") or "") or None
         for source, target in (
             ("status", "outcomeStatus"),
             ("satisfied", "satisfied"),
@@ -666,14 +711,16 @@ class ExecutionProjector:
             ("skill_id", "skillId"),
         ):
             if source in payload:
-                block["data"][target] = _json_safe(payload[source])
-        return block_id
+                node.details[target] = _json_safe(payload[source])
+        return node_id
 
-    def _promote_planned_block(self, node: str, step: int) -> tuple[str, dict[str, Any]] | None:
-        for block_id in self._planned_by_shape.get((node, step), []):
-            block = self.blocks[block_id]
-            if block.get("status") in {"queued", "pending"}:
-                return block_id, block
+    def _promote_planned_node(
+        self, capability: str, step: int
+    ) -> tuple[str, ExecutionNode] | None:
+        for node_id in self._planned_by_shape.get((capability, step), []):
+            execution_node = self.nodes[node_id]
+            if execution_node.status in {"queued", "pending"}:
+                return node_id, execution_node
         return None
 
     def _connect(
@@ -687,31 +734,26 @@ class ExecutionProjector:
     ) -> None:
         if not source or not target or source == target:
             return
-        edge_id = f"{source}->{target}"
-        if any(edge["id"] == edge_id for edge in self.workflow_state["edges"]):
+        dependency_id = f"{source}->{target}"
+        if any(dependency.id == dependency_id for dependency in self.state.dependencies):
             return
-        edge_status = status or "not-executed"
-        self.workflow_state["edges"].append(
-            {
-                "id": edge_id,
-                "source": source,
-                "target": target,
-                "type": "workflow",
-                "status": edge_status,
-                "label": label or ("Lingxi Runtime" if kind == "transition" else kind),
-                "data": {
-                    "kind": kind,
-                    "status": edge_status,
-                    "label": label or ("Lingxi Runtime" if kind == "transition" else kind),
-                },
-            }
+        dependency_status = status or "not-executed"
+        self.state.dependencies.append(
+            ExecutionDependency(
+                id=dependency_id,
+                source_node_id=source,
+                target_node_id=target,
+                kind=kind,
+                status=dependency_status,
+                label=label or ("Lingxi Runtime" if kind == "transition" else kind),
+            )
         )
 
     def consume(self, event: Any, *, agent: str = "coordinator") -> dict[str, Any]:
-        """Consume one native event and return the legacy-compatible envelope."""
+        """Consume one native event and return the public envelope."""
 
         kind = getattr(event, "kind", None)
-        node = str(getattr(event, "node", "") or agent)
+        provider = str(getattr(event, "node", "") or agent)
         metadata = {
             "execution_id": self.execution_id,
             "run_id": getattr(event, "run_id", None),
@@ -726,7 +768,7 @@ class ExecutionProjector:
         raw_kind = getattr(kind, "name", str(kind)).lower()
         raw_kind = raw_kind.removeprefix("run_")
         runtime_kind = f"run.{raw_kind}"
-        legacy_kind = runtime_kind
+        event_kind = runtime_kind
         payload: dict[str, Any] = {"runtime": metadata, "data": data}
 
         node_event_kinds = {
@@ -737,100 +779,98 @@ class ExecutionProjector:
             EventKind.NODE_CACHED,
         }
         span: dict[str, Any] | None = None
-        execution = visible_execution(node)
+        execution = visible_execution(provider)
         if kind in node_event_kinds and execution is not None:
-            block_id, block = self._ensure_block(event, agent)
-            payload["blockId"] = block_id
+            node_id, execution_node = self._ensure_node(event, agent)
+            payload["nodeId"] = node_id
             if kind is EventKind.NODE_STARTED:
-                legacy_kind = "node.started"
-                block["status"] = "running"
-                block["executionState"] = "running"
-                active = self._active_spans.get(block_id)
+                event_kind = "node.started"
+                execution_node.status = "running"
+                active = self._active_spans.get(node_id)
                 if active is None or active.get("status") != "running":
-                    attempts = sum(
-                        1 for item in self.trace_spans if item.get("blockId") == block_id
-                    )
+                    attempts = sum(1 for item in self.timeline_spans if item.get("nodeId") == node_id)
+                    started_at = _iso(getattr(event, "timestamp", None))
                     span = {
                         "id": metadata["span_id"]
-                        or (block_id if attempts == 0 else f"{block_id}:attempt:{attempts + 1}"),
-                        "name": node,
-                        "type": execution.display_kind,
-                        "blockId": block_id,
-                        "node": node,
+                        or (node_id if attempts == 0 else f"{node_id}:attempt:{attempts + 1}"),
+                        "name": execution.label,
+                        "kind": execution.display_kind,
+                        "nodeId": node_id,
+                        "capability": execution.key,
+                        "provider": provider,
                         "status": "running",
                         "attempt": attempts + 1,
-                        "startedAt": _iso(getattr(event, "timestamp", None)),
-                        "startTime": _iso(getattr(event, "timestamp", None)),
+                        "startedAt": started_at,
+                        "endedAt": started_at,
+                        "durationMs": 0,
+                        "children": [],
                         "events": [],
                     }
-                    self._active_spans[block_id] = span
-                    self.trace_spans.append(span)
+                    self._active_spans[node_id] = span
+                    self.timeline_spans.append(span)
             elif kind is EventKind.NODE_COMPLETED:
-                legacy_kind = "node.completed"
-                block["status"] = "completed"
-                block["executionState"] = "completed"
-                block["outputs"] = (
-                    data.get("update") or {} if isinstance(data, dict) else {}
-                )
-                span = self._active_spans.get(block_id)
+                event_kind = "node.completed"
+                execution_node.status = "completed"
+                execution_node.output = data.get("update") or {} if isinstance(data, dict) else {}
+                span = self._active_spans.get(node_id)
                 if span:
+                    ended_at = _iso(getattr(event, "timestamp", None))
                     span.update(
                         {
                             "status": "completed",
-                            "endedAt": _iso(getattr(event, "timestamp", None)),
-                            "endTime": _iso(getattr(event, "timestamp", None)),
-                            "output": block["outputs"],
+                            "endedAt": ended_at,
+                            "durationMs": _elapsed_ms(str(span["startedAt"]), ended_at),
+                            "output": execution_node.output,
                         }
                     )
             elif kind is EventKind.NODE_RETRYING:
-                legacy_kind = "node.retrying"
-                block["status"] = "retrying"
-                block["executionState"] = "retrying"
-                span = self._active_spans.get(block_id)
+                event_kind = "node.retrying"
+                execution_node.status = "retrying"
+                span = self._active_spans.get(node_id)
                 if span and span.get("status") == "running":
+                    ended_at = _iso(getattr(event, "timestamp", None))
                     span.update(
                         {
                             "status": "retrying",
-                            "endedAt": _iso(getattr(event, "timestamp", None)),
-                            "endTime": _iso(getattr(event, "timestamp", None)),
+                            "endedAt": ended_at,
+                            "durationMs": _elapsed_ms(str(span["startedAt"]), ended_at),
                         }
                     )
             elif kind is EventKind.NODE_FAILED:
-                legacy_kind = "node.failed"
-                block["status"] = "failed"
-                block["executionState"] = "failed"
-                span = self._active_spans.get(block_id)
+                event_kind = "node.failed"
+                execution_node.status = "failed"
+                span = self._active_spans.get(node_id)
                 if span:
+                    ended_at = _iso(getattr(event, "timestamp", None))
                     span.update(
                         {
                             "status": "failed",
-                            "endedAt": _iso(getattr(event, "timestamp", None)),
-                            "endTime": _iso(getattr(event, "timestamp", None)),
+                            "endedAt": ended_at,
+                            "durationMs": _elapsed_ms(str(span["startedAt"]), ended_at),
                             "error": data,
                         }
                     )
             else:
-                legacy_kind = "node.cached"
-                block["status"] = "cached"
-                block["executionState"] = "cached"
+                event_kind = "node.cached"
+                execution_node.status = "cached"
             if kind is EventKind.NODE_STARTED:
                 step = metadata["step"]
-                prior = self._last_blocks_by_step.get(step - 1, [])
+                prior = self._last_nodes_by_step.get(step - 1, [])
                 for source in prior:
-                    self._connect(source, block_id, status="success")
-                self._last_blocks_by_step.setdefault(step, []).append(block_id)
-                if len(self._last_blocks_by_step[step]) > 1:
+                    self._connect(source, node_id, status="success")
+                self._last_nodes_by_step.setdefault(step, []).append(node_id)
+                if len(self._last_nodes_by_step[step]) > 1:
                     parallel_id = f"parallel:{step}"
-                    self.workflow_state["parallels"].setdefault(
-                        parallel_id, {"id": parallel_id, "blockIds": []}
-                    )["blockIds"].append(block_id)
-                if self._node_counts.get(node, 0) > 1:
-                    loop_id = f"loop:{node}"
-                    self.workflow_state["loops"].setdefault(
-                        loop_id, {"id": loop_id, "node": node, "iterations": []}
-                    )["iterations"].append(block_id)
+                    self.state.groups["parallels"].setdefault(
+                        parallel_id, {"id": parallel_id, "nodeIds": []}
+                    )["nodeIds"].append(node_id)
+                if self._node_counts.get(provider, 0) > 1:
+                    loop_id = f"loop:{provider}"
+                    self.state.groups["loops"].setdefault(
+                        loop_id, {"id": loop_id, "provider": provider, "iterations": []}
+                    )["iterations"].append(node_id)
         elif kind in node_event_kinds:
-            legacy_kind = {
+            event_kind = {
                 EventKind.NODE_STARTED: "node.started",
                 EventKind.NODE_COMPLETED: "node.completed",
                 EventKind.NODE_FAILED: "node.failed",
@@ -838,17 +878,19 @@ class ExecutionProjector:
                 EventKind.NODE_CACHED: "node.cached",
             }[kind]
             payload["hiddenBy"] = "lingxi-runtime"
-            payload["runtimeMechanic"] = node
+            payload["runtimeMechanic"] = provider
         elif kind is EventKind.INTERRUPT_RAISED:
-            legacy_kind = "interrupt.raised"
+            event_kind = "interrupt.raised"
             payload["runtime"]["control"] = "human_in_the_loop"
-            self.workflow_state["metadata"]["paused"] = True
+            self.state.paused = True
         elif runtime_kind == "run.resumed":
-            legacy_kind = "run.resumed"
-            self.workflow_state["metadata"].update({"paused": False, "status": "running"})
+            event_kind = "run.resumed"
+            self.state.paused = False
+            self.state.status = "running"
         elif kind is EventKind.RUN_PAUSED:
-            legacy_kind = "run.paused"
-            self.workflow_state["metadata"].update({"paused": True, "status": "paused"})
+            event_kind = "run.paused"
+            self.state.paused = True
+            self.state.status = "paused"
         elif kind in {
             EventKind.RUN_COMPLETED,
             EventKind.RUN_FAILED,
@@ -856,37 +898,35 @@ class ExecutionProjector:
             EventKind.RUN_TIMED_OUT,
             EventKind.RUN_BUDGET_EXCEEDED,
         }:
-            self.workflow_state["metadata"].update(
-                {"terminal": True, "status": runtime_kind.removeprefix("run.")}
-            )
+            self.state.terminal = True
+            self.state.status = runtime_kind.removeprefix("run.")
         elif kind is EventKind.RUN_STARTED:
-            legacy_kind = "run.started"
-            self.workflow_state["metadata"].update(
-                {"startedAt": _iso(getattr(event, "timestamp", None)), "status": "running"}
-            )
+            event_kind = "run.started"
+            self.state.metadata["startedAt"] = _iso(getattr(event, "timestamp", None))
+            self.state.status = "running"
         elif kind is EventKind.STATE_UPDATED:
             update: dict[str, Any] = dict(data) if isinstance(data, dict) else {}
             if isinstance(data, dict):
                 candidate_update = data.get("values") or data.get("update") or data
                 if isinstance(candidate_update, dict):
                     update = candidate_update
-            self.workflow_state["variables"].update(update if isinstance(update, dict) else {})
-            legacy_kind = "state.updated"
+            self.state.variables.update(update if isinstance(update, dict) else {})
+            event_kind = "state.updated"
         elif kind is EventKind.CUSTOM:
             value = data.get("value") if isinstance(data, dict) else None
             if isinstance(value, dict) and value.get("type"):
-                legacy_kind = str(value["type"])
-                if legacy_kind == "node.appeared":
+                event_kind = str(value["type"])
+                if event_kind == "node.appeared":
                     payload_data = {str(k): _json_safe(v) for k, v in value.items()}
-                    planned_block_id = self._ensure_planned_block(payload_data)
-                    if planned_block_id is not None:
-                        payload["blockId"] = planned_block_id
+                    planned_node_id = self._ensure_planned_node(payload_data)
+                    if planned_node_id is not None:
+                        payload["nodeId"] = planned_node_id
                 payload.update(
                     {k: _json_safe(v) for k, v in value.items() if k not in {"type", "agent"}}
                 )
 
         return {
-            "kind": legacy_kind,
+            "kind": event_kind,
             "agent": agent,
             "payload": payload,
             "runtime": metadata,
@@ -896,7 +936,7 @@ class ExecutionProjector:
     def consume_runtime_event(
         self, kind: str, payload: dict[str, Any], *, agent: str = "orchestrator"
     ) -> dict[str, Any]:
-        """Project Lingxi decision-trace events that are not native graph events."""
+        """Project Lingxi decision-spans events that are not native graph events."""
         safe_payload = _json_safe(payload)
         result: dict[str, Any] = {
             "kind": kind,
@@ -909,10 +949,10 @@ class ExecutionProjector:
             },
         }
         if kind == "node.appeared" and isinstance(safe_payload, dict):
-            block_id = self._ensure_planned_block(safe_payload)
+            node_id = self._ensure_planned_node(safe_payload)
             result["payload"] = dict(safe_payload)
-            if block_id is not None:
-                result["payload"]["blockId"] = block_id
+            if node_id is not None:
+                result["payload"]["nodeId"] = node_id
             else:
                 result["payload"]["hiddenBy"] = "lingxi-runtime"
         elif kind in {
@@ -931,32 +971,23 @@ class ExecutionProjector:
                 "node.failed": "failed",
                 "node.retrying": "retrying",
             }[kind]
-            block_id = self._update_planned_execution(safe_payload, status=status)
-            if block_id is not None:
-                result["payload"] = {**safe_payload, "blockId": block_id}
+            node_id = self._update_planned_execution(safe_payload, status=status)
+            if node_id is not None:
+                result["payload"] = {**safe_payload, "nodeId": node_id}
                 if kind in {"node.held", "node.revising"}:
                     result["payload"]["held" if kind == "node.held" else "revising"] = True
         return result
 
     def snapshot(self) -> dict[str, Any]:
-        execution_snapshot = stored_execution_snapshot(
-            self.workflow_state,
-            execution_id=self.execution_id,
-            task_id=self.task_id,
-            graph_version=self.graph_version,
-        )
-        timeline = ExecutionTimeline(
-            execution_id=self.execution_id,
-            spans=tuple(ExecutionSpan.from_mapping(item) for item in self.trace_spans),
-        )
+        timeline = ExecutionTimeline.from_native(self.execution_id, self.timeline_spans)
         return {
-            "snapshot": execution_snapshot,
+            "snapshot": self.state.to_dict(),
             "timeline": timeline.to_dict(),
         }
 
 
-def _safe_trace_records(records: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    """Apply the V2 public event envelope before trace replay.
+def _safe_timeline_records(records: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Apply the V2 public event envelope before timeline replay.
 
     Reasoning deltas and raw tool call/result payloads are deliberately never
     reconstructed into the learner-facing execution timeline.
@@ -985,7 +1016,7 @@ def replay_execution_timeline(
     ended_at: Any = None,
 ) -> list[dict[str, Any]]:
     spans = _replay_timeline(
-        _safe_trace_records(records),
+        _safe_timeline_records(records),
         execution_id=execution_id,
         task_id=task_id,
         graph_version=graph_version,
@@ -994,8 +1025,8 @@ def replay_execution_timeline(
         started_at=started_at,
         ended_at=ended_at,
     )
-    return [ExecutionSpan.from_mapping(item).to_dict() for item in spans]
+    return spans
 
 
-def execution_timeline_total_tokens(trace: list[dict[str, Any]]) -> int:
-    return timeline_total_tokens(trace)
+def execution_timeline_total_tokens(spans: list[dict[str, Any]]) -> int:
+    return timeline_total_tokens(spans)

@@ -40,7 +40,6 @@ import { isChatEnabled } from '@/lib/core/config/env-flags'
 import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import type { ChatContext } from '@/lib/lingxi/chat-context'
 import { filterHiddenOutputKeys } from '@/lib/logs/execution/trace-spans/trace-spans'
-import type { TraceSpan } from '@/lib/logs/types'
 import { sendMothershipMessage } from '@/lib/mothership/events'
 import { formatDuration } from '@/lib/utils/formatting'
 import {
@@ -78,7 +77,10 @@ export const RunOutputSection = memo(
     const { copied, copy } = useCopyToClipboard({ resetMs: 1500 })
 
     const [isContextMenuOpen, setIsContextMenuOpen] = useState(false)
-    const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
+    const [contextMenuPosition, setContextMenuPosition] = useState({
+      x: 0,
+      y: 0,
+    })
 
     const {
       isSearchActive,
@@ -280,7 +282,9 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
     ...logDetailsTabParam.parser,
     ...logDetailsTabUrlKeys,
   })
-  const { copied: copiedRunId, copy: copyRunId } = useCopyToClipboard({ resetMs: 1500 })
+  const { copied: copiedRunId, copy: copyRunId } = useCopyToClipboard({
+    resetMs: 1500,
+  })
 
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
@@ -312,7 +316,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
    */
   const isLikelyExecution = !!log.identity.executionId && log.trigger?.type !== 'mothership'
   const hasExecutionDetail =
-    (log.trigger?.type === 'manual' && log.durationMs != null) || !!log.traceSpans
+    (log.trigger?.type === 'manual' && log.durationMs != null) || !!log.timelineSpans
 
   const hasCostInfo = hasExecutionDetail && log.costTotalDollars != null
   const showRunSnapshot =
@@ -322,8 +326,7 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
     !permissionConfig.hideTraceSpans
 
   const showTraceTab = !permissionConfig.hideTraceSpans && isLikelyExecution
-  // double-cast-allowed: contract schema makes duration/startTime optional for legacy persisted JSON; runtime data always supplies them.
-  const traceSpans = log.traceSpans as unknown as TraceSpan[] | undefined
+  const timelineSpans = log.timelineSpans
   const runtimeEvents = log.runtimeEvents
 
   const showEventsTab = isLikelyExecution && runtimeEvents.length > 0
@@ -596,9 +599,9 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
         {/* Trace Tab */}
         {showTraceTab && resolvedTab === 'trace' && (
           <div className='mt-3 min-h-0 flex-1 overflow-hidden focus-visible:outline-none'>
-            {traceSpans?.length ? (
+            {timelineSpans?.length ? (
               <TraceView
-                traceSpans={traceSpans}
+                timelineSpans={timelineSpans}
                 runCostDollars={log.costTotalDollars ?? undefined}
               />
             ) : log.hasDetailPayload ? (
@@ -656,7 +659,6 @@ export function LogDetailsContent({ log, onActiveTabChange }: LogDetailsContentP
       {log.identity.executionId && (
         <ExecutionSnapshot
           executionId={log.identity.executionId}
-          traceSpans={traceSpans}
           isModal
           isOpen={isExecutionSnapshotOpen}
           onClose={() => setIsExecutionSnapshotOpen(false)}

@@ -21,10 +21,9 @@ from typing import Any
 from ..runtime.execution import (
     execution_timeline_total_tokens,
     replay_execution_timeline,
-    stored_execution_snapshot,
+    require_execution_snapshot,
 )
 from ..runtime.public_projection import PublicProjector
-from ..runtime.timeline import ExecutionSpan
 from ..runtime.trajectory import build_trajectory_projection
 from ..store.repositories.agent_tasks import AgentTaskRepository
 from ..store.repositories.runtime import RuntimeRepository
@@ -293,12 +292,6 @@ class AgentEventService:
             started_at=started,
             ended_at=ended,
         )
-        if len(trace) <= 1 and row.trace_spans:
-            trace = [
-                ExecutionSpan.from_mapping(item).to_dict()
-                for item in row.trace_spans
-                if isinstance(item, Mapping)
-            ]
         trajectory = build_trajectory_projection(
             row,
             records,
@@ -312,8 +305,8 @@ class AgentEventService:
             "taskId": row.task_id,
             "graphVersion": row.graph_version,
             "schemaVersion": "lingxilearn.execution.v1",
-            "snapshot": stored_execution_snapshot(
-                row.workflow_state,
+            "snapshot": require_execution_snapshot(
+                row.execution_snapshot,
                 execution_id=row.id,
                 task_id=row.task_id,
                 graph_version=row.graph_version,

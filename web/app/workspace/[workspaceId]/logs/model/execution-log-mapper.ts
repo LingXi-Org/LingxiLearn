@@ -2,10 +2,8 @@ import type {
   ExecutionLogDetail,
   ExecutionLogRow,
   ExecutionLogSummary,
-  LogTraceSpan,
 } from '@/lib/api/contracts/logs'
 import { dollarsToCredits } from '@/lib/billing/credits/conversion'
-import { timelineSpansToTraceSpans } from '@/lib/lingxi/runtime-graph-adapter'
 import type {
   ExecutionLogDetailView,
   ExecutionLogSummaryView,
@@ -62,7 +60,11 @@ export function resolveTriggerPresentation(
   if (!trigger) return null
   const core = CORE_TRIGGER_PRESENTATION[trigger]
   if (core) return { type: trigger, label: core.label, color: core.color }
-  return { type: trigger, label: formatProviderLabel(trigger), color: DEFAULT_TRIGGER_COLOR }
+  return {
+    type: trigger,
+    label: formatProviderLabel(trigger),
+    color: DEFAULT_TRIGGER_COLOR,
+  }
 }
 
 /** Normalizes a raw wire status into the observability run status. */
@@ -130,10 +132,16 @@ export function resolveExecutionSource(wire: WireSourceFields): ExecutionRunSour
   // `agent-task` is the current runtime trigger token; `mothership` is the
   // legacy job token still present on older rows.
   if (wire.trigger === 'agent-task' || wire.trigger === 'mothership') {
-    return { kind: 'agent-task', title: wire.jobTitle?.trim() || UNTITLED_AGENT_TASK_LABEL }
+    return {
+      kind: 'agent-task',
+      title: wire.jobTitle?.trim() || UNTITLED_AGENT_TASK_LABEL,
+    }
   }
   if (wire.workflow?.id || wire.workflowId) {
-    return { kind: 'workflow', title: wire.workflow?.name || UNKNOWN_RUN_SOURCE_LABEL }
+    return {
+      kind: 'workflow',
+      title: wire.workflow?.name || UNKNOWN_RUN_SOURCE_LABEL,
+    }
   }
   return { kind: 'unknown', title: UNKNOWN_RUN_SOURCE_LABEL }
 }
@@ -170,7 +178,7 @@ export function mapExecutionLogSummary(wire: ExecutionLogSummary): ExecutionLogS
 
 /**
  * Maps a wire detail (or a summary mid-load) to the native detail view model.
- * Trajectory, trace spans, and runtime events pass through untouched — they are
+ * Trajectory, timeline spans, and runtime events pass through untouched — they are
  * the canonical projections consumed by the trajectory projector downstream.
  */
 export function mapExecutionLogDetail(
@@ -183,9 +191,7 @@ export function mapExecutionLogDetail(
     ...summary,
     taskId: extractTaskId(runInput, executionData?.taskId),
     hasDetailPayload: executionData != null,
-    traceSpans: timelineSpansToTraceSpans(
-      executionData?.timeline?.spans
-    ) as unknown as LogTraceSpan[],
+    timelineSpans: executionData?.timeline?.spans,
     trajectory: executionData?.trajectory,
     runtimeEvents: executionData?.runtimeEvents ?? [],
     files: wire.files ?? null,

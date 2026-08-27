@@ -876,8 +876,8 @@ class LingxiGraphRuntimeAdapter:
                 return
             await self._runtime.update_agent_execution(
                 execution_id,
-                workflow_state=current_execution_snapshot,
-                trace_spans=projector.snapshot()["timeline"]["spans"],
+                execution_snapshot=current_execution_snapshot,
+                timeline_spans=projector.snapshot()["timeline"]["spans"],
                 event_count=await self._agent_tasks.agent_event_count_for_execution(execution_id),
             )
             self._events.notify(task_id)
@@ -1040,8 +1040,8 @@ class LingxiGraphRuntimeAdapter:
                     await self._runtime.update_agent_execution(
                         execution_id,
                         status="cancelled",
-                        workflow_state=snapshot["snapshot"],
-                        trace_spans=snapshot["timeline"]["spans"],
+                        execution_snapshot=snapshot["snapshot"],
+                        timeline_spans=snapshot["timeline"]["spans"],
                         ended=True,
                     )
                     self._events.notify(task_id)
@@ -1183,8 +1183,8 @@ class LingxiGraphRuntimeAdapter:
                 execution_id,
                 status=failure_status,
                 error=f"运行失败：{type(exc).__name__}: {detail}",
-                workflow_state=execution_snapshot,
-                trace_spans=snapshot["timeline"]["spans"],
+                execution_snapshot=execution_snapshot,
+                timeline_spans=snapshot["timeline"]["spans"],
                 ended=True,
             )
             self._events.notify(task_id)
@@ -1241,8 +1241,8 @@ class LingxiGraphRuntimeAdapter:
             status="awaiting_user"
             if status == "awaiting_user"
             else ("completed" if status in {"completed", "handed_off"} else status),
-            workflow_state=projector.snapshot()["snapshot"],
-            trace_spans=projector.snapshot()["timeline"]["spans"],
+            execution_snapshot=projector.snapshot()["snapshot"],
+            timeline_spans=projector.snapshot()["timeline"]["spans"],
             error="; ".join(errors),
             ended=status not in {"awaiting_user", "partial"},
         )

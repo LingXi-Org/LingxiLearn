@@ -159,7 +159,14 @@ async def test_existing_0017_sqlite_file_upgrades_without_data_loss(legacy_sqlit
                 await conn.exec_driver_sql("PRAGMA table_info('agent_executions')")
             ).fetchall()
         }
-        assert {"turn_id", "parent_execution_id", "resumes_execution_id"} <= execution_columns
+        assert {
+            "turn_id",
+            "parent_execution_id",
+            "resumes_execution_id",
+            "execution_snapshot",
+            "timeline_spans",
+        } <= execution_columns
+        assert not {"workflow_state", "trace_spans"} & execution_columns
         command_columns = {
             row[1]
             for row in (
@@ -193,7 +200,7 @@ async def test_existing_0017_sqlite_file_upgrades_without_data_loss(legacy_sqlit
         assert protocol == 0
 
         marker = (await conn.exec_driver_sql("SELECT version_num FROM alembic_version")).scalar()
-        assert marker == SQLITE_SCHEMA_HEAD == "0021_command_delivery_identity"
+        assert marker == SQLITE_SCHEMA_HEAD == "0022_native_execution_snapshots"
 
 
 async def test_repaired_file_accepts_v1_events_and_agent_runs(legacy_sqlite_db) -> None:
