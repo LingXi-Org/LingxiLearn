@@ -395,7 +395,7 @@ export const NativeExecutionSnapshotResponseSchema = z.object({
 export type NativeExecutionSnapshotResponse = z.output<typeof NativeExecutionSnapshotResponseSchema>;
 
 /** One recursive span in the LingxiLearn execution timeline. */
-export const ExecutionSpanResponseSchema = z.object({
+export const ExecutionSpanResponseSchema: z.ZodType<any> = z.lazy(() => z.object({
   children: z.array(ExecutionSpanResponseSchema),
   durationMs: z.number().int(),
   endedAt: z.string(),
@@ -404,7 +404,7 @@ export const ExecutionSpanResponseSchema = z.object({
   name: z.string(),
   startedAt: z.string(),
   status: z.string(),
-}).catchall(z.unknown());
+}).catchall(z.unknown()));
 export type ExecutionSpanResponse = z.output<typeof ExecutionSpanResponseSchema>;
 
 export const ExecutionTimelineResponseSchema = z.object({

@@ -257,9 +257,15 @@ function generateSchemasFile(schemas: Record<string, OpenAPISchema>): string {
 
   for (const name of sortedNames) {
     const s = schemas[name];
+    const isSelfRecursive = collectRefs(s).has(name);
     if (s.type !== "object" || !s.properties) {
       // Non-object top-level schema (rare)
-      lines.push(`export const ${schemaVarName(name)} = ${toZod(s)};`);
+      const schemaExpr = toZod(s);
+      lines.push(
+        isSelfRecursive
+          ? `export const ${schemaVarName(name)}: z.ZodType<any> = z.lazy(() => ${schemaExpr});`
+          : `export const ${schemaVarName(name)} = ${schemaExpr};`,
+      );
     } else {
       const required = (s.required as string[]) || [];
       const props = s.properties as Record<string, OpenAPISchema>;
@@ -282,7 +288,11 @@ function generateSchemasFile(schemas: Record<string, OpenAPISchema>): string {
       if (s.description) {
         lines.push(`/** ${(s.description as string).replace(/\*\//g, "* /")} */`);
       }
-      lines.push(`export const ${schemaVarName(name)} = ${objExpr};`);
+      lines.push(
+        isSelfRecursive
+          ? `export const ${schemaVarName(name)}: z.ZodType<any> = z.lazy(() => ${objExpr});`
+          : `export const ${schemaVarName(name)} = ${objExpr};`,
+      );
     }
 
     lines.push(`export type ${name} = z.output<typeof ${schemaVarName(name)}>;`);
