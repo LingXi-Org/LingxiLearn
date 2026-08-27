@@ -12,8 +12,8 @@ import type {
   AgentTaskEvent,
   AgentTaskListItem,
   AgentTaskSnapshot,
+  ExecutionSnapshotResponse,
   QuizSubmissionSnapshot,
-  SimExecutionSnapshot,
 } from '@/lib/lingxi/types'
 import { request } from '../transport'
 import type { SseOptions } from '../transport/sse'
@@ -150,7 +150,7 @@ export function getRuntimeGraph(taskId: string) {
     latestExecutionId: string | null
     status: string
     updatedAt: string | null
-    workflowState: Record<string, unknown>
+    executionSnapshot: Record<string, unknown>
   }>(`/agent-tasks/${taskId}/runtime-graph`)
 }
 
@@ -303,7 +303,7 @@ export async function uploadAttachment(file: File) {
 // ---------------------------------------------------------------------------
 
 export function getExecutionSnapshot(executionId: string) {
-  return request<SimExecutionSnapshot>(`/logs/execution/${encodeURIComponent(executionId)}`)
+  return request<ExecutionSnapshotResponse>(`/logs/execution/${encodeURIComponent(executionId)}`)
 }
 
 export function getLogByExecution(executionId: string) {

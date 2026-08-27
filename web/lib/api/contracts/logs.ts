@@ -237,6 +237,29 @@ export const traceSpanSchema: z.ZodType<LogTraceSpan> = z
 
 export const traceSpansSchema = z.array(traceSpanSchema)
 
+export const executionTimelineSchema = z.object({
+  schemaVersion: z.literal('lingxilearn.timeline.v1'),
+  executionId: z.string(),
+  spans: z.array(z.record(z.string(), z.unknown())),
+  totalTokens: z.number(),
+  waitingForUserMs: z.number(),
+})
+
+export const nativeExecutionSnapshotSchema = z.object({
+  schemaVersion: z.literal('lingxilearn.execution.v1'),
+  executionId: z.string(),
+  taskId: z.string(),
+  graphVersion: z.string(),
+  status: z.string(),
+  paused: z.boolean(),
+  terminal: z.boolean(),
+  nodes: z.record(z.string(), z.record(z.string(), z.unknown())),
+  dependencies: z.array(z.record(z.string(), z.unknown())),
+  variables: z.record(z.string(), z.unknown()),
+  groups: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+})
+
 export const runtimeEventSchema = z.object({
   sequence: z.number().optional(),
   kind: z.string(),
@@ -307,7 +330,7 @@ const executionDataDetailSchema = z
   .object({
     totalDuration: z.number().nullable().optional(),
     enhanced: z.literal(true).optional(),
-    traceSpans: traceSpansSchema.optional(),
+    timeline: executionTimelineSchema.optional(),
     trajectory: trajectorySchema.optional(),
     runtimeEvents: z.array(runtimeEventSchema).optional(),
     blockExecutions: z.array(blockExecutionSchema).optional(),
@@ -404,19 +427,17 @@ export const dashboardStatsResponseSchema = z.object({
 
 export const executionSnapshotDataSchema = z.object({
   executionId: z.string(),
-  workflowId: z.string().nullable(),
-  workflowState: z.record(z.string(), z.unknown()).nullable(),
-  traceSpans: z.array(z.record(z.string(), z.unknown())).optional(),
+  schemaVersion: z.literal('lingxilearn.execution.v1'),
+  snapshot: nativeExecutionSnapshotSchema,
+  timeline: executionTimelineSchema,
   trajectory: trajectorySchema.optional(),
   status: z.string().optional(),
   taskId: z.string().optional(),
   graphVersion: z.string().optional(),
-  projectionVersion: z.string().optional(),
-  childWorkflowSnapshots: z.record(z.string(), z.unknown()).optional(),
   executionMetadata: z.object({
     trigger: z.string().nullable(),
-    startedAt: z.string(),
-    endedAt: z.string().optional(),
+    startedAt: z.string().nullable(),
+    endedAt: z.string().nullable().optional(),
     totalDurationMs: z.number().nullable().optional(),
     cost: z.unknown().nullable(),
     totalTokens: z.number().nullable().optional(),

@@ -1410,6 +1410,236 @@
         "title": "DocumentTagSaveResponse",
         "type": "object"
       },
+      "ExecutionMetadataResponse": {
+        "properties": {
+          "cost": {
+            "title": "Cost"
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endedat"
+          },
+          "scheduleId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduleid"
+          },
+          "scheduledFor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduledfor"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "totalDurationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totaldurationms"
+          },
+          "totalTokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totaltokens"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          }
+        },
+        "title": "ExecutionMetadataResponse",
+        "type": "object"
+      },
+      "ExecutionSnapshotResponse": {
+        "properties": {
+          "eventLog": {
+            "additionalProperties": true,
+            "title": "Eventlog",
+            "type": "object"
+          },
+          "executionId": {
+            "title": "Executionid",
+            "type": "string"
+          },
+          "executionMetadata": {
+            "$ref": "#/components/schemas/ExecutionMetadataResponse"
+          },
+          "graphVersion": {
+            "title": "Graphversion",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "lingxilearn.execution.v1",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/NativeExecutionSnapshotResponse"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "taskId": {
+            "title": "Taskid",
+            "type": "string"
+          },
+          "timeline": {
+            "$ref": "#/components/schemas/ExecutionTimelineResponse"
+          },
+          "trajectory": {
+            "additionalProperties": true,
+            "title": "Trajectory",
+            "type": "object"
+          }
+        },
+        "required": [
+          "executionId",
+          "status",
+          "taskId",
+          "graphVersion",
+          "schemaVersion",
+          "snapshot",
+          "timeline",
+          "executionMetadata"
+        ],
+        "title": "ExecutionSnapshotResponse",
+        "type": "object"
+      },
+      "ExecutionSpanResponse": {
+        "additionalProperties": true,
+        "description": "One recursive span in the LingxiLearn execution timeline.",
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionSpanResponse"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "durationMs": {
+            "title": "Durationms",
+            "type": "integer"
+          },
+          "endedAt": {
+            "title": "Endedat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "startedAt": {
+            "title": "Startedat",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "status",
+          "startedAt",
+          "endedAt",
+          "durationMs"
+        ],
+        "title": "ExecutionSpanResponse",
+        "type": "object"
+      },
+      "ExecutionTimelineResponse": {
+        "properties": {
+          "executionId": {
+            "title": "Executionid",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "lingxilearn.timeline.v1",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionSpanResponse"
+            },
+            "title": "Spans",
+            "type": "array"
+          },
+          "totalTokens": {
+            "default": 0,
+            "title": "Totaltokens",
+            "type": "integer"
+          },
+          "waitingForUserMs": {
+            "default": 0,
+            "title": "Waitingforuserms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "executionId"
+        ],
+        "title": "ExecutionTimelineResponse",
+        "type": "object"
+      },
       "FileDownloadUrlResponse": {
         "properties": {
           "downloadUrl": {
@@ -3213,6 +3443,81 @@
         "title": "MoveItemsResult",
         "type": "object"
       },
+      "NativeExecutionSnapshotResponse": {
+        "properties": {
+          "dependencies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "executionId": {
+            "title": "Executionid",
+            "type": "string"
+          },
+          "graphVersion": {
+            "title": "Graphversion",
+            "type": "string"
+          },
+          "groups": {
+            "additionalProperties": true,
+            "title": "Groups",
+            "type": "object"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "nodes": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Nodes",
+            "type": "object"
+          },
+          "paused": {
+            "default": false,
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "schemaVersion": {
+            "const": "lingxilearn.execution.v1",
+            "title": "Schemaversion",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "taskId": {
+            "title": "Taskid",
+            "type": "string"
+          },
+          "terminal": {
+            "default": false,
+            "title": "Terminal",
+            "type": "boolean"
+          },
+          "variables": {
+            "additionalProperties": true,
+            "title": "Variables",
+            "type": "object"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "executionId",
+          "taskId",
+          "graphVersion",
+          "status"
+        ],
+        "title": "NativeExecutionSnapshotResponse",
+        "type": "object"
+      },
       "NativeSkillInfo": {
         "description": "Union of the registry-backed and personal skill wire shapes.\n\nThe ``/skills`` catalogue merges two sources; fields present in only one\nsource stay optional so the merged list remains one schema.",
         "properties": {
@@ -3924,6 +4229,11 @@
             "title": "Executiongraph",
             "type": "object"
           },
+          "executionSnapshot": {
+            "additionalProperties": true,
+            "title": "Executionsnapshot",
+            "type": "object"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -3962,11 +4272,6 @@
               }
             ],
             "title": "Updatedat"
-          },
-          "workflowState": {
-            "additionalProperties": true,
-            "title": "Workflowstate",
-            "type": "object"
           }
         },
         "required": [
@@ -7181,7 +7486,7 @@
     },
     "/api/agent-tasks/{task_id}/runtime-graph": {
       "get": {
-        "description": "Return the durable Sim-compatible runtime graph for this task.\n\n``executionGraph`` is the canonical V1 graph whose nodes are AgentRuns --\nthe same identities the chat renders (issue #18 section 14).\n``workflowState`` remains the legacy heuristic projection for today's UI.",
+        "description": "Return the durable LingxiLearn execution graph for this task.\n\n``executionGraph`` is the canonical V1 graph whose nodes are AgentRuns --\nthe same identities the chat renders (issue #18 section 14).\n``executionSnapshot`` is the learner-meaningful view used by Chat.",
         "operationId": "agent_task_runtime_graph_api_agent_tasks__task_id__runtime_graph_get",
         "parameters": [
           {
@@ -9820,9 +10125,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Execution Snapshot Api Logs Execution  Execution Id  Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExecutionSnapshotResponse"
                 }
               }
             },

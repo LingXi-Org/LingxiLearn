@@ -18,6 +18,10 @@ import {
   ModalHeader,
 } from '@/components/ui-kit'
 import { CircleAlert } from '@/components/ui-kit/icons'
+import {
+  executionSnapshotToCanvasState,
+  timelineSpansToTraceSpans,
+} from '@/lib/lingxi/runtime-graph-adapter'
 import { userFacingError } from '@/lib/product-copy'
 import type { WorkflowState } from '@/lib/workflows/domain/workflow'
 import { Preview } from '@/app/workspace/[workspaceId]/components/preview'
@@ -87,10 +91,9 @@ export function ExecutionSnapshot({
     closeMenu()
   }
 
-  const workflowState = data?.workflowState as WorkflowState | undefined
-  const childWorkflowSnapshots = data?.childWorkflowSnapshots as
-    | Record<string, WorkflowState>
-    | undefined
+  const workflowState = data
+    ? (executionSnapshotToCanvasState(data.snapshot) as unknown as WorkflowState)
+    : undefined
 
   const renderContent = () => {
     if (isLoading) {
@@ -161,8 +164,9 @@ export function ExecutionSnapshot({
       <Preview
         key={executionId}
         workflowState={workflowState}
-        traceSpans={traceSpans ?? (data?.traceSpans as TraceSpan[] | undefined)}
-        childWorkflowSnapshots={childWorkflowSnapshots}
+        traceSpans={
+          traceSpans ?? (timelineSpansToTraceSpans(data?.timeline.spans) as TraceSpan[] | undefined)
+        }
         className={className}
         height={height}
         width={width}

@@ -27,7 +27,7 @@ export interface WorkflowNodeActivity {
 export interface WorkflowsEditorRuntime {
   task: AgentTaskSnapshot | null
   events: AgentTaskEvent[]
-  workflowState?: Record<string, unknown> | null
+  executionSnapshot?: Record<string, unknown> | null
 }
 
 export interface WorkflowsEditorLoopProps {

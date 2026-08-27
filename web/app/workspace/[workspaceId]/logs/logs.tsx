@@ -16,6 +16,7 @@ import {
 } from '@/components/ui-kit'
 import { Download } from '@/components/ui-kit/icons'
 import { formatDateShort } from '@/lib/core/utils/date-display'
+import { timelineSpansToTraceSpans } from '@/lib/lingxi/runtime-graph-adapter'
 import { hasActiveFilters } from '@/lib/logs/filters'
 import { getTriggerOptions } from '@/lib/logs/get-trigger-options'
 import { formatDuration } from '@/lib/utils/formatting'
@@ -364,7 +365,9 @@ export default function Logs() {
       {detail.preview.logId !== null && detail.preview.detail?.executionId && (
         <ExecutionSnapshot
           executionId={detail.preview.detail.executionId}
-          traceSpans={detail.preview.detail.executionData?.traceSpans}
+          traceSpans={timelineSpansToTraceSpans(
+            detail.preview.detail.executionData?.timeline?.spans
+          )}
           isModal
           isOpen={detail.preview.logId !== null}
           onClose={detail.preview.close}

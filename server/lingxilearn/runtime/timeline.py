@@ -1,10 +1,9 @@
-"""Full-fidelity Sim trace projection for LingxiGraph executions.
+"""LingxiLearn's full-fidelity execution timeline.
 
 The workflow canvas intentionally shows only learner-meaningful semantic nodes.
 Logs have a different job: every executable primitive and every control-plane
 decision must remain inspectable.  This module builds that second, exhaustive
-view without changing what the graph executes or what the learner sees on the
-canvas.
+view without changing what the graph executes or what the learner sees.
 
 The projector accepts both native :class:`lingxigraph.Event` values and the
 durable Agent Task event vocabulary.  Consequently the exact same projection
@@ -43,7 +42,7 @@ _NODE_EVENTS = {
 
 class PrimitiveLike(Protocol):
     @property
-    def sim_type(self) -> str: ...
+    def display_kind(self) -> str: ...
 
     @property
     def category(self) -> str: ...
@@ -60,10 +59,88 @@ PrimitiveResolver = Callable[[str], PrimitiveLike]
 
 @dataclass(frozen=True, slots=True)
 class _FallbackPrimitive:
-    sim_type: str = "function"
+    display_kind: str = "function"
     category: str = "runtime"
     idempotent: bool = False
     label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionSpan:
+    """One hierarchical interval in a LingxiLearn execution timeline."""
+
+    id: str
+    name: str
+    kind: str
+    status: str
+    started_at: str
+    ended_at: str
+    duration_ms: int
+    children: tuple[ExecutionSpan, ...] = ()
+    attributes: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> ExecutionSpan:
+        known = {
+            "id",
+            "name",
+            "type",
+            "kind",
+            "status",
+            "startTime",
+            "startedAt",
+            "endTime",
+            "endedAt",
+            "duration",
+            "durationMs",
+            "children",
+        }
+        return cls(
+            id=str(value.get("id") or ""),
+            name=str(value.get("name") or "Execution"),
+            kind=str(value.get("kind") or value.get("type") or "function"),
+            status=str(value.get("status") or "running"),
+            started_at=str(value.get("startedAt") or value.get("startTime") or ""),
+            ended_at=str(value.get("endedAt") or value.get("endTime") or ""),
+            duration_ms=max(0, int(value.get("durationMs") or value.get("duration") or 0)),
+            children=tuple(
+                cls.from_mapping(item)
+                for item in value.get("children") or ()
+                if isinstance(item, Mapping)
+            ),
+            attributes={key: _json_safe(item) for key, item in value.items() if key not in known},
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "kind": self.kind,
+            "status": self.status,
+            "startedAt": self.started_at,
+            "endedAt": self.ended_at,
+            "durationMs": self.duration_ms,
+            "children": [child.to_dict() for child in self.children],
+            **_json_safe(self.attributes),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionTimeline:
+    """Ordered, hierarchical history of one execution."""
+
+    execution_id: str
+    spans: tuple[ExecutionSpan, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        root = self.spans[0].attributes if self.spans else {}
+        return {
+            "schemaVersion": "lingxilearn.timeline.v1",
+            "executionId": self.execution_id,
+            "spans": [span.to_dict() for span in self.spans],
+            "totalTokens": timeline_total_tokens([span.to_dict() for span in self.spans]),
+            "waitingForUserMs": max(0, int(root.get("waitingForUserMs") or 0)),
+        }
 
 
 def _json_safe(value: Any) -> Any:
@@ -119,7 +196,7 @@ def _transport_free(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     return {
         str(key): _json_safe(value)
         for key, value in dict(payload or {}).items()
-        if key not in {"workflowState", "traceSpans", "runtime"}
+        if key not in {"executionSnapshot", "timeline", "runtime"}
     }
 
 
@@ -165,8 +242,8 @@ def _tool_arguments(value: Any) -> Any:
 
 
 @dataclass
-class SimTraceProjector:
-    """Incrementally build the hierarchical trace consumed by Sim Logs."""
+class ExecutionTimelineProjector:
+    """Incrementally build the hierarchical timeline consumed by Logs."""
 
     execution_id: str
     task_id: str
@@ -243,7 +320,7 @@ class SimTraceProjector:
             return self.resolve_primitive(name)
         except Exception:  # noqa: BLE001 - unknown telemetry must remain visible
             return _FallbackPrimitive(
-                sim_type=fallback_type,
+                display_kind=fallback_type,
                 category=fallback_category,
                 label=str(name or "Unknown primitive"),
             )
@@ -283,7 +360,7 @@ class SimTraceProjector:
         span = {
             "id": span_id or self._next_id(primitive_name),
             "name": name or primitive.label or primitive_name,
-            "type": primitive.sim_type,
+            "type": primitive.display_kind,
             "primitive": primitive_name,
             "category": primitive.category,
             "status": "running",
@@ -1145,7 +1222,7 @@ class SimTraceProjector:
                         fallback_category="tool",
                         toolCallId=call_id,
                     )
-                    # Sim's icon resolver expects tool spans to use type=tool,
+                    # the Logs icon resolver expects tool spans to use type=tool,
                     # regardless of the canvas block semantics for that tool.
                     existing["type"] = "tool"
                     self._active_tools[call_id] = existing
@@ -1464,7 +1541,7 @@ class SimTraceProjector:
         return _json_safe(self.trace_spans)
 
 
-def replay_trace(
+def replay_timeline(
     records: list[Mapping[str, Any]],
     *,
     execution_id: str,
@@ -1477,7 +1554,7 @@ def replay_trace(
 ) -> list[dict[str, Any]]:
     """Rebuild a trace from the durable Agent Task event log."""
 
-    projector = SimTraceProjector(
+    projector = ExecutionTimelineProjector(
         execution_id=execution_id,
         task_id=task_id,
         graph_version=graph_version,
@@ -1489,7 +1566,7 @@ def replay_trace(
     return projector.snapshot(status=status, ended_at=ended_at)
 
 
-def total_tokens(trace_spans: Sequence[Mapping[str, Any]]) -> int:
+def timeline_total_tokens(trace_spans: Sequence[Mapping[str, Any]]) -> int:
     """Return the root token total without double-counting child spans."""
 
     if not trace_spans:
@@ -1506,4 +1583,10 @@ def total_tokens(trace_spans: Sequence[Mapping[str, Any]]) -> int:
         return 0
 
 
-__all__ = ["SimTraceProjector", "replay_trace", "total_tokens"]
+__all__ = [
+    "ExecutionSpan",
+    "ExecutionTimeline",
+    "ExecutionTimelineProjector",
+    "replay_timeline",
+    "timeline_total_tokens",
+]

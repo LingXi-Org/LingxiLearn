@@ -12,13 +12,14 @@ import pytest
 from lingxigraph import EventKind
 
 from lingxilearn.runtime import schedules
-from lingxilearn.runtime.schedules import SchedulerWorker, next_schedule_time, validate_schedule
-from lingxilearn.runtime.sim_semantics import (
-    SimRunProjector,
-    SimRuntimeError,
-    replay_sim_trace,
+from lingxilearn.runtime.execution import (
+    ExecutionError,
+    ExecutionProjector,
+    replay_execution_timeline,
+    stored_execution_snapshot,
     visible_execution,
 )
+from lingxilearn.runtime.schedules import SchedulerWorker, next_schedule_time, validate_schedule
 
 
 def event(kind, *, node="lecture_hook", step=1, task_id="task-1", data=None):
@@ -37,7 +38,7 @@ def event(kind, *, node="lecture_hook", step=1, task_id="task-1", data=None):
 
 
 def test_projection_uses_actual_nodes_and_preserves_runtime_metadata():
-    projector = SimRunProjector("exec-1", "task-1", "knowledge_deep_dive.v1")
+    projector = ExecutionProjector("exec-1", "task-1", "knowledge_deep_dive.v1")
     started = projector.consume(event(EventKind.NODE_STARTED), agent="lecture_hook")
     completed = projector.consume(
         event(EventKind.NODE_COMPLETED, data={"update": {"topic": "StateGraph"}}),
@@ -46,36 +47,60 @@ def test_projection_uses_actual_nodes_and_preserves_runtime_metadata():
     snapshot = projector.snapshot()
     assert started["execution_id"] == "exec-1"
     assert started["payload"]["blockId"] == completed["payload"]["blockId"]
-    assert snapshot["workflowState"]["blocks"]
-    assert snapshot["traceSpans"][0]["status"] == "completed"
+    assert snapshot["snapshot"]["nodes"]
+    assert snapshot["timeline"]["spans"][0]["status"] == "completed"
+
+
+def test_persisted_editor_projection_is_translated_at_the_storage_boundary():
+    snapshot = stored_execution_snapshot(
+        {
+            "blocks": {
+                "tutor": {
+                    "name": "Tutor",
+                    "status": "completed",
+                    "data": {"primitive": "tutor", "nodeKind": "agent"},
+                }
+            },
+            "edges": [],
+            "metadata": {"terminal": True},
+        },
+        execution_id="exec-old",
+        task_id="task-old",
+        graph_version="v1",
+        status="completed",
+    )
+
+    assert snapshot["schemaVersion"] == "lingxilearn.execution.v1"
+    assert snapshot["nodes"]["tutor"]["capability"] == "tutor"
+    assert "blocks" not in snapshot
 
 
 def test_parallel_semantic_nodes_are_projected_but_runtime_mechanics_are_hidden():
-    projector = SimRunProjector("exec-2", "task-1", "v1")
+    projector = ExecutionProjector("exec-2", "task-1", "v1")
     for node in ("lecture_hook", "interactive_lecture_deck"):
         projector.consume(event(EventKind.NODE_STARTED, node=node, step=1), agent=node)
     projector.consume(event(EventKind.NODE_STARTED, node="await_user", step=2), agent="await_user")
     projector.consume(event(EventKind.NODE_STARTED, node="await_user", step=3), agent="await_user")
-    state = projector.snapshot()["workflowState"]
-    assert state["parallels"]["parallel:1"]["blockIds"]
-    assert not state["loops"]
-    assert {block["name"] for block in state["blocks"].values()} == {
+    state = projector.snapshot()["snapshot"]
+    assert state["groups"]["parallels"]["parallel:1"]["blockIds"]
+    assert not state["groups"]["loops"]
+    assert {node["label"] for node in state["nodes"].values()} == {
         "Lesson Intro",
         "Lecture Deck",
     }
 
 
 def test_unknown_runtime_node_is_hidden_and_catalog_still_fails_closed():
-    projector = SimRunProjector("exec-3", "task-1", "v1")
+    projector = ExecutionProjector("exec-3", "task-1", "v1")
     projected = projector.consume(event(EventKind.NODE_STARTED, node="unregistered_node"))
     assert projected["payload"]["hiddenBy"] == "lingxi-runtime"
-    assert not projector.snapshot()["workflowState"]["blocks"]
-    with pytest.raises(SimRuntimeError):
+    assert not projector.snapshot()["snapshot"]["nodes"]
+    with pytest.raises(ExecutionError):
         projector.catalog.resolve("unregistered_node")
 
 
 def test_planned_capabilities_become_semantic_nodes_and_hidden_tasks_collapse_to_edges():
-    projector = SimRunProjector("exec-semantic", "task-1", "v1")
+    projector = ExecutionProjector("exec-semantic", "task-1", "v1")
     projector.consume_runtime_event(
         "node.appeared",
         {"task_id": "intro", "step": 1, "capability": "content.lesson_intro"},
@@ -106,19 +131,19 @@ def test_planned_capabilities_become_semantic_nodes_and_hidden_tasks_collapse_to
             "provider": "pack_probe",
         },
     )
-    state = projector.snapshot()["workflowState"]
-    assert {block["name"] for block in state["blocks"].values()} == {
+    state = projector.snapshot()["snapshot"]
+    assert {node["label"] for node in state["nodes"].values()} == {
         "Lesson Intro",
         "Knowledge Probe",
     }
-    probe = next(block for block in state["blocks"].values() if block["name"] == "Knowledge Probe")
-    assert probe["executionState"] == "running"
-    assert probe["data"]["nodeKind"] == "deterministic"
-    assert state["edges"][0]["data"]["label"] == "Lingxi Runtime"
+    probe = next(node for node in state["nodes"].values() if node["label"] == "Knowledge Probe")
+    assert probe["status"] == "running"
+    assert probe["kind"] == "deterministic"
+    assert state["dependencies"][0]["label"] == "Lingxi Runtime"
 
 
 def test_replanned_logical_task_ids_keep_distinct_runtime_blocks():
-    projector = SimRunProjector("exec-replan", "task-1", "v1")
+    projector = ExecutionProjector("exec-replan", "task-1", "v1")
     projector.consume_runtime_event(
         "node.appeared",
         {
@@ -148,14 +173,14 @@ def test_replanned_logical_task_ids_keep_distinct_runtime_blocks():
         },
     )
 
-    blocks = projector.snapshot()["workflowState"]["blocks"]
-    assert set(blocks) == {"plan:1:exec-replan:1:t1", "plan:2:exec-replan:2:t1"}
-    assert blocks["plan:1:exec-replan:1:t1"]["executionState"] == "queued"
-    assert blocks["plan:2:exec-replan:2:t1"]["executionState"] == "running"
+    nodes = projector.snapshot()["snapshot"]["nodes"]
+    assert set(nodes) == {"plan:1:exec-replan:1:t1", "plan:2:exec-replan:2:t1"}
+    assert nodes["plan:1:exec-replan:1:t1"]["status"] == "queued"
+    assert nodes["plan:2:exec-replan:2:t1"]["status"] == "running"
 
 
 def test_runtime_loop_nodes_are_registered():
-    from lingxilearn.runtime.sim_semantics import PrimitiveCatalog
+    from lingxilearn.runtime.execution import PrimitiveCatalog
 
     catalog = PrimitiveCatalog()
     catalog.validate(
@@ -172,7 +197,7 @@ def test_runtime_loop_nodes_are_registered():
 
 
 def test_trace_replay_accepts_catalog_primitives_without_explicit_labels():
-    trace = replay_sim_trace(
+    trace = replay_execution_timeline(
         [
             {
                 "kind": "node.started",
@@ -235,7 +260,7 @@ def test_trace_replay_keeps_concurrent_same_model_events_in_their_runtime_bucket
             "ts": "2026-08-16T01:00:00.550000+00:00",
         },
     ]
-    trace = replay_sim_trace(
+    trace = replay_execution_timeline(
         records,
         execution_id="exec-concurrent-models",
         task_id="task-1",
@@ -248,7 +273,7 @@ def test_trace_replay_keeps_concurrent_same_model_events_in_their_runtime_bucket
         span
         for agent in trace[0]["children"]
         for span in agent.get("children") or []
-        if span.get("type") == "model"
+        if span.get("kind") == "model"
     ]
     assert [
         next(
@@ -316,14 +341,14 @@ def test_runtime_mechanics_never_become_visible_nodes(mechanic):
 
 
 def test_retry_translation_is_opt_in_and_only_idempotent():
-    from lingxilearn.runtime.sim_semantics import PrimitiveCatalog
+    from lingxilearn.runtime.execution import PrimitiveCatalog
 
     catalog = PrimitiveCatalog()
     assert (
         catalog.lingxi_retry_policy("knowledge.search", max_tries=3, wait_seconds=2).jitter is False
     )
     assert catalog.lingxi_retry_policy("lecture_hook") is None
-    with pytest.raises(SimRuntimeError):
+    with pytest.raises(ExecutionError):
         catalog.lingxi_retry_policy("lecture_hook", max_tries=2)
 
 

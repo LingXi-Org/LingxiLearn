@@ -662,6 +662,18 @@ export const recordLearningEventApiLingxiLearningRecordsPostContract = defineRou
   },
 });
 
+export const executionSnapshotApiLogsExecution_ExecutionId_GetContract = defineRouteContract({
+  method: "GET" as const,
+  path: "/api/logs/execution/[execution_id]",
+  params: z.object({
+    execution_id: z.string(),
+  }),
+  response: {
+    mode: "json" as const,
+    schema: S.ExecutionSnapshotResponseSchema,
+  },
+});
+
 export const meContextApiMeContextGetContract = defineRouteContract({
   method: "GET" as const,
   path: "/api/me/context",

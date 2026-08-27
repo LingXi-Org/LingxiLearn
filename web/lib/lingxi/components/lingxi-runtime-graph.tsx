@@ -10,13 +10,13 @@ import ReactFlow, {
   ReactFlowProvider,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { AgentIcon, CodeIcon, SlackIcon, StartIcon, TableIcon } from '@/components/icons'
 import {
   type EdgeRunStatus,
   SubBlockRowView,
   WorkflowBlockView,
   WorkflowEdgeView,
 } from '@/components/workflow'
-import { AgentIcon, CodeIcon, SlackIcon, StartIcon, TableIcon } from '@/components/icons'
 import { applyAutoLayout } from '@/lib/workflows/autolayout'
 import {
   projectRuntimeGraph,
@@ -31,7 +31,7 @@ import type { AgentTaskEvent } from '../types'
 
 interface RuntimeGraphProps {
   taskId: string
-  workflowState?: Record<string, unknown> | null
+  executionSnapshot?: Record<string, unknown> | null
   events?: AgentTaskEvent[]
 }
 
@@ -199,11 +199,11 @@ function RuntimeEdge(props: EdgeProps) {
   )
 }
 
-export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: RuntimeGraphProps) {
+export function LingxiRuntimeGraph({ taskId, executionSnapshot, events = [] }: RuntimeGraphProps) {
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null)
   const projection = useMemo(
-    () => projectRuntimeGraph(workflowState, events),
-    [events, workflowState]
+    () => projectRuntimeGraph(executionSnapshot, events),
+    [events, executionSnapshot]
   )
   const layoutSignature = useMemo(
     () =>

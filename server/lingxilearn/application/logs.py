@@ -138,7 +138,7 @@ class LogService:
             executionData={
                 "totalDuration": metadata.get("totalDurationMs"),
                 "enhanced": True,
-                "traceSpans": snapshot["traceSpans"],
+                "timeline": snapshot["timeline"],
                 "trajectory": snapshot.get("trajectory"),
                 "runtimeEvents": [self._runtime_event(event) for event in events],
                 "workflowInput": {"taskId": task_id},
@@ -185,7 +185,7 @@ class LogService:
             executionData={
                 "totalDuration": 0,
                 "enhanced": True,
-                "traceSpans": (snapshot or {}).get("traceSpans") or [],
+                "timeline": (snapshot or {}).get("timeline") or {"spans": []},
                 "trajectory": (snapshot or {}).get("trajectory"),
                 "runtimeEvents": [self._runtime_event(event) for event in events],
                 "workflowInput": {"taskId": task.id, "prompt": task.prompt},
@@ -218,7 +218,7 @@ class LogService:
             "id": identifier,
             "executionId": execution_id,
             "workflowId": "lingxi-agent",
-            "workflowName": "LingxiGraph · Sim runtime",
+            "workflowName": "LingxiLearn Execution",
             "deploymentVersionId": None,
             "deploymentVersion": None,
             "deploymentVersionName": None,
@@ -228,7 +228,7 @@ class LogService:
             "duration": str(duration),
             "trigger": trigger,
             "createdAt": created_at,
-            "workflow": {"id": "lingxi-agent", "name": "LingxiGraph · Sim runtime"},
+            "workflow": {"id": "lingxi-agent", "name": "LingxiLearn Execution"},
             "jobTitle": job_title,
             "cost": {"total": 0},
             "pauseSummary": {

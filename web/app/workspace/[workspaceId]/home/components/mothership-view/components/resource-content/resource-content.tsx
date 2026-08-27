@@ -1,15 +1,21 @@
 'use client'
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Skeleton, Tooltip } from '@/components/ui-kit'
-import { Download, FileX, Folder as FolderIcon, Library, SquareArrowUpRight } from '@/components/ui-kit/icons'
-import { createLogger } from '@/lib/logger'
 import { useRouter } from 'next/navigation'
+import { Button, Skeleton, Tooltip } from '@/components/ui-kit'
+import {
+  Download,
+  FileX,
+  Folder as FolderIcon,
+  Library,
+  SquareArrowUpRight,
+} from '@/components/ui-kit/icons'
 import { isApiClientError } from '@/lib/api/client/errors'
 import type { FilePreviewSession } from '@/lib/copilot/request/session'
 import { tryCanonicalWorkspaceFilePath } from '@/lib/copilot/vfs/path-utils'
 import { LingxiArtifactResource } from '@/lib/lingxi/components/lingxi-artifact-resource'
 import { LingxiRuntimeGraph } from '@/lib/lingxi/components/lingxi-runtime-graph'
+import { createLogger } from '@/lib/logger'
 import { triggerFileDownload } from '@/lib/uploads/client/download'
 import { getFileExtension, getMimeTypeFromExtension } from '@/lib/uploads/utils/file-utils'
 import type { WorkflowsEditorRuntime } from '@/app/(landing)/workflows/components/workflows-editor-loop'
@@ -197,7 +203,7 @@ export const ResourceContent = memo(function ResourceContent({
     return (
       <LingxiRuntimeGraph
         taskId={resource.id.split(':')[1] ?? ''}
-        workflowState={lingxiRuntime?.workflowState}
+        executionSnapshot={lingxiRuntime?.executionSnapshot}
         events={lingxiRuntime?.events}
       />
     )

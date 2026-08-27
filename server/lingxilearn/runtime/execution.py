@@ -1,9 +1,8 @@
-"""The read-only Sim runtime semantic projection.
+"""LingxiLearn's first-party execution domain.
 
-LingxiGraph remains the executor.  This module deliberately contains no graph
-execution code: it turns the *events emitted by an actual graph run* into the
-small, stable subset of Sim's ``WorkflowState`` and ``traceSpans`` contracts
-used by the chat and Logs surfaces.
+LingxiGraph remains the executor. This module reduces its event stream into
+the learner-meaningful execution snapshot owned by LingxiLearn. It does not
+execute graphs and exposes no editor-workflow representation.
 """
 
 from __future__ import annotations
@@ -15,18 +14,73 @@ from typing import Any
 
 from lingxigraph import EventKind, RetryPolicy
 
-from .sim_trace import replay_trace, total_tokens
+from .timeline import (
+    ExecutionSpan,
+    ExecutionTimeline,
+    timeline_total_tokens,
+)
+from .timeline import (
+    replay_timeline as _replay_timeline,
+)
 
-PROJECTION_VERSION = "sim-runtime.v1"
+EXECUTION_SCHEMA_VERSION = "lingxilearn.execution.v1"
 
 
-class SimRuntimeError(ValueError):
-    """Raised when an execution contains a primitive outside the allow-list."""
+class ExecutionError(ValueError):
+    """Structured failure raised by the execution domain."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "execution_error",
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.retryable = retryable
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"code": self.code, "message": self.message, "retryable": self.retryable}
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionSnapshot:
+    """Immutable public state of one LingxiLearn execution."""
+
+    execution_id: str
+    task_id: str
+    graph_version: str
+    status: str
+    paused: bool
+    terminal: bool
+    nodes: dict[str, dict[str, Any]]
+    dependencies: tuple[dict[str, Any], ...]
+    variables: dict[str, Any]
+    groups: dict[str, Any]
+    metadata: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schemaVersion": EXECUTION_SCHEMA_VERSION,
+            "executionId": self.execution_id,
+            "taskId": self.task_id,
+            "graphVersion": self.graph_version,
+            "status": self.status,
+            "paused": self.paused,
+            "terminal": self.terminal,
+            "nodes": _json_safe(self.nodes),
+            "dependencies": _json_safe(self.dependencies),
+            "variables": _json_safe(self.variables),
+            "groups": _json_safe(self.groups),
+            "metadata": _json_safe(self.metadata),
+        }
 
 
 @dataclass(frozen=True)
 class Primitive:
-    sim_type: str
+    display_kind: str
     category: str
     idempotent: bool = False
     label: str = ""
@@ -38,7 +92,7 @@ class VisibleExecution:
 
     key: str
     label: str
-    sim_type: str = "agent"
+    display_kind: str = "agent"
     node_kind: str = "agent"
 
 
@@ -203,7 +257,7 @@ def visible_execution(name: str | None) -> VisibleExecution | None:
 
 
 class PrimitiveCatalog:
-    """Closed mapping of LingxiLearn primitives to Sim block semantics."""
+    """Closed mapping of LingxiLearn primitives to execution capability semantics."""
 
     def __init__(self, entries: dict[str, Primitive] | None = None) -> None:
         self.entries = dict(entries or PRIMITIVE_CATALOG)
@@ -213,7 +267,7 @@ class PrimitiveCatalog:
         try:
             return self.entries[key]
         except KeyError as exc:
-            raise SimRuntimeError(f"unregistered LingxiLearn primitive: {key!r}") from exc
+            raise ExecutionError(f"unregistered LingxiLearn primitive: {key!r}") from exc
 
     def validate(self, names: Iterable[str]) -> None:
         for name in names:
@@ -226,13 +280,13 @@ class PrimitiveCatalog:
         if max_tries <= 1:
             return None
         if not primitive.idempotent:
-            raise SimRuntimeError(f"retry is only allowed for idempotent primitive: {name}")
+            raise ExecutionError(f"retry is only allowed for idempotent primitive: {name}")
         return {"maxTries": int(max_tries), "wait": float(wait_seconds), "backoff": "fixed"}
 
     def lingxi_retry_policy(
         self, name: str, *, max_tries: int = 1, wait_seconds: float = 0.0
     ) -> RetryPolicy | None:
-        """Translate an approved Sim retry block to LingxiGraph semantics."""
+        """Translate an approved execution retry policy to LingxiGraph semantics."""
         config = self.retry_policy(name, max_tries=max_tries, wait_seconds=wait_seconds)
         if config is None:
             return None
@@ -319,8 +373,82 @@ def _iso(value: Any) -> str:
     return datetime.now(UTC).isoformat()
 
 
+def stored_execution_snapshot(
+    value: Mapping[str, Any] | None,
+    *,
+    execution_id: str,
+    task_id: str,
+    graph_version: str,
+    status: str | None = None,
+) -> dict[str, Any]:
+    """Read persisted projection data through the native execution boundary.
+
+    Rows written before this contract may still contain editor-oriented keys.
+    They are translated at the storage boundary and are never exposed by REST,
+    SSE, or the runtime package's public models.
+    """
+
+    state = dict(value or {})
+    if state.get("schemaVersion") == EXECUTION_SCHEMA_VERSION:
+        state["status"] = status or state.get("status") or "running"
+        return _json_safe(state)
+    metadata = dict(state.get("metadata") or {})
+    nodes = {
+        block_id: {
+            "id": block_id,
+            "label": block.get("name") or block_id,
+            "kind": (block.get("data") or {}).get("nodeKind") or "agent",
+            "capability": (block.get("data") or {}).get("primitive"),
+            "provider": (block.get("data") or {}).get("provider"),
+            "status": block.get("executionState") or block.get("status") or "queued",
+            "step": (block.get("data") or {}).get("step"),
+            "taskId": (block.get("data") or {}).get("taskId"),
+            "namespace": (block.get("data") or {}).get("namespace"),
+            "details": {
+                key: item
+                for key, item in (block.get("data") or {}).items()
+                if key not in {"nodeKind", "primitive", "provider", "step", "taskId", "namespace"}
+            },
+        }
+        for block_id, block in (state.get("blocks") or {}).items()
+        if isinstance(block, Mapping)
+    }
+    dependencies = tuple(
+        {
+            "id": edge.get("id"),
+            "sourceNodeId": edge.get("source"),
+            "targetNodeId": edge.get("target"),
+            "kind": (edge.get("data") or {}).get("kind") or "sequence",
+            "status": (edge.get("data") or {}).get("status"),
+            "label": (edge.get("data") or {}).get("label"),
+        }
+        for edge in state.get("edges") or []
+        if isinstance(edge, Mapping)
+    )
+    return ExecutionSnapshot(
+        execution_id=execution_id,
+        task_id=task_id,
+        graph_version=graph_version,
+        status=str(status or metadata.get("status") or state.get("status") or "running"),
+        paused=bool(metadata.get("paused", state.get("paused", False))),
+        terminal=bool(metadata.get("terminal", state.get("terminal", False))),
+        nodes=nodes,
+        dependencies=dependencies,
+        variables=dict(state.get("variables") or {}),
+        groups={
+            "loops": dict(state.get("loops") or {}),
+            "parallels": dict(state.get("parallels") or {}),
+        },
+        metadata={
+            key: item
+            for key, item in metadata.items()
+            if key not in {"status", "paused", "terminal", "layoutVersion"}
+        },
+    ).to_dict()
+
+
 @dataclass
-class SimRunProjector:
+class ExecutionProjector:
     """Incrementally project a single StateGraph execution."""
 
     execution_id: str
@@ -340,7 +468,7 @@ class SimRunProjector:
     def __post_init__(self) -> None:
         self.workflow_state = {
             "id": self.execution_id,
-            "version": PROJECTION_VERSION,
+            "version": EXECUTION_SCHEMA_VERSION,
             "graphVersion": self.graph_version,
             "blocks": {},
             "edges": [],
@@ -365,7 +493,7 @@ class SimRunProjector:
         node = str(getattr(event, "node", "") or agent or "coordinator")
         execution = visible_execution(node)
         if execution is None:
-            raise SimRuntimeError(f"runtime mechanic cannot be projected as a block: {node!r}")
+            raise ExecutionError(f"runtime mechanic cannot be projected as a block: {node!r}")
         step = int(getattr(event, "step", 0) or 0)
         task_id = getattr(event, "task_id", None)
         key = (node, step, str(task_id or ""))
@@ -381,7 +509,7 @@ class SimRunProjector:
         self._block_keys[key] = block_id
         block = {
             "id": block_id,
-            "type": execution.sim_type,
+            "type": execution.display_kind,
             "name": execution.label,
             "position": {"x": (len(self.blocks) % 4) * 300, "y": (len(self.blocks) // 4) * 160},
             "subBlocks": {},
@@ -426,7 +554,7 @@ class SimRunProjector:
         block_id = f"plan:{step}:{plan_task_id}".replace("/", "_")
         self.blocks[block_id] = {
             "id": block_id,
-            "type": execution.sim_type,
+            "type": execution.display_kind,
             "name": execution.label,
             "position": {"x": 0, "y": 0},
             "subBlocks": {},
@@ -524,7 +652,7 @@ class SimRunProjector:
         )
         if actual is not None:
             block["name"] = actual.label
-            block["type"] = actual.sim_type
+            block["type"] = actual.display_kind
             block["data"]["primitive"] = actual.key
             block["data"]["category"] = actual.node_kind
             block["data"]["nodeKind"] = actual.node_kind
@@ -626,7 +754,7 @@ class SimRunProjector:
                         "id": metadata["span_id"]
                         or (block_id if attempts == 0 else f"{block_id}:attempt:{attempts + 1}"),
                         "name": node,
-                        "type": execution.sim_type,
+                        "type": execution.display_kind,
                         "blockId": block_id,
                         "node": node,
                         "status": "running",
@@ -811,15 +939,19 @@ class SimRunProjector:
         return result
 
     def snapshot(self) -> dict[str, Any]:
-        metadata = self.workflow_state.setdefault("metadata", {})
-        self.workflow_state["layoutVersion"] = metadata.get("layoutVersion", "semantic-layered.v2")
-        self.workflow_state["terminal"] = bool(metadata.get("terminal", False))
-        self.workflow_state["status"] = metadata.get("status", "running")
-        self.workflow_state["paused"] = bool(metadata.get("paused", False))
+        execution_snapshot = stored_execution_snapshot(
+            self.workflow_state,
+            execution_id=self.execution_id,
+            task_id=self.task_id,
+            graph_version=self.graph_version,
+        )
+        timeline = ExecutionTimeline(
+            execution_id=self.execution_id,
+            spans=tuple(ExecutionSpan.from_mapping(item) for item in self.trace_spans),
+        )
         return {
-            "workflowState": _json_safe(self.workflow_state),
-            "traceSpans": _json_safe(self.trace_spans),
-            "projectionVersion": PROJECTION_VERSION,
+            "snapshot": execution_snapshot,
+            "timeline": timeline.to_dict(),
         }
 
 
@@ -827,7 +959,7 @@ def _safe_trace_records(records: Iterable[Mapping[str, Any]]) -> list[Mapping[st
     """Apply the V2 public event envelope before trace replay.
 
     Reasoning deltas and raw tool call/result payloads are deliberately never
-    reconstructed into the learner-facing Sim trace.
+    reconstructed into the learner-facing execution timeline.
     """
     private = {"reasoning.delta", "tool.call.delta", "tool.result", "assistant.delta"}
     blocked = {"arguments", "input", "output", "result", "content", "thinking", "reasoning"}
@@ -842,7 +974,7 @@ def _safe_trace_records(records: Iterable[Mapping[str, Any]]) -> list[Mapping[st
     return safe
 
 
-def replay_sim_trace(
+def replay_execution_timeline(
     records: Iterable[Mapping[str, Any]],
     *,
     execution_id: str,
@@ -852,7 +984,7 @@ def replay_sim_trace(
     started_at: Any = None,
     ended_at: Any = None,
 ) -> list[dict[str, Any]]:
-    return replay_trace(
+    spans = _replay_timeline(
         _safe_trace_records(records),
         execution_id=execution_id,
         task_id=task_id,
@@ -862,7 +994,8 @@ def replay_sim_trace(
         started_at=started_at,
         ended_at=ended_at,
     )
+    return [ExecutionSpan.from_mapping(item).to_dict() for item in spans]
 
 
-def sim_trace_total_tokens(trace: list[dict[str, Any]]) -> int:
-    return total_tokens(trace)
+def execution_timeline_total_tokens(trace: list[dict[str, Any]]) -> int:
+    return timeline_total_tokens(trace)

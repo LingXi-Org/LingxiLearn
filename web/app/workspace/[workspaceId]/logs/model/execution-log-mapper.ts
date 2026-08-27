@@ -2,8 +2,10 @@ import type {
   ExecutionLogDetail,
   ExecutionLogRow,
   ExecutionLogSummary,
+  LogTraceSpan,
 } from '@/lib/api/contracts/logs'
 import { dollarsToCredits } from '@/lib/billing/credits/conversion'
+import { timelineSpansToTraceSpans } from '@/lib/lingxi/runtime-graph-adapter'
 import type {
   ExecutionLogDetailView,
   ExecutionLogSummaryView,
@@ -181,7 +183,9 @@ export function mapExecutionLogDetail(
     ...summary,
     taskId: extractTaskId(runInput, executionData?.taskId),
     hasDetailPayload: executionData != null,
-    traceSpans: executionData?.traceSpans,
+    traceSpans: timelineSpansToTraceSpans(
+      executionData?.timeline?.spans
+    ) as unknown as LogTraceSpan[],
     trajectory: executionData?.trajectory,
     runtimeEvents: executionData?.runtimeEvents ?? [],
     files: wire.files ?? null,

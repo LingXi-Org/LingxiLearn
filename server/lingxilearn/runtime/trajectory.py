@@ -740,7 +740,7 @@ class TrajectoryProjector:
     ) -> dict[str, set[str] | str]:
         """Collect stable model identities from a span and its agent parent.
 
-        Sim traces put the native ``span_id``/node metadata on the model span,
+        legacy traces put the native ``span_id``/node metadata on the model span,
         while older traces only put ``agent`` and task metadata on the parent
         agent span.  Looking through both keeps attribution compatible with
         each shape without relying on the model name (which is not unique).
@@ -946,7 +946,7 @@ class TrajectoryProjector:
             node = self._payload_node({**dict(span_metadata), **dict(span)}, runtime)
             parent = self._tasks.get(node, {}).get("item_id") if node else None
             if parent is None and self._tasks:
-                # Older Sim traces did not copy the runtime node id onto every
+                # Older legacy traces did not copy the runtime node id onto every
                 # child span.  A time-contained task is a safe best-effort
                 # parent for those historical records and is marked inferred
                 # by the action below.

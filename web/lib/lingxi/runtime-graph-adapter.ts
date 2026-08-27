@@ -1,6 +1,6 @@
+import type { Edge } from 'reactflow'
 import { BLOCK_DIMENSIONS } from '@/components/workflow/dimensions'
 import type { BlockData, BlockState } from '@/lib/workflows/domain/workflow'
-import type { Edge } from 'reactflow'
 import type { AgentTaskEvent } from './types'
 
 export type RuntimeExecutionState =
@@ -41,6 +41,100 @@ export interface RuntimeGraphCanvasState {
   edges: Edge[]
   running: boolean
   latestStatusText?: string
+}
+
+interface NativeExecutionNode extends Record<string, unknown> {
+  id?: unknown
+  label?: unknown
+  kind?: unknown
+  capability?: unknown
+  provider?: unknown
+  status?: unknown
+  step?: unknown
+  taskId?: unknown
+  namespace?: unknown
+  details?: unknown
+}
+
+/** Adapt the first-party execution domain to the existing read-only canvas. */
+export function executionSnapshotToCanvasState(
+  snapshot: Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  const value = snapshot ?? {}
+  if (!value.nodes) return value
+  const blocks = Object.fromEntries(
+    Object.entries(asRecord(value.nodes)).map(([id, rawNode]) => {
+      const node = rawNode as NativeExecutionNode
+      const details = asRecord(node.details)
+      const kind = stringValue(node.kind) || 'agent'
+      const capability = stringValue(node.capability)
+      return [
+        id,
+        {
+          id,
+          name: stringValue(node.label) || capability || id,
+          type: kind === 'deterministic' ? 'function' : 'agent',
+          enabled: true,
+          status: stringValue(node.status) || 'queued',
+          executionState: stringValue(node.status) || 'queued',
+          data: {
+            ...details,
+            primitive: capability,
+            provider: stringValue(node.provider),
+            nodeKind: kind,
+            step: node.step,
+            taskId: node.taskId,
+            namespace: node.namespace,
+          },
+        },
+      ]
+    })
+  )
+  const edges = (Array.isArray(value.dependencies) ? value.dependencies : []).map(
+    (rawDependency) => {
+      const dependency = asRecord(rawDependency)
+      const id = stringValue(dependency.id)
+      const source = stringValue(dependency.sourceNodeId)
+      const target = stringValue(dependency.targetNodeId)
+      return {
+        id: id || `${source}->${target}`,
+        source,
+        target,
+        data: {
+          kind: dependency.kind,
+          status: dependency.status,
+          label: dependency.label,
+        },
+      }
+    }
+  )
+  return {
+    id: value.executionId,
+    blocks,
+    edges,
+    variables: value.variables ?? {},
+    loops: asRecord(value.groups).loops ?? {},
+    parallels: asRecord(value.groups).parallels ?? {},
+    metadata: value.metadata ?? {},
+    status: value.status,
+    paused: value.paused,
+    terminal: value.terminal,
+  }
+}
+
+export function timelineSpansToTraceSpans(
+  spans: Array<Record<string, unknown>> | undefined
+): Array<Record<string, unknown>> {
+  return (spans ?? []).map((span) => ({
+    ...span,
+    type: stringValue(span.kind) || 'function',
+    duration: Number(span.durationMs ?? 0),
+    startTime: span.startedAt,
+    endTime: span.endedAt,
+    children: timelineSpansToTraceSpans(
+      Array.isArray(span.children) ? (span.children as Array<Record<string, unknown>>) : []
+    ),
+  }))
 }
 
 interface CapabilityPresentation {
@@ -662,10 +756,10 @@ function latestStatusText(events: AgentTaskEvent[]): string | undefined {
 }
 
 export function projectRuntimeGraph(
-  workflowState: Record<string, unknown> | null | undefined,
+  executionSnapshot: Record<string, unknown> | null | undefined,
   events: AgentTaskEvent[] = []
 ): RuntimeGraphCanvasState {
-  const graph = workflowState ?? {}
+  const graph = executionSnapshotToCanvasState(executionSnapshot)
   const rawBlocks = Object.fromEntries(
     Object.entries(asRecord(graph.blocks)).map(([id, block]) => [
       id,

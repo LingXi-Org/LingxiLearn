@@ -35,7 +35,55 @@ function graph(overrides: Record<string, unknown> = {}) {
   }
 }
 
-describe('Runtime Graph Sim projection', () => {
+describe('LingxiLearn execution snapshot projection', () => {
+  test('renders the native nodes and dependency contract', () => {
+    const projection = projectRuntimeGraph({
+      schemaVersion: 'lingxilearn.execution.v1',
+      executionId: 'exec-1',
+      taskId: 'task-1',
+      graphVersion: 'v1',
+      status: 'running',
+      paused: false,
+      terminal: false,
+      nodes: {
+        tutor: {
+          id: 'tutor',
+          label: 'Tutor',
+          kind: 'agent',
+          capability: 'tutor',
+          provider: 'answer_user',
+          status: 'running',
+          details: {},
+        },
+        quiz: {
+          id: 'quiz',
+          label: 'Quiz Generator',
+          kind: 'agent',
+          capability: 'quiz_generator',
+          provider: 'quiz_generator',
+          status: 'queued',
+          details: {},
+        },
+      },
+      dependencies: [
+        {
+          id: 'tutor->quiz',
+          sourceNodeId: 'tutor',
+          targetNodeId: 'quiz',
+          kind: 'dependency',
+        },
+      ],
+      variables: {},
+      groups: {},
+      metadata: {},
+    })
+
+    expect(projection.blocks.tutor.executionState).toBe('running')
+    expect(projection.blocks.quiz.executionState).toBe('queued')
+    expect(projection.edges.some((edge) => edge.source === 'tutor' && edge.target === 'quiz')).toBe(
+      true
+    )
+  })
   test('keeps visible capabilities and collapses hidden runtime nodes', () => {
     const projection = projectRuntimeGraph(graph())
 
@@ -65,7 +113,7 @@ describe('Runtime Graph Sim projection', () => {
     expect(next.blocks.tutor.name).toBe('辅导老师')
   })
 
-  test('retains every V2 execution state for the native block projection', () => {
+  test('retains every execution state for the read-only canvas projection', () => {
     const statuses = [
       'queued',
       'pending',
@@ -170,7 +218,7 @@ describe('Runtime Graph Sim projection', () => {
     )
   })
 
-  test('tolerates empty and malformed workflow snapshots', () => {
+  test('tolerates empty and malformed legacy snapshots', () => {
     const projection = projectRuntimeGraph({
       blocks: { nullBlock: null, listBlock: [], tutor: {} },
       edges: [null, { source: 'missing', target: 'tutor' }],
@@ -187,7 +235,7 @@ describe('Runtime Graph Sim projection', () => {
     expect(projectRuntimeGraph({ blocks: {}, metadata: { terminal: true } }).running).toBe(false)
   })
 
-  test('uses Sim dimensions for runtime card heights', () => {
+  test('uses stable runtime card heights', () => {
     const projection = projectRuntimeGraph({
       blocks: {
         tutor: { name: 'Tutor', type: 'agent', data: { capability: 'answer_user' } },

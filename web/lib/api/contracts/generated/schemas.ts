@@ -366,6 +366,70 @@ export const DocumentTagSaveResponseSchema = z.object({
 });
 export type DocumentTagSaveResponse = z.output<typeof DocumentTagSaveResponseSchema>;
 
+export const ExecutionMetadataResponseSchema = z.object({
+  cost: z.unknown(),
+  endedAt: z.string().nullable(),
+  scheduledFor: z.string().nullable(),
+  scheduleId: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  totalDurationMs: z.number().int().nullable(),
+  totalTokens: z.number().int().nullable(),
+  trigger: z.string().nullable(),
+});
+export type ExecutionMetadataResponse = z.output<typeof ExecutionMetadataResponseSchema>;
+
+export const NativeExecutionSnapshotResponseSchema = z.object({
+  dependencies: z.array(z.record(z.string(), z.unknown())),
+  executionId: z.string(),
+  graphVersion: z.string(),
+  groups: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+  nodes: z.record(z.string(), z.unknown()),
+  paused: z.boolean().default(false),
+  schemaVersion: z.string(),
+  status: z.string(),
+  taskId: z.string(),
+  terminal: z.boolean().default(false),
+  variables: z.record(z.string(), z.unknown()),
+});
+export type NativeExecutionSnapshotResponse = z.output<typeof NativeExecutionSnapshotResponseSchema>;
+
+/** One recursive span in the LingxiLearn execution timeline. */
+export const ExecutionSpanResponseSchema = z.object({
+  children: z.array(ExecutionSpanResponseSchema),
+  durationMs: z.number().int(),
+  endedAt: z.string(),
+  id: z.string(),
+  kind: z.string(),
+  name: z.string(),
+  startedAt: z.string(),
+  status: z.string(),
+}).catchall(z.unknown());
+export type ExecutionSpanResponse = z.output<typeof ExecutionSpanResponseSchema>;
+
+export const ExecutionTimelineResponseSchema = z.object({
+  executionId: z.string(),
+  schemaVersion: z.string(),
+  spans: z.array(ExecutionSpanResponseSchema),
+  totalTokens: z.number().int().default(0),
+  waitingForUserMs: z.number().int().default(0),
+});
+export type ExecutionTimelineResponse = z.output<typeof ExecutionTimelineResponseSchema>;
+
+export const ExecutionSnapshotResponseSchema = z.object({
+  eventLog: z.record(z.string(), z.unknown()),
+  executionId: z.string(),
+  executionMetadata: ExecutionMetadataResponseSchema,
+  graphVersion: z.string(),
+  schemaVersion: z.string(),
+  snapshot: NativeExecutionSnapshotResponseSchema,
+  status: z.string(),
+  taskId: z.string(),
+  timeline: ExecutionTimelineResponseSchema,
+  trajectory: z.record(z.string(), z.unknown()),
+});
+export type ExecutionSnapshotResponse = z.output<typeof ExecutionSnapshotResponseSchema>;
+
 export const FileDownloadUrlResponseSchema = z.object({
   downloadUrl: z.string(),
   expiresIn: z.number().int().nullable(),
@@ -1018,13 +1082,13 @@ export type ReadinessResponse = z.output<typeof ReadinessResponseSchema>;
 
 export const RuntimeGraphResponseSchema = z.object({
   executionGraph: z.record(z.string(), z.unknown()),
+  executionSnapshot: z.record(z.string(), z.unknown()),
   id: z.string(),
   latestExecutionId: z.string().nullable(),
   status: z.string(),
   taskId: z.string(),
   type: z.string().default("runtime-graph"),
   updatedAt: z.string().nullable(),
-  workflowState: z.record(z.string(), z.unknown()),
 });
 export type RuntimeGraphResponse = z.output<typeof RuntimeGraphResponseSchema>;
 

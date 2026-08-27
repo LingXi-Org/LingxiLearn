@@ -35,11 +35,11 @@ from lingxigraph.errors import (
 
 from ..agents.model_runtime import EVENT_CHANNEL
 from ..config import Settings
+from ..runtime.execution import ExecutionProjector
 from ..runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
 from ..runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from ..runtime.loop import initial_state as initial_loop_state
 from ..runtime.public_projection import PublicProjector
-from ..runtime.sim_semantics import SimRunProjector
 from ..state.session_state import RuntimeStatus, new_budget
 from ..store.repositories.agent_tasks import AgentTaskRepository
 from ..store.repositories.runtime import RuntimeRepository
@@ -735,7 +735,7 @@ class LingxiGraphRuntimeAdapter:
                 schedule_id=schedule_id,
                 scheduled_for=scheduled_for,
             )
-            projector = SimRunProjector(
+            projector = ExecutionProjector(
                 execution_id=execution_id,
                 task_id=task_id,
                 graph_version=record.graph_version,
@@ -860,14 +860,14 @@ class LingxiGraphRuntimeAdapter:
                     response_composed = True
                 composed.append(item)
             public_events = composed
-            current_workflow_state = projector.snapshot()["workflowState"]
+            current_execution_snapshot = projector.snapshot()["snapshot"]
             for item in public_events:
                 item.setdefault("execution_id", execution_id)
                 item.setdefault("runtime", (item.get("payload") or {}).get("runtime") or {})
-                item.setdefault("workflowState", current_workflow_state)
+                item.setdefault("executionSnapshot", current_execution_snapshot)
                 item["payload"] = {
                     **(item.get("payload") or {}),
-                    "workflowState": current_workflow_state,
+                    "executionSnapshot": current_execution_snapshot,
                 }
             # Dual projection: V1 rows carry the canonical identity the next
             # frontend stage consumes; V0 keeps serving today's UI unchanged.
@@ -876,8 +876,8 @@ class LingxiGraphRuntimeAdapter:
                 return
             await self._runtime.update_agent_execution(
                 execution_id,
-                workflow_state=current_workflow_state,
-                trace_spans=projector.snapshot()["traceSpans"],
+                workflow_state=current_execution_snapshot,
+                trace_spans=projector.snapshot()["timeline"]["spans"],
                 event_count=await self._agent_tasks.agent_event_count_for_execution(execution_id),
             )
             self._events.notify(task_id)
@@ -1040,8 +1040,8 @@ class LingxiGraphRuntimeAdapter:
                     await self._runtime.update_agent_execution(
                         execution_id,
                         status="cancelled",
-                        workflow_state=snapshot["workflowState"],
-                        trace_spans=snapshot["traceSpans"],
+                        workflow_state=snapshot["snapshot"],
+                        trace_spans=snapshot["timeline"]["spans"],
                         ended=True,
                     )
                     self._events.notify(task_id)
@@ -1177,16 +1177,14 @@ class LingxiGraphRuntimeAdapter:
             )
             await emit_turn_terminal("cancelled" if failure_status == "cancelled" else "failed")
             snapshot = projector.snapshot()
-            workflow_state = dict(snapshot["workflowState"])
-            metadata = dict(workflow_state.get("metadata") or {})
-            metadata.update({"terminal": True, "status": failure_status, "paused": False})
-            workflow_state["metadata"] = metadata
+            execution_snapshot = dict(snapshot["snapshot"])
+            execution_snapshot.update({"terminal": True, "status": failure_status, "paused": False})
             await self._runtime.update_agent_execution(
                 execution_id,
                 status=failure_status,
                 error=f"运行失败：{type(exc).__name__}: {detail}",
-                workflow_state=workflow_state,
-                trace_spans=snapshot["traceSpans"],
+                workflow_state=execution_snapshot,
+                trace_spans=snapshot["timeline"]["spans"],
                 ended=True,
             )
             self._events.notify(task_id)
@@ -1243,8 +1241,8 @@ class LingxiGraphRuntimeAdapter:
             status="awaiting_user"
             if status == "awaiting_user"
             else ("completed" if status in {"completed", "handed_off"} else status),
-            workflow_state=projector.snapshot()["workflowState"],
-            trace_spans=projector.snapshot()["traceSpans"],
+            workflow_state=projector.snapshot()["snapshot"],
+            trace_spans=projector.snapshot()["timeline"]["spans"],
             error="; ".join(errors),
             ended=status not in {"awaiting_user", "partial"},
         )

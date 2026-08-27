@@ -1,5 +1,6 @@
 import type { ExecutionLogDetail } from '@/lib/api/contracts/logs'
 import { dollarsToCredits } from '@/lib/billing/credits/conversion'
+import { timelineSpansToTraceSpans } from '@/lib/lingxi/runtime-graph-adapter'
 import type { LogsGetRunDetailsParams, LogsGetRunDetailsResponse } from '@/tools/logs/types'
 import type { ToolConfig } from '@/tools/types'
 
@@ -54,7 +55,7 @@ export const logsGetRunDetailsTool: ToolConfig<LogsGetRunDetailsParams, LogsGetR
           durationMs: detail.executionData?.totalDuration ?? null,
           // Costs are stored in dollars; credits are the user-facing unit.
           cost: detail.cost?.total != null ? dollarsToCredits(detail.cost.total) : null,
-          traceSpans: detail.executionData?.traceSpans ?? [],
+          traceSpans: timelineSpansToTraceSpans(detail.executionData?.timeline?.spans),
           finalOutput: detail.executionData?.finalOutput ?? null,
         },
       }

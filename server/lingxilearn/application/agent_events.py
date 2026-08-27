@@ -18,8 +18,13 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any
 
+from ..runtime.execution import (
+    execution_timeline_total_tokens,
+    replay_execution_timeline,
+    stored_execution_snapshot,
+)
 from ..runtime.public_projection import PublicProjector
-from ..runtime.sim_semantics import replay_sim_trace, sim_trace_total_tokens
+from ..runtime.timeline import ExecutionSpan
 from ..runtime.trajectory import build_trajectory_projection
 from ..store.repositories.agent_tasks import AgentTaskRepository
 from ..store.repositories.runtime import RuntimeRepository
@@ -279,7 +284,7 @@ class AgentEventService:
         records, event_read = await self._agent_events_for_execution_snapshot(
             execution_id, learner_id
         )
-        trace = replay_sim_trace(
+        trace = replay_execution_timeline(
             records,
             execution_id=row.id,
             task_id=row.task_id,
@@ -289,23 +294,38 @@ class AgentEventService:
             ended_at=ended,
         )
         if len(trace) <= 1 and row.trace_spans:
-            trace = row.trace_spans
+            trace = [
+                ExecutionSpan.from_mapping(item).to_dict()
+                for item in row.trace_spans
+                if isinstance(item, Mapping)
+            ]
         trajectory = build_trajectory_projection(
             row,
             records,
             trace,
         )
         _annotate_truncated_trajectory(trajectory, event_read)
+        total_tokens = execution_timeline_total_tokens(trace) or None
         return {
             "executionId": row.id,
-            "workflowId": "lingxi-agent",
-            "workflowName": "LingxiGraph · Sim runtime",
             "status": row.status,
             "taskId": row.task_id,
             "graphVersion": row.graph_version,
-            "projectionVersion": (row.workflow_state or {}).get("version", "sim-runtime.v1"),
-            "workflowState": row.workflow_state or {},
-            "traceSpans": trace,
+            "schemaVersion": "lingxilearn.execution.v1",
+            "snapshot": stored_execution_snapshot(
+                row.workflow_state,
+                execution_id=row.id,
+                task_id=row.task_id,
+                graph_version=row.graph_version,
+                status=row.status,
+            ),
+            "timeline": {
+                "schemaVersion": "lingxilearn.timeline.v1",
+                "executionId": row.id,
+                "spans": trace,
+                "totalTokens": total_tokens or 0,
+                "waitingForUserMs": int((trace[0] if trace else {}).get("waitingForUserMs") or 0),
+            },
             "trajectory": trajectory,
             "eventLog": event_read,
             "executionMetadata": {
@@ -314,7 +334,7 @@ class AgentEventService:
                 "endedAt": ended.isoformat() if ended else None,
                 "totalDurationMs": duration,
                 "cost": None,
-                "totalTokens": sim_trace_total_tokens(trace) or None,
+                "totalTokens": total_tokens,
                 "scheduleId": row.schedule_id,
                 "scheduledFor": row.scheduled_for.isoformat() if row.scheduled_for else None,
             },

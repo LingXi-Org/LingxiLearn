@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import croniter
 
-from .sim_semantics import SimRuntimeError
+from .execution import ExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 def validate_schedule(cron: str, timezone: str) -> tuple[str, str]:
     expression = " ".join(str(cron or "").split())
     if len(expression.split()) != 5:
-        raise SimRuntimeError("schedule cron must contain exactly five fields")
+        raise ExecutionError("schedule cron must contain exactly five fields")
     try:
         ZoneInfo(str(timezone or "UTC"))
     except ZoneInfoNotFoundError as exc:
-        raise SimRuntimeError(f"unknown IANA timezone: {timezone}") from exc
+        raise ExecutionError(f"unknown IANA timezone: {timezone}") from exc
     if not croniter.is_valid(expression):
-        raise SimRuntimeError("invalid cron expression")
+        raise ExecutionError("invalid cron expression")
     return expression, str(timezone or "UTC")
 
 
