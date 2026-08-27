@@ -45,10 +45,8 @@ def parse_sse(body: str) -> tuple[list[dict[str, Any]], str]:
 def run(base: str, prompt: str, timeout: float, token: str = "") -> int:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     with httpx.Client(base_url=base.rstrip("/"), timeout=30.0, headers=headers) as client:
-        health = client.get("/api/health")
-        health.raise_for_status()
-        if not health.json().get("agent", {}).get("configured"):
-            raise RuntimeError("server is not configured with DS_API_KEY")
+        readiness = client.get("/ready")
+        readiness.raise_for_status()
 
         created = client.post("/api/agent-tasks", json={"prompt": prompt})
         created.raise_for_status()

@@ -38,6 +38,12 @@ x-api-dev: &api-dev
     - ./packs:/app/packs:ro
     - ./skills:/app/skills:ro
     - ./var:/app/var
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/ready',timeout=5)"]
+    interval: 20s
+    timeout: 7s
+    retries: 5
+    start_period: 25s
   depends_on:
     postgres:
       condition: service_healthy

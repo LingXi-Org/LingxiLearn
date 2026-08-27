@@ -417,22 +417,6 @@ export const HTTPValidationErrorSchema = z.object({
 });
 export type HTTPValidationError = z.output<typeof HTTPValidationErrorSchema>;
 
-export const HealthAgentInfoSchema = z.object({
-  configured: z.boolean(),
-  model: z.string(),
-});
-export type HealthAgentInfo = z.output<typeof HealthAgentInfoSchema>;
-
-export const HealthResponseSchema = z.object({
-  agent: HealthAgentInfoSchema,
-  brain: z.string(),
-  database: z.boolean(),
-  packs: z.array(z.string()),
-  status: z.string(),
-  tools: z.number().int(),
-});
-export type HealthResponse = z.output<typeof HealthResponseSchema>;
-
 export const InteractionAnswerResponseSchema = z.object({
   interactionId: z.string(),
   status: z.string(),
@@ -855,6 +839,11 @@ export const LegacyToolPermissionResponseSchema = z.object({
 });
 export type LegacyToolPermissionResponse = z.output<typeof LegacyToolPermissionResponseSchema>;
 
+export const LivenessResponseSchema = z.object({
+  status: z.string(),
+});
+export type LivenessResponse = z.output<typeof LivenessResponseSchema>;
+
 export const SessionListItemInfoSchema = z.object({
   created_at: z.string().nullable(),
   id: z.string(),
@@ -1019,6 +1008,13 @@ export const QuizSubmissionResponseSchema = z.object({
   submission: QuizSubmissionSnapshotInfoSchema.nullable(),
 });
 export type QuizSubmissionResponse = z.output<typeof QuizSubmissionResponseSchema>;
+
+export const ReadinessResponseSchema = z.object({
+  database: z.boolean(),
+  services: z.boolean(),
+  status: z.string(),
+});
+export type ReadinessResponse = z.output<typeof ReadinessResponseSchema>;
 
 export const RuntimeGraphResponseSchema = z.object({
   executionGraph: z.record(z.string(), z.unknown()),

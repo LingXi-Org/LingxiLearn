@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from croniter import croniter
+
 from .sim_semantics import SimRuntimeError
 
-try:  # Optional at import time so SQLite/unit-test installs stay lightweight.
-    from croniter import croniter
-except ImportError:  # pragma: no cover - exercised only in minimal installs
-    croniter = None
+logger = logging.getLogger(__name__)
 
 
 def validate_schedule(cron: str, timezone: str) -> tuple[str, str]:
@@ -26,19 +26,8 @@ def validate_schedule(cron: str, timezone: str) -> tuple[str, str]:
         ZoneInfo(str(timezone or "UTC"))
     except ZoneInfoNotFoundError as exc:
         raise SimRuntimeError(f"unknown IANA timezone: {timezone}") from exc
-    if croniter is not None and not croniter.is_valid(expression):
+    if not croniter.is_valid(expression):
         raise SimRuntimeError("invalid cron expression")
-    if croniter is None and any(
-        not field or any(char not in "*/,-0123456789" for char in field)
-        for field in expression.split()
-    ):
-        raise SimRuntimeError("invalid cron expression")
-    if croniter is None:
-        _parse_cron_field(expression.split()[0], 0, 59)
-        _parse_cron_field(expression.split()[1], 0, 23)
-        _parse_cron_field(expression.split()[2], 1, 31)
-        _parse_cron_field(expression.split()[3], 1, 12)
-        _parse_cron_field(expression.split()[4], 0, 7)
     return expression, str(timezone or "UTC")
 
 
@@ -47,72 +36,7 @@ def next_schedule_time(cron: str, timezone: str, after: datetime) -> datetime:
     if after.tzinfo is None:
         after = after.replace(tzinfo=UTC)
     local_after = after.astimezone(ZoneInfo(zone))
-    if croniter is not None:
-        return croniter(expression, local_after).get_next(datetime).astimezone(UTC)
-    # Development images may omit croniter. This small parser covers the full
-    # five-field cron grammar (lists, ranges and steps) for deterministic
-    # local scheduling instead of silently treating ``*/15`` as daily.
-    fields = expression.split()
-    minute_values = _parse_cron_field(fields[0], 0, 59)
-    hour_values = _parse_cron_field(fields[1], 0, 23)
-    day_values = _parse_cron_field(fields[2], 1, 31)
-    month_values = _parse_cron_field(fields[3], 1, 12)
-    weekday_values = _parse_cron_field(fields[4], 0, 7)
-    weekday_values = {0 if value == 7 else value for value in weekday_values}
-    day_restricted = fields[2] != "*"
-    weekday_restricted = fields[4] != "*"
-    candidate = local_after.replace(second=0, microsecond=0) + timedelta(minutes=1)
-    for _ in range(366 * 24 * 60 + 1):
-        cron_weekday = (candidate.weekday() + 1) % 7
-        day_matches = candidate.day in day_values
-        weekday_matches = cron_weekday in weekday_values
-        day_ok = (
-            day_matches or weekday_matches
-            if day_restricted and weekday_restricted
-            else day_matches and weekday_matches
-        )
-        if (
-            candidate.minute in minute_values
-            and candidate.hour in hour_values
-            and candidate.month in month_values
-            and day_ok
-        ):
-            return candidate.astimezone(UTC)
-        candidate += timedelta(minutes=1)
-    raise SimRuntimeError("cron expression has no occurrence within one year")
-
-
-def _parse_cron_field(value: str, minimum: int, maximum: int) -> set[int]:
-    result: set[int] = set()
-    for token in value.split(","):
-        if not token:
-            raise SimRuntimeError("invalid cron expression")
-        base, _, step_text = token.partition("/")
-        try:
-            step = int(step_text) if step_text else 1
-        except ValueError as exc:
-            raise SimRuntimeError("invalid cron expression") from exc
-        if step < 1:
-            raise SimRuntimeError("invalid cron expression")
-        if base == "*":
-            start, end = minimum, maximum
-        elif "-" in base:
-            try:
-                start_text, end_text = base.split("-", 1)
-                start, end = int(start_text), int(end_text)
-            except ValueError as exc:
-                raise SimRuntimeError("invalid cron expression") from exc
-        else:
-            try:
-                start = end = int(base)
-            except ValueError as exc:
-                raise SimRuntimeError("invalid cron expression") from exc
-        if start < minimum or end > maximum or start > end:
-            raise SimRuntimeError("invalid cron expression")
-        result.update(range(start, end + 1, step))
-    if not result:
-        raise SimRuntimeError("invalid cron expression")
-    return result
+    return croniter(expression, local_after).get_next(datetime).astimezone(UTC)
 
 
 class SchedulerWorker:
@@ -157,7 +81,7 @@ class SchedulerWorker:
         while True:
             try:
                 await self.run_once()
-            except Exception:  # noqa: BLE001 - worker must continue after one bad proposal
+            except Exception:  # noqa: BLE001 - isolate one poll/launch failure
                 # A failed claim is released by lease expiry; continue polling.
-                pass
+                logger.exception("scheduler poll/launch failed; owner=%s", self.owner)
             await asyncio.sleep(max(0.5, interval_seconds))

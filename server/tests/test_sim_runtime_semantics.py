@@ -1,9 +1,17 @@
+import ast
+import asyncio
+import logging
+import os
+import subprocess
+import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from lingxigraph import EventKind
 
+from lingxilearn.runtime import schedules
 from lingxilearn.runtime.schedules import SchedulerWorker, next_schedule_time, validate_schedule
 from lingxilearn.runtime.sim_semantics import (
     SimRunProjector,
@@ -325,6 +333,106 @@ def test_schedule_validation_uses_iana_timezone_and_cron():
     assert zone == "Asia/Shanghai"
     next_run = next_schedule_time(cron, zone, datetime(2026, 8, 14, tzinfo=UTC))
     assert next_run.tzinfo is not None
+
+
+@pytest.mark.parametrize(
+    ("cron", "after", "expected"),
+    [
+        (
+            "5,20 * * * *",
+            datetime(2026, 8, 14, 10, 5, tzinfo=UTC),
+            datetime(2026, 8, 14, 10, 20, tzinfo=UTC),
+        ),
+        (
+            "10-12 * * * *",
+            datetime(2026, 8, 14, 10, 9, tzinfo=UTC),
+            datetime(2026, 8, 14, 10, 10, tzinfo=UTC),
+        ),
+        (
+            "*/15 * * * *",
+            datetime(2026, 8, 14, 10, 1, tzinfo=UTC),
+            datetime(2026, 8, 14, 10, 15, tzinfo=UTC),
+        ),
+        (
+            "0 9 * * 1",
+            datetime(2026, 8, 16, 10, 0, tzinfo=UTC),
+            datetime(2026, 8, 17, 9, 0, tzinfo=UTC),
+        ),
+    ],
+    ids=["list", "range", "step", "day-of-week"],
+)
+def test_croniter_defines_supported_cron_semantics(cron, after, expected):
+    assert next_schedule_time(cron, "UTC", after) == expected
+
+
+def test_croniter_is_a_required_direct_import(tmp_path):
+    tree = ast.parse(Path(schedules.__file__).read_text(encoding="utf-8"))
+    assert any(
+        isinstance(node, ast.ImportFrom) and node.module == "croniter" for node in tree.body
+    )
+    assert "croniter = None" not in Path(schedules.__file__).read_text(encoding="utf-8")
+    assert "_parse_cron_field" not in Path(schedules.__file__).read_text(encoding="utf-8")
+
+    (tmp_path / "croniter.py").write_text(
+        "raise ImportError('croniter intentionally unavailable')\n", encoding="utf-8"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(tmp_path)}
+    result = subprocess.run(
+        [sys.executable, "-c", "import lingxilearn.runtime.schedules"],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "croniter intentionally unavailable" in result.stderr
+
+
+@pytest.mark.parametrize("failure_stage", ["database", "launch"])
+def test_scheduler_logs_failure_with_owner_and_continues_polling(
+    failure_stage, monkeypatch, caplog
+):
+    class Repo:
+        def __init__(self):
+            self.polls = 0
+
+        async def claim_due_schedule(self, **_kwargs):
+            self.polls += 1
+            if self.polls == 1 and failure_stage == "database":
+                raise RuntimeError("database poll failed")
+            if self.polls == 1:
+                return {
+                    "schedule_id": "schedule-1",
+                    "run_id": "run-1",
+                    "scheduled_for": datetime(2026, 8, 14, 9, 0, tzinfo=UTC),
+                    "cron": "*/15 * * * *",
+                    "timezone": "UTC",
+                }
+            return None
+
+    async def launch(_claim):
+        raise RuntimeError("task launch failed")
+
+    sleeps = 0
+
+    async def stop_after_second_poll(_seconds):
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps == 2:
+            raise asyncio.CancelledError
+
+    async def run():
+        repo = Repo()
+        worker = SchedulerWorker(repo, launch, owner="scheduler-regression-owner")
+        with pytest.raises(asyncio.CancelledError):
+            await worker.serve(interval_seconds=0)
+        assert repo.polls == 2
+
+    monkeypatch.setattr(schedules.asyncio, "sleep", stop_after_second_poll)
+    caplog.set_level(logging.ERROR, logger=schedules.__name__)
+    asyncio.run(run())
+    assert "scheduler poll/launch failed; owner=scheduler-regression-owner" in caplog.text
+    assert f"{failure_stage if failure_stage == 'database' else 'task'}" in caplog.text
 
 
 def test_scheduler_runs_one_catch_up_then_skips_missed_slots():

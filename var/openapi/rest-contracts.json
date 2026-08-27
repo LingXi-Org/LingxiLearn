@@ -1496,64 +1496,6 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
-      "HealthAgentInfo": {
-        "properties": {
-          "configured": {
-            "title": "Configured",
-            "type": "boolean"
-          },
-          "model": {
-            "title": "Model",
-            "type": "string"
-          }
-        },
-        "required": [
-          "configured",
-          "model"
-        ],
-        "title": "HealthAgentInfo",
-        "type": "object"
-      },
-      "HealthResponse": {
-        "properties": {
-          "agent": {
-            "$ref": "#/components/schemas/HealthAgentInfo"
-          },
-          "brain": {
-            "title": "Brain",
-            "type": "string"
-          },
-          "database": {
-            "title": "Database",
-            "type": "boolean"
-          },
-          "packs": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Packs",
-            "type": "array"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "tools": {
-            "title": "Tools",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "status",
-          "database",
-          "brain",
-          "agent",
-          "packs",
-          "tools"
-        ],
-        "title": "HealthResponse",
-        "type": "object"
-      },
       "InteractionAnswerResponse": {
         "properties": {
           "interactionId": {
@@ -3191,6 +3133,20 @@
         "title": "LegacyToolPermissionResult",
         "type": "object"
       },
+      "LivenessResponse": {
+        "properties": {
+          "status": {
+            "const": "live",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "LivenessResponse",
+        "type": "object"
+      },
       "MasteryResponse": {
         "properties": {
           "mastery": {
@@ -3932,6 +3888,33 @@
           "submission_id"
         ],
         "title": "QuizSubmissionSnapshotInfo",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "boolean"
+          },
+          "services": {
+            "title": "Services",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "not_ready"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "services",
+          "database"
+        ],
+        "title": "ReadinessResponse",
         "type": "object"
       },
       "RuntimeGraphResponse": {
@@ -7583,24 +7566,6 @@
           }
         },
         "summary": "Create Upload Part Urls"
-      }
-    },
-    "/api/health": {
-      "get": {
-        "operationId": "health_api_health_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Health"
       }
     },
     "/api/knowledge": {
@@ -13589,6 +13554,54 @@
           }
         },
         "summary": "Update Workspace Permissions"
+      }
+    },
+    "/live": {
+      "get": {
+        "description": "Report only whether the FastAPI process can answer HTTP requests.",
+        "operationId": "live_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Live"
+      }
+    },
+    "/ready": {
+      "get": {
+        "description": "Report whether application startup completed and the database is usable.",
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Ready"
       }
     }
   }

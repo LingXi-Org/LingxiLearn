@@ -91,12 +91,12 @@ Production startup order is encoded in `docker-compose.yml`:
 
 Web listens on container port 3000 and is published as
 `${LINGXILEARN_WEB_PORT:-8080}`. FastAPI is internal on port 8000. Its image
-probes `GET /api/health`; that route reports a degraded body on database failure
-but still returns HTTP 200, so it is a process/startup probe rather than a full
-dependency readiness guarantee. Web probes its own `/api/health` rewrite,
-covering Node plus the proxy-to-API path. Scheduler has no HTTP server and its
-inherited image healthcheck is disabled. LingxiIdentity is external and is not
-covered by Compose healthchecks.
+probes `GET /ready`, which returns HTTP 503 until application services have
+initialized and the database responds. `GET /live` checks only that FastAPI can
+answer requests. Next explicitly rewrites both `/live` and `/ready` to FastAPI;
+the Web image probes `/ready`, covering Node plus the proxy-to-API path.
+Scheduler has no HTTP server and its inherited image healthcheck is disabled.
+LingxiIdentity is external and is not covered by Compose healthchecks.
 
 Development Compose publishes Web at `localhost:3000` and FastAPI at
 `${LINGXILEARN_PORT:-8080}`. It bind-mounts source, but the browser still uses
