@@ -39,6 +39,6 @@ COPY --chown=10001:10001 migrations ./migrations
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=20s --timeout=7s --retries=5 --start-period=25s \
-  CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=5)"
+  CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/ready',timeout=5)"
 
 CMD ["uvicorn", "lingxilearn.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

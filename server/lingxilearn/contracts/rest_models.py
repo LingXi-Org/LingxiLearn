@@ -44,18 +44,14 @@ class MessageResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class HealthAgentInfo(BaseModel):
-    configured: bool
-    model: str
+class LivenessResponse(BaseModel):
+    status: Literal["live"]
 
 
-class HealthResponse(BaseModel):
-    status: str
+class ReadinessResponse(BaseModel):
+    status: Literal["ready", "not_ready"]
+    services: bool
     database: bool
-    brain: str
-    agent: HealthAgentInfo
-    packs: list[str]
-    tools: int
 
 
 class PackConceptInfo(BaseModel):

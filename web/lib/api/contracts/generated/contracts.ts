@@ -1,4 +1,4 @@
-// 116 contracts generated from 104 paths.
+// 117 contracts generated from 105 paths.
 // AUTO-GENERATED — do not edit by hand.
 // Regenerate:  python scripts/export_openapi.py && bun run web/scripts/generate-rest-contracts.ts
 // eslint-disable @typescript-eslint/no-explicit-any
@@ -209,15 +209,6 @@ export const createUploadPartUrlsApiFilesUploads_UploadId_PartsPostContract = de
   response: {
     mode: "json" as const,
     schema: S.UploadPartsResponseSchema,
-  },
-});
-
-export const healthApiHealthGetContract = defineRouteContract({
-  method: "GET" as const,
-  path: "/api/health",
-  response: {
-    mode: "json" as const,
-    schema: S.HealthResponseSchema,
   },
 });
 
@@ -1429,5 +1420,23 @@ export const updateWorkspacePermissionsApiWorkspaces_WorkspaceId_PermissionsPatc
   response: {
     mode: "json" as const,
     schema: S.MessageResponseSchema,
+  },
+});
+
+export const liveLiveGetContract = defineRouteContract({
+  method: "GET" as const,
+  path: "/live",
+  response: {
+    mode: "json" as const,
+    schema: S.LivenessResponseSchema,
+  },
+});
+
+export const readyReadyGetContract = defineRouteContract({
+  method: "GET" as const,
+  path: "/ready",
+  response: {
+    mode: "json" as const,
+    schema: S.ReadinessResponseSchema,
   },
 });
