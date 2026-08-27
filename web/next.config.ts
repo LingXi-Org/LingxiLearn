@@ -31,6 +31,8 @@ const nextConfig: NextConfig = {
     if (!origin) return []
     const base = origin.replace(/\/$/, '')
     return [
+      { source: '/live', destination: `${base}/live` },
+      { source: '/ready', destination: `${base}/ready` },
       { source: '/api/:path*', destination: `${base}/api/:path*` },
       { source: '/auth/:path*', destination: `${base}/auth/:path*` },
       { source: '/api/v1/:path*', destination: `${base}/api/v1/:path*` },
