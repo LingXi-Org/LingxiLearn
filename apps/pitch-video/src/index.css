@@ -1,0 +1,30 @@
+@font-face {
+  font-family: "Geist";
+  src: url("../public/brand/Geist-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("../public/brand/Geist-Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500 700;
+}
+
+@font-face {
+  font-family: "Season Sans";
+  src: url("../public/brand/SeasonSans.woff2") format("woff2");
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: #09090b;
+  font-family: "Geist", "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

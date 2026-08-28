@@ -1,0 +1,15 @@
+export const FILM_THEME = {
+  ink: "#0a0a0b",
+  paper: "#f7f7f4",
+  white: "#ffffff",
+  soft: "#ececea",
+  line: "#d9d9d5",
+  muted: "#737373",
+  accent: "#cfff3d",
+  accentSoft: "#efffc0",
+  cyan: "#6adff4",
+  violet: "#a893ff",
+  coral: "#f79477",
+  radius: 24,
+  shadow: "0 30px 90px rgba(0,0,0,.12)",
+} as const;
