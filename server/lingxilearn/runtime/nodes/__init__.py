@@ -6,7 +6,7 @@ itself (edges, conditional routing, wiring) lives in
 
 Nodes advance the runtime phase exclusively through
 :meth:`lingxilearn.runtime.graph.LoopDeps.transition_status` — the single
-lifecycle write path documented in :mod:`lingxilearn.runtime.lifecycle` —
+lifecycle write path owned by the graph runtime —
 and request HITL interactions exclusively through
 :func:`lingxilearn.runtime.interactions.request_interaction`.
 """

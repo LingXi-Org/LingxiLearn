@@ -29,8 +29,8 @@ from typing import Any
 from ...agents.providers import ProviderError, ProviderResult
 from ...agents.providers import get as get_provider
 from ...agents.providers import load_all as load_providers
+from ...state.agent_task_state import Goal
 from ...state.evidence import EvidenceRecord
-from ...state.session_state import Goal
 from ...store.runtime_state import RuntimeStateRepository
 from ..completion import CompletionContext, StoreArtifactProbe, evaluate
 from ..contracts import PlannedTask, TaskOutcome
@@ -174,11 +174,7 @@ class Dispatcher:
                 attempt=int(claimed.get("attempts") or claimed.get("attempt") or 1),
                 turn_id=claimed.get("turn_id"),
             )
-        heartbeat = (
-            scheduler.start_heartbeat(work_id)
-            if claimed is not None
-            else None
-        )
+        heartbeat = scheduler.start_heartbeat(work_id) if claimed is not None else None
 
         # -- bind: capability → skill → provider (pure resolution) ----------
         try:

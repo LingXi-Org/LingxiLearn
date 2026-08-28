@@ -16,7 +16,7 @@ from lingxilearn.runtime.contracts import Cost, DoneCondition, PlannedTask
 from lingxilearn.runtime.dispatch import DispatchDeps, Dispatcher
 from lingxilearn.runtime.guardrails import Budget
 from lingxilearn.runtime.public_projection import PublicProjector
-from lingxilearn.state.session_state import Goal
+from lingxilearn.state.agent_task_state import Goal
 
 
 @register("test_event_answerer", display_name="事件答疑", execution_kind="model")
@@ -88,9 +88,7 @@ async def _run(capability: str) -> tuple[list[tuple[str, dict[str, Any]]], Any]:
         execution_id="exec_1",
         turn_id="turn_1",
     )
-    outcome = await Dispatcher(deps).run(
-        _task(capability), profile={}, budget=Budget.from_dict({})
-    )
+    outcome = await Dispatcher(deps).run(_task(capability), profile={}, budget=Budget.from_dict({}))
     return emitted, outcome
 
 
@@ -121,7 +119,9 @@ async def test_successful_run_emits_each_canonical_event_once_in_order() -> None
     ], "each lifecycle event exactly once, in canonical order"
 
     envelopes = _project(emitted)
-    span_starts = [e for e in envelopes if e["type"] == "span" and e["payload"].get("event") == "start"]
+    span_starts = [
+        e for e in envelopes if e["type"] == "span" and e["payload"].get("event") == "start"
+    ]
     span_ends = [e for e in envelopes if e["type"] == "span" and e["payload"].get("event") == "end"]
     assert len(span_starts) == 1, "no duplicate agent span emission"
     assert len(span_ends) == 1

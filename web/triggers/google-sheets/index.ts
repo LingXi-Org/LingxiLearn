@@ -1,1 +1,0 @@
-export { googleSheetsPollingTrigger } from './poller'

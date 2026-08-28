@@ -1,6 +1,0 @@
-export { ActionBar } from './action-bar'
-export { AddDocumentsModal } from './add-documents-modal'
-export { BaseTagsModal } from './base-tags-modal'
-export { DocumentContextMenu } from './document-context-menu'
-export { RenameDocumentModal } from './rename-document-modal'
-export { SearchHighlight } from './search-highlight'

@@ -43,9 +43,18 @@ def test_too_many_holds_closes_every_open_hold() -> None:
 
 @pytest.mark.asyncio
 async def test_board_round_trip(state_db) -> None:
-    _database, runtime, learner_id = state_db
+    database, runtime, learner_id = state_db
     task_id = "board-round-trip"
-    await runtime.ensure_session_state(learner_id=learner_id, task_id=task_id)
+    from lingxilearn.store.repositories.agent_tasks import AgentTaskRepository
+
+    await AgentTaskRepository(database).create_agent_task(
+        id=task_id,
+        learner_id=learner_id,
+        prompt="board round trip",
+        graph_version="test@v1",
+        status="queued",
+    )
+    await runtime.ensure_agent_task_state(learner_id=learner_id, task_id=task_id)
     board = {
         "holds": {"3:t2": {"task_id": "t2", "artifacts": ["visual"], "revisions": 0}},
         "order": ["lesson-intro", "visual"],

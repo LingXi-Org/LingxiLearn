@@ -73,12 +73,8 @@ def test_docker_and_compose_healthchecks_use_ready():
     repo_root = Path(__file__).parents[2]
     assert "/ready" in (repo_root / "server" / "Dockerfile").read_text(encoding="utf-8")
     assert "/ready" in (repo_root / "web" / "Dockerfile").read_text(encoding="utf-8")
-    assert "/api/health" not in (repo_root / "server" / "Dockerfile").read_text(
-        encoding="utf-8"
-    )
-    assert "/api/health" not in (repo_root / "web" / "Dockerfile").read_text(
-        encoding="utf-8"
-    )
+    assert "/api/health" not in (repo_root / "server" / "Dockerfile").read_text(encoding="utf-8")
+    assert "/api/health" not in (repo_root / "web" / "Dockerfile").read_text(encoding="utf-8")
 
     for compose_name, anchor in (
         ("docker-compose.yml", "x-api"),

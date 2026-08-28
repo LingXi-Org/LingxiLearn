@@ -1,9 +1,4 @@
-"""Learner responses to blocking agent interactions.
-
-This boundary owns human-in-the-loop commands.  The historical Copilot URL is
-kept as a transport adapter only; schedule permissions use Lingxi-native
-proposal terminology at the canonical endpoint.
-"""
+"""Learner responses to blocking AgentTask interactions."""
 
 from __future__ import annotations
 
@@ -62,39 +57,11 @@ class SchedulePermissionRequest(BaseModel):
     decisions: list[SchedulePermissionDecision] = Field(min_length=1, max_length=50)
 
 
-class LegacyToolPermissionDecision(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    tool_call_id: str = Field(alias="toolCallId", min_length=1, max_length=255)
-    decision: Literal["allow", "allow_chat", "always_allow", "skip"]
-
-
-class LegacyToolPermissionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    decisions: list[LegacyToolPermissionDecision] = Field(min_length=1, max_length=50)
-
-
-class LegacyToolPermissionResult(BaseModel):
-    toolCallId: str
-    decision: str
-    applied: bool = False
-    status: str = "unknown"
-    scope: Any = None
-
-
-class LegacyToolPermissionResponse(BaseModel):
-    success: bool
-    results: list[LegacyToolPermissionResult] = Field(default_factory=list)
-
-
 async def _decide_schedule_permissions(
     request: Request,
     context: LearnerContext,
     decisions: list[dict[str, str]],
 ) -> list[dict[str, Any]]:
-    """Shared application adapter for canonical and compatibility transports."""
-
     try:
         return await services_of(request).agent_tasks.decide_schedule_permission(
             learner_id=context.learner_id,
@@ -120,29 +87,13 @@ async def decide_schedule_permissions(
     return {
         "success": True,
         "results": [
-            {"proposalId": result.get("toolCallId"), **{k: v for k, v in result.items() if k != "toolCallId"}}
+            {
+                "proposalId": result.get("toolCallId"),
+                **{k: v for k, v in result.items() if k != "toolCallId"},
+            }
             for result in results
         ],
     }
-
-
-@router.post(
-    "/copilot/tool-permission",
-    response_model=LegacyToolPermissionResponse,
-    deprecated=True,
-)
-async def legacy_copilot_tool_permission(
-    body: LegacyToolPermissionRequest,
-    request: Request,
-    context: LearnerContext = Depends(current_learner_context),
-) -> dict[str, Any]:
-    """Deprecated compatibility adapter; use schedule-permissions instead."""
-
-    decisions = [
-        {"toolCallId": item.tool_call_id, "decision": item.decision} for item in body.decisions
-    ]
-    results = await _decide_schedule_permissions(request, context, decisions)
-    return {"success": True, "results": results}
 
 
 @router.post(
@@ -231,9 +182,7 @@ async def confirm_agent_work(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.post(
-    "/agent-tasks/{task_id}/delivery/{artifact}/ack", response_model=AckDeliveryResponse
-)
+@router.post("/agent-tasks/{task_id}/delivery/{artifact}/ack", response_model=AckDeliveryResponse)
 async def ack_agent_delivery(
     task_id: str,
     artifact: str,

@@ -54,13 +54,12 @@ class EvidenceRecord:
     knowledge_point: str
     signal: Signal
     source_agent: str
+    task_id: str
     summary: str = ""
     score: float | None = None
     """0..1 for graded signals; ``None`` when the signal carries no score."""
     misconceptions: tuple[str, ...] = ()
     hint_level: int = 0
-    task_id: str | None = None
-    session_id: str | None = None
     locator: dict[str, Any] = field(default_factory=dict)
     payload: dict[str, Any] = field(default_factory=dict)
     observed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -72,6 +71,8 @@ class EvidenceRecord:
             raise InvalidEvidence("evidence requires a knowledge_point")
         if not str(self.source_agent).strip():
             raise InvalidEvidence("evidence requires a source_agent")
+        if not str(self.task_id).strip():
+            raise InvalidEvidence("evidence requires a task_id")
         if self.signal in GRADED_SIGNALS and self.score is None:
             raise InvalidEvidence(f"{self.signal} evidence requires a score")
         if self.score is not None and not 0.0 <= float(self.score) <= 1.0:
@@ -100,7 +101,6 @@ class EvidenceRecord:
 
         return {
             "learner_id": self.learner_id,
-            "session_id": self.session_id,
             "task_id": self.task_id,
             "evidence_id": self.evidence_id,
             "kind": "learner_action",

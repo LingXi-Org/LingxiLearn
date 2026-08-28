@@ -12,7 +12,7 @@ from collections import defaultdict
 from typing import Any
 
 from ..config import Settings
-from ..runtime.loop import LoopDeps, build_loop
+from ..runtime.graph import LoopDeps, build_loop
 from ..store.repositories.runtime import RuntimeRepository
 from ..store.repositories.work_ledger import WorkLedgerRepository
 from ..store.runtime_state import RuntimeStateRepository

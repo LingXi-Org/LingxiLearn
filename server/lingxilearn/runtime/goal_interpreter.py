@@ -20,7 +20,7 @@ from lingxigraph import HumanMessage, create_agent
 
 from ..agents.contracts import extract_json
 from ..agents.model_runtime import agent_model, invoke_agent, message_text
-from ..state.session_state import Goal, GoalKind, GoalStack, StackOperation
+from ..state.agent_task_state import Goal, GoalKind, GoalStack, StackOperation
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +89,8 @@ def build_goal(
 ) -> Goal:
     """Assemble a validated goal from parsed fields plus the learner's profile.
 
-    Kept separate from the model call so the fallback path and the tests build
-    goals through exactly the same code.
+    Kept separate from the model call so validation and tests build goals
+    through exactly the same code.
     """
 
     topic = str(parsed.get("topic") or utterance).strip()

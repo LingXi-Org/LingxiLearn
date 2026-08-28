@@ -10,18 +10,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from ..contracts.rest_models import AgentEvidenceResponse, AgentTaskEventsResponse
 from ..learner import LearnerContext
 from .dependencies import current_learner_context, not_found, services_of
 
 router = APIRouter(prefix="/api")
-logger = logging.getLogger(__name__)
 
 
 @router.get("/agent-tasks/{task_id}/events", response_model=AgentTaskEventsResponse)
@@ -36,48 +34,23 @@ async def stream_agent_events(
     except KeyError as exc:
         raise not_found() from exc
 
-    # V1 clients (protocol=v1) read the versioned Mothership stream; everyone
-    # else keeps the historical V0 event vocabulary, unchanged.
-    protocol_version = 1 if request.query_params.get("protocol") == "v1" else 0
-
-    # Both SSE replay and JSON catch-up use the durable AgentTaskEvent row
-    # sequence.  This is intentionally different from the protocol envelope's
-    # own `seq`, because V0 and V1 rows share one database event log.
+    # SSE replay and JSON catch-up use the durable AgentTaskEvent row sequence.
     header = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
     try:
         cursor = int(header) if header else 0
-    except ValueError:
-        cursor = 0
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="invalid_event_cursor") from exc
+    if cursor < 0:
+        raise HTTPException(status_code=422, detail="invalid_event_cursor")
 
-    # History hydration is also the fallback catch-up transport for clients
-    # behind proxies that buffer a long-lived SSE response.  Respect the same
-    # cursor so polling transfers only rows the client has not consumed.
+    # JSON catch-up respects the same cursor as SSE.
     if request.query_params.get("format") == "json":
-        replay_protocol = await services.agent_events.replay_protocol(
-            task_id, context.learner_id
-        )
-        if replay_protocol == 0:
-            logger.info(
-                "legacy_v0_event_replay",
-                extra={"task_id": task_id, "learner_id": context.learner_id},
-            )
         events = await services.agent_events.events_after(
             task_id,
             context.learner_id,
             cursor,
-            protocol_version=protocol_version,
         )
-        return Response(
-            content=json.dumps(
-                {
-                    "events": events,
-                    "protocol": "v1" if replay_protocol == 1 else "legacy-v0",
-                },
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
-            media_type="application/json",
-        )
+        return {"events": events, "protocol": "v1"}
     heartbeat = services.settings.sse_heartbeat_seconds
 
     async def generate():  # noqa: ANN202
@@ -86,9 +59,7 @@ async def stream_agent_events(
         while True:
             if await request.is_disconnected():
                 return
-            events = await services.agent_events.events_after(
-                task_id, context.learner_id, cursor, protocol_version=protocol_version
-            )
+            events = await services.agent_events.events_after(task_id, context.learner_id, cursor)
             for event in events:
                 cursor = event["sequence"]
                 payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
@@ -101,9 +72,7 @@ async def stream_agent_events(
             # single turn delivers — a long-lived chat keeps its SSE channel
             # across turns (issue #18 §15.1).
             if current.get("threadStatus") == "cancelled":
-                tail = await services.agent_events.events_after(
-                    task_id, context.learner_id, cursor, protocol_version=protocol_version
-                )
+                tail = await services.agent_events.events_after(task_id, context.learner_id, cursor)
                 for event in tail:
                     cursor = event["sequence"]
                     payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))

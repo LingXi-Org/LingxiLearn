@@ -18,6 +18,9 @@ REMOVED_PLACEHOLDER_PATHS = {
     "/api/users/me/subscription/{subscription_id}/transfer",
     "/api/v2/billing/status",
     "/api/v2/billing/logs",
+    "/api/users/me/settings",
+    "/api/users/me/usage-logs",
+    "/api/users/me/usage-logs/export",
 }
 
 
@@ -30,8 +33,4 @@ def test_unowned_account_capabilities_have_no_registered_routes() -> None:
 
 def test_account_router_keeps_only_lingxilearn_owned_surfaces() -> None:
     paths = set(app.openapi()["paths"])
-    assert {
-        "/api/users/me/settings",
-        "/api/users/me/usage-logs",
-        "/api/users/me/usage-logs/export",
-    }.issubset(paths)
+    assert paths.isdisjoint(REMOVED_PLACEHOLDER_PATHS)

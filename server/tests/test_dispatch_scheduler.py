@@ -3,8 +3,8 @@
 The scheduler is the dispatcher's only door to the ledger: claim eligibility
 (dependencies succeeded, lease free), single-owner atomic claim under
 concurrency, lease heartbeat, and terminal finish.  These tests run against a
-throwaway SQLite ledger so the parallel-safe claim semantics are exercised,
-not mocked.
+the migrated PostgreSQL ledger so parallel-safe claim semantics are exercised,
+not mocked or emulated.
 """
 
 from __future__ import annotations
@@ -99,9 +99,7 @@ async def test_parallel_claim_has_a_single_owner(state_db) -> None:
     scheduler_a = _scheduler(task_id, ledger)
     scheduler_b = _scheduler(f"{task_id}-rival", ledger)
 
-    first, second = await asyncio.gather(
-        scheduler_a.claim("work-a"), scheduler_b.claim("work-a")
-    )
+    first, second = await asyncio.gather(scheduler_a.claim("work-a"), scheduler_b.claim("work-a"))
     assert [claim is not None for claim in (first, second)].count(True) == 1
 
 

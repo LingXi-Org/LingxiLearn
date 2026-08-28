@@ -23,8 +23,6 @@ from ..models.runtime import (
     AgentRun,
     SkillRun,
 )
-from ..models.workspace import Workspace
-from ..runtime_tables import project_runtime_events
 from .common import command_dict as _command_dict
 
 
@@ -33,45 +31,6 @@ class RuntimeRepository:
 
     def __init__(self, db: Database) -> None:
         self.db = db
-
-    async def project_runtime_event(
-        self,
-        *,
-        learner_id: str,
-        record_key: str,
-        kind: str,
-        task_id: str = "",
-        session_id: str = "",
-        sequence: int = 0,
-        agent: str = "",
-        payload: dict[str, Any] | None = None,
-        runtime: dict[str, Any] | None = None,
-        execution_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Project an externally replayed event into canonical runtime tables."""
-
-        async with self.db.session() as s:
-            workspace = await s.scalar(select(Workspace).where(Workspace.learner_id == learner_id))
-            result = await project_runtime_events(
-                s,
-                learner_id=learner_id,
-                records=[
-                    {
-                        "record_key": record_key,
-                        "task_id": task_id,
-                        "session_id": session_id,
-                        "sequence": sequence,
-                        "kind": kind,
-                        "agent": agent,
-                        "payload": payload or {},
-                        "runtime": runtime or {},
-                        "execution_id": execution_id,
-                    }
-                ],
-                workspace=workspace,
-            )
-            await s.commit()
-            return result[0]
 
     async def create_agent_execution(
         self,
@@ -323,7 +282,9 @@ class RuntimeRepository:
         async with self.db.session() as s:
             rows = (
                 await s.scalars(
-                    select(SkillRun).where(SkillRun.task_id == task_id).order_by(SkillRun.created_at)
+                    select(SkillRun)
+                    .where(SkillRun.task_id == task_id)
+                    .order_by(SkillRun.created_at)
                 )
             ).all()
             return [_skill_run_dict(row) for row in rows]
@@ -486,7 +447,10 @@ class RuntimeRepository:
                     "interaction": _interaction_dict(interaction),
                 }
             if interaction.status == "resolved":
-                return {"outcome": "already_resolved", "interaction": _interaction_dict(interaction)}
+                return {
+                    "outcome": "already_resolved",
+                    "interaction": _interaction_dict(interaction),
+                }
             if interaction.status != "pending":
                 return {"outcome": "invalid", "status": interaction.status}
             if not interaction.blocking:
@@ -520,8 +484,8 @@ class RuntimeRepository:
             if not turn_id:
                 return {"outcome": "invalid", "status": "no_turn"}
             # The pending→resolved transition is the election: a conditional
-            # UPDATE is atomic on both PostgreSQL and SQLite, so two concurrent
-            # answers cannot both observe a pending interaction and both
+            # PostgreSQL applies the guarded UPDATE atomically, so two answers
+            # cannot both observe a pending interaction and both
             # resume the same checkpoint.
             elected = await s.execute(
                 update(AgentInteraction)
@@ -606,8 +570,7 @@ class RuntimeRepository:
                 )
             ).all()
             return [
-                {**_command_dict(command), "learner_id": learner_id}
-                for command, learner_id in rows
+                {**_command_dict(command), "learner_id": learner_id} for command, learner_id in rows
             ]
 
     async def pending_interactions(self, task_id: str) -> list[dict[str, Any]]:
@@ -635,7 +598,6 @@ def interaction_resolved_event_key(interaction_id: str) -> str:
     return f"interaction:{interaction_id}:resolved"
 
 
-
 def _interaction_command_key(interaction_id: str, idempotency_key: str) -> str:
     """Command-ledger key for one interaction answer.
 
@@ -644,7 +606,6 @@ def _interaction_command_key(interaction_id: str, idempotency_key: str) -> str:
     """
 
     return f"interaction:{interaction_id}:{idempotency_key}"
-
 
 
 def _agent_run_dict(row: AgentRun) -> dict[str, Any]:
@@ -670,7 +631,6 @@ def _agent_run_dict(row: AgentRun) -> dict[str, Any]:
     }
 
 
-
 def _skill_run_dict(row: SkillRun) -> dict[str, Any]:
     return {
         "id": row.id,
@@ -687,7 +647,6 @@ def _skill_run_dict(row: SkillRun) -> dict[str, Any]:
         "ended_at": row.ended_at.isoformat() if row.ended_at else None,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
-
 
 
 def _interaction_dict(row: AgentInteraction) -> dict[str, Any]:

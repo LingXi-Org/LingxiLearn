@@ -1,5 +1,0 @@
-export * from '@/lib/api/contracts/knowledge/base'
-export * from '@/lib/api/contracts/knowledge/chunks'
-export * from '@/lib/api/contracts/knowledge/documents'
-export * from '@/lib/api/contracts/knowledge/search'
-export * from '@/lib/api/contracts/knowledge/tags'

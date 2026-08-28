@@ -36,11 +36,11 @@ from lingxigraph.errors import (
 from ..agents.model_runtime import EVENT_CHANNEL
 from ..config import Settings
 from ..runtime.execution import ExecutionProjector
-from ..runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
-from ..runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
-from ..runtime.loop import initial_state as initial_loop_state
+from ..runtime.graph import GRAPH_NAME as LOOP_GRAPH_NAME
+from ..runtime.graph import GRAPH_VERSION as LOOP_GRAPH_VERSION
+from ..runtime.graph import initial_state as initial_loop_state
 from ..runtime.public_projection import PublicProjector
-from ..state.session_state import RuntimeStatus, new_budget
+from ..state.agent_task_state import RuntimeStatus, new_budget
 from ..store.repositories.agent_tasks import AgentTaskRepository
 from ..store.repositories.runtime import RuntimeRepository
 from ..store.repositories.work_ledger import WorkLedgerRepository
@@ -485,14 +485,10 @@ class LingxiGraphRuntimeAdapter:
                 delivered += 1
         return delivered
 
-    async def _heartbeat_primary_command(
-        self, command_id: str, execution_id: str
-    ) -> None:
+    async def _heartbeat_primary_command(self, command_id: str, execution_id: str) -> None:
         while True:
             await asyncio.sleep(10)
-            if not await self._work_ledger.heartbeat_command_delivery(
-                command_id, execution_id
-            ):
+            if not await self._work_ledger.heartbeat_command_delivery(command_id, execution_id):
                 return
 
     def schedule_interaction_drain(self, task_id: str, learner_id: str) -> None:
@@ -518,9 +514,7 @@ class LingxiGraphRuntimeAdapter:
         for task in await self._agent_tasks.queued_agent_tasks():
             self._tasks.spawn(self._drain_pending_commands(task["id"], task["learner_id"]))
         for task in await self._work_ledger.tasks_with_pending_commands():
-            self._tasks.spawn(
-                self._recover_pending_commands(task["id"], task["learner_id"])
-            )
+            self._tasks.spawn(self._recover_pending_commands(task["id"], task["learner_id"]))
         await self.recover_interaction_continuations()
 
     async def recover_interaction_continuations(self) -> int:
@@ -679,7 +673,6 @@ class LingxiGraphRuntimeAdapter:
                     "answers": _json_safe(resume.get("answers"))
                     if resume.get("answers") is not None
                     else None,
-                    "attachments": _json_safe(resume.get("attachments") or []),
                 },
             )
         pending_commands = await self._work_ledger.pending_commands(task_id)
@@ -784,12 +777,10 @@ class LingxiGraphRuntimeAdapter:
                         "payload": turn_started,
                         "execution_id": execution_id,
                         "runtime": {},
-                        "protocol_version": 1,
                         "turn_id": turn_id or None,
                     }
                 )
-            # The thread is executing again; the legacy per-run status keeps
-            # its historical meaning for existing readers (issue #18 §4.1).
+            # The thread and current execution are both running again.
             await self._agent_tasks.set_agent_thread_status(task_id, "running")
             await self._events.append(task_id, start_events)
         except Exception as exc:  # noqa: BLE001 - startup failures are user-visible
@@ -824,11 +815,11 @@ class LingxiGraphRuntimeAdapter:
             # The graph adapter can inspect provider-native messages for local
             # control flow, but this is the sole public persistence boundary.
             # Raw reasoning and raw tool payloads/arguments stay private: they
-            # are dropped from the V0 rows and only their sanitized V1 shape
+            # are dropped from durable native events; only their sanitized V1 shape
             # (safeParams/safeResult, issue #18 §3.4/§9.3) is persisted.
             private_kinds = {"reasoning.delta", "tool.call.delta", "tool.result"}
             # An artifact that passed validation projects to a read-only
-            # WorkspaceFile immediately, so the resource identity exists the
+            # Artifact record immediately, so the resource identity exists the
             # moment the learner sees "产物完成" (issue #18 §12.2).
             for item in events:
                 if item.get("kind") != "artifact.ready":
@@ -839,8 +830,8 @@ class LingxiGraphRuntimeAdapter:
                 )
                 if descriptor is not None:
                     payload = dict(item.get("payload") or {})
-                    payload["workspace_file_id"] = descriptor["id"]
-                    payload["workspace_file_title"] = descriptor["title"]
+                    payload["artifact_record_id"] = descriptor["id"]
+                    payload["artifact_title"] = descriptor["title"]
                     item["payload"] = payload
             v1_rows = _project_public_events(
                 public_projector,
@@ -869,8 +860,8 @@ class LingxiGraphRuntimeAdapter:
                     **(item.get("payload") or {}),
                     "executionSnapshot": current_execution_snapshot,
                 }
-            # Dual projection: V1 rows carry the canonical identity the next
-            # frontend stage consumes; V0 keeps serving today's UI unchanged.
+            # Native rows feed execution diagnostics; V1 rows are the only
+            # rows exposed by the public event repository query.
             await self._events.append(task_id, [*public_events, *v1_rows])
             if not public_events and not v1_rows:
                 return
@@ -904,7 +895,6 @@ class LingxiGraphRuntimeAdapter:
                             "payload": envelope,
                             "execution_id": execution_id,
                             "runtime": {},
-                            "protocol_version": 1,
                             "turn_id": turn_id or None,
                         }
                     ],
@@ -960,7 +950,7 @@ class LingxiGraphRuntimeAdapter:
                 self._heartbeat_primary_command(primary_command_id, execution_id)
             )
         try:
-            session_state = await self._runtime_state.ensure_session_state(
+            task_state = await self._runtime_state.ensure_agent_task_state(
                 learner_id=learner_id,
                 task_id=task_id,
                 budget=new_budget(),
@@ -973,7 +963,7 @@ class LingxiGraphRuntimeAdapter:
                 turn_id=turn_id,
                 emit=emit_runtime_event,
                 confirmed_actions=frozenset(
-                    (session_state.get("plan") or {}).get("confirmed_actions") or ()
+                    (task_state.get("plan") or {}).get("confirmed_actions") or ()
                 ),
                 prior_results=prior_results,
                 prior_artifacts=prior_artifacts,
@@ -983,9 +973,7 @@ class LingxiGraphRuntimeAdapter:
             checkpointed_command_ids = {
                 str(command_id)
                 for command_id in (
-                    dict(getattr(checkpoint_state, "values", None) or {}).get(
-                        "applied_command_ids"
-                    )
+                    dict(getattr(checkpoint_state, "values", None) or {}).get("applied_command_ids")
                     or []
                 )
                 if str(command_id)
@@ -1011,7 +999,7 @@ class LingxiGraphRuntimeAdapter:
                     learner_id=learner_id,
                     task_id=task_id,
                     utterance=prompt,
-                    budget=session_state.get("budget") or new_budget(),
+                    budget=task_state.get("budget") or new_budget(),
                 )
             )
             async for streamed in graph.astream(
@@ -1022,7 +1010,7 @@ class LingxiGraphRuntimeAdapter:
                 context={
                     "learner_id": learner_id,
                     "locale": "zh-CN",
-                    "resource_refs": list(record.resources or []),
+                    "resources": list(record.resources or []),
                 },
             ):
                 current_record = await self._agent_tasks.get_agent_task_for_learner(
@@ -1113,33 +1101,6 @@ class LingxiGraphRuntimeAdapter:
                 self._active_steering.pop(task_id, None)
             logger.exception("agent task failed: %s", task_id)
             detail = _safe_agent_error(exc, self._settings)
-            recovered_intro = await self._artifacts.recover_lesson_intro_draft(task_id)
-            if recovered_intro is not None:
-                buffer.append(
-                    {
-                        "kind": "artifact.recovered",
-                        "agent": "lecture_hook",
-                        "payload": {
-                            "artifact": "lesson-intro",
-                            "relative_path": recovered_intro["relative_path"],
-                            "message": "课程引入生成被中断，已从已写入草稿恢复可用页面。",
-                        },
-                    }
-                )
-            recovered_deck = await self._artifacts.recover_deck_draft(task_id)
-            if recovered_deck is not None:
-                buffer.append(
-                    {
-                        "kind": "artifact.recovered",
-                        "agent": "interactive_lecture_deck",
-                        "payload": {
-                            "artifact": "lecture-deck",
-                            "relative_path": f"{task_id}/lecture-deck/dist/lecture.html",
-                            "message": "课件生成被中断或校验失败，已从已写入源文件恢复可用发布物。",
-                            "validation": recovered_deck["validation"],
-                        },
-                    }
-                )
             failure_status = (
                 "timed_out"
                 if isinstance(exc, GraphTimeoutError)
@@ -1255,9 +1216,7 @@ class LingxiGraphRuntimeAdapter:
             if primary_command_id:
                 applied_command_ids.add(primary_command_id)
             for command_id in applied_command_ids:
-                await self._work_ledger.consume_command(
-                    command_id, execution_id=execution_id
-                )
+                await self._work_ledger.consume_command(command_id, execution_id=execution_id)
 
             remaining_commands = await self._work_ledger.pending_commands(task_id)
             transferred = [
@@ -1365,7 +1324,6 @@ class LingxiGraphRuntimeAdapter:
                 resume = {
                     "kind": "chat",
                     "message": str(payload.get("message") or ""),
-                    "attachments": list(payload.get("attachments") or []),
                 }
                 prompt = ""
             elif mode in {"new_turn", "steering"} or disposition == "transfer_pending":

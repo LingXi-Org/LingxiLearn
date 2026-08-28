@@ -204,8 +204,6 @@ class OrchestrationPlan(BaseModel):
     candidates_considered: list[CandidateAction] = Field(default_factory=list)
     deviates_from_goal: bool = False
     """Set when the top-ranked capability is not what the learner literally asked for."""
-    degraded: bool = False
-    """Set when the plan came from the deterministic fallback rather than the model."""
     holds: list[HoldDecision] = Field(default_factory=list)
     delivery_order: list[str] = Field(default_factory=list)
 

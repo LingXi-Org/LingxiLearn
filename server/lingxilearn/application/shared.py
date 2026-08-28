@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def _utc_datetime(value: datetime | None) -> datetime | None:
-    """Normalize SQLite's naive timezone columns before arithmetic."""
+    """Normalize external timestamps before arithmetic."""
     if value is None:
         return None
     if value.tzinfo is None:

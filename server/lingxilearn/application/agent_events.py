@@ -6,7 +6,7 @@ question be read back from the checkpoint.  An SSE connection dying — which it
 will — costs nothing.
 
 **SSE serves from the persisted event log, not from the live stream.**  The run
-writes projections with a monotonic per-session sequence; the endpoint replays
+writes projections with a monotonic per-task sequence; the endpoint replays
 from ``Last-Event-ID``.  A reconnect resumes exactly where it left off.
 """
 
@@ -43,10 +43,10 @@ def _project_public_events(
     *,
     execution_id: str,
 ) -> list[dict[str, Any]]:
-    """Project a V0 persistence buffer into Lingxi Mothership Stream V1 rows.
+    """Project internal execution events into public AgentTask stream rows.
 
     The projector sanitizes every payload (denylist + per-tool projection), so
-    it may safely consume raw tool events that never reach the V0 rows.  The
+    it may safely consume raw tool events that never reach durable native rows. The
     ``seq`` placeholders are rewritten by the repository when the durable task
     sequence is assigned, keeping envelope seq == row sequence.
     """
@@ -62,12 +62,9 @@ def _project_public_events(
                         "payload": envelope,
                         "execution_id": execution_id,
                         "runtime": {},
-                        "protocol_version": 1,
                         "turn_id": (envelope.get("stream") or {}).get("turnId") or None,
-                        "agent_run_id": (envelope.get("scope") or {}).get("agentRunId")
-                        or None,
-                        "skill_run_id": (envelope.get("scope") or {}).get("skillRunId")
-                        or None,
+                        "agent_run_id": (envelope.get("scope") or {}).get("agentRunId") or None,
+                        "skill_run_id": (envelope.get("scope") or {}).get("skillRunId") or None,
                     }
                 )
         except Exception:  # noqa: BLE001 - projection must never fail the run
@@ -118,9 +115,7 @@ class AgentEventService:
         self._agent_waiters: dict[str, asyncio.Event] = defaultdict(asyncio.Event)
         # Publishing an interaction outbox row is idempotent across processes;
         # this lock only keeps one process from doing the same work twice.
-        self._interaction_publish_locks: defaultdict[str, asyncio.Lock] = defaultdict(
-            asyncio.Lock
-        )
+        self._interaction_publish_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     # -- live waiters (SSE wake-ups) --------------------------------------
 
@@ -139,19 +134,10 @@ class AgentEventService:
 
         await self._agent_tasks.append_agent_events(task_id, events)
 
-    async def events_after(
-        self, task_id: str, learner_id: str, after: int, *, protocol_version: int = 0
-    ) -> list[dict[str, Any]]:
+    async def events_after(self, task_id: str, learner_id: str, after: int) -> list[dict[str, Any]]:
         """Replay persisted rows after ``after`` for the SSE endpoint."""
 
-        return await self._agent_tasks.agent_events_after_for_learner(
-            task_id, learner_id, after, protocol_version=protocol_version
-        )
-
-    async def replay_protocol(self, task_id: str, learner_id: str) -> int:
-        """Return the authoritative reader protocol for this retained task."""
-
-        return await self._agent_tasks.agent_event_protocol_for_learner(task_id, learner_id)
+        return await self._agent_tasks.agent_events_after_for_learner(task_id, learner_id, after)
 
     # -- execution snapshots ----------------------------------------------
 
@@ -160,11 +146,8 @@ class AgentEventService:
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """Read an execution's event log to completion, page by sequence.
 
-        ``agent_events_for_execution`` historically defaulted to 5,000 rows.
-        A one-shot call made long runs look complete while silently dropping
-        their tail.  Keep paging until the repository reports a short page or
-        the durable count is satisfied, and return an explicit read status if
-        a legacy repository cannot page or makes no progress.
+        Keep paging until the repository reports a short page or the durable
+        count is satisfied.
         """
 
         expected_count: int | None = None
@@ -179,27 +162,16 @@ class AgentEventService:
         seen_sequences: set[int] = set()
         cursor = 0
         truncated = False
-        legacy_reader = False
         pages = 0
 
         while True:
             pages += 1
-            try:
-                page = await self._agent_tasks.agent_events_for_execution(
-                    execution_id,
-                    learner_id,
-                    limit=AGENT_EVENT_PAGE_SIZE,
-                    after=cursor,
-                )
-            except TypeError:
-                # Keep compatibility with an older repository implementation,
-                # but never treat its 5,000-row result as complete when there
-                # is no cursor support for a follow-up page.
-                legacy_reader = True
-                if cursor:
-                    truncated = True
-                    break
-                page = await self._agent_tasks.agent_events_for_execution(execution_id, learner_id)
+            page = await self._agent_tasks.agent_events_for_execution(
+                execution_id,
+                learner_id,
+                limit=AGENT_EVENT_PAGE_SIZE,
+                after=cursor,
+            )
 
             if not isinstance(page, list):
                 page = list(page or ())
@@ -249,13 +221,8 @@ class AgentEventService:
                 truncated = True
                 break
             cursor = next_cursor
-            if legacy_reader:
-                truncated = True
-                break
 
-        complete = not truncated and (
-            expected_count is None or len(records) >= expected_count
-        )
+        complete = not truncated and (expected_count is None or len(records) >= expected_count)
         if expected_count is not None and len(records) < expected_count:
             truncated = True
             complete = False
@@ -352,33 +319,6 @@ class AgentEventService:
 
     async def evidence_for_task(self, task_id: str) -> list[dict[str, Any]]:
         return await self._runtime_state.evidence_for_task(task_id)
-
-    async def project_learning_record(
-        self,
-        *,
-        learner_id: str,
-        record_key: str,
-        task_id: str,
-        sequence: int,
-        kind: str,
-        agent: str,
-        payload: dict[str, Any],
-        runtime: dict[str, Any],
-        execution_id: str | None,
-    ) -> dict[str, Any]:
-        """Project a replayed runtime event into the canonical runtime tables."""
-
-        return await self._runtime.project_runtime_event(
-            learner_id=learner_id,
-            record_key=record_key,
-            task_id=task_id,
-            sequence=sequence,
-            kind=kind,
-            agent=agent,
-            payload=payload,
-            runtime=runtime,
-            execution_id=execution_id,
-        )
 
     # -- interaction outbox (transactional public projection) --------------
 

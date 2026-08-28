@@ -22,7 +22,7 @@ from lingxilearn.runtime.contracts import Cost, DoneCondition, PlannedTask
 from lingxilearn.runtime.dispatch.binding import Resolution
 from lingxilearn.runtime.dispatch.projection import DispatchProjector
 from lingxilearn.runtime.dispatch.runner import ExecutionRunner
-from lingxilearn.state.session_state import Goal
+from lingxilearn.state.agent_task_state import Goal
 
 CANONICAL_DISPATCH_KINDS = {
     "work.claimed",

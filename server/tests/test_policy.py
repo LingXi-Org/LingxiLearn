@@ -5,7 +5,6 @@ from __future__ import annotations
 from lingxilearn.kernel.policy import (
     LeakGuard,
     check_leakage,
-    fallback_hint,
     next_hint_level,
     should_unlock_answer,
 )
@@ -59,11 +58,3 @@ def test_answer_unlocks_only_on_request_after_effort():
     assert not should_unlock_answer(attempts=5, step=step, learner_requested=False)
     assert not should_unlock_answer(attempts=1, step=step, learner_requested=True)
     assert should_unlock_answer(attempts=3, step=step, learner_requested=True)
-
-
-def test_fallback_hint_walks_the_authored_ladder():
-    step = {"hint_ladder": ["一级", "二级", "三级"]}
-    assert fallback_hint(step, 0) == "一级"
-    assert fallback_hint(step, 2) == "三级"
-    assert fallback_hint(step, 9) == "三级"  # clamps rather than crashing
-    assert fallback_hint({}, 0)  # always returns something usable

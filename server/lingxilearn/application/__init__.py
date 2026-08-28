@@ -18,7 +18,6 @@ from .agent_events import AgentEventService
 from .agent_tasks import AgentTaskService, agent_task_create_payload_digest
 from .artifacts import ArtifactResourceService
 from .container import ApplicationServices
-from .conversation import ConversationService
 from .learner_state import LearnerStateService
 from .runtime_adapter import LingxiGraphRuntimeAdapter
 from .runtime_port import RuntimeInputPort
@@ -30,7 +29,6 @@ __all__ = [
     "ApplicationServices",
     "ArtifactResourceService",
     "BackgroundTasks",
-    "ConversationService",
     "LearnerStateService",
     "LingxiGraphRuntimeAdapter",
     "RuntimeInputPort",

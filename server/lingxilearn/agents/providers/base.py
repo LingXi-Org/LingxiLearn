@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ...runtime.contracts import PlannedTask
+from ...state.agent_task_state import Goal
 from ...state.evidence import EvidenceRecord
-from ...state.session_state import Goal
 from ..artifact_store import ArtifactStore
 
 logger = logging.getLogger(__name__)
@@ -130,21 +130,20 @@ _DESCRIPTORS: dict[str, AgentDescriptor] = {}
 def register(
     name: str,
     *,
-    display_name: str = "",
+    display_name: str,
     description: str = "",
     execution_kind: Literal["model", "deterministic"] = "model",
     icon_key: str = "agent",
 ) -> Callable[[Provider], Provider]:
     """Register a provider implementation under the name skills refer to.
 
-    ``display_name`` is the learner-facing agent name; it becomes the authority
-    for AgentGroup labels instead of frontend constants.  Providers registered
-    without one keep a humanized fallback of their id.
+    ``display_name`` is the required learner-facing authority for AgentGroup
+    labels instead of a frontend constant or inferred provider id.
     """
 
     descriptor = AgentDescriptor(
         provider_id=name,
-        display_name=display_name or name.replace("_", " ").strip(),
+        display_name=display_name,
         description=description,
         execution_kind=execution_kind,
         icon_key=icon_key,

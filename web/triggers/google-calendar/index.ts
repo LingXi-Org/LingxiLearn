@@ -1,1 +1,0 @@
-export { googleCalendarPollingTrigger } from './poller'

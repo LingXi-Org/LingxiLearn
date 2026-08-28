@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 from lingxigraph import Runtime
 
+from ...state.agent_task_state import TERMINAL_STATUSES, Goal, RuntimeStatus
 from ...state.gain import ProfileView
-from ...state.session_state import TERMINAL_STATUSES, Goal, RuntimeStatus
 from .. import orchestrator
 from ..candidates import WorldState, is_direct_question, requests_heavy_artifact
 from ..contracts import Cost, DoneCondition, PlannedTask
@@ -584,19 +584,12 @@ def build_orchestrate_node(deps: LoopDeps, *, dispatcher: Dispatcher):
         if produced.negotiation:
             awaiting = True
 
-        # Structured HITL (issue #18 §10): a blocking interaction is persisted
-        # durably and announced as an event; the checkpoint stores only the
-        # opaque interaction id.  Prose negotiation remains the legacy path.
-        # Pre-execution HITL and the post-answer follow-up share the single
-        # request path in ``interactions.request_interaction`` (issue #32 §1).
+        # A blocking interaction is persisted and announced; the checkpoint
+        # stores only its opaque id.
         pending_interaction: dict[str, Any] | None = None
         if awaiting and isinstance(produced.interaction, dict):
-            try:
-                spec = InteractionSpec.model_validate(dict(produced.interaction))
-            except Exception:  # noqa: BLE001 - degrade to the legacy text path
-                spec = None
-            if spec is not None:
-                pending_interaction = await request_interaction(deps, spec)
+            spec = InteractionSpec.model_validate(dict(produced.interaction))
+            pending_interaction = await request_interaction(deps, spec)
 
         status = (
             RuntimeStatus.WAITING_FOR_USER

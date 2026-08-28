@@ -82,7 +82,9 @@ def test_paused_duration_freezes_active_time_and_excludes_the_wait_after_resume(
     assert final["durationMs"] == final["activeDurationMs"]
 
 
-def test_a_native_span_open_across_pause_and_resume_excludes_the_wait_from_its_own_duration() -> None:
+def test_a_native_span_open_across_pause_and_resume_excludes_the_wait_from_its_own_duration() -> (
+    None
+):
     """A node-level span (e.g. ``await_user``) must not inherit the wait either.
 
     The root's ``activeDurationMs`` freezing alone is not enough: if a native

@@ -12,6 +12,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...domain.errors import AgentTaskCreateConflict
 from ..database import Database
 from ..models.agent import (
     AgentSchedule,
@@ -22,8 +23,6 @@ from ..models.agent import (
     TransactionalOutbox,
 )
 from ..models.base import utcnow
-from ..models.workspace import Workspace
-from ..runtime_tables import project_runtime_events
 
 
 class AgentTaskRepository:
@@ -43,7 +42,13 @@ class AgentTaskRepository:
     async def create_agent_task(self, **fields: Any) -> None:
         async with self.db.session() as s:
             s.add(AgentTask(**fields))
-            await s.commit()
+            try:
+                await s.commit()
+            except IntegrityError as exc:
+                await s.rollback()
+                if fields.get("create_idempotency_key"):
+                    raise AgentTaskCreateConflict from exc
+                raise
 
     async def get_agent_task_by_create_idempotency_key(
         self, learner_id: str, idempotency_key: str
@@ -227,8 +232,7 @@ class AgentTaskRepository:
                 try:
                     await s.flush()
                 except IntegrityError:
-                    # A SQLite development worker has no SKIP LOCKED. If two
-                    # pollers race the same unique slot, the loser simply
+                    # If two pollers race the same unique slot, the loser simply
                     # yields this tick and the winner owns the lease.
                     await s.rollback()
                     return None
@@ -320,10 +324,8 @@ class AgentTaskRepository:
         restarted process.  A conditional update prevents startup recovery,
         retries, and the original request from running the same task twice.
 
-        A task is claimable when it is queued, waiting on the learner, or —
-        under the long-lived thread model (issue #18 §4.1) — when the thread is
-        still open even though an earlier turn ended in a terminal legacy
-        status.  A running task is never claimable.
+        A task is claimable when its thread is open and it is not currently
+        running or cancelled. A running task is never claimable.
         """
 
         async with self.db.session() as s:
@@ -536,8 +538,7 @@ class AgentTaskRepository:
     ) -> int:
         """Allocate sequences and write event rows inside an open transaction.
 
-        Shared by the ordinary append and the outbox publisher so both produce
-        identical rows and identical V1 envelope sequencing.
+        Shared by the ordinary append and the outbox publisher.
         """
 
         highest = (
@@ -545,15 +546,12 @@ class AgentTaskRepository:
                 select(func.max(AgentTaskEvent.sequence)).where(AgentTaskEvent.task_id == task_id)
             )
         ).scalar() or 0
-        runtime_records: list[dict[str, Any]] = []
         for offset, event in enumerate(events, start=1):
             sequence = highest + offset
             runtime = event.get("runtime") or (event.get("payload") or {}).get("runtime") or {}
             payload = event.get("payload") or {}
-            if int(event.get("protocol_version") or 0) == 1:
-                # Keep the V1 envelope seq equal to the durable row
-                # sequence so Last-Event-ID reconnect works uniformly
-                # across protocols (issue #18 §15.2).
+            if str(event.get("kind") or "").startswith("v1."):
+                # Keep the public envelope sequence equal to its durable row.
                 if isinstance(payload, dict):
                     payload = dict(payload)
                     payload["seq"] = sequence
@@ -570,32 +568,11 @@ class AgentTaskRepository:
                     payload=payload,
                     execution_id=event.get("execution_id"),
                     runtime=runtime,
-                    protocol_version=int(event.get("protocol_version") or 0),
                     turn_id=event.get("turn_id"),
                     agent_run_id=event.get("agent_run_id"),
                     skill_run_id=event.get("skill_run_id"),
                 )
             )
-            runtime_records.append(
-                {
-                    "record_key": f"task:{task_id}:{sequence}",
-                    "task_id": task_id,
-                    "sequence": sequence,
-                    "kind": str(event.get("kind", "")),
-                    "agent": str(event.get("agent", "")),
-                    "payload": payload,
-                    "execution_id": event.get("execution_id"),
-                    "runtime": runtime,
-                }
-            )
-        await project_runtime_events(
-            s,
-            learner_id=task.learner_id,
-            records=runtime_records,
-            workspace=await s.scalar(
-                select(Workspace).where(Workspace.learner_id == task.learner_id)
-            ),
-        )
         return highest + len(events)
 
     async def append_agent_events(self, task_id: str, events: list[dict[str, Any]]) -> int:
@@ -615,8 +592,8 @@ class AgentTaskRepository:
         async with self._event_lock(task_id):
             async with self.db.session() as s:
                 # FOR UPDATE makes the max(sequence) allocation atomic across
-                # API/worker processes on PostgreSQL. SQLite ignores it, but
-                # the per-task asyncio lock still serialises local writers.
+                # API/worker processes on PostgreSQL; the per-task asyncio lock
+                # also serialises local writers.
                 task = await s.get(AgentTask, task_id, with_for_update=True)
                 if task is None:
                     raise KeyError(f"unknown agent task: {task_id}")
@@ -696,18 +673,22 @@ class AgentTaskRepository:
     ) -> list[dict[str, Any]]:
         async with self.db.session() as s:
             rows = (
-                await s.execute(
-                    select(AgentTaskEvent)
-                    .join(AgentTask, AgentTask.id == AgentTaskEvent.task_id)
-                    .where(
-                        AgentTaskEvent.execution_id == execution_id,
-                        AgentTask.learner_id == learner_id,
-                        AgentTaskEvent.sequence > max(0, int(after or 0)),
+                (
+                    await s.execute(
+                        select(AgentTaskEvent)
+                        .join(AgentTask, AgentTask.id == AgentTaskEvent.task_id)
+                        .where(
+                            AgentTaskEvent.execution_id == execution_id,
+                            AgentTask.learner_id == learner_id,
+                            AgentTaskEvent.sequence > max(0, int(after or 0)),
+                        )
+                        .order_by(AgentTaskEvent.sequence)
+                        .limit(limit)
                     )
-                    .order_by(AgentTaskEvent.sequence)
-                    .limit(limit)
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             return [_agent_event_dict(row) for row in rows]
 
     async def agent_events_after_for_learner(
@@ -716,8 +697,6 @@ class AgentTaskRepository:
         learner_id: str,
         after: int = 0,
         limit: int = 500,
-        *,
-        protocol_version: int | None = None,
     ) -> list[dict[str, Any]]:
         async with self.db.session() as s:
             stmt = (
@@ -727,31 +706,11 @@ class AgentTaskRepository:
                     AgentTaskEvent.task_id == task_id,
                     AgentTask.learner_id == learner_id,
                     AgentTaskEvent.sequence > after,
+                    AgentTaskEvent.kind.like("v1.%"),
                 )
             )
-            if protocol_version is not None:
-                stmt = stmt.where(AgentTaskEvent.protocol_version == protocol_version)
-            rows = (
-                await s.execute(stmt.order_by(AgentTaskEvent.sequence).limit(limit))
-            ).scalars()
+            rows = (await s.execute(stmt.order_by(AgentTaskEvent.sequence).limit(limit))).scalars()
             return [_agent_event_dict(r) for r in rows]
-
-    async def agent_event_protocol_for_learner(self, task_id: str, learner_id: str) -> int:
-        """Choose one replay protocol for a learner-owned task.
-
-        Migration 0019 marks retained V0-only tasks explicitly. A brand-new
-        empty task defaults to V1, so an empty history can never be mistaken
-        for legacy data or trigger content-based protocol fallback.
-        """
-
-        async with self.db.session() as s:
-            version = await s.scalar(
-                select(AgentTask.event_protocol_version).where(
-                    AgentTask.id == task_id,
-                    AgentTask.learner_id == learner_id,
-                )
-            )
-            return 1 if version is None else int(version)
 
 
 def _quiz_submission_dict(row: QuizSubmission) -> dict[str, Any]:
@@ -766,7 +725,6 @@ def _quiz_submission_dict(row: QuizSubmission) -> dict[str, Any]:
         "handoff_reason": row.handoff_reason,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
-
 
 
 def _agent_event_dict(row: AgentTaskEvent) -> dict[str, Any]:
@@ -785,10 +743,8 @@ def _agent_event_dict(row: AgentTaskEvent) -> dict[str, Any]:
         "checkpoint_id": runtime.get("checkpoint_id"),
         "span_id": runtime.get("span_id"),
         "runtime": runtime,
-        "protocol_version": int(row.protocol_version or 0),
         "turn_id": row.turn_id,
         "agent_run_id": row.agent_run_id,
         "skill_run_id": row.skill_run_id,
         "ts": row.created_at.isoformat() if row.created_at else None,
     }
-

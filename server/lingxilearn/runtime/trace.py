@@ -16,9 +16,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..state.profile_writer import ProfileChange
-from ..state.session_state import Goal
-from ..store.runtime_state import RuntimeStateRepository
+from ..domain.learning_profile import ProfileChange
+from ..ports.runtime_state import RuntimeStatePort
+from ..state.agent_task_state import Goal
 from .contracts import CandidateAction, OrchestrationPlan, TaskOutcome
 from .guardrails import Budget, GuardrailVerdict
 
@@ -116,7 +116,7 @@ class DecisionTracer:
 
     def __init__(
         self,
-        runtime_state: RuntimeStateRepository,
+        runtime_state: RuntimeStatePort,
         *,
         learner_id: str,
         task_id: str,

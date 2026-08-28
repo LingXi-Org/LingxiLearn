@@ -1,58 +1,33 @@
 # 数据来源与合规说明
 
-## 课程数据来源
+## V1 数据边界
 
-正式课程的数据工件由各课程包自行声明。
+V1 只持久化 Identity 映射、Workspace、AgentTask、Artifact 元数据、Skill
+Catalog 元数据和运行健康所需状态。PostgreSQL 是唯一数据库；开发、测试与生产
+均必须提供显式 DSN，并通过唯一 Alembic 初始迁移建库。
 
-当前仓库不再内置旧示例课程及其教学抓包工件。
+Artifact 字节写入服务端 `LINGXILEARN_VAR_DIR`。浏览器没有上传入口，也不能直接
+访问数据库、文件系统、模型凭据或身份令牌。
 
-## 协议参考资料
+## 身份
 
-`packs/<course-pack>/knowledge/`
+LingxiIdentity BFF 验证 host-only HttpOnly Cookie。LingxiLearn 只使用验证后的
+Principal 建立 Identity 映射；客户端不能提交 learner ID、Bearer Token 或替代
+身份头。BFF 地址缺失或不可达时，受保护能力显式失败。
 
-| 文件 | 来源 | 用途 |
-|---|---|---|
-正式课程接入时，在对应课程包中声明知识来源及用途。
+## 课程与 Skill 来源
 
-RFC 文档版权归 IETF Trust 所有，此处为教学用途的**摘录与转述**，
-每个小节标题即引用锚点，教练给出的技术结论必须能指回其中一条。
-若需完整原文，请以上方链接的官方版本为准。
-
-## 学习记录
-
-- 持久化用户数据必须通过 LingxiIdentity BFF 的 host-only HttpOnly `lingxi_session` Cookie；服务端
-  以 BFF 验证后的 `Principal.subject` 和 issuer 建立唯一 Identity User 映射，客户端不能
-  传入 learner ID，也不在浏览器业务数据中保存 OIDC Bearer Token。
-- 本地只有显式 `LINGXILEARN_INSECURE_DEV_AUTH=true` 时才使用固定开发 subject；不接受
-  客户端自报 subject、header 或 learner ID。
-- 存储内容：学习者画像、会话状态、作答证据、掌握度、误区聚合、偏好、追加式学习事件、报告和 SSE 投影日志。
-- 直接在宿主机零配置启动时默认写入 `var/lingxilearn.sqlite3`；开发与生产 Compose 均写入 PostgreSQL 卷。
-- 旧的匿名 guest 记录不会自动映射到新 Identity 用户，仍保留但不通过受保护 API 暴露。
-- 评测使用的学习者档案全部是**合成的**（`lingxilearn.eval`），
-  评测报告中的"学习增益"一栏已明确标注为流程验证，**不代表真实学生的学习效果**。
-
-## 学生上传的抓包
-
-正式课程使用课程包内置工件，**没有开放上传入口**。
-若后续开放，已经就位的约束是：
-
-- 大小上限 `LINGXILEARN_MAX_ARTIFACT_BYTES`（默认 10 MB）；
-- 仅接受经典 pcap，格式校验失败给出明确的中文错误；
-- 课程数据由课程包声明，解析与学习过程在服务端离线完成。
+`packs/` 与 `skills/` 是只读发布输入。正式课程包和 Skill 必须在自身目录声明
+引用来源、许可与用途。运行时不会下载缺失内容，也不会用内置示例替代。
 
 ## 模型调用
 
-| 引擎 | 数据外发 |
-|---|---|
-| `scripted`（默认） | **无**。不联网 |
-| `openai` | 步骤标题、目标、课程作者写的问题与提示、证据摘要、掌握度数值 |
-| `coze` | 同上 |
-
-送往模型的是**教学上下文**，不包含学习者身份。原始抓包字节、完整工具输出与
-数据库记录都不外发。判分、误区识别与证据引用始终在本地完成，模型不参与。
+配置的 Provider 可能接收学习目标、对话内容、Skill 指令和必要的学习状态摘要。
+身份 Cookie、数据库凭据和内部推理不会发送给 Provider。Provider 选择是精确的；
+凭据缺失、调用失败或响应不符合契约时，AgentTask 失败，不切换到本地脚本或另一
+Provider。
 
 ## 边界声明
 
-> LingxiLearn 用于学习辅导与形成性反馈，**不替代教师、学校、考试或任何专业教育机构的最终评价**。
-
-该声明同时固定显示在产品首页与学习报告页底部。
+LingxiLearn 用于学习辅导与形成性反馈，不替代教师、学校、考试或专业教育机构的
+最终评价。

@@ -30,8 +30,8 @@ from lingxilearn.runtime.run_context import (
     new_skill_run_id,
     presentation_role_for,
 )
+from lingxilearn.state.agent_task_state import Goal
 from lingxilearn.state.capabilities import info
-from lingxilearn.state.session_state import Goal
 
 SKILLS = [
     {
@@ -355,9 +355,7 @@ async def test_cancellation_closes_durable_identity_rows() -> None:
     dispatcher = Dispatcher(deps)
 
     with pytest.raises(asyncio.CancelledError):
-        await dispatcher.run(
-            _task("dialog.probe"), profile={}, budget=Budget.from_dict({})
-        )
+        await dispatcher.run(_task("dialog.probe"), profile={}, budget=Budget.from_dict({}))
 
     assert len(repo.agent_runs) == 1
     assert repo.agent_runs[0]["status"] == "cancelled"
@@ -375,14 +373,18 @@ async def test_cancellation_closes_durable_identity_rows() -> None:
     envelopes: list[dict[str, Any]] = []
     for kind, payload in emitted:
         envelopes.extend(
-            projector.consume({"kind": kind, "agent": str(payload.get("agent") or ""), "payload": payload})
+            projector.consume(
+                {"kind": kind, "agent": str(payload.get("agent") or ""), "payload": payload}
+            )
         )
     span_end = [e for e in envelopes if e["type"] == "span" and e["payload"].get("event") == "end"]
     assert span_end and span_end[0]["payload"]["status"] == "cancelled"
     skill_tool = [
         e
         for e in envelopes
-        if e["type"] == "tool" and e["payload"]["toolKind"] == "skill" and e["payload"]["status"] != "executing"
+        if e["type"] == "tool"
+        and e["payload"]["toolKind"] == "skill"
+        and e["payload"]["status"] != "executing"
     ]
     assert skill_tool and skill_tool[0]["payload"]["status"] == "cancelled"
 
@@ -442,7 +444,9 @@ async def test_delegated_child_run_carries_real_parent_identity() -> None:
     envelopes: list[dict[str, Any]] = []
     for kind, payload in emitted:
         envelopes.extend(
-            projector.consume({"kind": kind, "agent": str(payload.get("agent") or ""), "payload": payload})
+            projector.consume(
+                {"kind": kind, "agent": str(payload.get("agent") or ""), "payload": payload}
+            )
         )
     starts = [e for e in envelopes if e["type"] == "span" and e["payload"].get("event") == "start"]
     assert len(starts) == 2

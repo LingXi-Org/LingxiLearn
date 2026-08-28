@@ -7,7 +7,7 @@ individual domain modules instead.
 
 from __future__ import annotations
 
-from . import agent, identity, knowledge, learning, runtime, table, workspace
+from . import agent, identity, learning, runtime, workspace
 from .base import Base
 
-__all__ = ["Base", "agent", "identity", "knowledge", "learning", "runtime", "table", "workspace"]
+__all__ = ["Base", "agent", "identity", "learning", "runtime", "workspace"]

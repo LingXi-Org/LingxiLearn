@@ -1,9 +1,7 @@
 """Fold new evidence into the learning profile.
 
-The single consumer of ``learning_evidence`` and, through
-:class:`~lingxilearn.state.profile_writer.ProfileWriter`, the only thing in the
-system that changes what we believe about a learner.  Agents produce evidence;
-this decides what the evidence means.
+The single consumer of ``learning_evidence``. Agents produce evidence; this
+decides what the evidence means.
 
 Mastery arithmetic is not reinvented here — :mod:`lingxilearn.kernel.mastery`
 already models evidence-weighted updates with hint discounting, and it stays the
@@ -18,11 +16,11 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from ..domain.learning_profile import DEFAULT_MASTERY, ProfileChange, ProfileDelta
 from ..kernel import mastery as mastery_model
+from ..ports.runtime_state import RuntimeStatePort
 from ..state.evidence import Signal, graded, hint_level_of, misconceptions_of, score_of
-from ..state.profile_writer import DEFAULT_MASTERY, ProfileChange, ProfileDelta
 from ..state.scheduling import due_at, next_stability, review_priority
-from ..store.runtime_state import RuntimeStateRepository
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +118,7 @@ def _group_by_point(rows: Sequence[Mapping[str, Any]]) -> dict[str, list[Mapping
 class StateUpdater:
     """Reads unconsumed evidence, writes the profile, reports what changed."""
 
-    def __init__(self, runtime_state: RuntimeStateRepository) -> None:
+    def __init__(self, runtime_state: RuntimeStatePort) -> None:
         self._state = runtime_state
 
     async def apply(

@@ -18,81 +18,41 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
-
+from ..domain.errors import AgentTaskCreateConflict
+from ..runtime.graph import GRAPH_NAME as LOOP_GRAPH_NAME
+from ..runtime.graph import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from ..runtime.interactions import parse_answers
-from ..runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
-from ..runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from ..runtime.schedules import next_schedule_time, validate_schedule
-from ..state.session_state import RuntimeStatus
-from ..store.database import Database
+from ..state.agent_task_state import RuntimeStatus
 from ..store.learner import LearnerRepository
-from ..store.models.agent import AgentTask
-from ..store.models.knowledge import KnowledgeBase, KnowledgeDocument
-from ..store.models.table import WorkspaceTable
-from ..store.models.workspace import PersonalSkill, Workspace, WorkspaceFile
 from ..store.repositories.agent_tasks import AgentTaskRepository
 from ..store.repositories.runtime import RuntimeRepository
 from ..store.repositories.work_ledger import WorkLedgerRepository
 from ..store.runtime_state import RuntimeStateRepository
 from .agent_events import AgentEventService
 from .artifacts import ArtifactResourceService
+from .ports.artifact import ArtifactRepositoryPort
+from .ports.skill_catalog import SkillCatalogPort
 from .runtime_port import RuntimeInputPort
 from .shared import _json_safe
-
-
-def _normalize_attachment_refs(
-    value: list[dict[str, Any]] | None, learner_id: str
-) -> list[dict[str, Any]]:
-    """Keep only the metadata needed to let agents retrieve uploaded files."""
-
-    refs: list[dict[str, Any]] = []
-    for item in value or []:
-        if not isinstance(item, dict):
-            continue
-        key = str(item.get("key") or "").strip()
-        filename = str(item.get("filename") or "").strip()
-        if not key or not filename or not key.startswith(f"{learner_id}/"):
-            continue
-        try:
-            size = max(0, int(item.get("size") or 0))
-        except (TypeError, ValueError):
-            size = 0
-        refs.append(
-            {
-                "key": key[:512],
-                "path": f"/api/attachments/{key[:512]}",
-                "filename": filename[:255],
-                "media_type": str(item.get("media_type") or "application/octet-stream")[:128],
-                "size": size,
-            }
-        )
-    return refs[:10]
+from .workspaces import WorkspaceService
 
 
 def agent_task_create_payload_digest(
     *,
     prompt: str,
-    attachments: list[dict[str, Any]] | None = None,
-    resource_refs: list[dict[str, Any]] | None = None,
-    skill_ids: list[str] | None = None,
     resources: list[dict[str, Any]] | None = None,
 ) -> str:
     """Build a stable digest for the request that creates an agent task.
 
-    The REST route hashes the learner-facing resource references and skill ids
-    before resolving them. Direct service callers can instead provide the
-    already-resolved resources. Either form is stored next to the create key so
-    a retry can be compared without starting another graph.
+    The resolved Artifact and Skill snapshots are stored next to the create
+    key so a retry can be compared without starting another execution.
     """
 
     payload = {
         "version": 1,
         "prompt": " ".join(prompt.strip().split()),
-        "attachments": attachments or [],
-        "resource_refs": resource_refs if resource_refs is not None else resources or [],
-        "skill_ids": skill_ids or [],
+        "resources": resources or [],
     }
     encoded = json.dumps(
         _json_safe(payload),
@@ -108,17 +68,6 @@ def _agent_task_create_result(record: Any) -> dict[str, Any]:
     if record.error:
         result["error"] = record.error
     return result
-
-
-def _prompt_with_attachments(prompt: str, attachments: list[dict[str, Any]]) -> str:
-    if not attachments:
-        return prompt
-    lines = ["\n\n[已上传附件]"]
-    lines.extend(
-        f"- {item['filename']} ({item['media_type']}, {item['path'] or item['key']})"
-        for item in attachments
-    )
-    return prompt + "\n".join(lines)
 
 
 def _agents_from_trace(decisions: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -211,7 +160,9 @@ class AgentTaskService:
         runtime_repository: RuntimeRepository,
         runtime_state: RuntimeStateRepository,
         learner_repository: LearnerRepository,
-        db: Database,
+        workspace_service: WorkspaceService,
+        artifact_repository: ArtifactRepositoryPort,
+        skill_repository: SkillCatalogPort,
         artifact_service: ArtifactResourceService,
         event_service: AgentEventService,
         runtime: RuntimeInputPort,
@@ -222,7 +173,9 @@ class AgentTaskService:
         self._runtime_repo = runtime_repository
         self._runtime_state = runtime_state
         self._learners = learner_repository
-        self._db = db
+        self._workspaces = workspace_service
+        self._artifact_repository = artifact_repository
+        self._skill_repository = skill_repository
         self._artifacts = artifact_service
         self._events = event_service
         self._runtime = runtime
@@ -234,7 +187,6 @@ class AgentTaskService:
         task_id: str,
         learner_id: str,
         prompt: str,
-        attachments: list[dict[str, Any]] | None = None,
         resources: list[dict[str, Any]] | None = None,
         schedule_id: str | None = None,
         scheduled_for: datetime | None = None,
@@ -249,10 +201,8 @@ class AgentTaskService:
             raise ValueError("prompt is too long")
         if idempotency_key is not None and not 1 <= len(idempotency_key) <= 192:
             raise ValueError("idempotency_key must be between 1 and 192 characters")
-        attachment_refs = _normalize_attachment_refs(attachments, learner_id)
         payload_digest = create_payload_digest or agent_task_create_payload_digest(
             prompt=normalized,
-            attachments=attachment_refs,
             resources=resources or [],
         )
         await self._learners.ensure_learner(learner_id)
@@ -284,7 +234,7 @@ class AgentTaskService:
                 user_messages=[],
                 visual_result={},
             )
-        except IntegrityError:
+        except AgentTaskCreateConflict:
             # Two API replicas can pass the lookup above concurrently. The
             # unique learner/key index elects one creator; the loser returns
             # the committed task instead of spawning a second graph.
@@ -301,7 +251,7 @@ class AgentTaskService:
         initial_command = await self._work_ledger.append_command(
             task_id=task_id,
             kind="initial_prompt",
-            payload={"message": normalized, "attachments": attachment_refs},
+            payload={"message": normalized},
             idempotency_key=f"task:{task_id}:initial",
             delivery_mode="new_turn",
         )
@@ -309,18 +259,10 @@ class AgentTaskService:
             task_id,
             [{"kind": "task.started", "agent": "coordinator", "payload": {"status": "queued"}}],
         )
-        if not self._runtime.model_configured:
-            message = "DS_API_KEY is not configured"
-            await self._agent_tasks.set_agent_task_status(task_id, "failed", message)
-            await self._events.append(
-                task_id,
-                [{"kind": "task.failed", "agent": "coordinator", "payload": {"message": message}}],
-            )
-            return {"id": task_id, "status": "failed", "error": message}
         self._runtime.start_turn(
             task_id,
             learner_id,
-            _prompt_with_attachments(normalized, attachment_refs),
+            normalized,
             schedule_id=schedule_id,
             scheduled_for=scheduled_for,
             command_id=str(initial_command["id"]),
@@ -354,15 +296,15 @@ class AgentTaskService:
         if record is None:
             raise KeyError(f"unknown agent task: {task_id}")
         executions = await self._runtime_repo.list_agent_executions(record.id, record.learner_id)
-        session_state = await self._runtime_state.get_session_state(record.id) or {}
+        task_state = await self._runtime_state.get_agent_task_state(record.id) or {}
         latest_turn = await self._work_ledger.latest_turn(record.id)
         stack = await self._runtime_state.goal_stack(record.id)
         current_goal = stack.current()
         decisions = await self._runtime_state.decisions_for_task(record.id)
         artifacts = await self._artifacts.artifact_snapshot(record)
         durable_work = await self._work_ledger.list_work(record.id)
-        runtime_status = str(session_state.get("runtime_status") or "")
-        current_plan = dict(session_state.get("plan") or {})
+        runtime_status = str(task_state.get("runtime_status") or "")
+        current_plan = dict(task_state.get("plan") or {})
         goal_status = str(current_goal.status) if current_goal else "open"
         turn_status = str((latest_turn or {}).get("status") or "")
         work_items = [
@@ -418,11 +360,8 @@ class AgentTaskService:
                 for item in executions
             ],
             "goal": current_goal.to_dict() if current_goal else {},
-            "goal_stack": list(session_state.get("goal_stack") or []),
+            "goal_stack": list(task_state.get("goal_stack") or []),
             "runtime_status": runtime_status,
-            # V2 additive compatibility fields.  The legacy status remains the
-            # task row status while these expose the independent run/turn/goal
-            # dimensions without forcing a frontend migration.
             "turnStatus": turn_status
             or (
                 "awaiting_user"
@@ -435,19 +374,16 @@ class AgentTaskService:
             ),
             "goalStatus": goal_status,
             "phase": str((latest_turn or {}).get("phase") or runtime_status.lower()),
-            "executionMode": str(
-                (latest_turn or {}).get("execution_mode")
-                or ("deterministic_fallback" if current_plan.get("degraded") else "normal")
-            ),
+            "executionMode": str((latest_turn or {}).get("execution_mode") or "model"),
             "currentTurnId": str(
-                (latest_turn or {}).get("id") or session_state.get("current_turn_id") or record.id
+                (latest_turn or {}).get("id") or task_state.get("current_turn_id") or record.id
             ),
             "planRevision": int(
-                (latest_turn or {}).get("revision") or session_state.get("revision") or 0
+                (latest_turn or {}).get("revision") or task_state.get("revision") or 0
             ),
             "workItems": work_items,
             "plan": current_plan,
-            "budget": dict(session_state.get("budget") or {}),
+            "budget": dict(task_state.get("budget") or {}),
             # Which agents ran is a fact about this run, read from the decision
             # trace and the registry. There is no fixed roster to enumerate.
             "intent": {
@@ -460,11 +396,11 @@ class AgentTaskService:
             "artifacts": artifacts,
             "delivery": {
                 "order": list(
-                    (session_state.get("board") or {}).get("order")
+                    (task_state.get("board") or {}).get("order")
                     or ["lesson-intro", "visual", "lecture-deck", "quiz"]
                 ),
-                "queue": list((session_state.get("board") or {}).get("delivery") or []),
-                "cursor": int((session_state.get("board") or {}).get("cursor") or 0),
+                "queue": list((task_state.get("board") or {}).get("delivery") or []),
+                "cursor": int((task_state.get("board") or {}).get("cursor") or 0),
             },
             "quiz_submission": await _submission_snapshot(self._agent_tasks, record.id),
             "error": record.error,
@@ -543,7 +479,7 @@ class AgentTaskService:
         source_task_id: str | None = None,
         graph_version: str = f"{LOOP_GRAPH_NAME}@{LOOP_GRAPH_VERSION}",
     ) -> dict[str, Any]:
-        """Create a pending Agent proposal; only the native Sim card can approve it."""
+        """Create a pending Agent schedule proposal."""
 
         expression, zone = validate_schedule(cron, timezone)
         now = datetime.now(UTC)
@@ -642,7 +578,7 @@ class AgentTaskService:
     async def decide_schedule_permission(
         self, *, learner_id: str, decisions: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Apply Sim permission-card decisions to schedule proposals."""
+        """Apply permission decisions to schedule proposals."""
 
         results: list[dict[str, Any]] = []
         for item in decisions[:50]:
@@ -692,128 +628,52 @@ class AgentTaskService:
     async def validate_task_resources(
         self,
         learner_id: str,
-        resource_refs: list[dict[str, Any]],
-        skill_ids: list[str],
+        resources: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Validate native workspace references and persist personal-skill snapshots.
+        """Validate Artifact and Skill references for a new task.
 
-        The Sim UI sends resource references as JSON rather than opaque backend
-        IDs.  Resolve every reference against the current learner before a task
-        starts so a guessed id can never disclose another learner's files,
-        tables, or KBs.  Skill snapshots are copied into the task resource list
-        to make a later run reproducible even if the editable personal skill
-        changes.
+        Resolve every reference against the current learner before a task
+        starts. Skill content is copied into the task resource list so a run
+        remains reproducible after the editable catalogue entry changes.
 
         Raises ``ValueError`` for malformed requests and ``KeyError`` for
         references that do not exist for this learner.
         """
 
-        normalized = [dict(ref) for ref in resource_refs if isinstance(ref, dict)]
-        async with self._db.session() as session:
-            workspace = await session.scalar(
-                select(Workspace).where(Workspace.learner_id == learner_id)
-            )
-            workspace_id = workspace.id if workspace is not None else None
-            for ref in normalized:
-                kind = str(
-                    ref.get("type") or ref.get("resourceType") or ref.get("kind") or ""
-                ).lower()
-                resource_id = str(
-                    ref.get("id")
-                    or ref.get("resourceId")
-                    or ref.get("fileId")
-                    or ref.get("tableId")
-                    or ref.get("knowledgeBaseId")
-                    or ref.get("documentId")
-                    or ""
-                )
-                if not resource_id:
-                    raise ValueError("resource_id_required")
-                if kind in {"file", "files", "workspace_file"} or ref.get("fileId"):
-                    row = await session.scalar(
-                        select(WorkspaceFile).where(
-                            WorkspaceFile.id == resource_id,
-                            WorkspaceFile.workspace_id == workspace_id,
-                        )
-                    )
-                elif kind in {"table", "tables", "workspace_table"} or ref.get("tableId"):
-                    row = await session.scalar(
-                        select(WorkspaceTable).where(
-                            WorkspaceTable.id == resource_id,
-                            WorkspaceTable.workspace_id == workspace_id,
-                        )
-                    )
-                elif (
-                    kind in {"knowledge", "knowledge_base", "kb", "document"}
-                    or ref.get("knowledgeBaseId")
-                    or ref.get("documentId")
-                ):
-                    if ref.get("documentId"):
-                        row = await session.scalar(
-                            select(KnowledgeDocument)
-                            .join(KnowledgeBase, KnowledgeBase.id == KnowledgeDocument.base_id)
-                            .where(
-                                KnowledgeDocument.id == resource_id,
-                                KnowledgeBase.learner_id == learner_id,
-                            )
-                        )
-                    else:
-                        row = await session.scalar(
-                            select(KnowledgeBase).where(
-                                KnowledgeBase.id == resource_id,
-                                KnowledgeBase.learner_id == learner_id,
-                            )
-                        )
-                elif kind in {"task", "agent_task", "artifact"}:
-                    # Task and artifact references are learner-scoped as well. Do
-                    # not accept an opaque id here: the caller must own the task
-                    # that produced the reference.
-                    task_id = str(ref.get("taskId") or resource_id)
-                    row = await session.scalar(
-                        select(AgentTask).where(
-                            AgentTask.id == task_id,
-                            AgentTask.learner_id == learner_id,
-                        )
-                    )
-                elif kind == "skill":
-                    skill_id = str(ref.get("skillId") or resource_id)
-                    row = await session.scalar(
-                        select(PersonalSkill).where(
-                            PersonalSkill.id == skill_id,
-                            PersonalSkill.learner_id == learner_id,
-                        )
-                    )
-                else:
-                    raise ValueError("unsupported_resource_type")
-                if row is None:
-                    raise KeyError("resource_not_found")
+        normalized = [dict(ref) for ref in resources if isinstance(ref, dict)]
+        workspace = await self._workspaces.resolve(learner_id)
+        referenced_skill_ids: set[str] = set()
+        for ref in normalized:
+            kind = str(ref.get("type") or ref.get("kind") or "").lower()
+            resource_id = str(ref.get("id") or "")
+            if not resource_id:
+                raise ValueError("resource_id_required")
+            if kind == "artifact":
+                row = await self._artifact_repository.get(workspace.id, resource_id)
+            elif kind == "agent_task":
+                row = await self._agent_tasks.get_agent_task_for_learner(resource_id, learner_id)
+            elif kind == "skill":
+                referenced_skill_ids.add(resource_id)
+                row = True
+            else:
+                raise ValueError("unsupported_resource_type")
+            if row is None:
+                raise KeyError("resource_not_found")
 
-            if skill_ids:
-                rows = (
-                    (
-                        await session.execute(
-                            select(PersonalSkill).where(
-                                PersonalSkill.learner_id == learner_id,
-                                PersonalSkill.id.in_(skill_ids),
-                            )
-                        )
-                    )
-                    .scalars()
-                    .all()
-                )
-                found = {row.id for row in rows}
-                if found != set(skill_ids):
-                    raise KeyError("resource_not_found")
-                normalized.extend(
-                    {
-                        "type": "skill",
-                        "skillId": row.id,
-                        "name": row.name,
-                        "version": row.version,
-                        "snapshot": row.content,
-                    }
-                    for row in rows
-                )
+        skills = await self._skill_repository.get_many(learner_id, referenced_skill_ids)
+        if {skill.id for skill in skills} != referenced_skill_ids:
+            raise KeyError("resource_not_found")
+        normalized = [ref for ref in normalized if str(ref.get("type")) != "skill"]
+        normalized.extend(
+            {
+                "type": "skill",
+                "id": skill.id,
+                "name": skill.name,
+                "version": skill.version,
+                "content": skill.content,
+            }
+            for skill in skills
+        )
         return normalized
 
     async def agent_message(
@@ -821,7 +681,6 @@ class AgentTaskService:
         task_id: str,
         message: str,
         *,
-        attachments: list[dict[str, Any]] | None = None,
         learner_id: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any] | None:
@@ -831,7 +690,7 @@ class AgentTaskService:
         graph waits resumes the current turn; a message while a turn is still
         running becomes an interjection in that turn; a message on an idle
         thread — even after an earlier turn completed or failed — starts a new
-        turn instead of dead-ending on a legacy terminal status.
+        turn.
         """
 
         record = await (
@@ -845,7 +704,6 @@ class AgentTaskService:
             raise ValueError("message must not be empty")
         if str(getattr(record, "thread_status", "") or "open") == "cancelled":
             raise ValueError("thread is cancelled")
-        attachment_refs = _normalize_attachment_refs(attachments, record.learner_id)
         current_turn = (
             await self._work_ledger.latest_turn(task_id)
             if record.status in {"queued", "running", "awaiting_user"}
@@ -859,7 +717,7 @@ class AgentTaskService:
         command = await self._work_ledger.append_command(
             task_id=task_id,
             kind="message",
-            payload={"message": message.strip(), "attachments": attachment_refs},
+            payload={"message": message.strip()},
             idempotency_key=idempotency_key or f"message-{uuid.uuid4().hex}",
             turn_id=str(current_turn["id"]) if current_turn is not None else None,
             delivery_mode=delivery_mode,
@@ -869,7 +727,6 @@ class AgentTaskService:
             if not created:
                 if command.get("payload") != {
                     "message": message.strip(),
-                    "attachments": attachment_refs,
                 }:
                     raise ValueError("idempotency_key_reused")
                 # Append success is not delivery success.  A retry repairs the
@@ -887,7 +744,6 @@ class AgentTaskService:
                 {
                     "message": message,
                     "kind": "chat",
-                    "attachments": attachment_refs,
                 },
                 command_id=command_id,
                 turn_id=command_turn_id,
@@ -902,7 +758,6 @@ class AgentTaskService:
             # conversation item and replay as a second turn.
             item = {
                 "message": message.strip(),
-                "attachments": attachment_refs,
                 "received_at": datetime.now(UTC).isoformat(),
                 "command_id": command_id,
                 "turn_id": command_turn_id,
@@ -916,7 +771,6 @@ class AgentTaskService:
         # Idle thread (previous turn delivered/failed): queue a brand-new turn.
         item = {
             "message": message.strip(),
-            "attachments": attachment_refs,
             "received_at": datetime.now(UTC).isoformat(),
             "command_id": command_id,
             "turn_id": command_turn_id,
@@ -1052,20 +906,13 @@ class AgentTaskService:
         if record.status != "awaiting_user":
             raise ValueError(f"task_not_waiting:{record.status}")
         result = _grade_agent_quiz(record.quiz_result or {}, answers)
-        snapshot = await self._agent_tasks.create_quiz_submission(
+        await self._agent_tasks.create_quiz_submission(
             task_id=task_id,
             submission_id=submission_id,
             answers=answers,
             per_question=result["per_question"],
             total_score=result["total_score"],
             total_points=result["total_points"],
-        )
-        await self._runtime_repo.project_runtime_event(
-            learner_id=record.learner_id,
-            record_key=f"assessment:{task_id}:{submission_id}",
-            task_id=task_id,
-            kind="assessment.submitted",
-            payload=snapshot,
         )
         try:
             await self.ack_delivery(task_id, "quiz", learner_id=record.learner_id)

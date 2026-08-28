@@ -10,14 +10,13 @@ and phrases it naturally.  It is not asked to decide correctness, invent
 protocol facts, or pick the hint level — those are computed.
 
 That narrowing is what makes an LLM brain safe to swap in: the kernel's leakage
-guard still post-validates the rendered text, and a malformed or missing
-response falls back to the authored rung rather than ending the lesson.
+guard still post-validates the rendered text. Provider failures and malformed
+responses are explicit errors; provider selection never changes at runtime.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import re
 from typing import Any
 
@@ -27,8 +26,6 @@ from ..kernel.contracts import CoachContext, ReportContext, TutorMove
 from ..kernel.mastery import DEFAULT_PRIOR
 from .base import ReportNarrative
 from .scripted import ScriptedBrain
-
-logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """你是 LingxiLearn 的工科助教，正在带一名本科生完成一次真实的工程分析任务。
 
@@ -87,30 +84,32 @@ class LlmBrain:
     def __init__(self, model: Any, *, options: dict[str, Any] | None = None) -> None:
         self.model = model
         self.options = options or {}
-        self._fallback = ScriptedBrain()
+        self._authored = ScriptedBrain()
 
-    async def _ask(self, system: str, user: str) -> dict[str, Any] | None:
+    async def _ask(self, system: str, user: str) -> dict[str, Any]:
         try:
             reply = await self.model.agenerate(
                 [SystemMessage(system), HumanMessage(user)], **self.options
             )
-        except Exception:  # noqa: BLE001 - never let a provider outage end a lesson
-            logger.exception("%s brain call failed", self.name)
-            return None
-        return _extract_json(str(getattr(reply, "content", "") or ""))
+        except Exception as exc:
+            raise RuntimeError(f"{self.name} brain provider call failed") from exc
+        parsed = _extract_json(str(getattr(reply, "content", "") or ""))
+        if parsed is None:
+            raise RuntimeError(f"{self.name} brain returned invalid JSON")
+        return parsed
 
     async def next_move(self, ctx: CoachContext) -> TutorMove:
-        baseline = await self._fallback.next_move(ctx)
+        baseline = await self._authored.next_move(ctx)
         if ctx.answer_unlocked or baseline.intent == "reveal":
             return baseline  # the walkthrough is authored; do not paraphrase it
 
         parsed = await self._ask(SYSTEM_PROMPT, _coach_prompt(ctx, baseline))
-        if not parsed or not str(parsed.get("say", "")).strip():
-            return baseline
+        if not str(parsed.get("say", "")).strip():
+            raise RuntimeError(f"{self.name} brain returned an empty tutor move")
 
         intent = str(parsed.get("intent", baseline.intent))
         if intent not in {"ask", "hint", "probe_back", "confirm"}:
-            intent = baseline.intent
+            raise RuntimeError(f"{self.name} brain returned an invalid tutor intent")
         return TutorMove(
             intent=intent,  # type: ignore[arg-type]
             say=str(parsed["say"]).strip(),
@@ -122,10 +121,10 @@ class LlmBrain:
         )
 
     async def narrate_report(self, ctx: ReportContext) -> ReportNarrative:
-        baseline = await self._fallback.narrate_report(ctx)
+        baseline = await self._authored.narrate_report(ctx)
         parsed = await self._ask(REPORT_PROMPT, _report_prompt(ctx))
-        if not parsed or not str(parsed.get("headline", "")).strip():
-            return baseline
+        if not str(parsed.get("headline", "")).strip():
+            raise RuntimeError(f"{self.name} brain returned an empty report")
         return ReportNarrative(
             headline=str(parsed["headline"]).strip(),
             strengths=[str(s) for s in parsed.get("strengths", [])][:5],
@@ -170,7 +169,7 @@ def _coach_prompt(ctx: CoachContext, baseline: TutorMove) -> str:
             f"# 上一次作答判定\n{'正确' if judgement.correct else '不正确'}"
             f"（得分 {judgement.score:.2f}）"
         )
-    parts.append("# 确定性引擎给出的保底回复（如果你想不出更好的表达，就用它）\n" + baseline.say)
+    parts.append("# 课程作者给出的参考表达\n" + baseline.say)
     parts.append("现在给出你的下一句话。记住：不要给答案，只问一个问题或给一级提示。")
     return "\n\n".join(parts)
 

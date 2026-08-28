@@ -18,7 +18,7 @@ Interaction answer side in :mod:`lingxilearn.runtime.interactions`); the
 round-exit policy is the pure function set in
 :mod:`lingxilearn.runtime.evaluation`; phase transitions go through the
 single lifecycle write path documented in
-:mod:`lingxilearn.runtime.lifecycle`.
+the runtime transition contract.
 
 What runs inside ``dispatch`` is computed at run time from the learner's
 profile via ``candidates`` → ``orchestrator`` → ``skill_registry``.  Adding a
@@ -26,7 +26,7 @@ capability, a skill, or a subject changes data; it never changes this file.
 
 .. seealso::
 
-   * :mod:`lingxilearn.runtime.lifecycle` — the canonical runtime phase
+   * the canonical runtime phase
      transition API (single owner).
    * :mod:`lingxilearn.runtime.interactions` — the single Interaction-request
      owner (``request_interaction``) and the ``await_user`` node.
@@ -42,7 +42,8 @@ from typing import Annotated, Any, TypedDict
 
 from lingxigraph import END, START, StateGraph
 
-from ..state.session_state import (
+from ..ports.runtime_state import RuntimeStatePort
+from ..state.agent_task_state import (
     TERMINAL_STATUSES,
     Goal,
     GoalStack,
@@ -50,7 +51,6 @@ from ..state.session_state import (
     RuntimeStatus,
     transition,
 )
-from ..store.runtime_state import RuntimeStateRepository
 from .dispatch import DispatchDeps, Dispatcher
 from .interactions import build_await_user_node
 from .nodes import (
@@ -105,7 +105,7 @@ class LoopDeps:
     """Everything the loop needs from the service, injected once per run.
 
     Also serves as the **canonical lifecycle transition owner** (see
-    :mod:`lingxilearn.runtime.lifecycle`): graph nodes call
+    the runtime transition contract): graph nodes call
     :meth:`transition_status` to advance the runtime phase, which validates
     the transition, persists it to the database, and returns a graph
     checkpoint patch derived from the committed result.
@@ -117,7 +117,7 @@ class LoopDeps:
     def __init__(
         self,
         *,
-        runtime_state: RuntimeStateRepository,
+        runtime_state: RuntimeStatePort,
         work_ledger: Any = None,
         runtime_repository: Any = None,
         learner_id: str,
@@ -183,7 +183,7 @@ class LoopDeps:
         between the two.
 
         The transition is validated against ``_TRANSITIONS`` (the single
-        source of truth in :mod:`lingxilearn.state.session_state`), then
+        source of truth in :mod:`lingxilearn.state.agent_task_state`), then
         persisted to the database.  The returned patch dict is derived from
         the committed result, so the graph checkpoint always reflects what
         the database confirmed.
@@ -198,7 +198,7 @@ class LoopDeps:
         so callers can include related fields (``finished_reason``,
         ``budget``, etc.) in a single graph update.
 
-        Raises :class:`~lingxilearn.state.session_state.IllegalTransition`
+        Raises :class:`~lingxilearn.state.agent_task_state.IllegalTransition`
         if the database write fails or the session is missing, ensuring the
         graph never advances to a phase the database has not confirmed.
         """
@@ -207,7 +207,7 @@ class LoopDeps:
         # This is essential when a node calls transition_status more than
         # once: after the first call, the graph ``state`` still carries the
         # pre-transition value while the DB has already advanced.
-        snapshot = await self.runtime_state.get_session_state(self.task_id)
+        snapshot = await self.runtime_state.get_agent_task_state(self.task_id)
         if snapshot is not None:
             current = RuntimeStatus(str(snapshot.get("runtime_status") or RuntimeStatus.PLANNING))
         else:

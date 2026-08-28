@@ -43,8 +43,6 @@ def _require_runtime_debug(
 
     if not services.settings.runtime_debug_enabled:
         raise not_found()
-    if services.settings.insecure_dev_auth:
-        return
     if principal is None or not (
         "runtime:debug" in principal.permissions
         or bool({"admin", "internal"}.intersection(principal.roles))
@@ -72,8 +70,7 @@ def _redact_runtime_debug(value: Any) -> Any:
         return {
             key: "[REDACTED]"
             if any(
-                marker.replace("_", "")
-                in re.sub(r"[^a-z0-9]", "", str(key).lower())
+                marker.replace("_", "") in re.sub(r"[^a-z0-9]", "", str(key).lower())
                 for marker in _DEBUG_SECRET_KEYS
             )
             else _redact_runtime_debug(item)
@@ -99,9 +96,7 @@ async def agent_task_decisions(
     return {"decisions": _redact_runtime_debug(decisions)}
 
 
-@router.get(
-    "/agent-tasks/{task_id}/runtime-graph", response_model=RuntimeGraphResponse
-)
+@router.get("/agent-tasks/{task_id}/runtime-graph", response_model=RuntimeGraphResponse)
 async def agent_task_runtime_graph(
     task_id: str,
     request: Request,

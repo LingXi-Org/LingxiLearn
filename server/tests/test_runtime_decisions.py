@@ -28,8 +28,8 @@ from lingxilearn.runtime.guardrails import (
     check_plan,
     check_replan,
 )
+from lingxilearn.state.agent_task_state import Goal
 from lingxilearn.state.gain import ProfileView
-from lingxilearn.state.session_state import Goal
 
 NOW = datetime(2026, 8, 14, tzinfo=UTC)
 
@@ -519,7 +519,7 @@ def test_an_empty_plan_is_only_legal_when_waiting_for_the_learner() -> None:
     ).findings
 
 
-def test_budget_round_trips_through_the_session_state_json() -> None:
+def test_budget_round_trips_through_agent_task_state_json() -> None:
     budget = Budget(steps_used=3, heavy_artifacts_used=1)
     assert Budget.from_dict(budget.to_dict()) == budget
     # Unknown keys from an older row must not break the load.

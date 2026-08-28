@@ -19,8 +19,12 @@ RUN python -m pip install --no-cache-dir --index-url ${UV_BOOTSTRAP_INDEX_URL} u
 
 ARG DOCKER_REGISTRY=accel.way2api.fun/docker.io
 FROM ${DOCKER_REGISTRY}/library/python:3.13-slim AS runtime
-ARG LINGXILEARN_VERSION=2.0.0
-LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}"
+ARG LINGXILEARN_VERSION=1.0.0
+ARG LINGXILEARN_REVISION
+ARG LINGXILEARN_SOURCE=https://github.com/lingxi-org/LingxiLearn
+LABEL org.opencontainers.image.version="${LINGXILEARN_VERSION}" \
+      org.opencontainers.image.revision="${LINGXILEARN_REVISION}" \
+      org.opencontainers.image.source="${LINGXILEARN_SOURCE}"
 RUN groupadd --gid 10001 lingxi \
  && useradd --uid 10001 --gid 10001 --create-home lingxi
 WORKDIR /app

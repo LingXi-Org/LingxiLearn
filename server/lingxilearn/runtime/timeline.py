@@ -58,7 +58,7 @@ PrimitiveResolver = Callable[[str], PrimitiveLike]
 
 
 @dataclass(frozen=True, slots=True)
-class _FallbackPrimitive:
+class _DefaultPrimitive:
     display_kind: str = "function"
     category: str = "runtime"
     idempotent: bool = False
@@ -323,15 +323,15 @@ class ExecutionTimelineProjector:
         self,
         name: str,
         *,
-        fallback_type: str = "function",
-        fallback_category: str = "runtime",
+        default_type: str = "function",
+        default_category: str = "runtime",
     ) -> PrimitiveLike:
         try:
             return self.resolve_primitive(name)
         except Exception:  # noqa: BLE001 - unknown telemetry must remain visible
-            return _FallbackPrimitive(
-                display_kind=fallback_type,
-                category=fallback_category,
+            return _DefaultPrimitive(
+                display_kind=default_type,
+                category=default_category,
                 label=str(name or "Unknown primitive"),
             )
 
@@ -356,14 +356,14 @@ class ExecutionTimelineProjector:
         node_id: str = "",
         name: str = "",
         input_data: Any = None,
-        fallback_type: str = "function",
-        fallback_category: str = "runtime",
+        default_type: str = "function",
+        default_category: str = "runtime",
         **metadata: Any,
     ) -> dict[str, Any]:
         primitive = self._primitive(
             primitive_name,
-            fallback_type=fallback_type,
-            fallback_category=fallback_category,
+            default_type=default_type,
+            default_category=default_category,
         )
         started = self._touch(timestamp)
         span = {
@@ -383,7 +383,9 @@ class ExecutionTimelineProjector:
             span["nodeId"] = node_id
         if input_data not in (None, {}, []):
             span["input"] = _json_safe(input_data)
-        span.update({key: _json_safe(value) for key, value in metadata.items() if value is not None})
+        span.update(
+            {key: _json_safe(value) for key, value in metadata.items() if value is not None}
+        )
         (parent or self._root).setdefault("children", []).append(span)
         return span
 
@@ -483,9 +485,7 @@ class ExecutionTimelineProjector:
         if sidecar_id and sidecar_id in self._active_sidecars:
             return self._active_sidecars[sidecar_id]
         active = [
-            span
-            for span in self._active_sidecars.values()
-            if span.get("status") == "running"
+            span for span in self._active_sidecars.values() if span.get("status") == "running"
         ]
         return active[-1] if len(active) == 1 else None
 
@@ -527,9 +527,7 @@ class ExecutionTimelineProjector:
                 existing["nodeId"] = node_id
             return existing
         primitive_name = str(
-            (payload or {}).get("provider")
-            or (payload or {}).get("capability")
-            or safe_agent
+            (payload or {}).get("provider") or (payload or {}).get("capability") or safe_agent
         )
         span = self._new_span(
             primitive_name,
@@ -537,8 +535,8 @@ class ExecutionTimelineProjector:
             timestamp=timestamp,
             node_id=node_id,
             input_data=_transport_free(payload),
-            fallback_type="agent",
-            fallback_category="agent",
+            default_type="agent",
+            default_category="agent",
             agent=safe_agent,
             capability=(payload or {}).get("capability"),
             skillId=(payload or {}).get("skill_id"),
@@ -633,7 +631,7 @@ class ExecutionTimelineProjector:
             return f"{agent}:node:{node_id}:work:{work_item}"
         # A graph runtime span can surround an entire dispatch fan-out, so it
         # is not a work identity when the event already carries node/work
-        # metadata.  Use it only as the last stable fallback.
+        # metadata. Use it only as the last stable identity.
         span_id = str(
             payload.get("span_id")
             or payload.get("spanId")
@@ -800,8 +798,8 @@ class ExecutionTimelineProjector:
                     span_id=str(runtime.get("span_id") or ""),
                     node_id=node_id,
                     input_data=data,
-                    fallback_type="router_v2",
-                    fallback_category="control",
+                    default_type="router_v2",
+                    default_category="control",
                     node=node,
                     attempt=attempt,
                     runtime=_json_safe(runtime),
@@ -813,8 +811,8 @@ class ExecutionTimelineProjector:
                     node,
                     timestamp=timestamp,
                     node_id=node_id,
-                    fallback_type="router_v2",
-                    fallback_category="control",
+                    default_type="router_v2",
+                    default_category="control",
                     node=node,
                     runtime=_json_safe(runtime),
                 )
@@ -871,8 +869,8 @@ class ExecutionTimelineProjector:
                 parent=parent,
                 timestamp=timestamp,
                 input_data=data,
-                fallback_type="human_in_the_loop" if kind == "interrupt.raised" else "function",
-                fallback_category="interrupt" if kind == "interrupt.raised" else "state",
+                default_type="human_in_the_loop" if kind == "interrupt.raised" else "function",
+                default_category="interrupt" if kind == "interrupt.raised" else "state",
             )
             self._finish(instant, timestamp=timestamp, status="success", output=data)
             parent = instant
@@ -938,14 +936,14 @@ class ExecutionTimelineProjector:
         if kind == "sidecar.started":
             sidecar_id = str(safe_payload.get("sidecar_id") or self._next_id("sidecar"))
             capability = str(safe_payload.get("capability") or agent)
-            primitive = self._primitive(capability, fallback_type="agent", fallback_category="agent")
+            primitive = self._primitive(capability, default_type="agent", default_category="agent")
             span = self._new_span(
                 "sidecar",
                 timestamp=timestamp,
                 name=f"Sidecar · {primitive.label or capability}",
                 input_data=safe_payload,
-                fallback_type="parallel",
-                fallback_category="control",
+                default_type="parallel",
+                default_category="control",
                 sidecarId=sidecar_id,
                 capability=capability,
             )
@@ -967,8 +965,8 @@ class ExecutionTimelineProjector:
                     "sidecar",
                     timestamp=timestamp,
                     input_data=safe_payload,
-                    fallback_type="parallel",
-                    fallback_category="control",
+                    default_type="parallel",
+                    default_category="control",
                     sidecarId=sidecar_id or None,
                 )
             failed = kind == "sidecar.failed"
@@ -1083,8 +1081,8 @@ class ExecutionTimelineProjector:
                 parent=parent,
                 timestamp=timestamp,
                 name=str(safe_payload.get("model") or "Model invocation"),
-                fallback_type="model",
-                fallback_category="model",
+                default_type="model",
+                default_category="model",
                 provider=safe_payload.get("provider"),
                 model=safe_payload.get("model"),
                 agent=agent,
@@ -1149,8 +1147,8 @@ class ExecutionTimelineProjector:
                     "model",
                     parent=parent,
                     timestamp=timestamp,
-                    fallback_type="model",
-                    fallback_category="model",
+                    default_type="model",
+                    default_category="model",
                 )
             response = dict(safe_payload.get("response_metadata") or {})
             additional = dict(safe_payload.get("additional_kwargs") or {})
@@ -1219,8 +1217,8 @@ class ExecutionTimelineProjector:
                         parent=parent,
                         timestamp=timestamp,
                         name=name,
-                        fallback_type="tool",
-                        fallback_category="tool",
+                        default_type="tool",
+                        default_category="tool",
                         toolCallId=call_id,
                     )
                     existing["kind"] = "tool"
@@ -1275,8 +1273,8 @@ class ExecutionTimelineProjector:
                     parent=parent,
                     timestamp=started,
                     name=name,
-                    fallback_type="tool",
-                    fallback_category="tool",
+                    default_type="tool",
+                    default_category="tool",
                     toolCallId=call_id,
                 )
                 span["kind"] = "tool"
@@ -1352,7 +1350,7 @@ class ExecutionTimelineProjector:
         }
         target = self._parent(safe_runtime)
         if kind in event_primitives:
-            primitive_name, fallback_type, fallback_category = event_primitives[kind]
+            primitive_name, default_type, default_category = event_primitives[kind]
             if kind.startswith("schedule.") and safe_payload.get("toolName"):
                 primitive_name = str(safe_payload["toolName"])
             instant = self._new_span(
@@ -1360,8 +1358,8 @@ class ExecutionTimelineProjector:
                 parent=target,
                 timestamp=timestamp,
                 input_data=safe_payload,
-                fallback_type=fallback_type,
-                fallback_category=fallback_category,
+                default_type=default_type,
+                default_category=default_category,
             )
             failed = kind == "guardrail.triggered" and bool(safe_payload.get("fatal"))
             self._finish(
@@ -1403,14 +1401,18 @@ class ExecutionTimelineProjector:
                 node_id=str(payload.get("nodeId") or ""),
             )
             return
-        if kind in {
-            "step.started",
-            "step.completed",
-            "state.updated",
-            "checkpoint.saved",
-            "interrupt.raised",
-            "message.emitted",
-        } and "data" in payload:
+        if (
+            kind
+            in {
+                "step.started",
+                "step.completed",
+                "state.updated",
+                "checkpoint.saved",
+                "interrupt.raised",
+                "message.emitted",
+            }
+            and "data" in payload
+        ):
             self._consume_native_kind(
                 kind,
                 node=str(runtime.get("node") or agent),
@@ -1470,9 +1472,7 @@ class ExecutionTimelineProjector:
                     # no explicit run.paused event): freeze from the last known
                     # activity instead of from "now", or the freeze point
                     # itself would already include this call's own delay.
-                    self._paused_since = self._paused_since or str(
-                        self._root.get("endedAt") or end
-                    )
+                    self._paused_since = self._paused_since or str(self._root.get("endedAt") or end)
                 self._root["paused"] = True
         if not self._saw_run_lifecycle and self._root.get("status") == "running":
             if not self._active_native and not self._active_tasks and not self._active_sidecars:

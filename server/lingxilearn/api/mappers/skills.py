@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from ...domain.skill_catalog import PersonalSkill
 
 
-def skill_response(row: Any) -> dict[str, Any]:
+def skill_response(row: PersonalSkill) -> dict[str, object]:
     return {
         "id": row.id,
         "name": row.name,

@@ -134,20 +134,16 @@ async def test_startup_builds_a_model_for_every_role_it_will_be_asked_for() -> N
     """
 
     import os
-    from uuid import uuid4
 
     from lingxilearn.application import ApplicationServices
     from lingxilearn.config import Settings
 
-    path = VAR_DIR / f"test-roles-{uuid4().hex}.sqlite3"
+    database_url = os.environ["LINGXILEARN_TEST_DATABASE_URL"]
     previous = os.environ.get("DS_API_KEY")
     os.environ["DS_API_KEY"] = "test-key-never-called"
     try:
-        services = ApplicationServices(
-            Settings(_env_file="", database_url=f"sqlite+aiosqlite:///./var/{path.name}")
-        )
+        services = ApplicationServices(Settings(_env_file="", database_url=database_url))
         assert services.settings.agents_configured, "the fixture failed to supply a credential"
-        await services.db.create_all()
         await services.startup()
         try:
             assert services.agent_model, "startup built no per-role models"
@@ -165,7 +161,6 @@ async def test_startup_builds_a_model_for_every_role_it_will_be_asked_for() -> N
             os.environ.pop("DS_API_KEY", None)
         else:
             os.environ["DS_API_KEY"] = previous
-        path.unlink(missing_ok=True)  # noqa: ASYNC240 - teardown, not hot path
 
 
 def test_every_module_in_the_package_imports() -> None:

@@ -23,14 +23,18 @@ prod-pull: ## Pull accelerated API and Web images using the configured tag
 test: ## Run the backend test suite against the current checkout
 	cd server && uv run pytest tests
 
-check: ## Run frontend type and style checks
-	cd web && bun run type-check
-	cd web && bun run lint:check
-	bash scripts/check-workspace-boundaries.sh web
+check: ## Run all backend architecture/style and frontend quality gates
+	cd server && uv run python scripts/check_architecture.py
+	cd server && uv run python scripts/export_openapi.py --check
+	cd server && uv run ruff check lingxilearn tests scripts
+	cd server && uv run ruff format --check lingxilearn tests scripts
+	cd web && bun run check
+	cd web && bun run build
 
-check-contracts: ## Verify OpenAPI export and generated Zod contracts are in sync
-	python scripts/export_openapi.py --check
-	cd web && bun run check:contracts
+check-contracts: ## Verify OpenAPI export and generated TypeScript contracts are in sync
+	cd server && uv run python scripts/export_openapi.py --check
+	cd web && bun run generate:api
+	git diff --exit-code -- server/openapi.json web/shared/api/generated/schema.ts
 
 clean: ## Remove generated frontend and Python cache directories
 	pwsh -NoProfile -Command "foreach ($$path in @('web/.next','web/out','web/node_modules','web/.cache','server/.pytest_cache','server/.ruff_cache')) { if (Test-Path -LiteralPath $$path) { [System.IO.Directory]::Delete((Resolve-Path -LiteralPath $$path).Path, $$true) } }"

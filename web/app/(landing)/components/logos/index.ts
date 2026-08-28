@@ -1,1 +1,0 @@
-export { Logos } from './logos'

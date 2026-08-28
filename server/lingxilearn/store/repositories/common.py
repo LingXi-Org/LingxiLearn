@@ -9,7 +9,7 @@ from ..models.agent import CommandInbox
 
 
 def utc_datetime(value: datetime) -> datetime:
-    """Normalize SQLite's naive DateTime round-trip to UTC for comparisons."""
+    """Normalize persisted timestamps to UTC for comparisons."""
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 

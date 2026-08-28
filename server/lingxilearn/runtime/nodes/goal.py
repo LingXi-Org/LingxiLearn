@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from lingxigraph import Runtime
 
-from ...state.session_state import RuntimeStatus
+from ...state.agent_task_state import RuntimeStatus
 from .. import goal_interpreter
 
 if TYPE_CHECKING:
@@ -59,24 +59,12 @@ def build_interpret_goal_node(deps: LoopDeps):
                 current_goal=stack.current(),
             )
         except goal_interpreter.GoalInterpretationUnavailable as exc:
-            # A missing control model may still use the constrained structural
-            # fallback: preserve the utterance as the topic, derive one stable
-            # knowledge-point id, and let candidate/guardrail validation limit
-            # execution to one safe action.  No capability is inferred here.
-            if deps.model is None and utterance.strip():
-                goal = goal_interpreter.build_goal(
-                    {"goal_type": "learn", "topic": utterance.strip()},
-                    utterance=utterance,
-                    profile_rows=rows,
-                    created_by="deterministic_fallback",
-                )
-            else:
-                return await deps.transition_status(
-                    state,
-                    RuntimeStatus.FAILED,
-                    finished_reason=str(exc),
-                    messages=["目标识别失败，本轮没有执行任何学习技能。"],
-                )
+            return await deps.transition_status(
+                state,
+                RuntimeStatus.FAILED,
+                finished_reason=str(exc),
+                messages=["目标识别失败，本轮没有执行任何学习技能。"],
+            )
         operation = goal_interpreter.apply_to_stack(stack, goal)
         await deps.runtime_state.apply_stack_operation(deps.task_id, operation)
         patch = await deps.transition_status(state, RuntimeStatus.PLANNING)

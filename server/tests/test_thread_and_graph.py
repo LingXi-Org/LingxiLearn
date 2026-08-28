@@ -66,7 +66,11 @@ def test_interaction_request_event_projects_to_v1() -> None:
         }
     )
     events = projector.consume(
-        {"kind": "interaction.requested", "agent": "", "payload": {"interaction_id": "it_1", **spec.public_request()}}
+        {
+            "kind": "interaction.requested",
+            "agent": "",
+            "payload": {"interaction_id": "it_1", **spec.public_request()},
+        }
     )
     assert len(events) == 1
     payload = events[0]["payload"]
@@ -118,9 +122,9 @@ def test_typed_interrupt_round_trip() -> None:
     opaque = opaque_interrupt_payload("it_9")
     command = resume_command(
         "it_9",
-        __import__(
-            "lingxilearn.runtime.interactions", fromlist=["parse_answers"]
-        ).parse_answers([{"questionId": "q1", "selectedOptionIds": ["o1"]}]),
+        __import__("lingxilearn.runtime.interactions", fromlist=["parse_answers"]).parse_answers(
+            [{"questionId": "q1", "selectedOptionIds": ["o1"]}]
+        ),
     )
     assert opaque["interaction_id"] == command["interaction_id"] == "it_9"
     assert command["answers"][0]["selectedOptionIds"] == ["o1"]
@@ -174,8 +178,12 @@ def test_overlapping_sibling_runs_share_a_parallel_group() -> None:
 
 def test_dependent_runs_get_dependency_edge_not_parallel_group() -> None:
     runs = [
-        _run("ar_dep", "exec_1", started_at="2026-01-01T00:00:01Z", ended_at="2026-01-01T00:00:05Z"),
-        _run("ar_after", "exec_1", started_at="2026-01-01T00:00:02Z", ended_at="2026-01-01T00:00:09Z"),
+        _run(
+            "ar_dep", "exec_1", started_at="2026-01-01T00:00:01Z", ended_at="2026-01-01T00:00:05Z"
+        ),
+        _run(
+            "ar_after", "exec_1", started_at="2026-01-01T00:00:02Z", ended_at="2026-01-01T00:00:09Z"
+        ),
     ]
     dependencies = [{"work_id": "work_ar_after", "depends_on_id": "work_ar_dep"}]
     graph = build_execution_graph(runs, task_id="task", work_dependencies=dependencies)
@@ -226,7 +234,12 @@ def test_turn_event_envelope_shape() -> None:
 
 @pytest.mark.parametrize(
     ("status", "expected"),
-    [("awaiting_user", "awaiting_user"), ("cancelled", "cancelled"), ("completed", "open"), ("failed", "open")],
+    [
+        ("awaiting_user", "awaiting_user"),
+        ("cancelled", "cancelled"),
+        ("completed", "open"),
+        ("failed", "open"),
+    ],
 )
 def test_thread_status_for_run_outcomes(status: str, expected: str) -> None:
     mapping = {"awaiting_user": "awaiting_user", "cancelled": "cancelled"}

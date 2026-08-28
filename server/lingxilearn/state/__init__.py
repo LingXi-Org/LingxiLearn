@@ -3,28 +3,23 @@
 Agents communicate through these tables and nowhere else — no agent hands
 another agent a paragraph of natural language.
 
-* ``learning_profile`` — one row per learner × knowledge point. Everyone reads
-  it; only :mod:`.profile_writer` writes it.
+* ``learning_profile`` — one row per learner × knowledge point.
 * ``learning_evidence`` — append-only structured observations. The only thing an
   agent may produce about a learner (:mod:`.evidence`).
-* ``session_state`` — goal stack plus run state machine (:mod:`.session_state`).
+* ``agent_task_state`` — goal stack plus run state machine (:mod:`.agent_task_state`).
 * ``skill_registry`` — capability tags, IO contracts, preconditions and cost
   (:mod:`.skill_catalog`).
 """
 
 from __future__ import annotations
 
-from .capabilities import Capability, CapabilityInfo, UnknownCapability, info, parse
-from .evidence import EvidenceRecord, InvalidEvidence, Signal
-from .gain import GainEstimate, ProfileView, estimate
-from .profile_writer import (
+from ..domain.learning_profile import (
     ProfileChange,
     ProfileDelta,
-    ProfileWriter,
     UnsourcedProfileWrite,
     profile_id,
 )
-from .session_state import (
+from .agent_task_state import (
     DEFAULT_BUDGET,
     Goal,
     GoalKind,
@@ -36,6 +31,9 @@ from .session_state import (
     new_budget,
     transition,
 )
+from .capabilities import Capability, CapabilityInfo, UnknownCapability, info, parse
+from .evidence import EvidenceRecord, InvalidEvidence, Signal
+from .gain import GainEstimate, ProfileView, estimate
 
 __all__ = [
     "DEFAULT_BUDGET",
@@ -52,7 +50,6 @@ __all__ = [
     "ProfileChange",
     "ProfileDelta",
     "ProfileView",
-    "ProfileWriter",
     "RuntimeStatus",
     "Signal",
     "StackOperation",

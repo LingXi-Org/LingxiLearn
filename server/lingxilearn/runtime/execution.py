@@ -479,11 +479,17 @@ def require_execution_snapshot(
     if not isinstance(state.get("nodes"), Mapping) or not isinstance(
         state.get("dependencies"), list
     ):
-        raise ExecutionError("persisted execution state is malformed", code="invalid_execution_schema")
-    if not all(
-        isinstance(state.get(key), Mapping) for key in ("variables", "groups", "metadata")
-    ) or not isinstance(state.get("paused"), bool) or not isinstance(state.get("terminal"), bool):
-        raise ExecutionError("persisted execution state is malformed", code="invalid_execution_schema")
+        raise ExecutionError(
+            "persisted execution state is malformed", code="invalid_execution_schema"
+        )
+    if (
+        not all(isinstance(state.get(key), Mapping) for key in ("variables", "groups", "metadata"))
+        or not isinstance(state.get("paused"), bool)
+        or not isinstance(state.get("terminal"), bool)
+    ):
+        raise ExecutionError(
+            "persisted execution state is malformed", code="invalid_execution_schema"
+        )
     node_required = {"id", "label", "kind", "capability", "status", "step", "details"}
     for node_id, node in state["nodes"].items():
         if (
@@ -589,10 +595,7 @@ class ExecutionProjector:
 
     def _ensure_planned_node(self, payload: dict[str, Any]) -> str | None:
         plan_task_id = str(
-            payload.get("node_id")
-            or payload.get("work_item_id")
-            or payload.get("task_id")
-            or ""
+            payload.get("node_id") or payload.get("work_item_id") or payload.get("task_id") or ""
         )
         logical_task_id = str(payload.get("task_id") or "")
         step = int(payload.get("step") or 0)
@@ -665,33 +668,9 @@ class ExecutionProjector:
 
     def _update_planned_execution(self, payload: dict[str, Any], *, status: str) -> str | None:
         task_id = str(
-            payload.get("node_id")
-            or payload.get("work_item_id")
-            or payload.get("task_id")
-            or ""
+            payload.get("node_id") or payload.get("work_item_id") or payload.get("task_id") or ""
         )
         node_id = self._planned_nodes.get(task_id)
-        if node_id is None:
-            execution = visible_execution(
-                str(
-                    payload.get("provider")
-                    or payload.get("agent")
-                    or payload.get("capability")
-                    or ""
-                )
-            )
-            if execution is not None:
-                candidates = [
-                    item
-                    for item in self.nodes.values()
-                    if item.capability == execution.key
-                    and item.status in {"queued", "pending", "running"}
-                ]
-                if candidates:
-                    # A repeated logical task id can have several queued
-                    # revisions.  The newest queued node is the safest
-                    # fallback when an external event has no node id.
-                    node_id = candidates[-1].id
         if node_id is None:
             return None
         node = self.nodes[node_id]
@@ -714,9 +693,7 @@ class ExecutionProjector:
                 node.details[target] = _json_safe(payload[source])
         return node_id
 
-    def _promote_planned_node(
-        self, capability: str, step: int
-    ) -> tuple[str, ExecutionNode] | None:
+    def _promote_planned_node(self, capability: str, step: int) -> tuple[str, ExecutionNode] | None:
         for node_id in self._planned_by_shape.get((capability, step), []):
             execution_node = self.nodes[node_id]
             if execution_node.status in {"queued", "pending"}:
@@ -788,7 +765,9 @@ class ExecutionProjector:
                 execution_node.status = "running"
                 active = self._active_spans.get(node_id)
                 if active is None or active.get("status") != "running":
-                    attempts = sum(1 for item in self.timeline_spans if item.get("nodeId") == node_id)
+                    attempts = sum(
+                        1 for item in self.timeline_spans if item.get("nodeId") == node_id
+                    )
                     started_at = _iso(getattr(event, "timestamp", None))
                     span = {
                         "id": metadata["span_id"]

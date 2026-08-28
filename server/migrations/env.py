@@ -35,7 +35,7 @@ target_metadata = Base.metadata
 
 def _sync_url() -> str:
     url = get_settings().resolved_database_url
-    return url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg")
+    return url.replace("+asyncpg", "+psycopg")
 
 
 def run_migrations_offline() -> None:
@@ -44,7 +44,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -58,9 +57,6 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            # SQLite cannot ALTER most things in place; batch mode rewrites the
-            # table instead, so the same migration script works on both backends.
-            render_as_batch=True,
         )
         with context.begin_transaction():
             context.run_migrations()

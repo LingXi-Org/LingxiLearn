@@ -22,26 +22,27 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from ..state.evidence import EvidenceRecord
-from ..state.profile_writer import ProfileChange, ProfileDelta, ProfileWriter, profile_id
-from ..state.session_state import (
+from ..domain.learning_profile import ProfileChange, ProfileDelta, profile_id
+from ..state.agent_task_state import (
     GoalStack,
     RuntimeStatus,
     StackOperation,
     new_budget,
     transition,
 )
+from ..state.evidence import EvidenceRecord
 from ..state.skill_catalog import SkillManifest
 from .database import Database
 from .models.agent import ProjectionCursor
 from .models.learning import (
+    AgentTaskState,
+    AgentTaskStateEvent,
     DecisionTrace,
     LearningEvidence,
     LearningProfile,
-    SessionState,
-    SessionStateEvent,
 )
 from .models.runtime import SkillRegistryEntry
+from .profile_writer import ProfileWriter
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,6 @@ def evidence_dict(row: LearningEvidence) -> dict[str, Any]:
     return {
         "id": row.id,
         "learner_id": row.learner_id,
-        "session_id": row.session_id,
         "task_id": row.task_id,
         "evidence_id": row.evidence_id,
         "kind": row.kind,
@@ -102,12 +102,11 @@ def profile_dict(row: LearningProfile) -> dict[str, Any]:
     }
 
 
-def session_state_dict(row: SessionState) -> dict[str, Any]:
+def agent_task_state_dict(row: AgentTaskState) -> dict[str, Any]:
     return {
         "id": row.id,
         "learner_id": row.learner_id,
         "task_id": row.task_id,
-        "session_id": row.session_id,
         "runtime_status": row.runtime_status,
         "goal_stack": list(row.goal_stack or []),
         "plan": dict(row.plan or {}),
@@ -162,7 +161,7 @@ def decision_dict(row: DecisionTrace) -> dict[str, Any]:
 
 class RuntimeStateRepository:
     """Reads and writes for ``learning_profile`` / ``learning_evidence`` /
-    ``session_state`` / ``skill_registry`` / ``decision_trace``."""
+    ``agent_task_state`` / ``skill_registry`` / ``decision_trace``."""
 
     def __init__(self, db: Database) -> None:
         self.db = db
@@ -257,7 +256,7 @@ class RuntimeStateRepository:
                     next_seq[learner_id] = int(current or 0)
 
                 row_values = record.to_row()
-                scope = row_values["session_id"] or row_values["task_id"] or "global"
+                scope = row_values["task_id"]
                 row_id = f"{scope}:{row_values['evidence_id']}"
                 existing = await s.get(LearningEvidence, row_id)
                 if existing is not None:
@@ -375,26 +374,26 @@ class RuntimeStateRepository:
             await s.commit()
         return change
 
-    # -- session_state -------------------------------------------------------
+    # -- agent_task_state ----------------------------------------------------
 
-    async def ensure_session_state(
+    async def ensure_agent_task_state(
         self,
         *,
         learner_id: str,
-        task_id: str | None = None,
-        session_id: str | None = None,
+        task_id: str,
         budget: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         async with self.db.session() as s:
             row = None
             if task_id:
-                row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+                row = await s.scalar(
+                    select(AgentTaskState).where(AgentTaskState.task_id == task_id)
+                )
             if row is None:
-                row = SessionState(
-                    id=f"ss_{uuid4().hex}",
+                row = AgentTaskState(
+                    id=f"ats_{uuid4().hex}",
                     learner_id=learner_id,
                     task_id=task_id,
-                    session_id=session_id,
                     runtime_status=str(RuntimeStatus.PLANNING),
                     goal_stack=[],
                     plan={},
@@ -402,14 +401,14 @@ class RuntimeStateRepository:
                 )
                 s.add(row)
                 await s.flush()
-            snapshot = session_state_dict(row)
+            snapshot = agent_task_state_dict(row)
             await s.commit()
         return snapshot
 
-    async def get_session_state(self, task_id: str) -> dict[str, Any] | None:
+    async def get_agent_task_state(self, task_id: str) -> dict[str, Any] | None:
         async with self.db.session() as s:
-            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
-            return session_state_dict(row) if row else None
+            row = await s.scalar(select(AgentTaskState).where(AgentTaskState.task_id == task_id))
+            return agent_task_state_dict(row) if row else None
 
     async def apply_stack_operation(
         self, task_id: str, operation: StackOperation
@@ -417,23 +416,23 @@ class RuntimeStateRepository:
         """Persist a goal-stack change together with its undo record."""
 
         if not operation.changed:
-            return await self.get_session_state(task_id)
+            return await self.get_agent_task_state(task_id)
         async with self.db.session() as s:
-            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            row = await s.scalar(select(AgentTaskState).where(AgentTaskState.task_id == task_id))
             if row is None:
                 return None
             sequence = int(
                 await s.scalar(
-                    select(func.count(SessionStateEvent.id)).where(
-                        SessionStateEvent.session_state_id == row.id
+                    select(func.count(AgentTaskStateEvent.id)).where(
+                        AgentTaskStateEvent.agent_task_state_id == row.id
                     )
                 )
                 or 0
             )
             s.add(
-                SessionStateEvent(
-                    id=f"sse_{uuid4().hex}",
-                    session_state_id=row.id,
+                AgentTaskStateEvent(
+                    id=f"atse_{uuid4().hex}",
+                    agent_task_state_id=row.id,
                     sequence=sequence + 1,
                     op=operation.op,
                     before={"goal_stack": operation.before},
@@ -444,7 +443,7 @@ class RuntimeStateRepository:
             row.goal_stack = list(operation.after)
             row.revision = int(row.revision or 0) + 1
             row.updated_at = datetime.now(UTC)
-            snapshot = session_state_dict(row)
+            snapshot = agent_task_state_dict(row)
             await s.commit()
         return snapshot
 
@@ -452,12 +451,12 @@ class RuntimeStateRepository:
         self, task_id: str, status: RuntimeStatus | str
     ) -> dict[str, Any] | None:
         async with self.db.session() as s:
-            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            row = await s.scalar(select(AgentTaskState).where(AgentTaskState.task_id == task_id))
             if row is None:
                 return None
             row.runtime_status = str(transition(row.runtime_status, status))
             row.updated_at = datetime.now(UTC)
-            snapshot = session_state_dict(row)
+            snapshot = agent_task_state_dict(row)
             await s.commit()
         return snapshot
 
@@ -465,7 +464,7 @@ class RuntimeStateRepository:
         self, task_id: str, plan: dict[str, Any], *, budget: dict[str, Any] | None = None
     ) -> dict[str, Any] | None:
         async with self.db.session() as s:
-            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            row = await s.scalar(select(AgentTaskState).where(AgentTaskState.task_id == task_id))
             if row is None:
                 return None
             row.plan = dict(plan)
@@ -473,30 +472,30 @@ class RuntimeStateRepository:
                 row.budget = dict(budget)
             row.revision = int(row.revision or 0) + 1
             row.updated_at = datetime.now(UTC)
-            snapshot = session_state_dict(row)
+            snapshot = agent_task_state_dict(row)
             await s.commit()
         return snapshot
 
     async def get_board(self, task_id: str) -> dict[str, Any]:
         async with self.db.session() as s:
-            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            row = await s.scalar(select(AgentTaskState).where(AgentTaskState.task_id == task_id))
             return dict(row.board or {}) if row is not None else {}
 
     async def save_board(self, task_id: str, board: dict[str, Any]) -> dict[str, Any] | None:
         async with self.db.session() as s:
-            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            row = await s.scalar(select(AgentTaskState).where(AgentTaskState.task_id == task_id))
             if row is None:
                 return None
             row.board = dict(board)
             row.revision = int(row.revision or 0) + 1
             row.updated_at = datetime.now(UTC)
-            snapshot = session_state_dict(row)
+            snapshot = agent_task_state_dict(row)
             await s.commit()
             return snapshot
 
     async def save_budget(self, task_id: str, budget: dict[str, Any]) -> None:
         async with self.db.session() as s:
-            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            row = await s.scalar(select(AgentTaskState).where(AgentTaskState.task_id == task_id))
             if row is None:
                 return
             row.budget = dict(budget)
@@ -504,19 +503,19 @@ class RuntimeStateRepository:
             await s.commit()
 
     async def goal_stack(self, task_id: str) -> GoalStack:
-        snapshot = await self.get_session_state(task_id)
+        snapshot = await self.get_agent_task_state(task_id)
         return GoalStack(list((snapshot or {}).get("goal_stack") or []))
 
     async def stack_history(self, task_id: str) -> list[dict[str, Any]]:
         async with self.db.session() as s:
-            row = await s.scalar(select(SessionState).where(SessionState.task_id == task_id))
+            row = await s.scalar(select(AgentTaskState).where(AgentTaskState.task_id == task_id))
             if row is None:
                 return []
             events = (
                 await s.execute(
-                    select(SessionStateEvent)
-                    .where(SessionStateEvent.session_state_id == row.id)
-                    .order_by(SessionStateEvent.sequence)
+                    select(AgentTaskStateEvent)
+                    .where(AgentTaskStateEvent.agent_task_state_id == row.id)
+                    .order_by(AgentTaskStateEvent.sequence)
                 )
             ).scalars()
             return [
@@ -639,6 +638,6 @@ __all__ = [
     "decision_dict",
     "evidence_dict",
     "profile_dict",
-    "session_state_dict",
+    "agent_task_state_dict",
     "skill_dict",
 ]
