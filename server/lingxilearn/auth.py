@@ -17,13 +17,6 @@ from lingxi_identity import Principal  # type: ignore[import-untyped]
 from .config import Settings
 
 
-class _NoopClient:
-    """Avoid constructing a native TLS client in explicit local-auth mode."""
-
-    async def aclose(self) -> None:
-        return None
-
-
 class _LazyHttpClient:
     """Create the TLS pool only when a production request actually needs it."""
 
@@ -56,13 +49,6 @@ class Authenticator:
     client: httpx.AsyncClient
 
     async def authenticate(self, cookie: str | None) -> Principal:
-        # Development must not depend on a browser's stale production cookie.
-        # Otherwise a previous session sends us to an unavailable BFF and the
-        # local workspace falls back to the same 401 storm as production auth.
-        # Compose development explicitly enables this switch; production
-        # overrides it to false and always follows the BFF path below.
-        if self.settings.insecure_dev_auth:
-            return Principal(subject=self.settings.dev_subject, issuer="lingxilearn-dev")
         if not cookie:
             raise _authentication_error("authentication_required")
         try:
@@ -100,15 +86,11 @@ class Authenticator:
 def build_authenticator(settings: Settings) -> Authenticator:
     """Create the BFF client once and reuse its connection pool."""
 
-    if not settings.identity_bff_url and not settings.insecure_dev_auth:
+    if not settings.identity_bff_url:
         raise RuntimeError("LINGXILEARN_IDENTITY_BFF_URL is required")
     return Authenticator(
         settings=settings,
-        client=(
-            _NoopClient()  # type: ignore[arg-type]
-            if settings.insecure_dev_auth
-            else _LazyHttpClient(timeout=settings.identity_bff_timeout)
-        ),
+        client=_LazyHttpClient(timeout=settings.identity_bff_timeout),  # type: ignore[arg-type]
     )
 
 

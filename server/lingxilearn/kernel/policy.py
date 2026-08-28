@@ -94,15 +94,3 @@ def should_unlock_answer(*, attempts: int, step: dict[str, Any], learner_request
     """
     threshold = int(step.get("reveal_after", 3))
     return learner_requested and attempts >= threshold
-
-
-def fallback_hint(step: dict[str, Any], hint_level: int) -> str:
-    """The pack-authored rung, used when a generated move is rejected.
-
-    Always available, always safe: hint ladders are written by the course
-    author and are guaranteed not to contain the answer.
-    """
-    ladder = [str(h) for h in step.get("hint_ladder", [])]
-    if not ladder:
-        return "再想想：你手上的证据里，哪一条能直接支持或否定你的判断？"
-    return ladder[min(hint_level, len(ladder) - 1)]

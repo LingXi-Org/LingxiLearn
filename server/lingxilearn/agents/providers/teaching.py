@@ -23,7 +23,7 @@ from lingxigraph import (
 )
 
 from ...config import REPO_ROOT
-from ...kernel.policy import LeakGuard, check_leakage, fallback_hint
+from ...kernel.policy import LeakGuard, check_leakage
 from ...state.evidence import EvidenceRecord, Signal
 from ..contracts import extract_json
 from ..model_runtime import agent_model, emit, invoke_agent, message_text
@@ -109,7 +109,7 @@ def _learner_brief(context: ProviderContext) -> dict[str, Any]:
 
 
 def _guarded(text: str, context: ProviderContext) -> tuple[str, bool]:
-    """Return text safe to show, and whether the guard had to substitute it.
+    """Return text safe to show or fail the provider output.
 
     The quiz answer key is the leak guard: while questions are outstanding, a
     teaching turn may not contain the phrases or numbers that give them away.
@@ -135,10 +135,7 @@ def _guarded(text: str, context: ProviderContext) -> tuple[str, bool]:
     if not verdict.leaked:
         return text, False
 
-    logger.info("teaching turn withheld for answer leakage: %s", verdict.reasons)
-    step = {"hint_ladder": context.task.inputs.get("hint_ladder") or []}
-    level = int(context.task.inputs.get("hint_level") or 0)
-    return fallback_hint(step, level), True
+    raise ProviderError(f"teaching output leaked a protected answer: {verdict.reasons}")
 
 
 @register(

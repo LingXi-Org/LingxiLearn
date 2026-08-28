@@ -218,12 +218,11 @@ class WorkLedgerRepository:
                         AgentTask.status != "cancelled",
                     )
                     .distinct()
-                    .order_by(AgentTask.created_at)
+                    .order_by(AgentTask.id)
                 )
             ).all()
             return [
-                {"id": str(task_id), "learner_id": str(learner_id)}
-                for task_id, learner_id in rows
+                {"id": str(task_id), "learner_id": str(learner_id)} for task_id, learner_id in rows
             ]
 
     async def latest_turn(self, task_id: str) -> dict[str, Any] | None:
@@ -283,9 +282,7 @@ class WorkLedgerRepository:
             await s.commit()
             return True
 
-    async def consume_command(
-        self, command_id: str, *, execution_id: str | None = None
-    ) -> bool:
+    async def consume_command(self, command_id: str, *, execution_id: str | None = None) -> bool:
         async with self.db.session() as s:
             stmt = update(CommandInbox).where(
                 CommandInbox.id == command_id, CommandInbox.consumed_at.is_(None)

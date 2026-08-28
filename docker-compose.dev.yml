@@ -24,13 +24,8 @@ x-api-dev: &api-dev
     LINGXILEARN_AGENT_TASK_DIR: /app/var/agent_tasks
     LINGXILEARN_WEB_DIST: /app/web-dist-disabled
     LINGXILEARN_CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
-    # Development never depends on the production Identity BFF. This also
-    # prevents a stale .env value from sending localhost cookies upstream.
-    LINGXILEARN_IDENTITY_BFF_URL: ""
+    LINGXILEARN_IDENTITY_BFF_URL: ${LINGXILEARN_IDENTITY_BFF_URL:?set LINGXILEARN_IDENTITY_BFF_URL}
     LINGXILEARN_IDENTITY_BFF_TIMEOUT: "10"
-    # The API uses the fixed local learner principal for every resource route.
-    LINGXILEARN_INSECURE_DEV_AUTH: "true"
-    LINGXILEARN_DEV_SUBJECT: ${LINGXILEARN_DEV_SUBJECT:-lingxilearn-dev}
   volumes:
     - ./server/lingxilearn:/app/lingxilearn
     - ./server/migrations:/app/migrations:ro
@@ -92,7 +87,7 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "${LINGXILEARN_PORT:-8080}:8000"
+      - "${LINGXILEARN_API_PORT:-8000}:8000"
     restart: unless-stopped
 
   scheduler:
@@ -114,8 +109,6 @@ services:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY:-accel.way2api.fun/docker.io}
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     working_dir: /app
-    # Keep shared runtime variables available to the frontend shell. Domain
-    # reads and writes still go through the canonical FastAPI service.
     env_file: [.env]
     command:
       [
@@ -129,18 +122,7 @@ services:
       - lingxilearn-dev-web-next:/app/.next
     environment:
       NODE_ENV: development
-      NEXT_STATIC_EXPORT: "0"
-      # Browser calls stay same-origin; Next rewrites them to the API service.
-      # An absolute localhost URL would point back to the web container during
-      # SSR and bypass the local proxy path.
-      NEXT_PUBLIC_API_BASE: ""
       LINGXILEARN_API_ORIGIN: http://api:8000
-      INTERNAL_API_BASE_URL: http://api:8000
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
-      # Keep the web shell aligned with the API's local development identity.
-      DISABLE_AUTH: "true"
-      NEXT_PUBLIC_DISABLE_AUTH: "true"
-      NEXT_PUBLIC_MOCK_AUTH: "true"
       NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
     depends_on:
       api:

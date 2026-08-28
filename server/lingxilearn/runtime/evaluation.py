@@ -19,8 +19,8 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from ..state.agent_task_state import RuntimeStatus
 from ..state.capabilities import info
-from ..state.session_state import RuntimeStatus
 from .completion import CompletionContext, StoreArtifactProbe, evaluate
 from .contracts import DoneCondition, TaskOutcome
 

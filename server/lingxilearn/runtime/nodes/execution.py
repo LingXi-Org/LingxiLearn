@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 from lingxigraph import Runtime
 
+from ...state.agent_task_state import Goal, RuntimeStatus
 from ...state.capabilities import info
-from ...state.session_state import Goal, RuntimeStatus
 from ..contracts import OrchestrationPlan, PlannedTask, TaskOutcome
 from ..guardrails import Budget
 

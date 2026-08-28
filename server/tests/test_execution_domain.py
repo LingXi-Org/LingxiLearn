@@ -64,12 +64,15 @@ def test_persisted_execution_snapshot_fails_closed_on_non_native_schema():
 
 def test_persisted_execution_snapshot_accepts_only_complete_native_state():
     native = ExecutionProjector("exec-native", "task-native", "v1").snapshot()["snapshot"]
-    assert require_execution_snapshot(
-        native,
-        execution_id="exec-native",
-        task_id="task-native",
-        graph_version="v1",
-    ) == native
+    assert (
+        require_execution_snapshot(
+            native,
+            execution_id="exec-native",
+            task_id="task-native",
+            graph_version="v1",
+        )
+        == native
+    )
 
     malformed = {**native, "nodes": {"node": {"id": "node"}}}
     with pytest.raises(ExecutionError, match="malformed node"):
@@ -398,9 +401,7 @@ def test_croniter_defines_supported_cron_semantics(cron, after, expected):
 
 def test_croniter_is_a_required_direct_import(tmp_path):
     tree = ast.parse(Path(schedules.__file__).read_text(encoding="utf-8"))
-    assert any(
-        isinstance(node, ast.ImportFrom) and node.module == "croniter" for node in tree.body
-    )
+    assert any(isinstance(node, ast.ImportFrom) and node.module == "croniter" for node in tree.body)
     assert "croniter = None" not in Path(schedules.__file__).read_text(encoding="utf-8")
     assert "_parse_cron_field" not in Path(schedules.__file__).read_text(encoding="utf-8")
 

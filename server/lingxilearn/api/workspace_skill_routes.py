@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..application.workspace_errors import WorkspaceDomainError
 from ..contracts.rest_models import (
+    SkillCreateRequest,
     SkillCreateResponse,
+    SkillUpdateRequest,
     SkillUpdateResponse,
     SuccessResponse,
 )
@@ -19,31 +21,35 @@ router = APIRouter(prefix="/api")
 
 @router.post("/skills", response_model=SkillCreateResponse)
 async def create_skill(
-    body: dict[str, Any],
+    body: SkillCreateRequest,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        row = await services_of(request).skills.create(context.learner_id, body)
+        row = await services_of(request).skills.create(
+            context.learner_id, body.model_dump(exclude_unset=True)
+        )
     except WorkspaceDomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.code) from error
     public = _skill_public(row)
-    return {"skills": [public], "skill": public, "data": public}
+    return {"skill": public}
 
 
 @router.patch("/skills/{skill_id}", response_model=SkillUpdateResponse)
 async def update_skill(
     skill_id: str,
-    body: dict[str, Any],
+    body: SkillUpdateRequest,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        row = await services_of(request).skills.update(context.learner_id, skill_id, body)
+        row = await services_of(request).skills.update(
+            context.learner_id, skill_id, body.model_dump(exclude_unset=True)
+        )
     except WorkspaceDomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.code) from error
     public = _skill_public(row)
-    return {"skill": public, "data": public}
+    return {"skill": public}
 
 
 @router.delete("/skills/{skill_id}", response_model=SuccessResponse)
@@ -55,6 +61,3 @@ async def delete_skill(
     except WorkspaceDomainError as error:
         raise HTTPException(status_code=error.status_code, detail=error.code) from error
     return {"success": True}
-
-
-# Logs -----------------------------------------------------------------------

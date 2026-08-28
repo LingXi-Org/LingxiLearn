@@ -1,23 +1,7 @@
-"""Public REST wire models for the Lingxi-native FastAPI surface.
+"""Public V1 REST response models.
 
-These Pydantic models are the single source of truth for the REST contract
-(issue #41): each model is bound to a real endpoint via ``response_model=...``
-so ``app.openapi()`` expresses exactly what the wire carries.  The TypeScript
-client contract under ``web/lib/api/contracts/lingxi/generated/`` is produced
-from that OpenAPI document by ``web/scripts/generate-rest-contracts.ts`` — it
-is never hand-maintained.
-
-Modelling rules:
-
-- A model declares every key the handler actually returns, no more and no
-  less.  Free-form JSON sub-documents (row values, metadata payloads, runtime
-  state projections) stay ``dict[str, Any]`` on purpose: that is the wire
-  truth, not modelling laziness.
-- Datetimes are already rendered as ISO strings by the ``_*_public``
-  serializers, so the wire type is ``str`` (or ``str | None``) — never
-  ``datetime``.  Frontend domain adapters may re-parse them.
-- Fields that are always present are required; fields some branches omit use
-  ``None`` defaults so response validation stays total.
+Every class is bound to a current endpoint through ``response_model`` and is
+therefore part of the generated OpenAPI contract.
 """
 
 from __future__ import annotations
@@ -26,22 +10,36 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# ---------------------------------------------------------------------------
-# Shared primitives
-# ---------------------------------------------------------------------------
+
+class StrictRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class WorkspaceUpdateRequest(StrictRequest):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    appearance: dict[str, Any] | None = None
+
+
+class ArtifactRenameRequest(StrictRequest):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class SkillCreateRequest(StrictRequest):
+    name: str = Field(min_length=1, max_length=128)
+    description: str = ""
+    content: str = Field(min_length=1)
+    version: str = Field(default="1.0.0", min_length=1, max_length=32)
+
+
+class SkillUpdateRequest(StrictRequest):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = None
+    content: str | None = Field(default=None, min_length=1)
+    version: str | None = Field(default=None, min_length=1, max_length=32)
 
 
 class SuccessResponse(BaseModel):
     success: bool
-
-
-class MessageResponse(BaseModel):
-    message: str
-
-
-# ---------------------------------------------------------------------------
-# Health & catalogue
-# ---------------------------------------------------------------------------
 
 
 class LivenessResponse(BaseModel):
@@ -54,51 +52,13 @@ class ReadinessResponse(BaseModel):
     database: bool
 
 
-class PackConceptInfo(BaseModel):
-    id: str
-    title: str
-    summary: str
-    requires: list[str]
-
-
-class PackMissionInfo(BaseModel):
-    id: str
-    title: str
-    subtitle: str
-    summary: str
-    why_not_chat: str
-    concepts: list[str]
-    estimated_minutes: int
-    steps: int
-
-
-class PackInfo(BaseModel):
-    id: str
-    title: str
-    version: str
-    description: str
-    concepts: list[PackConceptInfo]
-    missions: list[PackMissionInfo]
-
-
-class PacksResponse(BaseModel):
-    packs: list[PackInfo]
-
-
 class NativeSkillInfo(BaseModel):
-    """Union of the registry-backed and personal skill wire shapes.
-
-    The ``/skills`` catalogue merges two sources; fields present in only one
-    source stay optional so the merged list remains one schema.
-    """
-
     id: str
     name: str = ""
     display_name: str = ""
     description: str | None = None
     version: str = ""
     license: str | None = None
-    compatibility: str | None = None
     content: str = ""
     source: str = "system"
     is_system: bool = False
@@ -116,8 +76,6 @@ class SkillsResponse(BaseModel):
 
 
 class SkillRegistryEntryInfo(BaseModel):
-    """Machine view of one registry row (``skill_dict`` wire shape)."""
-
     skill_id: str
     source: str
     learner_id: str | None = None
@@ -151,134 +109,62 @@ class SkillRegistryResponse(BaseModel):
     capabilities: list[SkillRegistryCapabilityInfo]
 
 
-# ---------------------------------------------------------------------------
-# Sessions
-# ---------------------------------------------------------------------------
-
-
-SessionStatus = Literal["created", "running", "awaiting_learner", "done", "failed", "cancelled"]
-
-
-class SessionCreateResponse(BaseModel):
+class PersonalSkillInfo(BaseModel):
     id: str
-    mission_id: str
-    pack_id: str
-    status: str
-
-
-class AnswerResponse(BaseModel):
-    status: str
-
-
-class SessionMissionInfo(BaseModel):
-    id: str = ""
-    title: str = ""
-    subtitle: str = ""
-    why_not_chat: str = ""
-    concepts: list[str] = Field(default_factory=list)
-
-
-class LearningProfileSystemInfo(BaseModel):
-    confidence: float = 0.0
-    evidence_count: int = 0
-    misconceptions: list[Any] = Field(default_factory=list)
-    prerequisites: list[Any] = Field(default_factory=list)
-    difficulty: float = 0.0
-    review_priority: float = 0.0
-    stability: float = 0.0
-    source_agent: str | None = None
-    revision: int = 0
-    override_flag: bool = False
-    last_evidence_seq: int = 0
-
-
-class LearningProfileRowInfo(BaseModel):
-    knowledge_point_id: str
-    knowledge_point: str
-    mastery: float = 0.0
-    learning_state: str | None = None
-    progress: float = 0.0
-    my_questions: list[Any] = Field(default_factory=list)
-    recent_performance: dict[str, Any] = Field(default_factory=dict)
-    last_studied_at: str | None = None
-    review_due_at: str | None = None
-    next_step: dict[str, Any] = Field(default_factory=dict)
-    system: LearningProfileSystemInfo = Field(default_factory=LearningProfileSystemInfo)
+    name: str
+    display_name: str
+    description: str = ""
+    content: str = ""
+    version: str = "1.0.0"
+    source: Literal["personal"] = "personal"
+    is_system: Literal[False] = False
+    created_at: str | None = None
     updated_at: str | None = None
 
 
-class SessionInterruptInfo(BaseModel):
-    id: Any = None
-    resumable: bool = True
-    value: dict[str, Any] = Field(default_factory=dict)
+class SkillCreateResponse(BaseModel):
+    skill: PersonalSkillInfo
 
 
-class SessionSnapshotResponse(BaseModel):
-    """The runtime-truth session snapshot (see ``Service.snapshot``)."""
+class SkillUpdateResponse(BaseModel):
+    skill: PersonalSkillInfo
 
+
+class WorkspaceInfo(BaseModel):
     id: str
-    status: str = "created"
-    error: str | None = None
-    pack_id: str = ""
-    pack_version: str = ""
-    mission: SessionMissionInfo = Field(default_factory=SessionMissionInfo)
-    runtime_status: str = ""
-    goal: dict[str, Any] = Field(default_factory=dict)
-    goal_stack: list[Any] = Field(default_factory=list)
-    plan: dict[str, Any] = Field(default_factory=dict)
-    budget: dict[str, Any] = Field(default_factory=dict)
-    profile: list[LearningProfileRowInfo] = Field(default_factory=list)
-    decisions: list[dict[str, Any]] = Field(default_factory=list)
-    interrupts: list[SessionInterruptInfo] = Field(default_factory=list)
+    name: str
+    appearance: dict[str, Any] = Field(default_factory=dict)
+    createdAt: str | None = None
+    updatedAt: str | None = None
 
 
-class SessionListItemInfo(BaseModel):
+class WorkspaceListResponse(BaseModel):
+    workspaces: list[WorkspaceInfo] = Field(default_factory=list)
+
+
+class WorkspaceResponse(BaseModel):
+    workspace: WorkspaceInfo
+
+
+class ArtifactInfo(BaseModel):
     id: str
-    mission_id: str
-    pack_id: str
-    status: str
-    created_at: str | None = None
+    workspaceId: str
+    name: str
+    mimeType: str
+    size: int
+    source: Literal["upload", "agent"]
+    taskId: str | None = None
+    kind: str | None = None
+    createdAt: str | None = None
+    updatedAt: str | None = None
 
 
-class MasteryResponse(BaseModel):
-    mastery: dict[str, float] = Field(default_factory=dict)
-    sessions: list[SessionListItemInfo] = Field(default_factory=list)
+class ArtifactListResponse(BaseModel):
+    artifacts: list[ArtifactInfo] = Field(default_factory=list)
 
 
-class PreferencesResponse(BaseModel):
-    preferences: dict[str, Any] = Field(default_factory=dict)
-
-
-class ContextResponse(BaseModel):
-    profile: dict[str, Any] = Field(default_factory=dict)
-    mastery: dict[str, float] = Field(default_factory=dict)
-    misconceptions: list[dict[str, Any]] = Field(default_factory=list)
-    preferences: dict[str, Any] = Field(default_factory=dict)
-
-
-class LearningProfileColumns(BaseModel):
-    learner: list[str]
-    system: list[str]
-
-
-class LearningProfileResponse(BaseModel):
-    profile: list[LearningProfileRowInfo] = Field(default_factory=list)
-    columns: LearningProfileColumns
-
-
-class ProfileChangeResponse(BaseModel):
-    learner_id: str
-    knowledge_point_id: str
-    before: dict[str, Any] = Field(default_factory=dict)
-    after: dict[str, Any] = Field(default_factory=dict)
-    evidence_ids: list[str] = Field(default_factory=list)
-    source_agent: str = ""
-    reason: str = ""
-
-
-# ---------------------------------------------------------------------------
-# Agent tasks
-# ---------------------------------------------------------------------------
+class ArtifactResponse(BaseModel):
+    artifact: ArtifactInfo
 
 
 class AgentTaskCreateResponse(BaseModel):
@@ -318,7 +204,7 @@ class AgentWorkItemInfo(BaseModel):
 
 class AgentTaskRuntimeGraphSummary(BaseModel):
     id: str
-    type: str = "runtime-graph"
+    type: Literal["runtime-graph"] = "runtime-graph"
     taskId: str
     latestExecutionId: str | None = None
     status: str
@@ -386,8 +272,6 @@ class AgentRunInfo(BaseModel):
 
 
 class AgentTaskSnapshotResponse(BaseModel):
-    """The runtime-truth agent task snapshot (see ``Service.agent_task_snapshot``)."""
-
     id: str
     status: str
     threadStatus: str = "open"
@@ -463,14 +347,6 @@ class AgentTaskCancelResponse(BaseModel):
     status: str
 
 
-class AttachmentUploadResponse(BaseModel):
-    key: str
-    path: str
-    filename: str
-    media_type: str
-    size: int
-
-
 class QuizSubmissionResponse(BaseModel):
     status: str
     submission: QuizSubmissionSnapshotInfo | None = None
@@ -498,33 +374,8 @@ class AgentEvidenceResponse(BaseModel):
 
 
 class AgentTaskEventsResponse(BaseModel):
-    """JSON catch-up view of the durable agent event log (``format=json``)."""
-
     events: list[dict[str, Any]] = Field(default_factory=list)
-    protocol: Literal["v1", "legacy-v0"]
-
-
-class ExecutionSpanResponse(BaseModel):
-    """One recursive span in the LingxiLearn execution timeline."""
-
-    model_config = ConfigDict(extra="allow")
-
-    id: str
-    name: str
-    kind: str
-    status: str
-    startedAt: str
-    endedAt: str
-    durationMs: int
-    children: list[ExecutionSpanResponse] = Field(default_factory=list)
-
-
-class ExecutionTimelineResponse(BaseModel):
-    schemaVersion: Literal["lingxilearn.timeline.v1"]
-    executionId: str
-    spans: list[ExecutionSpanResponse] = Field(default_factory=list)
-    totalTokens: int = 0
-    waitingForUserMs: int = 0
+    protocol: Literal["v1"]
 
 
 class NativeExecutionNodeResponse(BaseModel):
@@ -569,37 +420,13 @@ class NativeExecutionSnapshotResponse(BaseModel):
 
 class RuntimeGraphResponse(BaseModel):
     id: str
-    type: str = "runtime-graph"
+    type: Literal["runtime-graph"] = "runtime-graph"
     taskId: str
     latestExecutionId: str | None = None
     status: str
     updatedAt: str | None = None
     executionSnapshot: NativeExecutionSnapshotResponse | None = None
     executionGraph: dict[str, Any] = Field(default_factory=dict)
-
-
-class ExecutionMetadataResponse(BaseModel):
-    trigger: str | None = None
-    startedAt: str | None = None
-    endedAt: str | None = None
-    totalDurationMs: int | None = None
-    cost: Any = None
-    totalTokens: int | None = None
-    scheduleId: str | None = None
-    scheduledFor: str | None = None
-
-
-class ExecutionSnapshotResponse(BaseModel):
-    executionId: str
-    status: str
-    taskId: str
-    graphVersion: str
-    schemaVersion: Literal["lingxilearn.execution.v1"]
-    snapshot: NativeExecutionSnapshotResponse
-    timeline: ExecutionTimelineResponse
-    trajectory: dict[str, Any] = Field(default_factory=dict)
-    eventLog: dict[str, Any] = Field(default_factory=dict)
-    executionMetadata: ExecutionMetadataResponse
 
 
 class SchedulePermissionResult(BaseModel):
@@ -613,910 +440,3 @@ class SchedulePermissionResult(BaseModel):
 class SchedulePermissionResponse(BaseModel):
     success: bool
     results: list[SchedulePermissionResult] = Field(default_factory=list)
-
-
-class LearningRecordResponse(BaseModel):
-    success: bool
-    data: dict[str, Any] = Field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
-# Workspaces & pins
-# ---------------------------------------------------------------------------
-
-
-class WorkspaceOwnerBillingInfo(BaseModel):
-    plan: str = "internal"
-    isPaid: bool = False
-    isPro: bool = False
-
-
-class WorkspaceInfo(BaseModel):
-    id: str
-    workspaceId: str
-    name: str
-    ownerId: str
-    organizationId: str | None = None
-    slug: str
-    workspaceMode: str = "personal"
-    role: str = "admin"
-    membershipId: str
-    permissions: str = "admin"
-    appearance: dict[str, Any] = Field(default_factory=dict)
-    ownerBilling: WorkspaceOwnerBillingInfo = Field(default_factory=WorkspaceOwnerBillingInfo)
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-
-class WorkspaceListResponse(BaseModel):
-    workspaces: list[WorkspaceInfo] = Field(default_factory=list)
-    lastActiveWorkspaceId: str | None = None
-    pinnedWorkspaceIds: list[str] = Field(default_factory=list)
-    creationPolicy: dict[str, Any] | None = None
-
-
-class WorkspaceResponse(BaseModel):
-    workspace: WorkspaceInfo
-    data: WorkspaceInfo
-
-
-class WorkspaceMemberInfo(BaseModel):
-    userId: str
-    name: str
-    image: str | None = None
-
-
-class WorkspaceMembersResponse(BaseModel):
-    members: list[WorkspaceMemberInfo] = Field(default_factory=list)
-
-
-class WorkspacePermissionUserInfo(BaseModel):
-    userId: str
-    email: str
-    name: str
-    image: str | None = None
-    permissionType: str = "admin"
-    isExternal: bool = False
-    joinedAt: str | None = None
-    roleSource: str = "owner"
-    isBilledAccount: bool = True
-
-
-class WorkspacePermissionViewerInfo(BaseModel):
-    userId: str
-    isAdmin: bool = True
-    permissionType: str = "admin"
-
-
-class WorkspacePermissionsResponse(BaseModel):
-    users: list[WorkspacePermissionUserInfo] = Field(default_factory=list)
-    total: int = 0
-    viewer: WorkspacePermissionViewerInfo
-
-
-class PinnedItemInfo(BaseModel):
-    id: str
-    userId: str
-    workspaceId: str
-    resourceType: str
-    resourceId: str
-    pinnedAt: str | None = None
-
-
-class PinnedItemsResponse(BaseModel):
-    pinnedItems: list[PinnedItemInfo] = Field(default_factory=list)
-
-
-class PinnedItemResponse(BaseModel):
-    pinnedItem: PinnedItemInfo
-
-
-# ---------------------------------------------------------------------------
-# Workspace folders & files
-# ---------------------------------------------------------------------------
-
-
-class WorkspaceFolderInfo(BaseModel):
-    """Exact ``_folder_public`` wire shape (no ``archived`` key on the wire)."""
-
-    id: str
-    workspaceId: str
-    userId: str
-    name: str
-    parentId: str | None = None
-    path: str
-    sortOrder: int = 0
-    deletedAt: str | None = None
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-
-class WorkspaceFoldersResponse(BaseModel):
-    success: bool = True
-    folders: list[WorkspaceFolderInfo] = Field(default_factory=list)
-    data: list[WorkspaceFolderInfo] = Field(default_factory=list)
-
-
-class WorkspaceFolderResponse(BaseModel):
-    success: bool = True
-    folder: WorkspaceFolderInfo
-
-
-class WorkspaceFileInfo(BaseModel):
-    """Exact ``_file_public`` wire shape — the public file DTO, never the ORM row."""
-
-    id: str
-    workspaceId: str
-    name: str
-    key: str
-    path: str
-    url: str
-    size: int = 0
-    type: str
-    mimeType: str
-    width: int | None = None
-    height: int | None = None
-    uploadedBy: str | None = None
-    folderId: str | None = None
-    deletedAt: str | None = None
-    uploadedAt: str | None = None
-    updatedAt: str | None = None
-    storageContext: str = "workspace"
-    context: str = "workspace"
-    readOnly: bool = False
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class WorkspaceFilesResponse(BaseModel):
-    success: bool = True
-    files: list[WorkspaceFileInfo] = Field(default_factory=list)
-
-
-class WorkspaceFileResponse(BaseModel):
-    success: bool = True
-    file: WorkspaceFileInfo
-    data: WorkspaceFileInfo | None = None
-
-
-class WorkspaceFileContentResponse(BaseModel):
-    success: bool = True
-    content: str
-    encoding: str
-    file: WorkspaceFileInfo
-
-
-class MoveItemsResult(BaseModel):
-    files: int = 0
-    folders: int = 0
-
-
-class MoveItemsResponse(BaseModel):
-    success: bool = True
-    movedItems: MoveItemsResult
-
-
-class DeletedItemsResult(BaseModel):
-    files: int = 0
-    folders: int = 0
-
-
-class FolderArchiveResponse(BaseModel):
-    success: bool = True
-    deletedItems: DeletedItemsResult = Field(default_factory=DeletedItemsResult)
-
-
-class FolderRestoreResponse(BaseModel):
-    success: bool = True
-    folder: WorkspaceFolderInfo
-    restoredItems: DeletedItemsResult = Field(default_factory=DeletedItemsResult)
-
-
-class FileDownloadUrlResponse(BaseModel):
-    success: bool = True
-    downloadUrl: str
-    viewerUrl: str
-    fileName: str
-    expiresIn: int | None = None
-
-
-class StorageStatusResponse(BaseModel):
-    cloudConfigured: bool = False
-
-
-# Upload sessions (local single-process transfer)
-
-
-class UploadSessionInfo(BaseModel):
-    id: str
-    purpose: str = "workspace_file"
-    status: str
-    name: str
-    contentType: str
-    size: int
-    expiresAt: str
-    error: str | None = None
-    result: dict[str, Any] | None = None
-
-
-class UploadTransferInfo(BaseModel):
-    method: str = "put"
-    url: str
-    headers: dict[str, str] = Field(default_factory=dict)
-    expiresAt: str
-
-
-class CreateUploadData(BaseModel):
-    session: UploadSessionInfo
-    uploadToken: str
-    transfer: UploadTransferInfo
-
-
-class CreateUploadResponse(BaseModel):
-    data: CreateUploadData
-
-
-class UploadPartInfo(BaseModel):
-    partNumber: int
-    url: str
-    headers: dict[str, str] = Field(default_factory=dict)
-    expiresAt: str
-
-
-class UploadPartsData(BaseModel):
-    parts: list[UploadPartInfo] = Field(default_factory=list)
-
-
-class UploadPartsResponse(BaseModel):
-    data: UploadPartsData
-
-
-class UploadCompletedInfo(BaseModel):
-    id: str
-    purpose: str = "workspace_file"
-    status: str
-    name: str
-    contentType: str
-    size: int
-    expiresAt: str
-    error: str | None = None
-    result: dict[str, Any] | None = None
-
-
-class UploadStateResponse(BaseModel):
-    data: UploadCompletedInfo
-
-
-# ---------------------------------------------------------------------------
-# Tables
-# ---------------------------------------------------------------------------
-
-
-class TableColumnInfo(BaseModel):
-    id: str
-    name: str
-    key: str
-    type: str = "string"
-    position: int = 0
-    required: bool = False
-    unique: bool = False
-    options: list[Any] = Field(default_factory=list)
-    multiple: bool = False
-    currencyCode: str | None = None
-
-
-class TableLocksInfo(BaseModel):
-    schemaLocked: bool = False
-    insertLocked: bool = False
-    updateLocked: bool = False
-    deleteLocked: bool = False
-
-
-class TableSchemaInfo(BaseModel):
-    columns: list[TableColumnInfo] = Field(default_factory=list)
-
-
-class WorkspaceTableInfo(BaseModel):
-    """Exact ``_table_public`` wire shape."""
-
-    id: str
-    name: str
-    description: str = ""
-    workspaceId: str
-    folderId: str | None = None
-    schema_: TableSchemaInfo = Field(default_factory=TableSchemaInfo, alias="schema")
-    columns: list[TableColumnInfo] = Field(default_factory=list)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    rowCount: int = 0
-    totalRows: int = 0
-    createdBy: str | None = None
-    locks: TableLocksInfo = Field(default_factory=TableLocksInfo)
-    archivedAt: str | None = None
-    archived: bool = False
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-    model_config = {"populate_by_name": True}
-
-
-class TableListData(BaseModel):
-    tables: list[WorkspaceTableInfo] = Field(default_factory=list)
-    totalCount: int = 0
-
-
-class TableListResponse(BaseModel):
-    success: bool = True
-    data: TableListData
-    tables: list[WorkspaceTableInfo] = Field(default_factory=list)
-    totalCount: int = 0
-
-
-class TableData(BaseModel):
-    table: WorkspaceTableInfo
-    message: str | None = None
-
-
-class TableResponse(BaseModel):
-    success: bool = True
-    data: TableData
-
-
-class TableMessageData(BaseModel):
-    message: str = ""
-
-
-class TableMessageResponse(BaseModel):
-    success: bool = True
-    data: TableMessageData = Field(default_factory=TableMessageData)
-
-
-class TableRowInfo(BaseModel):
-    id: str
-    data: dict[str, Any] = Field(default_factory=dict)
-    values: dict[str, Any] = Field(default_factory=dict)
-    position: int = 0
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-
-class TableRowsData(BaseModel):
-    rows: list[TableRowInfo] = Field(default_factory=list)
-    rowCount: int = 0
-    totalCount: int = 0
-    limit: int = 100
-    offset: int = 0
-    nextCursor: str | None = None
-
-
-class TableRowsResponse(BaseModel):
-    success: bool = True
-    data: TableRowsData
-
-
-class TableRowsQueryData(BaseModel):
-    rows: list[TableRowInfo] = Field(default_factory=list)
-    rowCount: int = 0
-    totalCount: int = 0
-    nextCursor: str | None = None
-
-
-class TableRowsQueryResponse(BaseModel):
-    success: bool = True
-    data: TableRowsQueryData
-
-
-class TableRowMatchInfo(BaseModel):
-    ordinal: int
-    rowId: str
-    column: str
-
-
-class TableRowsFindData(BaseModel):
-    matches: list[TableRowMatchInfo] = Field(default_factory=list)
-    truncated: bool = False
-
-
-class TableRowsFindResponse(BaseModel):
-    success: bool = True
-    data: TableRowsFindData
-
-
-class TableRowsCreateData(BaseModel):
-    rows: list[TableRowInfo] = Field(default_factory=list)
-    row: TableRowInfo | None = None
-
-
-class TableRowsCreateResponse(BaseModel):
-    success: bool = True
-    data: TableRowsCreateData
-
-
-class TableRowData(BaseModel):
-    row: TableRowInfo
-
-
-class TableRowResponse(BaseModel):
-    success: bool = True
-    data: TableRowData
-
-
-class TableRowsUpsertData(BaseModel):
-    rows: list[TableRowInfo] = Field(default_factory=list)
-
-
-class TableRowsUpsertResponse(BaseModel):
-    success: bool = True
-    data: TableRowsUpsertData
-
-
-class TableEmptyDataResponse(BaseModel):
-    success: bool = True
-    data: dict[str, Any] = Field(default_factory=dict)
-
-
-class TableColumnsData(BaseModel):
-    columns: list[TableColumnInfo] = Field(default_factory=list)
-
-
-class TableColumnsResponse(BaseModel):
-    success: bool = True
-    data: TableColumnsData
-
-
-class TableViewInfo(BaseModel):
-    id: str
-    tableId: str
-    name: str
-    config: dict[str, Any] = Field(default_factory=dict)
-    isDefault: bool = False
-    createdBy: str | None = None
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-
-class TableViewsData(BaseModel):
-    views: list[TableViewInfo] = Field(default_factory=list)
-
-
-class TableViewsResponse(BaseModel):
-    success: bool = True
-    data: TableViewsData
-
-
-class TableViewData(BaseModel):
-    view: TableViewInfo
-
-
-class TableViewResponse(BaseModel):
-    success: bool = True
-    data: TableViewData
-
-
-class TableViewDeletedData(BaseModel):
-    deleted: bool = True
-
-
-class TableViewDeletedResponse(BaseModel):
-    success: bool = True
-    data: TableViewDeletedData = Field(default_factory=TableViewDeletedData)
-
-
-class TableImportCsvTableInfo(BaseModel):
-    id: str
-    name: str
-
-
-class TableImportCsvData(BaseModel):
-    table: TableImportCsvTableInfo
-    importedRows: int = 0
-
-
-class TableImportCsvResponse(BaseModel):
-    success: bool = True
-    data: TableImportCsvData
-
-
-class TableImportRowsData(BaseModel):
-    importedRows: int = 0
-
-
-class TableImportRowsResponse(BaseModel):
-    success: bool = True
-    data: TableImportRowsData
-
-
-# ---------------------------------------------------------------------------
-# Knowledge
-# ---------------------------------------------------------------------------
-
-
-class KnowledgeChunkingConfigInfo(BaseModel):
-    maxSize: int = 1200
-    minSize: int = 1
-    overlap: int = 0
-    strategy: str = "text"
-
-
-class KnowledgeBaseInfo(BaseModel):
-    """Exact ``_knowledge_base_public`` wire shape."""
-
-    id: str
-    userId: str
-    name: str
-    description: str = ""
-    workspaceId: str
-    documentCount: int = 0
-    docCount: int = 0
-    fileCount: int = 0
-    tokenCount: int = 0
-    chunkingConfig: KnowledgeChunkingConfigInfo = Field(default_factory=KnowledgeChunkingConfigInfo)
-    folderId: str | None = None
-    deletedAt: str | None = None
-    archived: bool = False
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-
-class KnowledgeBasesResponse(BaseModel):
-    success: bool = True
-    data: list[KnowledgeBaseInfo] = Field(default_factory=list)
-    knowledgeBases: list[KnowledgeBaseInfo] = Field(default_factory=list)
-
-
-class KnowledgeBaseResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeBaseInfo
-    knowledgeBase: KnowledgeBaseInfo
-
-
-class KnowledgeMessageResponse(BaseModel):
-    success: bool = True
-    data: TableMessageData = Field(default_factory=TableMessageData)
-
-
-class KnowledgeDocumentInfo(BaseModel):
-    """Exact ``_document_public`` wire shape, tag slots included."""
-
-    id: str
-    knowledgeBaseId: str
-    name: str
-    filename: str
-    fileUrl: str
-    fileSize: int = 0
-    mimeType: str
-    chunkCount: int = 0
-    tokenCount: int = 0
-    characterCount: int = 0
-    processingStatus: str = "completed"
-    processingError: str | None = None
-    enabled: bool = True
-    uploadedAt: str | None = None
-    content: str = ""
-    size: int = 0
-    status: str = "ready"
-    archived: bool = False
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    readOnly: bool = False
-    tag1: Any = None
-    tag2: Any = None
-    tag3: Any = None
-    tag4: Any = None
-    tag5: Any = None
-    tag6: Any = None
-    tag7: Any = None
-    number1: Any = None
-    number2: Any = None
-    number3: Any = None
-    number4: Any = None
-    number5: Any = None
-    date1: Any = None
-    date2: Any = None
-    boolean1: Any = None
-    boolean2: Any = None
-    boolean3: Any = None
-    connectorId: Any = None
-    connectorType: Any = None
-    sourceUrl: Any = None
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-
-class KnowledgePaginationInfo(BaseModel):
-    total: int = 0
-    limit: int = 50
-    offset: int = 0
-    hasMore: bool = False
-
-
-class KnowledgeDocumentsData(BaseModel):
-    documents: list[KnowledgeDocumentInfo] = Field(default_factory=list)
-    pagination: KnowledgePaginationInfo = Field(default_factory=KnowledgePaginationInfo)
-
-
-class KnowledgeDocumentsResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeDocumentsData
-    documents: list[KnowledgeDocumentInfo] = Field(default_factory=list)
-
-
-class KnowledgeDocumentResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeDocumentInfo
-    document: KnowledgeDocumentInfo
-
-
-class KnowledgeSearchResultInfo(BaseModel):
-    document: KnowledgeDocumentInfo
-    score: float = 0.0
-    snippet: str = ""
-
-
-class KnowledgeSearchResponse(BaseModel):
-    success: bool = True
-    data: list[KnowledgeSearchResultInfo] = Field(default_factory=list)
-    results: list[KnowledgeSearchResultInfo] = Field(default_factory=list)
-
-
-class KnowledgeChunkInfo(BaseModel):
-    """Exact ``_chunk_public`` wire shape, tag slots included."""
-
-    id: str
-    chunkIndex: int = 0
-    content: str = ""
-    contentLength: int = 0
-    tokenCount: int = 0
-    enabled: bool = True
-    startOffset: int = 0
-    endOffset: int = 0
-    tag1: Any = None
-    tag2: Any = None
-    tag3: Any = None
-    tag4: Any = None
-    tag5: Any = None
-    tag6: Any = None
-    tag7: Any = None
-    number1: Any = None
-    number2: Any = None
-    number3: Any = None
-    number4: Any = None
-    number5: Any = None
-    date1: Any = None
-    date2: Any = None
-    boolean1: Any = None
-    boolean2: Any = None
-    boolean3: Any = None
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-
-class KnowledgeChunksResponse(BaseModel):
-    success: bool = True
-    data: list[KnowledgeChunkInfo] = Field(default_factory=list)
-    chunks: list[KnowledgeChunkInfo] = Field(default_factory=list)
-    pagination: KnowledgePaginationInfo
-
-
-class KnowledgeChunkResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeChunkInfo
-
-
-class KnowledgeTagInfo(BaseModel):
-    id: str
-    tagSlot: str = ""
-    displayName: str
-    name: str
-    fieldType: str = "text"
-    createdAt: str | None = None
-    updatedAt: str | None = None
-
-
-class KnowledgeTagsResponse(BaseModel):
-    success: bool = True
-    data: list[KnowledgeTagInfo] = Field(default_factory=list)
-    tags: list[KnowledgeTagInfo] = Field(default_factory=list)
-
-
-class KnowledgeTagListResponse(BaseModel):
-    """Document-scoped tag list: only ``data`` is present on the wire."""
-
-    success: bool = True
-    data: list[KnowledgeTagInfo] = Field(default_factory=list)
-
-
-class KnowledgeTagResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeTagInfo
-
-
-class KnowledgeTagUsageDocumentInfo(BaseModel):
-    id: str
-    name: str
-    tagValue: str = ""
-
-
-class KnowledgeTagUsageInfo(BaseModel):
-    tagName: str
-    tagSlot: str = ""
-    documentCount: int = 0
-    documents: list[KnowledgeTagUsageDocumentInfo] = Field(default_factory=list)
-
-
-class KnowledgeTagUsageResponse(BaseModel):
-    success: bool = True
-    data: list[KnowledgeTagUsageInfo] = Field(default_factory=list)
-
-
-class KnowledgeNextSlotData(BaseModel):
-    nextAvailableSlot: str | None = None
-    fieldType: str
-    usedSlots: list[str] = Field(default_factory=list)
-    totalSlots: int = 0
-    availableSlots: int = 0
-
-
-class KnowledgeNextSlotResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeNextSlotData
-
-
-class DocumentTagSaveData(BaseModel):
-    created: list[KnowledgeTagInfo] = Field(default_factory=list)
-    updated: list[KnowledgeTagInfo] = Field(default_factory=list)
-    errors: list[Any] = Field(default_factory=list)
-
-
-class DocumentTagSaveResponse(BaseModel):
-    success: bool = True
-    data: DocumentTagSaveData
-
-
-class KnowledgeDocumentUpsertCreatedInfo(BaseModel):
-    documentId: str
-    filename: str
-    status: str = "pending"
-
-
-class KnowledgeDocumentUpsertData(BaseModel):
-    documentsCreated: list[KnowledgeDocumentUpsertCreatedInfo] = Field(default_factory=list)
-    isUpdate: bool = False
-    previousDocumentId: str | None = None
-    processingMethod: str = "background"
-    processingConfig: dict[str, Any] = Field(default_factory=dict)
-
-
-class KnowledgeDocumentUpsertResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeDocumentUpsertData
-
-
-class KnowledgeBulkDocumentUpdateInfo(BaseModel):
-    id: str
-    enabled: bool
-
-
-class KnowledgeBulkDocumentsData(BaseModel):
-    operation: str
-    successCount: int = 0
-    failedCount: int = 0
-    updatedDocuments: list[KnowledgeBulkDocumentUpdateInfo] = Field(default_factory=list)
-
-
-class KnowledgeBulkDocumentsResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeBulkDocumentsData
-
-
-class KnowledgeBulkChunksData(BaseModel):
-    operation: str
-    successCount: int = 0
-    errorCount: int = 0
-    processed: int = 0
-    errors: list[Any] = Field(default_factory=list)
-
-
-class KnowledgeBulkChunksResponse(BaseModel):
-    success: bool = True
-    data: KnowledgeBulkChunksData
-
-
-class KnowledgeDocumentSummaryInfo(BaseModel):
-    id: str
-    knowledgeBaseId: str
-    filename: str
-    fileSize: int = 0
-    mimeType: str
-    processingStatus: str = "completed"
-    chunkCount: int = 0
-    tokenCount: int = 0
-    characterCount: int = 0
-    enabled: bool = True
-    createdAt: str | None = None
-
-
-class KnowledgeUploadSessionInfo(BaseModel):
-    id: str
-    knowledgeBaseId: str
-    status: str
-    name: str
-    contentType: str
-    size: int
-    expiresAt: str
-    error: str | None = None
-    document: KnowledgeDocumentSummaryInfo | None = None
-
-
-class KnowledgeUploadCreateData(BaseModel):
-    session: KnowledgeUploadSessionInfo
-    uploadToken: str
-    transfer: UploadTransferInfo
-
-
-class KnowledgeUploadCreateResponse(BaseModel):
-    data: KnowledgeUploadCreateData
-
-
-class KnowledgeUploadStateResponse(BaseModel):
-    data: KnowledgeUploadSessionInfo
-
-
-# ---------------------------------------------------------------------------
-# Personal skills (workspace skill CRUD)
-# ---------------------------------------------------------------------------
-
-
-class PersonalSkillInfo(BaseModel):
-    """Exact ``_skill_public`` wire shape."""
-
-    id: str
-    name: str
-    display_name: str
-    description: str = ""
-    content: str = ""
-    version: str = "1.0.0"
-    source: str = "personal"
-    is_system: bool = False
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class SkillCreateResponse(BaseModel):
-    skills: list[PersonalSkillInfo] = Field(default_factory=list)
-    skill: PersonalSkillInfo
-    data: PersonalSkillInfo
-
-
-class SkillUpdateResponse(BaseModel):
-    skill: PersonalSkillInfo
-    data: PersonalSkillInfo
-
-
-# ---------------------------------------------------------------------------
-# Settings / account / billing
-# ---------------------------------------------------------------------------
-
-
-class UserSettingsInfo(BaseModel):
-    """Exact ``_settings_public`` wire shape."""
-
-    theme: str = "system"
-    autoConnect: bool = True
-    telemetryEnabled: bool = True
-    emailPreferences: dict[str, Any] = Field(default_factory=dict)
-    billingUsageNotificationsEnabled: bool = True
-    superUserModeEnabled: bool = False
-    mothershipEnvironment: str = "default"
-    errorNotificationsEnabled: bool = True
-    snapToGridSize: float = 0
-    showActionBar: bool = True
-    copilotAutoAllowedTools: list[str] = Field(default_factory=list)
-    timezone: str | None = None
-    lastActiveWorkspaceId: str | None = None
-
-
-class UserSettingsResponse(BaseModel):
-    data: UserSettingsInfo
-
-
-class UserSettingsUpdateResponse(BaseModel):
-    success: bool
-    data: UserSettingsInfo

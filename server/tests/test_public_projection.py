@@ -362,12 +362,18 @@ def test_artifact_ready_maps_to_resource_upsert() -> None:
         {
             "kind": "artifact.ready",
             "agent": "visual_explainer",
-            "payload": {"artifact": "visual", "relative_path": "t/visual/dist/index.html"},
+            "payload": {
+                "artifact": "visual",
+                "artifact_record_id": "artifact_123",
+                "artifact_title": "可视化讲解",
+                "relative_path": "t/visual/dist/index.html",
+            },
         }
     )
     assert len(events) == 1
     resource = events[0]["payload"]["resource"]
     assert resource["type"] == "file"
+    assert resource["id"] == "artifact_123"
     assert resource["artifactKind"] == "visual"
     assert resource["path"] == "t/visual/dist/index.html"
     assert events[0]["type"] == "resource"
@@ -375,7 +381,13 @@ def test_artifact_ready_maps_to_resource_upsert() -> None:
 
 def test_internal_mechanics_are_not_public() -> None:
     p = _projector()
-    for kind in ("node.started", "node.completed", "model.started", "plan.created", "state.updated"):
+    for kind in (
+        "node.started",
+        "node.completed",
+        "model.started",
+        "plan.created",
+        "state.updated",
+    ):
         assert p.consume({"kind": kind, "agent": "orchestrator", "payload": {}}) == []
 
 

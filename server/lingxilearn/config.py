@@ -7,13 +7,13 @@ Secrets are :class:`SecretStr` so they never land in logs or tracebacks.
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
-from pydantic.fields import AliasChoices
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 if sys.platform == "win32":
@@ -36,8 +36,7 @@ class Settings(BaseSettings):
         env_prefix="LINGXILEARN_",
         # Resolve the checkout's root environment file regardless of whether
         # uvicorn is started from the repository root, ``server/``, or a
-        # container working directory.  Compose still injects its explicit
-        # environment values, so this is only a local quick-start fallback.
+        # container working directory.
         env_file=str(REPO_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
@@ -48,11 +47,7 @@ class Settings(BaseSettings):
     var_dir: Path = REPO_ROOT / "var"
 
     # --- persistence -------------------------------------------------------
-    # SQLite by default so a fresh clone runs with zero setup; point this at
-    # PostgreSQL (asyncpg or psycopg's async dialect) for the container
-    # deployment.  psycopg is also supported for Windows/Python builds where
-    # asyncpg can hit the OpenSSL Applink native exit.
-    database_url: str = "sqlite+aiosqlite:///./var/lingxilearn.sqlite3"
+    database_url: str = ""
     # LingxiGraph's checkpointers are synchronous drivers, so they need their
     # own DSN in the driver's native form.
     checkpoint_url: str = ""
@@ -63,9 +58,6 @@ class Settings(BaseSettings):
     # and consumes its verified Principal response.
     identity_bff_url: str = ""
     identity_bff_timeout: float = 10.0
-    insecure_dev_auth: bool = False
-    dev_subject: str = "lingxilearn-dev"
-
     # Raw orchestration diagnostics are an explicit operator capability. Keep
     # this disabled in normal deployments; it is intended for local/internal
     # debugging only and is never inferred from a learner session.
@@ -83,10 +75,10 @@ class Settings(BaseSettings):
     # --- Agent Task runtime -----------------------------------------------
     # Agent tasks use one shared DeepSeek model. DS_API_KEY is intentionally
     # unprefixed because it is the repository-level credential requested by
-    # the product contract; the alias keeps it out of public settings dumps.
+    # the product contract.
     agent_api_key: SecretStr = Field(
         default=SecretStr(""),
-        validation_alias=AliasChoices("DS_API_KEY", "LINGXILEARN_AGENT_API_KEY"),
+        validation_alias="DS_API_KEY",
         repr=False,
     )
     agent_model: str = "deepseek-v4-flash"
@@ -113,8 +105,7 @@ class Settings(BaseSettings):
     # prompt/tool prefix intact so DeepSeek can use its native prompt cache.
     agent_cache_enabled: bool = True
     agent_cache_verify_mode: Literal["strict", "warn", "off"] = "strict"
-    # Sim retry blocks are opt-in; the default preserves LingxiGraph's
-    # single-attempt behavior for every non-idempotent Agent primitive.
+    # Retry blocks are opt-in; non-idempotent Agent primitives run once.
     agent_retry_max_tries: int = 1
     agent_retry_wait_seconds: float = 0.0
     agent_max_html_bytes: int = 512 * 1024
@@ -142,39 +133,16 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _known_async_driver(cls, value: str) -> str:
-        allowed = (
-            "sqlite+aiosqlite://",
-            "postgresql+asyncpg://",
-            "postgresql+psycopg://",
-        )
+        if not value:
+            return value
+        allowed = ("postgresql+asyncpg://", "postgresql+psycopg://")
         if not value.startswith(allowed):
             raise ValueError(f"LINGXILEARN_DATABASE_URL must start with one of {allowed}")
         return value
 
     @property
     def resolved_database_url(self) -> str:
-        """Anchor a relative SQLite path to the repo, not to the working directory.
-
-        Without this, ``uvicorn`` started from ``server/`` and a script started
-        from the repo root would quietly use two different databases.
-        """
-        # asyncpg currently can terminate Python 3.13 Windows processes via
-        # OpenSSL_Applink.  psycopg 3 provides the same SQLAlchemy async
-        # interface and uses the supported SelectorEventLoop path instead.
-        if sys.platform == "win32" and self.database_url.startswith(
-            "postgresql+asyncpg://"
-        ):
-            return self.database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-
-        prefix = "sqlite+aiosqlite:///"
-        if not self.database_url.startswith(prefix):
-            return self.database_url
-        path = self.database_url[len(prefix) :]
-        if path.startswith("/"):  # already absolute
-            return self.database_url
-        resolved = (REPO_ROOT / path.lstrip("./")).resolve()
-        resolved.parent.mkdir(parents=True, exist_ok=True)
-        return f"{prefix}{resolved}"
+        return self.database_url
 
     @property
     def resolved_checkpoint_url(self) -> str:
@@ -184,25 +152,45 @@ class Settings(BaseSettings):
         for prefix in ("postgresql+asyncpg://", "postgresql+psycopg://"):
             if self.database_url.startswith(prefix):
                 return self.database_url.replace(prefix, "postgresql://", 1)
-        path = self.resolved_database_url.split("///", 1)[-1]
-        return str(Path(path).with_name("checkpoints.sqlite3"))
+        return ""
 
     @property
     def effective_brain(self) -> BrainKind:
-        """Fall back to the deterministic brain when the chosen provider has no credential.
-
-        This keeps the whole teaching loop runnable (and reproducible in CI)
-        without an API key, instead of failing at the first coach turn.
-        """
-        if self.brain == "openai" and not self.llm_api_key.get_secret_value():
-            return "scripted"
-        if self.brain == "coze" and not (self.coze_token.get_secret_value() and self.coze_bot_id):
-            return "scripted"
         return self.brain
 
     @property
     def agents_configured(self) -> bool:
         return bool(self.agent_api_key.get_secret_value())
+
+    def validate_runtime(self) -> None:
+        """Validate the complete production composition before opening resources."""
+
+        errors: list[dict[str, str]] = []
+        if not self.database_url:
+            errors.append({"field": "LINGXILEARN_DATABASE_URL", "code": "required"})
+        elif not self.database_url.startswith(("postgresql+asyncpg://", "postgresql+psycopg://")):
+            errors.append({"field": "LINGXILEARN_DATABASE_URL", "code": "postgresql_required"})
+        if not self.identity_bff_url.strip():
+            errors.append({"field": "LINGXILEARN_IDENTITY_BFF_URL", "code": "required"})
+        if self.brain == "openai" and not self.llm_api_key.get_secret_value():
+            errors.append({"field": "LINGXILEARN_LLM_API_KEY", "code": "required_for_openai"})
+        if self.brain == "coze":
+            if not self.coze_token.get_secret_value():
+                errors.append({"field": "LINGXILEARN_COZE_TOKEN", "code": "required_for_coze"})
+            if not self.coze_bot_id.strip():
+                errors.append({"field": "LINGXILEARN_COZE_BOT_ID", "code": "required_for_coze"})
+        if not self.agent_api_key.get_secret_value():
+            errors.append({"field": "DS_API_KEY", "code": "required_for_agent_tasks"})
+        if not self.resolved_checkpoint_url:
+            errors.append({"field": "LINGXILEARN_CHECKPOINT_URL", "code": "postgresql_required"})
+        if errors:
+            raise RuntimeError(
+                json.dumps(
+                    {"code": "configuration.invalid", "errors": errors},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            )
 
 
 @lru_cache

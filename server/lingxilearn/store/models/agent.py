@@ -27,7 +27,7 @@ from .base import Base, utcnow
 
 
 class AgentTask(Base):
-    """A one-shot intent-routing task and its specialist outputs."""
+    """Long-lived learning task and its current execution state."""
 
     __tablename__ = "agent_tasks"
     __table_args__ = (
@@ -41,9 +41,7 @@ class AgentTask(Base):
 
     id: Mapped[str] = mapped_column(String(96), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
-    create_idempotency_key: Mapped[str | None] = mapped_column(
-        String(192), nullable=True
-    )
+    create_idempotency_key: Mapped[str | None] = mapped_column(String(192), nullable=True)
     create_payload_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     prompt: Mapped[str] = mapped_column(Text)
     title: Mapped[str] = mapped_column(Text, default="")
@@ -62,21 +60,11 @@ class AgentTask(Base):
     adaptive_result: Mapped[dict] = mapped_column(JSON, default=dict)
     handoff_result: Mapped[dict] = mapped_column(JSON, default=dict)
     user_messages: Mapped[list] = mapped_column(JSON, default=list)
-    # Kept for backwards-compatible reads of tasks created before the subgraph
-    # refactor. New code never creates or renders this artifact.
     visual_result: Mapped[dict] = mapped_column(JSON, default=dict)
     error: Mapped[str] = mapped_column(Text, default="")
     current_execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     latest_execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    # Long-lived thread state, separate from the legacy one-shot ``status``.
-    # ``status`` keeps its historical per-run terminal semantics until every
-    # caller has moved to the thread model (issue #18 Stage 4).
     thread_status: Mapped[str] = mapped_column(String(24), default="open", index=True)
-    # Authoritative frontend reader. Migration 0019 marks retained V0-only
-    # tasks as 0; all newly-created tasks are V1 even before their first event.
-    event_protocol_version: Mapped[int] = mapped_column(
-        Integer, default=1, server_default="1"
-    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -320,12 +308,6 @@ class AgentTaskEvent(Base):
         UniqueConstraint("task_id", "sequence", name="uq_agent_task_events_sequence"),
         Index("ix_agent_task_events_task_sequence", "task_id", "sequence"),
         Index("ix_agent_task_events_execution", "execution_id", "sequence"),
-        Index(
-            "ix_agent_task_events_task_protocol",
-            "task_id",
-            "protocol_version",
-            "sequence",
-        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -336,10 +318,6 @@ class AgentTaskEvent(Base):
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     execution_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     runtime: Mapped[dict] = mapped_column(JSON, default=dict)
-    # --- Mothership Stream V1 identity columns (issue #18) ------------------
-    # V1 events always populate these; legacy V0 rows keep protocol_version=0
-    # and null identity links.
-    protocol_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     turn_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     agent_run_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     skill_run_id: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)

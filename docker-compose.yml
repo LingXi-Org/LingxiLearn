@@ -1,7 +1,7 @@
 # LingxiLearn — one-command deployment.
 #
-#   cp .env.example .env    # edit the password, optionally add an LLM key
-#   docker compose pull && docker compose up -d
+#   cp .env.example .env    # set every required credential and release SHA
+#   docker compose up -d
 #   open http://localhost:8080
 #
 # The Compose path is exercised by the Agent-task end-to-end verification.
@@ -9,8 +9,7 @@
 name: lingxilearn
 
 x-api: &api
-  image: accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-api:latest
-  pull_policy: always
+  image: ghcr.io/lingxi-org/lingxilearn-api:sha-${LINGXILEARN_RELEASE_SHA:?set LINGXILEARN_RELEASE_SHA}
   env_file: [.env]
   environment:
     LINGXILEARN_DATABASE_URL: >-
@@ -22,11 +21,7 @@ x-api: &api
     # Keep this internal when both services share the deployment network.
     LINGXILEARN_IDENTITY_BFF_URL: ${LINGXILEARN_IDENTITY_BFF_URL:?set LINGXILEARN_IDENTITY_BFF_URL}
     LINGXILEARN_IDENTITY_BFF_TIMEOUT: ${LINGXILEARN_IDENTITY_BFF_TIMEOUT:-10}
-    # Production always validates the shared HttpOnly identity session. Do not
-    # inherit the local .env development bypass into this deployment.
-    LINGXILEARN_INSECURE_DEV_AUTH: "false"
     LINGXILEARN_AGENT_CONCURRENCY: ${LINGXILEARN_AGENT_CONCURRENCY:-1}
-    LINGXILEARN_AGENT_SIDECAR_CONCURRENCY: ${LINGXILEARN_AGENT_SIDECAR_CONCURRENCY:-4}
     LINGXILEARN_DB_POOL_SIZE: ${LINGXILEARN_DB_POOL_SIZE:-3}
     LINGXILEARN_DB_MAX_OVERFLOW: ${LINGXILEARN_DB_MAX_OVERFLOW:-1}
   volumes:
@@ -42,9 +37,8 @@ x-api: &api
   depends_on:
     postgres:
       condition: service_healthy
-  # Linux Docker does not provide host.docker.internal automatically. The
-  # Identity BFF runs in the second Compose project and is published on the
-  # host, so let this stack reach it through the host gateway.
+  # Linux Docker does not provide host.docker.internal automatically. This
+  # mapping supports an explicitly configured host Identity BFF endpoint.
   extra_hosts:
     - "host.docker.internal:host-gateway"
   security_opt: [no-new-privileges:true]
@@ -68,16 +62,10 @@ services:
   # The LingxiLearn web shell proxies browser API requests to the canonical
   # FastAPI service so the browser keeps one same-origin session.
   web:
-    image: accel.way2api.fun/ghcr.io/lingxi-org/lingxilearn-web:latest
-    pull_policy: always
+    image: ghcr.io/lingxi-org/lingxilearn-web:sha-${LINGXILEARN_RELEASE_SHA:?set LINGXILEARN_RELEASE_SHA}
     env_file: [.env]
     environment:
       LINGXILEARN_API_ORIGIN: http://api:8000
-      # Production must use the canonical LingxiIdentity session path.
-      DISABLE_AUTH: "false"
-      NEXT_PUBLIC_DISABLE_AUTH: "false"
-      NEXT_PUBLIC_MOCK_AUTH: "false"
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:8080}
     depends_on:
       # Next rewrites /auth/* and /api/* to the API. Do not expose the web
       # container until FastAPI's image healthcheck reports that port 8000 is ready.

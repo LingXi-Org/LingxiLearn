@@ -19,9 +19,9 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any
 
+from ..state.agent_task_state import Goal
 from ..state.capabilities import Capability, UnknownCapability, info, parse
 from ..state.gain import ProfileView, estimate
-from ..state.session_state import Goal
 from .contracts import CandidateAction, Cost
 
 MIN_UTILITY = 0.05
@@ -359,7 +359,7 @@ def eligible_only(candidates: Sequence[CandidateAction]) -> list[CandidateAction
 
 
 def best(candidates: Sequence[CandidateAction]) -> CandidateAction | None:
-    """The deterministic fallback choice used when the model is unavailable."""
+    """Return the highest-utility eligible candidate for analysis and tests."""
 
     return next((item for item in candidates if item.eligible), None)
 

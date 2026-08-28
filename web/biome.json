@@ -1,111 +1,35 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.0.0-beta.5/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
   "files": {
-    "ignoreUnknown": false,
     "includes": [
-      "**",
-      "!**/.next",
-      "!**/out",
-      "!**/dist",
-      "!**/build",
-      "!**/node_modules",
-      "!**/.cache",
-      "!**/.turbo",
-      "!**/.env*",
-      "!**/*.test.*",
-      "!**/*.spec.*",
-      "!**/tools/generated/**",
-      "!**/lib/execution/sandbox/bundles/**",
-      "!**/public/sw.js",
-      "!**/public/workbox-*.js",
-      "!**/public/worker-*.js"
+      "app/**",
+      "features/**",
+      "entities/**",
+      "shared/**",
+      "tests/**",
+      "scripts/**",
+      "*.ts",
+      "*.json",
+      "!next-env.d.ts",
+      "!shared/api/generated",
+      "!node_modules",
+      "!.next"
     ]
   },
   "formatter": {
     "enabled": true,
-    "useEditorconfig": true,
-    "formatWithErrors": false,
     "indentStyle": "space",
-    "indentWidth": 2,
-    "lineEnding": "lf",
-    "lineWidth": 100,
-    "bracketSpacing": true
-  },
-  "assist": {
-    "actions": {
-      "source": {
-        "organizeImports": {
-          "level": "on",
-          "options": {
-            "groups": [
-              [":NODE:", "react", "react/**"],
-              ":PACKAGE:",
-              "@/components/**",
-              "@/lib/**",
-              "@/app/**",
-              ":ALIAS:",
-              ":RELATIVE:"
-            ]
-          }
-        }
-      }
-    }
+    "lineWidth": 100
   },
   "linter": {
     "enabled": true,
-    "rules": {
-      "recommended": true,
-      "a11y": {
-        "noSvgWithoutTitle": "off",
-        "useAltText": "off",
-        "useButtonType": "off",
-        "useFocusableInteractive": "off",
-        "useAriaPropsForRole": "off",
-        "useAriaPropsSupportedByRole": "off",
-        "useKeyWithClickEvents": "off",
-        "useSemanticElements": "off",
-        "noStaticElementInteractions": "off"
-      },
-      "complexity": { "noStaticOnlyClass": "off" },
-      "performance": { "noImgElement": "off" },
-      "suspicious": {
-        "noControlCharactersInRegex": "off",
-        "noExplicitAny": "off",
-        "noArrayIndexKey": "off",
-        "noImplicitAnyLet": "off",
-        "noAssignInExpressions": "off"
-      },
-      "correctness": {
-        "useExhaustiveDependencies": "off",
-        "noUnusedFunctionParameters": "off",
-        "noUnusedVariables": "off"
-      },
-      "security": { "noDangerouslySetInnerHtml": "off" },
-      "style": {
-        "noDescendingSpecificity": "off",
-        "useSelfClosingElements": "error",
-        "useAsConstAssertion": "error",
-        "useDefaultParameterLast": "error",
-        "useEnumInitializers": "error",
-        "noParameterAssign": "off",
-        "noNonNullAssertion": "off",
-        "useNodejsImportProtocol": "off"
-      }
-    }
+    "rules": { "recommended": true }
   },
   "javascript": {
-    "jsxRuntime": "reactClassic",
     "formatter": {
+      "quoteStyle": "single",
       "jsxQuoteStyle": "single",
-      "quoteProperties": "asNeeded",
-      "trailingCommas": "es5",
-      "semicolons": "asNeeded",
-      "arrowParentheses": "always",
-      "bracketSameLine": false,
-      "quoteStyle": "single"
+      "semicolons": "asNeeded"
     }
-  },
-  "css": { "parser": { "cssModules": true } },
-  "json": { "formatter": { "indentWidth": 2 } }
+  }
 }

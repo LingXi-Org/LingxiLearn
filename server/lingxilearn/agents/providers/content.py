@@ -1,15 +1,13 @@
 """Providers that produce learner-facing artifacts.
 
 Ported from the coordinator graph's specialist nodes with their prompts,
-progressive-disclosure setup, staged-artifact tooling and recovery paths intact.
+progressive-disclosure setup and staged-artifact tooling intact.
 What was removed is the graph state they used to read (``if state["route"] !=
 "initialize": return {}``) and the edges that decided when they ran — that
 decision is now the orchestrator's, recomputed each round from the profile.
 
-The recovery behaviour is deliberately preserved: a seeded fallback page before
-generation starts, and a draft that survives a timeout, because a model that
-runs out of budget mid-artifact should cost the learner a worse page, not the
-page.
+Provider failures are explicit: an invalid or timed-out model result is never
+published as a substitute artifact.
 """
 
 from __future__ import annotations
@@ -17,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from html import escape
 
 from lingxigraph import (
     FilesystemSkillSource,
@@ -140,24 +137,6 @@ def _teaching_context(context: ProviderContext) -> dict[str, object]:
     }
 
 
-_FALLBACK_PAGE = REPO_ROOT / "skills" / "lesson-intro" / "assets" / "fallback-page.html"
-
-
-def _lesson_intro_fallback(topic: str, objective: str) -> str:
-    """A valid page staged before generation, so interruption stays recoverable.
-
-    Read from the skill's assets rather than embedded here: it is a real
-    learner-facing page, and a page maintained as a Python string literal stops
-    being maintained.
-    """
-
-    return (
-        _FALLBACK_PAGE.read_text(encoding="utf-8")
-        .replace("__TOPIC__", escape(topic))
-        .replace("__OBJECTIVE__", escape(objective or f"理解{topic}的核心概念"))
-    )
-
-
 @register(
     "lesson_intro",
     display_name="课程引入",
@@ -175,17 +154,14 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
     emit(context.runtime, "agent.started", agent="lesson_intro", skill="lesson-intro")
 
     draft = ArtifactDraft(context.artifacts, context.task_id, "lesson-intro")
-    fallback_html = _lesson_intro_fallback(topic, str(brief["learning_objective"] or ""))
     revision = brief.get("revision")
     if revision:
         try:
             draft.write(
                 "lesson-intro.html", context.artifacts.read_lesson_intro_file(context.task_id)
             )
-        except (OSError, ArtifactError):
-            draft.write("lesson-intro.html", fallback_html)
-    else:
-        draft.write("lesson-intro.html", fallback_html)
+        except (OSError, ArtifactError) as exc:
+            raise ProviderError("lesson-intro revision source is unavailable") from exc
 
     prompt = (
         (
@@ -214,7 +190,6 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
         min(45.0, configured - 15.0) if not revision else configured * 0.5,
     )
     warnings: list[str] = []
-    published = False
     try:
         try:
             response = message_text(
@@ -230,17 +205,8 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
                     timeout=timeout,
                 )
             )
-        except (TimeoutError, GraphTimeoutError, GraphRecursionError):
-            # The fallback is already staged and valid; publish it rather than
-            # losing the artifact because the model ran long.
-            emit(
-                context.runtime,
-                "agent.output",
-                agent="lesson_intro",
-                message="课程引入生成超时，已保留可用页面并继续发布。",
-            )
-            response = "{}"
-            warnings.append("生成超时，已回退到可用课程引入页面")
+        except (TimeoutError, GraphTimeoutError, GraphRecursionError) as exc:
+            raise ProviderError("lesson-intro generation timed out") from exc
 
         parsed = extract_json(response) or {}
         html = draft.snapshot().get("lesson-intro.html")
@@ -250,19 +216,9 @@ async def lesson_intro(context: ProviderContext) -> ProviderResult:
         context.artifacts.write_lesson_intro_file(context.task_id, html)
         validation = await context.artifacts.validate_lesson_intro(context.task_id)
         if not validation["ok"]:
-            # A model can stage a file successfully and still produce a malformed
-            # page. Restore the validated fallback instead of shipping it.
-            html = fallback_html
-            draft.write("lesson-intro.html", html)
-            context.artifacts.write_lesson_intro_file(context.task_id, html)
-            validation = await context.artifacts.validate_lesson_intro(context.task_id)
-            if not validation["ok"]:
-                raise ProviderError(f"lesson-intro fallback validation failed: {validation}")
-            warnings.append("生成页面未通过校验，已回退到可用课程引入页面")
-        published = True
+            raise ProviderError(f"lesson-intro validation failed: {validation}")
     finally:
-        if published:
-            draft.cleanup()
+        draft.cleanup()
 
     emit(
         context.runtime,

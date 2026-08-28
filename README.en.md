@@ -56,7 +56,7 @@ Skills define what the system can do. State decides what it should do now.
 
 ```bash
 cp .env.example .env
-# Change POSTGRES_PASSWORD
+# Fill every required credential; missing configuration fails startup
 
 docker compose -f docker-compose.dev.yml up --build
 ```
@@ -64,7 +64,7 @@ docker compose -f docker-compose.dev.yml up --build
 Default endpoints:
 
 - Web: `http://localhost:3000`
-- API: `http://localhost:8080`
+- API: `http://localhost:8000`
 
 Or simply run:
 
@@ -96,4 +96,4 @@ Main stack: **Next.js 16 · React 19 · FastAPI · Python 3.13 · LingxiGraph 2.
 
 Root project code is released under the [MIT License](LICENSE).
 
-`web/` retains selected Apache-2.0 upstream code from Sim. See [web/SIM_UPSTREAM.md](web/SIM_UPSTREAM.md) for provenance and licensing notes.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for historical provenance and third-party notices. The V1 source tree contains none of the retired workspace implementation.

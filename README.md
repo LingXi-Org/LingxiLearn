@@ -52,7 +52,7 @@ Skill 定义系统能够做什么，State 决定当前应该做什么。
 
 ```bash
 cp .env.example .env
-# 修改 POSTGRES_PASSWORD
+# 填写全部必需凭据；缺失配置会直接阻止启动
 
 docker compose -f docker-compose.dev.yml up --build
 ```
@@ -60,7 +60,7 @@ docker compose -f docker-compose.dev.yml up --build
 默认地址：
 
 - Web: `http://localhost:3000`
-- API: `http://localhost:8080`
+- API: `http://localhost:8000`
 
 也可以使用：
 
@@ -77,7 +77,7 @@ make check   # 前端检查
 make prod    # 生产部署
 ```
 
-合并门禁及其本地复现命令见 [CI 质量门禁](docs/ci-quality-gates.md)。
+后端门禁检查依赖边界、生产源码可达性、唯一迁移与禁用能力；前端门禁检查类型、格式、测试、未使用代码、依赖方向和生产构建。
 
 ## 仓库结构
 
@@ -94,4 +94,4 @@ packs/      课程包与知识内容
 
 项目根目录代码采用 [MIT License](LICENSE)。
 
-`web/` 中保留部分 Sim 上游 Apache-2.0 代码，许可与来源说明见 [web/SIM_UPSTREAM.md](web/SIM_UPSTREAM.md)。
+历史来源与第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。当前 V1 源码不包含旧工作台实现。

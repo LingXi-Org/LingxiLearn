@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
-export default function WorkspacePage() {
-  redirect('/workspace/lingxi/home/')
+export default function WorkspaceEntryPage() {
+  redirect('/workspace/lingxi/tasks')
 }

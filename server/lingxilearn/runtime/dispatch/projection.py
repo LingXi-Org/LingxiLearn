@@ -69,9 +69,7 @@ class DispatchProjector:
 
     # -- node lifecycle ------------------------------------------------------
 
-    def node_revising(
-        self, task: PlannedTask, *, node_id: str, resolution: Resolution
-    ) -> None:
+    def node_revising(self, task: PlannedTask, *, node_id: str, resolution: Resolution) -> None:
         emit = self._emit()
         if emit is None:
             return
@@ -87,9 +85,7 @@ class DispatchProjector:
             },
         )
 
-    def node_started(
-        self, task: PlannedTask, *, node_id: str, resolution: Resolution
-    ) -> None:
+    def node_started(self, task: PlannedTask, *, node_id: str, resolution: Resolution) -> None:
         emit = self._emit()
         if emit is None:
             return

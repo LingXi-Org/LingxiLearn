@@ -1,12 +1,6 @@
-# LingxiLearn web
+# LingxiLearn Web
 
-The frontend is a single Next.js application rooted directly in `web/`.
-
-Development uses `docker-compose.dev.yml` from the repository root and mounts
-`./web` into a Bun development container. Production uses the root
-`docker-compose.yml`; the web image runs a Next standalone Node server and
-rewrites same-origin `/api/*` and `/auth/*` traffic to the separate FastAPI
-service.
-
-The only application backend contract used by the conversation UI is the
-LingxiGraph REST/SSE API in `lib/lingxi/`.
+The V1 Next.js client contains only Identity, Workspace, AgentTask, Artifact,
+Skill Catalog, and Health user paths. Production requires
+`LINGXILEARN_API_ORIGIN` and proxies all API and Identity BFF traffic through
+the same browser origin.

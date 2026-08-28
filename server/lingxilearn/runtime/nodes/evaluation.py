@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from lingxigraph import Runtime
 
+from ...state.agent_task_state import Goal, RuntimeStatus
 from ...state.capabilities import info
-from ...state.session_state import Goal, RuntimeStatus
 from ..contracts import TaskOutcome
 from ..evaluation import check_goal_satisfied, decide_next_phase
 from ..interactions import build_followup_interaction, request_interaction

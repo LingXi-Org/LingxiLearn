@@ -76,9 +76,7 @@ class WorkScheduler:
         with suppress(asyncio.CancelledError):
             await heartbeat
 
-    async def finish(
-        self, work_id: str, *, status: str, result: Mapping[str, Any]
-    ) -> bool:
+    async def finish(self, work_id: str, *, status: str, result: Mapping[str, Any]) -> bool:
         """Record the attempt's terminal status and result payload."""
 
         return await self._deps.work_ledger.finish_work(

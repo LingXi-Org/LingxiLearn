@@ -94,7 +94,7 @@ bun run test:trajectory
 ## 前端贡献
 
 - 保持现有组件、状态管理和数据访问层级，不要在页面组件中重复实现已有 API client、runtime adapter 或持久化逻辑。
-- 修改 Sim-derived 代码时保留其许可和来源说明，不要移除 [`web/SIM_UPSTREAM.md`](web/SIM_UPSTREAM.md) 中要求保留的归属信息。
+- 不得重新引入已退役的工作台源码、路由或兼容适配；历史归属记录见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 - 新增依赖前先确认现有依赖无法合理完成需求；避免为单一小功能引入重量级包。
 - UI 改动应同时检查桌面端基本可用性、空状态、加载状态、错误状态和长内容场景。
 

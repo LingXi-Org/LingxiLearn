@@ -3,8 +3,7 @@
 Coze bots are remote agents addressed by ``bot_id`` rather than model configs,
 but LingxiGraph's ``CozeChatModel`` implements the same ``ChatModel`` protocol
 as the OpenAI adapter — so everything above the constructor is shared with
-:mod:`lingxilearn.brains.llm`, including the JSON contract and the fallback to
-authored material when a response is unusable.
+:mod:`lingxilearn.brains.llm`, including its strict JSON contract.
 """
 
 from __future__ import annotations

@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from ..state.agent_task_state import Goal
 from ..state.capabilities import Capability, UnknownCapability, info, parse
-from ..state.session_state import Goal
 from .contracts import HoldDecision, OrchestrationPlan, PlannedTask
 
 
@@ -89,7 +89,7 @@ class GuardrailVerdict:
 
 @dataclass
 class Budget:
-    """The mutable half of the guardrails, persisted on ``session_state``."""
+    """The mutable half of the guardrails, persisted on ``agent_task_state``."""
 
     steps_used: int = 0
     max_steps: int = 24

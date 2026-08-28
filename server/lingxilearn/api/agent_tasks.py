@@ -27,12 +27,10 @@ router = APIRouter(prefix="/api")
 
 
 class CreateAgentTask(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     prompt: str = Field(min_length=1, max_length=4000)
-    attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
-    resource_refs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
-    skill_ids: list[str] = Field(default_factory=list, max_length=50)
+    resources: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
 
 
@@ -46,28 +44,23 @@ class AgentTaskMetadataPatch(BaseModel):
 
 
 class AgentMessage(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     message: str = Field(min_length=1, max_length=4000)
-    attachments: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
-    resource_refs: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
-    skill_ids: list[str] = Field(default_factory=list, max_length=50)
+    resources: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=192)
 
 
 async def _validated_task_context(
     request: Request,
     context: LearnerContext,
-    resource_refs: list[dict[str, Any]],
-    skill_ids: list[str],
+    resources: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Transport mapping for task-resource validation; logic lives in the service."""
 
     services = services_of(request)
     try:
-        return await services.agent_tasks.validate_task_resources(
-            context.learner_id, resource_refs, skill_ids
-        )
+        return await services.agent_tasks.validate_task_resources(context.learner_id, resources)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except KeyError as exc:
@@ -84,9 +77,7 @@ async def create_agent_task(
     task_id = f"t-{uuid.uuid4().hex[:20]}"
     payload_digest = agent_task_create_payload_digest(
         prompt=body.prompt,
-        attachments=body.attachments,
-        resource_refs=body.resource_refs,
-        skill_ids=body.skill_ids,
+        resources=body.resources,
     )
     if body.idempotency_key:
         existing = await services.agent_tasks.get_agent_task_by_create_idempotency_key(
@@ -100,14 +91,11 @@ async def create_agent_task(
                 result["error"] = existing.error
             return result
     try:
-        task_resources = await _validated_task_context(
-            request, context, body.resource_refs, body.skill_ids
-        )
+        task_resources = await _validated_task_context(request, context, body.resources)
         created = await services.agent_tasks.create_agent_task(
             task_id=task_id,
             learner_id=context.learner_id,
             prompt=body.prompt,
-            attachments=body.attachments,
             resources=task_resources,
             idempotency_key=body.idempotency_key,
             create_payload_digest=payload_digest,
@@ -164,9 +152,7 @@ async def post_agent_message(
 ) -> dict[str, Any]:
     services = services_of(request)
     try:
-        task_resources = await _validated_task_context(
-            request, context, body.resource_refs, body.skill_ids
-        )
+        task_resources = await _validated_task_context(request, context, body.resources)
         if task_resources:
             await services.agent_tasks.update_agent_task(
                 task_id, context.learner_id, resources=task_resources
@@ -174,7 +160,6 @@ async def post_agent_message(
         result = await services.agent_tasks.agent_message(
             task_id,
             body.message,
-            attachments=body.attachments,
             learner_id=context.learner_id,
             idempotency_key=body.idempotency_key,
         )
@@ -214,9 +199,7 @@ async def delete_agent_task(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await services_of(request).agent_tasks.delete_agent_task(
-            task_id, context.learner_id
-        )
+        return await services_of(request).agent_tasks.delete_agent_task(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
@@ -235,18 +218,14 @@ async def restore_agent_task(
         raise not_found() from exc
 
 
-@router.post(
-    "/agent-tasks/{task_id}/fork", status_code=202, response_model=AgentTaskForkResponse
-)
+@router.post("/agent-tasks/{task_id}/fork", status_code=202, response_model=AgentTaskForkResponse)
 async def fork_agent_task(
     task_id: str,
     request: Request,
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await services_of(request).agent_tasks.fork_agent_task(
-            task_id, context.learner_id
-        )
+        return await services_of(request).agent_tasks.fork_agent_task(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc
 
@@ -258,8 +237,6 @@ async def cancel_agent_task(
     context: LearnerContext = Depends(current_learner_context),
 ) -> dict[str, Any]:
     try:
-        return await services_of(request).agent_tasks.cancel_agent_task(
-            task_id, context.learner_id
-        )
+        return await services_of(request).agent_tasks.cancel_agent_task(task_id, context.learner_id)
     except KeyError as exc:
         raise not_found() from exc

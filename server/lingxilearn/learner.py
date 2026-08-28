@@ -70,48 +70,7 @@ class LearnerService:
     ) -> dict[str, float]:
         return await self.repository.mastery_for(context.learner_id, concepts=concepts)
 
-    async def record_evidence(
-        self,
-        context: LearnerContext,
-        session_id: str,
-        entries: list[dict[str, Any]],
-    ) -> None:
-        await self.repository.record_evidence(context.learner_id, session_id, entries)
-
-    async def record_misconception(
-        self,
-        context: LearnerContext,
-        session_id: str,
-        tags: list[str],
-    ) -> None:
-        await self.repository.record_misconception(context.learner_id, session_id, tags)
-
     async def update_preference(
         self, context: LearnerContext, patch: dict[str, Any]
     ) -> LearningPreference:
         return await self.repository.update_preference(context.learner_id, patch)
-
-    async def record_session_outcome(
-        self,
-        context: LearnerContext,
-        *,
-        session_id: str,
-        outcome: str,
-        evidence: list[dict[str, Any]],
-        misconceptions: list[str],
-        mastery: dict[str, float],
-        report: dict[str, Any],
-        mission_id: str,
-    ) -> None:
-        """Persist one terminal outcome in one idempotent transaction."""
-
-        await self.repository.record_session_outcome(
-            learner_id=context.learner_id,
-            session_id=session_id,
-            outcome=outcome,
-            evidence=evidence,
-            misconceptions=misconceptions,
-            mastery=mastery,
-            report=report,
-            mission_id=mission_id,
-        )

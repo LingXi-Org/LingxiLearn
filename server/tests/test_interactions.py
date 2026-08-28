@@ -83,9 +83,7 @@ def test_opaque_interrupt_payload_carries_identity_only() -> None:
 
 
 def test_resume_command_round_trips_structured_answers() -> None:
-    answers = parse_answers(
-        [{"questionId": "q1", "selectedOptionIds": ["o2"], "text": None}]
-    )
+    answers = parse_answers([{"questionId": "q1", "selectedOptionIds": ["o2"], "text": None}])
     assert answers == [InteractionAnswer(question_id="q1", selected_option_ids=["o2"])]
     command = resume_command("it_1", answers)
     assert command["kind"] == "interaction_answer"

@@ -14,7 +14,7 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[1] / "lingxilearn"
 
-WRITER = PACKAGE / "state" / "profile_writer.py"
+WRITER = PACKAGE / "store" / "profile_writer.py"
 """The single sanctioned writer."""
 
 MODEL = "LearningProfile"
@@ -162,7 +162,7 @@ def test_the_guard_would_catch_a_real_violation() -> None:
 
     clean = ast.parse(
         "async def fine(session):\n"
-        "    row = await session.get(SessionState, 'x')\n"
+        "    row = await session.get(AgentTaskState, 'x')\n"
         "    row.runtime_status = 'PLANNING'\n"
     )
     clean_scope = next(node for node in ast.walk(clean) if isinstance(node, ast.AsyncFunctionDef))
@@ -172,7 +172,7 @@ def test_the_guard_would_catch_a_real_violation() -> None:
 def test_the_writer_refuses_changes_that_cite_no_evidence() -> None:
     """The guard is only meaningful if the writer itself demands evidence."""
 
-    from lingxilearn.state.profile_writer import ProfileDelta, UnsourcedProfileWrite
+    from lingxilearn.domain.learning_profile import ProfileDelta, UnsourcedProfileWrite
 
     try:
         ProfileDelta(

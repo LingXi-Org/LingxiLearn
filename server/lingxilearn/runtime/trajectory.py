@@ -192,7 +192,7 @@ def _stream_chars(payload: Mapping[str, Any]) -> int:
     return sum(len(str(payload.get(key) or "")) for key in _CONTENT_KEYS)
 
 
-def _time(value: Any, fallback: datetime | None = None) -> datetime:
+def _time(value: Any, default: datetime | None = None) -> datetime:
     if isinstance(value, datetime):
         result = value
     elif isinstance(value, (int, float)):
@@ -202,9 +202,9 @@ def _time(value: Any, fallback: datetime | None = None) -> datetime:
         try:
             result = datetime.fromisoformat(text)
         except ValueError:
-            result = fallback or datetime.now(UTC)
+            result = default or datetime.now(UTC)
     else:
-        result = fallback or datetime.now(UTC)
+        result = default or datetime.now(UTC)
     if result.tzinfo is None:
         result = result.replace(tzinfo=UTC)
     return result.astimezone(UTC)
@@ -278,9 +278,13 @@ class TrajectoryProjector:
     ) -> None:
         self.execution = execution or {}
         self.events = [dict(item) for item in events if isinstance(item, Mapping)]
-        self.timeline_spans = [dict(item) for item in (timeline_spans or ()) if isinstance(item, Mapping)]
+        self.timeline_spans = [
+            dict(item) for item in (timeline_spans or ()) if isinstance(item, Mapping)
+        ]
         self.now = now.astimezone(UTC) if now else datetime.now(UTC)
-        self.execution_id = str(_value(self.execution, "id", "execution_id", "executionId", default=""))
+        self.execution_id = str(
+            _value(self.execution, "id", "execution_id", "executionId", default="")
+        )
         self.started = _time(
             _value(self.execution, "started_at", "startedAt", default=None), self.now
         )
@@ -291,10 +295,6 @@ class TrajectoryProjector:
         self._items: dict[str, list[dict[str, Any]]] = {lane: [] for lane in _LANE_IDS}
         self._relations: list[dict[str, Any]] = []
         self._rounds: dict[str, dict[str, Any]] = {}
-        # Legacy plan/decision events are kept separate until projection.  A
-        # lifecycle pair is authoritative even when a legacy event for the
-        # same step arrived first (or has a different decision id).
-        self._legacy_rounds: dict[str, dict[str, Any]] = {}
         self._tasks: dict[str, dict[str, Any]] = {}
         # Keep the event envelope alongside its payload.  Production
         # ``assistant.delta`` records intentionally contain only ``delta`` in
@@ -323,26 +323,6 @@ class TrajectoryProjector:
             payload = {}
         runtime_value = event.get("runtime")
         runtime = dict(runtime_value) if isinstance(runtime_value, Mapping) else {}
-        # Some adapters flatten runtime fields on the durable event row.  Keep
-        # those aliases available to the matcher without changing the public
-        # payload shape.
-        for key in (
-            "span_id",
-            "spanId",
-            "node",
-            "node_id",
-            "nodeId",
-            "work_item_id",
-            "workItemId",
-            "work_item",
-            "workItem",
-            "task_id",
-            "taskId",
-            "run_id",
-            "runId",
-        ):
-            if key not in runtime and event.get(key) is not None:
-                runtime[key] = event[key]
         agent = str(event.get("agent") or runtime.get("agent") or payload.get("agent") or "")
         timestamp = (
             runtime.get("timestamp")
@@ -449,13 +429,8 @@ class TrajectoryProjector:
 
     def _round_item(self, kind: str, payload: Mapping[str, Any], when: datetime) -> None:
         step, decision_id, key = self._round_parts(payload)
-        if key not in self._rounds and step is None:
-            # Some older completion records omitted ``step`` but followed a
-            # single open lifecycle round.  Keep that pair together without
-            # making decision ids the identity of normal step-bearing rounds.
-            open_rows = [candidate for candidate in self._rounds.values() if not candidate.get("completed")]
-            if len(open_rows) == 1:
-                key = next(stable for stable, candidate in self._rounds.items() if candidate is open_rows[0])
+        if key == "round:unknown":
+            return
         row = self._rounds.setdefault(
             key,
             {
@@ -487,46 +462,11 @@ class TrajectoryProjector:
         if payload.get("turn_id") or payload.get("turnId"):
             row["turn_id"] = payload.get("turn_id") or payload.get("turnId")
 
-    def _legacy_round(self, kind: str, payload: Mapping[str, Any], when: datetime) -> None:
-        step, decision_id, key = self._round_parts(payload)
-        row = self._legacy_rounds.setdefault(
-            key,
-            {
-                "id": "",
-                "start": when,
-                "end": when,
-                "step": step,
-                "decision_id": decision_id,
-                "payload": dict(payload),
-                "precision": "inferred",
-            },
-        )
-        row["id"] = self._round_id(row)
-        if step is not None:
-            row["step"] = step
-        if decision_id:
-            row["decision_id"] = decision_id
-            row["id"] = self._round_id(row)
-        if kind in {"plan.created", "plan.replanned", "decision.recorded"}:
-            row["end"] = when
-        if kind in {"plan.created", "plan.replanned"}:
-            row["start"] = min(row["start"], when)
-        if payload.get("replan_of"):
-            self._relations.append(
-                {
-                    "type": "replan",
-                    "from": f"round:{payload['replan_of']}",
-                    "to": row["id"],
-                }
-            )
-
     def _consume_event(self, event: Mapping[str, Any]) -> None:
         kind, payload, runtime, when, agent = self._event_data(event)
         self._events_by_kind[kind].append((when, payload, agent, runtime, event))
         if kind in _ROUND_KINDS:
             self._round_item(kind, payload, when)
-        elif kind in {"decision.recorded", "plan.created", "plan.replanned"}:
-            self._legacy_round(kind, payload, when)
 
         node_id = self._payload_node(payload, runtime)
         if kind == "node.appeared":
@@ -540,46 +480,37 @@ class TrajectoryProjector:
         elif kind == "work.claimed":
             task = self._tasks.setdefault(node_id or f"task:{len(self._tasks) + 1}", {})
             task.update({"claimed": when, "payload": {**task.get("payload", {}), **payload}})
-            task["work_item_id"] = payload.get("work_item_id") or payload.get("workItemId") or node_id
+            task["work_item_id"] = (
+                payload.get("work_item_id") or payload.get("workItemId") or node_id
+            )
         elif kind == "node.started":
             task = self._tasks.setdefault(node_id or f"task:{len(self._tasks) + 1}", {})
             task.update({"started": when, "payload": {**task.get("payload", {}), **payload}})
         elif kind in _TERMINAL_KINDS:
             task = self._tasks.setdefault(node_id or f"task:{len(self._tasks) + 1}", {})
-            task.update({"ended": when, "terminal_kind": kind, "payload": {**task.get("payload", {}), **payload}})
+            task.update(
+                {
+                    "ended": when,
+                    "terminal_kind": kind,
+                    "payload": {**task.get("payload", {}), **payload},
+                }
+            )
 
     def _find_parent_round(self, payload: Mapping[str, Any]) -> str | None:
         step, decision_id, key = self._round_parts(payload)
-        row = self._rounds.get(key) or self._legacy_rounds.get(key)
+        row = self._rounds.get(key)
         if row is not None:
             return self._round_id(row)
         # A child may carry only a decision id while its round lifecycle was
         # keyed by step.  Resolve that id across the authoritative rows.
         if decision_id:
-            for candidate in (*self._rounds.values(), *self._legacy_rounds.values()):
+            for candidate in self._rounds.values():
                 if str(candidate.get("decision_id") or "") == decision_id:
                     return self._round_id(candidate)
         return None
 
     def _project_rounds(self) -> None:
-        rows = list(self._rounds.values())
-        # Legacy rows are a compatibility fallback only.  If a lifecycle row
-        # exists for a stable step/decision key, it owns the projected round.
-        lifecycle_steps = {str(row.get("step")) for row in self._rounds.values() if row.get("step") is not None}
-        lifecycle_decisions = {
-            str(row.get("decision_id"))
-            for row in self._rounds.values()
-            if row.get("decision_id")
-        }
-        rows.extend(
-            row
-            for key, row in self._legacy_rounds.items()
-            if key not in self._rounds
-            and (row.get("step") is not None or row.get("decision_id") or not self._rounds)
-            and str(row.get("step")) not in lifecycle_steps
-            and str(row.get("decision_id") or "") not in lifecycle_decisions
-        )
-        for row in rows:
+        for row in self._rounds.values():
             row["id"] = self._round_id(row)
             start = row["start"]
             end = row["end"]
@@ -607,7 +538,11 @@ class TrajectoryProjector:
             )
             if row.get("payload", {}).get("replan_of"):
                 self._relations.append(
-                    {"type": "replan", "from": f"round:{row['payload']['replan_of']}", "to": item["id"]}
+                    {
+                        "type": "replan",
+                        "from": f"round:{row['payload']['replan_of']}",
+                        "to": item["id"],
+                    }
                 )
 
     def _project_tasks(self) -> None:
@@ -618,14 +553,21 @@ class TrajectoryProjector:
             end = row.get("ended") or self.ended
             status = str(payload.get("status") or "")
             if not status:
-                status = "failed" if str(row.get("terminal_kind", "")).endswith("failed") else "running"
+                status = (
+                    "failed" if str(row.get("terminal_kind", "")).endswith("failed") else "running"
+                )
             item_id = f"task:{node_id or index}"
             parent = self._find_parent_round(payload)
             item = self._item(
                 "task",
                 item_id=item_id,
                 kind="capability.task",
-                label=str(payload.get("capability") or payload.get("task_id") or node_id or "Capability task"),
+                label=str(
+                    payload.get("capability")
+                    or payload.get("task_id")
+                    or node_id
+                    or "Capability task"
+                ),
                 start=start,
                 end=end,
                 status=status,
@@ -640,13 +582,16 @@ class TrajectoryProjector:
                     "provider": payload.get("provider"),
                     "depends_on": payload.get("depends_on") or payload.get("dependsOn") or [],
                     "attempt": payload.get("attempt") or payload.get("attempts"),
-                    "knowledge_point_id": payload.get("knowledge_point_id") or payload.get("knowledgePointId"),
+                    "knowledge_point_id": payload.get("knowledge_point_id")
+                    or payload.get("knowledgePointId"),
                 },
             )
             row["item_id"] = item["id"]
             deps = payload.get("depends_on") or payload.get("dependsOn") or []
             for dependency in deps:
-                self._relations.append({"type": "dependency", "from": f"task:{dependency}", "to": item["id"]})
+                self._relations.append(
+                    {"type": "dependency", "from": f"task:{dependency}", "to": item["id"]}
+                )
 
     def _flatten_spans(self) -> Iterable[tuple[Mapping[str, Any], Mapping[str, Any] | None]]:
         def walk(items: Sequence[Mapping[str, Any]], parent: Mapping[str, Any] | None = None):
@@ -665,9 +610,7 @@ class TrajectoryProjector:
             end = _time(end_value, start)
         else:
             try:
-                end = start + timedelta(
-                    milliseconds=max(0, int(span.get("durationMs") or 0))
-                )
+                end = start + timedelta(milliseconds=max(0, int(span.get("durationMs") or 0)))
             except (TypeError, ValueError):
                 end = start
         return start, max(start, end)
@@ -688,7 +631,12 @@ class TrajectoryProjector:
             primitive = str(span.get("primitive") or "").lower()
             if primitive == "lingxigraph.runtime" or primitive == "workflow":
                 continue
-            if category != "control" and primitive not in {"interpret_goal", "orchestrate", "observe", "dispatch"}:
+            if category != "control" and primitive not in {
+                "interpret_goal",
+                "orchestrate",
+                "observe",
+                "dispatch",
+            }:
                 continue
             start, end = self._span_times(span)
             span_runtime_value = span.get("runtime")
@@ -696,7 +644,11 @@ class TrajectoryProjector:
                 span_runtime_value if isinstance(span_runtime_value, Mapping) else {}
             )
             raw_span_step = span_runtime.get("step")
-            span_step = int(raw_span_step) if isinstance(raw_span_step, str) and raw_span_step.isdigit() else raw_span_step
+            span_step = (
+                int(raw_span_step)
+                if isinstance(raw_span_step, str) and raw_span_step.isdigit()
+                else raw_span_step
+            )
             item_id = f"control:span:{span.get('id') or control_items + 1}"
             self._item(
                 "control",
@@ -738,13 +690,7 @@ class TrajectoryProjector:
         span: Mapping[str, Any],
         parent: Mapping[str, Any] | None,
     ) -> dict[str, set[str] | str]:
-        """Collect stable model identities from a span and its agent parent.
-
-        legacy traces put the native ``span_id``/node metadata on the model span,
-        while older traces only put ``agent`` and task metadata on the parent
-        agent span.  Looking through both keeps attribution compatible with
-        each shape without relying on the model name (which is not unique).
-        """
+        """Collect stable identities from a model span and its agent parent."""
 
         sources: list[Mapping[str, Any]] = [span]
         for key in ("runtime", "metadata", "input"):
@@ -777,15 +723,11 @@ class TrajectoryProjector:
             "taskId",
         )
         span_ids = collect("id", "span_id", "spanId")
-        stream_ids = collect("stream_id", "streamId")
-        models = collect("model", "model_name", "modelName")
         return {
             "agents": agents,
             "nodes": nodes,
             "work_items": work_items,
             "span_ids": span_ids,
-            "stream_ids": stream_ids,
-            "models": models,
         }
 
     @classmethod
@@ -821,8 +763,6 @@ class TrajectoryProjector:
                 "taskId",
             ),
             "span_ids": collect("span_id", "spanId", "span"),
-            "stream_ids": collect("stream_id", "streamId"),
-            "models": collect("model", "model_name", "modelName"),
         }
 
     @staticmethod
@@ -852,32 +792,23 @@ class TrajectoryProjector:
         if event_spans and span_spans and set(event_spans) & set(span_spans):
             return 2
 
-        event_streams = event_identity.get("stream_ids") or set()
-        span_streams = span_identity.get("stream_ids") or set()
-        if event_streams and span_streams and set(event_streams) & set(span_streams):
-            return 3
-
-        event_models = event_identity.get("models") or set()
-        span_models = span_identity.get("models") or set()
-        if event_models and span_models and set(event_models) & set(span_models):
-            return 4
         return None
 
     def _first_model_output_times(
         self,
-        model_spans: Sequence[tuple[Mapping[str, Any], Mapping[str, Any] | None, datetime, datetime]],
+        model_spans: Sequence[
+            tuple[Mapping[str, Any], Mapping[str, Any] | None, datetime, datetime]
+        ],
     ) -> dict[int, tuple[datetime, Mapping[str, Any], str, Mapping[str, Any]]]:
         """Assign output events to model spans before calculating TTFT.
 
-        Assignment is deliberately event-centric: one output event can belong
-        to at most one concurrent model invocation.  A native ``span_id`` is
-        strongest, followed by ``agent`` + ``node``/``work_item``.  Stream and
-        model names remain compatibility fallbacks only when they identify a
-        unique candidate, so equal-model concurrent calls cannot steal each
-        other's first token.
+        Assignment is event-centric: one output event belongs to at most one
+        invocation, identified by span id or agent plus node/work item.
         """
 
-        records: list[tuple[datetime, Mapping[str, Any], str, Mapping[str, Any], Mapping[str, Any]]] = []
+        records: list[
+            tuple[datetime, Mapping[str, Any], str, Mapping[str, Any], Mapping[str, Any]]
+        ] = []
         for kind in ("assistant.delta", "agent.output.delta", "agent.output"):
             records.extend(self._events_by_kind.get(kind, ()))
         records.sort(key=lambda record: (record[0], str(record[4].get("sequence") or "")))
@@ -896,10 +827,7 @@ class TrajectoryProjector:
                 continue
             best_score = min(candidate[0] for candidate in candidates)
             best = [candidate for candidate in candidates if candidate[0] == best_score]
-            if best_score >= 2 and len(best) != 1:
-                # A stream/model-only fallback is unsafe for overlapping
-                # invocations.  Leave the interval inferred instead of
-                # attaching the token to an arbitrary model span.
+            if len(best) != 1:
                 continue
             _, span_index, _span_key = min(best, key=lambda candidate: (candidate[1], candidate[2]))
             span_key = id(model_spans[span_index][0])
@@ -936,36 +864,13 @@ class TrajectoryProjector:
                 "tokens": span.get("tokens"),
             }
             runtime_value = span.get("runtime")
-            runtime: Mapping[str, Any] = (
-                runtime_value if isinstance(runtime_value, Mapping) else {}
-            )
+            runtime: Mapping[str, Any] = runtime_value if isinstance(runtime_value, Mapping) else {}
             span_metadata_value = span.get("metadata")
             span_metadata: Mapping[str, Any] = (
                 span_metadata_value if isinstance(span_metadata_value, Mapping) else {}
             )
             node = self._payload_node({**dict(span_metadata), **dict(span)}, runtime)
             parent = self._tasks.get(node, {}).get("item_id") if node else None
-            if parent is None and self._tasks:
-                # Older legacy traces did not copy the runtime node id onto every
-                # child span.  A time-contained task is a safe best-effort
-                # parent for those historical records and is marked inferred
-                # by the action below.
-                containing = [
-                    (task_id, task)
-                    for task_id, task in self._tasks.items()
-                    if task.get("started")
-                    and task["started"] <= start
-                    and (task.get("ended") or self.ended) >= end
-                ]
-                if containing:
-                    node, task = min(
-                        containing,
-                        key=lambda pair: _duration(
-                            pair[1].get("started", self.started),
-                            pair[1].get("ended") or self.ended,
-                        ),
-                    )
-                    parent = task.get("item_id")
             action_id = f"action:{span.get('id') or action_items + 1}"
             action = self._item(
                 "action",
@@ -1085,7 +990,11 @@ class TrajectoryProjector:
             if kind in _OUTPUT_KINDS:
                 grouped: dict[
                     str,
-                    list[tuple[datetime, Mapping[str, Any], str, Mapping[str, Any], Mapping[str, Any]]],
+                    list[
+                        tuple[
+                            datetime, Mapping[str, Any], str, Mapping[str, Any], Mapping[str, Any]
+                        ]
+                    ],
                 ] = defaultdict(list)
                 for when, payload, agent, runtime, event in records:
                     stream = str(
@@ -1124,7 +1033,9 @@ class TrajectoryProjector:
                         "output",
                         item_id=f"output:{kind}:{key or 'default'}",
                         kind="stream" if kind.endswith("delta") else kind,
-                        label="Streaming output" if kind.endswith("delta") else kind.replace(".", " ").title(),
+                        label="Streaming output"
+                        if kind.endswith("delta")
+                        else kind.replace(".", " ").title(),
                         start=start,
                         end=end,
                         precision="exact",
@@ -1159,7 +1070,9 @@ class TrajectoryProjector:
         kind: str,
         *,
         stream_key: str,
-        values: Sequence[tuple[datetime, Mapping[str, Any], str, Mapping[str, Any], Mapping[str, Any]]],
+        values: Sequence[
+            tuple[datetime, Mapping[str, Any], str, Mapping[str, Any], Mapping[str, Any]]
+        ],
     ) -> dict[str, Any]:
         """Identity, timing and size for one output group — never raw text.
 
@@ -1257,7 +1170,13 @@ class TrajectoryProjector:
         self._project_task_resources()
         self._project_runtime_state_output()
         lanes: list[dict[str, Any]] = [
-            {"id": lane, "label": label, "items": sorted(self._items[lane], key=lambda item: (item["relativeStartMs"], item["id"]))}
+            {
+                "id": lane,
+                "label": label,
+                "items": sorted(
+                    self._items[lane], key=lambda item: (item["relativeStartMs"], item["id"])
+                ),
+            }
             for lane, label in TRAJECTORY_LANES
         ]
         duration = _duration(self.started, self.ended)
@@ -1271,7 +1190,9 @@ class TrajectoryProjector:
             start=self.started,
             end=self.ended,
             status=str(_value(self.execution, "status", default="running")),
-            precision="exact" if _value(self.execution, "started_at", "startedAt", default=None) else "inferred",
+            precision="exact"
+            if _value(self.execution, "started_at", "startedAt", default=None)
+            else "inferred",
             metadata={"execution_id": self.execution_id},
         )
         lanes[0]["items"] = [run]
@@ -1279,8 +1200,16 @@ class TrajectoryProjector:
             "rounds": sum(1 for item in self._items["control"] if item.get("kind") == "round"),
             "tasks": len(self._items["task"]),
             "actions": len(self._items["action"]),
-            "failures": sum(1 for lane in lanes for item in lane["items"] if str(item.get("status", "")).lower() in {"failed", "error"}),
-            "tokens": sum(int((item.get("metadata") or {}).get("tokens") or 0) for item in self._items["resource"]),
+            "failures": sum(
+                1
+                for lane in lanes
+                for item in lane["items"]
+                if str(item.get("status", "")).lower() in {"failed", "error"}
+            ),
+            "tokens": sum(
+                int((item.get("metadata") or {}).get("tokens") or 0)
+                for item in self._items["resource"]
+            ),
             "durationMs": duration,
         }
         return {
@@ -1288,7 +1217,9 @@ class TrajectoryProjector:
             "executionId": self.execution_id,
             "clock": {
                 "startedAt": _iso(self.started),
-                "endedAt": _iso(self.ended) if _value(self.execution, "ended_at", "endedAt", default=None) else None,
+                "endedAt": _iso(self.ended)
+                if _value(self.execution, "ended_at", "endedAt", default=None)
+                else None,
                 "durationMs": duration,
             },
             "lanes": lanes,

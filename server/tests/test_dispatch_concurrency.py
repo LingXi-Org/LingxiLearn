@@ -19,7 +19,7 @@ from lingxilearn.agents.providers import ProviderContext, ProviderResult, regist
 from lingxilearn.runtime.contracts import Cost, DoneCondition, PlannedTask
 from lingxilearn.runtime.dispatch import DispatchDeps, Dispatcher
 from lingxilearn.runtime.guardrails import Budget
-from lingxilearn.state.session_state import Goal
+from lingxilearn.state.agent_task_state import Goal
 
 _PROBE: dict[str, Any] = {}
 
@@ -128,7 +128,9 @@ async def test_parallel_safe_siblings_overlap_in_real_time() -> None:
     )
 
     outcomes = await asyncio.gather(
-        dispatcher.run(_task("t_visual", "content.visual"), profile={}, budget=Budget.from_dict({})),
+        dispatcher.run(
+            _task("t_visual", "content.visual"), profile={}, budget=Budget.from_dict({})
+        ),
         dispatcher.run(_task("t_deck", "content.deck"), profile={}, budget=Budget.from_dict({})),
     )
 

@@ -8,8 +8,7 @@ produced.
 
 The model evaluates every registry-eligible candidate and produces the plan.
 The host only enforces capability availability and schema safety. If the model
-is unavailable or malformed, the round fails closed; it never selects a local
-fallback route.
+is unavailable or malformed, the round fails closed and selects no route.
 """
 
 from __future__ import annotations
@@ -23,9 +22,9 @@ from lingxigraph import HumanMessage, create_agent
 
 from ..agents.contracts import extract_json
 from ..agents.model_runtime import agent_model, invoke_agent, message_text
+from ..state.agent_task_state import Goal
 from ..state.capabilities import UnknownCapability, info, parse
-from ..state.session_state import Goal
-from .candidates import WorldState, best, deviates, eligible_only, generate
+from .candidates import WorldState, deviates, eligible_only, generate
 from .contracts import (
     CandidateAction,
     Cost,
@@ -85,133 +84,14 @@ awaits_user=true 且需要学习者澄清时，interaction 使用：
 
 
 def unavailable_plan(*, candidates: Sequence[CandidateAction]) -> OrchestrationPlan:
-    """Fail closed when a control-plane model cannot make a decision.
+    """Fail closed when the control-plane model cannot make a decision."""
 
-    A code-selected fallback plan would be fixed routing in disguise.  We keep
-    the candidate trace for observability, but ask the learner to retry rather
-    than executing a route which the model did not explicitly choose.
-    """
-    selected = best(candidates)
-    if selected is not None:
-        capability_info = info(parse(selected.capability))
-        task = PlannedTask(
-            id=f"fallback-{selected.candidate_id or selected.skill_id}",
-            candidate_id=selected.candidate_id,
-            capability=selected.capability,
-            knowledge_point_id=selected.knowledge_point_id,
-            done_when=_default_done_condition(selected),
-            rationale=selected.reason or "先完成当前最有帮助的一步，再根据结果继续安排。",
-            expected_learning_gain=selected.gain,
-            estimated_cost=Cost(
-                heavy_artifact=capability_info.heavy_artifact,
-                irreversible=capability_info.irreversible,
-                parallel_safe=selected.parallel_safe,
-                critical_path=selected.critical_path,
-            ),
-        )
-        return OrchestrationPlan(
-            reasoning="计划模型暂不可用，已执行一项可逆且满足前置条件的安全降级动作。",
-            tasks=[task],
-            goal_satisfied_when=task.done_when,
-            candidates_considered=list(candidates),
-            degraded=True,
-        )
-    return OrchestrationPlan(
-        reasoning="本轮学习计划模型暂时没有给出可验证的决策。",
-        awaits_user=True,
-        negotiation="学习计划暂时无法确认，请稍后重试或补充你想达到的具体效果。",
-        goal_satisfied_when=DoneCondition(kind="user_replied"),
-        candidates_considered=list(candidates),
-        degraded=True,
+    raise RuntimeError(
+        f"learning plan unavailable: model did not select from {len(candidates)} candidates"
     )
 
 
-def _default_done_condition(candidate: CandidateAction) -> DoneCondition:
-    """A machine-checkable completion condition for a capability.
-
-    Used for the fallback plan and to repair a model task that omitted one.
-    Defaulting to ``always`` everywhere would quietly restore "the agent ran, so
-    we are done", which is the behaviour this refactor exists to remove.
-    """
-
-    capability = parse(candidate.capability)
-    match capability.value:
-        case "content.lesson_intro":
-            return DoneCondition(kind="artifact_valid", artifact="lesson-intro")
-        case "content.deck":
-            return DoneCondition(kind="artifact_valid", artifact="lecture-deck")
-        case "content.visual":
-            return DoneCondition(kind="artifact_valid", artifact="visual")
-        case "assess.generate":
-            return DoneCondition(kind="artifact_exists", artifact="quiz")
-        case "assess.grade":
-            return DoneCondition(kind="quiz_graded")
-        case "assess.interpret":
-            return DoneCondition(
-                kind="evidence_observed",
-                signal="error_pattern",
-                knowledge_point_id=candidate.knowledge_point_id,
-            )
-        case "dialog.answer":
-            return DoneCondition(
-                kind="evidence_observed",
-                signal="self_report",
-                knowledge_point_id=candidate.knowledge_point_id,
-            )
-        case "dialog.converse":
-            return DoneCondition(kind="evidence_observed", signal="self_report")
-        case "dialog.interview":
-            return DoneCondition(kind="evidence_observed", signal="self_report")
-        case "dialog.probe":
-            return DoneCondition(kind="user_replied")
-    return DoneCondition(kind="provider_result")
-
-
-def _goal_condition(goal: Goal, world: WorldState) -> DoneCondition:
-    """When the goal itself is satisfied, if nothing more specific is stated."""
-
-    point_ids = tuple(point for point in goal.knowledge_points if str(point).strip())
-    goal_type = goal.goal_type.casefold()
-    if goal.satisfied_when:
-        try:
-            candidate_condition = DoneCondition.model_validate(goal.satisfied_when)
-            if candidate_condition.kind != "always":
-                return candidate_condition
-        except ValueError:
-            pass
-    if goal_type in {"assess", "quiz", "evaluate", "assessment"}:
-        return DoneCondition(kind="quiz_graded")
-    if goal_type in {"report", "content", "artifact"}:
-        return DoneCondition(kind="artifact_valid", artifact="lesson-intro")
-    if goal_type in {"learn", "study", "review", "practice"} and not point_ids:
-        return DoneCondition(kind="evidence_observed", signal="goal_clarified")
-    if point_ids:
-        return DoneCondition(
-            kind="all_of",
-            conditions=[
-                DoneCondition(
-                    kind="all_of",
-                    conditions=[
-                        DoneCondition(
-                            kind="profile_reaches",
-                            knowledge_point_id=point,
-                            mastery=0.75,
-                        ),
-                        DoneCondition(
-                            kind="evidence_observed",
-                            knowledge_point_id=point,
-                            signal="correct",
-                            min_count=2,
-                        ),
-                    ],
-                )
-                for point in point_ids
-            ],
-        )
-    return DoneCondition(kind="user_replied")
-
-
-def _repair(
+def _validate_plan_output(
     parsed: Mapping[str, Any],
     *,
     goal: Goal,
@@ -220,59 +100,33 @@ def _repair(
     interjection_message: str = "",
     board: Mapping[str, Any] | None = None,
 ) -> OrchestrationPlan | None:
-    """Turn model output into a valid plan, or ``None`` if it cannot be saved.
-
-    Repairing is preferred over rejecting: a model that picked the right action
-    and forgot a ``done_when`` should not cost the learner a round.
-    """
+    """Validate one model decision against the exact offered candidates."""
 
     eligible = eligible_only(candidates)
     by_id = {item.candidate_id: item for item in eligible if item.candidate_id}
-    by_capability: dict[str, list[CandidateAction]] = {}
-    for item in eligible:
-        by_capability.setdefault(item.capability, []).append(item)
     tasks: list[PlannedTask] = []
 
-    for index, raw in enumerate(parsed.get("tasks") or [], start=1):
+    for raw in parsed.get("tasks") or []:
+        if not isinstance(raw, Mapping):
+            return None
         capability = str(raw.get("capability") or "").strip()
         selected_id = str(raw.get("candidate_id") or "").strip()
-        candidate = by_id.get(selected_id) if selected_id else None
-        # Compatibility for old planners: only accept capability-only output
-        # when it is unambiguous.  A collision must never be resolved again at
-        # dispatch time.
-        if candidate is None:
-            matches = by_capability.get(capability, [])
-            candidate = matches[0] if len(matches) == 1 else None
-        if candidate is None:
-            # Outside the offered set: the model invented an action.
+        candidate = by_id.get(selected_id)
+        if candidate is None or capability != candidate.capability:
             logger.info("orchestrator proposed an unavailable capability: %s", capability)
-            continue
+            return None
         try:
             raw_done = raw.get("done_when")
-            if (
-                isinstance(raw_done, Mapping)
-                and str(raw_done.get("kind")) == "evidence_observed"
-                and str(raw_done.get("signal")) == "provider_result"
-            ):
-                # Older planner prompts encoded a successful provider result as
-                # learning evidence. It is a host execution fact, so normalize
-                # it before validation instead of creating an impossible signal.
-                raw_done = {"kind": "provider_result"}
-            if isinstance(raw_done, Mapping) and str(raw_done.get("kind")) == "always":
-                # ``always`` is an internal strategy fallback only; accepting
-                # it from a model would let a provider forge completion.
-                raw_done = None
-            done_when = (
-                DoneCondition.model_validate(raw_done)
-                if isinstance(raw_done, Mapping)
-                else _default_done_condition(candidate)
-            )
+            if not isinstance(raw_done, Mapping) or str(raw_done.get("kind")) == "always":
+                return None
+            done_when = DoneCondition.model_validate(raw_done)
         except ValueError:
-            done_when = _default_done_condition(candidate)
+            return None
 
-        rationale = str(raw.get("rationale") or "").strip() or candidate.reason
-        if not rationale:
-            continue
+        task_id = str(raw.get("id") or "").strip()
+        rationale = str(raw.get("rationale") or "").strip()
+        if not task_id or not rationale:
+            return None
         try:
             capability_info = info(parse(capability))
         except UnknownCapability:
@@ -280,7 +134,7 @@ def _repair(
 
         tasks.append(
             PlannedTask(
-                id=str(raw.get("id") or f"t{index}"),
+                id=task_id,
                 candidate_id=candidate.candidate_id,
                 capability=capability,
                 knowledge_point_id=str(
@@ -328,43 +182,6 @@ def _repair(
             )
         )
 
-    # A new learner has no evidence from which to personalize the first
-    # explanation.  Keep the dedicated opening conversation agent present in
-    # that state even if the model spends its one call selecting artifacts;
-    # this is derived from candidate metadata and profile evidence, never from
-    # the learner's wording or a goal/intent route.
-    opening_candidate = next(
-        (
-            item
-            for item in candidates
-            if item.eligible and info(item.capability).opening_conversation
-        ),
-        None,
-    )
-    if (
-        opening_candidate is not None
-        and not world.interview_completed
-        and not any(info(task.capability).opening_conversation for task in tasks)
-        and not any(
-            info(task.capability).turn_complete and not info(task.capability).opening_conversation
-            for task in tasks
-        )
-    ):
-        tasks.insert(
-            0,
-            PlannedTask(
-                id=f"opening-{opening_candidate.skill_id}",
-                capability=opening_candidate.capability,
-                knowledge_point_id=opening_candidate.knowledge_point_id,
-                done_when=_default_done_condition(opening_candidate),
-                rationale=opening_candidate.reason or "先了解你的基础，再安排最合适的学习路径。",
-                expected_learning_gain=opening_candidate.gain,
-                estimated_cost=Cost(
-                    parallel_safe=opening_candidate.parallel_safe,
-                    critical_path=opening_candidate.critical_path,
-                ),
-            ),
-        )
     # A control-plane round may contain only hold decisions.  This is valid
     # even when every artifact candidate is currently precondition-blocked:
     # closing or revising an existing hold is driven by the board, not by a
@@ -394,21 +211,15 @@ def _repair(
         artifact_name = str(raw_artifact)
         if artifact_name in known_artifacts and artifact_name not in delivery_order:
             delivery_order.append(artifact_name)
+    raw_goal_when = parsed.get("goal_satisfied_when")
+    if not isinstance(raw_goal_when, Mapping):
+        return None
     try:
-        goal_when = (
-            DoneCondition.model_validate(parsed["goal_satisfied_when"])
-            if isinstance(parsed.get("goal_satisfied_when"), Mapping)
-            else (
-                DoneCondition(
-                    kind="any_of",
-                    conditions=[task.done_when for task in tasks],
-                )
-                if tasks
-                else _goal_condition(goal, world)
-            )
-        )
+        goal_when = DoneCondition.model_validate(raw_goal_when)
     except ValueError:
-        goal_when = _goal_condition(goal, world)
+        return None
+    if goal_when.kind == "always":
+        return None
 
     candidate_by_id = {item.candidate_id: item for item in candidates}
     deviating = any(
@@ -416,22 +227,23 @@ def _repair(
         for t in tasks
         if t.candidate_id in candidate_by_id
     )
-    # A structured interaction beats prose negotiation when the model emits
-    # one; malformed specs fall back to the legacy text path (issue #18 §10.2).
     interaction_spec: dict[str, Any] | None = None
     if isinstance(parsed.get("interaction"), Mapping):
         try:
             validated = InteractionSpec.model_validate(dict(parsed["interaction"]))
             interaction_spec = validated.model_dump(mode="json", by_alias=True)
-        except Exception:  # noqa: BLE001 - model output; degrade, don't crash
-            logger.info("orchestrator emitted an invalid interaction; ignoring")
+        except ValueError:
+            return None
+    awaits_user = bool(parsed.get("awaits_user")) or deviating
+    if awaits_user and interaction_spec is None:
+        return None
     try:
         return OrchestrationPlan(
             reasoning=str(parsed.get("reasoning") or ""),
             hypotheses=[str(item) for item in (parsed.get("hypotheses") or [])],
             tasks=tasks,
             goal_satisfied_when=goal_when,
-            awaits_user=bool(parsed.get("awaits_user")) or deviating,
+            awaits_user=awaits_user,
             negotiation=(str(parsed.get("negotiation")).strip() or None)
             if parsed.get("negotiation")
             else None,
@@ -519,7 +331,7 @@ async def plan(
                 )
             )
         )
-    except Exception:  # noqa: BLE001 - planning must not be able to end a session
+    except Exception:  # noqa: BLE001 - provider failures become explicit task failures
         logger.exception("orchestrator planning failed; no route will be selected locally")
         return unavailable_plan(candidates=registry_candidates)
 
@@ -553,10 +365,7 @@ async def plan(
                 "reason": str(raw.get("reason") or candidate.reason).strip(),
             }
         )
-    # When the board is the only actionable source of work, the model may
-    # quite correctly return no candidate scores and only holds/delivery.  In
-    # that case preserve the state decision instead of replacing it with the
-    # empty fallback plan.
+    # A hold-only board decision legitimately has no new candidate score.
     if not judged and not ((board or {}).get("holds") and parsed.get("holds")):
         return unavailable_plan(candidates=registry_candidates)
     candidates = sorted(
@@ -570,7 +379,7 @@ async def plan(
         key=lambda item: item.utility,
         reverse=True,
     )
-    repaired = _repair(
+    validated = _validate_plan_output(
         parsed,
         goal=goal,
         world=world,
@@ -578,9 +387,9 @@ async def plan(
         interjection_message=str((user_message or {}).get("message") or "").strip(),
         board=board,
     )
-    if repaired is None:
+    if validated is None:
         return unavailable_plan(candidates=candidates)
-    return repaired
+    return validated
 
 
 def _view_dict(view: Any) -> dict[str, Any]:

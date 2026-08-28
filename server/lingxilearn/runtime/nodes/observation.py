@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from lingxigraph import Runtime
 
-from ...state.session_state import RuntimeStatus
+from ...state.agent_task_state import RuntimeStatus
 from ..contracts import TaskOutcome
 from ..trace import summarise_profile
 

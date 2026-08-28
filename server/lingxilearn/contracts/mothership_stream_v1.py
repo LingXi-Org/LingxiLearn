@@ -47,9 +47,7 @@ EventType = Literal[
 TextChannel = Literal["assistant", "narration"]
 PresentationRole = Literal["primary", "supporting", "background"]
 ExecutionKind = Literal["model", "deterministic"]
-SpanStatus = Literal[
-    "queued", "running", "awaiting_user", "completed", "failed", "cancelled"
-]
+SpanStatus = Literal["queued", "running", "awaiting_user", "completed", "failed", "cancelled"]
 ToolKind = Literal["skill", "tool"]
 ToolStatus = Literal[
     "call",
@@ -62,12 +60,8 @@ ToolStatus = Literal[
     "skipped",
     "rejected",
 ]
-RunStatus = Literal[
-    "started", "checkpoint_pause", "resumed", "completed", "failed", "cancelled"
-]
-TurnStatus = Literal[
-    "started", "awaiting_user", "resumed", "delivered", "failed", "cancelled"
-]
+RunStatus = Literal["started", "checkpoint_pause", "resumed", "completed", "failed", "cancelled"]
+TurnStatus = Literal["started", "awaiting_user", "resumed", "delivered", "failed", "cancelled"]
 
 # Keys that must never appear in a public payload — the schema allowlist is the
 # primary defence; this catches projection bugs (issue #18 §20.1).
@@ -101,7 +95,7 @@ _DENYLIST_PATTERN = re.compile(
 
 
 class V1Model(BaseModel):
-    """Base: strict, forward-compatible-but-explicit.
+    """Strict V1 wire model.
 
     Fields are snake_case in Python and camelCase on the wire (matching the
     protocol examples); both spellings validate.
@@ -154,7 +148,7 @@ class TurnPayload(V1Model):
     status: TurnStatus
     user_text: str = ""
     """The learner's input for this turn; present on ``started`` events so a
-    refreshed transcript can rebuild the user bubbles without V0 history."""
+    refreshed transcript can rebuild the user bubbles from V1 history."""
 
 
 class TextPayload(V1Model):
@@ -279,9 +273,7 @@ def validate_public_payload(payload: dict[str, Any]) -> dict[str, Any]:
             cleaned[str(key)] = validate_public_payload(value)
         elif isinstance(value, (list, tuple)):
             cleaned[str(key)] = [
-                validate_public_payload(item)
-                if isinstance(item, dict)
-                else _public_scalar(item)
+                validate_public_payload(item) if isinstance(item, dict) else _public_scalar(item)
                 for item in value
             ]
         else:

@@ -197,6 +197,8 @@ def _sim_outcome(spec: dict[str, Any], _answer: Any, ctx: dict[str, Any]) -> Jud
         feedback="交付完整且效率达标。" if correct else "先保证交付结果完整，再优化效率。",
         detail={"delivered_intact": intact, "efficiency": efficiency, "min_efficiency": minimum},
     )
+
+
 # --------------------------------------------------------------------------
 # Latency attribution — mission "慢在哪一环"
 # --------------------------------------------------------------------------

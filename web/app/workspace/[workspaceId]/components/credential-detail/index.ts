@@ -1,7 +1,0 @@
-export { CHIP_FIELD_INPUT, CHIP_FIELD_SHELL } from './components/chip-field'
-export { CredentialDetailHeading } from './components/credential-detail-heading'
-export { CredentialDetailLayout } from './components/credential-detail-layout'
-export { DetailSection } from './components/detail-section'
-export { UnsavedChangesModal } from './components/unsaved-changes-modal'
-export { useCredentialDetailForm } from './hooks/use-credential-detail-form'
-export { useUnsavedChangesGuard } from './hooks/use-unsaved-changes-guard'

@@ -40,7 +40,7 @@ class AgentExecution(Base):
     task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
     turn_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    """The AgentTurn this invocation belongs to; null only for legacy rows."""
+    """The interactive AgentTurn; scheduled pre-turn executions may be null."""
     parent_execution_id: Mapped[str | None] = mapped_column(
         String(128), ForeignKey("agent_executions.id"), nullable=True
     )
@@ -93,9 +93,7 @@ class AgentRun(Base):
     execution_kind: Mapped[str] = mapped_column(String(24), default="model")
     capability: Mapped[str] = mapped_column(String(96), default="")
     presentation_role: Mapped[str] = mapped_column(String(24), default="supporting")
-    status: Mapped[str] = mapped_column(
-        String(24), default="queued", index=True
-    )
+    status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     start_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -144,9 +142,7 @@ class AgentInteraction(Base):
     """
 
     __tablename__ = "agent_interactions"
-    __table_args__ = (
-        Index("ix_agent_interactions_task_turn", "task_id", "turn_id"),
-    )
+    __table_args__ = (Index("ix_agent_interactions_task_turn", "task_id", "turn_id"),)
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), index=True)

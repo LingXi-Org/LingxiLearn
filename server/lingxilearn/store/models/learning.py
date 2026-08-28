@@ -1,10 +1,4 @@
-"""Learning domain models: sessions, mastery, evidence, profile and decisions.
-
-These tables own what must outlive a single run: who the learner is and what
-they have demonstrated (``mastery``), and a durable, monotonically sequenced
-event log per session, which is what makes the SSE stream resumable rather
-than a fire-and-forget pipe.
-"""
+"""Learning data owned by learners and AgentTask executions."""
 
 from __future__ import annotations
 
@@ -26,42 +20,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, utcnow
-
-
-class Session(Base):
-    __tablename__ = "sessions"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
-    pack_id: Mapped[str] = mapped_column(String(64))
-    pack_version: Mapped[str] = mapped_column(String(32))
-    mission_id: Mapped[str] = mapped_column(String(64))
-    checkpoint_ns: Mapped[str] = mapped_column(String(128), default="")
-    status: Mapped[str] = mapped_column(String(24), default="created", index=True)
-    """created | running | awaiting_learner | done | failed"""
-    error: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
-    )
-
-
-class RunEvent(Base):
-    """The durable projection log. SSE serves from here, never from the live run."""
-
-    __tablename__ = "run_events"
-    __table_args__ = (
-        UniqueConstraint("session_id", "sequence", name="uq_run_events_session_sequence"),
-        Index("ix_run_events_session_sequence", "session_id", "sequence"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(String(64), ForeignKey("sessions.id"), index=True)
-    sequence: Mapped[int] = mapped_column(Integer)
-    kind: Mapped[str] = mapped_column(String(48))
-    node: Mapped[str] = mapped_column(String(64), default="")
-    payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class Mastery(Base):
@@ -107,14 +65,12 @@ class LearningEvidence(Base):
 
     ``seq`` is monotonic *per learner* (see ``Repository.append_learning_evidence``);
     that is the ordering state_updater needs, and it avoids depending on a
-    database sequence that SQLite does not have.
+    global database sequence.
     """
 
     __tablename__ = "learning_evidence"
     __table_args__ = (
-        UniqueConstraint("session_id", "evidence_id", name="uq_learning_evidence_session_id"),
-        # A unique *index* rather than a table constraint: SQLite cannot ALTER a
-        # constraint in, and this is added to an existing table by migration.
+        UniqueConstraint("task_id", "evidence_id", name="uq_learning_evidence_task_id"),
         Index("uq_learning_evidence_learner_seq", "learner_id", "seq", unique=True),
         Index("ix_learning_evidence_learner_created", "learner_id", "created_at"),
         Index("ix_learning_evidence_task", "task_id", "seq"),
@@ -122,10 +78,9 @@ class LearningEvidence(Base):
 
     id: Mapped[str] = mapped_column(String(192), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
-    session_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("sessions.id"), nullable=True, index=True
+    task_id: Mapped[str] = mapped_column(
+        String(96), ForeignKey("agent_tasks.id"), nullable=False, index=True
     )
-    task_id: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
     evidence_id: Mapped[str] = mapped_column(String(64))
     kind: Mapped[str] = mapped_column(String(64))
     source: Mapped[str] = mapped_column(String(256))
@@ -147,7 +102,7 @@ class LearningProfile(Base):
     """One row per (learner, knowledge point) — the learner-visible study record.
 
     Every agent may read this table.  **No agent may write it.**  The single
-    writer is ``lingxilearn.state.profile_writer.ProfileWriter``, which only
+    writer is ``lingxilearn.store.profile_writer.ProfileWriter``, which only
     accepts changes that cite ``learning_evidence`` rows.  That rule is
     enforced by ``tests/test_profile_write_guard.py``, not by comments.
     """
@@ -195,19 +150,18 @@ class LearningProfile(Base):
     )
 
 
-class SessionState(Base):
-    """The goal stack and run state machine for one learner conversation."""
+class AgentTaskState(Base):
+    """Planning state owned by one AgentTask aggregate."""
 
-    __tablename__ = "session_state"
+    __tablename__ = "agent_task_state"
     __table_args__ = (
-        UniqueConstraint("task_id", name="uq_session_state_task"),
-        Index("ix_session_state_learner_status", "learner_id", "runtime_status"),
+        UniqueConstraint("task_id", name="uq_agent_task_state_task"),
+        Index("ix_agent_task_state_learner_status", "learner_id", "runtime_status"),
     )
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
-    task_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    task_id: Mapped[str] = mapped_column(String(96), ForeignKey("agent_tasks.id"), nullable=False)
     runtime_status: Mapped[str] = mapped_column(String(32), default="PLANNING")
     goal_stack: Mapped[list] = mapped_column(JSON, default=list)
     """Bottom-up: long-term goal → current goal → interrupt goals."""
@@ -221,17 +175,17 @@ class SessionState(Base):
     )
 
 
-class SessionStateEvent(Base):
+class AgentTaskStateEvent(Base):
     """Undo log for goal-stack operations, so routing decisions stay revocable."""
 
-    __tablename__ = "session_state_events"
+    __tablename__ = "agent_task_state_events"
     __table_args__ = (
-        UniqueConstraint("session_state_id", "sequence", name="uq_session_state_events_seq"),
+        UniqueConstraint("agent_task_state_id", "sequence", name="uq_agent_task_state_events_seq"),
     )
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
-    session_state_id: Mapped[str] = mapped_column(
-        String(128), ForeignKey("session_state.id"), index=True
+    agent_task_state_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("agent_task_state.id"), index=True
     )
     sequence: Mapped[int] = mapped_column(Integer, default=0)
     op: Mapped[str] = mapped_column(String(32))
@@ -280,39 +234,3 @@ class LearningPreference(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
-
-
-class LearningEvent(Base):
-    """Append-only, idempotent learning event separate from the SSE projection."""
-
-    __tablename__ = "learning_events"
-    __table_args__ = (
-        UniqueConstraint(
-            "learner_id", "idempotency_key", name="uq_learning_events_learner_idempotency"
-        ),
-        Index("ix_learning_events_learner_created", "learner_id", "created_at"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    learner_id: Mapped[str] = mapped_column(String(64), ForeignKey("learners.id"), index=True)
-    session_id: Mapped[str | None] = mapped_column(
-        String(64), ForeignKey("sessions.id"), nullable=True, index=True
-    )
-    event_type: Mapped[str] = mapped_column(String(96))
-    idempotency_key: Mapped[str] = mapped_column(String(192))
-    payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
-class ReportRecord(Base):
-    """Finished learning reports, kept so a learner can revisit past sessions."""
-
-    __tablename__ = "reports"
-
-    session_id: Mapped[str] = mapped_column(String(64), ForeignKey("sessions.id"), primary_key=True)
-    learner_id: Mapped[str] = mapped_column(String(64), index=True)
-    mission_id: Mapped[str] = mapped_column(String(64))
-    probe_score: Mapped[float] = mapped_column(Float, default=0.0)
-    verify_score: Mapped[float] = mapped_column(Float, default=0.0)
-    payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

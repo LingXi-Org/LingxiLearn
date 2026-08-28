@@ -1,57 +1,34 @@
 {
-	"compilerOptions": {
-		"target": "ES2020",
-		"lib": ["dom", "dom.iterable", "esnext"],
-		"allowJs": false,
-		"skipLibCheck": true,
-		"strict": true,
-		"noEmit": true,
-		"esModuleInterop": true,
-		"module": "esnext",
-		"moduleResolution": "bundler",
-		"allowImportingTsExtensions": true,
-		"resolveJsonModule": true,
-		"isolatedModules": true,
-		"jsx": "react-jsx",
-		"incremental": true,
-		"plugins": [
-			{
-				"name": "next"
-			}
-		],
-		"paths": {
-			"@/*": ["./*"]
-		}
-	},
-	"include": [
-		"next-env.d.ts",
-		".next/types/**/*.ts",
-		"app/**/*.ts",
-		"app/**/*.tsx",
-		"components/**/*.ts",
-		"components/**/*.tsx",
-		"content/**/*.ts",
-		"content/**/*.tsx",
-		"lib/ashby/**/*.ts",
-		"lib/blog/**/*.ts",
-		"lib/colors/**/*.ts",
-		"lib/content/**/*.ts",
-		"lib/landing/**/*.ts",
-		"lib/landing/**/*.tsx",
-		"lib/lingxi/**/*.ts",
-		"lib/lingxi/**/*.tsx",
-		"lib/logger/**/*.ts",
-		"lib/ui/**/*.ts",
-		"lib/utils/**/*.ts",
-		"types/**/*.d.ts",
-		".next/dev/types/**/*.ts"
-	],
-	"exclude": [
-		"node_modules",
-		".next",
-		"out",
-		"dist",
-		"**/*.test.ts",
-		"**/*.test.tsx"
-	]
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": ["node_modules"]
 }

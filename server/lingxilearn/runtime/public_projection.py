@@ -1,16 +1,4 @@
-"""Project internal runtime events into Lingxi Mothership Stream V1 (issue #18).
-
-A pure, synchronous mapping over the V0 event dicts that flow through the
-service's persistence buffer.  For every V0 flush the service also runs this
-projector and appends the resulting envelopes as ``protocol_version=1`` rows —
-dual projection: the V0 stream keeps serving today's UI while V1 becomes the
-contract the next frontend stage consumes.
-
-Nothing here guesses identity: if a V0 event carries ``agent_run_id`` the V1
-event is scoped to it; if it does not, the projector falls back to the span
-registry populated by dispatcher-emitted span starts, and otherwise emits the
-fact unscoped rather than inventing an id.
-"""
+"""Strict projection from native AgentTask events to the public V1 protocol."""
 
 from __future__ import annotations
 
@@ -53,7 +41,7 @@ _TOOL_ERROR_STATUSES = {"error", "failed"}
 
 
 class PublicProjector:
-    """Stateful V0 → V1 event projector for one execution."""
+    """Stateful native-event → V1 projector for one execution."""
 
     def __init__(
         self,
@@ -73,7 +61,7 @@ class PublicProjector:
         )
         self._trace = TraceScope(request_id=request_id, run_id=execution_id)
         self._seq = 0
-        # Span registry: V0 agent name -> most recent agent_run_id, populated
+        # Span registry: agent name -> most recent agent_run_id, populated
         # from dispatcher-emitted lifecycle events carrying real identity.
         self._agent_runs: dict[str, str] = {}
         self._open_spans: set[str] = set()
@@ -99,7 +87,7 @@ class PublicProjector:
             )
 
     def consume(self, event: dict[str, Any]) -> list[dict[str, Any]]:
-        """Map one V0 buffer event to zero or more V1 envelope dicts.
+        """Map one native event to zero or more V1 envelope dicts.
 
         Returns JSON-ready ``model_dump()`` dicts with ``seq=0``; the
         repository rewrites ``seq`` (and ``stream.executionId``) when it
@@ -146,13 +134,19 @@ class PublicProjector:
 
     # -- lifecycle handlers ---------------------------------------------------
 
-    def _on_run_started(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_started(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return [self._emit("run", {"status": "started", "executionId": self._stream.execution_id})]
 
-    def _on_run_resumed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_resumed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return [self._emit("run", {"status": "resumed", "executionId": self._stream.execution_id})]
 
-    def _on_run_paused(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_paused(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         interaction_id = ""
         for marker in payload.get("interrupts") or []:
             if isinstance(marker, dict) and marker.get("kind") == "interaction":
@@ -160,33 +154,47 @@ class PublicProjector:
                 break
         # The public pause payload carries only the interaction identity —
         # never graph state, plan, or messages (issue #18 §5.8).
-        body: dict[str, Any] = {"status": "checkpoint_pause", "executionId": self._stream.execution_id}
+        body: dict[str, Any] = {
+            "status": "checkpoint_pause",
+            "executionId": self._stream.execution_id,
+        }
         if interaction_id:
             body["interactionId"] = interaction_id
         return [self._emit("run", body)]
 
-    def _on_interrupt_raised(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
-        # Legacy untyped interrupts carry raw checkpoint payloads; project a
-        # pause with no detail rather than leaking them. Typed interactions
-        # arrive through interaction.requested instead.
-        return self._on_run_paused(event, payload, agent)
+    def _on_interrupt_raised(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
+        return []
 
-    def _on_run_ended(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_ended(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_run("run.ended", payload)
 
-    def _on_run_completed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_completed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_run("run.completed", payload)
 
-    def _on_run_failed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_failed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_run("run.failed", payload)
 
-    def _on_run_cancelled(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_cancelled(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_run("run.cancelled", payload)
 
-    def _on_run_timed_out(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_timed_out(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_run("run.timed_out", payload)
 
-    def _on_run_budget_exceeded(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_run_budget_exceeded(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_run("run.budget_exceeded", payload)
 
     def _terminal_run(self, kind: str, payload: dict[str, Any]) -> list[LingxiMothershipEventV1]:
@@ -202,30 +210,40 @@ class PublicProjector:
             events.append(self._emit("complete", {"status": "cancelled"}))
         return events
 
-    def _on_task_completed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_task_completed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_task("task.completed")
 
-    def _on_task_failed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_task_failed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_task("task.failed", message=str(payload.get("message") or ""))
 
-    def _on_task_cancelled(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_task_cancelled(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._terminal_task("task.cancelled")
 
     def _terminal_task(self, kind: str, *, message: str = "") -> list[LingxiMothershipEventV1]:
         if self._terminated:
             return []
         self._terminated = True
-        events = [self._emit("error", {"message": message or "运行已结束", "fatal": True})] if kind == "task.failed" else []
+        events = (
+            [self._emit("error", {"message": message or "运行已结束", "fatal": True})]
+            if kind == "task.failed"
+            else []
+        )
         events.append(self._emit("complete", {"status": TASK_TERMINAL_MAP[kind]}))
         return events
 
     # -- agent span lifecycle -------------------------------------------------
 
-    def _on_agent_started(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_agent_started(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         agent_run_id = str(payload.get("agent_run_id") or "")
         if not agent_run_id:
-            # Provider-emitted legacy start without dispatcher identity; do
-            # not synthesize an id — register for later attribution only.
             return []
         if agent_run_id in self._open_spans:
             return []
@@ -242,7 +260,9 @@ class PublicProjector:
                     "kind": "agent",
                     "event": "start",
                     "agentRunId": agent_run_id,
-                    "providerId": str(payload.get("provider") or payload.get("provider_id") or agent),
+                    "providerId": str(
+                        payload.get("provider") or payload.get("provider_id") or agent
+                    ),
                     "displayName": str(
                         payload.get("display_name") or payload.get("agent_display_name") or agent
                     ),
@@ -259,10 +279,14 @@ class PublicProjector:
             )
         ]
 
-    def _on_agent_completed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_agent_completed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._end_span(event, payload, agent, "completed")
 
-    def _on_agent_failed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_agent_failed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         status = "cancelled" if str(payload.get("status") or "") == "cancelled" else "failed"
         return self._end_span(event, payload, agent, status)
 
@@ -356,7 +380,9 @@ class PublicProjector:
 
     # -- skill runs (dispatcher-owned ToolCallItems, issue #18 §4.6) ---------
 
-    def _on_skill_started(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_skill_started(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         skill_run_id = str(payload.get("skill_run_id") or "")
         if not skill_run_id:
             return []
@@ -371,7 +397,9 @@ class PublicProjector:
                     "toolCallId": skill_run_id,
                     "toolKind": "skill",
                     "toolName": "lingxi.skill",
-                    "displayTitle": str(payload.get("display_name") or payload.get("skill_id") or "技能"),
+                    "displayTitle": str(
+                        payload.get("display_name") or payload.get("skill_id") or "技能"
+                    ),
                     "status": "executing",
                     "safeParams": safe_params,
                 },
@@ -379,10 +407,14 @@ class PublicProjector:
             )
         ]
 
-    def _on_skill_completed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_skill_completed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         return self._end_skill(payload, "success")
 
-    def _on_skill_failed(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_skill_failed(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         # A cancelled SkillRun is not an error: keep the real status so Stop
         # renders a cancelled ToolCallItem (issue #18 §5.5).
         status = "cancelled" if str(payload.get("status") or "") == "cancelled" else "error"
@@ -409,7 +441,9 @@ class PublicProjector:
 
     # -- text channels ----------------------------------------------------------
 
-    def _on_agent_status(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_agent_status(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         text = str(payload.get("text") or "")
         if not text:
             return []
@@ -419,7 +453,11 @@ class PublicProjector:
         return [
             self._emit(
                 "text",
-                {"channel": "narration", "text": text, "source": "system" if not agent_run_id else "agent"},
+                {
+                    "channel": "narration",
+                    "text": text,
+                    "source": "system" if not agent_run_id else "agent",
+                },
                 scope=scope,
             )
         ]
@@ -466,19 +504,25 @@ class PublicProjector:
             body["delta"] = delta
         return [self._emit("text", body, scope=scope)]
 
-    def _on_agent_output(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_agent_output(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         message = str(payload.get("message") or "")
         if not message:
             return []
         return self._agent_text(payload, agent, text=message, delta="")
 
-    def _on_agent_output_delta(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_agent_output_delta(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         delta = str(payload.get("delta") or "")
         if not delta:
             return []
         return self._agent_text(payload, agent, text="", delta=delta)
 
-    def _on_assistant_delta(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_assistant_delta(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         # The raw provider message stream is NOT learner-facing: structured
         # providers still parse it, validate the output contract and run their
         # safety checks before publishing through ``agent.output*``.  Letting
@@ -488,7 +532,9 @@ class PublicProjector:
 
     # -- tools -------------------------------------------------------------------
 
-    def _on_tool_call_delta(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_tool_call_delta(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         agent_run_id = str(payload.get("agent_run_id") or "") or self._agent_runs.get(agent, "")
         out: list[LingxiMothershipEventV1] = []
         for call in payload.get("calls") or []:
@@ -519,7 +565,9 @@ class PublicProjector:
             )
         return out
 
-    def _on_tool_result(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_tool_result(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         agent_run_id = str(payload.get("agent_run_id") or "") or self._agent_runs.get(agent, "")
         tool_call_id = str(payload.get("tool_call_id") or "")
         name = str(payload.get("name") or "")
@@ -550,17 +598,17 @@ class PublicProjector:
 
     # -- resources ----------------------------------------------------------------
 
-    def _on_artifact_ready(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _on_artifact_ready(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         artifact = str(payload.get("artifact") or "")
         if not artifact:
             return []
         agent_run_id = str(payload.get("agent_run_id") or "") or self._agent_runs.get(agent, "")
-        # The host resolves the artifact to a stable WorkspaceFile identity at
-        # emit time (issue #18 §12.2); the synthetic id is the fallback while
-        # no projection exists yet.
-        file_id = str(payload.get("workspace_file_id") or "")
-        resource_id = file_id or f"artifact:{self._stream.chat_id}:{artifact}"
-        title = str(payload.get("workspace_file_title") or artifact)
+        resource_id = str(payload.get("artifact_record_id") or "")
+        if not resource_id:
+            return []
+        title = str(payload.get("artifact_title") or artifact)
         return [
             self._emit(
                 "resource",
@@ -579,12 +627,13 @@ class PublicProjector:
             )
         ]
 
-    # -- fallback -------------------------------------------------------------------
+    # -- ignored internal events -----------------------------------------------------
 
-    def _generic(self, event: dict[str, Any], payload: dict[str, Any], agent: str) -> list[LingxiMothershipEventV1]:
+    def _generic(
+        self, event: dict[str, Any], payload: dict[str, Any], agent: str
+    ) -> list[LingxiMothershipEventV1]:
         # Internal mechanics (node.*, model.*, delivery.*, plan.*, state.*,
-        # goal.*) are deliberately not public V1 facts. The V0 stream keeps
-        # them for today's UI; V1 publishes only canonical identities.
+        # goal.*) are deliberately not public V1 facts.
         return []
 
     # -- internals --------------------------------------------------------------------

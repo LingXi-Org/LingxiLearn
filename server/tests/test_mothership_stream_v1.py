@@ -197,9 +197,7 @@ def test_resource_payload_is_strict() -> None:
         }
     )
     with pytest.raises(ValidationError):
-        ResourceUpsertPayload.model_validate(
-            {"resource": {"id": "file_1", "type": "terminal"}}
-        )
+        ResourceUpsertPayload.model_validate({"resource": {"id": "file_1", "type": "terminal"}})
 
 
 # -- shared fixtures --------------------------------------------------------------
@@ -232,9 +230,7 @@ def test_blocking_pause_fixture_leaks_no_checkpoint_state() -> None:
 
 
 def test_parallel_fixture_has_two_distinct_overlapping_agent_runs() -> None:
-    envelopes = json.loads(
-        (FIXTURE_DIR / "parallel-siblings.json").read_text(encoding="utf-8")
-    )
+    envelopes = json.loads((FIXTURE_DIR / "parallel-siblings.json").read_text(encoding="utf-8"))
     starts = [
         e["payload"]["agentRunId"]
         for e in envelopes
@@ -251,9 +247,7 @@ def test_parallel_fixture_has_two_distinct_overlapping_agent_runs() -> None:
 
 
 def test_single_primary_agent_fixture_shapes() -> None:
-    envelopes = json.loads(
-        (FIXTURE_DIR / "single-primary-agent.json").read_text(encoding="utf-8")
-    )
+    envelopes = json.loads((FIXTURE_DIR / "single-primary-agent.json").read_text(encoding="utf-8"))
     span_starts = [e for e in envelopes if e["type"] == "span" and e["payload"]["event"] == "start"]
     assert len(span_starts) == 1
     assert span_starts[0]["payload"]["presentationRole"] == "primary"
@@ -268,16 +262,18 @@ def test_single_primary_agent_fixture_shapes() -> None:
     assert "huge ranked blob" not in json.dumps(result, ensure_ascii=False)
     assert result["payload"]["safeResult"]["ok"] is True
 
-    assistant = [e for e in envelopes if e["type"] == "text" and e["payload"]["channel"] == "assistant"]
+    assistant = [
+        e for e in envelopes if e["type"] == "text" and e["payload"]["channel"] == "assistant"
+    ]
     assert assistant and assistant[-1]["payload"]["text"]
-    narration = [e for e in envelopes if e["type"] == "text" and e["payload"]["channel"] == "narration"]
+    narration = [
+        e for e in envelopes if e["type"] == "text" and e["payload"]["channel"] == "narration"
+    ]
     assert narration and narration[0]["scope"]["agentRunId"] == "ar_answer1"
 
 
 def test_multi_turn_fixture_carries_user_text_per_turn() -> None:
-    envelopes = json.loads(
-        (FIXTURE_DIR / "multi-turn-thread.json").read_text(encoding="utf-8")
-    )
+    envelopes = json.loads((FIXTURE_DIR / "multi-turn-thread.json").read_text(encoding="utf-8"))
     turn_events = [e for e in envelopes if e["type"] == "turn"]
     started = [e for e in turn_events if e["payload"]["status"] == "started"]
     assert len(started) == 2

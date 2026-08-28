@@ -7,8 +7,8 @@ import uuid
 
 from .application import ApplicationServices
 from .config import get_settings
-from .runtime.loop import GRAPH_NAME as LOOP_GRAPH_NAME
-from .runtime.loop import GRAPH_VERSION as LOOP_GRAPH_VERSION
+from .runtime.graph import GRAPH_NAME as LOOP_GRAPH_NAME
+from .runtime.graph import GRAPH_VERSION as LOOP_GRAPH_VERSION
 from .runtime.schedules import SchedulerWorker
 
 

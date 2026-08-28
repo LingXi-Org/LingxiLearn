@@ -35,7 +35,7 @@ from lingxigraph import Runtime, interrupt
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
-from ..state.session_state import RuntimeStatus
+from ..state.agent_task_state import RuntimeStatus
 from .run_context import new_interaction_id
 
 if TYPE_CHECKING:
@@ -253,40 +253,37 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-async def request_interaction(deps: LoopDeps, spec: InteractionSpec) -> dict[str, Any] | None:
+async def request_interaction(deps: LoopDeps, spec: InteractionSpec) -> dict[str, Any]:
     """Persist and announce one blocking Interaction; return its checkpoint entry.
 
     This is the single Interaction-request path in the loop (issue #32 搂1):
     pre-execution HITL clarification and post-answer follow-up both go
     through it, so both get the same interaction_id, the same durable
     ``agent_interactions`` row, the same ``interaction.requested`` event, and
-    the same ``pending_interaction`` checkpoint shape. A non-blocking spec is
-    a legacy-path suggestion, not a typed interrupt, and produces nothing here.
+    the same ``pending_interaction`` checkpoint shape.
     """
 
     if not spec.blocking:
-        return None
+        raise ValueError("AgentTask interactions must be blocking")
     interaction_id = new_interaction_id()
     spec = spec.model_copy(update={"interaction_id": interaction_id})
     request_payload = spec.public_request()
     turn = (
         await deps.work_ledger.latest_turn(deps.task_id) if deps.work_ledger is not None else None
     )
-    if deps.runtime_repository is not None:
-        try:
-            await deps.runtime_repository.create_interaction(
-                interaction_id=interaction_id,
-                task_id=deps.task_id,
-                turn_id=str(turn["id"]) if turn else None,
-                execution_id=deps.execution_id or None,
-                request_payload=request_payload,
-                purpose=spec.purpose,
-                presentation=spec.presentation,
-                blocking=spec.blocking,
-                reason_code=spec.reason_code,
-            )
-        except Exception:  # noqa: BLE001 - interaction must not fail the run
-            logger.exception("failed to persist interaction")
+    if deps.runtime_repository is None:
+        raise RuntimeError("AgentTask interaction persistence is unavailable")
+    await deps.runtime_repository.create_interaction(
+        interaction_id=interaction_id,
+        task_id=deps.task_id,
+        turn_id=str(turn["id"]) if turn else None,
+        execution_id=deps.execution_id or None,
+        request_payload=request_payload,
+        purpose=spec.purpose,
+        presentation=spec.presentation,
+        blocking=spec.blocking,
+        reason_code=spec.reason_code,
+    )
     if deps.emit is not None:
         deps.emit(
             "interaction.requested",
@@ -331,29 +328,17 @@ def _interaction_answer_summary(value: Mapping[str, Any], pending: Any) -> str:
 def build_await_user_node(deps: LoopDeps, *, dispatcher: Dispatcher, checkpointer: Any = None):
     """Build the ``await_user`` graph node — the Interaction answer side.
 
-    The node pauses the graph on the opaque interaction id (typed interrupt,
-    issue #18 搂10.3) or on the legacy free-text payload, and on resume turns
-    the answer into the ``user_message`` the next planning round consumes.
+    The node pauses on an opaque Interaction id and turns the resumed answer
+    into the ``user_message`` consumed by the next planning round.
     """
 
     async def await_user(state: LoopState, _runtime: Runtime[Any]) -> dict[str, Any]:
         if checkpointer is None:
             return {"runtime_status": str(RuntimeStatus.WAITING_FOR_USER)}
         pending = state.get("pending_interaction")
-        if isinstance(pending, dict) and pending.get("interaction_id"):
-            # Typed interrupt (issue #18 搂10.3): the checkpoint carries the
-            # opaque interaction identity only — the full structured request
-            # is durable in agent_interactions, never in graph state.
-            payload = interrupt(opaque_interrupt_payload(str(pending["interaction_id"])))
-        else:
-            payload = interrupt(
-                {
-                    "kind": "user_message",
-                    "task_id": deps.task_id,
-                    "messages": list(state.get("messages") or []),
-                    "plan": state.get("plan") or {},
-                }
-            )
+        if not isinstance(pending, dict) or not pending.get("interaction_id"):
+            raise RuntimeError("WAITING_FOR_USER requires a persisted Interaction")
+        payload = interrupt(opaque_interrupt_payload(str(pending["interaction_id"])))
         value = payload if isinstance(payload, dict) else {"message": str(payload)}
         if value.get("kind") == "interaction_answer":
             # Continuation of the same turn: providers see a compact summary
@@ -375,13 +360,6 @@ def build_await_user_node(deps: LoopDeps, *, dispatcher: Dispatcher, checkpointe
                 utterance="",
                 pending_interaction=None,
             )
-        dispatcher.retarget(user_message=value)
-        return await deps.transition_status(
-            state,
-            RuntimeStatus.PLANNING,
-            user_message=value,
-            utterance=str(value.get("message") or ""),
-            pending_interaction=None,
-        )
+        raise ValueError("Interaction resume payload is invalid")
 
     return await_user

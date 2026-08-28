@@ -1,1 +1,0 @@
-export { googleDrivePollingTrigger } from './poller'

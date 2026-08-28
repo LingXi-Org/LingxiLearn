@@ -1,6 +1,0 @@
-export { salesforceCaseStatusChangedTrigger } from './case_status_changed'
-export { salesforceOpportunityStageChangedTrigger } from './opportunity_stage_changed'
-export { salesforceRecordCreatedTrigger } from './record_created'
-export { salesforceRecordDeletedTrigger } from './record_deleted'
-export { salesforceRecordUpdatedTrigger } from './record_updated'
-export { salesforceWebhookTrigger } from './webhook'
