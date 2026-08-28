@@ -1,10 +1,9 @@
-"""Full-fidelity Sim trace projection for LingxiGraph executions.
+"""LingxiLearn's full-fidelity execution timeline.
 
 The workflow canvas intentionally shows only learner-meaningful semantic nodes.
 Logs have a different job: every executable primitive and every control-plane
 decision must remain inspectable.  This module builds that second, exhaustive
-view without changing what the graph executes or what the learner sees on the
-canvas.
+view without changing what the graph executes or what the learner sees.
 
 The projector accepts both native :class:`lingxigraph.Event` values and the
 durable Agent Task event vocabulary.  Consequently the exact same projection
@@ -43,7 +42,7 @@ _NODE_EVENTS = {
 
 class PrimitiveLike(Protocol):
     @property
-    def sim_type(self) -> str: ...
+    def display_kind(self) -> str: ...
 
     @property
     def category(self) -> str: ...
@@ -60,10 +59,101 @@ PrimitiveResolver = Callable[[str], PrimitiveLike]
 
 @dataclass(frozen=True, slots=True)
 class _FallbackPrimitive:
-    sim_type: str = "function"
+    display_kind: str = "function"
     category: str = "runtime"
     idempotent: bool = False
     label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionSpan:
+    """One hierarchical interval in a LingxiLearn execution timeline."""
+
+    id: str
+    name: str
+    kind: str
+    status: str
+    started_at: str
+    ended_at: str
+    duration_ms: int
+    children: tuple[ExecutionSpan, ...] = ()
+    attributes: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_native(cls, value: Mapping[str, Any]) -> ExecutionSpan:
+        """Build a span from the one accepted native timeline schema."""
+
+        required = {"id", "name", "kind", "status", "startedAt", "endedAt", "durationMs"}
+        missing = required.difference(value)
+        if missing:
+            raise ValueError(f"invalid native execution span; missing {sorted(missing)}")
+        known = {
+            "id",
+            "name",
+            "kind",
+            "status",
+            "startedAt",
+            "endedAt",
+            "durationMs",
+            "children",
+        }
+        return cls(
+            id=str(value.get("id") or ""),
+            name=str(value.get("name") or "Execution"),
+            kind=str(value["kind"]),
+            status=str(value.get("status") or "running"),
+            started_at=str(value["startedAt"]),
+            ended_at=str(value["endedAt"]),
+            duration_ms=max(0, int(value["durationMs"])),
+            children=tuple(
+                cls.from_native(item)
+                for item in value.get("children") or ()
+                if isinstance(item, Mapping)
+            ),
+            attributes={key: _json_safe(item) for key, item in value.items() if key not in known},
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "kind": self.kind,
+            "status": self.status,
+            "startedAt": self.started_at,
+            "endedAt": self.ended_at,
+            "durationMs": self.duration_ms,
+            "children": [child.to_dict() for child in self.children],
+            **_json_safe(self.attributes),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionTimeline:
+    """Ordered, hierarchical history of one execution."""
+
+    execution_id: str
+    spans: tuple[ExecutionSpan, ...]
+
+    @classmethod
+    def from_native(
+        cls,
+        execution_id: str,
+        spans: Sequence[Mapping[str, Any]],
+    ) -> ExecutionTimeline:
+        return cls(
+            execution_id=execution_id,
+            spans=tuple(ExecutionSpan.from_native(span) for span in spans),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        root = self.spans[0].attributes if self.spans else {}
+        return {
+            "schemaVersion": "lingxilearn.timeline.v1",
+            "executionId": self.execution_id,
+            "spans": [span.to_dict() for span in self.spans],
+            "totalTokens": timeline_total_tokens([span.to_dict() for span in self.spans]),
+            "waitingForUserMs": max(0, int(root.get("waitingForUserMs") or 0)),
+        }
 
 
 def _json_safe(value: Any) -> Any:
@@ -119,7 +209,7 @@ def _transport_free(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     return {
         str(key): _json_safe(value)
         for key, value in dict(payload or {}).items()
-        if key not in {"workflowState", "traceSpans", "runtime"}
+        if key not in {"executionSnapshot", "timeline", "runtime"}
     }
 
 
@@ -165,15 +255,15 @@ def _tool_arguments(value: Any) -> Any:
 
 
 @dataclass
-class SimTraceProjector:
-    """Incrementally build the hierarchical trace consumed by Sim Logs."""
+class ExecutionTimelineProjector:
+    """Incrementally build the hierarchical timeline consumed by Logs."""
 
     execution_id: str
     task_id: str
     graph_version: str
     resolve_primitive: PrimitiveResolver
     started_at: Any = None
-    trace_spans: list[dict[str, Any]] = field(default_factory=list)
+    spans: list[dict[str, Any]] = field(default_factory=list)
     _root: dict[str, Any] = field(default_factory=dict, init=False)
     _active_native: dict[str, dict[str, Any]] = field(default_factory=dict, init=False)
     _active_native_order: list[str] = field(default_factory=list, init=False)
@@ -197,7 +287,7 @@ class SimTraceProjector:
     _pause_intervals: list[tuple[str, str]] = field(default_factory=list, init=False)
     """Completed ``(pause_ts, resume_ts)`` wall-clock windows.
 
-    Any span whose own ``[startTime, endTime]`` overlaps one of these windows
+    Any span whose own ``[startedAt, endedAt]`` overlaps one of these windows
     must have that overlap excluded from its ``durationMs`` — not just the
     root's — otherwise a native span (e.g. ``await_user``) that is still open
     when ``run.paused`` fires and only closes after ``run.resumed`` would show
@@ -208,16 +298,13 @@ class SimTraceProjector:
         started = _iso(self.started_at)
         self._last_timestamp = started
         self._root = {
-            "id": f"{self.execution_id}:workflow",
+            "id": f"{self.execution_id}:execution",
             "name": "LingxiGraph Runtime",
-            "type": "workflow",
+            "kind": "execution",
             "primitive": "lingxigraph.runtime",
             "category": "runtime",
             "status": "running",
-            "duration": 0,
             "durationMs": 0,
-            "startTime": started,
-            "endTime": started,
             "startedAt": started,
             "endedAt": started,
             "input": {
@@ -228,7 +315,7 @@ class SimTraceProjector:
             "children": [],
             "events": [],
         }
-        self.trace_spans = [self._root]
+        self.spans = [self._root]
 
     # -- primitive/span helpers -----------------------------------------
 
@@ -243,7 +330,7 @@ class SimTraceProjector:
             return self.resolve_primitive(name)
         except Exception:  # noqa: BLE001 - unknown telemetry must remain visible
             return _FallbackPrimitive(
-                sim_type=fallback_type,
+                display_kind=fallback_type,
                 category=fallback_category,
                 label=str(name or "Unknown primitive"),
             )
@@ -256,7 +343,6 @@ class SimTraceProjector:
     def _touch(self, value: Any = None) -> str:
         timestamp = _iso(value)
         self._last_timestamp = timestamp
-        self._root["endTime"] = timestamp
         self._root["endedAt"] = timestamp
         return timestamp
 
@@ -267,7 +353,7 @@ class SimTraceProjector:
         parent: dict[str, Any] | None = None,
         timestamp: Any = None,
         span_id: str = "",
-        block_id: str = "",
+        node_id: str = "",
         name: str = "",
         input_data: Any = None,
         fallback_type: str = "function",
@@ -283,21 +369,18 @@ class SimTraceProjector:
         span = {
             "id": span_id or self._next_id(primitive_name),
             "name": name or primitive.label or primitive_name,
-            "type": primitive.sim_type,
+            "kind": primitive.display_kind,
             "primitive": primitive_name,
             "category": primitive.category,
             "status": "running",
-            "duration": 0,
             "durationMs": 0,
-            "startTime": started,
-            "endTime": started,
             "startedAt": started,
             "endedAt": started,
             "children": [],
             "events": [],
         }
-        if block_id:
-            span["blockId"] = block_id
+        if node_id:
+            span["nodeId"] = node_id
         if input_data not in (None, {}, []):
             span["input"] = _json_safe(input_data)
         span.update({key: _json_safe(value) for key, value in metadata.items() if value is not None})
@@ -319,10 +402,8 @@ class SimTraceProjector:
             return
         ended = self._touch(timestamp)
         span["status"] = status
-        span["endTime"] = ended
         span["endedAt"] = ended
-        span["duration"] = _millis(str(span.get("startTime") or ended), ended)
-        span["durationMs"] = span["duration"]
+        span["durationMs"] = _millis(str(span.get("startedAt") or ended), ended)
         if output not in (None, {}, []):
             span["output"] = _json_safe(output)
         if error_type:
@@ -425,7 +506,7 @@ class SimTraceProjector:
         payload: Mapping[str, Any] | None,
         runtime: Mapping[str, Any] | None,
         timestamp: Any,
-        block_id: str = "",
+        node_id: str = "",
     ) -> dict[str, Any]:
         safe_agent = str(agent or "coordinator")
         logical_task_key = str((payload or {}).get("task_id") or "")
@@ -442,8 +523,8 @@ class SimTraceProjector:
                 return existing
         existing = self._find_agent(safe_agent)
         if existing is not None:
-            if block_id:
-                existing["blockId"] = block_id
+            if node_id:
+                existing["nodeId"] = node_id
             return existing
         primitive_name = str(
             (payload or {}).get("provider")
@@ -454,7 +535,7 @@ class SimTraceProjector:
             primitive_name,
             parent=self._parent(runtime),
             timestamp=timestamp,
-            block_id=block_id,
+            node_id=node_id,
             input_data=_transport_free(payload),
             fallback_type="agent",
             fallback_category="agent",
@@ -571,7 +652,7 @@ class SimTraceProjector:
         event: Any,
         *,
         agent: str = "coordinator",
-        block_id: str = "",
+        node_id: str = "",
     ) -> None:
         kind = getattr(event, "kind", None)
         if not isinstance(kind, EventKind):
@@ -599,7 +680,7 @@ class SimTraceProjector:
                     agent=custom_agent,
                     runtime=runtime,
                     timestamp=timestamp,
-                    block_id=block_id,
+                    node_id=node_id,
                 )
             return
 
@@ -631,7 +712,7 @@ class SimTraceProjector:
             data=data if isinstance(data, dict) else {"value": data},
             runtime=runtime,
             timestamp=timestamp,
-            block_id=block_id,
+            node_id=node_id,
         )
 
     def _consume_native_kind(
@@ -642,7 +723,7 @@ class SimTraceProjector:
         data: Mapping[str, Any],
         runtime: Mapping[str, Any],
         timestamp: Any,
-        block_id: str = "",
+        node_id: str = "",
     ) -> None:
         span: dict[str, Any] | None
         timestamp = self._touch(timestamp)
@@ -651,9 +732,7 @@ class SimTraceProjector:
             self._root.update(
                 {
                     "status": "running",
-                    "startTime": timestamp,
                     "startedAt": timestamp,
-                    "endTime": timestamp,
                     "endedAt": timestamp,
                 }
             )
@@ -719,7 +798,7 @@ class SimTraceProjector:
                     node,
                     timestamp=timestamp,
                     span_id=str(runtime.get("span_id") or ""),
-                    block_id=block_id,
+                    node_id=node_id,
                     input_data=data,
                     fallback_type="router_v2",
                     fallback_category="control",
@@ -733,7 +812,7 @@ class SimTraceProjector:
                 span = self._new_span(
                     node,
                     timestamp=timestamp,
-                    block_id=block_id,
+                    node_id=node_id,
                     fallback_type="router_v2",
                     fallback_category="control",
                     node=node,
@@ -816,7 +895,7 @@ class SimTraceProjector:
         agent: str = "coordinator",
         runtime: Mapping[str, Any] | None = None,
         timestamp: Any = None,
-        block_id: str = "",
+        node_id: str = "",
     ) -> None:
         span: dict[str, Any] | None
         safe_payload = _transport_free(payload)
@@ -919,7 +998,7 @@ class SimTraceProjector:
                 payload=safe_payload,
                 runtime=safe_runtime,
                 timestamp=timestamp,
-                block_id=block_id or str(safe_payload.get("blockId") or ""),
+                node_id=node_id or str(safe_payload.get("nodeId") or ""),
             )
             if kind == "node.revising":
                 span["revising"] = True
@@ -963,7 +1042,7 @@ class SimTraceProjector:
                 payload=safe_payload,
                 runtime=safe_runtime,
                 timestamp=timestamp,
-                block_id=block_id,
+                node_id=node_id,
             )
             self._event(
                 span,
@@ -1104,8 +1183,7 @@ class SimTraceProjector:
             duration = safe_payload.get("duration_ms")
             if duration is not None:
                 try:
-                    model_span["duration"] = max(0, int(float(duration)))
-                    model_span["durationMs"] = model_span["duration"]
+                    model_span["durationMs"] = max(0, int(float(duration)))
                 except (TypeError, ValueError):
                     pass
             self._event(
@@ -1145,9 +1223,7 @@ class SimTraceProjector:
                         fallback_category="tool",
                         toolCallId=call_id,
                     )
-                    # Sim's icon resolver expects tool spans to use type=tool,
-                    # regardless of the canvas block semantics for that tool.
-                    existing["type"] = "tool"
+                    existing["kind"] = "tool"
                     self._active_tools[call_id] = existing
                 raw_args = call.get("args", call.get("arguments", ""))
                 if isinstance(raw_args, str):
@@ -1203,7 +1279,7 @@ class SimTraceProjector:
                     fallback_category="tool",
                     toolCallId=call_id,
                 )
-                span["type"] = "tool"
+                span["kind"] = "tool"
             arguments = safe_payload.get("arguments")
             if arguments is not None:
                 span["input"] = _json_safe(arguments)
@@ -1226,8 +1302,7 @@ class SimTraceProjector:
             duration = safe_payload.get("duration_ms")
             if duration is not None:
                 try:
-                    span["duration"] = max(0, int(float(duration)))
-                    span["durationMs"] = span["duration"]
+                    span["durationMs"] = max(0, int(float(duration)))
                 except (TypeError, ValueError):
                     pass
             self._event(
@@ -1325,7 +1400,7 @@ class SimTraceProjector:
                 data=dict(payload.get("data") or {}),
                 runtime=runtime,
                 timestamp=timestamp,
-                block_id=str(payload.get("blockId") or ""),
+                node_id=str(payload.get("nodeId") or ""),
             )
             return
         if kind in {
@@ -1350,7 +1425,7 @@ class SimTraceProjector:
             agent=agent,
             runtime=runtime,
             timestamp=timestamp,
-            block_id=str(payload.get("blockId") or ""),
+            node_id=str(payload.get("nodeId") or ""),
         )
 
     # -- final projection ------------------------------------------------
@@ -1396,14 +1471,13 @@ class SimTraceProjector:
                     # activity instead of from "now", or the freeze point
                     # itself would already include this call's own delay.
                     self._paused_since = self._paused_since or str(
-                        self._root.get("endTime") or end
+                        self._root.get("endedAt") or end
                     )
                 self._root["paused"] = True
         if not self._saw_run_lifecycle and self._root.get("status") == "running":
             if not self._active_native and not self._active_tasks and not self._active_sidecars:
-                # Preserve the legacy standalone projector contract; durable
-                # executions always receive a run.completed envelope and use
-                # the normalized ``success`` status above.
+                # A standalone projection without a run lifecycle is complete
+                # once it has no active native work.
                 self._root["status"] = "completed"
 
         terminal = self._root.get("status") in {"success", "error"}
@@ -1418,24 +1492,20 @@ class SimTraceProjector:
             waiting_ms += _millis(self._paused_since, end)
 
         if terminal and ended_at is not None:
-            self._root["endTime"] = end
             self._root["endedAt"] = end
         else:
-            self._root["endTime"] = max(str(self._root.get("endTime") or end), end)
-            self._root["endedAt"] = self._root["endTime"]
+            self._root["endedAt"] = max(str(self._root.get("endedAt") or end), end)
 
         def update(span: dict[str, Any], root_start: str) -> dict[str, int]:
             if span.get("status") == "running" and span is not self._root:
                 clamp = freeze_at if paused else end
-                span["endTime"] = clamp
                 span["endedAt"] = clamp
-            span_start = str(span.get("startTime") or end)
-            span_end = str(span.get("endTime") or end)
+            span_start = str(span.get("startedAt") or end)
+            span_end = str(span.get("endedAt") or end)
             overlap = self._paused_overlap_ms(span_start, span_end) if span is not self._root else 0
-            span["duration"] = max(0, _millis(span_start, span_end) - overlap)
-            span["durationMs"] = span["duration"]
+            span["durationMs"] = max(0, _millis(span_start, span_end) - overlap)
             try:
-                span["relativeStartMs"] = _millis(root_start, str(span.get("startTime") or end))
+                span["relativeStartMs"] = _millis(root_start, str(span.get("startedAt") or end))
             except Exception:  # pragma: no cover - _millis already guards malformed values
                 span["relativeStartMs"] = 0
             totals = {} if span is self._root else _usage_tokens(span.get("tokens") or {})
@@ -1447,24 +1517,22 @@ class SimTraceProjector:
                 span["tokens"] = totals
             return totals
 
-        root_start = str(self._root.get("startTime") or end)
+        root_start = str(self._root.get("startedAt") or end)
         update(self._root, root_start)
 
         # wallDurationMs is real wall-clock elapsed time (grows through a
         # pause); activeDurationMs excludes accumulated/ongoing waiting-for-
-        # user time; durationMs stays active-time for backward compatibility
-        # rather than the multi-hour wall-clock figure it used to carry.
-        wall_ms = _millis(root_start, str(self._root.get("endTime") or end))
+        # user time; durationMs is active execution time.
+        wall_ms = _millis(root_start, str(self._root.get("endedAt") or end))
         active_ms = max(0, wall_ms - waiting_ms)
         self._root["wallDurationMs"] = wall_ms
         self._root["waitingForUserMs"] = waiting_ms
         self._root["activeDurationMs"] = active_ms
         self._root["durationMs"] = active_ms
-        self._root["duration"] = active_ms
-        return _json_safe(self.trace_spans)
+        return _json_safe(self.spans)
 
 
-def replay_trace(
+def replay_timeline(
     records: list[Mapping[str, Any]],
     *,
     execution_id: str,
@@ -1477,7 +1545,7 @@ def replay_trace(
 ) -> list[dict[str, Any]]:
     """Rebuild a trace from the durable Agent Task event log."""
 
-    projector = SimTraceProjector(
+    projector = ExecutionTimelineProjector(
         execution_id=execution_id,
         task_id=task_id,
         graph_version=graph_version,
@@ -1489,12 +1557,12 @@ def replay_trace(
     return projector.snapshot(status=status, ended_at=ended_at)
 
 
-def total_tokens(trace_spans: Sequence[Mapping[str, Any]]) -> int:
+def timeline_total_tokens(spans: Sequence[Mapping[str, Any]]) -> int:
     """Return the root token total without double-counting child spans."""
 
-    if not trace_spans:
+    if not spans:
         return 0
-    tokens = trace_spans[0].get("tokens") or {}
+    tokens = spans[0].get("tokens") or {}
     if isinstance(tokens, Mapping):
         try:
             return max(0, int(tokens.get("total") or 0))
@@ -1506,4 +1574,10 @@ def total_tokens(trace_spans: Sequence[Mapping[str, Any]]) -> int:
         return 0
 
 
-__all__ = ["SimTraceProjector", "replay_trace", "total_tokens"]
+__all__ = [
+    "ExecutionSpan",
+    "ExecutionTimeline",
+    "ExecutionTimelineProjector",
+    "replay_timeline",
+    "timeline_total_tokens",
+]

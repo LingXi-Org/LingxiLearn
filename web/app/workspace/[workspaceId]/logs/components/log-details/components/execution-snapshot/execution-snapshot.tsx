@@ -18,32 +18,12 @@ import {
   ModalHeader,
 } from '@/components/ui-kit'
 import { CircleAlert } from '@/components/ui-kit/icons'
+import { LingxiRuntimeGraph } from '@/lib/lingxi/components/lingxi-runtime-graph'
 import { userFacingError } from '@/lib/product-copy'
-import type { WorkflowState } from '@/lib/workflows/domain/workflow'
-import { Preview } from '@/app/workspace/[workspaceId]/components/preview'
 import { useExecutionSnapshot } from '@/hooks/queries/logs'
-
-interface TraceSpan {
-  blockId?: string
-  input?: unknown
-  output?: unknown
-  status?: string
-  duration?: number
-  children?: TraceSpan[]
-}
-
-interface MigratedWorkflowState extends WorkflowState {
-  _migrated: true
-  _note?: string
-}
-
-function isMigratedWorkflowState(state: WorkflowState): state is MigratedWorkflowState {
-  return (state as MigratedWorkflowState)._migrated === true
-}
 
 interface ExecutionSnapshotProps {
   executionId: string
-  traceSpans?: TraceSpan[]
   className?: string
   height?: string | number
   width?: string | number
@@ -55,7 +35,6 @@ interface ExecutionSnapshotProps {
 
 export function ExecutionSnapshot({
   executionId,
-  traceSpans,
   className,
   height = '100%',
   width = '100%',
@@ -86,11 +65,6 @@ export function ExecutionSnapshot({
     navigator.clipboard.writeText(executionId)
     closeMenu()
   }
-
-  const workflowState = data?.workflowState as WorkflowState | undefined
-  const childWorkflowSnapshots = data?.childWorkflowSnapshots as
-    | Record<string, WorkflowState>
-    | undefined
 
   const renderContent = () => {
     if (isLoading) {
@@ -123,7 +97,7 @@ export function ExecutionSnapshot({
       )
     }
 
-    if (!data || !workflowState) {
+    if (!data) {
       return (
         <div
           className={cn('flex items-center justify-center', className)}
@@ -137,40 +111,21 @@ export function ExecutionSnapshot({
       )
     }
 
-    if (isMigratedWorkflowState(workflowState)) {
-      return (
-        <div
-          className={cn('flex flex-col items-center justify-center gap-4 p-8', className)}
-          style={{ height, width }}
-        >
-          <div className='flex items-center gap-3 text-[var(--text-warning)]'>
-            <CircleAlert className='size-[20px]' />
-            <span className='text-base'>未找到已记录的状态</span>
-          </div>
-          <div className='max-w-md text-center text-[var(--text-secondary)] text-small'>
-            此日志从旧版日志系统迁移而来，无法获取此次运行时的工作流状态。
-          </div>
-          <div className='text-[var(--text-tertiary)] text-caption'>
-            Note: {workflowState._note}
-          </div>
-        </div>
-      )
-    }
-
     return (
-      <Preview
-        key={executionId}
-        workflowState={workflowState}
-        traceSpans={traceSpans ?? (data?.traceSpans as TraceSpan[] | undefined)}
-        childWorkflowSnapshots={childWorkflowSnapshots}
-        className={className}
-        height={height}
-        width={width}
-        onCanvasContextMenu={handleCanvasContextMenu}
-        showBorder={!isModal}
-        autoSelectLeftmost
-        showBlockCloseButton={!isModal}
-      />
+      <div
+        className={cn('overflow-hidden', className)}
+        style={{ height, width }}
+        onContextMenu={handleCanvasContextMenu}
+        role='application'
+        aria-label='Execution canvas'
+      >
+        <LingxiRuntimeGraph
+          key={executionId}
+          taskId={data.taskId ?? executionId}
+          executionSnapshot={data.snapshot}
+          events={[]}
+        />
+      </div>
     )
   }
 
@@ -220,11 +175,11 @@ export function ExecutionSnapshot({
           }}
         >
           <ModalContent size='full' className='flex h-[90vh] flex-col'>
-            <ModalHeader>工作流状态</ModalHeader>
+            <ModalHeader>执行画布</ModalHeader>
 
             <ModalBody className='!p-0 min-h-0 flex-1 overflow-hidden'>
               <ModalDescription className='sr-only'>
-                View the workflow state snapshot for this execution
+                View the native execution canvas for this run
               </ModalDescription>
               {renderContent()}
             </ModalBody>

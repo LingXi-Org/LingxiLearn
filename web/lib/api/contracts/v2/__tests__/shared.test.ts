@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { traceSpansSchema } from '@/lib/api/contracts/logs'
+import { timelineSpansSchema } from '@/lib/api/contracts/logs'
 import {
   v2DeleteFolderQuerySchema,
   v2FolderPathInputSchema,
@@ -50,12 +50,16 @@ describe('v2 folder path contracts', () => {
     )
   })
 
-  it('declares persisted trace cost and error metadata', () => {
-    const [span] = traceSpansSchema.parse([
+  it('declares persisted native timeline cost and error metadata', () => {
+    const [span] = timelineSpansSchema.parse([
       {
         id: 'span-1',
         name: 'Agent',
-        type: 'agent',
+        kind: 'agent',
+        status: 'error',
+        startedAt: '2026-08-27T00:00:00Z',
+        endedAt: '2026-08-27T00:00:01Z',
+        durationMs: 1000,
         errorHandled: true,
         errorType: 'RateLimitError',
         errorMessage: 'Rate limited',

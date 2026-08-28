@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
+from ..contracts.rest_models import ExecutionSnapshotResponse
 from ..learner import LearnerContext
 from .dependencies import current_learner_context, not_found, services_of
 from .workspace_route_shared import _workspace_for_id
@@ -63,7 +64,7 @@ async def log_by_execution(
         raise not_found() from exc
 
 
-@router.get("/logs/execution/{execution_id}")
+@router.get("/logs/execution/{execution_id}", response_model=ExecutionSnapshotResponse)
 async def execution_snapshot(
     execution_id: str,
     request: Request,

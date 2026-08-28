@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LogTraceSpan } from '@/lib/api/contracts/logs'
+import type { ExecutionTimelineSpan } from '@/lib/api/contracts/logs'
 import {
   buildTrajectoryModel,
   getVisibleTrajectoryEntries,
@@ -8,13 +8,14 @@ import {
 
 const START = '2026-08-15T08:00:00.000Z'
 
-function nestedTrace(): LogTraceSpan[] {
+function nestedTrace(): ExecutionTimelineSpan[] {
   return [
     {
       id: 'workflow',
       name: 'Research workflow',
-      type: 'workflow',
-      startTime: START,
+      kind: 'execution',
+      startedAt: START,
+      endedAt: '2026-08-15T08:00:01.000Z',
       durationMs: 1_000,
       status: 'error',
       tokens: { total: 100 },
@@ -22,7 +23,9 @@ function nestedTrace(): LogTraceSpan[] {
         {
           id: 'agent',
           name: 'Research agent',
-          type: 'agent',
+          kind: 'agent',
+          startedAt: '2026-08-15T08:00:00.100Z',
+          endedAt: '2026-08-15T08:00:00.900Z',
           relativeStartMs: 100,
           durationMs: 800,
           status: 'error',
@@ -31,7 +34,9 @@ function nestedTrace(): LogTraceSpan[] {
             {
               id: 'model',
               name: 'Generate query',
-              type: 'model',
+              kind: 'model',
+              startedAt: '2026-08-15T08:00:00.120Z',
+              endedAt: '2026-08-15T08:00:00.220Z',
               relativeStartMs: 120,
               durationMs: 100,
               status: 'success',
@@ -40,7 +45,9 @@ function nestedTrace(): LogTraceSpan[] {
             {
               id: 'search',
               name: 'Search web',
-              type: 'tool',
+              kind: 'tool',
+              startedAt: '2026-08-15T08:00:00.300Z',
+              endedAt: '2026-08-15T08:00:00.500Z',
               relativeStartMs: 300,
               durationMs: 200,
               status: 'error',
@@ -64,42 +71,59 @@ describe('buildTrajectoryModel', () => {
       '1.1.1',
       '1.1.2',
     ])
-    expect(model.entries.map((entry) => entry.offsetMs)).toEqual([0, 100, 120, 300])
+    expect(model.entries.map((entry) => entry.offsetMs)).toEqual([
+      0, 100, 120, 300,
+    ])
     expect(model.maxDepth).toBe(3)
     expect(model.totalDurationMs).toBe(1_000)
   })
 
-  it('projects legacy tool calls as nested tool spans', () => {
+  it('projects native tool children as nested spans', () => {
     const model = buildTrajectoryModel([
       {
         id: 'agent',
         name: 'Agent',
-        type: 'agent',
-        startTime: START,
+        kind: 'agent',
+        startedAt: START,
+        endedAt: '2026-08-15T08:00:00.500Z',
         durationMs: 500,
-        toolCalls: [
+        status: 'success',
+        children: [
           {
             id: 'call-1',
             name: 'fetch',
-            duration: 120,
-            startTime: '2026-08-15T08:00:00.100Z',
-            endTime: '2026-08-15T08:00:00.220Z',
-            result: { ok: true },
+            kind: 'tool',
+            durationMs: 120,
+            startedAt: '2026-08-15T08:00:00.100Z',
+            endedAt: '2026-08-15T08:00:00.220Z',
+            status: 'success',
+            output: { ok: true },
           },
         ],
       },
     ])
 
     expect(model.entries).toHaveLength(2)
-    expect(model.entries[1]).toMatchObject({ depth: 1, offsetMs: 100, durationMs: 120 })
-    expect(model.entries[1].span).toMatchObject({ type: 'tool', name: 'fetch' })
+    expect(model.entries[1]).toMatchObject({
+      depth: 1,
+      offsetMs: 100,
+      durationMs: 120,
+    })
+    expect(model.entries[1].span).toMatchObject({
+      kind: 'tool',
+      name: 'fetch',
+    })
   })
 
   it('keeps the eight semantic lanes on one execution clock', () => {
     const model = buildTrajectoryModel([], 1_000, {
       version: 'lingxi-trajectory.v1',
       executionId: 'exec-1',
-      clock: { startedAt: START, endedAt: '2026-08-15T08:00:01.000Z', durationMs: 1_000 },
+      clock: {
+        startedAt: START,
+        endedAt: '2026-08-15T08:00:01.000Z',
+        durationMs: 1_000,
+      },
       lanes: [
         { id: 'run', label: 'RUN', items: [] },
         {
@@ -132,7 +156,10 @@ describe('buildTrajectoryModel', () => {
       'resource',
       'output',
     ])
-    expect(model.lanes[2].entries[0]).toMatchObject({ offsetMs: 200, durationMs: 300 })
+    expect(model.lanes[2].entries[0]).toMatchObject({
+      offsetMs: 200,
+      durationMs: 300,
+    })
     expect(model.source).toBe('trajectory')
   })
 
@@ -140,7 +167,11 @@ describe('buildTrajectoryModel', () => {
     const model = buildTrajectoryModel([], 0, {
       version: 'lingxi-trajectory.v1',
       executionId: 'exec-parent',
-      clock: { startedAt: START, endedAt: '2026-08-15T08:00:01.000Z', durationMs: 1_000 },
+      clock: {
+        startedAt: START,
+        endedAt: '2026-08-15T08:00:01.000Z',
+        durationMs: 1_000,
+      },
       lanes: [
         { id: 'run', label: 'RUN', items: [] },
         {
@@ -206,7 +237,9 @@ describe('buildTrajectoryModel', () => {
 
     const round = model.entries.find((entry) => entry.sourceId === 'round:1')!
     const task = model.entries.find((entry) => entry.sourceId === 'task:n1')!
-    const action = model.entries.find((entry) => entry.sourceId === 'action:model')!
+    const action = model.entries.find(
+      (entry) => entry.sourceId === 'action:model',
+    )!
     expect(round.id).toBe('round:1')
     expect(task.parentId).toBe(round.id)
     expect(action.parentIds).toEqual([round.id, task.id])
@@ -217,13 +250,17 @@ describe('buildTrajectoryModel', () => {
       type: 'model',
       collapsedIds: new Set(),
     })
-    expect(matches.map((entry) => entry.id)).toEqual([round.id, task.id, action.id])
+    expect(matches.map((entry) => entry.id)).toEqual([
+      round.id,
+      task.id,
+      action.id,
+    ])
     expect(
       getVisibleTrajectoryEntries(model.entries, {
         searchQuery: 'provider',
         type: 'model',
         collapsedIds: new Set([task.id]),
-      }).map((entry) => entry.id)
+      }).map((entry) => entry.id),
     ).toEqual([round.id, task.id])
   })
 })
@@ -260,6 +297,8 @@ describe('trajectory summaries and filtering', () => {
       type: 'tool',
       collapsedIds: new Set([expanded[0].id]),
     })
-    expect(collapsed.map((entry) => entry.span.name)).toEqual(['Research workflow'])
+    expect(collapsed.map((entry) => entry.span.name)).toEqual([
+      'Research workflow',
+    ])
   })
 })

@@ -138,7 +138,7 @@ export function useWorkspaceChatController(
 
   const [resolvedChatId, setResolvedChatId] = useState<string | undefined>(initialChatId)
   const [task, setTask] = useState<AgentTaskSnapshot | null>(null)
-  const [workflowState, setWorkflowState] = useState<Record<string, unknown> | null>(null)
+  const [executionSnapshot, setExecutionSnapshot] = useState<Record<string, unknown> | null>(null)
   const [events, setEvents] = useState<AgentTaskEvent[]>([])
   const [streamProtocol, setStreamProtocol] = useState<'v1' | 'legacy-v0' | null>(null)
   const [legacyProjection, setLegacyProjection] = useState<{
@@ -220,7 +220,7 @@ export function useWorkspaceChatController(
     resolvedChatIdRef.current = initialChatId
     requestIdRef.current = initialChatId
     setTask(null)
-    setWorkflowState(null)
+    setExecutionSnapshot(null)
     setEvents([])
     setStreamProtocol(null)
     setLegacyProjection(null)
@@ -266,7 +266,7 @@ export function useWorkspaceChatController(
       runtimeGraphRefreshInFlight = true
       try {
         const graph = await getRuntimeGraph(taskId)
-        if (!cancelled) setWorkflowState(graph.workflowState)
+        if (!cancelled) setExecutionSnapshot(graph.executionSnapshot)
       } catch {
         // The graph endpoint can briefly lag identity persistence; the next
         // lifecycle event/catch-up tick schedules another coalesced refresh.
@@ -293,9 +293,10 @@ export function useWorkspaceChatController(
         return next
       })
       void recordLearningEvent(taskId, event).catch(() => {})
-      const eventWorkflowState =
-        event.workflowState ?? (event.payload.workflowState as Record<string, unknown> | undefined)
-      if (eventWorkflowState) setWorkflowState(eventWorkflowState)
+      const eventExecutionSnapshot =
+        event.executionSnapshot ??
+        (event.payload.executionSnapshot as Record<string, unknown> | undefined)
+      if (eventExecutionSnapshot) setExecutionSnapshot(eventExecutionSnapshot)
       if (RUNTIME_GRAPH_REFRESH_EVENTS.has(event.kind)) scheduleRuntimeGraphRefresh()
       if (event.kind === 'artifact.ready') {
         const artifact = typeof event.payload.artifact === 'string' ? event.payload.artifact : ''
@@ -446,12 +447,12 @@ export function useWorkspaceChatController(
         }
         void getRuntimeGraph(taskId)
           .then((graph) => {
-            if (!cancelled) setWorkflowState(graph.workflowState)
+            if (!cancelled) setExecutionSnapshot(graph.executionSnapshot)
           })
           .catch(() => {
             if (loaded.latest_execution_id) {
               void getExecutionSnapshot(loaded.latest_execution_id)
-                .then((snapshot) => setWorkflowState(snapshot.workflowState))
+                .then((snapshot) => setExecutionSnapshot(snapshot.snapshot))
                 .catch(() => {})
             }
           })
@@ -1028,7 +1029,7 @@ export function useWorkspaceChatController(
     dispatchingHeadId,
     previewSession: null as FilePreviewSession | null,
     genericResourceData: null as GenericResourceData | null,
-    lingxiRuntime: { task, events, workflowState, turnState, v1Model },
+    lingxiRuntime: { task, events, executionSnapshot, turnState, v1Model },
     getCurrentRequestId: () => requestIdRef.current,
   }
 }

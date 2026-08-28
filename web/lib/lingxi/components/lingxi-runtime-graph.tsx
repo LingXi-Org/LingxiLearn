@@ -10,17 +10,17 @@ import ReactFlow, {
   ReactFlowProvider,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { AgentIcon, CodeIcon, SlackIcon, StartIcon, TableIcon } from '@/components/icons'
 import {
   type EdgeRunStatus,
   SubBlockRowView,
   WorkflowBlockView,
   WorkflowEdgeView,
 } from '@/components/workflow'
-import { AgentIcon, CodeIcon, SlackIcon, StartIcon, TableIcon } from '@/components/icons'
-import { applyAutoLayout } from '@/lib/workflows/autolayout'
+import { layoutExecutionCanvasPositions } from '@/lib/workflows/autolayout'
 import {
+  type ExecutionCanvasNode,
   projectRuntimeGraph,
-  type RuntimeBlockState,
   runtimeDisplayName,
   runtimeEdgeStatus,
   runtimeIconType,
@@ -31,12 +31,12 @@ import type { AgentTaskEvent } from '../types'
 
 interface RuntimeGraphProps {
   taskId: string
-  workflowState?: Record<string, unknown> | null
+  executionSnapshot?: Record<string, unknown> | null
   events?: AgentTaskEvent[]
 }
 
 interface RuntimeNodeData {
-  block: RuntimeBlockState
+  block: ExecutionCanvasNode
   workflowRunning: boolean
   verticalHandles: RuntimeVerticalHandles
 }
@@ -67,8 +67,8 @@ interface RuntimeEdgeOrientation {
 }
 
 function runtimeEdgeOrientation(
-  source: RuntimeBlockState | undefined,
-  target: RuntimeBlockState | undefined
+  source: ExecutionCanvasNode | undefined,
+  target: ExecutionCanvasNode | undefined
 ): RuntimeEdgeOrientation {
   const sourcePosition = source?.position ?? { x: 0, y: 0 }
   const targetPosition = target?.position ?? sourcePosition
@@ -124,7 +124,7 @@ const nativeCanvasClassName = [
   '[&_.react-flow__background]:hidden',
 ].join(' ')
 
-function runtimeIcon(block: RuntimeBlockState): ComponentType<{ className?: string }> {
+function runtimeIcon(block: ExecutionCanvasNode): ComponentType<{ className?: string }> {
   const type = runtimeIconType(block).toLowerCase()
   if (type.includes('start') || type.includes('trigger') || type.includes('input')) return StartIcon
   if (type.includes('table')) return TableIcon
@@ -133,7 +133,7 @@ function runtimeIcon(block: RuntimeBlockState): ComponentType<{ className?: stri
   return AgentIcon
 }
 
-function runtimeRows(block: RuntimeBlockState): ReactNode {
+function runtimeRows(block: ExecutionCanvasNode): ReactNode {
   if (block.runtimeRows.length === 0) return null
   return block.runtimeRows.map((row) => (
     <SubBlockRowView key={`${row.title}:${row.value}`} title={row.title} displayValue={row.value} />
@@ -142,12 +142,12 @@ function runtimeRows(block: RuntimeBlockState): ReactNode {
 
 function RuntimeNode({ id, data }: NodeProps<RuntimeNodeData>) {
   const { block, workflowRunning, verticalHandles } = data
-  const active = block.executionState === 'running' || block.executionState === 'retrying'
-  const pending = block.executionState === 'queued' || block.executionState === 'pending'
+  const active = block.runtimeStatus === 'running' || block.runtimeStatus === 'retrying'
+  const pending = block.runtimeStatus === 'queued' || block.runtimeStatus === 'pending'
   // Router V2 is a real Sim block type, but its native view reserves source
   // ports for configured route rows.  The runtime control node has one
   // collapsed output, so render it through the ordinary native card topology
-  // while retaining the control type in the projected BlockState metadata.
+  // while retaining the control type in the Execution Canvas metadata.
   const nativeType = block.data.runtimeKind === 'control' ? 'agent' : runtimeIconType(block)
   return (
     <WorkflowBlockView
@@ -159,7 +159,7 @@ function RuntimeNode({ id, data }: NodeProps<RuntimeNodeData>) {
       isLocked={false}
       hasRing={false}
       ringStyles=''
-      runPathStatus={runtimeStatusToRunPath(block.executionState)}
+      runPathStatus={runtimeStatusToRunPath(block.runtimeStatus)}
       isRunning={active}
       isWorkflowRunning={workflowRunning}
       isExecutionHighlighted={active}
@@ -199,54 +199,49 @@ function RuntimeEdge(props: EdgeProps) {
   )
 }
 
-export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: RuntimeGraphProps) {
+export function LingxiRuntimeGraph({ taskId, executionSnapshot, events = [] }: RuntimeGraphProps) {
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null)
   const projection = useMemo(
-    () => projectRuntimeGraph(workflowState, events),
-    [events, workflowState]
+    () => projectRuntimeGraph(executionSnapshot, events),
+    [events, executionSnapshot]
   )
   const layoutSignature = useMemo(
     () =>
       [
-        ...Object.values(projection.blocks)
+        ...Object.values(projection.nodes)
           .map(
             (block) =>
               `${block.id}:${block.type}:${block.height ?? ''}:${block.data.parentId ?? ''}`
           )
           .sort(),
-        ...projection.edges
+        ...projection.connections
           .map(
             (edge) =>
               `${edge.id}:${edge.source}:${edge.sourceHandle ?? ''}->${edge.target}:${edge.targetHandle ?? ''}`
           )
           .sort(),
       ].join('|'),
-    [projection.blocks, projection.edges]
+    [projection.nodes, projection.connections]
   )
-  const layout = useMemo(
-    () => applyAutoLayout(projection.blocks, projection.edges),
-    // Execution status changes must not recalculate or write positions.  The
-    // native layout is recomputed only when the projected topology changes.
+  const layoutPositions = useMemo(
+    () => layoutExecutionCanvasPositions(Object.keys(projection.nodes), projection.connections),
+    // Execution status changes must not recalculate positions. The native
+    // layout is recomputed only when the projected topology changes.
     [layoutSignature]
   )
-  const laidOutBlocks = useMemo(() => {
-    const positioned = (layout.success ? layout.blocks : projection.blocks) as Record<
-      string,
-      RuntimeBlockState
-    >
-    return Object.fromEntries(
-      Object.entries(projection.blocks).map(([id, block]) => [
-        id,
-        {
-          ...block,
-          position: positioned[id]?.position ?? block.position,
-        },
-      ])
-    ) as Record<string, RuntimeBlockState>
-  }, [layout.blocks, layout.success, projection.blocks])
+  const laidOutBlocks = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(projection.nodes).map(([id, block]) => [
+          id,
+          { ...block, position: layoutPositions[id] ?? block.position },
+        ])
+      ),
+    [layoutPositions, projection.nodes]
+  )
   const verticalHandles = useMemo(() => {
     const handles: Record<string, RuntimeVerticalHandles> = {}
-    for (const edge of projection.edges) {
+    for (const edge of projection.connections) {
       const orientation = runtimeEdgeOrientation(
         laidOutBlocks[edge.source],
         laidOutBlocks[edge.target]
@@ -263,7 +258,7 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
       if (orientation.targetSide === 'bottom') targetHandles.targetBottom = true
     }
     return handles
-  }, [laidOutBlocks, projection.edges])
+  }, [laidOutBlocks, projection.connections])
   const nodes = useMemo<Node<RuntimeNodeData>[]>(
     () =>
       Object.values(laidOutBlocks).map((block) => ({
@@ -284,7 +279,7 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
   )
   const edges = useMemo(
     () =>
-      projection.edges.map((edge) => {
+      projection.connections.map((edge) => {
         const source = laidOutBlocks[edge.source]
         const target = laidOutBlocks[edge.target]
         const orientation = runtimeEdgeOrientation(source, target)
@@ -299,13 +294,13 @@ export function LingxiRuntimeGraph({ taskId, workflowState, events = [] }: Runti
             ...(edge.data ?? {}),
             runStatus: runtimeEdgeStatus(source, target, edge.data?.status),
             isTargetActive:
-              target?.executionState === 'running' || target?.executionState === 'retrying',
+              target?.runtimeStatus === 'running' || target?.runtimeStatus === 'retrying',
             isWorkflowRunning: projection.running,
           } satisfies RuntimeEdgeData,
           selectable: false,
         }
       }),
-    [laidOutBlocks, projection.edges, projection.running]
+    [laidOutBlocks, projection.connections, projection.running]
   )
 
   const hasFittedView = useRef(false)

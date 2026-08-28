@@ -10,6 +10,7 @@ file in place without discarding learner data.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -19,7 +20,7 @@ from .models.base import Base
 
 logger = logging.getLogger(__name__)
 
-SQLITE_SCHEMA_HEAD = "0021_command_delivery_identity"
+SQLITE_SCHEMA_HEAD = "0022_native_execution_snapshots"
 SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "agent_tasks": {
         "create_idempotency_key": "VARCHAR(192)",
@@ -95,6 +96,25 @@ def repair_sqlite_schema(connection: Any) -> None:
     existing_tables = set(inspector.get_table_names())
     repaired: list[str] = []
 
+    reset_execution_rows = False
+    if "agent_executions" in existing_tables:
+        execution_columns = {
+            column["name"] for column in inspector.get_columns("agent_executions")
+        }
+        if "workflow_state" in execution_columns and "execution_snapshot" not in execution_columns:
+            connection.exec_driver_sql(
+                'ALTER TABLE "agent_executions" RENAME COLUMN "workflow_state" TO "execution_snapshot"'
+            )
+            repaired.append("agent_executions.execution_snapshot")
+            reset_execution_rows = True
+        if "trace_spans" in execution_columns and "timeline_spans" not in execution_columns:
+            connection.exec_driver_sql(
+                'ALTER TABLE "agent_executions" RENAME COLUMN "trace_spans" TO "timeline_spans"'
+            )
+            repaired.append("agent_executions.timeline_spans")
+            reset_execution_rows = True
+        inspector = inspect(connection)
+
     for table_name, columns in SQLITE_COMPAT_COLUMNS.items():
         if table_name not in existing_tables:
             continue
@@ -119,6 +139,32 @@ def repair_sqlite_schema(connection: Any) -> None:
             )
             """
         )
+
+    if reset_execution_rows:
+        rows = connection.exec_driver_sql(
+            "SELECT id, task_id, graph_version, status FROM agent_executions"
+        ).mappings().all()
+        for row in rows:
+            status = str(row["status"] or "running")
+            snapshot = {
+                "schemaVersion": "lingxilearn.execution.v1",
+                "executionId": str(row["id"]),
+                "taskId": str(row["task_id"]),
+                "graphVersion": str(row["graph_version"] or ""),
+                "status": status,
+                "paused": status == "paused",
+                "terminal": status
+                in {"completed", "failed", "cancelled", "timed_out", "budget_exceeded"},
+                "nodes": {},
+                "dependencies": [],
+                "variables": {},
+                "groups": {"loops": {}, "parallels": {}},
+                "metadata": {"migration": "native-contract-reset"},
+            }
+            connection.exec_driver_sql(
+                "UPDATE agent_executions SET execution_snapshot = ?, timeline_spans = '[]' WHERE id = ?",
+                (json.dumps(snapshot, ensure_ascii=False), row["id"]),
+            )
 
     # ``create_all`` does not create indexes for columns added above.  Let
     # SQLAlchemy create every declared index after the column repair; existing

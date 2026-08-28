@@ -84,7 +84,7 @@ export interface AgentTaskEvent {
   namespace?: unknown
   checkpoint_id?: string | null
   span_id?: string | null
-  workflowState?: Record<string, unknown> | null
+  executionSnapshot?: Record<string, unknown> | null
   runtime?: {
     execution_id?: string | null
     run_id?: string | null
@@ -330,18 +330,23 @@ export function isAgentTaskActive(task: AgentTaskSnapshot | null | undefined): b
   )
 }
 
-export interface SimExecutionSnapshot {
+export interface ExecutionSnapshotResponse {
   executionId: string
-  workflowId: string | null
   taskId?: string
   graphVersion?: string
-  projectionVersion?: string
+  schemaVersion: 'lingxilearn.execution.v1'
   status?: string
-  workflowState: Record<string, unknown> | null
-  traceSpans?: Array<Record<string, unknown>>
+  snapshot: Record<string, unknown>
+  timeline: {
+    schemaVersion: 'lingxilearn.timeline.v1'
+    executionId: string
+    spans: Array<Record<string, unknown>>
+    totalTokens: number
+    waitingForUserMs: number
+  }
   executionMetadata: {
     trigger: string | null
-    startedAt: string
+    startedAt: string | null
     endedAt?: string | null
     totalDurationMs?: number | null
     cost: unknown | null

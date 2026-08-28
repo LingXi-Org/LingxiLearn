@@ -2,6 +2,7 @@ import type {
   ExecutionLogDetail,
   ExecutionLogSummary,
   ExecutionSnapshotData,
+  ExecutionTimelineSpan,
 } from '@/lib/api/contracts/logs'
 import type { ToolResponse, WorkflowToolExecutionContext } from '@/tools/types'
 
@@ -78,7 +79,7 @@ export interface LogsGetRunDetailsResponse extends ToolResponse {
     startedAt: string
     durationMs: number | null
     cost: number | null
-    traceSpans: unknown[]
+    timelineSpans: ExecutionTimelineSpan[]
     finalOutput: unknown
   }
 }

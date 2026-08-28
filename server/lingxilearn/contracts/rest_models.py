@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # Shared primitives
@@ -504,6 +504,69 @@ class AgentTaskEventsResponse(BaseModel):
     protocol: Literal["v1", "legacy-v0"]
 
 
+class ExecutionSpanResponse(BaseModel):
+    """One recursive span in the LingxiLearn execution timeline."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    kind: str
+    status: str
+    startedAt: str
+    endedAt: str
+    durationMs: int
+    children: list[ExecutionSpanResponse] = Field(default_factory=list)
+
+
+class ExecutionTimelineResponse(BaseModel):
+    schemaVersion: Literal["lingxilearn.timeline.v1"]
+    executionId: str
+    spans: list[ExecutionSpanResponse] = Field(default_factory=list)
+    totalTokens: int = 0
+    waitingForUserMs: int = 0
+
+
+class NativeExecutionNodeResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    label: str
+    kind: str
+    capability: str
+    provider: str | None = None
+    status: str
+    step: int
+    taskId: str | None = None
+    namespace: Any = None
+    details: dict[str, Any] = Field(default_factory=dict)
+    output: Any = None
+
+
+class NativeExecutionDependencyResponse(BaseModel):
+    id: str
+    sourceNodeId: str
+    targetNodeId: str
+    kind: str
+    status: str
+    label: str
+
+
+class NativeExecutionSnapshotResponse(BaseModel):
+    schemaVersion: Literal["lingxilearn.execution.v1"]
+    executionId: str
+    taskId: str
+    graphVersion: str
+    status: str
+    paused: bool = False
+    terminal: bool = False
+    nodes: dict[str, NativeExecutionNodeResponse] = Field(default_factory=dict)
+    dependencies: list[NativeExecutionDependencyResponse] = Field(default_factory=list)
+    variables: dict[str, Any] = Field(default_factory=dict)
+    groups: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class RuntimeGraphResponse(BaseModel):
     id: str
     type: str = "runtime-graph"
@@ -511,8 +574,32 @@ class RuntimeGraphResponse(BaseModel):
     latestExecutionId: str | None = None
     status: str
     updatedAt: str | None = None
-    workflowState: dict[str, Any] = Field(default_factory=dict)
+    executionSnapshot: NativeExecutionSnapshotResponse | None = None
     executionGraph: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExecutionMetadataResponse(BaseModel):
+    trigger: str | None = None
+    startedAt: str | None = None
+    endedAt: str | None = None
+    totalDurationMs: int | None = None
+    cost: Any = None
+    totalTokens: int | None = None
+    scheduleId: str | None = None
+    scheduledFor: str | None = None
+
+
+class ExecutionSnapshotResponse(BaseModel):
+    executionId: str
+    status: str
+    taskId: str
+    graphVersion: str
+    schemaVersion: Literal["lingxilearn.execution.v1"]
+    snapshot: NativeExecutionSnapshotResponse
+    timeline: ExecutionTimelineResponse
+    trajectory: dict[str, Any] = Field(default_factory=dict)
+    eventLog: dict[str, Any] = Field(default_factory=dict)
+    executionMetadata: ExecutionMetadataResponse
 
 
 class SchedulePermissionResult(BaseModel):

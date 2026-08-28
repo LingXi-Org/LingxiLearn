@@ -142,72 +142,70 @@ const blockExecutionSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
-const toolCallSchema = z
-  .object({
-    id: z.string().describe('Tool-call identifier.').optional(),
-    name: z.string().describe('Invoked tool name.').optional(),
-    arguments: z.unknown().describe('Arguments supplied to the tool call.').optional(),
-    result: z.unknown().describe('Value returned by the tool call.').optional(),
-    error: z.string().describe('Tool-call error message.').optional(),
-    startTime: z.string().describe('ISO 8601 tool-call start timestamp.').optional(),
-    endTime: z.string().describe('ISO 8601 tool-call end timestamp.').optional(),
-    duration: z.number().describe('Tool-call duration in milliseconds.').optional(),
-  })
-  .describe('Tool invocation captured inside a trace span.')
-  .catchall(z.unknown().describe('Additional provider-specific tool-call metadata.'))
-
-export type LogTraceSpan = {
+export type ExecutionTimelineSpan = {
+  [key: string]: unknown
   id: string
   name: string
-  type: string
-  duration?: number
-  durationMs?: number
-  startTime?: string
-  endTime?: string
-  status?: string
+  kind: string
+  durationMs: number
+  startedAt: string
+  endedAt: string
+  status: string
   errorHandled?: boolean
   errorType?: string
   errorMessage?: string
-  blockId?: string
+  nodeId?: string
   input?: unknown
   output?: unknown
-  tokens?: number | { total?: number; input?: number; output?: number }
+  tokens?: {
+    total?: number
+    input?: number
+    output?: number
+    cacheRead?: number
+    cacheWrite?: number
+    reasoning?: number
+  }
   cost?: { total?: number; input?: number; output?: number; toolCost?: number }
   relativeStartMs?: number
-  toolCalls?: Array<z.output<typeof toolCallSchema>>
-  children?: LogTraceSpan[]
+  category?: string
+  provider?: string
+  executionOrder?: number
+  tries?: number
+  model?: string
+  finishReason?: string
+  ttft?: number
+  iterationIndex?: number
+  thinking?: string
+  modelToolCalls?: unknown[]
+  children?: ExecutionTimelineSpan[]
 }
 
-export const traceSpanSchema: z.ZodType<LogTraceSpan> = z
+export const executionTimelineSpanSchema: z.ZodType<ExecutionTimelineSpan> = z
   .lazy(() =>
     z
       .object({
         id: z.string().describe('Trace-span identifier.'),
         name: z.string().describe('Trace-span name.'),
-        type: z.string().describe('Trace-span category.'),
-        duration: z.number().describe('Legacy span duration in milliseconds.').optional(),
-        durationMs: z.number().describe('Span duration in milliseconds.').optional(),
-        startTime: z.string().describe('ISO 8601 span start timestamp.').optional(),
-        endTime: z.string().describe('ISO 8601 span end timestamp.').optional(),
-        status: z.string().describe('Trace-span status.').optional(),
+        kind: z.string().describe('Execution span category.'),
+        durationMs: z.number().describe('Span duration in milliseconds.'),
+        startedAt: z.string().describe('ISO 8601 span start timestamp.'),
+        endedAt: z.string().describe('ISO 8601 span end timestamp.'),
+        status: z.string().describe('Execution span status.'),
         errorHandled: z.boolean().describe('Whether the recorded error was handled.').optional(),
         errorType: z.string().describe('Recorded error type.').optional(),
         errorMessage: z.string().describe('Recorded error message.').optional(),
-        blockId: z.string().describe('Workflow block associated with the span.').optional(),
+        nodeId: z.string().describe('Execution node associated with the span.').optional(),
         input: z.unknown().describe('Input captured for the traced operation.').optional(),
         output: z.unknown().describe('Output captured for the traced operation.').optional(),
         tokens: z
-          .union([
-            z.number().describe('Total tokens attributed to the span.'),
-            z
-              .object({
-                total: z.number().describe('Total tokens.').optional(),
-                input: z.number().describe('Input tokens.').optional(),
-                output: z.number().describe('Output tokens.').optional(),
-              })
-              .describe('Token usage attributed to the span.')
-              .partial(),
-          ])
+          .object({
+            total: z.number().describe('Total tokens.').optional(),
+            input: z.number().describe('Input tokens.').optional(),
+            output: z.number().describe('Output tokens.').optional(),
+            cacheRead: z.number().describe('Cache-read tokens.').optional(),
+            cacheWrite: z.number().describe('Cache-write tokens.').optional(),
+            reasoning: z.number().describe('Reasoning tokens.').optional(),
+          })
           .describe('Token usage attributed to the span.')
           .optional(),
         cost: z
@@ -224,18 +222,43 @@ export const traceSpanSchema: z.ZodType<LogTraceSpan> = z
           .number()
           .describe('Offset from the root span in milliseconds.')
           .optional(),
-        toolCalls: z.array(toolCallSchema).describe('Tool calls recorded by the span.').optional(),
-        children: z.array(traceSpanSchema).describe('Nested child trace spans.').optional(),
+        children: z
+          .array(executionTimelineSpanSchema)
+          .describe('Nested child execution spans.')
+          .optional(),
       })
       .catchall(z.unknown().describe('Additional provider-specific trace-span metadata.'))
   )
   .meta({
-    id: 'LogTraceSpan',
-    title: 'Log trace span',
-    description: 'One recursive operation span in a workflow execution trace.',
+    id: 'ExecutionTimelineSpan',
+    title: 'Execution timeline span',
+    description: 'One recursive operation span in a LingxiLearn execution timeline.',
   })
 
-export const traceSpansSchema = z.array(traceSpanSchema)
+export const timelineSpansSchema = z.array(executionTimelineSpanSchema)
+
+export const executionTimelineSchema = z.object({
+  schemaVersion: z.literal('lingxilearn.timeline.v1'),
+  executionId: z.string(),
+  spans: z.array(executionTimelineSpanSchema),
+  totalTokens: z.number(),
+  waitingForUserMs: z.number(),
+})
+
+export const nativeExecutionSnapshotSchema = z.object({
+  schemaVersion: z.literal('lingxilearn.execution.v1'),
+  executionId: z.string(),
+  taskId: z.string(),
+  graphVersion: z.string(),
+  status: z.string(),
+  paused: z.boolean(),
+  terminal: z.boolean(),
+  nodes: z.record(z.string(), z.record(z.string(), z.unknown())),
+  dependencies: z.array(z.record(z.string(), z.unknown())),
+  variables: z.record(z.string(), z.unknown()),
+  groups: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+})
 
 export const runtimeEventSchema = z.object({
   sequence: z.number().optional(),
@@ -307,7 +330,7 @@ const executionDataDetailSchema = z
   .object({
     totalDuration: z.number().nullable().optional(),
     enhanced: z.literal(true).optional(),
-    traceSpans: traceSpansSchema.optional(),
+    timeline: executionTimelineSchema.optional(),
     trajectory: trajectorySchema.optional(),
     runtimeEvents: z.array(runtimeEventSchema).optional(),
     blockExecutions: z.array(blockExecutionSchema).optional(),
@@ -404,19 +427,17 @@ export const dashboardStatsResponseSchema = z.object({
 
 export const executionSnapshotDataSchema = z.object({
   executionId: z.string(),
-  workflowId: z.string().nullable(),
-  workflowState: z.record(z.string(), z.unknown()).nullable(),
-  traceSpans: z.array(z.record(z.string(), z.unknown())).optional(),
+  schemaVersion: z.literal('lingxilearn.execution.v1'),
+  snapshot: nativeExecutionSnapshotSchema,
+  timeline: executionTimelineSchema,
   trajectory: trajectorySchema.optional(),
   status: z.string().optional(),
   taskId: z.string().optional(),
   graphVersion: z.string().optional(),
-  projectionVersion: z.string().optional(),
-  childWorkflowSnapshots: z.record(z.string(), z.unknown()).optional(),
   executionMetadata: z.object({
     trigger: z.string().nullable(),
-    startedAt: z.string(),
-    endedAt: z.string().optional(),
+    startedAt: z.string().nullable(),
+    endedAt: z.string().nullable().optional(),
     totalDurationMs: z.number().nullable().optional(),
     cost: z.unknown().nullable(),
     totalTokens: z.number().nullable().optional(),

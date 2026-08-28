@@ -1,6 +1,5 @@
+import type { ExecutionTimelineSpan } from '@/lib/api/contracts/logs'
 import { formatCreditCost } from '@/lib/billing/credits/conversion'
-import { hasUnhandledError } from '@/lib/logs/execution/trace-spans/trace-spans'
-import type { TraceSpan } from '@/lib/logs/types'
 import { perceivedBrightness } from '@/lib/utils/color'
 import { getSpanPresentation } from '@/app/workspace/[workspaceId]/logs/model/span-presentation'
 import { normalizeToolId } from '@/tools/normalize'
@@ -24,15 +23,16 @@ export function isIterationType(type: string): boolean {
   return lower === 'loop-iteration' || lower === 'parallel-iteration'
 }
 
-export function hasErrorInTree(span: TraceSpan): boolean {
+export function hasErrorInTree(span: ExecutionTimelineSpan): boolean {
   if (span.status === 'error') return true
   if (span.children?.length) return span.children.some(hasErrorInTree)
-  if (span.toolCalls?.length) return span.toolCalls.some((tc) => tc.error)
   return false
 }
 
-export function hasUnhandledErrorInTree(span: TraceSpan): boolean {
-  return hasUnhandledError(span, { includeToolCalls: true })
+export function hasUnhandledErrorInTree(span: ExecutionTimelineSpan): boolean {
+  if (span.status === 'error' && !span.errorHandled) return true
+  if (span.children?.some(hasUnhandledErrorInTree)) return true
+  return false
 }
 
 /**
@@ -43,7 +43,10 @@ export function getBlockIconAndColor(
   type: string,
   toolName?: string,
   provider?: string
-): { icon: React.ComponentType<{ className?: string }> | null; bgColor: string } {
+): {
+  icon: React.ComponentType<{ className?: string }> | null
+  bgColor: string
+} {
   return getSpanPresentation(type, toolName, provider)
 }
 
@@ -97,8 +100,8 @@ export function formatTps(
   return tps > 0 ? `${tps.toLocaleString('en-US')} tok/s` : undefined
 }
 
-export function getDisplayName(span: TraceSpan): string {
-  if (span.type?.toLowerCase() === 'tool') {
+export function getDisplayName(span: ExecutionTimelineSpan): string {
+  if (span.kind.toLowerCase() === 'tool') {
     const mcpToolName = tryParseMcpToolName(span.name)
     if (mcpToolName) return mcpToolName
     return normalizeToolId(span.name)
@@ -110,7 +113,7 @@ export function formatCostAmount(value: number | undefined): string | undefined 
   return formatCreditCost(value, { emptyForZeroOrLess: true })
 }
 
-export function formatTokensSummary(tokens: TraceSpan['tokens']): string | undefined {
+export function formatTokensSummary(tokens: ExecutionTimelineSpan['tokens']): string | undefined {
   if (!tokens) return undefined
   const parts: string[] = []
   const input = formatTokenCount(tokens.input)

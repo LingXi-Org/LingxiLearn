@@ -1,4 +1,4 @@
-// 117 contracts generated from 105 paths.
+// 118 contracts generated from 105 paths.
 // AUTO-GENERATED — do not edit by hand.
 // Regenerate:  python scripts/export_openapi.py && bun run web/scripts/generate-rest-contracts.ts
 // eslint-disable @typescript-eslint/no-explicit-any
@@ -659,6 +659,18 @@ export const recordLearningEventApiLingxiLearningRecordsPostContract = defineRou
   response: {
     mode: "json" as const,
     schema: S.LearningRecordResponseSchema,
+  },
+});
+
+export const executionSnapshotApiLogsExecution_ExecutionId_GetContract = defineRouteContract({
+  method: "GET" as const,
+  path: "/api/logs/execution/[execution_id]",
+  params: z.object({
+    execution_id: z.string(),
+  }),
+  response: {
+    mode: "json" as const,
+    schema: S.ExecutionSnapshotResponseSchema,
   },
 });
 

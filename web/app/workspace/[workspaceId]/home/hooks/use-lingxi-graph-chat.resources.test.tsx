@@ -139,8 +139,8 @@ describe('workspace controller native resource mutations', () => {
       }
     )
     api.getAgentTaskV1Events.mockResolvedValue({ protocol: 'v1', events: [] })
-    api.getRuntimeGraph.mockResolvedValue({ workflowState: {} })
-    api.getExecutionSnapshot.mockResolvedValue({ workflowState: {} })
+    api.getRuntimeGraph.mockResolvedValue({ executionSnapshot: {} })
+    api.getExecutionSnapshot.mockResolvedValue({ executionSnapshot: {} })
     api.subscribeAgentV1Events.mockReturnValue(() => {})
     api.recordLearningEvent.mockResolvedValue(undefined)
   })

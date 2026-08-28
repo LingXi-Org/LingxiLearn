@@ -38,13 +38,8 @@ export const logsGetExecutionTool: ToolConfig<LogsGetExecutionParams, LogsGetExe
 
   outputs: {
     executionId: { type: 'string', description: 'Execution ID' },
-    workflowId: { type: 'string', description: 'Workflow ID this execution belongs to' },
-    workflowState: { type: 'json', description: 'Per-block state snapshot for the execution' },
-    childWorkflowSnapshots: {
-      type: 'json',
-      description: 'Snapshots for any child workflows invoked during the run',
-      optional: true,
-    },
+    snapshot: { type: 'json', description: 'LingxiLearn execution snapshot' },
+    timeline: { type: 'json', description: 'LingxiLearn execution timeline' },
     executionMetadata: {
       type: 'json',
       description: 'Trigger, timestamps, totalDurationMs, and cost for the run',

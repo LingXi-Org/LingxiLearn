@@ -1,4 +1,4 @@
-"""Sim Trace pause-duration semantics (issue #32 §3).
+"""Execution timeline pause-duration semantics (issue #32 §3).
 
 Waiting for the learner must never be attributed to Agent/Skill active
 execution time: pausing for hours must not make the trace show hours of
@@ -12,16 +12,16 @@ from types import SimpleNamespace
 
 from lingxigraph import EventKind
 
-from lingxilearn.runtime.sim_trace import SimTraceProjector
+from lingxilearn.runtime.timeline import ExecutionTimelineProjector
 
 
 def _resolve_primitive(name: str) -> SimpleNamespace:
-    return SimpleNamespace(sim_type="agent", category="agent", idempotent=False, label=name)
+    return SimpleNamespace(display_kind="agent", category="agent", idempotent=False, label=name)
 
 
 def test_paused_duration_freezes_active_time_and_excludes_the_wait_after_resume() -> None:
     started = datetime(2026, 1, 1, tzinfo=UTC)
-    projector = SimTraceProjector(
+    projector = ExecutionTimelineProjector(
         execution_id="exec-1",
         task_id="task-1",
         graph_version="test@1",
@@ -92,7 +92,7 @@ def test_a_native_span_open_across_pause_and_resume_excludes_the_wait_from_its_o
     """
 
     started = datetime(2026, 1, 1, tzinfo=UTC)
-    projector = SimTraceProjector(
+    projector = ExecutionTimelineProjector(
         execution_id="exec-2",
         task_id="task-2",
         graph_version="test@1",

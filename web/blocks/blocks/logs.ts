@@ -627,9 +627,9 @@ export const LogsV2Block: BlockConfig = {
       description: 'Run cost in credits',
       condition: { field: 'operation', value: 'get_run_details' },
     },
-    traceSpans: {
+    timelineSpans: {
       type: 'array',
-      description: 'Full trace spans for the run',
+      description: 'Native execution timeline spans for the run',
       condition: { field: 'operation', value: 'get_run_details' },
     },
     finalOutput: {

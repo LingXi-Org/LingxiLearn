@@ -61,7 +61,7 @@ export interface UseChatReturn {
   lingxiRuntime?: {
     task: AgentTaskSnapshot | null
     events: AgentTaskEvent[]
-    workflowState?: Record<string, unknown> | null
+    executionSnapshot?: Record<string, unknown> | null
     turnState?: LingxiTurnState
     v1Model?: LingxiV1ThreadModel | null
   }

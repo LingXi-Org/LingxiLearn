@@ -1,98 +1,43 @@
-import { createLogger } from '@/lib/logger'
-import { getErrorMessage } from '@/lib/utils/errors'
-import {
-  DEFAULT_HORIZONTAL_SPACING,
-  DEFAULT_VERTICAL_SPACING,
-} from '@/lib/workflows/autolayout/constants'
-import { layoutContainers } from '@/lib/workflows/autolayout/containers'
-import { assignLayers, layoutBlocksCore } from '@/lib/workflows/autolayout/core'
-import type { Edge, LayoutOptions, LayoutResult } from '@/lib/workflows/autolayout/types'
-import {
-  calculateSubflowDepths,
-  filterLayoutEligibleBlockIds,
-  getBlocksByParent,
-  prepareContainerDimensions,
-  resolveNoteOverlaps,
-} from '@/lib/workflows/autolayout/utils'
-import type { BlockState } from '@/lib/workflows/domain/workflow'
-
-const logger = createLogger('AutoLayout')
+export type ExecutionCanvasPosition = { x: number; y: number }
 
 /**
- * Applies automatic layout to all blocks in a workflow.
- * Positions blocks in layers based on their connections (edges).
+ * Deterministically position the first-party Execution Canvas topology.
+ *
+ * Returning positions only keeps live execution data out of the topology
+ * cache used by the read-only canvas.
  */
-export function applyAutoLayout(
-  blocks: Record<string, BlockState>,
-  edges: Edge[],
-  options: LayoutOptions = {}
-): LayoutResult {
-  try {
-    logger.info('Starting auto layout', {
-      blockCount: Object.keys(blocks).length,
-      edgeCount: edges.length,
-    })
-
-    const blocksCopy: Record<string, BlockState> = structuredClone(blocks)
-
-    const horizontalSpacing = options.horizontalSpacing ?? DEFAULT_HORIZONTAL_SPACING
-    const verticalSpacing = options.verticalSpacing ?? DEFAULT_VERTICAL_SPACING
-
-    prepareContainerDimensions(
-      blocksCopy,
-      edges,
-      layoutBlocksCore,
-      horizontalSpacing,
-      verticalSpacing,
-      options.gridSize
-    )
-
-    const { root: rootBlockIds } = getBlocksByParent(blocksCopy)
-    const layoutRootIds = filterLayoutEligibleBlockIds(rootBlockIds, blocksCopy)
-
-    const rootBlocks: Record<string, BlockState> = {}
-    for (const id of layoutRootIds) {
-      rootBlocks[id] = blocksCopy[id]
-    }
-
-    const rootEdges = edges.filter(
-      (edge) => layoutRootIds.includes(edge.source) && layoutRootIds.includes(edge.target)
-    )
-
-    const subflowDepths = calculateSubflowDepths(blocksCopy, edges, assignLayers)
-
-    if (Object.keys(rootBlocks).length > 0) {
-      const { nodes } = layoutBlocksCore(rootBlocks, rootEdges, {
-        isContainer: false,
-        layoutOptions: options,
-        subflowDepths,
-      })
-
-      for (const node of nodes.values()) {
-        blocksCopy[node.id].position = node.position
+export function layoutExecutionCanvasPositions(
+  nodeIds: string[],
+  connections: Array<{ source: string; target: string }>
+): Record<string, ExecutionCanvasPosition> {
+  const ranks = new Map(nodeIds.map((id) => [id, 0]))
+  for (let pass = 0; pass < nodeIds.length; pass += 1) {
+    let changed = false
+    for (const connection of connections) {
+      const sourceRank = ranks.get(connection.source)
+      const targetRank = ranks.get(connection.target)
+      if (sourceRank === undefined || targetRank === undefined || sourceRank + 1 <= targetRank) {
+        continue
       }
+      ranks.set(connection.target, sourceRank + 1)
+      changed = true
     }
-
-    layoutContainers(blocksCopy, edges, options)
-
-    resolveNoteOverlaps(blocksCopy, verticalSpacing)
-
-    logger.info('Auto layout completed successfully', {
-      blockCount: Object.keys(blocksCopy).length,
-    })
-
-    return {
-      blocks: blocksCopy,
-      success: true,
-    }
-  } catch (error) {
-    logger.error('Auto layout failed', { error })
-    return {
-      blocks,
-      success: false,
-      error: getErrorMessage(error, 'Unknown error'),
-    }
+    if (!changed) break
   }
+
+  const byRank = new Map<number, string[]>()
+  for (const [id, rank] of ranks) {
+    byRank.set(rank, [...(byRank.get(rank) ?? []), id])
+  }
+
+  const positions: Record<string, ExecutionCanvasPosition> = {}
+  for (const [rank, ids] of byRank) {
+    ids.sort()
+    ids.forEach((id, index) => {
+      positions[id] = { x: rank * 360, y: (index - (ids.length - 1) / 2) * 190 }
+    })
+  }
+  return positions
 }
 
 export {

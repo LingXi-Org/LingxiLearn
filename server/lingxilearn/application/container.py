@@ -28,7 +28,7 @@ from ..config import REPO_ROOT, Settings, get_settings
 from ..learner import LearnerService
 from ..packs.loader import discover_packs, validate_pack
 from ..packs.models import Pack
-from ..runtime.sim_semantics import PrimitiveCatalog
+from ..runtime.execution import PrimitiveCatalog
 from ..state.skill_catalog import discover as discover_skill_manifests
 from ..store.database import Database
 from ..store.learner import LearnerRepository
@@ -202,7 +202,7 @@ class ApplicationServices:
                         "pack %s: [%s] %s — %s", pack.id, issue.code, issue.path, issue.message
                     )
         # Keep the primitive projection closed: adding a callable LingxiLearn
-        # tool without a Sim mapping is a startup error, never a generic node.
+        # A tool without an execution capability mapping is a startup error.
         PrimitiveCatalog().validate(self.registry.names())
         # Seed the capability registry from the SKILL.md manifests on disk, so
         # the orchestrator plans against declared capabilities rather than a

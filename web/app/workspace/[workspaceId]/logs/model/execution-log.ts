@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type {
   CostLedger,
   ExecutionLogDetail,
-  LogTraceSpan,
+  ExecutionTimelineSpan,
   runtimeEventSchema,
   Trajectory,
 } from '@/lib/api/contracts/logs'
@@ -98,7 +98,7 @@ export interface ExecutionLogDetailView extends ExecutionLogSummaryView {
   taskId: string | null
   /** Whether the detail payload (executionData) has loaded, even if empty. */
   hasDetailPayload: boolean
-  traceSpans: LogTraceSpan[] | undefined
+  timelineSpans: ExecutionTimelineSpan[] | undefined
   trajectory: Trajectory | undefined
   runtimeEvents: RuntimeEvent[]
   files: ExecutionLogDetail['files']

@@ -252,9 +252,9 @@ def _span_children(span: Mapping[str, Any]) -> list[Mapping[str, Any]]:
             {
                 "id": call.get("id") or f"{span.get('id', 'span')}-tool-{index}",
                 "name": call.get("name") or "Tool call",
-                "type": "tool",
-                "startTime": call.get("startTime"),
-                "endTime": call.get("endTime"),
+                "kind": "tool",
+                "startedAt": call.get("startTime") or span.get("startedAt"),
+                "endedAt": call.get("endTime") or span.get("endedAt"),
                 "durationMs": call.get("duration") or 0,
                 "status": "error" if call.get("error") else "success",
                 "errorMessage": call.get("error"),
@@ -272,13 +272,13 @@ class TrajectoryProjector:
         self,
         execution: Any | None = None,
         events: Iterable[Mapping[str, Any]] = (),
-        trace_spans: Sequence[Mapping[str, Any]] | None = None,
+        timeline_spans: Sequence[Mapping[str, Any]] | None = None,
         *,
         now: datetime | None = None,
     ) -> None:
         self.execution = execution or {}
         self.events = [dict(item) for item in events if isinstance(item, Mapping)]
-        self.trace_spans = [dict(item) for item in (trace_spans or ()) if isinstance(item, Mapping)]
+        self.timeline_spans = [dict(item) for item in (timeline_spans or ()) if isinstance(item, Mapping)]
         self.now = now.astimezone(UTC) if now else datetime.now(UTC)
         self.execution_id = str(_value(self.execution, "id", "execution_id", "executionId", default=""))
         self.started = _time(
@@ -656,17 +656,17 @@ class TrajectoryProjector:
                 if children:
                     yield from walk(children, span)
 
-        yield from walk(self.trace_spans)
+        yield from walk(self.timeline_spans)
 
     def _span_times(self, span: Mapping[str, Any]) -> tuple[datetime, datetime]:
-        start = _time(span.get("startTime") or span.get("startedAt"), self.started)
-        end_value = span.get("endTime") or span.get("endedAt")
+        start = _time(span.get("startedAt"), self.started)
+        end_value = span.get("endedAt")
         if end_value:
             end = _time(end_value, start)
         else:
             try:
                 end = start + timedelta(
-                    milliseconds=max(0, int(span.get("durationMs") or span.get("duration") or 0))
+                    milliseconds=max(0, int(span.get("durationMs") or 0))
                 )
             except (TypeError, ValueError):
                 end = start
@@ -675,7 +675,7 @@ class TrajectoryProjector:
     def _project_control_spans(self) -> None:
         """Expose native control-plane spans as first-class CONTROL items.
 
-        Native graph nodes such as ``interpret_goal`` use ``type=router_v2``
+        Native graph nodes such as ``interpret_goal`` use ``kind=router_v2``
         and ``category=control``.  They are deliberately not actions, but
         hiding them makes the control lane look empty even though the runtime
         did real work.  Keep each span independent so its timing/status can be
@@ -683,7 +683,7 @@ class TrajectoryProjector:
         """
         control_items = 0
         for span, _parent_span in self._flatten_spans():
-            span_type = str(span.get("type") or span.get("category") or "function").lower()
+            span_kind = str(span.get("kind") or span.get("category") or "function").lower()
             category = str(span.get("category") or "").lower()
             primitive = str(span.get("primitive") or "").lower()
             if primitive == "lingxigraph.runtime" or primitive == "workflow":
@@ -701,18 +701,18 @@ class TrajectoryProjector:
             self._item(
                 "control",
                 item_id=item_id,
-                kind=primitive or span_type,
-                label=str(span.get("name") or span.get("primitive") or span_type.title()),
+                kind=primitive or span_kind,
+                label=str(span.get("name") or span.get("primitive") or span_kind.title()),
                 start=start,
                 end=end,
                 status=str(span.get("status") or "success"),
-                precision="exact" if span.get("startTime") else "inferred",
+                precision="exact" if span.get("startedAt") else "inferred",
                 spanId=span.get("id"),
                 roundStep=span_step,
                 metadata={
                     "primitive": span.get("primitive"),
                     "category": span.get("category"),
-                    "span_type": span.get("type"),
+                    "span_kind": span.get("kind"),
                     "node": span.get("node"),
                     "provider": span.get("provider"),
                 },
@@ -740,7 +740,7 @@ class TrajectoryProjector:
     ) -> dict[str, set[str] | str]:
         """Collect stable model identities from a span and its agent parent.
 
-        Sim traces put the native ``span_id``/node metadata on the model span,
+        legacy traces put the native ``span_id``/node metadata on the model span,
         while older traces only put ``agent`` and task metadata on the parent
         agent span.  Looking through both keeps attribution compatible with
         each shape without relying on the model name (which is not unique).
@@ -913,21 +913,21 @@ class TrajectoryProjector:
             tuple[Mapping[str, Any], Mapping[str, Any] | None, datetime, datetime]
         ] = []
         for span, parent in self._flatten_spans():
-            span_type = str(span.get("type") or span.get("category") or "function").lower()
+            span_kind = str(span.get("kind") or span.get("category") or "function").lower()
             primitive = str(span.get("primitive") or "").lower()
-            action_kind = primitive if primitive in {"model", "tool"} else span_type
+            action_kind = primitive if primitive in {"model", "tool"} else span_kind
             if action_kind == "model":
                 model_spans.append((*((span, parent)), *self._span_times(span)))
         first_output_by_span = self._first_model_output_times(model_spans)
         action_items = 0
         for span, _parent_span in self._flatten_spans():
-            span_type = str(span.get("type") or span.get("category") or "function").lower()
+            span_kind = str(span.get("kind") or span.get("category") or "function").lower()
             primitive = str(span.get("primitive") or "").lower()
-            if span_type in _CONTROL_TYPES or primitive in {"lingxigraph.runtime", "workflow"}:
+            if span_kind in _CONTROL_TYPES or primitive in {"lingxigraph.runtime", "workflow"}:
                 continue
-            if span_type not in _ACTION_TYPES and primitive not in _ACTION_PRIMITIVES:
+            if span_kind not in _ACTION_TYPES and primitive not in _ACTION_PRIMITIVES:
                 continue
-            action_kind = primitive if primitive in {"model", "tool"} else span_type
+            action_kind = primitive if primitive in {"model", "tool"} else span_kind
             start, end = self._span_times(span)
             metadata = {
                 "provider": span.get("provider"),
@@ -946,7 +946,7 @@ class TrajectoryProjector:
             node = self._payload_node({**dict(span_metadata), **dict(span)}, runtime)
             parent = self._tasks.get(node, {}).get("item_id") if node else None
             if parent is None and self._tasks:
-                # Older Sim traces did not copy the runtime node id onto every
+                # Older legacy traces did not copy the runtime node id onto every
                 # child span.  A time-contained task is a safe best-effort
                 # parent for those historical records and is marked inferred
                 # by the action below.
@@ -970,13 +970,13 @@ class TrajectoryProjector:
             action = self._item(
                 "action",
                 item_id=action_id,
-                kind=span_type,
-                label=str(span.get("name") or span.get("primitive") or span_type.title()),
+                kind=span_kind,
+                label=str(span.get("name") or span.get("primitive") or span_kind.title()),
                 start=start,
                 end=end,
                 status=str(span.get("status") or "success"),
                 parent_id=parent,
-                precision="exact" if span.get("startTime") and node else "inferred",
+                precision="exact" if span.get("startedAt") and node else "inferred",
                 spanId=span.get("id"),
                 metadata={key: value for key, value in metadata.items() if value not in (None, "")},
             )
@@ -989,7 +989,7 @@ class TrajectoryProjector:
                     "resource",
                     item_id=f"resource:tokens:{action_id}",
                     kind="tokens",
-                    label=f"{span_type.title()} tokens",
+                    label=f"{span_kind.title()} tokens",
                     start=start,
                     end=end,
                     status=str(span.get("status") or "success"),
@@ -1025,7 +1025,7 @@ class TrajectoryProjector:
             if action_kind in {"model", "tool"}:
                 self._item(
                     "resource",
-                    item_id=f"resource:{span_type}:duration:{action_id}",
+                    item_id=f"resource:{span_kind}:duration:{action_id}",
                     kind=f"{action_kind}.duration",
                     label=f"{action_kind.title()} duration",
                     start=start,
@@ -1300,13 +1300,13 @@ class TrajectoryProjector:
 def build_trajectory_projection(
     execution: Any,
     events: Iterable[Mapping[str, Any]] = (),
-    trace_spans: Sequence[Mapping[str, Any]] | None = None,
+    timeline_spans: Sequence[Mapping[str, Any]] | None = None,
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Convenience wrapper used by the service and tests."""
 
-    return TrajectoryProjector(execution, events, trace_spans, now=now).project()
+    return TrajectoryProjector(execution, events, timeline_spans, now=now).project()
 
 
 project_trajectory = build_trajectory_projection

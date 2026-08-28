@@ -1,6 +1,6 @@
 import type {
   Trajectory as ApiTrajectory,
-  LogTraceSpan,
+  ExecutionTimelineSpan,
   TrajectoryItem,
 } from '@/lib/api/contracts/logs'
 
@@ -25,7 +25,7 @@ export interface TrajectoryLane {
 export interface TrajectoryEntry {
   id: string
   sourceId: string
-  span: LogTraceSpan
+  span: ExecutionTimelineSpan
   depth: number
   path: number[]
   parentId: string | null
@@ -78,46 +78,26 @@ function parseTimestamp(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function spanRecord(span: LogTraceSpan): Record<string, unknown> {
-  return span as unknown as Record<string, unknown>
-}
-
-function orderingValue(span: LogTraceSpan): number {
+function orderingValue(span: ExecutionTimelineSpan): number {
   return (
-    parseTimestamp(span.startTime) ??
+    parseTimestamp(span.startedAt) ??
     finiteNumber(span.relativeStartMs) ??
-    finiteNumber(spanRecord(span).executionOrder) ??
+    finiteNumber(span.executionOrder) ??
     Number.POSITIVE_INFINITY
   )
 }
 
-/**
- * Returns persisted children plus legacy tool-call records projected as child spans.
- */
-export function getTrajectoryChildren(span: LogTraceSpan): LogTraceSpan[] {
-  const children = span.children?.length
-    ? [...span.children]
-    : (span.toolCalls ?? []).map((toolCall, index) => ({
-        id: toolCall.id ?? `${span.id}-tool-${index}`,
-        name: toolCall.name ?? 'Tool call',
-        type: 'tool',
-        durationMs: finiteNumber(toolCall.duration) ?? 0,
-        startTime: toolCall.startTime,
-        endTime: toolCall.endTime,
-        status: toolCall.error ? 'error' : 'success',
-        errorMessage: toolCall.error,
-        input: toolCall.arguments,
-        output: toolCall.result,
-      }))
-
+/** Returns native child spans in execution order. */
+export function getTrajectoryChildren(span: ExecutionTimelineSpan): ExecutionTimelineSpan[] {
+  const children = [...(span.children ?? [])]
   return children.sort((left, right) => orderingValue(left) - orderingValue(right))
 }
 
-function collectAbsoluteStartTimes(spans: LogTraceSpan[]): number[] {
+function collectAbsoluteStartTimes(spans: ExecutionTimelineSpan[]): number[] {
   const values: number[] = []
-  const walk = (items: LogTraceSpan[]) => {
+  const walk = (items: ExecutionTimelineSpan[]) => {
     for (const span of items) {
-      const start = parseTimestamp(span.startTime)
+      const start = parseTimestamp(span.startedAt)
       if (start !== null) values.push(start)
       const children = getTrajectoryChildren(span)
       if (children.length > 0) walk(children)
@@ -127,17 +107,16 @@ function collectAbsoluteStartTimes(spans: LogTraceSpan[]): number[] {
   return values
 }
 
-function resolveDuration(span: LogTraceSpan, startMs: number): number {
-  const explicit = finiteNumber(span.durationMs) ?? finiteNumber(span.duration)
+function resolveDuration(span: ExecutionTimelineSpan, startMs: number): number {
+  const explicit = finiteNumber(span.durationMs)
   if (explicit !== null) return Math.max(0, explicit)
 
-  const end = parseTimestamp(span.endTime)
+  const end = parseTimestamp(span.endedAt)
   return end !== null ? Math.max(0, end - startMs) : 0
 }
 
-function laneForSpan(span: LogTraceSpan): TrajectoryLaneId {
-  const value =
-    `${span.type ?? ''} ${(span as unknown as Record<string, unknown>).category ?? ''}`.toLowerCase()
+function laneForSpan(span: ExecutionTimelineSpan): TrajectoryLaneId {
+  const value = `${span.kind} ${span.category ?? ''}`.toLowerCase()
   if (value.includes('workflow') || value.includes('run')) return 'run'
   if (value.includes('decision') || value.includes('control') || value.includes('agent'))
     return 'control'
@@ -152,7 +131,7 @@ function laneForItem(item: TrajectoryItem): TrajectoryLaneId {
   return TRAJECTORY_LANES.some((lane) => lane.id === item.lane) ? item.lane : 'action'
 }
 
-function itemToSpan(item: TrajectoryItem): LogTraceSpan {
+function itemToSpan(item: TrajectoryItem): ExecutionTimelineSpan {
   const metadata = item.metadata ?? {}
   const tokenValue =
     metadata.tokens ??
@@ -164,18 +143,18 @@ function itemToSpan(item: TrajectoryItem): LogTraceSpan {
   return {
     id: item.id,
     name: item.label,
-    type: item.kind,
-    status: item.status,
-    startTime: item.startTime,
-    endTime: item.endTime,
+    kind: item.kind,
+    status: item.status ?? 'running',
+    startedAt: item.startTime,
+    endedAt: item.endTime ?? item.startTime,
     durationMs: item.durationMs,
     relativeStartMs: item.relativeStartMs,
     input: metadata,
     ...(typeof tokenValue === 'number' || (tokenValue && typeof tokenValue === 'object')
-      ? { tokens: tokenValue as LogTraceSpan['tokens'] }
+      ? { tokens: tokenValue as ExecutionTimelineSpan['tokens'] }
       : {}),
     ...(item.spanId ? { spanId: item.spanId } : {}),
-  } as LogTraceSpan
+  }
 }
 
 function buildSemanticModel(
@@ -189,7 +168,7 @@ function buildSemanticModel(
     lane: TrajectoryLaneId
     start: number
     end: number
-    span: LogTraceSpan
+    span: ExecutionTimelineSpan
     rawParentId: string | null
     sourceId: string
     id: string
@@ -201,7 +180,7 @@ function buildSemanticModel(
       const start = parseTimestamp(item.startTime) ?? clockStart + Math.max(0, item.relativeStartMs)
       const itemDuration = Math.max(0, item.durationMs)
       const end = Math.max(start + itemDuration, parseTimestamp(item.endTime) ?? start)
-      const path = [index + 1]
+      const _path = [index + 1]
       const span = itemToSpan(item)
       const sourceId = item.id
       // Backend semantic ids are stable; only disambiguate malformed payloads
@@ -278,13 +257,17 @@ function buildSemanticModel(
  * one run-wide time axis so every nesting level can share the same scale.
  */
 export function buildTrajectoryModel(
-  spans: LogTraceSpan[] | undefined,
+  spans: ExecutionTimelineSpan[] | undefined,
   fallbackDurationMs = 0,
   trajectory?: ApiTrajectory
 ): TrajectoryModel {
   if (trajectory) return buildSemanticModel(trajectory, fallbackDurationMs)
   if (!spans?.length) {
-    const lanes = TRAJECTORY_LANES.map(({ id, label }) => ({ id, label, entries: [] }))
+    const lanes = TRAJECTORY_LANES.map(({ id, label }) => ({
+      id,
+      label,
+      entries: [],
+    }))
     return {
       entries: [],
       runStartMs: 0,
@@ -301,7 +284,7 @@ export function buildTrajectoryModel(
   const entries: TrajectoryEntry[] = []
 
   const walk = (
-    items: LogTraceSpan[],
+    items: ExecutionTimelineSpan[],
     depth: number,
     pathPrefix: number[],
     parentId: string | null,
@@ -312,15 +295,15 @@ export function buildTrajectoryModel(
 
     sorted.forEach((span, index) => {
       const path = [...pathPrefix, index + 1]
-      const sourceId = span.id || `${span.type || 'span'}-${path.join('-')}`
+      const sourceId = span.id || `${span.kind || 'span'}-${path.join('-')}`
       const id = `${sourceId}::${path.join('.')}`
-      const absoluteStart = parseTimestamp(span.startTime)
+      const absoluteStart = parseTimestamp(span.startedAt)
       const relativeStart = finiteNumber(span.relativeStartMs)
       const startMs =
         absoluteStart ??
         (relativeStart !== null ? absoluteAnchor + relativeStart : parentStartMs || absoluteAnchor)
       const durationMs = resolveDuration(span, startMs)
-      const absoluteEnd = parseTimestamp(span.endTime)
+      const absoluteEnd = parseTimestamp(span.endedAt)
       const endMs = Math.max(startMs + durationMs, absoluteEnd ?? startMs)
 
       entries.push({
@@ -381,7 +364,7 @@ export function buildTrajectoryModel(
   }
 }
 
-export function getSpanTokenCount(span: LogTraceSpan): number {
+export function getSpanTokenCount(span: ExecutionTimelineSpan): number {
   if (typeof span.tokens === 'number') return Math.max(0, span.tokens)
   if (!span.tokens) return 0
   return Math.max(0, span.tokens.total ?? (span.tokens.input ?? 0) + (span.tokens.output ?? 0))
@@ -405,7 +388,7 @@ function trajectorySummaryTokenCount(summary: Record<string, unknown> | undefine
   return Math.max(0, (Number.isFinite(input) ? input : 0) + (Number.isFinite(output) ? output : 0))
 }
 
-export function isTrajectoryError(span: LogTraceSpan): boolean {
+export function isTrajectoryError(span: ExecutionTimelineSpan): boolean {
   const status = span.status?.toLowerCase()
   return status === 'error' || status === 'failed' || Boolean(span.errorMessage)
 }
@@ -434,7 +417,7 @@ export function summarizeTrajectory(model: TrajectoryModel): TrajectorySummary {
   const summary: TrajectorySummary = {
     spanCount: entries.length,
     maxDepth: model.maxDepth,
-    toolCount: entries.filter((entry) => entry.span.type.toLowerCase() === 'tool').length,
+    toolCount: entries.filter((entry) => entry.span.kind.toLowerCase() === 'tool').length,
     failureCount,
     tokenCount,
   }
@@ -460,15 +443,14 @@ function searchValue(value: unknown): string {
 }
 
 function entrySearchText(entry: TrajectoryEntry): string {
-  const richSpan = spanRecord(entry.span)
   return [
     entry.span.name,
-    entry.span.type,
+    entry.span.kind,
     entry.span.status,
     entry.span.errorType,
     entry.span.errorMessage,
-    richSpan.model,
-    richSpan.provider,
+    entry.span.model,
+    entry.span.provider,
     entry.lane,
     entry.item?.roundStep,
     searchValue(entry.item?.metadata),
@@ -495,7 +477,7 @@ export function getVisibleTrajectoryEntries(
 
   for (const entry of entries) {
     const matchesSearch = !needle || entrySearchText(entry).includes(needle)
-    const matchesType = !hasTypeFilter || entry.span.type.toLowerCase() === normalizedType
+    const matchesType = !hasTypeFilter || entry.span.kind.toLowerCase() === normalizedType
     if (!matchesSearch || !matchesType) continue
     matchingIds.add(entry.id)
     entry.parentIds.forEach((id) => matchingIds.add(id))
@@ -507,7 +489,7 @@ export function getVisibleTrajectoryEntries(
 }
 
 export function getTrajectoryTypes(entries: TrajectoryEntry[]): string[] {
-  return Array.from(new Set(entries.map((entry) => entry.span.type).filter(Boolean))).sort((a, b) =>
+  return Array.from(new Set(entries.map((entry) => entry.span.kind).filter(Boolean))).sort((a, b) =>
     a.localeCompare(b)
   )
 }

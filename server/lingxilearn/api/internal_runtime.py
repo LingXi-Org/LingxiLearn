@@ -17,6 +17,7 @@ from ..application import ApplicationServices
 from ..auth import get_principal
 from ..contracts.rest_models import AgentDecisionsResponse, RuntimeGraphResponse
 from ..learner import LearnerContext
+from ..runtime.execution import require_execution_snapshot
 from ..runtime.execution_graph import build_execution_graph
 from .dependencies import not_found, services_of
 
@@ -106,11 +107,11 @@ async def agent_task_runtime_graph(
     request: Request,
     context: LearnerContext = Depends(runtime_debug_context),
 ) -> dict[str, Any]:
-    """Return the durable Sim-compatible runtime graph for this task.
+    """Return the durable LingxiLearn execution graph for this task.
 
     ``executionGraph`` is the canonical V1 graph whose nodes are AgentRuns --
     the same identities the chat renders (issue #18 section 14).
-    ``workflowState`` remains the legacy heuristic projection for today's UI.
+    ``executionSnapshot`` is the learner-meaningful view used by Chat.
     """
 
     services = services_of(request)
@@ -123,7 +124,17 @@ async def agent_task_runtime_graph(
         if execution_id
         else None
     )
-    state = dict(execution.workflow_state or {}) if execution is not None else {}
+    state = (
+        require_execution_snapshot(
+            execution.execution_snapshot,
+            execution_id=execution.id,
+            task_id=task_id,
+            graph_version=execution.graph_version,
+            status=execution.status,
+        )
+        if execution is not None
+        else None
+    )
     runs = await services.agent_events.agent_runs_for_task(task_id)
     dependencies = await services.agent_events.work_dependencies_for_task(task_id)
     skill_runs = await services.agent_events.skill_runs_for_task(task_id)
@@ -136,7 +147,7 @@ async def agent_task_runtime_graph(
         "updatedAt": execution.updated_at.isoformat()
         if execution and execution.updated_at
         else None,
-        "workflowState": _redact_runtime_debug(state),
+        "executionSnapshot": _redact_runtime_debug(state),
         "executionGraph": _redact_runtime_debug(
             build_execution_graph(
                 runs,
